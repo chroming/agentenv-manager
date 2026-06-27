@@ -4,7 +4,8 @@ import {
   fireEvent,
   render,
   screen,
-  waitFor
+  waitFor,
+  within
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../src/renderer/App";
@@ -54,6 +55,28 @@ const preview = {
   targetState: { managedConfigKeys: [], managedMcpNames: [] }
 };
 
+const backup = {
+  id: "2026-06-30T09-19-41-374Z",
+  createdAt: "2026-06-30T09:19:41.374Z",
+  fileCount: 2
+};
+
+const rollbackPreview = {
+  id: "rollback-1",
+  backupId: backup.id,
+  createdAt: "2026-06-30T00:00:00.000Z",
+  warnings: [],
+  errors: [],
+  changes: [
+    {
+      path: "/tmp/home/.config/opencode/AGENTS.md",
+      before: "# Agent\n",
+      after: "# Old\n",
+      diff: "--- AGENTS.md\n+++ AGENTS.md\n@@\n-# Agent\n+# Old\n"
+    }
+  ]
+};
+
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     listTargets: vi.fn().mockResolvedValue([
@@ -87,14 +110,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     previewApply: vi.fn().mockResolvedValue(preview),
     applyProfile: vi.fn().mockResolvedValue({ ok: true, backupId: "backup-1" }),
     listBackups: vi.fn().mockResolvedValue([]),
-    previewRollback: vi.fn().mockResolvedValue({
-      id: "rollback-1",
-      backupId: "backup-1",
-      createdAt: "2026-06-30T00:00:00.000Z",
-      warnings: [],
-      errors: [],
-      changes: []
-    }),
+    previewRollback: vi.fn().mockResolvedValue(rollbackPreview),
     rollback: vi.fn().mockResolvedValue({ ok: true }),
     ...overrides
   };
@@ -145,5 +161,28 @@ describe("App", () => {
     expect(screen.getByText("2 files will change")).toBeInTheDocument();
     expect(screen.getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
     expect(applyButton).toBeEnabled();
+  });
+
+  it("previews and restores a backup from history", async () => {
+    const api = installApi({
+      listBackups: vi.fn().mockResolvedValue([backup])
+    });
+    render(<App />);
+
+    const history = await screen.findByRole("region", { name: "History" });
+    fireEvent.click(
+      within(history).getByRole("button", {
+        name: `Preview rollback ${backup.id}`
+      })
+    );
+
+    await waitFor(() => expect(api.previewRollback).toHaveBeenCalledWith(backup.id));
+    expect(screen.getByText("Rollback preview")).toBeInTheDocument();
+    expect(screen.getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
+
+    fireEvent.click(within(history).getByRole("button", { name: "Restore backup" }));
+
+    await waitFor(() => expect(api.rollback).toHaveBeenCalledWith(backup.id));
+    expect(screen.getByText("Preview required")).toBeInTheDocument();
   });
 });

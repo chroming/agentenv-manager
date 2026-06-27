@@ -620,12 +620,61 @@ summary {
 .history-row,
 .owned-skill {
   display: grid;
-  gap: 3px;
+  gap: 8px;
   padding: 10px;
+}
+
+.history-row.is-active {
+  border-color: #b9cffd;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.history-row__main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
 .history-row span,
 .owned-skill span {
   font-size: 13px;
   font-weight: 650;
+}
+
+.history-actions {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.history-action,
+.restore-action {
+  min-height: 32px;
+  width: 100%;
+}
+
+.history-action {
+  background: #f8fafc;
+}
+
+.restore-action {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.restore-action:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.restore-action:disabled {
+  background: #eef2f7;
+  border-color: var(--border);
+  color: #98a2b3;
+}
+
+.history-status {
+  color: var(--muted);
+  font-size: 12px;
 }

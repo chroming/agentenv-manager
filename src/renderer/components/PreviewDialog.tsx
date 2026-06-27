@@ -1,11 +1,12 @@
-import type { ActivationPreview } from "../../shared/types";
+import type { ActivationPreview, RollbackPreview } from "../../shared/types";
 import { DiffViewer } from "./DiffViewer";
 
 interface PreviewDialogProps {
-  preview?: ActivationPreview;
+  preview?: ActivationPreview | RollbackPreview;
+  title?: string;
 }
 
-export const PreviewDialog = ({ preview }: PreviewDialogProps) => {
+export const PreviewDialog = ({ preview, title = "Preview" }: PreviewDialogProps) => {
   if (!preview) {
     return null;
   }
@@ -14,7 +15,7 @@ export const PreviewDialog = ({ preview }: PreviewDialogProps) => {
     <section className="preview-dialog" aria-label="Preview">
       <header className="preview-header">
         <div>
-          <div className="section-title">Preview</div>
+          <div className="section-title">{title}</div>
           <p className="muted">{preview.changes.length} files in this diff</p>
         </div>
         <time dateTime={preview.createdAt}>{new Date(preview.createdAt).toLocaleString()}</time>

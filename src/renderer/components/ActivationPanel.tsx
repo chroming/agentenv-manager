@@ -1,33 +1,43 @@
-import type { ActivationPreview, BackupSummary } from "../../shared/types";
+import type { ActivationPreview, BackupSummary, RollbackPreview } from "../../shared/types";
 import { HistoryView } from "./HistoryView";
 
 interface ActivationPanelProps {
   selectedProfileId?: string;
   targetName?: string;
   preview?: ActivationPreview;
+  rollbackPreview?: RollbackPreview;
   backups: BackupSummary[];
   busy: boolean;
   onPreview(): void;
   onApply(): void;
+  onPreviewRollback(backupId: string): void;
+  onRestoreRollback(): void;
 }
 
 export const ActivationPanel = ({
   selectedProfileId,
   targetName = "target",
   preview,
+  rollbackPreview,
   backups,
   busy,
   onPreview,
-  onApply
+  onApply,
+  onPreviewRollback,
+  onRestoreRollback
 }: ActivationPanelProps) => {
-  const canApply = Boolean(preview && preview.errors.length === 0);
-  const isBlocked = Boolean(preview && preview.errors.length > 0);
+  const activePreview = rollbackPreview ?? preview;
+  const canApply = Boolean(preview && preview.errors.length === 0 && !rollbackPreview);
+  const canRestore = Boolean(rollbackPreview && rollbackPreview.errors.length === 0);
+  const isBlocked = Boolean(activePreview && activePreview.errors.length > 0);
   const statusLabel = isBlocked
     ? "Blocked"
-    : canApply
+    : canRestore
+      ? "Rollback ready"
+      : canApply
       ? "Ready to apply"
       : "Preview required";
-  const changedCount = preview?.changes.length ?? 0;
+  const changedCount = activePreview?.changes.length ?? 0;
 
   return (
     <aside className="activation-panel" aria-label="Activation">
@@ -40,7 +50,9 @@ export const ActivationPanel = ({
         <div>
           <strong>{statusLabel}</strong>
           <small>
-            {canApply
+            {canRestore
+              ? `${changedCount} files will restore`
+              : canApply
               ? `${changedCount} files will change`
               : isBlocked
                 ? "Resolve conflicts before applying"
@@ -56,14 +68,16 @@ export const ActivationPanel = ({
       </button>
       <section className="will-touch" aria-label="Files to modify">
         <div className="section-title">Will touch</div>
-        {preview ? (
+        {activePreview ? (
           <>
-            <p className="muted">{changedCount} planned file updates</p>
+            <p className="muted">
+              {rollbackPreview ? `${changedCount} planned restores` : `${changedCount} planned file updates`}
+            </p>
             <div className="path-list">
-              {preview.changes.map((change) => (
+              {activePreview.changes.map((change) => (
                 <div className="path-row" key={change.path}>
                   <span>{change.path}</span>
-                  <small>Modify</small>
+                  <small>{rollbackPreview ? "Restore" : "Modify"}</small>
                 </div>
               ))}
             </div>
@@ -84,10 +98,16 @@ export const ActivationPanel = ({
         </div>
         <div className="check-row">
           <span>Preview freshness</span>
-          <strong>{preview ? "Fresh" : "Required"}</strong>
+          <strong>{activePreview ? "Fresh" : "Required"}</strong>
         </div>
       </section>
-      <HistoryView backups={backups} />
+      <HistoryView
+        backups={backups}
+        busy={busy}
+        rollbackPreview={rollbackPreview}
+        onPreviewRollback={onPreviewRollback}
+        onRestoreRollback={onRestoreRollback}
+      />
     </aside>
   );
 };

@@ -5,6 +5,7 @@ import type {
   BackupSummary,
   ProfileDetail,
   ProfileSummary,
+  RollbackPreview,
   SaveProfileInput,
   TargetDescriptor
 } from "../shared/types";
@@ -56,6 +57,7 @@ export const App = () => {
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
+  const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [activeTab, setActiveTab] = useState<EditorTab>("instructions");
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -97,6 +99,7 @@ export const App = () => {
     setBusy(true);
     setError(undefined);
     setPreview(undefined);
+    setRollbackPreview(undefined);
     setActiveTab("instructions");
     setSelectedProfileId(profileId);
     try {
@@ -132,6 +135,7 @@ export const App = () => {
     setDraftProfile(saved);
     setActiveTab("instructions");
     setPreview(undefined);
+    setRollbackPreview(undefined);
   };
 
   const selectedTarget = targets.find(
@@ -146,6 +150,7 @@ export const App = () => {
   const previewSelectedProfile = async () => {
     setBusy(true);
     setError(undefined);
+    setRollbackPreview(undefined);
     try {
       const saved = await saveDraft();
       if (!saved) {
@@ -174,6 +179,43 @@ export const App = () => {
         return;
       }
       setPreview(undefined);
+      setRollbackPreview(undefined);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const previewSelectedRollback = async (backupId: string) => {
+    setBusy(true);
+    setError(undefined);
+    setPreview(undefined);
+    try {
+      const nextPreview = await window.agentEnv.previewRollback(backupId);
+      setRollbackPreview(nextPreview);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreSelectedRollback = async () => {
+    if (!rollbackPreview) {
+      return;
+    }
+
+    setBusy(true);
+    setError(undefined);
+    try {
+      const result = await window.agentEnv.rollback(rollbackPreview.backupId);
+      if (!result.ok) {
+        setError(result.errors.join("\n"));
+        return;
+      }
+      setRollbackPreview(undefined);
       await refreshProfiles();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -195,6 +237,7 @@ export const App = () => {
           setSelectedProfileId(undefined);
           setDraftProfile(undefined);
           setPreview(undefined);
+          setRollbackPreview(undefined);
           setActiveTab("instructions");
         }}
         onSelect={selectProfile}
@@ -246,6 +289,7 @@ export const App = () => {
                   onChange={(instructions) => {
                     setDraftProfile({ ...draftProfile, instructions });
                     setPreview(undefined);
+                    setRollbackPreview(undefined);
                   }}
                 />
               ) : null}
@@ -256,6 +300,7 @@ export const App = () => {
                   onChange={(configText) => {
                     setDraftProfile({ ...draftProfile, configText });
                     setPreview(undefined);
+                    setRollbackPreview(undefined);
                   }}
                 />
               ) : null}
@@ -265,6 +310,7 @@ export const App = () => {
                   onChange={(assetPolicy) => {
                     setDraftProfile({ ...draftProfile, assetPolicy });
                     setPreview(undefined);
+                    setRollbackPreview(undefined);
                   }}
                 />
               ) : null}
@@ -296,8 +342,13 @@ export const App = () => {
                 </section>
               ) : null}
             </div>
-            <PreviewDialog preview={preview} />
+            <PreviewDialog
+              preview={rollbackPreview ?? preview}
+              title={rollbackPreview ? "Rollback preview" : "Preview"}
+            />
           </>
+        ) : rollbackPreview ? (
+          <PreviewDialog preview={rollbackPreview} title="Rollback preview" />
         ) : (
           <div className="empty-state">
             <h2>No profile selected</h2>
@@ -309,10 +360,13 @@ export const App = () => {
         selectedProfileId={draftProfile?.id}
         targetName={activeTargetName}
         preview={preview}
+        rollbackPreview={rollbackPreview}
         backups={backups}
         busy={busy}
         onPreview={previewSelectedProfile}
         onApply={applySelectedProfile}
+        onPreviewRollback={previewSelectedRollback}
+        onRestoreRollback={restoreSelectedRollback}
       />
     </main>
   );
