@@ -366,6 +366,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
   },
   createTargetPaths: ({ homeDir }) => {
     const codexHome = join(homeDir, ".codex");
+    const skillsDir = join(homeDir, ".agents", "skills");
     return {
       targetId: "codex",
       configDir: codexHome,
@@ -373,7 +374,8 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       instructionsOverridePath: join(codexHome, "AGENTS.override.md"),
       configPath: join(codexHome, "config.toml"),
       agentsDir: join(codexHome, "agents"),
-      skillsDir: join(homeDir, ".agents", "skills")
+      skillsDir,
+      skillScanDirs: [skillsDir]
     };
   },
   createDefaultProfile: (id) => ({

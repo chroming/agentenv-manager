@@ -3590,13 +3590,13 @@ button svg,
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
   display: grid;
   gap: 0;
-  max-height: calc(100% - 92px);
+  max-height: min(640px, calc(100vh - 112px));
   overflow: auto;
-  position: absolute;
-  right: 16px;
-  top: 86px;
-  width: min(520px, calc(100% - 32px));
-  z-index: 15;
+  position: fixed;
+  right: 24px;
+  top: 88px;
+  width: min(520px, calc(100vw - 260px));
+  z-index: 60;
 }
 
 .library-drawer__header {

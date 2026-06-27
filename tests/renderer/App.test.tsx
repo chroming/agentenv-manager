@@ -120,6 +120,7 @@ const target: TargetInfo = {
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    selectSkillFolder: vi.fn().mockResolvedValue(undefined),
     listTargets: vi.fn().mockResolvedValue([target]),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
     scanSkillInventory: vi.fn().mockResolvedValue([]),
@@ -323,6 +324,33 @@ describe("App", () => {
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
+  });
+
+  it("rescans local target skills when opening local skill discoveries", async () => {
+    const api = installApi({
+      scanSkillInventory: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {
+          id: "target-only-reviewer",
+          name: "Target Only Reviewer",
+          description: "Found on disk",
+          path: "/tmp/opencode/skills/target-only-reviewer",
+          foundIn: ["opencode"],
+          status: "unmanaged"
+        }
+      ])
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Skill library" });
+    expect(api.scanSkillInventory).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Scan local Skills" }));
+
+    expect(await screen.findByRole("region", { name: "Environment skills" })).toBeInTheDocument();
+    expect(api.scanSkillInventory).toHaveBeenCalledTimes(2);
+    expect(
+      await screen.findByRole("group", { name: "Environment skill target-only-reviewer" })
+    ).toHaveTextContent("Found on disk");
   });
 
   it("checks skill updates on the configured background interval", async () => {

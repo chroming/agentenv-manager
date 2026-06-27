@@ -9,6 +9,7 @@ export type { AssetPolicy, ProfileManifest } from "./schemas";
 import type { AssetPolicy, ProfileManifest } from "./schemas";
 
 export interface AgentEnvApi {
+  selectSkillFolder(): Promise<string | undefined>;
   listTargets(): Promise<TargetInfo[]>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   scanSkillInventory(): Promise<SkillInventoryEntry[]>;
@@ -164,6 +165,7 @@ export interface TargetPaths {
   mcpConfigPath?: string;
   agentsDir?: string;
   skillsDir?: string;
+  skillScanDirs?: string[];
 }
 
 export interface TargetState {

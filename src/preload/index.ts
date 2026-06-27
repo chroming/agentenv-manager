@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { AgentEnvApi } from "../shared/types";
 
 const api: AgentEnvApi = {
+  selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),
   listTargets: () => ipcRenderer.invoke("targets:list"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),
   scanSkillInventory: () => ipcRenderer.invoke("skills:scan-inventory"),

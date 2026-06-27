@@ -393,6 +393,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
   },
   createTargetPaths: ({ homeDir }) => {
     const claudeDir = join(homeDir, ".claude");
+    const skillsDir = join(claudeDir, "skills");
     return {
       targetId: "claude-code",
       configDir: claudeDir,
@@ -400,7 +401,8 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       configPath: join(claudeDir, "settings.json"),
       mcpConfigPath: join(homeDir, ".claude.json"),
       agentsDir: join(claudeDir, "agents"),
-      skillsDir: join(claudeDir, "skills")
+      skillsDir,
+      skillScanDirs: [skillsDir]
     };
   },
   createDefaultProfile: (id) => ({

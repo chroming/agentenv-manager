@@ -762,6 +762,19 @@ export const App = () => {
     }
   };
 
+  const openSkillDiscoveries = async () => {
+    setSkillLibraryTool("discoveries");
+    setBusy(true);
+    setError(undefined);
+    try {
+      setSkillInventory(await window.agentEnv.scanSkillInventory());
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const importGitHubSkill = async (input: { url: string; id?: string }) => {
     setBusy(true);
     setError(undefined);
@@ -919,7 +932,9 @@ export const App = () => {
                     <button
                       className="secondary-action"
                       type="button"
-                      onClick={() => setSkillLibraryTool("discoveries")}
+                      onClick={() => {
+                        void openSkillDiscoveries();
+                      }}
                     >
                       <ScanLine size={15} strokeWidth={2.2} />
                       Scan local Skills
@@ -977,7 +992,9 @@ export const App = () => {
                 <button
                   className="metric-tile metric-tile--button"
                   type="button"
-                  onClick={() => setSkillLibraryTool("discoveries")}
+                  onClick={() => {
+                    void openSkillDiscoveries();
+                  }}
                 >
                   <span className="metric-icon metric-icon--slate" aria-hidden="true">
                     <HardDrive size={21} strokeWidth={2.2} />
@@ -999,6 +1016,7 @@ export const App = () => {
                 skillUsage={skillUsage}
                 activeTool={skillLibraryTool}
                 onCloseTool={() => setSkillLibraryTool(undefined)}
+                onSelectLocalSkillFolder={() => window.agentEnv.selectSkillFolder()}
                 onImportUnmanaged={importUnmanagedSkill}
                 onImportGitHubSkill={importGitHubSkill}
                 onManageTargetSkill={manageTargetSkill}
@@ -1498,7 +1516,11 @@ export const App = () => {
             </header>
             <div className="target-grid">
               {targets.map((target) => (
-                <article className="target-card" key={target.id}>
+                <article
+                  aria-label={`Target ${target.name}`}
+                  className="target-card"
+                  key={target.id}
+                >
                   <div className="target-card__header">
                     <div>
                       <strong>{target.name}</strong>

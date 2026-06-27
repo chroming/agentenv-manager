@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillLibraryPanel } from "../../src/renderer/components/SkillLibraryPanel";
 
@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe("SkillLibraryPanel", () => {
-  it("keeps the skill list clean and routes secondary workflows through drawers and row actions", () => {
+  it("keeps the skill list clean and routes secondary workflows through drawers and row actions", async () => {
     const onImportUnmanaged = vi.fn();
     const onImportGitHubSkill = vi.fn();
     const onPreviewLibrarySkillUpdate = vi.fn();
@@ -18,6 +18,7 @@ describe("SkillLibraryPanel", () => {
     const onSetUpdateSource = vi.fn();
     const onManageTargetSkill = vi.fn();
     const onCloseTool = vi.fn();
+    const onSelectLocalSkillFolder = vi.fn().mockResolvedValue("/tmp/local-skills/path-reviewer");
 
     const renderPanel = (activeTool?: "import" | "discoveries") => (
       <SkillLibraryPanel
@@ -119,6 +120,7 @@ describe("SkillLibraryPanel", () => {
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         activeTool={activeTool}
         onCloseTool={onCloseTool}
+        onSelectLocalSkillFolder={onSelectLocalSkillFolder}
         onImportUnmanaged={onImportUnmanaged}
         onImportGitHubSkill={onImportGitHubSkill}
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
@@ -169,6 +171,16 @@ describe("SkillLibraryPanel", () => {
     expect(onUpdateLibrarySkill).toHaveBeenCalledWith("shared-reviewer");
 
     rerender(renderPanel("import"));
+    fireEvent.click(screen.getByRole("button", { name: "Choose local skill folder" }));
+    expect(onSelectLocalSkillFolder).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Local skill folder path")).toHaveValue(
+        "/tmp/local-skills/path-reviewer"
+      )
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Import local skill" }));
+    expect(onImportUnmanaged).toHaveBeenCalledWith("/tmp/local-skills/path-reviewer");
+
     fireEvent.change(screen.getByLabelText("GitHub skill URL"), {
       target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
     });

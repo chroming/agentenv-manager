@@ -387,13 +387,20 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   },
   createTargetPaths: ({ homeDir }) => {
     const configDir = join(homeDir, ".config", "opencode");
+    const skillsDir = join(configDir, "skills");
     return {
       targetId: "opencode",
       configDir,
       instructionsPath: join(configDir, "AGENTS.md"),
       configPath: join(configDir, "opencode.jsonc"),
       agentsDir: join(configDir, "agents"),
-      skillsDir: join(configDir, "skills")
+      skillsDir,
+      skillScanDirs: [
+        skillsDir,
+        join(configDir, "skill"),
+        join(homeDir, ".agents", "skills"),
+        join(homeDir, ".claude", "skills")
+      ]
     };
   },
   createDefaultProfile: (id) => ({

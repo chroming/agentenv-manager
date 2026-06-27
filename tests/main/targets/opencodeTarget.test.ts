@@ -56,6 +56,20 @@ describe("OpenCode target adapter", () => {
     );
   };
 
+  it("declares every OpenCode skill root that should be scanned", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+
+    expect(targetPaths.skillsDir).toBe(join(root, ".config", "opencode", "skills"));
+    expect(targetPaths.skillScanDirs).toEqual([
+      join(root, ".config", "opencode", "skills"),
+      join(root, ".config", "opencode", "skill"),
+      join(root, ".agents", "skills"),
+      join(root, ".claude", "skills")
+    ]);
+  });
+
   it("plans instructions, JSONC overlay, and managed MCP state without clobbering unmanaged config", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
     const adapter = createOpenCodeTargetAdapter();

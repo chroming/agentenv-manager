@@ -472,37 +472,42 @@ export const createSkillLibraryStore = (
     const libraryIds = new Set((await listSkills()).map((skill) => skill.id));
     const byKey = new Map<string, SkillInventoryEntry>();
     for (const target of targetPaths) {
-      if (!target.skillsDir || !(await pathExists(target.skillsDir))) {
-        continue;
-      }
-      const entries = await readdir(target.skillsDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory() || entry.name.startsWith(".")) {
+      const scanRoots = [...new Set([target.skillsDir, ...(target.skillScanDirs ?? [])].filter(Boolean))];
+      for (const scanRoot of scanRoots) {
+        if (!scanRoot || !(await pathExists(scanRoot))) {
           continue;
         }
-        const skillDir = join(target.skillsDir, entry.name);
-        if (!(await pathExists(join(skillDir, "SKILL.md")))) {
-          continue;
+        const entries = await readdir(scanRoot, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory() || entry.name.startsWith(".")) {
+            continue;
+          }
+          const skillDir = join(scanRoot, entry.name);
+          if (!(await pathExists(join(skillDir, "SKILL.md")))) {
+            continue;
+          }
+          const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
+          const markerId = await markerLibraryId(skillDir, target);
+          const status = markerId ? "managed" : libraryIds.has(entry.name) ? "library" : "unmanaged";
+          const libraryId = markerId ?? (status === "library" ? entry.name : undefined);
+          const key = `${status}:${libraryId ?? entry.name}:${skillDir}`;
+          const existing = byKey.get(key);
+          if (existing) {
+            if (!existing.foundIn.includes(target.targetId)) {
+              existing.foundIn.push(target.targetId);
+            }
+            continue;
+          }
+          byKey.set(key, {
+            id: entry.name,
+            name: metadataValue(content, "name") || entry.name,
+            description: metadataValue(content, "description"),
+            path: skillDir,
+            foundIn: [target.targetId],
+            status,
+            libraryId
+          });
         }
-        const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
-        const markerId = await markerLibraryId(skillDir, target);
-        const status = markerId ? "managed" : libraryIds.has(entry.name) ? "library" : "unmanaged";
-        const libraryId = markerId ?? (status === "library" ? entry.name : undefined);
-        const key = `${status}:${libraryId ?? entry.name}:${skillDir}`;
-        const existing = byKey.get(key);
-        if (existing) {
-          existing.foundIn.push(target.targetId);
-          continue;
-        }
-        byKey.set(key, {
-          id: entry.name,
-          name: metadataValue(content, "name") || entry.name,
-          description: metadataValue(content, "description"),
-          path: skillDir,
-          foundIn: [target.targetId],
-          status,
-          libraryId
-        });
       }
     }
     return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));

@@ -35,6 +35,7 @@ interface SkillLibraryPanelProps {
   skillUsage: Record<string, string[]>;
   activeTool?: "import" | "discoveries";
   onCloseTool?(): void;
+  onSelectLocalSkillFolder(): Promise<string | undefined>;
   onImportUnmanaged(sourcePath: string): void;
   onImportGitHubSkill(input: GitHubSkillImportInput): void;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
@@ -74,6 +75,7 @@ export const SkillLibraryPanel = ({
   skillUsage,
   activeTool,
   onCloseTool,
+  onSelectLocalSkillFolder,
   onImportUnmanaged,
   onImportGitHubSkill,
   onManageTargetSkill,
@@ -85,6 +87,7 @@ export const SkillLibraryPanel = ({
 }: SkillLibraryPanelProps) => {
   const [githubUrl, setGithubUrl] = useState("");
   const [githubId, setGithubId] = useState("");
+  const [localSkillPath, setLocalSkillPath] = useState("");
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | SkillSourceType>("all");
   const [usageFilter, setUsageFilter] = useState<"all" | "used" | "unused">("all");
@@ -153,6 +156,22 @@ export const SkillLibraryPanel = ({
     });
     setGithubUrl("");
     setGithubId("");
+  };
+
+  const importLocalSkill = () => {
+    const sourcePath = localSkillPath.trim();
+    if (!sourcePath) {
+      return;
+    }
+    onImportUnmanaged(sourcePath);
+    setLocalSkillPath("");
+  };
+
+  const selectLocalSkillFolder = async () => {
+    const sourcePath = await onSelectLocalSkillFolder();
+    if (sourcePath) {
+      setLocalSkillPath(sourcePath);
+    }
   };
 
   return (
@@ -535,6 +554,11 @@ export const SkillLibraryPanel = ({
             <p className="muted">Skills detected on targets that may need import or management.</p>
           </div>
           <div className="resource-list resource-list--unmanaged">
+            {skillInventory.length === 0 ? (
+              <p className="muted library-empty">
+                No target skills detected. Install skills into a supported target and scan again.
+              </p>
+            ) : null}
             {skillInventory.map((skill) => (
               <div
                 aria-label={`Environment skill ${skill.id}`}
@@ -593,12 +617,47 @@ export const SkillLibraryPanel = ({
           <div className="library-drawer__header">
             <div>
               <strong>Import Skill</strong>
-              <p className="muted">Use the header action for imports; local target imports live under Needs management.</p>
+              <p className="muted">Import a local skill folder or track a GitHub skill directory.</p>
             </div>
             <button className="icon-action" type="button" aria-label="Close library tool" onClick={onCloseTool}>
               <X size={16} strokeWidth={2.2} />
             </button>
           </div>
+          <section className="resource-section library-import-panel">
+            <div>
+              <div className="resource-heading">Import from local folder</div>
+              <p className="muted">Choose an existing skill folder that contains a SKILL.md file.</p>
+            </div>
+            <div className="library-import-grid">
+              <label>
+                <span>Selected folder</span>
+                <input
+                  aria-label="Local skill folder path"
+                  placeholder="No folder selected"
+                  readOnly
+                  value={localSkillPath}
+                />
+              </label>
+              <button
+                className="secondary-action"
+                aria-label="Choose local skill folder"
+                type="button"
+                onClick={() => {
+                  void selectLocalSkillFolder();
+                }}
+              >
+                Choose folder
+              </button>
+              <button
+                className="primary-action library-import-action"
+                type="button"
+                disabled={!localSkillPath.trim()}
+                onClick={importLocalSkill}
+              >
+                Import local skill
+              </button>
+            </div>
+          </section>
       <section className="resource-section library-import-panel">
         <div>
           <div className="resource-heading">Import from GitHub directory</div>

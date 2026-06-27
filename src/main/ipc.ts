@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { BrowserWindow, dialog, ipcMain } from "electron";
 import type { ActivationService } from "./activationService";
 import type { BackupStore } from "./backupStore";
 import type { McpLibraryStore } from "./mcpLibraryStore";
@@ -46,6 +46,18 @@ export const registerIpcHandlers = ({
   targetRegistry,
   targetDiscoveryService
 }: IpcServices) => {
+  ipcMain.handle("dialog:select-skill-folder", async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Select skill folder",
+      properties: ["openDirectory"] as Array<"openDirectory">
+    };
+    const result = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+
+    return result.canceled ? undefined : result.filePaths[0];
+  });
   ipcMain.handle("targets:list", () => targetDiscoveryService.listTargets());
   ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
   ipcMain.handle("skills:scan-inventory", () =>

@@ -189,6 +189,53 @@ describe("skill library store", () => {
     ]);
   });
 
+  it("scans additional target skill roots such as singular OpenCode skill directories", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const pluralDir = join(root, "home", ".config", "opencode", "skills", "plural-reviewer");
+    const singularDir = join(root, "home", ".config", "opencode", "skill", "singular-reviewer");
+    const externalDir = join(root, "home", ".agents", "skills", "external-reviewer");
+    await mkdir(pluralDir, { recursive: true });
+    await mkdir(singularDir, { recursive: true });
+    await mkdir(externalDir, { recursive: true });
+    await writeFile(
+      join(pluralDir, "SKILL.md"),
+      "---\nname: Plural Reviewer\ndescription: Plural root.\n---\n",
+      "utf8"
+    );
+    await writeFile(
+      join(singularDir, "SKILL.md"),
+      "---\nname: Singular Reviewer\ndescription: Singular root.\n---\n",
+      "utf8"
+    );
+    await writeFile(
+      join(externalDir, "SKILL.md"),
+      "---\nname: External Reviewer\ndescription: External shared root.\n---\n",
+      "utf8"
+    );
+
+    const store = createSkillLibraryStore(paths);
+    const inventory = await store.scanInventory([
+      {
+        targetId: "opencode",
+        configDir: join(root, "home", ".config", "opencode"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: join(root, "home", ".config", "opencode", "skills"),
+        skillScanDirs: [
+          join(root, "home", ".config", "opencode", "skill"),
+          join(root, "home", ".agents", "skills")
+        ]
+      }
+    ]);
+
+    expect(inventory.map((skill) => skill.id)).toEqual([
+      "external-reviewer",
+      "plural-reviewer",
+      "singular-reviewer"
+    ]);
+  });
+
   it("replaces an imported target skill with an AgentEnv-managed library skill", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

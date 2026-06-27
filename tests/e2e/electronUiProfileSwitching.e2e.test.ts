@@ -33,6 +33,9 @@ const writeJson = async (path: string, value: unknown) => {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 };
 
+const readJson = async <T,>(path: string): Promise<T> =>
+  JSON.parse(await readFile(path, "utf8")) as T;
+
 const findProfileByName = async (appDataRoot: string, name: string) => {
   const profileIds = await readdir(join(appDataRoot, "profiles"));
   for (const profileId of profileIds) {
@@ -240,12 +243,22 @@ const writeGitHubFixtureSkill = async (fixtureRoot: string, version: "v1" | "v2"
   return skillDir;
 };
 
-const writeUnmanagedTargetSkill = async (opencodeDir: string) => {
-  const skillDir = join(opencodeDir, "skills", "target-only-reviewer");
+const writeUnmanagedTargetSkill = async (
+  opencodeDir: string,
+  id = "target-only-reviewer",
+  description = "Existing target skill ready to migrate.",
+  rootName = "skills"
+) => {
+  const title = id
+    .split("-")
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join(" ");
+  const skillDir = join(opencodeDir, rootName, id);
   await mkdir(skillDir, { recursive: true });
   await writeFile(
     join(skillDir, "SKILL.md"),
-    "---\nname: Target Only Reviewer\ndescription: Existing target skill ready to migrate.\n---\n\n# Target Only Reviewer\n\nMigrate me into the shared library.\n",
+    `---\nname: ${title}\ndescription: ${description}\n---\n\n# ${title}\n\nMigrate me into the shared library.\n`,
     "utf8"
   );
 
@@ -400,6 +413,28 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
   }, 30_000);
 
+  it("shows target readiness from installed commands and writable local paths", async () => {
+    const { homeDir, page } = await launchApp();
+
+    await page.getByRole("button", { name: "Targets" }).click();
+    const targetsPage = page.getByRole("region", { name: "Targets", exact: true });
+    await targetsPage.waitFor({ state: "visible" });
+
+    const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
+    await openCodeCard.waitFor({ state: "visible" });
+    await expect.poll(() => openCodeCard.textContent()).toContain("Ready");
+    await expect.poll(() => openCodeCard.textContent()).toContain(
+      join(homeDir, ".config", "opencode")
+    );
+    await expect.poll(() => openCodeCard.textContent()).toContain("Config directory");
+    await expect.poll(() => openCodeCard.textContent()).toContain("Writable");
+
+    const codexCard = page.getByRole("article", { name: "Target Codex" });
+    await codexCard.waitFor({ state: "visible" });
+    await expect.poll(() => codexCard.textContent()).toContain("Ready");
+    await expect.poll(() => codexCard.textContent()).toContain(join(homeDir, ".codex"));
+  }, 30_000);
+
   it("creates, edits, duplicates, and deletes profiles through the rendered app", async () => {
     const { appDataRoot, page } = await launchApp();
 
@@ -461,11 +496,20 @@ describe("Electron UI profile switching e2e", () => {
 
   it("imports an existing target skill into the shared library", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
+    await writeUnmanagedTargetSkill(
+      opencodeDir,
+      "late-target-reviewer",
+      "Created after app launch and discovered by manual scan.",
+      "skill"
+    );
 
     await page.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("button", { name: "Scan local Skills" }).click();
     await page
       .getByRole("group", { name: "Environment skill target-only-reviewer" })
+      .waitFor({ state: "visible" });
+    await page
+      .getByRole("group", { name: "Environment skill late-target-reviewer" })
       .waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: "Import target-only-reviewer" }).click();
@@ -497,6 +541,108 @@ describe("Electron UI profile switching e2e", () => {
         "utf8"
       )
     ).resolves.toContain('"source": "skills-library/target-only-reviewer"');
+  }, 30_000);
+
+  it("imports a local skill folder from the Import Skill drawer", async () => {
+    const { appDataRoot, page } = await launchApp();
+    await page.setViewportSize({ width: 1180, height: 760 });
+    const localSkillDir = join(appDataRoot, "manual-import-skills", "path-reviewer");
+    await mkdir(localSkillDir, { recursive: true });
+    await writeFile(
+      join(localSkillDir, "SKILL.md"),
+      "---\nname: Path Reviewer\ndescription: Imported from a selected local folder.\n---\n\n# Path Reviewer\n\nUse the selected folder import flow.\n",
+      "utf8"
+    );
+
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      localSkillDir
+    );
+
+    await page.getByRole("button", { name: "Import Skill" }).click();
+    await page.getByRole("button", { name: "Choose local skill folder" }).waitFor({
+      state: "visible"
+    });
+    await expect
+      .poll(
+        () =>
+          page.locator(".library-drawer").evaluate((element) => ({
+            clientHeight: element.clientHeight,
+            scrollHeight: element.scrollHeight
+          })),
+        { timeout: 5_000 }
+      )
+      .toMatchObject({
+        clientHeight: expect.any(Number),
+        scrollHeight: expect.any(Number)
+      });
+    const drawerMetrics = await page.locator(".library-drawer").evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight
+    }));
+    expect(drawerMetrics.clientHeight).toBeGreaterThanOrEqual(
+      Math.min(drawerMetrics.scrollHeight, 360)
+    );
+    await page.getByRole("button", { name: "Choose local skill folder" }).click();
+    await expect
+      .poll(() => page.getByLabel("Local skill folder path").inputValue(), { timeout: 5_000 })
+      .toBe(localSkillDir);
+    await page.getByRole("button", { name: "Import local skill" }).click();
+    await expect
+      .poll(() => fileExists(join(appDataRoot, "skills-library", "path-reviewer", "SKILL.md")), {
+        timeout: 5_000
+      })
+      .toBe(true);
+
+    await page
+      .getByRole("group", { name: "Library item path-reviewer" })
+      .getByText("Imported from a selected local folder.")
+      .waitFor({ state: "visible" });
+    await expect(
+      readFile(join(appDataRoot, "skills-library", "path-reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("Use the selected folder import flow.");
+  }, 30_000);
+
+  it("adds and removes reusable MCP servers through the rendered MCP library", async () => {
+    const { appDataRoot, page } = await launchApp();
+    const mcpLibraryPath = join(appDataRoot, "mcp-library.json");
+
+    await page.getByRole("button", { name: "MCP Servers" }).click();
+    await page.getByRole("region", { name: "MCP library" }).waitFor({ state: "visible" });
+    await page.getByLabel("MCP library id").fill("local-search");
+    await page.getByLabel("MCP library name").fill("Local Search");
+    await page.getByLabel("MCP command").fill("node");
+    await page.getByLabel("MCP args").fill("server.js\n--stdio");
+    await page.getByRole("button", { name: "Save MCP server" }).click();
+
+    const localSearch = page.getByRole("group", { name: "MCP library item local-search" });
+    await localSearch.waitFor({ state: "visible" });
+    await expect.poll(() => localSearch.textContent()).toContain("node server.js --stdio");
+    await expect
+      .poll(async () => readJson<Array<{ id: string; command?: string; args?: string[] }>>(mcpLibraryPath))
+      .toContainEqual(
+        expect.objectContaining({
+          id: "local-search",
+          command: "node",
+          args: ["server.js", "--stdio"]
+        })
+      );
+
+    await localSearch.getByRole("button", { name: "Remove local-search" }).click();
+    await localSearch.waitFor({ state: "detached" });
+    await expect
+      .poll(async () =>
+        (await readJson<Array<{ id: string }>>(mcpLibraryPath)).some(
+          (server) => server.id === "local-search"
+        )
+      )
+      .toBe(false);
   }, 30_000);
 
   it("installs a shared library skill into an OpenCode profile from the rendered app", async () => {
