@@ -1,4 +1,5 @@
 import type { ActivationPreview } from "../../shared/types";
+import { DiffViewer } from "./DiffViewer";
 
 interface PreviewDialogProps {
   preview?: ActivationPreview;
@@ -32,7 +33,7 @@ export const PreviewDialog = ({ preview }: PreviewDialogProps) => {
         {preview.changes.map((change) => (
           <details key={change.path} open>
             <summary>{change.path}</summary>
-            <pre>{change.diff}</pre>
+            <DiffViewer path={change.path} diff={change.diff} />
           </details>
         ))}
       </div>

@@ -527,16 +527,94 @@ summary {
   font-weight: 650;
 }
 
-pre {
-  background: #111827;
+.diff-viewer {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.diff-language {
+  color: var(--subtle);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
+  font-size: 11px;
+  justify-self: end;
+  text-transform: uppercase;
+}
+
+.diff-table-wrap {
+  background: #f8fafc;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  color: #e5e7eb;
-  font-size: 12px;
-  line-height: 1.55;
-  max-height: 260px;
+  max-height: 320px;
+  min-width: 0;
   overflow: auto;
-  padding: 12px;
-  white-space: pre-wrap;
+}
+
+.diff-table {
+  border-collapse: collapse;
+  color: #24292e;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+.diff-row {
+  background: #ffffff;
+}
+
+.diff-row--file,
+.diff-row--hunk {
+  background: #f1f5f9;
+  color: #526174;
+}
+
+.diff-row--addition {
+  background: #eefbf3;
+}
+
+.diff-row--deletion {
+  background: #fff1f0;
+}
+
+.diff-line-number,
+.diff-marker {
+  border-right: 1px solid #e5eaf1;
+  color: #7a8699;
+  padding: 2px 8px;
+  text-align: right;
+  user-select: none;
+  white-space: nowrap;
+  width: 1%;
+}
+
+.diff-marker {
+  font-weight: 700;
+  text-align: center;
+}
+
+.diff-row--addition .diff-marker {
+  color: #138a4b;
+}
+
+.diff-row--deletion .diff-marker {
+  color: #c7362f;
+}
+
+.diff-code {
+  min-width: 280px;
+  padding: 2px 10px;
+  white-space: pre;
+}
+
+.diff-code code {
+  color: inherit;
+  display: inline-block;
+  min-width: 100%;
 }
 
 .history-row,
