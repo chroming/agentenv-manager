@@ -10,6 +10,12 @@ import type { AssetPolicy, ProfileManifest } from "./schemas";
 
 export interface AgentEnvApi {
   listTargets(): Promise<TargetInfo[]>;
+  listSkillLibrary(): Promise<SkillLibraryEntry[]>;
+  scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
+  importSkillToLibrary(sourcePath: string): Promise<SkillLibraryEntry>;
+  updateLibrarySkill(id: string): Promise<SkillLibraryEntry>;
+  readSettings(): Promise<AgentEnvSettings>;
+  updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
@@ -19,6 +25,34 @@ export interface AgentEnvApi {
   listBackups(): Promise<BackupSummary[]>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
   rollback(backupId: string): Promise<RollbackResult>;
+}
+
+export interface SkillLibraryEntry {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+  sourceType: SkillSourceType;
+  source?: string;
+  contentHash: string;
+  updatedAt: string;
+}
+
+export interface UnmanagedSkillEntry {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+  foundIn: string[];
+}
+
+export type SkillSourceType = "local" | "github" | "zip";
+export type SkillSyncMethod = "symlink" | "copy" | "auto";
+export type SkillStorageLocation = "appData" | "agents";
+
+export interface AgentEnvSettings {
+  skillSyncMethod: SkillSyncMethod;
+  skillStorageLocation: SkillStorageLocation;
 }
 
 export interface TargetDescriptor {

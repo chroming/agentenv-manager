@@ -52,6 +52,23 @@ export const AssetPolicySchema = z.object({
       })
     )
     .default([]),
+  ownedFiles: z
+    .array(
+      z.object({
+        kind: z.enum(["agent", "skill"]),
+        source: RelativeAssetSourceSchema,
+        targetName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
+      })
+    )
+    .default([]),
+  skillRefs: z
+    .array(
+      z.object({
+        libraryId: SafeIdSchema,
+        targetName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
+      })
+    )
+    .default([]),
   disabledSkillPaths: z.array(z.string().min(1)).default([])
 });
 
@@ -79,6 +96,8 @@ export const LegacySkillsPolicySchema = z
       source: entry.source,
       targetName: entry.targetName
     })),
+    ownedFiles: [],
+    skillRefs: [],
     disabledSkillPaths: value.disabledSkillPaths
   }));
 

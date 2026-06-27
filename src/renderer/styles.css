@@ -940,6 +940,22 @@ summary {
   box-shadow: none;
 }
 
+.resource-settings-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.resource-settings-grid select {
+  min-height: 36px;
+  width: 100%;
+}
+
+.resource-list--unmanaged {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
 .resource-table-head {
   color: var(--subtle);
   display: grid;

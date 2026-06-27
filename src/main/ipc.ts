@@ -2,6 +2,8 @@ import { ipcMain } from "electron";
 import type { ActivationService } from "./activationService";
 import type { BackupStore } from "./backupStore";
 import type { ProfileStore } from "./profileStore";
+import type { SettingsStore } from "./settingsStore";
+import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import { SafeIdSchema } from "../shared/schemas";
 import type { SaveProfileInput } from "../shared/types";
@@ -11,6 +13,8 @@ export interface IpcServices {
   profileStore: ProfileStore;
   activationService: ActivationService;
   backupStore: BackupStore;
+  settingsStore: SettingsStore;
+  skillLibraryStore: SkillLibraryStore;
   targetRegistry: TargetRegistry;
   targetDiscoveryService: TargetDiscoveryService;
 }
@@ -27,10 +31,28 @@ export const registerIpcHandlers = ({
   profileStore,
   activationService,
   backupStore,
+  settingsStore,
+  skillLibraryStore,
   targetRegistry,
   targetDiscoveryService
 }: IpcServices) => {
   ipcMain.handle("targets:list", () => targetDiscoveryService.listTargets());
+  ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
+  ipcMain.handle("skills:scan-unmanaged", () =>
+    targetDiscoveryService
+      .listTargets()
+      .then((targets) => skillLibraryStore.scanUnmanaged(targets.map((target) => target.paths)))
+  );
+  ipcMain.handle("skills:import-library", (_event, sourcePath: unknown) =>
+    skillLibraryStore.importSkill({ sourcePath: String(sourcePath) })
+  );
+  ipcMain.handle("skills:update-library", (_event, id: unknown) =>
+    skillLibraryStore.updateSkill(parseId(id, "skill id"))
+  );
+  ipcMain.handle("settings:read", () => settingsStore.readSettings());
+  ipcMain.handle("settings:update", (_event, input: unknown) =>
+    settingsStore.updateSettings(input && typeof input === "object" ? input : {})
+  );
   ipcMain.handle("profiles:list", () => profileStore.listProfiles());
   ipcMain.handle("profiles:read", (_event, id: unknown) =>
     profileStore.readProfile(parseId(id, "profile id"))

@@ -26,6 +26,8 @@ const profile: ProfileDetail = {
   configText: '{\n  "mcp": {}\n}\n',
   assetPolicy: {
     ownedDirs: [],
+    ownedFiles: [],
+    skillRefs: [],
     disabledSkillPaths: []
   }
 };
@@ -117,6 +119,36 @@ const target: TargetInfo = {
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     listTargets: vi.fn().mockResolvedValue([target]),
+    listSkillLibrary: vi.fn().mockResolvedValue([]),
+    scanUnmanagedSkills: vi.fn().mockResolvedValue([]),
+    importSkillToLibrary: vi.fn().mockResolvedValue({
+      id: "skill",
+      name: "skill",
+      description: "",
+      path: "/tmp/skill",
+      sourceType: "local",
+      source: "/tmp/skill",
+      contentHash: "hash",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    }),
+    updateLibrarySkill: vi.fn().mockResolvedValue({
+      id: "skill",
+      name: "skill",
+      description: "",
+      path: "/tmp/skill",
+      sourceType: "local",
+      source: "/tmp/skill",
+      contentHash: "hash",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    }),
+    readSettings: vi.fn().mockResolvedValue({
+      skillSyncMethod: "symlink",
+      skillStorageLocation: "appData"
+    }),
+    updateSettings: vi.fn().mockImplementation(async (input) => ({
+      skillSyncMethod: input.skillSyncMethod ?? "symlink",
+      skillStorageLocation: input.skillStorageLocation ?? "appData"
+    })),
     listProfiles: vi
       .fn()
       .mockResolvedValue([

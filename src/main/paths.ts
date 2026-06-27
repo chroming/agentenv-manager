@@ -7,6 +7,7 @@ export interface AgentEnvPaths {
   backupsDir: string;
   targetStatesDir: string;
   activationHistoryPath: string;
+  skillsLibraryDir: string;
   homeDir: string;
   fakeHomeRoot: string;
   codexHome: string;
@@ -35,6 +36,8 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
     activationHistoryPath:
       overrides.activationHistoryPath ??
       join(overrides.appDataRoot, "activation-history.jsonl"),
+    skillsLibraryDir:
+      overrides.skillsLibraryDir ?? join(overrides.appDataRoot, "skills-library"),
     homeDir: home,
     fakeHomeRoot,
     codexHome,

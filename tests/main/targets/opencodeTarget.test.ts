@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readlink, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "jsonc-parser";
@@ -25,6 +25,8 @@ const makeProfile = (configText: string): ProfileDetail => ({
       { kind: "agent", source: "agents/reviewer", targetName: "reviewer" },
       { kind: "skill", source: "skills/reviewer", targetName: "agentenv-reviewer" }
     ],
+    ownedFiles: [],
+    skillRefs: [],
     disabledSkillPaths: []
   }
 });
@@ -183,6 +185,116 @@ describe("OpenCode target adapter", () => {
     ).resolves.toBe("# Skill\n");
   });
 
+  it("links reusable library skills into the OpenCode skills directory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const skillLibraryDir = join(root, "app-data", "skills-library");
+    const librarySkillDir = join(skillLibraryDir, "shared-reviewer");
+    await mkdir(join(librarySkillDir, "references"), { recursive: true });
+    await writeFile(join(librarySkillDir, "SKILL.md"), "# Shared reviewer\n");
+    await writeFile(join(librarySkillDir, "references", "guide.md"), "# Guide\n");
+    const profile: ProfileDetail = {
+      ...makeProfile("{}"),
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [
+          {
+            libraryId: "shared-reviewer",
+            targetName: "agentenv-shared-reviewer"
+          }
+        ],
+        disabledSkillPaths: []
+      }
+    };
+
+    await expect(
+      adapter.validateAssets({ profile, targetPaths, skillLibraryDir })
+    ).resolves.toEqual([]);
+    await adapter.applyAssets({ profile, targetPaths, skillLibraryDir });
+
+    const targetDir = join(targetPaths.skillsDir ?? "", "agentenv-shared-reviewer");
+    await expect(readFile(join(targetDir, "SKILL.md"), "utf8")).resolves.toBe(
+      "# Shared reviewer\n"
+    );
+    await expect(readFile(join(targetDir, "references", "guide.md"), "utf8")).resolves.toBe(
+      "# Guide\n"
+    );
+    expect((await lstat(join(targetDir, "SKILL.md"))).isSymbolicLink()).toBe(true);
+    await expect(readlink(join(targetDir, "SKILL.md"))).resolves.toBe(
+      join(librarySkillDir, "SKILL.md")
+    );
+    await expect(readFile(join(targetDir, ".agentenv-owner.json"), "utf8")).resolves.toContain(
+      '"source": "skills-library/shared-reviewer"'
+    );
+  });
+
+  it("can copy reusable library skills when symlinks are not desired", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const skillLibraryDir = join(root, "app-data", "skills-library");
+    const librarySkillDir = join(skillLibraryDir, "shared-reviewer");
+    await mkdir(librarySkillDir, { recursive: true });
+    await writeFile(join(librarySkillDir, "SKILL.md"), "# Shared reviewer\n");
+    const profile: ProfileDetail = {
+      ...makeProfile("{}"),
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [{ libraryId: "shared-reviewer", targetName: "agentenv-shared-reviewer" }],
+        disabledSkillPaths: []
+      }
+    };
+
+    await adapter.applyAssets({
+      profile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: "copy"
+    });
+
+    const targetSkillMd = join(targetPaths.skillsDir ?? "", "agentenv-shared-reviewer", "SKILL.md");
+    await expect(readFile(targetSkillMd, "utf8")).resolves.toBe("# Shared reviewer\n");
+    expect((await lstat(targetSkillMd)).isSymbolicLink()).toBe(false);
+  });
+
+  it("rejects reusable library skills that target the same skill directory as profile assets", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const skillLibraryDir = join(root, "app-data", "skills-library");
+    const profileDir = join(root, "profiles", "daily-coding");
+    await mkdir(join(profileDir, "skills", "reviewer"), { recursive: true });
+    await writeFile(join(profileDir, "skills", "reviewer", "SKILL.md"), "# Profile reviewer\n");
+    await mkdir(join(skillLibraryDir, "shared-reviewer"), { recursive: true });
+    await writeFile(join(skillLibraryDir, "shared-reviewer", "SKILL.md"), "# Shared reviewer\n");
+    const profile: ProfileDetail = {
+      ...makeProfile("{}"),
+      profileDir,
+      assetPolicy: {
+        ownedDirs: [
+          { kind: "skill", source: "skills/reviewer", targetName: "agentenv-reviewer" }
+        ],
+        ownedFiles: [],
+        skillRefs: [
+          {
+            libraryId: "shared-reviewer",
+            targetName: "agentenv-reviewer"
+          }
+        ],
+        disabledSkillPaths: []
+      }
+    };
+
+    await expect(
+      adapter.validateAssets({ profile, targetPaths, skillLibraryDir })
+    ).resolves.toContain(
+      "Skill target agentenv-reviewer is declared more than once: skills/reviewer and skills-library/shared-reviewer"
+    );
+  });
+
   it("does not trust a target directory just because it contains an owner marker file", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
     const adapter = createOpenCodeTargetAdapter();
@@ -201,6 +313,8 @@ describe("OpenCode target adapter", () => {
         ownedDirs: [
           { kind: "skill", source: "skills/reviewer", targetName: "agentenv-reviewer" }
         ],
+        ownedFiles: [],
+        skillRefs: [],
         disabledSkillPaths: []
       }
     };
@@ -248,6 +362,8 @@ describe("OpenCode target adapter", () => {
           { kind: "skill", source: "skills/next", targetName: "agentenv-next-skill" },
           { kind: "agent", source: "agents/next", targetName: "next-agent" }
         ],
+        ownedFiles: [],
+        skillRefs: [],
         disabledSkillPaths: []
       }
     };

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   AssetPolicySchema,
   LegacySkillsPolicySchema
@@ -18,10 +18,18 @@ import { replaceManagedSection } from "../managedSections";
 import {
   createOwnerMarkerContent,
   isAgentEnvOwnedDir,
-  markerPathFor
+  isAgentEnvOwnedFile,
+  markerPathFor,
+  markerPathForFile
 } from "../ownershipMarkers";
 import { findSecretWarnings } from "../secretWarnings";
 import { findUnmanagedMcpConflicts, validateToml } from "../tomlConfig";
+import {
+  addSkillRefBackupPaths,
+  applySkillRefs,
+  skillTargetNames,
+  validateSkillRefs
+} from "./skillRefs";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
 
 const hashText = (content: string): string =>
@@ -59,10 +67,16 @@ const buildSkillsConfigToml = (profile: ProfileDetail): string => {
 
 const invalidMessage = (label: string, message: string) => `${label}: ${message}`;
 
-const validateAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
+const validateAssets = async (input: TargetAssetInput) => {
+  const { profile, targetPaths } = input;
   const errors: string[] = [];
+  const ownedFiles = profile.assetPolicy.ownedFiles ?? [];
+
   if (!targetPaths.skillsDir && profile.assetPolicy.ownedDirs.length > 0) {
     return ["Codex target does not expose a skills directory"];
+  }
+  if (!profile.profileDir && (profile.assetPolicy.ownedDirs.length > 0 || ownedFiles.length > 0)) {
+    return ["Profile directory is required to copy owned assets"];
   }
 
   for (const ownedDir of profile.assetPolicy.ownedDirs) {
@@ -87,10 +101,39 @@ const validateAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
     }
   }
 
+  for (const ownedFile of ownedFiles) {
+    if (ownedFile.kind !== "agent") {
+      errors.push(`Codex does not support owned ${ownedFile.kind} files`);
+      continue;
+    }
+    if (!targetPaths.agentsDir) {
+      errors.push("Codex target does not expose an agents directory");
+      continue;
+    }
+
+    const sourceFile = join(profile.profileDir ?? "", ownedFile.source);
+    const targetFile = join(targetPaths.agentsDir, ownedFile.targetName);
+    if (!(await pathExists(sourceFile))) {
+      errors.push(`Owned agent source does not exist: ${sourceFile}`);
+    }
+    if (
+      (await pathExists(targetFile)) &&
+      !(await isAgentEnvOwnedFile(targetFile, {
+        targetId: targetPaths.targetId,
+        kind: "agent"
+      }))
+    ) {
+      errors.push(`Agent target already exists and is not AgentEnv-owned: ${targetFile}`);
+    }
+  }
+
+  errors.push(...(await validateSkillRefs(input)));
+
   return errors;
 };
 
-const removeStaleOwnedSkills = async ({ profile, targetPaths }: TargetAssetInput) => {
+const removeStaleOwnedSkills = async (input: TargetAssetInput) => {
+  const { profile, targetPaths } = input;
   if (!targetPaths.skillsDir || !(await pathExists(targetPaths.skillsDir))) {
     return;
   }
@@ -100,6 +143,9 @@ const removeStaleOwnedSkills = async ({ profile, targetPaths }: TargetAssetInput
       .filter((ownedDir) => ownedDir.kind === "skill")
       .map((ownedDir) => ownedDir.targetName)
   );
+  for (const skillName of skillTargetNames(input)) {
+    desired.add(skillName);
+  }
   const entries = await readdir(targetPaths.skillsDir, { withFileTypes: true });
 
   for (const entry of entries) {
@@ -119,7 +165,38 @@ const removeStaleOwnedSkills = async ({ profile, targetPaths }: TargetAssetInput
   }
 };
 
-const getAssetBackupPaths = async ({ profile, targetPaths }: TargetAssetInput) => {
+const removeStaleOwnedAgentFiles = async ({ profile, targetPaths }: TargetAssetInput) => {
+  if (!targetPaths.agentsDir || !(await pathExists(targetPaths.agentsDir))) {
+    return;
+  }
+
+  const desired = new Set(
+    (profile.assetPolicy.ownedFiles ?? [])
+      .filter((ownedFile) => ownedFile.kind === "agent")
+      .map((ownedFile) => ownedFile.targetName)
+  );
+  const entries = await readdir(targetPaths.agentsDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isFile() || entry.name.endsWith(".agentenv-owner.json") || desired.has(entry.name)) {
+      continue;
+    }
+
+    const targetFile = join(targetPaths.agentsDir, entry.name);
+    if (
+      await isAgentEnvOwnedFile(targetFile, {
+        targetId: targetPaths.targetId,
+        kind: "agent"
+      })
+    ) {
+      await rm(targetFile, { force: true });
+      await rm(markerPathForFile(targetFile), { force: true });
+    }
+  }
+};
+
+const getAssetBackupPaths = async (input: TargetAssetInput) => {
+  const { profile, targetPaths } = input;
   const paths = new Set<string>();
   const desired = new Set(
     profile.assetPolicy.ownedDirs
@@ -131,6 +208,16 @@ const getAssetBackupPaths = async ({ profile, targetPaths }: TargetAssetInput) =
     for (const ownedDir of profile.assetPolicy.ownedDirs) {
       if (ownedDir.kind === "skill") {
         paths.add(join(targetPaths.skillsDir, ownedDir.targetName));
+      }
+    }
+  }
+  addSkillRefBackupPaths(paths, targetPaths, input);
+  if (targetPaths.agentsDir) {
+    for (const ownedFile of profile.assetPolicy.ownedFiles ?? []) {
+      if (ownedFile.kind === "agent") {
+        const targetFile = join(targetPaths.agentsDir, ownedFile.targetName);
+        paths.add(targetFile);
+        paths.add(markerPathForFile(targetFile));
       }
     }
   }
@@ -154,11 +241,38 @@ const getAssetBackupPaths = async ({ profile, targetPaths }: TargetAssetInput) =
     }
   }
 
+  if (targetPaths.agentsDir && (await pathExists(targetPaths.agentsDir))) {
+    const desired = new Set(
+      (profile.assetPolicy.ownedFiles ?? [])
+        .filter((ownedFile) => ownedFile.kind === "agent")
+        .map((ownedFile) => ownedFile.targetName)
+    );
+    const entries = await readdir(targetPaths.agentsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || entry.name.endsWith(".agentenv-owner.json") || desired.has(entry.name)) {
+        continue;
+      }
+
+      const targetFile = join(targetPaths.agentsDir, entry.name);
+      if (
+        await isAgentEnvOwnedFile(targetFile, {
+          targetId: targetPaths.targetId,
+          kind: "agent"
+        })
+      ) {
+        paths.add(targetFile);
+        paths.add(markerPathForFile(targetFile));
+      }
+    }
+  }
+
   return [...paths];
 };
 
-const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
-  await removeStaleOwnedSkills({ profile, targetPaths });
+const applyAssets = async (input: TargetAssetInput) => {
+  const { profile, targetPaths } = input;
+  await removeStaleOwnedSkills(input);
+  await removeStaleOwnedAgentFiles(input);
 
   for (const ownedDir of profile.assetPolicy.ownedDirs) {
     const sourceDir = join(profile.profileDir ?? "", ownedDir.source);
@@ -186,6 +300,38 @@ const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
       "utf8"
     );
   }
+
+  for (const ownedFile of profile.assetPolicy.ownedFiles ?? []) {
+    if (ownedFile.kind !== "agent" || !targetPaths.agentsDir) {
+      continue;
+    }
+    const sourceFile = join(profile.profileDir ?? "", ownedFile.source);
+    const targetFile = join(targetPaths.agentsDir, ownedFile.targetName);
+
+    if (
+      await isAgentEnvOwnedFile(targetFile, {
+        targetId: targetPaths.targetId,
+        kind: "agent"
+      })
+    ) {
+      await rm(targetFile, { force: true });
+      await rm(markerPathForFile(targetFile), { force: true });
+    }
+
+    await mkdir(dirname(targetFile), { recursive: true });
+    await cp(sourceFile, targetFile);
+    await writeFile(
+      markerPathForFile(targetFile),
+      createOwnerMarkerContent({
+        profileId: profile.id,
+        targetId: profile.manifest.targetId,
+        kind: ownedFile.kind,
+        source: ownedFile.source
+      }),
+      "utf8"
+    );
+  }
+  await applySkillRefs(input);
 };
 
 const readAssetPolicy = async (profileDir: string) => {
@@ -215,19 +361,19 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     instructionsLabel: "AGENTS.md",
     configLabel: "config.toml managed fragment",
     configLanguage: "toml",
-    realWritesEnabled: false,
+    realWritesEnabled: true,
     executableName: "codex"
   },
-  createTargetPaths: ({ homeDir, fakeHomeRoot }) => {
-    const root = fakeHomeRoot ?? homeDir;
-    const codexHome = join(root, ".codex");
+  createTargetPaths: ({ homeDir }) => {
+    const codexHome = join(homeDir, ".codex");
     return {
       targetId: "codex",
       configDir: codexHome,
       instructionsPath: join(codexHome, "AGENTS.md"),
       instructionsOverridePath: join(codexHome, "AGENTS.override.md"),
       configPath: join(codexHome, "config.toml"),
-      skillsDir: join(root, ".agents", "skills")
+      agentsDir: join(codexHome, "agents"),
+      skillsDir: join(homeDir, ".agents", "skills")
     };
   },
   createDefaultProfile: (id) => ({
@@ -243,7 +389,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     instructions:
       "# Global Codex Guidance\n\n- Keep changes scoped and reversible.\n- Preview environment changes before applying them.\n",
     configText: "",
-    assetPolicy: { ownedDirs: [], disabledSkillPaths: [] }
+    assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], disabledSkillPaths: [] }
   }),
   readProfileFiles: async (profileDir, manifest) => {
     const [instructions, configText, assetPolicy] = await Promise.all([

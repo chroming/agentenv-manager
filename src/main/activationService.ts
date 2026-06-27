@@ -12,6 +12,11 @@ import {
 import type { AgentEnvPaths } from "./paths";
 import type { ProfileStore } from "./profileStore";
 import {
+  createSettingsStore,
+  resolveSkillsLibraryDir,
+  type SettingsStore
+} from "./settingsStore";
+import {
   createTargetRegistry,
   type TargetRegistry
 } from "./targets/registry";
@@ -30,6 +35,7 @@ export interface ActivationServiceOptions {
   profileStore: ProfileStore;
   targetRegistry?: TargetRegistry;
   allowRealHomeWrites?: boolean;
+  settingsStore?: SettingsStore;
 }
 
 export interface ActivationService {
@@ -158,7 +164,8 @@ export const createActivationService = ({
   paths,
   profileStore,
   targetRegistry = createTargetRegistry(),
-  allowRealHomeWrites = false
+  allowRealHomeWrites = false,
+  settingsStore = createSettingsStore(paths)
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
   const previews = new Map<string, ActivationPreview>();
@@ -200,14 +207,23 @@ export const createActivationService = ({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
     });
+    const settings = await settingsStore.readSettings();
+    const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     const stateFile = await readTargetStateFile(adapter.descriptor.id);
     const targetPreview = await adapter.createPreview({
       profile,
       targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: settings.skillSyncMethod,
       state: stateFile.state
     });
     const profileErrors = validateProfileStructure(profile);
-    const assetErrors = await adapter.validateAssets({ profile, targetPaths });
+    const assetErrors = await adapter.validateAssets({
+      profile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: settings.skillSyncMethod
+    });
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
@@ -244,6 +260,8 @@ export const createActivationService = ({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
     });
+    const settings = await settingsStore.readSettings();
+    const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     if (
       !allowRealHomeWrites &&
       !adapter.descriptor.realWritesEnabled &&
@@ -262,13 +280,23 @@ export const createActivationService = ({
       }
     }
 
-    const assetErrors = await adapter.validateAssets({ profile, targetPaths });
+    const assetErrors = await adapter.validateAssets({
+      profile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: settings.skillSyncMethod
+    });
     if (assetErrors.length > 0) {
       return { ok: false, errors: assetErrors };
     }
 
     const statePath = statePathFor(preview.targetId);
-    const assetBackupPaths = await adapter.getAssetBackupPaths({ profile, targetPaths });
+    const assetBackupPaths = await adapter.getAssetBackupPaths({
+      profile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: settings.skillSyncMethod
+    });
     const backup = await backupStore.createBackup([
       ...preview.changes.map((change) => change.path),
       ...assetBackupPaths,
@@ -280,7 +308,12 @@ export const createActivationService = ({
         await writeAtomic(change.path, change.after);
       }
 
-      await adapter.applyAssets({ profile, targetPaths });
+      await adapter.applyAssets({
+        profile,
+        targetPaths,
+        skillLibraryDir,
+        skillSyncMethod: settings.skillSyncMethod
+      });
       await writeTargetState(preview.targetId, preview.targetState);
     } catch (error) {
       try {

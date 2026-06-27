@@ -19,14 +19,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 export const markerPathFor = (targetDir: string) =>
   join(targetDir, ".agentenv-owner.json");
 
+export const markerPathForFile = (targetFile: string) =>
+  `${targetFile}.agentenv-owner.json`;
+
 export const createOwnerMarkerContent = (input: OwnerMarkerInput) =>
   `${JSON.stringify({ owner: OWNER, ...input }, null, 2)}\n`;
 
-export const isAgentEnvOwnedDir = async (
-  targetDir: string,
+const isAgentEnvOwnedMarker = async (
+  markerPath: string,
   expected: OwnedDirExpectation
 ) => {
-  const content = await readTextIfExists(markerPathFor(targetDir));
+  const content = await readTextIfExists(markerPath);
   if (content.trim().length === 0) {
     return false;
   }
@@ -48,3 +51,13 @@ export const isAgentEnvOwnedDir = async (
     return false;
   }
 };
+
+export const isAgentEnvOwnedDir = async (
+  targetDir: string,
+  expected: OwnedDirExpectation
+) => isAgentEnvOwnedMarker(markerPathFor(targetDir), expected);
+
+export const isAgentEnvOwnedFile = async (
+  targetFile: string,
+  expected: OwnedDirExpectation
+) => isAgentEnvOwnedMarker(markerPathForFile(targetFile), expected);

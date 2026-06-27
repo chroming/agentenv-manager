@@ -25,6 +25,8 @@ const makeProfile = (configText: string): ProfileDetail => ({
       { kind: "agent", source: "agents/reviewer", targetName: "reviewer" },
       { kind: "skill", source: "skills/reviewer", targetName: "reviewer" }
     ],
+    ownedFiles: [],
+    skillRefs: [],
     disabledSkillPaths: []
   }
 });
@@ -229,6 +231,8 @@ describe("Claude Code target adapter", () => {
       profileDir,
       assetPolicy: {
         ownedDirs: [{ kind: "skill", source: "skills/reviewer", targetName: "reviewer" }],
+        ownedFiles: [],
+        skillRefs: [],
         disabledSkillPaths: []
       }
     };

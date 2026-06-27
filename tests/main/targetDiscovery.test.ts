@@ -131,17 +131,21 @@ describe("target discovery", () => {
     );
   });
 
-  it("keeps detected Codex guarded even when its CLI exists", async () => {
+  it("marks Codex ready when the CLI and writable user config files are present", async () => {
     const { binDir, service } = await makeService();
     const executable = join(binDir, "codex");
+    const codexDir = join(root, ".codex");
     await writeFile(executable, "#!/bin/sh\n");
     await chmod(executable, 0o755);
+    await mkdir(codexDir, { recursive: true });
+    await writeFile(join(codexDir, "AGENTS.md"), "# Codex\n");
+    await writeFile(join(codexDir, "config.toml"), 'model = "gpt-5"\n');
 
     const targets = await service.listTargets();
     const codex = targets.find((target) => target.id === "codex");
 
-    expect(codex?.health.status).toBe("guarded");
+    expect(codex?.health.status).toBe("ready");
     expect(codex?.health.executableFound).toBe(true);
-    expect(codex?.health.canWrite).toBe(false);
+    expect(codex?.health.canWrite).toBe(true);
   });
 });

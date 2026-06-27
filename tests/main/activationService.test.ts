@@ -5,7 +5,6 @@ import {
   rm,
   writeFile
 } from "node:fs/promises";
-import { homedir } from "node:os";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -24,7 +23,7 @@ const makeEnv = async () => {
   const userSkillsDir = join(root, ".agents", "skills");
   await mkdir(codexHome, { recursive: true });
   await mkdir(userSkillsDir, { recursive: true });
-  const paths = createPaths({ appDataRoot: root, codexHome, userSkillsDir });
+  const paths = createPaths({ appDataRoot: root, homeDir: root, codexHome, userSkillsDir });
 
   const profileDir = join(paths.profilesDir, "daily-coding");
   await mkdir(join(profileDir, "skills", "example-skill"), { recursive: true });
@@ -188,33 +187,19 @@ describe("activation service", () => {
     );
   });
 
-  it("refuses real Codex home writes by default", async () => {
-    const { paths } = await makeEnv();
-    const guardedPaths = createPaths({
-      appDataRoot: paths.appDataRoot,
-      codexHome: join(homedir(), ".codex"),
-      userSkillsDir: paths.userSkillsDir,
-      globalAgentsPath: paths.globalAgentsPath,
-      codexConfigPath: paths.codexConfigPath
-    });
-    const guardedProfileStore = createProfileStore({
-      appDataRoot: guardedPaths.appDataRoot,
-      codexHome: guardedPaths.codexHome,
-      userSkillsDir: guardedPaths.userSkillsDir
-    });
-    const guardedService = createActivationService({
-      paths: guardedPaths,
-      profileStore: guardedProfileStore
-    });
-    await writeFile(guardedPaths.globalAgentsPath, "# Old agents\n");
+  it("applies Codex profiles without modifying auth.json", async () => {
+    const { paths, service } = await makeEnv();
+    const authPath = join(paths.codexHome, "auth.json");
+    await writeFile(paths.globalAgentsPath, "# Old agents\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+    await writeFile(authPath, '{"token":"keep-me"}\n');
 
-    const preview = await guardedService.previewProfile("daily-coding");
-    const result = await guardedService.applyProfile("daily-coding", preview.id);
+    const preview = await service.previewProfile("daily-coding");
+    expect(Object.keys(preview.liveFingerprints)).not.toContain(authPath);
+    const result = await service.applyProfile("daily-coding", preview.id);
 
-    expect(result).toEqual({
-      ok: false,
-      errors: ["Real Codex writes are disabled"]
-    });
+    expect(result.ok).toBe(true);
+    await expect(readFile(authPath, "utf8")).resolves.toBe('{"token":"keep-me"}\n');
   });
 
   it("restores already-written files when target asset apply fails", async () => {
@@ -234,7 +219,7 @@ describe("activation service", () => {
         instructionsLabel: "AGENTS.md",
         configLabel: "config.toml",
         configLanguage: "toml",
-        realWritesEnabled: false
+        realWritesEnabled: true
       },
       createTargetPaths: () => ({
         targetId: "codex",

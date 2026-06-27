@@ -6,6 +6,8 @@ import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
 import { seedDefaultProfiles } from "./seedProfiles";
+import { createSettingsStore } from "./settingsStore";
+import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetRegistry } from "./targets/registry";
 import { preloadScriptName } from "./windowConfig";
@@ -37,18 +39,22 @@ const createServices = async () => {
     process.env.AGENTENV_DATA_ROOT ?? join(app.getPath("userData"), "data");
   const paths = createPaths({
     appDataRoot,
+    homeDir: process.env.AGENTENV_HOME,
     fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });
   const targetRegistry = createTargetRegistry();
+  const settingsStore = createSettingsStore(paths);
   const profileStore = createProfileStore({
     appDataRoot: paths.appDataRoot,
     fakeHomeRoot: paths.fakeHomeRoot
   }, targetRegistry);
   const backupStore = createBackupStore(paths);
+  const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
   const activationService = createActivationService({
     paths,
     profileStore,
-    targetRegistry
+    targetRegistry,
+    settingsStore
   });
   const targetDiscoveryService = createTargetDiscoveryService({
     paths,
@@ -60,6 +66,8 @@ const createServices = async () => {
   return {
     profileStore,
     backupStore,
+    settingsStore,
+    skillLibraryStore,
     activationService,
     targetRegistry,
     targetDiscoveryService

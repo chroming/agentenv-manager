@@ -12,7 +12,10 @@ import type {
   ProfileSummary,
   RollbackPreview,
   SaveProfileInput,
-  TargetInfo
+  AgentEnvSettings,
+  SkillLibraryEntry,
+  TargetInfo,
+  UnmanagedSkillEntry
 } from "../shared/types";
 import { ActivationPanel } from "./components/ActivationPanel";
 import { AgentsEditor } from "./components/AgentsEditor";
@@ -23,6 +26,8 @@ import { SkillsEditor } from "./components/SkillsEditor";
 
 const emptyAssetPolicy: AssetPolicy = {
   ownedDirs: [],
+  ownedFiles: [],
+  skillRefs: [],
   disabledSkillPaths: []
 };
 
@@ -197,6 +202,13 @@ const createValidationRows = (
 export const App = () => {
   const [targets, setTargets] = useState<TargetInfo[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
+  const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
+  const [unmanagedSkills, setUnmanagedSkills] = useState<UnmanagedSkillEntry[]>([]);
+  const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
+    skillSyncMethod: "symlink",
+    skillStorageLocation: "appData"
+  });
+  const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string>();
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
@@ -209,14 +221,39 @@ export const App = () => {
   const [error, setError] = useState<string>();
 
   const refreshProfiles = async () => {
-    const [targetItems, profileItems, backupItems] = await Promise.all([
+    const [
+      targetItems,
+      profileItems,
+      backupItems,
+      skillItems,
+      unmanagedItems,
+      settings
+    ] = await Promise.all([
       window.agentEnv.listTargets(),
       window.agentEnv.listProfiles(),
-      window.agentEnv.listBackups()
+      window.agentEnv.listBackups(),
+      window.agentEnv.listSkillLibrary(),
+      window.agentEnv.scanUnmanagedSkills(),
+      window.agentEnv.readSettings()
     ]);
+    const profileDetails = await Promise.all(
+      profileItems.map((profile) => window.agentEnv.readProfile(profile.id))
+    );
+    const usage: Record<string, string[]> = {};
+    for (const profile of profileDetails) {
+      for (const skillRef of profile.assetPolicy.skillRefs ?? []) {
+        usage[skillRef.libraryId] = (usage[skillRef.libraryId] ?? []).concat(
+          profile.manifest.name
+        );
+      }
+    }
     setTargets(targetItems);
     setProfiles(profileItems);
     setBackups(backupItems);
+    setLibrarySkills(skillItems);
+    setUnmanagedSkills(unmanagedItems);
+    setSkillSettings(settings);
+    setSkillUsage(usage);
     setSelectedTargetId((current) => current ?? targetItems[0]?.id);
     return { targetItems, profileItems, backupItems };
   };
@@ -402,6 +439,46 @@ export const App = () => {
     }
   };
 
+  const importUnmanagedSkill = async (sourcePath: string) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.importSkillToLibrary(sourcePath);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateLibrarySkill = async (id: string) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.updateLibrarySkill(id);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateSkillSettings = async (input: Partial<AgentEnvSettings>) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const nextSettings = await window.agentEnv.updateSettings(input);
+      setSkillSettings(nextSettings);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <main className="app-shell">
       <ProfileSidebar
@@ -503,6 +580,13 @@ export const App = () => {
                   configText={draftProfile.configText}
                   configLanguage={selectedTarget?.configLanguage}
                   preview={preview}
+                  librarySkills={librarySkills}
+                  unmanagedSkills={unmanagedSkills}
+                  skillSettings={skillSettings}
+                  skillUsage={skillUsage}
+                  onImportUnmanaged={importUnmanagedSkill}
+                  onUpdateLibrarySkill={updateLibrarySkill}
+                  onSkillSettingsChange={updateSkillSettings}
                   onChange={(assetPolicy) => {
                     setDraftProfile({ ...draftProfile, assetPolicy });
                     setPreview(undefined);

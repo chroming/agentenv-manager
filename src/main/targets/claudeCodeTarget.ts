@@ -24,6 +24,12 @@ import {
   markerPathFor
 } from "../ownershipMarkers";
 import { findSecretWarnings } from "../secretWarnings";
+import {
+  addSkillRefBackupPaths,
+  applySkillRefs,
+  skillTargetNames,
+  validateSkillRefs
+} from "./skillRefs";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
 
 const DEFAULT_STATE: TargetState = {
@@ -219,9 +225,13 @@ const targetDirFor = (
   return join(root, targetName);
 };
 
-const validateAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
+const validateAssets = async (input: TargetAssetInput) => {
+  const { profile, targetPaths } = input;
   const errors: string[] = [];
   const profileDir = profile.profileDir;
+  if ((profile.assetPolicy.ownedFiles ?? []).length > 0) {
+    errors.push("Claude Code target does not support owned file assets");
+  }
   if (!profileDir && profile.assetPolicy.ownedDirs.length > 0) {
     return ["Profile directory is required to copy owned assets"];
   }
@@ -246,13 +256,19 @@ const validateAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
     }
   }
 
+  errors.push(...(await validateSkillRefs(input)));
+
   return errors;
 };
 
-const removeStaleOwnedDirs = async ({ profile, targetPaths }: TargetAssetInput) => {
+const removeStaleOwnedDirs = async (input: TargetAssetInput) => {
+  const { profile, targetPaths } = input;
   const desired = new Set(
     profile.assetPolicy.ownedDirs.map((ownedDir) => `${ownedDir.kind}:${ownedDir.targetName}`)
   );
+  for (const skillName of skillTargetNames(input)) {
+    desired.add(`skill:${skillName}`);
+  }
   const roots: Array<{ kind: "agent" | "skill"; path?: string }> = [
     { kind: "agent", path: targetPaths.agentsDir },
     { kind: "skill", path: targetPaths.skillsDir }
@@ -284,11 +300,15 @@ const removeStaleOwnedDirs = async ({ profile, targetPaths }: TargetAssetInput) 
   }
 };
 
-const getAssetBackupPaths = async ({ profile, targetPaths }: TargetAssetInput) => {
+const getAssetBackupPaths = async (input: TargetAssetInput) => {
+  const { profile, targetPaths } = input;
   const paths = new Set<string>();
   const desired = new Set(
     profile.assetPolicy.ownedDirs.map((ownedDir) => `${ownedDir.kind}:${ownedDir.targetName}`)
   );
+  for (const skillName of skillTargetNames(input)) {
+    desired.add(`skill:${skillName}`);
+  }
   const roots: Array<{ kind: "agent" | "skill"; path?: string }> = [
     { kind: "agent", path: targetPaths.agentsDir },
     { kind: "skill", path: targetPaths.skillsDir }
@@ -297,6 +317,7 @@ const getAssetBackupPaths = async ({ profile, targetPaths }: TargetAssetInput) =
   for (const ownedDir of profile.assetPolicy.ownedDirs) {
     paths.add(targetDirFor(targetPaths, ownedDir.kind, ownedDir.targetName));
   }
+  addSkillRefBackupPaths(paths, targetPaths, input);
 
   for (const root of roots) {
     if (!root.path || !(await pathExists(root.path))) {
@@ -326,8 +347,9 @@ const getAssetBackupPaths = async ({ profile, targetPaths }: TargetAssetInput) =
   return [...paths];
 };
 
-const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
-  await removeStaleOwnedDirs({ profile, targetPaths });
+const applyAssets = async (input: TargetAssetInput) => {
+  const { profile, targetPaths } = input;
+  await removeStaleOwnedDirs(input);
 
   for (const ownedDir of profile.assetPolicy.ownedDirs) {
     const sourceDir = join(profile.profileDir ?? "", ownedDir.source);
@@ -355,6 +377,7 @@ const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
       "utf8"
     );
   }
+  await applySkillRefs(input);
 };
 
 export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
@@ -402,7 +425,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       null,
       2
     )}\n`,
-    assetPolicy: { ownedDirs: [], disabledSkillPaths: [] }
+    assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], disabledSkillPaths: [] }
   }),
   readProfileFiles: async (profileDir, manifest) => {
     const [instructions, configText, assetPolicyContent] = await Promise.all([

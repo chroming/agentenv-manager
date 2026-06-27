@@ -32,8 +32,7 @@ describe("profile schemas", () => {
   });
 
   it("accepts explicit owned asset targets", () => {
-    expect(
-      AssetPolicySchema.parse({
+    const policy = AssetPolicySchema.parse({
         ownedDirs: [
           {
             kind: "skill",
@@ -41,8 +40,35 @@ describe("profile schemas", () => {
             targetName: "agentenv-daily-example"
           }
         ],
+        ownedFiles: [
+          {
+            kind: "agent",
+            source: "agents/reviewer.toml",
+            targetName: "reviewer.toml"
+          }
+        ],
+        skillRefs: [
+          {
+            libraryId: "shared-reviewer",
+            targetName: "agentenv-shared-reviewer"
+          }
+        ],
         disabledSkillPaths: ["/Users/example/.agents/skills/old/SKILL.md"]
-      }).ownedDirs
-    ).toHaveLength(1);
+      });
+
+    expect(policy.ownedDirs).toHaveLength(1);
+    expect(policy.ownedFiles).toEqual([
+      {
+        kind: "agent",
+        source: "agents/reviewer.toml",
+        targetName: "reviewer.toml"
+      }
+    ]);
+    expect(policy.skillRefs).toEqual([
+      {
+        libraryId: "shared-reviewer",
+        targetName: "agentenv-shared-reviewer"
+      }
+    ]);
   });
 });

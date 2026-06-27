@@ -1,4 +1,13 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  rm,
+  writeFile
+} from "node:fs/promises";
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -117,6 +126,8 @@ const createOpenCodeProfile = async (
           targetName: `agentenv-${variant}-skill`
         }
       ],
+      ownedFiles: [],
+      skillRefs: [],
       disabledSkillPaths: []
     }
   });
@@ -250,6 +261,73 @@ describe("OpenCode profile switching e2e", () => {
     await expect(
       readFile(join(targetDir, "skills", "agentenv-beta-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("name: agentenv-beta-skill");
+  });
+
+  it("switches reusable library skill links without duplicating the library skill", async () => {
+    const { paths, profileStore, activationService } = await makeEnv();
+    const targetDir = join(paths.homeDir, ".config", "opencode");
+    const librarySkillDir = join(paths.skillsLibraryDir, "shared-reviewer");
+    await mkdir(librarySkillDir, { recursive: true });
+    await writeFile(
+      join(librarySkillDir, "SKILL.md"),
+      "---\nname: shared-reviewer\ndescription: Shared reviewer skill.\n---\n\n# Shared reviewer\n",
+      "utf8"
+    );
+
+    const alpha = await profileStore.saveProfile({
+      manifest: {
+        id: "opencode-library-alpha",
+        targetId: "opencode",
+        name: "OpenCode Library Alpha",
+        description: "Temporary alpha profile",
+        version: 1,
+        managed: { instructions: true, config: true, assets: true }
+      },
+      instructions: "# Library Alpha\n",
+      configText: "{}\n",
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [{ libraryId: "shared-reviewer", targetName: "agentenv-alpha-shared" }],
+        disabledSkillPaths: []
+      }
+    });
+    const beta = await profileStore.saveProfile({
+      manifest: {
+        id: "opencode-library-beta",
+        targetId: "opencode",
+        name: "OpenCode Library Beta",
+        description: "Temporary beta profile",
+        version: 1,
+        managed: { instructions: true, config: true, assets: true }
+      },
+      instructions: "# Library Beta\n",
+      configText: "{}\n",
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [{ libraryId: "shared-reviewer", targetName: "agentenv-beta-shared" }],
+        disabledSkillPaths: []
+      }
+    });
+
+    await expectApplyOk(activationService, alpha.id);
+    const alphaSkillMd = join(targetDir, "skills", "agentenv-alpha-shared", "SKILL.md");
+    await expect(readFile(alphaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
+    expect((await lstat(alphaSkillMd)).isSymbolicLink()).toBe(true);
+    await expect(readlink(alphaSkillMd)).resolves.toBe(join(librarySkillDir, "SKILL.md"));
+
+    await expectApplyOk(activationService, beta.id);
+    await expect(fileExists(join(targetDir, "skills", "agentenv-alpha-shared"))).resolves.toBe(
+      false
+    );
+    const betaSkillMd = join(targetDir, "skills", "agentenv-beta-shared", "SKILL.md");
+    await expect(readFile(betaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
+    expect((await lstat(betaSkillMd)).isSymbolicLink()).toBe(true);
+    await expect(readlink(betaSkillMd)).resolves.toBe(join(librarySkillDir, "SKILL.md"));
+    await expect(readFile(join(librarySkillDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "name: shared-reviewer"
+    );
   });
 
   it("blocks a profile switch when the target has an unmanaged MCP conflict", async () => {

@@ -13,6 +13,8 @@ export interface TargetPathInput {
 export interface TargetAssetInput {
   profile: ProfileDetail;
   targetPaths: TargetPaths;
+  skillLibraryDir?: string;
+  skillSyncMethod?: "symlink" | "copy" | "auto";
 }
 
 export interface TargetPreviewInput extends TargetAssetInput {

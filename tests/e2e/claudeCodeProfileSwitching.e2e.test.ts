@@ -106,6 +106,8 @@ const createClaudeProfile = async (
           targetName: `agentenv-${variant}-skill`
         }
       ],
+      ownedFiles: [],
+      skillRefs: [],
       disabledSkillPaths: []
     }
   });
