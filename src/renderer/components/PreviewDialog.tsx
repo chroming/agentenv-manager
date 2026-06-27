@@ -11,7 +11,13 @@ export const PreviewDialog = ({ preview }: PreviewDialogProps) => {
 
   return (
     <section className="preview-dialog" aria-label="Preview">
-      <div className="section-title">Preview</div>
+      <header className="preview-header">
+        <div>
+          <div className="section-title">Preview</div>
+          <p className="muted">{preview.changes.length} files in this diff</p>
+        </div>
+        <time dateTime={preview.createdAt}>{new Date(preview.createdAt).toLocaleString()}</time>
+      </header>
       {preview.warnings.map((warning) => (
         <p className="warning" key={warning}>
           {warning}

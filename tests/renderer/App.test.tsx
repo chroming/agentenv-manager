@@ -29,6 +29,31 @@ const profile: ProfileDetail = {
   }
 };
 
+const preview = {
+  id: "preview-1",
+  profileId: "daily-coding",
+  targetId: "opencode",
+  createdAt: "2026-06-30T00:00:00.000Z",
+  warnings: [],
+  errors: [],
+  changes: [
+    {
+      path: "/tmp/home/.config/opencode/AGENTS.md",
+      before: "# Old\n",
+      after: "# Agent\n",
+      diff: "--- AGENTS.md\n+++ AGENTS.md\n@@\n-# Old\n+# Agent\n"
+    },
+    {
+      path: "/tmp/home/.config/opencode/opencode.json",
+      before: "{}\n",
+      after: '{\n  "mcp": {}\n}\n',
+      diff: "--- opencode.json\n+++ opencode.json\n@@\n-{}\n+{\"mcp\":{}}\n"
+    }
+  ],
+  liveFingerprints: {},
+  targetState: { managedConfigKeys: [], managedMcpNames: [] }
+};
+
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     listTargets: vi.fn().mockResolvedValue([
@@ -59,17 +84,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       id: input.manifest.id
     })),
     createProfile: vi.fn().mockResolvedValue(profile),
-    previewApply: vi.fn().mockResolvedValue({
-      id: "preview-1",
-      profileId: "daily-coding",
-      targetId: "opencode",
-      createdAt: "2026-06-30T00:00:00.000Z",
-      warnings: [],
-      errors: [],
-      changes: [],
-      liveFingerprints: {},
-      targetState: { managedConfigKeys: [], managedMcpNames: [] }
-    }),
+    previewApply: vi.fn().mockResolvedValue(preview),
     applyProfile: vi.fn().mockResolvedValue({ ok: true, backupId: "backup-1" }),
     listBackups: vi.fn().mockResolvedValue([]),
     previewRollback: vi.fn().mockResolvedValue({
@@ -105,20 +120,30 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Daily Coding/ }));
 
     expect(await screen.findByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
+    expect(screen.getByRole("tab", { name: "Instructions" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Config" }));
     expect(screen.getByLabelText("opencode.json")).toHaveValue('{\n  "mcp": {}\n}\n');
   });
 
-  it("previews the selected profile before apply is enabled", async () => {
+  it("shows a safe activation inspector and enables apply after preview", async () => {
     const api = installApi();
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Daily Coding/ }));
-    const applyButton = await screen.findByRole("button", { name: "Apply" });
+    const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
     expect(applyButton).toBeDisabled();
+    expect(screen.getByText("Preview required")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview changes" }));
 
     await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding"));
+    expect(screen.getByText("Ready to apply")).toBeInTheDocument();
+    expect(screen.getByText("2 files will change")).toBeInTheDocument();
+    expect(screen.getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
     expect(applyButton).toBeEnabled();
   });
 });

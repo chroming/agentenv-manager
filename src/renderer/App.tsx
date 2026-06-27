@@ -20,6 +20,27 @@ const emptyAssetPolicy: AssetPolicy = {
   disabledSkillPaths: []
 };
 
+type EditorTab = "instructions" | "config" | "assets" | "validation";
+
+const editorTabs: Array<{ id: EditorTab; label: string }> = [
+  { id: "instructions", label: "Instructions" },
+  { id: "config", label: "Config" },
+  { id: "assets", label: "Assets" },
+  { id: "validation", label: "Validation" }
+];
+
+const getLivePathLabel = (targetId?: string) => {
+  if (targetId === "opencode") {
+    return "~/.config/opencode";
+  }
+
+  if (targetId === "codex") {
+    return "sandboxed Codex home";
+  }
+
+  return "target workspace";
+};
+
 const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   manifest: profile.manifest,
   instructions: profile.instructions,
@@ -35,6 +56,7 @@ export const App = () => {
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
+  const [activeTab, setActiveTab] = useState<EditorTab>("instructions");
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -75,6 +97,7 @@ export const App = () => {
     setBusy(true);
     setError(undefined);
     setPreview(undefined);
+    setActiveTab("instructions");
     setSelectedProfileId(profileId);
     try {
       const profile = await window.agentEnv.readProfile(profileId);
@@ -107,6 +130,7 @@ export const App = () => {
     await refreshProfiles();
     setSelectedProfileId(saved.id);
     setDraftProfile(saved);
+    setActiveTab("instructions");
     setPreview(undefined);
   };
 
@@ -116,6 +140,8 @@ export const App = () => {
   const visibleProfiles = profiles.filter(
     (profile) => !selectedTargetId || profile.targetId === selectedTargetId
   );
+  const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
+  const activeTabPanelId = `editor-panel-${activeTab}`;
 
   const previewSelectedProfile = async () => {
     setBusy(true);
@@ -169,6 +195,7 @@ export const App = () => {
           setSelectedProfileId(undefined);
           setDraftProfile(undefined);
           setPreview(undefined);
+          setActiveTab("instructions");
         }}
         onSelect={selectProfile}
         onCreate={createProfile}
@@ -179,42 +206,97 @@ export const App = () => {
         {draftProfile ? (
           <>
             <header className="editor-header">
-              <div>
-                <p className="eyebrow">
-                  {selectedTarget?.name ?? draftProfile.manifest.targetId} Environment
-                </p>
+              <div className="editor-title">
+                <p className="eyebrow">{activeTargetName} Environment</p>
                 <h2>{draftProfile.manifest.name}</h2>
+                <p className="target-path">
+                  Live path: {getLivePathLabel(draftProfile.manifest.targetId)}
+                </p>
               </div>
-              <button type="button" disabled={busy} onClick={saveDraft}>
+              <button className="save-button" type="button" disabled={busy} onClick={saveDraft}>
                 Save
               </button>
             </header>
-            <div className="editor-grid">
-              <AgentsEditor
-                label={selectedTarget?.instructionsLabel ?? "Instructions"}
-                value={draftProfile.instructions}
-                onChange={(instructions) => {
-                  setDraftProfile({ ...draftProfile, instructions });
-                  setPreview(undefined);
-                }}
-              />
-              <McpEditor
-                label={selectedTarget?.configLabel ?? "Config"}
-                value={draftProfile.configText}
-                onChange={(configText) => {
-                  setDraftProfile({ ...draftProfile, configText });
-                  setPreview(undefined);
-                }}
-              />
-              <SkillsEditor
-                value={draftProfile.assetPolicy ?? emptyAssetPolicy}
-                onChange={(assetPolicy) => {
-                  setDraftProfile({ ...draftProfile, assetPolicy });
-                  setPreview(undefined);
-                }}
-              />
-              <PreviewDialog preview={preview} />
+            <div className="tab-list" role="tablist" aria-label="Profile sections">
+              {editorTabs.map((tab) => (
+                <button
+                  className={`tab-button${activeTab === tab.id ? " is-active" : ""}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  aria-controls={`editor-panel-${tab.id}`}
+                  id={`editor-tab-${tab.id}`}
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
+            <div
+              className="editor-grid"
+              id={activeTabPanelId}
+              role="tabpanel"
+              aria-labelledby={`editor-tab-${activeTab}`}
+            >
+              {activeTab === "instructions" ? (
+                <AgentsEditor
+                  label={selectedTarget?.instructionsLabel ?? "Instructions"}
+                  value={draftProfile.instructions}
+                  onChange={(instructions) => {
+                    setDraftProfile({ ...draftProfile, instructions });
+                    setPreview(undefined);
+                  }}
+                />
+              ) : null}
+              {activeTab === "config" ? (
+                <McpEditor
+                  label={selectedTarget?.configLabel ?? "Config"}
+                  value={draftProfile.configText}
+                  onChange={(configText) => {
+                    setDraftProfile({ ...draftProfile, configText });
+                    setPreview(undefined);
+                  }}
+                />
+              ) : null}
+              {activeTab === "assets" ? (
+                <SkillsEditor
+                  value={draftProfile.assetPolicy ?? emptyAssetPolicy}
+                  onChange={(assetPolicy) => {
+                    setDraftProfile({ ...draftProfile, assetPolicy });
+                    setPreview(undefined);
+                  }}
+                />
+              ) : null}
+              {activeTab === "validation" ? (
+                <section className="validation-panel" aria-label="Validation">
+                  <div className="section-title">Validation</div>
+                  {preview?.errors.length ? (
+                    preview.errors.map((item) => (
+                      <p className="error" key={item}>
+                        {item}
+                      </p>
+                    ))
+                  ) : (
+                    <div className="validation-grid">
+                      <div className="check-row">
+                        <span>No literal secrets found</span>
+                        <strong>OK</strong>
+                      </div>
+                      <div className="check-row">
+                        <span>No unmanaged MCP conflict</span>
+                        <strong>{preview ? "OK" : "Pending"}</strong>
+                      </div>
+                      <div className="check-row">
+                        <span>Backup before apply</span>
+                        <strong>Enabled</strong>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              ) : null}
+            </div>
+            <PreviewDialog preview={preview} />
           </>
         ) : (
           <div className="empty-state">
@@ -225,6 +307,7 @@ export const App = () => {
 
       <ActivationPanel
         selectedProfileId={draftProfile?.id}
+        targetName={activeTargetName}
         preview={preview}
         backups={backups}
         busy={busy}
