@@ -44,6 +44,7 @@ body {
 
 button,
 select,
+input,
 textarea {
   font: inherit;
 }
@@ -75,6 +76,7 @@ button:hover:not(:disabled) {
 
 button:focus-visible,
 select:focus-visible,
+input:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
   outline: 2px solid rgba(37, 99, 235, 0.32);
@@ -318,7 +320,9 @@ h2 {
 .diff-list,
 .history-view,
 .skills-editor,
-.owned-skill-list {
+.owned-skill-list,
+.resource-section,
+.resource-list {
   display: grid;
   gap: 10px;
 }
@@ -496,6 +500,17 @@ textarea {
   width: 100%;
 }
 
+input {
+  background: #fbfcfe;
+  border: 1px solid #d3dae5;
+  border-radius: 7px;
+  color: var(--text);
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  width: 100%;
+}
+
 textarea[aria-label="AGENTS.md"] {
   min-height: 260px;
 }
@@ -517,6 +532,7 @@ textarea[aria-label="opencode.json"] {
 .status-card,
 .history-row,
 .owned-skill,
+.resource-row,
 .path-row,
 .check-row {
   border: 1px solid var(--border);
@@ -808,6 +824,120 @@ summary {
   display: grid;
   gap: 8px;
   padding: 10px;
+}
+
+.asset-editor-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.asset-editor-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.secondary-action {
+  background: #f8fafc;
+}
+
+.resource-section {
+  background: #fbfcfe;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.resource-section--advanced {
+  box-shadow: none;
+}
+
+.resource-heading {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 760;
+  line-height: 1.3;
+}
+
+.resource-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  min-height: 54px;
+  padding: 10px;
+}
+
+.resource-row__main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.resource-row__main span {
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.resource-row__main small {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-chip,
+.resource-status {
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1;
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
+.resource-chip {
+  background: #edf2f7;
+  color: #344054;
+}
+
+.resource-status {
+  background: #eef4ff;
+  color: var(--accent-strong);
+}
+
+.resource-status--managed {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.resource-status--conflict {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.owned-skill {
+  margin: 0;
+}
+
+.owned-skill legend {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 4px;
+  text-transform: uppercase;
+}
+
+.owned-skill label {
+  display: grid;
+  gap: 5px;
 }
 
 .history-row.is-active {

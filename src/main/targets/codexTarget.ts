@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   AssetPolicySchema,
@@ -84,7 +84,33 @@ const validateAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
   return errors;
 };
 
+const removeStaleOwnedSkills = async ({ profile, targetPaths }: TargetAssetInput) => {
+  if (!targetPaths.skillsDir || !(await pathExists(targetPaths.skillsDir))) {
+    return;
+  }
+
+  const desired = new Set(
+    profile.assetPolicy.ownedDirs
+      .filter((ownedDir) => ownedDir.kind === "skill")
+      .map((ownedDir) => ownedDir.targetName)
+  );
+  const entries = await readdir(targetPaths.skillsDir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || desired.has(entry.name)) {
+      continue;
+    }
+
+    const targetDir = join(targetPaths.skillsDir, entry.name);
+    if (await isAgentEnvOwnedDir(targetDir)) {
+      await rm(targetDir, { recursive: true, force: true });
+    }
+  }
+};
+
 const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
+  await removeStaleOwnedSkills({ profile, targetPaths });
+
   for (const ownedDir of profile.assetPolicy.ownedDirs) {
     const sourceDir = join(profile.profileDir ?? "", ownedDir.source);
     const targetDir = join(targetPaths.skillsDir ?? "", ownedDir.targetName);

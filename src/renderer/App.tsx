@@ -26,12 +26,12 @@ const emptyAssetPolicy: AssetPolicy = {
   disabledSkillPaths: []
 };
 
-type EditorTab = "instructions" | "config" | "assets" | "validation";
+type EditorTab = "instructions" | "config" | "resources" | "validation";
 
 const editorTabs: Array<{ id: EditorTab; label: string }> = [
   { id: "instructions", label: "Instructions" },
   { id: "config", label: "Config" },
-  { id: "assets", label: "Assets" },
+  { id: "resources", label: "Resources" },
   { id: "validation", label: "Validation" }
 ];
 
@@ -41,6 +41,8 @@ const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   configText: profile.configText,
   assetPolicy: profile.assetPolicy
 });
+
+const managedSurfaceLabel = (key: string) => (key === "assets" ? "skills" : key);
 
 type ValidationLevel = "ok" | "warning" | "error" | "pending";
 
@@ -145,18 +147,20 @@ const createValidationRows = (
       ...configValidation
     },
     {
-      label: "Owned assets",
+      label: "Skills",
       value: profile.manifest.managed.assets
-        ? profile.assetPolicy.ownedDirs.length > 0
+        ? profile.assetPolicy.ownedDirs.some((ownedDir) => ownedDir.kind === "skill")
           ? "Preview"
           : "OK"
         : "Disabled",
       detail:
-        profile.manifest.managed.assets && profile.assetPolicy.ownedDirs.length > 0
+        profile.manifest.managed.assets &&
+        profile.assetPolicy.ownedDirs.some((ownedDir) => ownedDir.kind === "skill")
           ? "Preview verifies source directories and target ownership"
           : undefined,
       level:
-        profile.manifest.managed.assets && profile.assetPolicy.ownedDirs.length > 0
+        profile.manifest.managed.assets &&
+        profile.assetPolicy.ownedDirs.some((ownedDir) => ownedDir.kind === "skill")
           ? "pending"
           : "ok"
     },
@@ -274,7 +278,7 @@ export const App = () => {
   const managedSurfaces = draftProfile
     ? Object.entries(draftProfile.manifest.managed)
         .filter(([, enabled]) => enabled)
-        .map(([key]) => key)
+        .map(([key]) => managedSurfaceLabel(key))
         .join(" / ")
     : "";
   const validationRows = draftProfile
@@ -440,9 +444,12 @@ export const App = () => {
                   }}
                 />
               ) : null}
-              {activeTab === "assets" ? (
+              {activeTab === "resources" ? (
                 <SkillsEditor
                   value={draftProfile.assetPolicy ?? emptyAssetPolicy}
+                  configText={draftProfile.configText}
+                  configLanguage={selectedTarget?.configLanguage}
+                  preview={preview}
                   onChange={(assetPolicy) => {
                     setDraftProfile({ ...draftProfile, assetPolicy });
                     setPreview(undefined);

@@ -166,4 +166,53 @@ describe("OpenCode target adapter", () => {
       readFile(join(targetPaths.skillsDir ?? "", "agentenv-reviewer", "SKILL.md"), "utf8")
     ).resolves.toBe("# Skill\n");
   });
+
+  it("removes stale AgentEnv-owned OpenCode agents and skills when switching profiles", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const profileDir = join(root, "profiles", "daily-coding");
+    await mkdir(join(profileDir, "skills", "next"), { recursive: true });
+    await mkdir(join(profileDir, "agents", "next"), { recursive: true });
+    await writeFile(join(profileDir, "skills", "next", "SKILL.md"), "# Next skill\n");
+    await writeFile(join(profileDir, "agents", "next", "AGENTS.md"), "# Next agent\n");
+
+    const staleSkillDir = join(targetPaths.skillsDir ?? "", "agentenv-old-skill");
+    const staleAgentDir = join(targetPaths.agentsDir ?? "", "old-agent");
+    const unmanagedSkillDir = join(targetPaths.skillsDir ?? "", "user-skill");
+    await mkdir(staleSkillDir, { recursive: true });
+    await mkdir(staleAgentDir, { recursive: true });
+    await mkdir(unmanagedSkillDir, { recursive: true });
+    await writeFile(join(staleSkillDir, ".agentenv-owner.json"), "{}\n");
+    await writeFile(join(staleSkillDir, "SKILL.md"), "# Old skill\n");
+    await writeFile(join(staleAgentDir, ".agentenv-owner.json"), "{}\n");
+    await writeFile(join(staleAgentDir, "AGENTS.md"), "# Old agent\n");
+    await writeFile(join(unmanagedSkillDir, "SKILL.md"), "# User skill\n");
+
+    const profile: ProfileDetail = {
+      ...makeProfile("{}"),
+      profileDir,
+      assetPolicy: {
+        ownedDirs: [
+          { kind: "skill", source: "skills/next", targetName: "agentenv-next-skill" },
+          { kind: "agent", source: "agents/next", targetName: "next-agent" }
+        ],
+        disabledSkillPaths: []
+      }
+    };
+
+    await adapter.applyAssets({ profile, targetPaths });
+
+    await expect(readFile(join(staleSkillDir, "SKILL.md"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(staleAgentDir, "AGENTS.md"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(unmanagedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(
+      "# User skill\n"
+    );
+    await expect(
+      readFile(join(targetPaths.skillsDir ?? "", "agentenv-next-skill", "SKILL.md"), "utf8")
+    ).resolves.toBe("# Next skill\n");
+    await expect(
+      readFile(join(targetPaths.agentsDir ?? "", "next-agent", "AGENTS.md"), "utf8")
+    ).resolves.toBe("# Next agent\n");
+  });
 });

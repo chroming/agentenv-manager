@@ -171,6 +171,9 @@ describe("App", () => {
         "/tmp/home/.config/opencode"
       )
     ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Skills" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Assets" })).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Instructions" })).toHaveAttribute(
       "aria-selected",
       "true"
