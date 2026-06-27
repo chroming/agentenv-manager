@@ -9,7 +9,7 @@ export type { AssetPolicy, ProfileManifest } from "./schemas";
 import type { AssetPolicy, ProfileManifest } from "./schemas";
 
 export interface AgentEnvApi {
-  listTargets(): Promise<TargetDescriptor[]>;
+  listTargets(): Promise<TargetInfo[]>;
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
@@ -29,6 +29,7 @@ export interface TargetDescriptor {
   configLabel: string;
   configLanguage: "jsonc" | "toml" | "text";
   realWritesEnabled: boolean;
+  executableName?: string;
 }
 
 export interface TargetPaths {
@@ -44,6 +45,32 @@ export interface TargetPaths {
 export interface TargetState {
   managedConfigKeys: string[];
   managedMcpNames: string[];
+}
+
+export type TargetHealthStatus = "ready" | "needs-setup" | "missing" | "guarded";
+
+export interface TargetPathCheck {
+  id: "configDir" | "instructions" | "config" | "agentsDir" | "skillsDir";
+  label: string;
+  path: string;
+  exists: boolean;
+  writable: boolean;
+  required: boolean;
+}
+
+export interface TargetHealth {
+  status: TargetHealthStatus;
+  executableName?: string;
+  executablePath?: string;
+  executableFound: boolean;
+  canWrite: boolean;
+  summary: string;
+  checks: TargetPathCheck[];
+}
+
+export interface TargetInfo extends TargetDescriptor {
+  paths: TargetPaths;
+  health: TargetHealth;
 }
 
 export interface TargetActivationPreview {

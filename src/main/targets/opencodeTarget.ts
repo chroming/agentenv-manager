@@ -245,7 +245,8 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     instructionsLabel: "AGENTS.md",
     configLabel: "opencode.json",
     configLanguage: "jsonc",
-    realWritesEnabled: true
+    realWritesEnabled: true,
+    executableName: "opencode"
   },
   createTargetPaths: ({ homeDir }) => {
     const configDir = join(homeDir, ".config", "opencode");

@@ -139,7 +139,8 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     instructionsLabel: "AGENTS.md",
     configLabel: "config.toml managed fragment",
     configLanguage: "toml",
-    realWritesEnabled: false
+    realWritesEnabled: false,
+    executableName: "codex"
   },
   createTargetPaths: ({ homeDir, fakeHomeRoot }) => {
     const root = fakeHomeRoot ?? homeDir;

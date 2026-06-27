@@ -1,4 +1,9 @@
 import { useEffect, useState } from "react";
+import {
+  parse as parseJsonc,
+  printParseErrorCode,
+  type ParseError
+} from "jsonc-parser";
 import type {
   ActivationPreview,
   AssetPolicy,
@@ -7,7 +12,7 @@ import type {
   ProfileSummary,
   RollbackPreview,
   SaveProfileInput,
-  TargetDescriptor
+  TargetInfo
 } from "../shared/types";
 import { ActivationPanel } from "./components/ActivationPanel";
 import { AgentsEditor } from "./components/AgentsEditor";
@@ -30,18 +35,6 @@ const editorTabs: Array<{ id: EditorTab; label: string }> = [
   { id: "validation", label: "Validation" }
 ];
 
-const getLivePathLabel = (targetId?: string) => {
-  if (targetId === "opencode") {
-    return "~/.config/opencode";
-  }
-
-  if (targetId === "codex") {
-    return "sandboxed Codex home";
-  }
-
-  return "target workspace";
-};
-
 const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   manifest: profile.manifest,
   instructions: profile.instructions,
@@ -49,8 +42,139 @@ const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   assetPolicy: profile.assetPolicy
 });
 
+type ValidationLevel = "ok" | "warning" | "error" | "pending";
+
+interface ValidationRow {
+  label: string;
+  value: string;
+  detail?: string;
+  level: ValidationLevel;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === "object" && !Array.isArray(value));
+
+const validateConfig = (
+  configText: string,
+  language?: TargetInfo["configLanguage"]
+): Pick<ValidationRow, "value" | "detail" | "level"> => {
+  if (language === "jsonc") {
+    const errors: ParseError[] = [];
+    const parsed = parseJsonc(configText.trim().length === 0 ? "{}" : configText, errors, {
+      allowTrailingComma: true
+    });
+    if (errors.length > 0) {
+      return {
+        value: "Blocked",
+        detail: errors.map((error) => printParseErrorCode(error.error)).join(", "),
+        level: "error"
+      };
+    }
+    if (!isRecord(parsed)) {
+      return {
+        value: "Blocked",
+        detail: "Expected a JSON object",
+        level: "error"
+      };
+    }
+    return { value: "OK", level: "ok" };
+  }
+
+  if (language === "toml") {
+    return {
+      value: "Preview",
+      detail: "Preview validates TOML in the main process",
+      level: "pending"
+    };
+  }
+
+  return { value: "Pending", detail: "Preview checks this target format", level: "pending" };
+};
+
+const createValidationRows = (
+  profile: ProfileDetail,
+  target?: TargetInfo,
+  preview?: ActivationPreview
+): ValidationRow[] => {
+  const configValidation = profile.manifest.managed.config
+    ? validateConfig(profile.configText, target?.configLanguage)
+    : { value: "Disabled", level: "pending" as const };
+  const targetLevel: ValidationLevel =
+    target?.health.status === "ready"
+      ? "ok"
+      : target?.health.status === "missing"
+        ? "error"
+        : target
+          ? "warning"
+          : "pending";
+
+  return [
+    {
+      label: "Target access",
+      value:
+        target?.health.status === "ready"
+          ? "OK"
+          : target?.health.status === "missing"
+            ? "Blocked"
+            : target?.health.status === "guarded"
+              ? "Guarded"
+              : target
+                ? "Needs setup"
+                : "Pending",
+      detail: target?.health.summary,
+      level: targetLevel
+    },
+    {
+      label: target?.instructionsLabel ?? "Instructions",
+      value: profile.manifest.managed.instructions
+        ? profile.instructions.trim().length > 0
+          ? "OK"
+          : "Blocked"
+        : "Disabled",
+      detail:
+        profile.manifest.managed.instructions && profile.instructions.trim().length === 0
+          ? "Instructions are empty"
+          : undefined,
+      level:
+        profile.manifest.managed.instructions && profile.instructions.trim().length === 0
+          ? "error"
+          : "ok"
+    },
+    {
+      label: target?.configLabel ?? "Config",
+      ...configValidation
+    },
+    {
+      label: "Owned assets",
+      value: profile.manifest.managed.assets
+        ? profile.assetPolicy.ownedDirs.length > 0
+          ? "Preview"
+          : "OK"
+        : "Disabled",
+      detail:
+        profile.manifest.managed.assets && profile.assetPolicy.ownedDirs.length > 0
+          ? "Preview verifies source directories and target ownership"
+          : undefined,
+      level:
+        profile.manifest.managed.assets && profile.assetPolicy.ownedDirs.length > 0
+          ? "pending"
+          : "ok"
+    },
+    {
+      label: "Live conflicts",
+      value: preview ? (preview.errors.length > 0 ? "Blocked" : "OK") : "Pending",
+      detail: preview
+        ? preview.errors.length > 0
+          ? `${preview.errors.length} issue${preview.errors.length === 1 ? "" : "s"} found`
+          : "Preview checks passed"
+        : "Run preview to check live files",
+      level: preview ? (preview.errors.length > 0 ? "error" : "ok") : "pending"
+    }
+  ];
+};
+
 export const App = () => {
-  const [targets, setTargets] = useState<TargetDescriptor[]>([]);
+  const [targets, setTargets] = useState<TargetInfo[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string>();
@@ -145,7 +269,17 @@ export const App = () => {
     (profile) => !selectedTargetId || profile.targetId === selectedTargetId
   );
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
+  const activeTargetPath = selectedTarget?.paths.configDir ?? "target workspace";
   const activeTabPanelId = `editor-panel-${activeTab}`;
+  const managedSurfaces = draftProfile
+    ? Object.entries(draftProfile.manifest.managed)
+        .filter(([, enabled]) => enabled)
+        .map(([key]) => key)
+        .join(" / ")
+    : "";
+  const validationRows = draftProfile
+    ? createValidationRows(draftProfile, selectedTarget, preview)
+    : [];
 
   const previewSelectedProfile = async () => {
     setBusy(true);
@@ -252,9 +386,11 @@ export const App = () => {
               <div className="editor-title">
                 <p className="eyebrow">{activeTargetName} Environment</p>
                 <h2>{draftProfile.manifest.name}</h2>
-                <p className="target-path">
-                  Live path: {getLivePathLabel(draftProfile.manifest.targetId)}
-                </p>
+                <div className="editor-meta" aria-label="Profile metadata">
+                  <span>{selectedTarget?.health.summary ?? "Target pending"}</span>
+                  <span>{managedSurfaces || "No managed surfaces"}</span>
+                  <code>{activeTargetPath}</code>
+                </div>
               </div>
               <button className="save-button" type="button" disabled={busy} onClick={saveDraft}>
                 Save
@@ -317,28 +453,27 @@ export const App = () => {
               {activeTab === "validation" ? (
                 <section className="validation-panel" aria-label="Validation">
                   <div className="section-title">Validation</div>
-                  {preview?.errors.length ? (
-                    preview.errors.map((item) => (
-                      <p className="error" key={item}>
-                        {item}
-                      </p>
-                    ))
-                  ) : (
-                    <div className="validation-grid">
-                      <div className="check-row">
-                        <span>No literal secrets found</span>
-                        <strong>OK</strong>
+                  <div className="validation-grid">
+                    {validationRows.map((row) => (
+                      <div className={`check-row check-row--${row.level}`} key={row.label}>
+                        <span>
+                          {row.label}
+                          {row.detail ? <small>{row.detail}</small> : null}
+                        </span>
+                        <strong>{row.value}</strong>
                       </div>
-                      <div className="check-row">
-                        <span>No unmanaged MCP conflict</span>
-                        <strong>{preview ? "OK" : "Pending"}</strong>
-                      </div>
-                      <div className="check-row">
-                        <span>Backup before apply</span>
-                        <strong>Enabled</strong>
-                      </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                  {preview?.warnings.map((item) => (
+                    <p className="warning" key={item}>
+                      {item}
+                    </p>
+                  ))}
+                  {preview?.errors.map((item) => (
+                    <p className="error" key={item}>
+                      {item}
+                    </p>
+                  ))}
                 </section>
               ) : null}
             </div>
@@ -363,6 +498,8 @@ export const App = () => {
         rollbackPreview={rollbackPreview}
         backups={backups}
         busy={busy}
+        targetCanWrite={selectedTarget?.health.canWrite ?? false}
+        targetWriteSummary={selectedTarget?.health.summary}
         onPreview={previewSelectedProfile}
         onApply={applySelectedProfile}
         onPreviewRollback={previewSelectedRollback}

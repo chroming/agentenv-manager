@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import type { ActivationService } from "./activationService";
 import type { BackupStore } from "./backupStore";
 import type { ProfileStore } from "./profileStore";
+import type { TargetDiscoveryService } from "./targetDiscovery";
 import { SafeIdSchema } from "../shared/schemas";
 import type { SaveProfileInput } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
@@ -11,6 +12,7 @@ export interface IpcServices {
   activationService: ActivationService;
   backupStore: BackupStore;
   targetRegistry: TargetRegistry;
+  targetDiscoveryService: TargetDiscoveryService;
 }
 
 const parseId = (value: unknown, label: string): string => {
@@ -25,9 +27,10 @@ export const registerIpcHandlers = ({
   profileStore,
   activationService,
   backupStore,
-  targetRegistry
+  targetRegistry,
+  targetDiscoveryService
 }: IpcServices) => {
-  ipcMain.handle("targets:list", () => targetRegistry.list());
+  ipcMain.handle("targets:list", () => targetDiscoveryService.listTargets());
   ipcMain.handle("profiles:list", () => profileStore.listProfiles());
   ipcMain.handle("profiles:read", (_event, id: unknown) =>
     profileStore.readProfile(parseId(id, "profile id"))

@@ -8,6 +8,8 @@ interface ActivationPanelProps {
   rollbackPreview?: RollbackPreview;
   backups: BackupSummary[];
   busy: boolean;
+  targetCanWrite: boolean;
+  targetWriteSummary?: string;
   onPreview(): void;
   onApply(): void;
   onPreviewRollback(backupId: string): void;
@@ -21,16 +23,21 @@ export const ActivationPanel = ({
   rollbackPreview,
   backups,
   busy,
+  targetCanWrite,
+  targetWriteSummary,
   onPreview,
   onApply,
   onPreviewRollback,
   onRestoreRollback
 }: ActivationPanelProps) => {
   const activePreview = rollbackPreview ?? preview;
-  const canApply = Boolean(preview && preview.errors.length === 0 && !rollbackPreview);
+  const targetBlocked = Boolean(preview && !rollbackPreview && !targetCanWrite);
+  const canApply = Boolean(preview && preview.errors.length === 0 && !rollbackPreview && targetCanWrite);
   const canRestore = Boolean(rollbackPreview && rollbackPreview.errors.length === 0);
-  const isBlocked = Boolean(activePreview && activePreview.errors.length > 0);
-  const statusLabel = isBlocked
+  const isBlocked = Boolean(activePreview && activePreview.errors.length > 0) || targetBlocked;
+  const statusLabel = targetBlocked
+    ? "Target blocked"
+    : isBlocked
     ? "Blocked"
     : canRestore
       ? "Rollback ready"
@@ -42,7 +49,7 @@ export const ActivationPanel = ({
   return (
     <aside className="activation-panel" aria-label="Activation">
       <div className="activation-header">
-        <p className="section-title">Activation</p>
+        <p className="section-title">Activation Console</p>
         <h2>{targetName}</h2>
       </div>
       <div className={`status-card${isBlocked ? " is-blocked" : ""}`}>
@@ -50,7 +57,9 @@ export const ActivationPanel = ({
         <div>
           <strong>{statusLabel}</strong>
           <small>
-            {canRestore
+            {targetBlocked
+              ? targetWriteSummary ?? "Target is not writable"
+              : canRestore
               ? `${changedCount} files will restore`
               : canApply
               ? `${changedCount} files will change`
@@ -67,7 +76,7 @@ export const ActivationPanel = ({
         Apply to {targetName}
       </button>
       <section className="will-touch" aria-label="Files to modify">
-        <div className="section-title">Will touch</div>
+        <div className="section-title">Change Set</div>
         {activePreview ? (
           <>
             <p className="muted">
@@ -87,7 +96,7 @@ export const ActivationPanel = ({
         )}
       </section>
       <section className="safety-checks" aria-label="Safety checks">
-        <div className="section-title">Safety</div>
+        <div className="section-title">Safety Gates</div>
         <div className="check-row">
           <span>Automatic backup</span>
           <strong>Enabled</strong>
@@ -99,6 +108,10 @@ export const ActivationPanel = ({
         <div className="check-row">
           <span>Preview freshness</span>
           <strong>{activePreview ? "Fresh" : "Required"}</strong>
+        </div>
+        <div className={`check-row${targetCanWrite ? "" : " check-row--error"}`}>
+          <span>Target access</span>
+          <strong>{targetCanWrite ? "Writable" : "Blocked"}</strong>
         </div>
       </section>
       <HistoryView

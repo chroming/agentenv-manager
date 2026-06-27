@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../src/renderer/App";
-import type { AgentEnvApi, ProfileDetail } from "../../src/shared/types";
+import type { AgentEnvApi, ProfileDetail, TargetInfo } from "../../src/shared/types";
 
 const profile: ProfileDetail = {
   id: "daily-coding",
@@ -77,19 +77,46 @@ const rollbackPreview = {
   ]
 };
 
+const target: TargetInfo = {
+  id: "opencode",
+  name: "OpenCode",
+  description: "Manage OpenCode.",
+  instructionsLabel: "AGENTS.md",
+  configLabel: "opencode.json",
+  configLanguage: "jsonc",
+  realWritesEnabled: true,
+  executableName: "opencode",
+  paths: {
+    targetId: "opencode",
+    configDir: "/tmp/home/.config/opencode",
+    instructionsPath: "/tmp/home/.config/opencode/AGENTS.md",
+    configPath: "/tmp/home/.config/opencode/opencode.json",
+    agentsDir: "/tmp/home/.config/opencode/agents",
+    skillsDir: "/tmp/home/.config/opencode/skills"
+  },
+  health: {
+    status: "ready",
+    executableName: "opencode",
+    executablePath: "/usr/local/bin/opencode",
+    executableFound: true,
+    canWrite: true,
+    summary: "Ready",
+    checks: [
+      {
+        id: "configDir",
+        label: "Config directory",
+        path: "/tmp/home/.config/opencode",
+        exists: true,
+        writable: true,
+        required: true
+      }
+    ]
+  }
+};
+
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
-    listTargets: vi.fn().mockResolvedValue([
-      {
-        id: "opencode",
-        name: "OpenCode",
-        description: "Manage OpenCode.",
-        instructionsLabel: "AGENTS.md",
-        configLabel: "opencode.json",
-        configLanguage: "jsonc",
-        realWritesEnabled: true
-      }
-    ]),
+    listTargets: vi.fn().mockResolvedValue([target]),
     listProfiles: vi
       .fn()
       .mockResolvedValue([
@@ -136,6 +163,14 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Daily Coding/ }));
 
     expect(await screen.findByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
+    expect(
+      within(screen.getByRole("region", { name: "Target status" })).getByText("Ready")
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Target status" })).getByText(
+        "/tmp/home/.config/opencode"
+      )
+    ).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Instructions" })).toHaveAttribute(
       "aria-selected",
       "true"
@@ -161,6 +196,34 @@ describe("App", () => {
     expect(screen.getByText("2 files will change")).toBeInTheDocument();
     expect(screen.getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
     expect(applyButton).toBeEnabled();
+  });
+
+  it("keeps apply disabled when target discovery says writes are blocked", async () => {
+    const api = installApi({
+      listTargets: vi.fn().mockResolvedValue([
+        {
+          ...target,
+          health: {
+            ...target.health,
+            status: "missing",
+            executableFound: false,
+            executablePath: undefined,
+            canWrite: false,
+            summary: "opencode CLI not found"
+          }
+        }
+      ])
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Daily Coding/ }));
+    const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview changes" }));
+
+    await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding"));
+    expect(screen.getByText("Target blocked")).toBeInTheDocument();
+    expect(applyButton).toBeDisabled();
   });
 
   it("previews and restores a backup from history", async () => {

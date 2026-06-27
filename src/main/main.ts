@@ -6,6 +6,7 @@ import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
 import { seedDefaultProfiles } from "./seedProfiles";
+import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetRegistry } from "./targets/registry";
 import { preloadScriptName } from "./windowConfig";
 
@@ -49,10 +50,20 @@ const createServices = async () => {
     profileStore,
     targetRegistry
   });
+  const targetDiscoveryService = createTargetDiscoveryService({
+    paths,
+    targetRegistry
+  });
 
   await seedDefaultProfiles(paths, targetRegistry);
 
-  return { profileStore, backupStore, activationService, targetRegistry };
+  return {
+    profileStore,
+    backupStore,
+    activationService,
+    targetRegistry,
+    targetDiscoveryService
+  };
 };
 
 void app.whenReady().then(() => {

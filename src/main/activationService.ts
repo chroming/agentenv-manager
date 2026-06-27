@@ -87,6 +87,19 @@ const createRollbackChange = async (
   };
 };
 
+const validateProfileStructure = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>) => {
+  const errors: string[] = [];
+
+  if (
+    profile.manifest.managed.instructions &&
+    profile.instructions.trim().length === 0
+  ) {
+    errors.push("Managed instructions are empty");
+  }
+
+  return errors;
+};
+
 export const createActivationService = ({
   paths,
   profileStore,
@@ -139,13 +152,15 @@ export const createActivationService = ({
       targetPaths,
       state: stateFile.state
     });
+    const profileErrors = validateProfileStructure(profile);
+    const assetErrors = await adapter.validateAssets({ profile, targetPaths });
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
       warnings: targetPreview.warnings,
-      errors: targetPreview.errors,
+      errors: targetPreview.errors.concat(profileErrors, assetErrors),
       changes: targetPreview.changes,
       liveFingerprints: {
         ...targetPreview.liveFingerprints,

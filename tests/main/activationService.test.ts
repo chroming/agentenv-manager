@@ -126,6 +126,27 @@ describe("activation service", () => {
     );
   });
 
+  it("reports missing owned asset sources during preview", async () => {
+    const { paths, service } = await makeEnv();
+    await rm(join(paths.profilesDir, "daily-coding", "skills", "example-skill"), {
+      recursive: true,
+      force: true
+    });
+
+    const preview = await service.previewProfile("daily-coding");
+
+    expect(preview.errors[0]).toContain("Owned skill source does not exist");
+  });
+
+  it("reports empty managed instructions during preview", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(join(paths.profilesDir, "daily-coding", "AGENTS.md"), "   \n");
+
+    const preview = await service.previewProfile("daily-coding");
+
+    expect(preview.errors).toContain("Managed instructions are empty");
+  });
+
   it("refuses non-AgentEnv skill target conflicts without writing", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");

@@ -1,7 +1,7 @@
-import type { ProfileSummary, TargetDescriptor } from "../../shared/types";
+import type { ProfileSummary, TargetHealthStatus, TargetInfo } from "../../shared/types";
 
 interface ProfileSidebarProps {
-  targets: TargetDescriptor[];
+  targets: TargetInfo[];
   profiles: ProfileSummary[];
   selectedProfileId?: string;
   selectedTargetId?: string;
@@ -10,6 +10,13 @@ interface ProfileSidebarProps {
   onSelect(profileId: string): void;
   onCreate(): void;
 }
+
+const targetStatusLabel: Record<TargetHealthStatus, string> = {
+  ready: "Ready",
+  "needs-setup": "Needs setup",
+  missing: "Missing",
+  guarded: "Guarded"
+};
 
 export const ProfileSidebar = ({
   targets,
@@ -22,13 +29,19 @@ export const ProfileSidebar = ({
   onCreate
 }: ProfileSidebarProps) => {
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
+  const selectedTargetStatus = selectedTarget
+    ? targetStatusLabel[selectedTarget.health.status]
+    : undefined;
 
   return (
     <aside className="sidebar" aria-label="Profiles">
       <div className="sidebar__header">
-        <div>
-          <h1>AgentEnv</h1>
-          <p className="muted">Local agent environments</p>
+        <div className="brand-lockup">
+          <div className="brand-mark" aria-hidden="true">A</div>
+          <div>
+            <h1>AgentEnv</h1>
+            <p className="muted">Local agent environments</p>
+          </div>
         </div>
         <button className="create-button" type="button" onClick={onCreate}>
           New
@@ -48,6 +61,31 @@ export const ProfileSidebar = ({
         </select>
         {selectedTarget ? <small>{selectedTarget.description}</small> : null}
       </label>
+      {selectedTarget ? (
+        <section className="target-status" aria-label="Target status">
+          <div className="target-status__summary">
+            <strong className={`target-badge target-badge--${selectedTarget.health.status}`}>
+              {selectedTargetStatus}
+            </strong>
+            {selectedTarget.health.summary !== selectedTargetStatus ? (
+              <small>{selectedTarget.health.summary}</small>
+            ) : null}
+          </div>
+          <div className="target-checks">
+            {selectedTarget.health.checks.map((check) => (
+              <div className="target-check" key={check.id}>
+                <div>
+                  <span>{check.label}</span>
+                  <code title={check.path}>{check.path}</code>
+                </div>
+                <strong>
+                  {check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing"}
+                </strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <div className="section-title">Profiles</div>
       <div className="profile-list">
         {isLoading ? <p className="muted">Loading profiles...</p> : null}
