@@ -9,11 +9,25 @@ import type { ProfileManifest, SkillsPolicy } from "./schemas";
 
 export interface AgentEnvApi {
   listProfiles(): Promise<ProfileSummary[]>;
+  readProfile(id: string): Promise<ProfileDetail>;
+  saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
+  previewApply(profileId: string): Promise<ActivationPreview>;
+  applyProfile(profileId: string, previewId: string): Promise<ApplyResult>;
+  listBackups(): Promise<BackupSummary[]>;
+  previewRollback(backupId: string): Promise<RollbackPreview>;
+  rollback(backupId: string): Promise<RollbackResult>;
 }
 
 export interface ProfileDetail {
   id: string;
   profileDir?: string;
+  manifest: ProfileManifest;
+  agentsMd: string;
+  mcpToml: string;
+  skillsPolicy: SkillsPolicy;
+}
+
+export interface SaveProfileInput {
   manifest: ProfileManifest;
   agentsMd: string;
   mcpToml: string;

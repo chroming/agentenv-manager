@@ -1,16 +1,21 @@
-import { readdir, readFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   ProfileManifestSchema,
   SafeIdSchema,
   SkillsPolicySchema
 } from "../shared/schemas";
-import type { ProfileDetail, ProfileSummary } from "../shared/types";
+import type {
+  ProfileDetail,
+  ProfileSummary,
+  SaveProfileInput
+} from "../shared/types";
 import { createPaths, type PathOverrides } from "./paths";
 
 export interface ProfileStore {
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
+  saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
 }
 
 const readJson = async (path: string): Promise<unknown> => {
@@ -74,5 +79,29 @@ export const createProfileStore = (overrides: PathOverrides): ProfileStore => {
     return summaries.sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  return { listProfiles, readProfile };
+  const saveProfile = async (input: SaveProfileInput): Promise<ProfileDetail> => {
+    const manifest = ProfileManifestSchema.parse(input.manifest);
+    const skillsPolicy = SkillsPolicySchema.parse(input.skillsPolicy);
+    const profileDir = join(paths.profilesDir, manifest.id);
+
+    await mkdir(profileDir, { recursive: true });
+    await Promise.all([
+      writeFile(
+        join(profileDir, "profile.json"),
+        `${JSON.stringify(manifest, null, 2)}\n`,
+        "utf8"
+      ),
+      writeFile(join(profileDir, "AGENTS.md"), input.agentsMd, "utf8"),
+      writeFile(join(profileDir, "mcp.toml"), input.mcpToml, "utf8"),
+      writeFile(
+        join(profileDir, "skills.json"),
+        `${JSON.stringify(skillsPolicy, null, 2)}\n`,
+        "utf8"
+      )
+    ]);
+
+    return readProfile(manifest.id);
+  };
+
+  return { listProfiles, readProfile, saveProfile };
 };

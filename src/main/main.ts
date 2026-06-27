@@ -1,5 +1,10 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
+import { createActivationService } from "./activationService";
+import { createBackupStore } from "./backupStore";
+import { registerIpcHandlers } from "./ipc";
+import { createPaths } from "./paths";
+import { createProfileStore } from "./profileStore";
 
 const createWindow = () => {
   const win = new BrowserWindow({
@@ -23,9 +28,31 @@ const createWindow = () => {
   }
 };
 
-ipcMain.handle("profiles:list", async () => []);
+const createServices = () => {
+  const appDataRoot =
+    process.env.AGENTENV_DATA_ROOT ?? join(app.getPath("userData"), "data");
+  const fakeHomeRoot =
+    process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home");
+  const paths = createPaths({
+    appDataRoot,
+    codexHome: join(fakeHomeRoot, ".codex"),
+    userSkillsDir: join(fakeHomeRoot, ".agents", "skills")
+  });
+  const profileStore = createProfileStore({
+    appDataRoot: paths.appDataRoot,
+    codexHome: paths.codexHome,
+    userSkillsDir: paths.userSkillsDir
+  });
+  const backupStore = createBackupStore(paths);
+  const activationService = createActivationService({ paths, profileStore });
 
-void app.whenReady().then(createWindow);
+  return { profileStore, backupStore, activationService };
+};
+
+void app.whenReady().then(() => {
+  registerIpcHandlers(createServices());
+  createWindow();
+});
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
