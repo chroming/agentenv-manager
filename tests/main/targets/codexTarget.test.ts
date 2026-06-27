@@ -27,6 +27,7 @@ const makeProfile = (configText: string): ProfileDetail => ({
       { kind: "agent", source: "agents/reviewer.toml", targetName: "reviewer.toml" }
     ],
     skillRefs: [],
+    mcpRefs: [],
     disabledSkillPaths: ["/Users/example/.agents/skills/legacy/SKILL.md"]
   }
 });

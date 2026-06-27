@@ -13,6 +13,8 @@ import type {
   RollbackPreview,
   SaveProfileInput,
   AgentEnvSettings,
+  McpLibraryEntry,
+  SaveMcpServerInput,
   SkillLibraryEntry,
   SkillUpdateInfo,
   TargetInfo,
@@ -22,6 +24,7 @@ import { ActivationPanel } from "./components/ActivationPanel";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { LibrarySummaryPanel } from "./components/LibrarySummaryPanel";
 import { McpEditor } from "./components/McpEditor";
+import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileSidebar } from "./components/ProfileSidebar";
 import { SkillLibraryPanel } from "./components/SkillLibraryPanel";
@@ -31,6 +34,7 @@ const emptyAssetPolicy: AssetPolicy = {
   ownedDirs: [],
   ownedFiles: [],
   skillRefs: [],
+  mcpRefs: [],
   disabledSkillPaths: []
 };
 
@@ -206,6 +210,7 @@ export const App = () => {
   const [targets, setTargets] = useState<TargetInfo[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
+  const [mcpServers, setMcpServers] = useState<McpLibraryEntry[]>([]);
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [unmanagedSkills, setUnmanagedSkills] = useState<UnmanagedSkillEntry[]>([]);
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
@@ -220,6 +225,7 @@ export const App = () => {
   const [preview, setPreview] = useState<ActivationPreview>();
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [activeWorkspace, setActiveWorkspace] = useState<"profile" | "skill-library">("profile");
+  const [activeLibraryTab, setActiveLibraryTab] = useState<"skills" | "mcp">("skills");
   const [activeTab, setActiveTab] = useState<EditorTab>("instructions");
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -231,6 +237,7 @@ export const App = () => {
       profileItems,
       backupItems,
       skillItems,
+      mcpItems,
       skillUpdateItems,
       unmanagedItems,
       settings
@@ -239,6 +246,7 @@ export const App = () => {
       window.agentEnv.listProfiles(),
       window.agentEnv.listBackups(),
       window.agentEnv.listSkillLibrary(),
+      window.agentEnv.listMcpLibrary(),
       window.agentEnv.checkSkillLibraryUpdates(),
       window.agentEnv.scanUnmanagedSkills(),
       window.agentEnv.readSettings()
@@ -258,6 +266,7 @@ export const App = () => {
     setProfiles(profileItems);
     setBackups(backupItems);
     setLibrarySkills(skillItems);
+    setMcpServers(mcpItems);
     setSkillUpdates(skillUpdateItems);
     setUnmanagedSkills(unmanagedItems);
     setSkillSettings(settings);
@@ -535,6 +544,32 @@ export const App = () => {
     }
   };
 
+  const saveMcpServer = async (input: SaveMcpServerInput) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.saveMcpServer(input);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeMcpServer = async (id: string) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.removeMcpServer(id);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <main className="app-shell">
       <ProfileSidebar
@@ -564,19 +599,49 @@ export const App = () => {
       >
         {error ? <p className="error">{error}</p> : null}
         {activeWorkspace === "skill-library" ? (
-          <SkillLibraryPanel
-            librarySkills={librarySkills}
-            skillUpdates={skillUpdates}
-            unmanagedSkills={unmanagedSkills}
-            skillSettings={skillSettings}
-            skillUsage={skillUsage}
-            onImportUnmanaged={importUnmanagedSkill}
-            onImportGitHubSkill={importGitHubSkill}
-            onUpdateLibrarySkill={updateLibrarySkill}
-            onUpdateAllAvailable={updateAvailableLibrarySkills}
-            onCheckUpdates={checkSkillUpdates}
-            onSkillSettingsChange={updateSkillSettings}
-          />
+          <>
+            <div className="tab-list" role="tablist" aria-label="Library sections">
+              <button
+                className={`tab-button${activeLibraryTab === "skills" ? " is-active" : ""}`}
+                type="button"
+                role="tab"
+                aria-selected={activeLibraryTab === "skills"}
+                onClick={() => setActiveLibraryTab("skills")}
+              >
+                Skills
+              </button>
+              <button
+                className={`tab-button${activeLibraryTab === "mcp" ? " is-active" : ""}`}
+                type="button"
+                role="tab"
+                aria-selected={activeLibraryTab === "mcp"}
+                onClick={() => setActiveLibraryTab("mcp")}
+              >
+                MCP Servers
+              </button>
+            </div>
+            {activeLibraryTab === "skills" ? (
+              <SkillLibraryPanel
+                librarySkills={librarySkills}
+                skillUpdates={skillUpdates}
+                unmanagedSkills={unmanagedSkills}
+                skillSettings={skillSettings}
+                skillUsage={skillUsage}
+                onImportUnmanaged={importUnmanagedSkill}
+                onImportGitHubSkill={importGitHubSkill}
+                onUpdateLibrarySkill={updateLibrarySkill}
+                onUpdateAllAvailable={updateAvailableLibrarySkills}
+                onCheckUpdates={checkSkillUpdates}
+                onSkillSettingsChange={updateSkillSettings}
+              />
+            ) : (
+              <McpLibraryPanel
+                mcpServers={mcpServers}
+                onSave={saveMcpServer}
+                onRemove={removeMcpServer}
+              />
+            )}
+          </>
         ) : draftProfile ? (
           <>
             <header className="editor-header">
@@ -657,6 +722,7 @@ export const App = () => {
                   configLanguage={selectedTarget?.configLanguage}
                   preview={preview}
                   librarySkills={librarySkills}
+                  mcpServers={mcpServers}
                   onChange={(assetPolicy) => {
                     setDraftProfile({ ...draftProfile, assetPolicy });
                     setPreview(undefined);

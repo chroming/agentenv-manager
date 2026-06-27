@@ -27,6 +27,7 @@ const makeProfile = (configText: string): ProfileDetail => ({
     ],
     ownedFiles: [],
     skillRefs: [],
+    mcpRefs: [],
     disabledSkillPaths: []
   }
 });
@@ -205,6 +206,7 @@ describe("OpenCode target adapter", () => {
             targetName: "agentenv-shared-reviewer"
           }
         ],
+        mcpRefs: [],
         disabledSkillPaths: []
       }
     };
@@ -244,6 +246,7 @@ describe("OpenCode target adapter", () => {
         ownedDirs: [],
         ownedFiles: [],
         skillRefs: [{ libraryId: "shared-reviewer", targetName: "agentenv-shared-reviewer" }],
+        mcpRefs: [],
         disabledSkillPaths: []
       }
     };
@@ -284,6 +287,7 @@ describe("OpenCode target adapter", () => {
             targetName: "agentenv-reviewer"
           }
         ],
+        mcpRefs: [],
         disabledSkillPaths: []
       }
     };
@@ -315,6 +319,7 @@ describe("OpenCode target adapter", () => {
         ],
         ownedFiles: [],
         skillRefs: [],
+        mcpRefs: [],
         disabledSkillPaths: []
       }
     };
@@ -364,6 +369,7 @@ describe("OpenCode target adapter", () => {
         ],
         ownedFiles: [],
         skillRefs: [],
+        mcpRefs: [],
         disabledSkillPaths: []
       }
     };

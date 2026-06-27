@@ -425,7 +425,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       null,
       2
     )}\n`,
-    assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], disabledSkillPaths: [] }
+    assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], mcpRefs: [], disabledSkillPaths: [] }
   }),
   readProfileFiles: async (profileDir, manifest) => {
     const [instructions, configText, assetPolicyContent] = await Promise.all([

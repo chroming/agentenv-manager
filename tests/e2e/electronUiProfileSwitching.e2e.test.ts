@@ -68,6 +68,12 @@ const writeOpenCodeProfile = async (
       }
     ],
     ownedFiles: [],
+    mcpRefs: [
+      {
+        libraryId: "shared-docs",
+        targetName: "shared-docs"
+      }
+    ],
     disabledSkillPaths: []
   });
   await writeFile(
@@ -125,6 +131,12 @@ const writeCodexProfile = async (
         targetName: `ui-codex-${variant}-agent.toml`
       }
     ],
+    mcpRefs: [
+      {
+        libraryId: "shared-docs",
+        targetName: "shared-docs"
+      }
+    ],
     disabledSkillPaths: []
   });
   await writeFile(
@@ -139,6 +151,48 @@ const writeCodexProfile = async (
   );
 
   return profileId;
+};
+
+const writeLibrarySkill = async (appDataRoot: string) => {
+  const sourceDir = join(appDataRoot, "source-skills", "shared-reviewer");
+  const libraryDir = join(appDataRoot, "skills-library", "shared-reviewer");
+  const skillMarkdown =
+    "---\nname: Shared Reviewer\ndescription: Shared review guidance for multiple profiles.\n---\n\n# Shared Reviewer\n\nReview code changes before applying them.\n";
+  await mkdir(sourceDir, { recursive: true });
+  await mkdir(libraryDir, { recursive: true });
+  await writeFile(join(sourceDir, "SKILL.md"), skillMarkdown, "utf8");
+  await writeFile(join(libraryDir, "SKILL.md"), skillMarkdown, "utf8");
+  await writeJson(join(libraryDir, ".agentenv-skill.json"), {
+    sourceType: "local",
+    source: sourceDir,
+    contentHash: "seed",
+    updatedAt: "2026-07-02T00:00:00.000Z"
+  });
+
+  return { libraryDir, sourceDir };
+};
+
+const writeUnmanagedTargetSkill = async (opencodeDir: string) => {
+  const skillDir = join(opencodeDir, "skills", "target-only-reviewer");
+  await mkdir(skillDir, { recursive: true });
+  await writeFile(
+    join(skillDir, "SKILL.md"),
+    "---\nname: Target Only Reviewer\ndescription: Existing target skill ready to migrate.\n---\n\n# Target Only Reviewer\n\nMigrate me into the shared library.\n",
+    "utf8"
+  );
+
+  return skillDir;
+};
+
+const writeMcpLibrary = async (appDataRoot: string) => {
+  await writeJson(join(appDataRoot, "mcp-library.json"), [
+    {
+      id: "shared-docs",
+      name: "Shared Docs",
+      transport: "http",
+      url: "https://example.com/shared-docs/mcp"
+    }
+  ]);
 };
 
 const launchApp = async () => {
@@ -179,6 +233,9 @@ const launchApp = async () => {
   await writeOpenCodeProfile(appDataRoot, "beta");
   await writeCodexProfile(appDataRoot, "alpha");
   await writeCodexProfile(appDataRoot, "beta");
+  const librarySkill = await writeLibrarySkill(appDataRoot);
+  await writeUnmanagedTargetSkill(opencodeDir);
+  await writeMcpLibrary(appDataRoot);
 
   app = await electron.launch({
     executablePath: electronPath as unknown as string,
@@ -194,7 +251,7 @@ const launchApp = async () => {
   const page = await app.firstWindow();
   await page.waitForLoadState("domcontentloaded");
 
-  return { appDataRoot, homeDir, opencodeDir, codexDir, page };
+  return { appDataRoot, homeDir, opencodeDir, codexDir, librarySkill, page };
 };
 
 const selectProfile = async (page: Page, name: string) => {
@@ -221,6 +278,99 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("opens the Skill Library workspace as a top-level app area", async () => {
+    const { page } = await launchApp();
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await page.getByRole("tablist", { name: "Profile sections" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Skill Library" }).click();
+    await page
+      .getByRole("region", { name: "Skill library", exact: true })
+      .waitFor({ state: "visible" });
+
+    expect(await page.getByRole("complementary", { name: "Library summary" }).count()).toBe(1);
+    expect(await page.getByRole("group", { name: "Library item shared-reviewer" }).count()).toBe(
+      1
+    );
+    expect(await page.getByText("Shared review guidance for multiple profiles.").count()).toBe(1);
+    expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
+    expect(await page.getByRole("tablist", { name: "Profile sections" }).count()).toBe(0);
+
+    await page
+      .getByLabel("GitHub skill URL")
+      .fill("https://github.com/acme/agent-skills/tree/main/skills/reviewer");
+    expect(await page.getByRole("button", { name: "Import from GitHub" }).isEnabled()).toBe(true);
+
+    await page.getByRole("button", { name: "Profiles" }).click();
+    await page.getByRole("tablist", { name: "Profile sections" }).waitFor({ state: "visible" });
+    expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(1);
+  }, 30_000);
+
+  it("imports an existing target skill into the shared library", async () => {
+    const { appDataRoot, page } = await launchApp();
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await page.getByRole("button", { name: "Skill Library" }).click();
+    await page
+      .getByRole("group", { name: "Unmanaged skill target-only-reviewer" })
+      .waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: "Import target-only-reviewer" }).click();
+    await page
+      .getByRole("group", { name: "Library item target-only-reviewer" })
+      .waitFor({ state: "visible" });
+
+    expect(await page.getByText("Existing target skill ready to migrate.").count()).toBe(1);
+    expect(
+      await page.getByRole("group", { name: "Unmanaged skill target-only-reviewer" }).count()
+    ).toBe(0);
+    await expect(
+      readFile(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("Migrate me into the shared library.");
+  }, 30_000);
+
+  it("updates a local library skill from its tracked source", async () => {
+    const { librarySkill, page } = await launchApp();
+
+    await writeFile(
+      join(librarySkill.sourceDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Updated shared review guidance.\n---\n\n# Shared Reviewer\n\nUse the refreshed source content.\n",
+      "utf8"
+    );
+    await selectProfile(page, "UI OpenCode alpha");
+    await page.getByRole("button", { name: "Skill Library" }).click();
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: "Update shared-reviewer" }).click();
+    await page.getByText("Updated shared review guidance.").waitFor({ state: "visible" });
+
+    await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "Use the refreshed source content."
+    );
+  }, 30_000);
+
+  it("applies reusable MCP library refs to multiple agent targets", async () => {
+    const { codexDir, opencodeDir, page } = await launchApp();
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    await expect(readFile(join(opencodeDir, "opencode.json"), "utf8")).resolves.toContain(
+      "https://example.com/shared-docs/mcp"
+    );
+
+    await page.getByRole("combobox").selectOption({ label: "Codex" });
+    await selectProfile(page, "UI Codex alpha");
+    await previewAndApply(page, "Codex");
+    await expect(readFile(join(codexDir, "config.toml"), "utf8")).resolves.toContain(
+      "[mcp_servers.shared-docs]"
+    );
+    await expect(readFile(join(codexDir, "config.toml"), "utf8")).resolves.toContain(
+      'url = "https://example.com/shared-docs/mcp"'
+    );
+  }, 30_000);
+
   it("switches OpenCode profiles through the rendered app and restores from history", async () => {
     const { opencodeDir, page } = await launchApp();
 

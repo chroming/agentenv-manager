@@ -90,6 +90,7 @@ const createCodexProfile = async (
         }
       ],
       skillRefs: [],
+      mcpRefs: [],
       disabledSkillPaths: []
     }
   });

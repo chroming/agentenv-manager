@@ -10,6 +10,11 @@ import {
   writeAtomic
 } from "./fileUtils";
 import type { AgentEnvPaths } from "./paths";
+import {
+  createMcpLibraryStore,
+  type McpLibraryStore
+} from "./mcpLibraryStore";
+import { materializeProfileMcpRefs } from "./mcpRefs";
 import type { ProfileStore } from "./profileStore";
 import {
   createSettingsStore,
@@ -36,6 +41,7 @@ export interface ActivationServiceOptions {
   targetRegistry?: TargetRegistry;
   allowRealHomeWrites?: boolean;
   settingsStore?: SettingsStore;
+  mcpLibraryStore?: McpLibraryStore;
 }
 
 export interface ActivationService {
@@ -165,7 +171,8 @@ export const createActivationService = ({
   profileStore,
   targetRegistry = createTargetRegistry(),
   allowRealHomeWrites = false,
-  settingsStore = createSettingsStore(paths)
+  settingsStore = createSettingsStore(paths),
+  mcpLibraryStore = createMcpLibraryStore(paths)
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
   const previews = new Map<string, ActivationPreview>();
@@ -202,6 +209,8 @@ export const createActivationService = ({
 
   const previewProfile = async (profileId: string): Promise<ActivationPreview> => {
     const profile = await profileStore.readProfile(profileId);
+    const mcpLibrary = await mcpLibraryStore.listServers();
+    const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
     const adapter = targetRegistry.get(profile.manifest.targetId);
     const targetPaths = adapter.createTargetPaths({
       homeDir: paths.homeDir,
@@ -211,7 +220,7 @@ export const createActivationService = ({
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     const stateFile = await readTargetStateFile(adapter.descriptor.id);
     const targetPreview = await adapter.createPreview({
-      profile,
+      profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
@@ -219,7 +228,7 @@ export const createActivationService = ({
     });
     const profileErrors = validateProfileStructure(profile);
     const assetErrors = await adapter.validateAssets({
-      profile,
+      profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod
@@ -255,6 +264,8 @@ export const createActivationService = ({
     }
 
     const profile = await profileStore.readProfile(profileId);
+    const mcpLibrary = await mcpLibraryStore.listServers();
+    const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
     const adapter = targetRegistry.get(preview.targetId);
     const targetPaths = adapter.createTargetPaths({
       homeDir: paths.homeDir,
@@ -281,7 +292,7 @@ export const createActivationService = ({
     }
 
     const assetErrors = await adapter.validateAssets({
-      profile,
+      profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod
@@ -292,7 +303,7 @@ export const createActivationService = ({
 
     const statePath = statePathFor(preview.targetId);
     const assetBackupPaths = await adapter.getAssetBackupPaths({
-      profile,
+      profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod
@@ -309,7 +320,7 @@ export const createActivationService = ({
       }
 
       await adapter.applyAssets({
-        profile,
+        profile: materializedProfile,
         targetPaths,
         skillLibraryDir,
         skillSyncMethod: settings.skillSyncMethod

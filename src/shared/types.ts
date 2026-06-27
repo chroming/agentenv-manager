@@ -11,6 +11,9 @@ import type { AssetPolicy, ProfileManifest } from "./schemas";
 export interface AgentEnvApi {
   listTargets(): Promise<TargetInfo[]>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
+  listMcpLibrary(): Promise<McpLibraryEntry[]>;
+  saveMcpServer(input: SaveMcpServerInput): Promise<McpLibraryEntry>;
+  removeMcpServer(id: string): Promise<void>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   importSkillToLibrary(sourcePath: string): Promise<SkillLibraryEntry>;
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
@@ -68,6 +71,28 @@ export interface UnmanagedSkillEntry {
 export type SkillSourceType = "local" | "github" | "zip";
 export type SkillSyncMethod = "symlink" | "copy" | "auto";
 export type SkillStorageLocation = "appData" | "agents";
+
+export type McpTransport = "stdio" | "http" | "sse";
+
+export interface McpLibraryEntry {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+}
+
+export interface SaveMcpServerInput {
+  id: string;
+  name: string;
+  transport: McpTransport;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+}
 
 export interface AgentEnvSettings {
   skillSyncMethod: SkillSyncMethod;

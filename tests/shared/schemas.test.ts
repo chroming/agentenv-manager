@@ -53,6 +53,12 @@ describe("profile schemas", () => {
             targetName: "agentenv-shared-reviewer"
           }
         ],
+        mcpRefs: [
+          {
+            libraryId: "context7",
+            targetName: "context7"
+          }
+        ],
         disabledSkillPaths: ["/Users/example/.agents/skills/old/SKILL.md"]
       });
 
@@ -68,6 +74,12 @@ describe("profile schemas", () => {
       {
         libraryId: "shared-reviewer",
         targetName: "agentenv-shared-reviewer"
+      }
+    ]);
+    expect(policy.mcpRefs).toEqual([
+      {
+        libraryId: "context7",
+        targetName: "context7"
       }
     ]);
   });

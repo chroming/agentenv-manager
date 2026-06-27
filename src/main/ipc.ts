@@ -1,12 +1,17 @@
 import { ipcMain } from "electron";
 import type { ActivationService } from "./activationService";
 import type { BackupStore } from "./backupStore";
+import type { McpLibraryStore } from "./mcpLibraryStore";
 import type { ProfileStore } from "./profileStore";
 import type { SettingsStore } from "./settingsStore";
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import { SafeIdSchema } from "../shared/schemas";
-import type { GitHubSkillImportInput, SaveProfileInput } from "../shared/types";
+import type {
+  GitHubSkillImportInput,
+  SaveMcpServerInput,
+  SaveProfileInput
+} from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
 
 export interface IpcServices {
@@ -15,6 +20,7 @@ export interface IpcServices {
   backupStore: BackupStore;
   settingsStore: SettingsStore;
   skillLibraryStore: SkillLibraryStore;
+  mcpLibraryStore: McpLibraryStore;
   targetRegistry: TargetRegistry;
   targetDiscoveryService: TargetDiscoveryService;
 }
@@ -33,11 +39,19 @@ export const registerIpcHandlers = ({
   backupStore,
   settingsStore,
   skillLibraryStore,
+  mcpLibraryStore,
   targetRegistry,
   targetDiscoveryService
 }: IpcServices) => {
   ipcMain.handle("targets:list", () => targetDiscoveryService.listTargets());
   ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
+  ipcMain.handle("mcp:list-library", () => mcpLibraryStore.listServers());
+  ipcMain.handle("mcp:save-library", (_event, input: SaveMcpServerInput) =>
+    mcpLibraryStore.saveServer(input)
+  );
+  ipcMain.handle("mcp:remove-library", (_event, id: unknown) =>
+    mcpLibraryStore.removeServer(parseId(id, "MCP server id"))
+  );
   ipcMain.handle("skills:scan-unmanaged", () =>
     targetDiscoveryService
       .listTargets()

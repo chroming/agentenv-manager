@@ -43,16 +43,36 @@ const makeEnv = async () => {
     '[mcp_servers.context7]\ncommand = "npx"\n'
   );
   await writeFile(
-    join(profileDir, "skills.json"),
+    join(profileDir, "assets.json"),
     JSON.stringify({
-      ownedSkillDirs: [
+      ownedDirs: [
         {
+          kind: "skill",
           source: "skills/example-skill",
           targetName: "agentenv-daily-coding-example-skill"
         }
       ],
+      ownedFiles: [],
+      skillRefs: [],
+      mcpRefs: [
+        {
+          libraryId: "shared-docs",
+          targetName: "shared_docs"
+        }
+      ],
       disabledSkillPaths: ["/Users/example/.agents/skills/old/SKILL.md"]
     })
+  );
+  await writeFile(
+    join(paths.appDataRoot, "mcp-library.json"),
+    JSON.stringify([
+      {
+        id: "shared-docs",
+        name: "Shared Docs",
+        transport: "http",
+        url: "https://example.com/shared-docs/mcp"
+      }
+    ])
   );
   await writeFile(
     join(profileDir, "skills", "example-skill", "SKILL.md"),
@@ -94,6 +114,12 @@ describe("activation service", () => {
     );
     await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toContain(
       "[mcp_servers.context7]"
+    );
+    await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toContain(
+      "[mcp_servers.shared_docs]"
+    );
+    await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toContain(
+      'url = "https://example.com/shared-docs/mcp"'
     );
     await expect(
       readFile(

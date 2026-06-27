@@ -8,6 +8,7 @@ const emptyPolicy: AssetPolicy = {
   ownedDirs: [],
   ownedFiles: [],
   skillRefs: [],
+  mcpRefs: [],
   disabledSkillPaths: []
 };
 
@@ -35,6 +36,12 @@ const mixedPolicy: AssetPolicy = {
     {
       libraryId: "shared-reviewer",
       targetName: "agentenv-shared-reviewer"
+    }
+  ],
+  mcpRefs: [
+    {
+      libraryId: "context7",
+      targetName: "context7"
     }
   ],
   disabledSkillPaths: []
@@ -105,6 +112,7 @@ describe("SkillsEditor", () => {
       ],
       ownedFiles: [],
       skillRefs: [],
+      mcpRefs: [],
       disabledSkillPaths: []
     });
 
@@ -136,6 +144,7 @@ describe("SkillsEditor", () => {
       ],
       ownedFiles: [],
       skillRefs: [],
+      mcpRefs: [],
       disabledSkillPaths: []
     });
   });
@@ -171,6 +180,16 @@ describe("SkillsEditor", () => {
             updatedAt: "2026-07-02T00:00:00.000Z"
           }
         ]}
+        mcpServers={[
+          {
+            id: "context7",
+            name: "Context7",
+            transport: "stdio",
+            command: "npx",
+            args: ["-y", "@upstash/context7-mcp"],
+            env: {}
+          }
+        ]}
         onChange={onChange}
       />
     );
@@ -178,6 +197,7 @@ describe("SkillsEditor", () => {
     expect(screen.getByRole("group", { name: "Skill agentenv-reviewer" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Agent reviewer.toml" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Library skill agentenv-shared-reviewer" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Library MCP context7" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
 
@@ -188,6 +208,20 @@ describe("SkillsEditor", () => {
         {
           libraryId: "shared-reviewer",
           targetName: "agentenv-shared-reviewer"
+        }
+      ],
+      mcpRefs: mixedPolicy.mcpRefs
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add library MCP" }));
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...mixedPolicy,
+      mcpRefs: [
+        mixedPolicy.mcpRefs[0],
+        {
+          libraryId: "context7",
+          targetName: "context7"
         }
       ]
     });
@@ -213,6 +247,7 @@ describe("SkillsEditor", () => {
     expect(within(inventory).getByRole("group", { name: "Skill agentenv-reviewer" })).toBeInTheDocument();
     expect(within(inventory).getByRole("group", { name: "Agent reviewer.toml" })).toBeInTheDocument();
     expect(within(inventory).getByRole("group", { name: "Library skill agentenv-shared-reviewer" })).toBeInTheDocument();
+    expect(within(inventory).getByRole("group", { name: "Library MCP context7" })).toBeInTheDocument();
     expect(within(inventory).getByRole("group", { name: "MCP context7" })).toBeInTheDocument();
     expect(within(inventory).getByText("https://mcp.context7.com/mcp")).toBeInTheDocument();
     expect(within(inventory).getByRole("group", { name: "MCP filesystem" })).toBeInTheDocument();

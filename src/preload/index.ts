@@ -4,6 +4,9 @@ import type { AgentEnvApi } from "../shared/types";
 const api: AgentEnvApi = {
   listTargets: () => ipcRenderer.invoke("targets:list"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),
+  listMcpLibrary: () => ipcRenderer.invoke("mcp:list-library"),
+  saveMcpServer: (input) => ipcRenderer.invoke("mcp:save-library", input),
+  removeMcpServer: (id) => ipcRenderer.invoke("mcp:remove-library", id),
   scanUnmanagedSkills: () => ipcRenderer.invoke("skills:scan-unmanaged"),
   importSkillToLibrary: (sourcePath) => ipcRenderer.invoke("skills:import-library", sourcePath),
   importGitHubSkillToLibrary: (input) => ipcRenderer.invoke("skills:import-github", input),

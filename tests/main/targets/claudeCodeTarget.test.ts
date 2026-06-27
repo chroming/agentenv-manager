@@ -27,6 +27,7 @@ const makeProfile = (configText: string): ProfileDetail => ({
     ],
     ownedFiles: [],
     skillRefs: [],
+    mcpRefs: [],
     disabledSkillPaths: []
   }
 });
@@ -233,6 +234,7 @@ describe("Claude Code target adapter", () => {
         ownedDirs: [{ kind: "skill", source: "skills/reviewer", targetName: "reviewer" }],
         ownedFiles: [],
         skillRefs: [],
+        mcpRefs: [],
         disabledSkillPaths: []
       }
     };

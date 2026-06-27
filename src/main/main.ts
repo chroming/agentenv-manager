@@ -2,6 +2,7 @@ import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { createActivationService } from "./activationService";
 import { createBackupStore } from "./backupStore";
+import { createMcpLibraryStore } from "./mcpLibraryStore";
 import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
@@ -50,11 +51,13 @@ const createServices = async () => {
   }, targetRegistry);
   const backupStore = createBackupStore(paths);
   const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+  const mcpLibraryStore = createMcpLibraryStore(paths);
   const activationService = createActivationService({
     paths,
     profileStore,
     targetRegistry,
-    settingsStore
+    settingsStore,
+    mcpLibraryStore
   });
   const targetDiscoveryService = createTargetDiscoveryService({
     paths,
@@ -68,6 +71,7 @@ const createServices = async () => {
     backupStore,
     settingsStore,
     skillLibraryStore,
+    mcpLibraryStore,
     activationService,
     targetRegistry,
     targetDiscoveryService

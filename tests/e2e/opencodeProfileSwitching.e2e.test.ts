@@ -128,6 +128,7 @@ const createOpenCodeProfile = async (
       ],
       ownedFiles: [],
       skillRefs: [],
+      mcpRefs: [],
       disabledSkillPaths: []
     }
   });
@@ -289,6 +290,7 @@ describe("OpenCode profile switching e2e", () => {
         ownedDirs: [],
         ownedFiles: [],
         skillRefs: [{ libraryId: "shared-reviewer", targetName: "agentenv-alpha-shared" }],
+        mcpRefs: [],
         disabledSkillPaths: []
       }
     });
@@ -307,6 +309,7 @@ describe("OpenCode profile switching e2e", () => {
         ownedDirs: [],
         ownedFiles: [],
         skillRefs: [{ libraryId: "shared-reviewer", targetName: "agentenv-beta-shared" }],
+        mcpRefs: [],
         disabledSkillPaths: []
       }
     });

@@ -28,6 +28,7 @@ const profile: ProfileDetail = {
     ownedDirs: [],
     ownedFiles: [],
     skillRefs: [],
+    mcpRefs: [],
     disabledSkillPaths: []
   }
 };
@@ -120,6 +121,9 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     listTargets: vi.fn().mockResolvedValue([target]),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
+    listMcpLibrary: vi.fn().mockResolvedValue([]),
+    saveMcpServer: vi.fn().mockImplementation(async (input) => input),
+    removeMcpServer: vi.fn().mockResolvedValue(undefined),
     scanUnmanagedSkills: vi.fn().mockResolvedValue([]),
     importSkillToLibrary: vi.fn().mockResolvedValue({
       id: "skill",
@@ -268,6 +272,55 @@ describe("App", () => {
     );
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
+  });
+
+  it("opens the MCP library and saves reusable MCP servers", async () => {
+    const api = installApi({
+      listMcpLibrary: vi.fn().mockResolvedValue([
+        {
+          id: "context7",
+          name: "Context7",
+          transport: "stdio",
+          command: "npx",
+          args: ["-y", "@upstash/context7-mcp"],
+          env: {}
+        }
+      ])
+    });
+    render(<App />);
+
+    await screen.findByLabelText("AGENTS.md");
+    fireEvent.click(screen.getByRole("button", { name: "Skill Library" }));
+    fireEvent.click(screen.getByRole("tab", { name: "MCP Servers" }));
+
+    expect(screen.getByRole("region", { name: "MCP library" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "MCP library item context7" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("MCP library id"), {
+      target: { value: "shared-docs" }
+    });
+    fireEvent.change(screen.getByLabelText("MCP library name"), {
+      target: { value: "Shared Docs" }
+    });
+    fireEvent.change(screen.getByLabelText("MCP transport"), {
+      target: { value: "http" }
+    });
+    fireEvent.change(screen.getByLabelText("MCP URL"), {
+      target: { value: "https://example.com/shared-docs/mcp" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
+
+    await waitFor(() =>
+      expect(api.saveMcpServer).toHaveBeenCalledWith({
+        id: "shared-docs",
+        name: "Shared Docs",
+        transport: "http",
+        command: undefined,
+        url: "https://example.com/shared-docs/mcp",
+        args: [],
+        env: {}
+      })
+    );
   });
 
   it("shows a safe activation inspector and enables apply after preview", async () => {

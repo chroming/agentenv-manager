@@ -389,7 +389,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     instructions:
       "# Global Codex Guidance\n\n- Keep changes scoped and reversible.\n- Preview environment changes before applying them.\n",
     configText: "",
-    assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], disabledSkillPaths: [] }
+    assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], mcpRefs: [], disabledSkillPaths: [] }
   }),
   readProfileFiles: async (profileDir, manifest) => {
     const [instructions, configText, assetPolicy] = await Promise.all([

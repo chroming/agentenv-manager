@@ -7,6 +7,7 @@ import {
 import type {
   ActivationPreview,
   AssetPolicy,
+  McpLibraryEntry,
   SkillLibraryEntry,
   TargetInfo
 } from "../../shared/types";
@@ -17,6 +18,7 @@ interface SkillsEditorProps {
   configLanguage?: TargetInfo["configLanguage"];
   preview?: ActivationPreview;
   librarySkills?: SkillLibraryEntry[];
+  mcpServers?: McpLibraryEntry[];
   onChange(value: AssetPolicy): void;
 }
 
@@ -218,6 +220,7 @@ export const SkillsEditor = ({
   configLanguage,
   preview,
   librarySkills = [],
+  mcpServers = [],
   onChange
 }: SkillsEditorProps) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -228,13 +231,16 @@ export const SkillsEditor = ({
     (ownedFile) => ownedFile.kind === "agent"
   );
   const librarySkillEntries = value.skillRefs ?? [];
+  const libraryMcpEntries = value.mcpRefs ?? [];
   const mcpState = getMcpResources(configText, configLanguage, preview);
   const hasResources =
     skillEntries.length > 0 ||
     agentFileEntries.length > 0 ||
     librarySkillEntries.length > 0 ||
+    libraryMcpEntries.length > 0 ||
     mcpState.resources.length > 0;
   const firstLibrarySkill = librarySkills[0];
+  const firstMcpServer = mcpServers[0];
 
   const updateOwnedDir = (
     index: number,
@@ -266,6 +272,17 @@ export const SkillsEditor = ({
     });
   };
 
+  const addLibraryMcp = () => {
+    const libraryId = firstMcpServer?.id ?? "shared-mcp";
+    onChange({
+      ...value,
+      mcpRefs: (value.mcpRefs ?? []).concat({
+        libraryId,
+        targetName: libraryId
+      })
+    });
+  };
+
   return (
     <section className="skills-editor" aria-label="Resources">
       <div className="asset-editor-header">
@@ -285,6 +302,9 @@ export const SkillsEditor = ({
           </button>
           <button className="secondary-action" type="button" onClick={addLibrarySkill}>
             Add library skill
+          </button>
+          <button className="secondary-action" type="button" onClick={addLibraryMcp}>
+            Add library MCP
           </button>
           <button
             aria-expanded={advancedOpen}
@@ -386,6 +406,29 @@ export const SkillsEditor = ({
                   <span>{asset.targetName}</span>
                   <small>{librarySkill?.name ?? asset.libraryId}</small>
                   <small>{librarySkill?.path ?? `skills-library/${asset.libraryId}`}</small>
+                </div>
+                <strong className="resource-status">Configured</strong>
+              </div>
+            );
+          })}
+          {libraryMcpEntries.map((asset, index) => {
+            const mcpServer = mcpServers.find((server) => server.id === asset.libraryId);
+            return (
+              <div
+                aria-label={`Library MCP ${asset.targetName}`}
+                className="resource-row"
+                key={`${asset.libraryId}:${asset.targetName}:${index}`}
+                role="group"
+              >
+                <span className="resource-chip">Library MCP</span>
+                <div className="resource-row__main">
+                  <span>{asset.targetName}</span>
+                  <small>{mcpServer?.name ?? asset.libraryId}</small>
+                  <small>
+                    {mcpServer?.transport === "stdio"
+                      ? [mcpServer.command, ...(mcpServer.args ?? [])].filter(Boolean).join(" ")
+                      : mcpServer?.url ?? `mcp-library/${asset.libraryId}`}
+                  </small>
                 </div>
                 <strong className="resource-status">Configured</strong>
               </div>

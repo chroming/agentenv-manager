@@ -108,6 +108,7 @@ const createClaudeProfile = async (
       ],
       ownedFiles: [],
       skillRefs: [],
+      mcpRefs: [],
       disabledSkillPaths: []
     }
   });
