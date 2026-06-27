@@ -44,6 +44,23 @@ const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
 
 const managedSurfaceLabel = (key: string) => (key === "assets" ? "skills" : key);
 
+const targetStatusLabel: Record<TargetInfo["health"]["status"], string> = {
+  ready: "Ready",
+  "needs-setup": "Needs setup",
+  missing: "Missing",
+  guarded: "Guarded"
+};
+
+const targetReadinessDetail = (target?: TargetInfo) => {
+  if (!target) {
+    return "Target discovery is still loading.";
+  }
+  if (target.health.status === "ready") {
+    return "Ready for preview and apply.";
+  }
+  return "Fix target access before applying.";
+};
+
 type ValidationLevel = "ok" | "warning" | "error" | "pending";
 
 interface ValidationRow {
@@ -201,12 +218,26 @@ export const App = () => {
     setProfiles(profileItems);
     setBackups(backupItems);
     setSelectedTargetId((current) => current ?? targetItems[0]?.id);
+    return { targetItems, profileItems, backupItems };
   };
 
   useEffect(() => {
     let isMounted = true;
 
     refreshProfiles()
+      .then(async ({ profileItems }) => {
+        if (!isMounted || profileItems.length !== 1) {
+          return;
+        }
+
+        const [onlyProfile] = profileItems;
+        setSelectedProfileId(onlyProfile.id);
+        setActiveTab("instructions");
+        const profile = await window.agentEnv.readProfile(onlyProfile.id);
+        if (isMounted) {
+          setDraftProfile(profile);
+        }
+      })
       .catch((unknownError) => {
         if (isMounted) {
           setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -274,6 +305,15 @@ export const App = () => {
   );
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
   const activeTargetPath = selectedTarget?.paths.configDir ?? "target workspace";
+  const activeTargetStatus = selectedTarget
+    ? targetStatusLabel[selectedTarget.health.status]
+    : "Pending";
+  const activeTargetSummary =
+    selectedTarget && selectedTarget.health.summary !== activeTargetStatus
+      ? selectedTarget.health.summary
+      : selectedTarget
+        ? `${selectedTarget.name} target`
+        : "Target pending";
   const activeTabPanelId = `editor-panel-${activeTab}`;
   const managedSurfaces = draftProfile
     ? Object.entries(draftProfile.manifest.managed)
@@ -390,10 +430,23 @@ export const App = () => {
               <div className="editor-title">
                 <p className="eyebrow">{activeTargetName} Environment</p>
                 <h2>{draftProfile.manifest.name}</h2>
+                <section
+                  className={`target-readiness target-readiness--${selectedTarget?.health.status ?? "pending"}`}
+                  aria-label="Target readiness"
+                >
+                  <strong
+                    className={`target-badge target-badge--${selectedTarget?.health.status ?? "needs-setup"}`}
+                  >
+                    {activeTargetStatus}
+                  </strong>
+                  <div className="target-readiness__main">
+                    <span>{activeTargetSummary}</span>
+                    <code>{activeTargetPath}</code>
+                  </div>
+                  <small>{targetReadinessDetail(selectedTarget)}</small>
+                </section>
                 <div className="editor-meta" aria-label="Profile metadata">
-                  <span>{selectedTarget?.health.summary ?? "Target pending"}</span>
                   <span>{managedSurfaces || "No managed surfaces"}</span>
-                  <code>{activeTargetPath}</code>
                 </div>
               </div>
               <button className="save-button" type="button" disabled={busy} onClick={saveDraft}>

@@ -156,17 +156,20 @@ describe("SkillsEditor", () => {
     );
 
     expect(screen.getByRole("region", { name: "Resources" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Skills" })).toBeInTheDocument();
-
-    const mcpServers = screen.getByRole("region", { name: "MCP servers" });
-    expect(within(mcpServers).getByText("context7")).toBeInTheDocument();
-    expect(within(mcpServers).getByText("remote")).toBeInTheDocument();
-    expect(within(mcpServers).getByText("https://mcp.context7.com/mcp")).toBeInTheDocument();
-    expect(within(mcpServers).getByText("filesystem")).toBeInTheDocument();
-    expect(within(mcpServers).getByText("local")).toBeInTheDocument();
+    const inventory = screen.getByRole("region", { name: "Resource inventory" });
+    expect(within(inventory).getByRole("group", { name: "Skill agentenv-reviewer" })).toBeInTheDocument();
+    expect(within(inventory).getByRole("group", { name: "MCP context7" })).toBeInTheDocument();
+    expect(within(inventory).getByText("https://mcp.context7.com/mcp")).toBeInTheDocument();
+    expect(within(inventory).getByRole("group", { name: "MCP filesystem" })).toBeInTheDocument();
     expect(
-      within(mcpServers).getByText("npx -y @modelcontextprotocol/server-filesystem")
+      within(inventory).getByText("npx -y @modelcontextprotocol/server-filesystem")
     ).toBeInTheDocument();
-    expect(within(mcpServers).getAllByText("Managed")).toHaveLength(2);
+    expect(within(inventory).getAllByText("MCP")).toHaveLength(2);
+    expect(within(inventory).getAllByText("Managed")).toHaveLength(2);
+    expect(screen.queryByRole("region", { name: "MCP servers" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Disabled Skill Paths" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    expect(screen.getByRole("textbox", { name: "Disabled Skill Paths" })).toBeInTheDocument();
   });
 });

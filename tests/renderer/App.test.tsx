@@ -157,20 +157,20 @@ afterEach(() => {
 
 describe("App", () => {
   it("loads profiles and shows the selected profile", async () => {
-    installApi();
+    const api = installApi();
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Daily Coding/ }));
-
     expect(await screen.findByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
+    expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
+    const readiness = screen.getByRole("region", { name: "Target readiness" });
+    expect(within(readiness).getByText("Ready")).toBeInTheDocument();
     expect(
-      within(screen.getByRole("region", { name: "Target status" })).getByText("Ready")
+      within(readiness).getByText("/tmp/home/.config/opencode")
     ).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("region", { name: "Target status" })).getByText(
-        "/tmp/home/.config/opencode"
-      )
-    ).toBeInTheDocument();
+    const targetStatus = screen.getByRole("region", { name: "Target status" });
+    expect(within(targetStatus).getByText("Config directory")).not.toBeVisible();
+    fireEvent.click(within(targetStatus).getByText("Target details"));
+    expect(within(targetStatus).getByText("Config directory")).toBeVisible();
     expect(screen.getByRole("tab", { name: "Resources" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Skills" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Assets" })).not.toBeInTheDocument();
@@ -187,7 +187,6 @@ describe("App", () => {
     const api = installApi();
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Daily Coding/ }));
     const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
     expect(applyButton).toBeDisabled();
     expect(screen.getByText("Preview required")).toBeInTheDocument();
@@ -197,6 +196,7 @@ describe("App", () => {
     await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding"));
     expect(screen.getByText("Ready to apply")).toBeInTheDocument();
     expect(screen.getByText("2 files will change")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview again" })).toBeEnabled();
     expect(screen.getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
     expect(applyButton).toBeEnabled();
   });
@@ -219,13 +219,15 @@ describe("App", () => {
     });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Daily Coding/ }));
     const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
 
     fireEvent.click(screen.getByRole("button", { name: "Preview changes" }));
 
     await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding"));
-    expect(screen.getByText("Target blocked")).toBeInTheDocument();
+    const readiness = screen.getByRole("region", { name: "Target readiness" });
+    expect(within(readiness).getByText("Fix target access before applying.")).toBeInTheDocument();
+    expect(screen.getByText("Cannot apply yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Preview again" })).toBeEnabled();
     expect(applyButton).toBeDisabled();
   });
 

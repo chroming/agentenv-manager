@@ -71,19 +71,22 @@ export const ProfileSidebar = ({
               <small>{selectedTarget.health.summary}</small>
             ) : null}
           </div>
-          <div className="target-checks">
-            {selectedTarget.health.checks.map((check) => (
-              <div className="target-check" key={check.id}>
-                <div>
-                  <span>{check.label}</span>
-                  <code title={check.path}>{check.path}</code>
+          <details className="target-details">
+            <summary>Target details</summary>
+            <div className="target-checks">
+              {selectedTarget.health.checks.map((check) => (
+                <div className="target-check" key={check.id}>
+                  <div>
+                    <span>{check.label}</span>
+                    <code title={check.path}>{check.path}</code>
+                  </div>
+                  <strong>
+                    {check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing"}
+                  </strong>
                 </div>
-                <strong>
-                  {check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing"}
-                </strong>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </details>
         </section>
       ) : null}
       <div className="section-title">Profiles</div>

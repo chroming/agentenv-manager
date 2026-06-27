@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   parse as parseJsonc,
   printParseErrorCode,
@@ -93,10 +94,12 @@ export const SkillsEditor = ({
   preview,
   onChange
 }: SkillsEditorProps) => {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const skillEntries = value.ownedDirs
     .map((ownedDir, index) => ({ ownedDir, index }))
     .filter((entry) => entry.ownedDir.kind === "skill");
   const mcpState = getMcpResources(configText, configLanguage, preview);
+  const hasResources = skillEntries.length > 0 || mcpState.resources.length > 0;
 
   const updateOwnedDir = (
     index: number,
@@ -122,86 +125,102 @@ export const SkillsEditor = ({
       <div className="asset-editor-header">
         <div>
           <div className="section-title">Resources</div>
-          <p className="muted">Skills and MCP servers switched with this profile.</p>
+          <p className="muted">Skills and MCP servers managed by this profile.</p>
+        </div>
+        <div className="asset-editor-actions">
+          <button
+            className="secondary-action"
+            type="button"
+            onClick={() =>
+              onChange({ ...value, ownedDirs: value.ownedDirs.concat(defaultSkill) })
+            }
+          >
+            Add skill
+          </button>
+          <button
+            aria-expanded={advancedOpen}
+            className="secondary-action"
+            type="button"
+            onClick={() => setAdvancedOpen((current) => !current)}
+          >
+            Advanced
+          </button>
         </div>
       </div>
 
-      <section className="resource-section" aria-label="Skills">
-        <div className="asset-editor-header">
-          <div>
-            <div className="resource-heading">Skills</div>
-            <p className="muted">Enabled skills are copied into the target skills folder.</p>
-          </div>
-          <div className="asset-editor-actions">
-            <button
-              className="secondary-action"
-              type="button"
-              onClick={() =>
-                onChange({ ...value, ownedDirs: value.ownedDirs.concat(defaultSkill) })
-              }
-            >
-              Add skill
-            </button>
-          </div>
-        </div>
-        <div className="owned-skill-list">
-          {skillEntries.length === 0 ? (
-            <p className="muted">No enabled skills</p>
-          ) : (
-            skillEntries.map(({ ownedDir: asset, index }) => (
-              <fieldset
-                className="owned-skill"
-                aria-label={`Skill ${asset.targetName}`}
-                key={`${asset.kind}:${asset.source}:${asset.targetName}:${index}`}
-              >
-                <legend>Skill</legend>
-                <label>
-                  <span>Source</span>
-                  <input
-                    aria-label="Source"
-                    value={asset.source}
-                    onChange={(event) =>
-                      updateOwnedDir(index, { source: event.currentTarget.value })
-                    }
-                  />
-                </label>
-                <label>
-                  <span>Target name</span>
-                  <input
-                    aria-label="Target name"
-                    value={asset.targetName}
-                    onChange={(event) =>
-                      updateOwnedDir(index, { targetName: event.currentTarget.value })
-                    }
-                  />
-                </label>
-                <button type="button" onClick={() => removeOwnedDir(index)}>
-                  Remove
-                </button>
-              </fieldset>
-            ))
-          )}
-        </div>
-      </section>
-
-      <section className="resource-section" aria-label="MCP servers">
+      <section className="resource-section" aria-label="Resource inventory">
         <div>
-          <div className="resource-heading">MCP servers</div>
-          <p className="muted">MCP entries are read from the config tab.</p>
+          <div className="resource-heading">Inventory</div>
+          <p className="muted">Review what this environment switches before previewing.</p>
+        </div>
+        <div className="resource-table-head" aria-hidden="true">
+          <span>Type</span>
+          <span>Name and source</span>
+          <span>Status</span>
         </div>
         <div className="resource-list">
           {mcpState.error ? <p className="warning">Config parse error: {mcpState.error}</p> : null}
           {mcpState.note ? <p className="muted">{mcpState.note}</p> : null}
-          {!mcpState.error && !mcpState.note && mcpState.resources.length === 0 ? (
-            <p className="muted">No MCP servers</p>
+          {!mcpState.error && !mcpState.note && !hasResources ? (
+            <p className="muted">No resources configured</p>
+          ) : null}
+          {skillEntries.length > 0 ? (
+            skillEntries.map(({ ownedDir: asset, index }) => (
+              <fieldset
+                className="owned-skill resource-item"
+                aria-label={`Skill ${asset.targetName}`}
+                key={`${asset.kind}:${asset.source}:${asset.targetName}:${index}`}
+              >
+                <legend className="resource-legend">Skill</legend>
+                <div className="resource-row resource-row--editable">
+                  <span className="resource-chip">Skill</span>
+                  <div className="resource-row__main">
+                    <span>{asset.targetName}</span>
+                    <small>{asset.source}</small>
+                  </div>
+                  <strong className="resource-status">Configured</strong>
+                </div>
+                <div className="resource-edit-grid">
+                  <label>
+                    <span>Source</span>
+                    <input
+                      aria-label="Source"
+                      value={asset.source}
+                      onChange={(event) =>
+                        updateOwnedDir(index, { source: event.currentTarget.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Target name</span>
+                    <input
+                      aria-label="Target name"
+                      value={asset.targetName}
+                      onChange={(event) =>
+                        updateOwnedDir(index, { targetName: event.currentTarget.value })
+                      }
+                    />
+                  </label>
+                  <button type="button" onClick={() => removeOwnedDir(index)}>
+                    Remove
+                  </button>
+                </div>
+              </fieldset>
+            ))
           ) : null}
           {mcpState.resources.map((resource) => (
-            <div className="resource-row" key={resource.name}>
+            <div
+              aria-label={`MCP ${resource.name}`}
+              className="resource-row"
+              key={resource.name}
+              role="group"
+            >
+              <span className="resource-chip">MCP</span>
               <div className="resource-row__main">
                 <span>{resource.name}</span>
+                <small>{resource.type}</small>
                 <small>{resource.detail}</small>
               </div>
-              <span className="resource-chip">{resource.type}</span>
               <strong
                 className={`resource-status resource-status--${resource.status.toLowerCase()}`}
               >
@@ -212,23 +231,25 @@ export const SkillsEditor = ({
         </div>
       </section>
 
-      <label className="field-block resource-section--advanced">
-        <span>Disabled Skill Paths</span>
-        <textarea
-          aria-label="Disabled Skill Paths"
-          spellCheck={false}
-          value={value.disabledSkillPaths.join("\n")}
-          onChange={(event) =>
-            onChange({
-              ...value,
-              disabledSkillPaths: event.currentTarget.value
-                .split("\n")
-                .map((line) => line.trim())
-                .filter(Boolean)
-            })
-          }
-        />
-      </label>
+      {advancedOpen ? (
+        <label className="field-block resource-section--advanced">
+          <span>Disabled Skill Paths</span>
+          <textarea
+            aria-label="Disabled Skill Paths"
+            spellCheck={false}
+            value={value.disabledSkillPaths.join("\n")}
+            onChange={(event) =>
+              onChange({
+                ...value,
+                disabledSkillPaths: event.currentTarget.value
+                  .split("\n")
+                  .map((line) => line.trim())
+                  .filter(Boolean)
+              })
+            }
+          />
+        </label>
+      ) : null}
     </section>
   );
 };
