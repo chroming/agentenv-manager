@@ -7,6 +7,7 @@ import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
 import { seedDefaultProfiles } from "./seedProfiles";
 import { createTargetRegistry } from "./targets/registry";
+import { preloadScriptName } from "./windowConfig";
 
 const createWindow = () => {
   const win = new BrowserWindow({
@@ -16,7 +17,7 @@ const createWindow = () => {
     minHeight: 620,
     title: "AgentEnv Manager",
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
+      preload: join(__dirname, "../preload", preloadScriptName),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
