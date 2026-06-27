@@ -6,7 +6,7 @@ import type { SettingsStore } from "./settingsStore";
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import { SafeIdSchema } from "../shared/schemas";
-import type { SaveProfileInput } from "../shared/types";
+import type { GitHubSkillImportInput, SaveProfileInput } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
 
 export interface IpcServices {
@@ -46,6 +46,10 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:import-library", (_event, sourcePath: unknown) =>
     skillLibraryStore.importSkill({ sourcePath: String(sourcePath) })
   );
+  ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>
+    skillLibraryStore.importGitHubSkill(input)
+  );
+  ipcMain.handle("skills:check-updates", () => skillLibraryStore.checkUpdates());
   ipcMain.handle("skills:update-library", (_event, id: unknown) =>
     skillLibraryStore.updateSkill(parseId(id, "skill id"))
   );

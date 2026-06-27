@@ -131,6 +131,19 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       contentHash: "hash",
       updatedAt: "2026-07-02T00:00:00.000Z"
     }),
+    importGitHubSkillToLibrary: vi.fn().mockResolvedValue({
+      id: "github-reviewer",
+      name: "GitHub Reviewer",
+      description: "",
+      path: "/tmp/skill",
+      sourceType: "github",
+      source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+      remoteRef: "main",
+      remoteRevision: "revision",
+      contentHash: "hash",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    }),
+    checkSkillLibraryUpdates: vi.fn().mockResolvedValue([]),
     updateLibrarySkill: vi.fn().mockResolvedValue({
       id: "skill",
       name: "skill",

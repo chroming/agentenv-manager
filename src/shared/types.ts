@@ -13,6 +13,8 @@ export interface AgentEnvApi {
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   importSkillToLibrary(sourcePath: string): Promise<SkillLibraryEntry>;
+  importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
+  checkSkillLibraryUpdates(): Promise<SkillUpdateInfo[]>;
   updateLibrarySkill(id: string): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
@@ -34,8 +36,25 @@ export interface SkillLibraryEntry {
   path: string;
   sourceType: SkillSourceType;
   source?: string;
+  remoteRef?: string;
+  remoteRevision?: string;
   contentHash: string;
   updatedAt: string;
+}
+
+export interface GitHubSkillImportInput {
+  url: string;
+  id?: string;
+}
+
+export interface SkillUpdateInfo {
+  id: string;
+  name: string;
+  sourceType: SkillSourceType;
+  currentRevision?: string;
+  latestRevision?: string;
+  updateAvailable: boolean;
+  error?: string;
 }
 
 export interface UnmanagedSkillEntry {

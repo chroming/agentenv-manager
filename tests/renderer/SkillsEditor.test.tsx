@@ -143,6 +143,7 @@ describe("SkillsEditor", () => {
   it("lists shared library skills and preserves them during skill edits", () => {
     const onChange = vi.fn();
     const onImportUnmanaged = vi.fn();
+    const onImportGitHubSkill = vi.fn();
     const onUpdateLibrarySkill = vi.fn();
     const onSettingsChange = vi.fn();
     render(
@@ -160,6 +161,28 @@ describe("SkillsEditor", () => {
             source: "/tmp/source/shared-reviewer",
             contentHash: "abc123",
             updatedAt: "2026-07-02T00:00:00.000Z"
+          },
+          {
+            id: "github-reviewer",
+            name: "GitHub Reviewer",
+            description: "Review from GitHub",
+            path: "/tmp/skills-library/github-reviewer",
+            sourceType: "github",
+            source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+            remoteRef: "main",
+            remoteRevision: "revision-1",
+            contentHash: "def456",
+            updatedAt: "2026-07-02T00:00:00.000Z"
+          }
+        ]}
+        skillUpdates={[
+          {
+            id: "github-reviewer",
+            name: "GitHub Reviewer",
+            sourceType: "github",
+            currentRevision: "revision-1",
+            latestRevision: "revision-2",
+            updateAvailable: true
           }
         ]}
         unmanagedSkills={[
@@ -177,6 +200,7 @@ describe("SkillsEditor", () => {
         }}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         onImportUnmanaged={onImportUnmanaged}
+        onImportGitHubSkill={onImportGitHubSkill}
         onUpdateLibrarySkill={onUpdateLibrarySkill}
         onSkillSettingsChange={onSettingsChange}
         onChange={onChange}
@@ -204,6 +228,20 @@ describe("SkillsEditor", () => {
     expect(screen.getByRole("group", { name: "Library item shared-reviewer" })).toHaveTextContent(
       "Daily Coding"
     );
+    expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent(
+      "Update available"
+    );
+    fireEvent.change(screen.getByLabelText("GitHub skill URL"), {
+      target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
+    });
+    fireEvent.change(screen.getByLabelText("GitHub skill library id"), {
+      target: { value: "github-reviewer" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import GitHub skill" }));
+    expect(onImportGitHubSkill).toHaveBeenCalledWith({
+      url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+      id: "github-reviewer"
+    });
     fireEvent.click(screen.getByRole("button", { name: "Update shared-reviewer" }));
     expect(onUpdateLibrarySkill).toHaveBeenCalledWith("shared-reviewer");
     fireEvent.click(screen.getByRole("button", { name: "Import legacy-reviewer" }));

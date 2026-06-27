@@ -14,6 +14,7 @@ import type {
   SaveProfileInput,
   AgentEnvSettings,
   SkillLibraryEntry,
+  SkillUpdateInfo,
   TargetInfo,
   UnmanagedSkillEntry
 } from "../shared/types";
@@ -203,6 +204,7 @@ export const App = () => {
   const [targets, setTargets] = useState<TargetInfo[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
+  const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [unmanagedSkills, setUnmanagedSkills] = useState<UnmanagedSkillEntry[]>([]);
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
     skillSyncMethod: "symlink",
@@ -226,6 +228,7 @@ export const App = () => {
       profileItems,
       backupItems,
       skillItems,
+      skillUpdateItems,
       unmanagedItems,
       settings
     ] = await Promise.all([
@@ -233,6 +236,7 @@ export const App = () => {
       window.agentEnv.listProfiles(),
       window.agentEnv.listBackups(),
       window.agentEnv.listSkillLibrary(),
+      window.agentEnv.checkSkillLibraryUpdates(),
       window.agentEnv.scanUnmanagedSkills(),
       window.agentEnv.readSettings()
     ]);
@@ -251,6 +255,7 @@ export const App = () => {
     setProfiles(profileItems);
     setBackups(backupItems);
     setLibrarySkills(skillItems);
+    setSkillUpdates(skillUpdateItems);
     setUnmanagedSkills(unmanagedItems);
     setSkillSettings(settings);
     setSkillUsage(usage);
@@ -465,6 +470,19 @@ export const App = () => {
     }
   };
 
+  const importGitHubSkill = async (input: { url: string; id?: string }) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.importGitHubSkillToLibrary(input);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const updateSkillSettings = async (input: Partial<AgentEnvSettings>) => {
     setBusy(true);
     setError(undefined);
@@ -581,10 +599,12 @@ export const App = () => {
                   configLanguage={selectedTarget?.configLanguage}
                   preview={preview}
                   librarySkills={librarySkills}
+                  skillUpdates={skillUpdates}
                   unmanagedSkills={unmanagedSkills}
                   skillSettings={skillSettings}
                   skillUsage={skillUsage}
                   onImportUnmanaged={importUnmanagedSkill}
+                  onImportGitHubSkill={importGitHubSkill}
                   onUpdateLibrarySkill={updateLibrarySkill}
                   onSkillSettingsChange={updateSkillSettings}
                   onChange={(assetPolicy) => {
