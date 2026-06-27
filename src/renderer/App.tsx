@@ -969,8 +969,8 @@ export const App = () => {
                 </span>
                 <div>
                   <strong>{activeLibraryTab === "skills" ? totalInstalledSkills : readyTargetCount}</strong>
-                  <small>Target installs</small>
-                  <span>{activeLibraryTab === "skills" ? "Installed instances" : `${readyTargetCount}/${targets.length || 0} targets ready`}</span>
+                  <small>Installs</small>
+                  <span>{activeLibraryTab === "skills" ? "Target copies" : `${readyTargetCount}/${targets.length || 0} ready`}</span>
                 </div>
               </div>
               {activeLibraryTab === "skills" ? (
@@ -984,8 +984,8 @@ export const App = () => {
                   </span>
                   <div>
                     <strong>{needsManagementCount}</strong>
-                    <small>Needs management</small>
-                    <span>Imported target skills</span>
+                    <small>Unmanaged</small>
+                    <span>Target skills</span>
                   </div>
                 </button>
               ) : null}

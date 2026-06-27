@@ -133,6 +133,12 @@ export const SkillLibraryPanel = ({
     setTargetFilter("all");
     setUpdateFilter("all");
   };
+  const hasActiveFilters =
+    search.trim().length > 0 ||
+    sourceFilter !== "all" ||
+    usageFilter !== "all" ||
+    targetFilter !== "all" ||
+    updateFilter !== "all";
   const usedSkillCount = librarySkills.filter((skill) => (skillUsage[skill.id] ?? []).length > 0).length;
   const unusedSkillCount = Math.max(librarySkills.length - usedSkillCount, 0);
 
@@ -210,10 +216,12 @@ export const SkillLibraryPanel = ({
               onChange={(event) => setSearch(event.currentTarget.value)}
             />
           </label>
-          <button className="secondary-action" type="button" onClick={resetFilters}>
-            <RotateCcw size={15} strokeWidth={2.2} />
-            Reset filters
-          </button>
+          {hasActiveFilters ? (
+            <button className="secondary-action" type="button" onClick={resetFilters}>
+              <RotateCcw size={15} strokeWidth={2.2} />
+              Reset filters
+            </button>
+          ) : null}
           <select
             aria-label="Skill source filter"
             value={sourceFilter}

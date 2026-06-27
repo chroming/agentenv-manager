@@ -3439,14 +3439,112 @@ button svg,
   position: relative;
 }
 
+.app-shell--library .editor-panel {
+  overflow-x: hidden;
+}
+
+.metric-strip {
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+}
+
+.library-quick-tabs {
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  min-width: 0;
+  padding: 0 14px;
+}
+
+.library-quick-tab {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.library-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.library-toolbar .library-search {
+  flex: 1 1 240px;
+  min-width: min(240px, 100%);
+}
+
+.library-toolbar select {
+  flex: 0 1 132px;
+  min-width: 112px;
+}
+
+.library-toolbar button {
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .library-table {
   overflow: visible;
+  width: 100%;
 }
 
 .library-table-row,
 .library-table__body,
+.library-table__head,
 .library-actions-cell {
+  min-width: 0;
   overflow: visible;
+  width: 100%;
+}
+
+.library-table__body {
+  min-width: 0;
+}
+
+.library-table__head {
+  display: none;
+}
+
+.library-table-row {
+  column-gap: 12px;
+  grid-template-areas:
+    "resource update actions"
+    "source usage actions"
+    "version installs actions";
+  grid-template-columns: minmax(0, 1fr) minmax(132px, 0.42fr) 76px;
+  min-height: 96px;
+  padding: 12px 14px;
+  row-gap: 6px;
+}
+
+.library-resource-cell {
+  grid-area: resource;
+}
+
+.library-source-cell {
+  grid-area: source;
+}
+
+.library-version-cell {
+  grid-area: version;
+}
+
+.library-update-cell {
+  grid-area: update;
+}
+
+.library-usage-cell {
+  grid-area: usage;
+}
+
+.library-installs-cell {
+  grid-area: installs;
+}
+
+.library-actions-cell {
+  grid-area: actions;
+  justify-content: end;
 }
 
 .metric-tile--button {
