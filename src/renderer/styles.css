@@ -252,6 +252,42 @@ h2 {
   text-align: right;
 }
 
+.workspace-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-button {
+  align-items: flex-start;
+  background: #fbfcfe;
+  border-color: var(--border);
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  min-height: 58px;
+  padding: 10px 11px;
+  text-align: left;
+  white-space: normal;
+}
+
+.workspace-button span {
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.workspace-button small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.workspace-button.is-active {
+  background: #eef4ff;
+  border-color: #b8cafd;
+  box-shadow: inset 3px 0 0 var(--accent);
+  color: var(--accent-strong);
+}
+
 .target-badge {
   border-radius: 999px;
   color: #233043;
@@ -655,6 +691,12 @@ textarea[aria-label="opencode.json"] {
   border-color: #0f1724;
 }
 
+.primary-action:disabled {
+  background: #eef2f7;
+  border-color: var(--border);
+  color: #98a2b3;
+}
+
 .apply-action {
   background: var(--accent);
   border-color: var(--accent);
@@ -949,6 +991,63 @@ summary {
 .resource-settings-grid select {
   min-height: 36px;
   width: 100%;
+}
+
+.skill-library-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.library-import-panel {
+  background: #f8fbff;
+}
+
+.library-import-grid {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(140px, 0.75fr) auto;
+}
+
+.library-import-grid label {
+  display: grid;
+  gap: 5px;
+}
+
+.library-import-action {
+  min-height: 36px;
+}
+
+.library-section-title-row {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.library-list {
+  gap: 4px;
+}
+
+.library-row {
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+}
+
+.library-row__actions {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.resource-chip--github {
+  background: #eef4ff;
+  color: var(--accent-strong);
+}
+
+.resource-chip--local {
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .resource-list--unmanaged {

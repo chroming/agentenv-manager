@@ -224,6 +224,7 @@ describe("Electron UI profile switching e2e", () => {
   it("switches OpenCode profiles through the rendered app and restores from history", async () => {
     const { opencodeDir, page } = await launchApp();
 
+    await page.getByTitle(opencodeDir, { exact: true }).first().waitFor({ state: "attached" });
     expect(await page.getByTitle(opencodeDir, { exact: true }).count()).toBeGreaterThan(0);
 
     await selectProfile(page, "UI OpenCode alpha");

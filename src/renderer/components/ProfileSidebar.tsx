@@ -5,7 +5,9 @@ interface ProfileSidebarProps {
   profiles: ProfileSummary[];
   selectedProfileId?: string;
   selectedTargetId?: string;
+  activeWorkspace: "profile" | "skill-library";
   isLoading: boolean;
+  onWorkspaceSelect(workspace: "profile" | "skill-library"): void;
   onTargetSelect(targetId: string): void;
   onSelect(profileId: string): void;
   onCreate(): void;
@@ -23,7 +25,9 @@ export const ProfileSidebar = ({
   profiles,
   selectedProfileId,
   selectedTargetId,
+  activeWorkspace,
   isLoading,
+  onWorkspaceSelect,
   onTargetSelect,
   onSelect,
   onCreate
@@ -89,6 +93,26 @@ export const ProfileSidebar = ({
           </details>
         </section>
       ) : null}
+      <nav className="workspace-nav" aria-label="Workspace">
+        <button
+          aria-label="Profiles"
+          className={`workspace-button${activeWorkspace === "profile" ? " is-active" : ""}`}
+          type="button"
+          onClick={() => onWorkspaceSelect("profile")}
+        >
+          <span>Profiles</span>
+          <small>Edit and apply environments</small>
+        </button>
+        <button
+          aria-label="Skill Library"
+          className={`workspace-button${activeWorkspace === "skill-library" ? " is-active" : ""}`}
+          type="button"
+          onClick={() => onWorkspaceSelect("skill-library")}
+        >
+          <span>Skill Library</span>
+          <small>Import, update, and reuse skills</small>
+        </button>
+      </nav>
       <div className="section-title">Profiles</div>
       <div className="profile-list">
         {isLoading ? <p className="muted">Loading profiles...</p> : null}

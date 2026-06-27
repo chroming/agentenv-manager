@@ -142,10 +142,6 @@ describe("SkillsEditor", () => {
 
   it("lists shared library skills and preserves them during skill edits", () => {
     const onChange = vi.fn();
-    const onImportUnmanaged = vi.fn();
-    const onImportGitHubSkill = vi.fn();
-    const onUpdateLibrarySkill = vi.fn();
-    const onSettingsChange = vi.fn();
     render(
       <SkillsEditor
         value={mixedPolicy}
@@ -175,34 +171,6 @@ describe("SkillsEditor", () => {
             updatedAt: "2026-07-02T00:00:00.000Z"
           }
         ]}
-        skillUpdates={[
-          {
-            id: "github-reviewer",
-            name: "GitHub Reviewer",
-            sourceType: "github",
-            currentRevision: "revision-1",
-            latestRevision: "revision-2",
-            updateAvailable: true
-          }
-        ]}
-        unmanagedSkills={[
-          {
-            id: "legacy-reviewer",
-            name: "Legacy Reviewer",
-            description: "Found on disk",
-            path: "/tmp/opencode/skills/legacy-reviewer",
-            foundIn: ["opencode"]
-          }
-        ]}
-        skillSettings={{
-          skillSyncMethod: "symlink",
-          skillStorageLocation: "appData"
-        }}
-        skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
-        onImportUnmanaged={onImportUnmanaged}
-        onImportGitHubSkill={onImportGitHubSkill}
-        onUpdateLibrarySkill={onUpdateLibrarySkill}
-        onSkillSettingsChange={onSettingsChange}
         onChange={onChange}
       />
     );
@@ -224,32 +192,8 @@ describe("SkillsEditor", () => {
       ]
     });
 
-    expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Library item shared-reviewer" })).toHaveTextContent(
-      "Daily Coding"
-    );
-    expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent(
-      "Update available"
-    );
-    fireEvent.change(screen.getByLabelText("GitHub skill URL"), {
-      target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
-    });
-    fireEvent.change(screen.getByLabelText("GitHub skill library id"), {
-      target: { value: "github-reviewer" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Import GitHub skill" }));
-    expect(onImportGitHubSkill).toHaveBeenCalledWith({
-      url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
-      id: "github-reviewer"
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Update shared-reviewer" }));
-    expect(onUpdateLibrarySkill).toHaveBeenCalledWith("shared-reviewer");
-    fireEvent.click(screen.getByRole("button", { name: "Import legacy-reviewer" }));
-    expect(onImportUnmanaged).toHaveBeenCalledWith("/tmp/opencode/skills/legacy-reviewer");
-    fireEvent.change(screen.getByLabelText("Skill sync method"), {
-      target: { value: "copy" }
-    });
-    expect(onSettingsChange).toHaveBeenCalledWith({ skillSyncMethod: "copy" });
+    expect(screen.queryByRole("region", { name: "Skill library" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("GitHub skill URL")).not.toBeInTheDocument();
   });
 
   it("lists skills and MCP servers as profile resources", () => {

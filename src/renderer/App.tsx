@@ -20,9 +20,11 @@ import type {
 } from "../shared/types";
 import { ActivationPanel } from "./components/ActivationPanel";
 import { AgentsEditor } from "./components/AgentsEditor";
+import { LibrarySummaryPanel } from "./components/LibrarySummaryPanel";
 import { McpEditor } from "./components/McpEditor";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileSidebar } from "./components/ProfileSidebar";
+import { SkillLibraryPanel } from "./components/SkillLibraryPanel";
 import { SkillsEditor } from "./components/SkillsEditor";
 
 const emptyAssetPolicy: AssetPolicy = {
@@ -217,6 +219,7 @@ export const App = () => {
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
+  const [activeWorkspace, setActiveWorkspace] = useState<"profile" | "skill-library">("profile");
   const [activeTab, setActiveTab] = useState<EditorTab>("instructions");
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -302,6 +305,7 @@ export const App = () => {
     setPreview(undefined);
     setRollbackPreview(undefined);
     setActiveTab("instructions");
+    setActiveWorkspace("profile");
     setSelectedProfileId(profileId);
     try {
       const profile = await window.agentEnv.readProfile(profileId);
@@ -335,6 +339,7 @@ export const App = () => {
     setSelectedProfileId(saved.id);
     setDraftProfile(saved);
     setActiveTab("instructions");
+    setActiveWorkspace("profile");
     setPreview(undefined);
     setRollbackPreview(undefined);
   };
@@ -470,6 +475,39 @@ export const App = () => {
     }
   };
 
+  const updateAvailableLibrarySkills = async () => {
+    const skillIds = skillUpdates
+      .filter((update) => update.updateAvailable)
+      .map((update) => update.id);
+    if (skillIds.length === 0) {
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      for (const id of skillIds) {
+        await window.agentEnv.updateLibrarySkill(id);
+      }
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const checkSkillUpdates = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const importGitHubSkill = async (input: { url: string; id?: string }) => {
     setBusy(true);
     setError(undefined);
@@ -505,6 +543,8 @@ export const App = () => {
         selectedProfileId={selectedProfileId}
         selectedTargetId={selectedTargetId}
         isLoading={isLoading}
+        activeWorkspace={activeWorkspace}
+        onWorkspaceSelect={setActiveWorkspace}
         onTargetSelect={(targetId) => {
           setSelectedTargetId(targetId);
           setSelectedProfileId(undefined);
@@ -512,14 +552,32 @@ export const App = () => {
           setPreview(undefined);
           setRollbackPreview(undefined);
           setActiveTab("instructions");
+          setActiveWorkspace("profile");
         }}
         onSelect={selectProfile}
         onCreate={createProfile}
       />
 
-      <section className="editor-panel" aria-label="Profile editor">
+      <section
+        className="editor-panel"
+        aria-label={activeWorkspace === "skill-library" ? "Skill library workspace" : "Profile editor"}
+      >
         {error ? <p className="error">{error}</p> : null}
-        {draftProfile ? (
+        {activeWorkspace === "skill-library" ? (
+          <SkillLibraryPanel
+            librarySkills={librarySkills}
+            skillUpdates={skillUpdates}
+            unmanagedSkills={unmanagedSkills}
+            skillSettings={skillSettings}
+            skillUsage={skillUsage}
+            onImportUnmanaged={importUnmanagedSkill}
+            onImportGitHubSkill={importGitHubSkill}
+            onUpdateLibrarySkill={updateLibrarySkill}
+            onUpdateAllAvailable={updateAvailableLibrarySkills}
+            onCheckUpdates={checkSkillUpdates}
+            onSkillSettingsChange={updateSkillSettings}
+          />
+        ) : draftProfile ? (
           <>
             <header className="editor-header">
               <div className="editor-title">
@@ -536,7 +594,7 @@ export const App = () => {
                   </strong>
                   <div className="target-readiness__main">
                     <span>{activeTargetSummary}</span>
-                    <code>{activeTargetPath}</code>
+                    <code title={activeTargetPath}>{activeTargetPath}</code>
                   </div>
                   <small>{targetReadinessDetail(selectedTarget)}</small>
                 </section>
@@ -599,14 +657,6 @@ export const App = () => {
                   configLanguage={selectedTarget?.configLanguage}
                   preview={preview}
                   librarySkills={librarySkills}
-                  skillUpdates={skillUpdates}
-                  unmanagedSkills={unmanagedSkills}
-                  skillSettings={skillSettings}
-                  skillUsage={skillUsage}
-                  onImportUnmanaged={importUnmanagedSkill}
-                  onImportGitHubSkill={importGitHubSkill}
-                  onUpdateLibrarySkill={updateLibrarySkill}
-                  onSkillSettingsChange={updateSkillSettings}
                   onChange={(assetPolicy) => {
                     setDraftProfile({ ...draftProfile, assetPolicy });
                     setPreview(undefined);
@@ -655,20 +705,28 @@ export const App = () => {
         )}
       </section>
 
-      <ActivationPanel
-        selectedProfileId={draftProfile?.id}
-        targetName={activeTargetName}
-        preview={preview}
-        rollbackPreview={rollbackPreview}
-        backups={backups}
-        busy={busy}
-        targetCanWrite={selectedTarget?.health.canWrite ?? false}
-        targetWriteSummary={selectedTarget?.health.summary}
-        onPreview={previewSelectedProfile}
-        onApply={applySelectedProfile}
-        onPreviewRollback={previewSelectedRollback}
-        onRestoreRollback={restoreSelectedRollback}
-      />
+      {activeWorkspace === "skill-library" ? (
+        <LibrarySummaryPanel
+          librarySkills={librarySkills}
+          skillUpdates={skillUpdates}
+          skillSettings={skillSettings}
+        />
+      ) : (
+        <ActivationPanel
+          selectedProfileId={draftProfile?.id}
+          targetName={activeTargetName}
+          preview={preview}
+          rollbackPreview={rollbackPreview}
+          backups={backups}
+          busy={busy}
+          targetCanWrite={selectedTarget?.health.canWrite ?? false}
+          targetWriteSummary={selectedTarget?.health.summary}
+          onPreview={previewSelectedProfile}
+          onApply={applySelectedProfile}
+          onPreviewRollback={previewSelectedRollback}
+          onRestoreRollback={restoreSelectedRollback}
+        />
+      )}
     </main>
   );
 };

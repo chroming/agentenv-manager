@@ -6,13 +6,9 @@ import {
 } from "jsonc-parser";
 import type {
   ActivationPreview,
-  AgentEnvSettings,
   AssetPolicy,
-  GitHubSkillImportInput,
   SkillLibraryEntry,
-  SkillUpdateInfo,
-  TargetInfo,
-  UnmanagedSkillEntry
+  TargetInfo
 } from "../../shared/types";
 
 interface SkillsEditorProps {
@@ -21,14 +17,6 @@ interface SkillsEditorProps {
   configLanguage?: TargetInfo["configLanguage"];
   preview?: ActivationPreview;
   librarySkills?: SkillLibraryEntry[];
-  skillUpdates?: SkillUpdateInfo[];
-  unmanagedSkills?: UnmanagedSkillEntry[];
-  skillSettings?: AgentEnvSettings;
-  skillUsage?: Record<string, string[]>;
-  onImportUnmanaged?(sourcePath: string): void;
-  onImportGitHubSkill?(input: GitHubSkillImportInput): void;
-  onUpdateLibrarySkill?(id: string): void;
-  onSkillSettingsChange?(input: Partial<AgentEnvSettings>): void;
   onChange(value: AssetPolicy): void;
 }
 
@@ -230,19 +218,9 @@ export const SkillsEditor = ({
   configLanguage,
   preview,
   librarySkills = [],
-  skillUpdates = [],
-  unmanagedSkills = [],
-  skillSettings,
-  skillUsage = {},
-  onImportUnmanaged,
-  onImportGitHubSkill,
-  onUpdateLibrarySkill,
-  onSkillSettingsChange,
   onChange
 }: SkillsEditorProps) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [githubUrl, setGithubUrl] = useState("");
-  const [githubId, setGithubId] = useState("");
   const skillEntries = value.ownedDirs
     .map((ownedDir, index) => ({ ownedDir, index }))
     .filter((entry) => entry.ownedDir.kind === "skill");
@@ -257,7 +235,6 @@ export const SkillsEditor = ({
     librarySkillEntries.length > 0 ||
     mcpState.resources.length > 0;
   const firstLibrarySkill = librarySkills[0];
-  const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
 
   const updateOwnedDir = (
     index: number,
@@ -287,19 +264,6 @@ export const SkillsEditor = ({
         targetName: `agentenv-${libraryId}`
       })
     });
-  };
-
-  const importGitHubSkill = () => {
-    const url = githubUrl.trim();
-    if (!url) {
-      return;
-    }
-    onImportGitHubSkill?.({
-      url,
-      id: githubId.trim() || undefined
-    });
-    setGithubUrl("");
-    setGithubId("");
   };
 
   return (
@@ -448,144 +412,6 @@ export const SkillsEditor = ({
             </div>
           ))}
         </div>
-      </section>
-
-      <section className="resource-section" aria-label="Skill library">
-        <div>
-          <div className="resource-heading">Skill Library</div>
-          <p className="muted">Reusable skills are stored once and linked or copied into profiles.</p>
-        </div>
-        {skillSettings ? (
-          <div className="resource-settings-grid">
-            <label>
-              <span>Sync</span>
-              <select
-                aria-label="Skill sync method"
-                value={skillSettings.skillSyncMethod}
-                onChange={(event) =>
-                  onSkillSettingsChange?.({
-                    skillSyncMethod: event.currentTarget.value as AgentEnvSettings["skillSyncMethod"]
-                  })
-                }
-              >
-                <option value="symlink">Symlink</option>
-                <option value="copy">Copy</option>
-                <option value="auto">Auto</option>
-              </select>
-            </label>
-            <label>
-              <span>Storage</span>
-              <select
-                aria-label="Skill storage location"
-                value={skillSettings.skillStorageLocation}
-                onChange={(event) =>
-                  onSkillSettingsChange?.({
-                    skillStorageLocation: event.currentTarget
-                      .value as AgentEnvSettings["skillStorageLocation"]
-                  })
-                }
-              >
-                <option value="appData">App data</option>
-                <option value="agents">~/.agents/skills</option>
-              </select>
-            </label>
-          </div>
-        ) : null}
-        <div className="resource-settings-grid" aria-label="GitHub skill import">
-          <label>
-            <span>GitHub URL</span>
-            <input
-              aria-label="GitHub skill URL"
-              placeholder="https://github.com/owner/repo/tree/main/path/to/skill"
-              value={githubUrl}
-              onChange={(event) => setGithubUrl(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>Library ID</span>
-            <input
-              aria-label="GitHub skill library id"
-              placeholder="Optional"
-              value={githubId}
-              onChange={(event) => setGithubId(event.currentTarget.value)}
-            />
-          </label>
-          <button
-            className="secondary-action"
-            type="button"
-            disabled={!githubUrl.trim()}
-            onClick={importGitHubSkill}
-          >
-            Import GitHub skill
-          </button>
-        </div>
-        <div className="resource-list">
-          {librarySkills.length === 0 ? <p className="muted">No shared skills in the library</p> : null}
-          {librarySkills.map((skill) => {
-            const updateInfo = updatesById.get(skill.id);
-            const updateLabel = updateInfo?.error
-              ? "Check failed"
-              : updateInfo?.updateAvailable
-                ? "Update available"
-                : skill.sourceType === "github" && updateInfo
-                  ? "Up to date"
-                  : skill.sourceType;
-            return (
-              <div
-                aria-label={`Library item ${skill.id}`}
-                className="resource-row"
-                key={skill.id}
-                role="group"
-              >
-                <span className="resource-chip">Library</span>
-                <div className="resource-row__main">
-                  <span>{skill.name}</span>
-                  <small>{skill.description || skill.id}</small>
-                  <small>{skill.sourceType}{skill.source ? ` · ${skill.source}` : ""}</small>
-                  <small>{updateLabel}</small>
-                  <small>
-                    {(skillUsage[skill.id] ?? []).length > 0
-                      ? `Used by ${(skillUsage[skill.id] ?? []).join(", ")}`
-                      : "Not used by any profile"}
-                  </small>
-                </div>
-                <button
-                  className="secondary-action"
-                  type="button"
-                  onClick={() => onUpdateLibrarySkill?.(skill.id)}
-                >
-                  Update {skill.id}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        {unmanagedSkills.length > 0 ? (
-          <div className="resource-list resource-list--unmanaged">
-            {unmanagedSkills.map((skill) => (
-              <div
-                aria-label={`Unmanaged skill ${skill.id}`}
-                className="resource-row"
-                key={skill.path}
-                role="group"
-              >
-                <span className="resource-chip">Found</span>
-                <div className="resource-row__main">
-                  <span>{skill.name}</span>
-                  <small>{skill.description || skill.id}</small>
-                  <small>{skill.foundIn.join(", ")} · {skill.path}</small>
-                </div>
-                <button
-                  className="secondary-action"
-                  type="button"
-                  onClick={() => onImportUnmanaged?.(skill.path)}
-                >
-                  Import {skill.id}
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
       </section>
 
       {advancedOpen ? (

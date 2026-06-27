@@ -217,6 +217,8 @@ describe("App", () => {
     fireEvent.click(within(targetStatus).getByText("Target details"));
     expect(within(targetStatus).getByText("Config directory")).toBeVisible();
     expect(screen.getByRole("tab", { name: "Resources" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Skill Library" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Skill Library" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Skills" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Assets" })).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Instructions" })).toHaveAttribute(
@@ -226,6 +228,46 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Config" }));
     expect(screen.getByLabelText("opencode.json")).toHaveValue('{\n  "mcp": {}\n}\n');
+  });
+
+  it("opens the skill library as an app-level workspace", async () => {
+    installApi({
+      listSkillLibrary: vi.fn().mockResolvedValue([
+        {
+          id: "github-reviewer",
+          name: "GitHub Reviewer",
+          description: "Review from GitHub",
+          path: "/tmp/skills-library/github-reviewer",
+          sourceType: "github",
+          source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+          remoteRef: "main",
+          remoteRevision: "revision-1",
+          contentHash: "hash",
+          updatedAt: "2026-07-02T00:00:00.000Z"
+        }
+      ]),
+      checkSkillLibraryUpdates: vi.fn().mockResolvedValue([
+        {
+          id: "github-reviewer",
+          name: "GitHub Reviewer",
+          sourceType: "github",
+          currentRevision: "revision-1",
+          latestRevision: "revision-2",
+          updateAvailable: true
+        }
+      ])
+    });
+    render(<App />);
+
+    await screen.findByLabelText("AGENTS.md");
+    fireEvent.click(screen.getByRole("button", { name: "Skill Library" }));
+
+    expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Library summary" })).toHaveTextContent(
+      "1 update available"
+    );
+    expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
   });
 
   it("shows a safe activation inspector and enables apply after preview", async () => {
