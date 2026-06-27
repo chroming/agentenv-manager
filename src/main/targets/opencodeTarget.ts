@@ -26,6 +26,8 @@ const DEFAULT_STATE: TargetState = {
   managedMcpNames: []
 };
 
+const METADATA_CONFIG_KEYS = new Set(["$schema"]);
+
 const formattingOptions = {
   insertSpaces: true,
   tabSize: 2,
@@ -105,12 +107,25 @@ const applyJsoncOverlay = (
   const profileMcp = isRecord(profileConfig.mcp)
     ? profileConfig.mcp
     : ({} as Record<string, unknown>);
-  const profileConfigKeys = Object.keys(profileConfig).filter((key) => key !== "mcp");
+  const profileConfigKeys = Object.keys(profileConfig).filter(
+    (key) => key !== "mcp" && !METADATA_CONFIG_KEYS.has(key)
+  );
+  const profileMetadataKeys = Object.keys(profileConfig).filter((key) =>
+    METADATA_CONFIG_KEYS.has(key)
+  );
 
   for (const key of state.managedConfigKeys) {
-    if (key !== "mcp" && !profileConfigKeys.includes(key)) {
+    if (
+      key !== "mcp" &&
+      !METADATA_CONFIG_KEYS.has(key) &&
+      !profileConfigKeys.includes(key)
+    ) {
       nextContent = setJsoncProperty(nextContent, [key], undefined);
     }
+  }
+
+  for (const key of profileMetadataKeys) {
+    nextContent = setJsoncProperty(nextContent, [key], profileConfig[key]);
   }
 
   for (const key of profileConfigKeys) {
@@ -150,7 +165,9 @@ const findOverlayConflicts = (
   const profileMcp = isRecord(profileConfig.mcp) ? profileConfig.mcp : {};
   const managedMcpNames = new Set(state.managedMcpNames);
 
-  for (const key of Object.keys(profileConfig).filter((name) => name !== "mcp")) {
+  for (const key of Object.keys(profileConfig).filter(
+    (name) => name !== "mcp" && !METADATA_CONFIG_KEYS.has(name)
+  )) {
     if (key in liveConfig && !managedConfigKeys.has(key)) {
       errors.push(`Config key ${key} already exists outside AgentEnv management`);
     }
@@ -236,6 +253,42 @@ const removeStaleOwnedDirs = async ({ profile, targetPaths }: TargetAssetInput) 
       }
     }
   }
+};
+
+const getAssetBackupPaths = async ({ profile, targetPaths }: TargetAssetInput) => {
+  const paths = new Set<string>();
+  const desired = new Set(
+    profile.assetPolicy.ownedDirs.map((ownedDir) => `${ownedDir.kind}:${ownedDir.targetName}`)
+  );
+  const roots: Array<{ kind: "agent" | "skill"; path?: string }> = [
+    { kind: "agent", path: targetPaths.agentsDir },
+    { kind: "skill", path: targetPaths.skillsDir }
+  ];
+
+  for (const ownedDir of profile.assetPolicy.ownedDirs) {
+    paths.add(targetDirFor(targetPaths, ownedDir.kind, ownedDir.targetName));
+  }
+
+  for (const root of roots) {
+    if (!root.path || !(await pathExists(root.path))) {
+      continue;
+    }
+
+    const entries = await readdir(root.path, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      const targetDir = join(root.path, entry.name);
+      const key = `${root.kind}:${entry.name}`;
+      if (!desired.has(key) && (await isAgentEnvOwnedDir(targetDir))) {
+        paths.add(targetDir);
+      }
+    }
+  }
+
+  return [...paths];
 };
 
 const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
@@ -390,5 +443,6 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     };
   },
   validateAssets,
+  getAssetBackupPaths,
   applyAssets
 });

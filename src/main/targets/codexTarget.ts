@@ -108,6 +108,39 @@ const removeStaleOwnedSkills = async ({ profile, targetPaths }: TargetAssetInput
   }
 };
 
+const getAssetBackupPaths = async ({ profile, targetPaths }: TargetAssetInput) => {
+  const paths = new Set<string>();
+  const desired = new Set(
+    profile.assetPolicy.ownedDirs
+      .filter((ownedDir) => ownedDir.kind === "skill")
+      .map((ownedDir) => ownedDir.targetName)
+  );
+
+  if (targetPaths.skillsDir) {
+    for (const ownedDir of profile.assetPolicy.ownedDirs) {
+      if (ownedDir.kind === "skill") {
+        paths.add(join(targetPaths.skillsDir, ownedDir.targetName));
+      }
+    }
+  }
+
+  if (targetPaths.skillsDir && (await pathExists(targetPaths.skillsDir))) {
+    const entries = await readdir(targetPaths.skillsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || desired.has(entry.name)) {
+        continue;
+      }
+
+      const targetDir = join(targetPaths.skillsDir, entry.name);
+      if (await isAgentEnvOwnedDir(targetDir)) {
+        paths.add(targetDir);
+      }
+    }
+  }
+
+  return [...paths];
+};
+
 const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
   await removeStaleOwnedSkills({ profile, targetPaths });
 
@@ -315,5 +348,6 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     };
   },
   validateAssets,
+  getAssetBackupPaths,
   applyAssets
 });

@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
-import { appendFile, mkdir, readFile, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { appendFile, cp, mkdir, readFile, rm } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
 import { createUnifiedDiff } from "./diff";
 import {
+  pathExists,
   readTextIfExists,
   writeAtomic
 } from "./fileUtils";
@@ -46,6 +47,25 @@ const DEFAULT_TARGET_STATE: TargetState = {
 const hashText = (content: string): string =>
   createHash("sha256").update(content).digest("hex");
 
+const isDirectoryReadError = (error: unknown) =>
+  Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "EISDIR"
+  );
+
+const readRollbackTextIfExists = async (path: string) => {
+  try {
+    return await readTextIfExists(path);
+  } catch (error) {
+    if (isDirectoryReadError(error)) {
+      return "[directory]\n";
+    }
+    throw error;
+  }
+};
+
 const appendHistory = async (
   paths: AgentEnvPaths,
   event: Record<string, unknown>
@@ -76,7 +96,19 @@ const normalizeTargetState = (value: unknown): TargetState => {
 const createRollbackChange = async (
   entry: BackupManifest["entries"][number]
 ): Promise<PlannedFileChange> => {
-  const before = await readTextIfExists(entry.sourcePath);
+  if (entry.kind === "directory") {
+    const before = (await pathExists(entry.sourcePath)) ? "[directory]\n" : "";
+    const after = entry.missing ? "" : "[directory]\n";
+
+    return {
+      path: entry.sourcePath,
+      before,
+      after,
+      diff: createUnifiedDiff(entry.sourcePath, before, after)
+    };
+  }
+
+  const before = await readRollbackTextIfExists(entry.sourcePath);
   const after = entry.missing ? "" : await readFile(entry.backupPath ?? "", "utf8");
 
   return {
@@ -214,8 +246,10 @@ export const createActivationService = ({
     }
 
     const statePath = statePathFor(preview.targetId);
+    const assetBackupPaths = await adapter.getAssetBackupPaths({ profile, targetPaths });
     const backup = await backupStore.createBackup([
       ...preview.changes.map((change) => change.path),
+      ...assetBackupPaths,
       statePath
     ]);
 
@@ -254,7 +288,15 @@ export const createActivationService = ({
 
     for (const entry of backup.entries) {
       if (entry.missing) {
-        await rm(entry.sourcePath, { force: true });
+        await rm(entry.sourcePath, { recursive: true, force: true });
+        continue;
+      }
+
+      if (entry.kind === "directory") {
+        await rm(entry.sourcePath, { recursive: true, force: true });
+        await mkdir(dirname(entry.sourcePath), { recursive: true });
+        await cp(entry.backupPath ?? "", entry.sourcePath, { recursive: true });
+        continue;
       } else {
         const content = await readFile(entry.backupPath ?? "", "utf8");
         await writeAtomic(entry.sourcePath, content);

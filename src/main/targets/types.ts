@@ -30,5 +30,6 @@ export interface AgentTargetAdapter {
   writeProfileFiles(profileDir: string, profile: ProfileDetail): Promise<void>;
   createPreview(input: TargetPreviewInput): Promise<TargetActivationPreview>;
   validateAssets(input: TargetAssetInput): Promise<string[]>;
+  getAssetBackupPaths(input: TargetAssetInput): Promise<string[]>;
   applyAssets(input: TargetAssetInput): Promise<void>;
 }

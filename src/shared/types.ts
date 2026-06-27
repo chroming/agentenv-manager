@@ -121,6 +121,7 @@ export interface BackupEntry {
   backupPath?: string;
   sha256?: string;
   missing: boolean;
+  kind?: "file" | "directory";
 }
 
 export interface BackupManifest {

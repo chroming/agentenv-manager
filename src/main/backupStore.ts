@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import {
   chmod,
+  cp,
   copyFile,
+  lstat,
   mkdir,
   readFile,
   readdir,
@@ -71,15 +73,28 @@ export const createBackupStore = (
 
     for (const sourcePath of sourcePaths) {
       try {
-        const content = await readFile(sourcePath);
+        const sourceStats = await lstat(sourcePath);
         const backupPath = join(filesDir, encodePath(sourcePath));
-        await copyFile(sourcePath, backupPath);
-        entries.push({
-          sourcePath,
-          backupPath,
-          sha256: sha256(content),
-          missing: false
-        });
+
+        if (sourceStats.isDirectory()) {
+          await cp(sourcePath, backupPath, { recursive: true });
+          entries.push({
+            sourcePath,
+            backupPath,
+            missing: false,
+            kind: "directory"
+          });
+        } else {
+          const content = await readFile(sourcePath);
+          await copyFile(sourcePath, backupPath);
+          entries.push({
+            sourcePath,
+            backupPath,
+            sha256: sha256(content),
+            missing: false,
+            kind: "file"
+          });
+        }
       } catch (error) {
         if (isMissingFileError(error)) {
           entries.push({ sourcePath, missing: true });
