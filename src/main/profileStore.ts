@@ -41,6 +41,7 @@ export const createProfileStore = (overrides: PathOverrides): ProfileStore => {
 
     return {
       id: manifest.id,
+      profileDir,
       manifest,
       agentsMd,
       mcpToml,
