@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -118,6 +118,231 @@ describe("skill library store", () => {
         foundIn: ["opencode"]
       }
     ]);
+  });
+
+  it("scans target skill directories into a full managed and unmanaged inventory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const managedLibraryDir = join(paths.skillsLibraryDir, "shared-reviewer");
+    const managedTargetDir = join(root, "home", ".config", "opencode", "skills", "reviewer");
+    const unmanagedDir = join(root, "home", ".config", "opencode", "skills", "legacy");
+    await mkdir(managedLibraryDir, { recursive: true });
+    await writeFile(
+      join(managedLibraryDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Managed from library.\n---\n",
+      "utf8"
+    );
+    await mkdir(managedTargetDir, { recursive: true });
+    await symlink(join(managedLibraryDir, "SKILL.md"), join(managedTargetDir, "SKILL.md"));
+    await writeFile(
+      join(managedTargetDir, ".agentenv-owner.json"),
+      JSON.stringify(
+        {
+          owner: "agentenv-manager",
+          profileId: "daily",
+          targetId: "opencode",
+          kind: "skill",
+          source: "skills-library/shared-reviewer"
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+    await mkdir(unmanagedDir, { recursive: true });
+    await writeFile(
+      join(unmanagedDir, "SKILL.md"),
+      "---\nname: Legacy\ndescription: Import me.\n---\n",
+      "utf8"
+    );
+
+    const store = createSkillLibraryStore(paths);
+    const inventory = await store.scanInventory([
+      {
+        targetId: "opencode",
+        configDir: join(root, "home", ".config", "opencode"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: join(root, "home", ".config", "opencode", "skills")
+      }
+    ]);
+
+    expect(inventory).toEqual([
+      {
+        id: "legacy",
+        name: "Legacy",
+        description: "Import me.",
+        path: unmanagedDir,
+        foundIn: ["opencode"],
+        status: "unmanaged",
+        libraryId: undefined
+      },
+      {
+        id: "reviewer",
+        name: "Shared Reviewer",
+        description: "Managed from library.",
+        path: managedTargetDir,
+        foundIn: ["opencode"],
+        status: "managed",
+        libraryId: "shared-reviewer"
+      }
+    ]);
+  });
+
+  it("replaces an imported target skill with an AgentEnv-managed library skill", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const libraryDir = join(paths.skillsLibraryDir, "legacy");
+    const targetSkillsDir = join(root, "home", ".config", "opencode", "skills");
+    const targetDir = join(targetSkillsDir, "legacy");
+    await mkdir(libraryDir, { recursive: true });
+    await writeFile(
+      join(libraryDir, "SKILL.md"),
+      "---\nname: Legacy\ndescription: Library copy.\n---\n\n# From Library\n",
+      "utf8"
+    );
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(
+      join(targetDir, "SKILL.md"),
+      "---\nname: Legacy\ndescription: Old target copy.\n---\n\n# From Target\n",
+      "utf8"
+    );
+
+    const store = createSkillLibraryStore(paths);
+    await store.manageTargetSkill({
+      targetPaths: {
+        targetId: "opencode",
+        configDir: join(root, "home", ".config", "opencode"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: targetSkillsDir
+      },
+      targetName: "legacy",
+      libraryId: "legacy"
+    });
+
+    await expect(readFile(join(targetDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "# From Library"
+    );
+    await expect(readFile(join(targetDir, ".agentenv-owner.json"), "utf8")).resolves.toContain(
+      '"source": "skills-library/legacy"'
+    );
+
+    const inventory = await store.scanInventory([
+      {
+        targetId: "opencode",
+        configDir: join(root, "home", ".config", "opencode"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: targetSkillsDir
+      }
+    ]);
+    expect(inventory).toMatchObject([
+      {
+        id: "legacy",
+        status: "managed",
+        libraryId: "legacy"
+      }
+    ]);
+  });
+
+  it("saves an update source for an existing library skill", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const originalDir = join(root, "original", "reviewer");
+    const updateDir = join(root, "updates", "reviewer");
+    await mkdir(originalDir, { recursive: true });
+    await mkdir(updateDir, { recursive: true });
+    await writeFile(join(originalDir, "SKILL.md"), "---\nname: reviewer\n---\n# v1\n", "utf8");
+    await writeFile(join(updateDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
+
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: originalDir, id: "reviewer", sourceType: "local" });
+
+    const updated = await store.setUpdateSource({
+      id: "reviewer",
+      sourceType: "local",
+      source: updateDir
+    });
+
+    expect(updated.sourceType).toBe("local");
+    expect(updated.source).toBe(updateDir);
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json"), "utf8")
+    ).resolves.toContain(updateDir);
+  });
+
+  it("detects updates after a GitHub source is configured on an existing library skill", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "source", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# local\n", "utf8");
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/acme/agent-skills/contents/skills/reviewer?ref=main")) {
+        return new Response(
+          JSON.stringify([
+            {
+              type: "file",
+              name: "SKILL.md",
+              path: "skills/reviewer/SKILL.md",
+              download_url: "https://raw.example/SKILL.md",
+              sha: "skill-md-sha"
+            }
+          ])
+        );
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+
+    const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+    await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
+    await store.setUpdateSource({
+      id: "reviewer",
+      sourceType: "github",
+      source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
+    });
+
+    const updates = await store.checkUpdates();
+
+    expect(updates).toEqual([
+      {
+        id: "reviewer",
+        name: "reviewer",
+        sourceType: "github",
+        currentRevision: undefined,
+        latestRevision: "2ae0ba4cfd9c5eb970776d3bd9ffad6e00682cee",
+        updateAvailable: true
+      }
+    ]);
+  });
+
+  it("previews how a local source update will change a library skill", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "source", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v1\n", "utf8");
+    await writeFile(join(sourceDir, "old.md"), "remove me\n", "utf8");
+
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
+    await writeFile(join(sourceDir, "new.md"), "add me\n", "utf8");
+    await rm(join(sourceDir, "old.md"));
+
+    const plan = await store.previewUpdate("reviewer");
+
+    expect(plan).toMatchObject({
+      id: "reviewer",
+      name: "reviewer",
+      sourceType: "local",
+      source: sourceDir,
+      updateAvailable: true,
+      errors: []
+    });
+    expect(plan.changes.map((change) => change.path)).toEqual(["SKILL.md", "new.md", "old.md"]);
+    expect(plan.changes[0].diff).toContain("# v2");
   });
 
   it("refreshes local-source skills and records a new content hash", async () => {
@@ -256,5 +481,54 @@ describe("skill library store", () => {
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).resolves.toContain(
       "# v2"
     );
+  });
+
+  it("previews GitHub-backed skill updates before applying them", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    let version = "v1";
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/repos/acme/agent-skills/contents/skills/reviewer?ref=main")) {
+        return new Response(
+          JSON.stringify([
+            {
+              type: "file",
+              name: "SKILL.md",
+              path: "skills/reviewer/SKILL.md",
+              download_url: "https://raw.example/SKILL.md",
+              sha: `skill-md-sha-${version}`
+            }
+          ])
+        );
+      }
+      if (url === "https://raw.example/SKILL.md") {
+        return new Response(`---\nname: reviewer\n---\n# ${version}\n`);
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+    await store.importGitHubSkill({
+      url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
+    });
+
+    version = "v2";
+    const plan = await store.previewUpdate("reviewer");
+
+    expect(plan).toMatchObject({
+      id: "reviewer",
+      name: "reviewer",
+      sourceType: "github",
+      source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+      currentRevision: "9e0a463d609626416ae0d7e8e4e2a2da6cb0f125",
+      latestRevision: "bd3ab812f7c7c36d243ec501041be299e208ecc1",
+      updateAvailable: true,
+      errors: []
+    });
+    expect(plan.changes).toHaveLength(1);
+    expect(plan.changes[0]).toMatchObject({
+      path: "SKILL.md",
+      before: "---\nname: reviewer\n---\n# v1\n",
+      after: "---\nname: reviewer\n---\n# v2\n"
+    });
   });
 });

@@ -104,13 +104,13 @@ export const ProfileSidebar = ({
           <small>Edit and apply environments</small>
         </button>
         <button
-          aria-label="Skill Library"
+          aria-label="Libraries"
           className={`workspace-button${activeWorkspace === "skill-library" ? " is-active" : ""}`}
           type="button"
           onClick={() => onWorkspaceSelect("skill-library")}
         >
-          <span>Skill Library</span>
-          <small>Import, update, and reuse skills</small>
+          <span>Libraries</span>
+          <small>Manage shared skills and MCP</small>
         </button>
       </nav>
       <div className="section-title">Profiles</div>

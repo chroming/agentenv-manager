@@ -345,6 +345,7 @@ export const SkillsEditor = ({
                   <span className="resource-chip">Skill</span>
                   <div className="resource-row__main">
                     <span>{asset.targetName}</span>
+                    <small>Profile-owned</small>
                     <small>{asset.source}</small>
                   </div>
                   <strong className="resource-status">Configured</strong>
@@ -387,6 +388,7 @@ export const SkillsEditor = ({
               <span className="resource-chip">Agent</span>
               <div className="resource-row__main">
                 <span>{asset.targetName}</span>
+                <small>Profile-owned</small>
                 <small>{asset.source}</small>
               </div>
               <strong className="resource-status">Configured</strong>
@@ -401,9 +403,10 @@ export const SkillsEditor = ({
                 key={`${asset.libraryId}:${asset.targetName}:${index}`}
                 role="group"
               >
-                <span className="resource-chip">Library</span>
+                <span className="resource-chip">Skill</span>
                 <div className="resource-row__main">
                   <span>{asset.targetName}</span>
+                  <small>Library</small>
                   <small>{librarySkill?.name ?? asset.libraryId}</small>
                   <small>{librarySkill?.path ?? `skills-library/${asset.libraryId}`}</small>
                 </div>
@@ -415,14 +418,15 @@ export const SkillsEditor = ({
             const mcpServer = mcpServers.find((server) => server.id === asset.libraryId);
             return (
               <div
-                aria-label={`Library MCP ${asset.targetName}`}
+                aria-label={`MCP ${asset.targetName}`}
                 className="resource-row"
                 key={`${asset.libraryId}:${asset.targetName}:${index}`}
                 role="group"
               >
-                <span className="resource-chip">Library MCP</span>
+                <span className="resource-chip">MCP</span>
                 <div className="resource-row__main">
                   <span>{asset.targetName}</span>
+                  <small>Library</small>
                   <small>{mcpServer?.name ?? asset.libraryId}</small>
                   <small>
                     {mcpServer?.transport === "stdio"
@@ -444,6 +448,7 @@ export const SkillsEditor = ({
               <span className="resource-chip">MCP</span>
               <div className="resource-row__main">
                 <span>{resource.name}</span>
+                <small>Raw config</small>
                 <small>{resource.type}</small>
                 <small>{resource.detail}</small>
               </div>

@@ -11,13 +11,17 @@ import type { AssetPolicy, ProfileManifest } from "./schemas";
 export interface AgentEnvApi {
   listTargets(): Promise<TargetInfo[]>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
+  scanSkillInventory(): Promise<SkillInventoryEntry[]>;
   listMcpLibrary(): Promise<McpLibraryEntry[]>;
   saveMcpServer(input: SaveMcpServerInput): Promise<McpLibraryEntry>;
   removeMcpServer(id: string): Promise<void>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   importSkillToLibrary(sourcePath: string): Promise<SkillLibraryEntry>;
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
+  manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
   checkSkillLibraryUpdates(): Promise<SkillUpdateInfo[]>;
+  setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
+  previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
   updateLibrarySkill(id: string): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
@@ -58,6 +62,37 @@ export interface SkillUpdateInfo {
   latestRevision?: string;
   updateAvailable: boolean;
   error?: string;
+}
+
+export interface SkillUpdateSourceInput {
+  id: string;
+  sourceType: SkillSourceType;
+  source: string;
+}
+
+export interface ManageTargetSkillInput {
+  targetId: string;
+  targetName: string;
+  libraryId: string;
+}
+
+export interface SkillUpdatePlan {
+  id: string;
+  name: string;
+  sourceType: SkillSourceType;
+  source?: string;
+  currentRevision?: string;
+  latestRevision?: string;
+  updateAvailable: boolean;
+  changes: PlannedFileChange[];
+  errors: string[];
+}
+
+export type SkillInventoryStatus = "managed" | "library" | "unmanaged";
+
+export interface SkillInventoryEntry extends UnmanagedSkillEntry {
+  status: SkillInventoryStatus;
+  libraryId?: string;
 }
 
 export interface UnmanagedSkillEntry {

@@ -278,12 +278,12 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
-  it("opens the Skill Library workspace as a top-level app area", async () => {
+  it("opens the Libraries workspace as a top-level app area", async () => {
     const { page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("tablist", { name: "Profile sections" }).waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Skill Library" }).click();
+    await page.getByRole("button", { name: "Libraries" }).click();
     await page
       .getByRole("region", { name: "Skill library", exact: true })
       .waitFor({ state: "visible" });
@@ -307,12 +307,12 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("imports an existing target skill into the shared library", async () => {
-    const { appDataRoot, page } = await launchApp();
+    const { appDataRoot, opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("button", { name: "Skill Library" }).click();
+    await page.getByRole("button", { name: "Libraries" }).click();
     await page
-      .getByRole("group", { name: "Unmanaged skill target-only-reviewer" })
+      .getByRole("group", { name: "Environment skill target-only-reviewer" })
       .waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: "Import target-only-reviewer" }).click();
@@ -320,13 +320,30 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item target-only-reviewer" })
       .waitFor({ state: "visible" });
 
-    expect(await page.getByText("Existing target skill ready to migrate.").count()).toBe(1);
+    expect(await page.getByText("Existing target skill ready to migrate.").count()).toBeGreaterThan(
+      0
+    );
     expect(
-      await page.getByRole("group", { name: "Unmanaged skill target-only-reviewer" }).count()
-    ).toBe(0);
+      await page
+        .getByRole("group", { name: "Environment skill target-only-reviewer" })
+        .textContent()
+    ).toContain("Imported");
     await expect(
       readFile(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"), "utf8")
     ).resolves.toContain("Migrate me into the shared library.");
+
+    await page.getByRole("button", { name: "Manage target-only-reviewer" }).click();
+    await expect
+      .poll(async () =>
+        page.getByRole("group", { name: "Environment skill target-only-reviewer" }).textContent()
+      )
+      .toContain("Managed");
+    await expect(
+      readFile(
+        join(opencodeDir, "skills", "target-only-reviewer", ".agentenv-owner.json"),
+        "utf8"
+      )
+    ).resolves.toContain('"source": "skills-library/target-only-reviewer"');
   }, 30_000);
 
   it("updates a local library skill from its tracked source", async () => {
@@ -338,16 +355,55 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("button", { name: "Skill Library" }).click();
+    await page.getByRole("button", { name: "Libraries" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .waitFor({ state: "visible" });
 
-    await page.getByRole("button", { name: "Update shared-reviewer" }).click();
+    await page.getByRole("button", { name: "Preview update shared-reviewer" }).click();
+    await page
+      .getByRole("region", { name: "Update preview for shared-reviewer" })
+      .waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
     await page.getByText("Updated shared review guidance.").waitFor({ state: "visible" });
 
     await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
       "Use the refreshed source content."
+    );
+  }, 30_000);
+
+  it("configures a local update source before updating a library skill", async () => {
+    const { appDataRoot, librarySkill, page } = await launchApp();
+    const newSourceDir = join(appDataRoot, "alternate-source-skills", "shared-reviewer");
+    await mkdir(newSourceDir, { recursive: true });
+    await writeFile(
+      join(newSourceDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Alternate source guidance.\n---\n\n# Shared Reviewer\n\nUse the alternate configured source.\n",
+      "utf8"
+    );
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await page.getByRole("button", { name: "Libraries" }).click();
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .waitFor({ state: "visible" });
+    await page.getByLabel("Update source for shared-reviewer").fill(newSourceDir);
+    await page.getByRole("button", { name: "Save source for shared-reviewer" }).click();
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByText(newSourceDir)
+      .waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: "Preview update shared-reviewer" }).click();
+    await page
+      .getByRole("region", { name: "Update preview for shared-reviewer" })
+      .getByText("SKILL.md", { exact: true })
+      .waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
+    await page.getByText("Alternate source guidance.").waitFor({ state: "visible" });
+
+    await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "Use the alternate configured source."
     );
   }, 30_000);
 

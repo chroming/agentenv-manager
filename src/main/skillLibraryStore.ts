@@ -1,18 +1,24 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { SafeIdSchema } from "../shared/schemas";
 import type {
   AgentEnvSettings,
   GitHubSkillImportInput,
+  PlannedFileChange,
+  SkillInventoryEntry,
   SkillLibraryEntry,
   SkillSourceType,
   SkillUpdateInfo,
+  SkillUpdatePlan,
+  SkillUpdateSourceInput,
   TargetPaths,
   UnmanagedSkillEntry
 } from "../shared/types";
+import { createUnifiedDiff } from "./diff";
 import { pathExists } from "./fileUtils";
+import { createOwnerMarkerContent, markerPathFor } from "./ownershipMarkers";
 import type { AgentEnvPaths } from "./paths";
 import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 
@@ -32,12 +38,22 @@ export interface ImportSkillInput {
   sourceType?: SkillSourceType;
 }
 
+export interface ManageTargetSkillStoreInput {
+  targetPaths: TargetPaths;
+  targetName: string;
+  libraryId: string;
+}
+
 export interface SkillLibraryStore {
   listSkills(): Promise<SkillLibraryEntry[]>;
+  scanInventory(targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   importSkill(input: ImportSkillInput): Promise<SkillLibraryEntry>;
   importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
+  manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   checkUpdates(): Promise<SkillUpdateInfo[]>;
+  setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
+  previewUpdate(id: string): Promise<SkillUpdatePlan>;
   updateSkill(id: string): Promise<SkillLibraryEntry>;
 }
 
@@ -128,10 +144,91 @@ const hashPath = async (path: string, hash = createHash("sha256")) => {
 
 const computeContentHash = async (path: string) => (await hashPath(path)).digest("hex");
 
+const readSkillFiles = async (root: string) => {
+  const files = new Map<string, string>();
+
+  const walk = async (dir: string) => {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (entry.name === ".agentenv-skill.json") {
+        continue;
+      }
+      const child = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(child);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      files.set(relative(root, child), await readFile(child, "utf8"));
+    }
+  };
+
+  await walk(root);
+  return files;
+};
+
+const createSkillChanges = async (currentDir: string, nextDir: string): Promise<PlannedFileChange[]> => {
+  const currentFiles = await readSkillFiles(currentDir);
+  const nextFiles = await readSkillFiles(nextDir);
+  const filePaths = [...new Set([...currentFiles.keys(), ...nextFiles.keys()])].sort((a, b) => {
+    if (a === "SKILL.md") {
+      return -1;
+    }
+    if (b === "SKILL.md") {
+      return 1;
+    }
+    return a.localeCompare(b);
+  });
+  return filePaths
+    .map((path) => {
+      const before = currentFiles.get(path) ?? "";
+      const after = nextFiles.get(path) ?? "";
+      if (before === after) {
+        return undefined;
+      }
+      return {
+        path,
+        before,
+        after,
+        diff: createUnifiedDiff(path, before, after)
+      };
+    })
+    .filter((change): change is PlannedFileChange => Boolean(change));
+};
+
 const removeAndCopy = async (source: string, destination: string) => {
   await rm(destination, { recursive: true, force: true });
   await mkdir(destination, { recursive: true });
   await cp(source, destination, { recursive: true, dereference: true });
+};
+
+const copySkillEntries = async (sourceDir: string, targetDir: string) => {
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === ".agentenv-skill.json") {
+      continue;
+    }
+    await cp(join(sourceDir, entry.name), join(targetDir, entry.name), {
+      recursive: true,
+      dereference: true
+    });
+  }
+};
+
+const symlinkSkillEntries = async (sourceDir: string, targetDir: string) => {
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name === ".agentenv-skill.json") {
+      continue;
+    }
+    await symlink(
+      join(sourceDir, entry.name),
+      join(targetDir, entry.name),
+      entry.isDirectory() ? "dir" : "file"
+    );
+  }
 };
 
 const parseGitHubSkillUrl = (rawUrl: string): ParsedGitHubSkillSource => {
@@ -292,6 +389,9 @@ export const createSkillLibraryStore = (
     };
   };
 
+  const readLibraryMetadata = async (skillDir: string) =>
+    (await readJsonIfExists<SkillMetadataFile>(join(skillDir, ".agentenv-skill.json"))) ?? {};
+
   const writeMetadata = async (
     skillDir: string,
     metadata: Pick<
@@ -352,16 +452,30 @@ export const createSkillLibraryStore = (
       .sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  const scanUnmanaged = async (targetPaths: TargetPaths[]) => {
+  const markerLibraryId = async (skillDir: string, target: TargetPaths) => {
+    const marker = await readJsonIfExists<Record<string, unknown>>(markerPathFor(skillDir));
+    if (
+      marker?.owner === "agentenv-manager" &&
+      marker.targetId === target.targetId &&
+      marker.kind === "skill" &&
+      typeof marker.source === "string" &&
+      marker.source.startsWith("skills-library/")
+    ) {
+      return marker.source.slice("skills-library/".length);
+    }
+    return undefined;
+  };
+
+  const scanInventory = async (targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]> => {
     const libraryIds = new Set((await listSkills()).map((skill) => skill.id));
-    const byId = new Map<string, UnmanagedSkillEntry>();
+    const byKey = new Map<string, SkillInventoryEntry>();
     for (const target of targetPaths) {
       if (!target.skillsDir || !(await pathExists(target.skillsDir))) {
         continue;
       }
       const entries = await readdir(target.skillsDir, { withFileTypes: true });
       for (const entry of entries) {
-        if (!entry.isDirectory() || entry.name.startsWith(".") || libraryIds.has(entry.name)) {
+        if (!entry.isDirectory() || entry.name.startsWith(".")) {
           continue;
         }
         const skillDir = join(target.skillsDir, entry.name);
@@ -369,21 +483,40 @@ export const createSkillLibraryStore = (
           continue;
         }
         const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
-        const existing = byId.get(entry.name);
+        const markerId = await markerLibraryId(skillDir, target);
+        const status = markerId ? "managed" : libraryIds.has(entry.name) ? "library" : "unmanaged";
+        const libraryId = markerId ?? (status === "library" ? entry.name : undefined);
+        const key = `${status}:${libraryId ?? entry.name}:${skillDir}`;
+        const existing = byKey.get(key);
         if (existing) {
           existing.foundIn.push(target.targetId);
           continue;
         }
-        byId.set(entry.name, {
+        byKey.set(key, {
           id: entry.name,
           name: metadataValue(content, "name") || entry.name,
           description: metadataValue(content, "description"),
           path: skillDir,
-          foundIn: [target.targetId]
+          foundIn: [target.targetId],
+          status,
+          libraryId
         });
       }
     }
-    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const scanUnmanaged = async (targetPaths: TargetPaths[]) => {
+    const inventory = await scanInventory(targetPaths);
+    return inventory
+      .filter((skill) => skill.status === "unmanaged")
+      .map(({ id, name, description, path, foundIn }) => ({
+        id,
+        name,
+        description,
+        path,
+        foundIn
+      }));
   };
 
   const importSkill = async ({
@@ -435,12 +568,62 @@ export const createSkillLibraryStore = (
     }
   };
 
+  const manageTargetSkill = async ({
+    targetPaths,
+    targetName,
+    libraryId
+  }: ManageTargetSkillStoreInput): Promise<void> => {
+    if (!targetPaths.skillsDir) {
+      throw new Error("Target does not expose a skills directory");
+    }
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(targetName)) {
+      throw new Error(`Invalid target skill name: ${targetName}`);
+    }
+
+    const safeLibraryId = SafeIdSchema.parse(libraryId);
+    const sourceDir = join(await libraryDir(), safeLibraryId);
+    if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
+      throw new Error(`Library skill does not exist: ${safeLibraryId}`);
+    }
+
+    const targetDir = join(targetPaths.skillsDir, targetName);
+    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
+      throw new Error(`Target skill does not exist: ${targetDir}`);
+    }
+
+    const settings = await readSettings();
+    await rm(targetDir, { recursive: true, force: true });
+    await mkdir(targetDir, { recursive: true });
+    if (settings.skillSyncMethod === "copy") {
+      await copySkillEntries(sourceDir, targetDir);
+    } else if (settings.skillSyncMethod === "auto") {
+      try {
+        await symlinkSkillEntries(sourceDir, targetDir);
+      } catch {
+        await rm(targetDir, { recursive: true, force: true });
+        await mkdir(targetDir, { recursive: true });
+        await copySkillEntries(sourceDir, targetDir);
+      }
+    } else {
+      await symlinkSkillEntries(sourceDir, targetDir);
+    }
+    await writeFile(
+      markerPathFor(targetDir),
+      createOwnerMarkerContent({
+        profileId: "library-management",
+        targetId: targetPaths.targetId,
+        kind: "skill",
+        source: `skills-library/${safeLibraryId}`
+      }),
+      "utf8"
+    );
+  };
+
   const checkUpdates = async (): Promise<SkillUpdateInfo[]> => {
     const skills = await listSkills();
     const updates: SkillUpdateInfo[] = [];
-    for (const skill of skills.filter((item) => item.sourceType === "github")) {
-      const metadata =
-        (await readJsonIfExists<SkillMetadataFile>(join(skill.path, ".agentenv-skill.json"))) ?? {};
+    for (const skill of skills.filter((item) => item.sourceType === "github" || item.source)) {
+      const metadata = await readLibraryMetadata(skill.path);
       if (!metadata.source) {
         updates.push({
           id: skill.id,
@@ -454,6 +637,21 @@ export const createSkillLibraryStore = (
       }
 
       try {
+        if (metadata.sourceType === "local") {
+          if (!(await pathExists(join(metadata.source, "SKILL.md")))) {
+            throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
+          }
+          const latestRevision = await computeContentHash(metadata.source);
+          updates.push({
+            id: skill.id,
+            name: skill.name,
+            sourceType: "local",
+            currentRevision: metadata.contentHash,
+            latestRevision,
+            updateAvailable: latestRevision !== metadata.contentHash
+          });
+          continue;
+        }
         const source = parseGitHubSkillUrl(metadata.source);
         const latest = await readGitHubTree(source);
         updates.push({
@@ -462,7 +660,7 @@ export const createSkillLibraryStore = (
           sourceType: "github",
           currentRevision: metadata.remoteRevision,
           latestRevision: latest.revision,
-          updateAvailable: Boolean(metadata.remoteRevision && latest.revision !== metadata.remoteRevision)
+          updateAvailable: latest.revision !== metadata.remoteRevision
         });
       } catch (error) {
         updates.push({
@@ -478,11 +676,116 @@ export const createSkillLibraryStore = (
     return updates;
   };
 
+  const setUpdateSource = async ({
+    id,
+    sourceType,
+    source
+  }: SkillUpdateSourceInput): Promise<SkillLibraryEntry> => {
+    const safeId = SafeIdSchema.parse(id);
+    const targetDir = join(await libraryDir(), safeId);
+    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
+      throw new Error(`Library skill does not exist: ${safeId}`);
+    }
+    if (sourceType === "github") {
+      const githubSource = parseGitHubSkillUrl(source);
+      await writeMetadata(targetDir, {
+        sourceType: "github",
+        source: githubSource.sourceUrl,
+        remoteRef: githubSource.ref,
+        remotePath: githubSource.remotePath
+      });
+      return entryFor(safeId, targetDir);
+    }
+    if (sourceType !== "local") {
+      throw new Error(`Skill update source type is not supported yet: ${sourceType}`);
+    }
+    if (!(await pathExists(join(source, "SKILL.md")))) {
+      throw new Error(`Skill source is missing SKILL.md: ${source}`);
+    }
+    await writeMetadata(targetDir, { sourceType: "local", source });
+    return entryFor(safeId, targetDir);
+  };
+
+  const previewUpdate = async (id: string): Promise<SkillUpdatePlan> => {
+    const safeId = SafeIdSchema.parse(id);
+    const targetDir = join(await libraryDir(), safeId);
+    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
+      throw new Error(`Library skill does not exist: ${safeId}`);
+    }
+    const skill = await entryFor(safeId, targetDir);
+    const metadata = await readLibraryMetadata(targetDir);
+    if (!metadata.source) {
+      return {
+        id: skill.id,
+        name: skill.name,
+        sourceType: skill.sourceType,
+        source: metadata.source,
+        currentRevision: metadata.remoteRevision ?? metadata.contentHash,
+        updateAvailable: false,
+        changes: [],
+        errors: ["Skill has no update source configured"]
+      };
+    }
+
+    if (metadata.sourceType === "github") {
+      const source = parseGitHubSkillUrl(metadata.source);
+      const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-preview-"));
+      try {
+        const { hasSkillMd, revision } = await readGitHubTree(source, tempDir);
+        if (!hasSkillMd) {
+          throw new Error(`GitHub skill source is missing SKILL.md: ${metadata.source}`);
+        }
+        const changes = await createSkillChanges(targetDir, tempDir);
+        return {
+          id: skill.id,
+          name: skill.name,
+          sourceType: "github",
+          source: metadata.source,
+          currentRevision: metadata.remoteRevision,
+          latestRevision: revision,
+          updateAvailable: changes.length > 0,
+          changes,
+          errors: []
+        };
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    }
+
+    if (metadata.sourceType !== "local") {
+      return {
+        id: skill.id,
+        name: skill.name,
+        sourceType: skill.sourceType,
+        source: metadata.source,
+        currentRevision: metadata.contentHash,
+        updateAvailable: false,
+        changes: [],
+        errors: [`Skill update source type is not supported yet: ${metadata.sourceType}`]
+      };
+    }
+    if (!(await pathExists(join(metadata.source, "SKILL.md")))) {
+      throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
+    }
+    const latestRevision = await computeContentHash(metadata.source);
+    const changes = await createSkillChanges(targetDir, metadata.source);
+    return {
+      id: skill.id,
+      name: skill.name,
+      sourceType: "local",
+      source: metadata.source,
+      currentRevision: metadata.contentHash,
+      latestRevision,
+      updateAvailable: changes.length > 0,
+      changes,
+      errors: []
+    };
+  };
+
   const updateSkill = async (id: string): Promise<SkillLibraryEntry> => {
     const safeId = SafeIdSchema.parse(id);
     const targetDir = join(await libraryDir(), safeId);
-    const metadata =
-      (await readJsonIfExists<SkillMetadataFile>(join(targetDir, ".agentenv-skill.json"))) ?? {};
+    const metadata = await readLibraryMetadata(targetDir);
     if (metadata.sourceType === "github" && metadata.source) {
       const source = parseGitHubSkillUrl(metadata.source);
       const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-"));
@@ -515,5 +818,16 @@ export const createSkillLibraryStore = (
     return entryFor(safeId, targetDir);
   };
 
-  return { listSkills, scanUnmanaged, importSkill, importGitHubSkill, checkUpdates, updateSkill };
+  return {
+    listSkills,
+    scanInventory,
+    scanUnmanaged,
+    importSkill,
+    importGitHubSkill,
+    manageTargetSkill,
+    checkUpdates,
+    setUpdateSource,
+    previewUpdate,
+    updateSkill
+  };
 };

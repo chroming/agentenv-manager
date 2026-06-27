@@ -197,7 +197,7 @@ describe("SkillsEditor", () => {
     expect(screen.getByRole("group", { name: "Skill agentenv-reviewer" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Agent reviewer.toml" })).toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Library skill agentenv-shared-reviewer" })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Library MCP context7" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "MCP context7" })).toHaveTextContent("Library");
 
     fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
 
@@ -247,14 +247,16 @@ describe("SkillsEditor", () => {
     expect(within(inventory).getByRole("group", { name: "Skill agentenv-reviewer" })).toBeInTheDocument();
     expect(within(inventory).getByRole("group", { name: "Agent reviewer.toml" })).toBeInTheDocument();
     expect(within(inventory).getByRole("group", { name: "Library skill agentenv-shared-reviewer" })).toBeInTheDocument();
-    expect(within(inventory).getByRole("group", { name: "Library MCP context7" })).toBeInTheDocument();
-    expect(within(inventory).getByRole("group", { name: "MCP context7" })).toBeInTheDocument();
+    const mcpRows = within(inventory).getAllByRole("group", { name: "MCP context7" });
+    expect(mcpRows).toHaveLength(2);
+    expect(mcpRows[0]).toHaveTextContent("Library");
+    expect(mcpRows[1]).toHaveTextContent("Raw config");
     expect(within(inventory).getByText("https://mcp.context7.com/mcp")).toBeInTheDocument();
     expect(within(inventory).getByRole("group", { name: "MCP filesystem" })).toBeInTheDocument();
     expect(
       within(inventory).getByText("npx -y @modelcontextprotocol/server-filesystem")
     ).toBeInTheDocument();
-    expect(within(inventory).getAllByText("MCP")).toHaveLength(2);
+    expect(within(inventory).getAllByText("MCP")).toHaveLength(3);
     expect(within(inventory).getAllByText("Managed")).toHaveLength(2);
     expect(screen.queryByRole("region", { name: "MCP servers" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Disabled Skill Paths" })).not.toBeInTheDocument();

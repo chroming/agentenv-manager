@@ -9,8 +9,10 @@ import type { TargetDiscoveryService } from "./targetDiscovery";
 import { SafeIdSchema } from "../shared/schemas";
 import type {
   GitHubSkillImportInput,
+  ManageTargetSkillInput,
   SaveMcpServerInput,
-  SaveProfileInput
+  SaveProfileInput,
+  SkillUpdateSourceInput
 } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
 
@@ -45,6 +47,11 @@ export const registerIpcHandlers = ({
 }: IpcServices) => {
   ipcMain.handle("targets:list", () => targetDiscoveryService.listTargets());
   ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
+  ipcMain.handle("skills:scan-inventory", () =>
+    targetDiscoveryService
+      .listTargets()
+      .then((targets) => skillLibraryStore.scanInventory(targets.map((target) => target.paths)))
+  );
   ipcMain.handle("mcp:list-library", () => mcpLibraryStore.listServers());
   ipcMain.handle("mcp:save-library", (_event, input: SaveMcpServerInput) =>
     mcpLibraryStore.saveServer(input)
@@ -63,7 +70,27 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>
     skillLibraryStore.importGitHubSkill(input)
   );
+  ipcMain.handle("skills:manage-target", async (_event, input: ManageTargetSkillInput) => {
+    const targetId = parseId(input.targetId, "target id");
+    const libraryId = parseId(input.libraryId, "skill id");
+    const targets = await targetDiscoveryService.listTargets();
+    const target = targets.find((item) => item.id === targetId);
+    if (!target) {
+      throw new Error(`Target not found: ${targetId}`);
+    }
+    return skillLibraryStore.manageTargetSkill({
+      targetPaths: target.paths,
+      targetName: input.targetName,
+      libraryId
+    });
+  });
   ipcMain.handle("skills:check-updates", () => skillLibraryStore.checkUpdates());
+  ipcMain.handle("skills:set-update-source", (_event, input: SkillUpdateSourceInput) =>
+    skillLibraryStore.setUpdateSource(input)
+  );
+  ipcMain.handle("skills:preview-update", (_event, id: unknown) =>
+    skillLibraryStore.previewUpdate(parseId(id, "skill id"))
+  );
   ipcMain.handle("skills:update-library", (_event, id: unknown) =>
     skillLibraryStore.updateSkill(parseId(id, "skill id"))
   );

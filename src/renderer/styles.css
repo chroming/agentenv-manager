@@ -1014,6 +1014,26 @@ summary {
   gap: 5px;
 }
 
+.mcp-server-form {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+}
+
+.mcp-server-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.mcp-server-form__wide {
+  grid-column: span 2;
+}
+
+.mcp-server-form textarea {
+  min-height: 72px;
+}
+
 .library-import-action {
   min-height: 36px;
 }
@@ -1033,11 +1053,73 @@ summary {
   grid-template-columns: 76px minmax(0, 1fr) auto;
 }
 
+.library-source-editor {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 132px minmax(180px, 1fr) auto;
+  margin-top: 8px;
+}
+
 .library-row__actions {
   align-items: end;
   display: grid;
   gap: 8px;
   justify-items: end;
+}
+
+.library-update-preview {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  grid-column: 2 / -1;
+  margin-top: 6px;
+  padding-top: 12px;
+}
+
+.library-update-preview small {
+  color: var(--subtle);
+  display: block;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.update-change-list {
+  display: grid;
+  gap: 6px;
+}
+
+.update-change-list details {
+  background: #fbfcfe;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.update-change-list summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 760;
+  padding: 8px 10px;
+}
+
+.update-change-list pre {
+  border-top: 1px solid var(--border);
+  color: #243041;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre;
 }
 
 .resource-chip--github {
@@ -1048,6 +1130,21 @@ summary {
 .resource-chip--local {
   background: var(--success-bg);
   color: var(--success);
+}
+
+.resource-chip--managed {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.resource-chip--library {
+  background: #eef4ff;
+  color: var(--accent-strong);
+}
+
+.resource-chip--unmanaged {
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .resource-list--unmanaged {

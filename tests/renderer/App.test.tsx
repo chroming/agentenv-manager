@@ -121,6 +121,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     listTargets: vi.fn().mockResolvedValue([target]),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
+    scanSkillInventory: vi.fn().mockResolvedValue([]),
     listMcpLibrary: vi.fn().mockResolvedValue([]),
     saveMcpServer: vi.fn().mockImplementation(async (input) => input),
     removeMcpServer: vi.fn().mockResolvedValue(undefined),
@@ -148,6 +149,28 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       updatedAt: "2026-07-02T00:00:00.000Z"
     }),
     checkSkillLibraryUpdates: vi.fn().mockResolvedValue([]),
+    manageTargetSkill: vi.fn().mockResolvedValue(undefined),
+    setSkillUpdateSource: vi.fn().mockImplementation(async (input) => ({
+      id: input.id,
+      name: input.id,
+      description: "",
+      path: "/tmp/skill",
+      sourceType: input.sourceType,
+      source: input.source,
+      contentHash: "hash",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    })),
+    previewLibrarySkillUpdate: vi.fn().mockResolvedValue({
+      id: "skill",
+      name: "skill",
+      sourceType: "local",
+      source: "/tmp/skill",
+      currentRevision: "hash",
+      latestRevision: "hash2",
+      updateAvailable: true,
+      changes: [],
+      errors: []
+    }),
     updateLibrarySkill: vi.fn().mockResolvedValue({
       id: "skill",
       name: "skill",
@@ -221,7 +244,7 @@ describe("App", () => {
     fireEvent.click(within(targetStatus).getByText("Target details"));
     expect(within(targetStatus).getByText("Config directory")).toBeVisible();
     expect(screen.getByRole("tab", { name: "Resources" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Skill Library" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Libraries" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Skill Library" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Skills" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Assets" })).not.toBeInTheDocument();
@@ -234,7 +257,7 @@ describe("App", () => {
     expect(screen.getByLabelText("opencode.json")).toHaveValue('{\n  "mcp": {}\n}\n');
   });
 
-  it("opens the skill library as an app-level workspace", async () => {
+  it("opens libraries as an app-level workspace", async () => {
     installApi({
       listSkillLibrary: vi.fn().mockResolvedValue([
         {
@@ -264,7 +287,7 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByLabelText("AGENTS.md");
-    fireEvent.click(screen.getByRole("button", { name: "Skill Library" }));
+    fireEvent.click(screen.getByRole("button", { name: "Libraries" }));
 
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "Library summary" })).toHaveTextContent(
@@ -290,10 +313,16 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByLabelText("AGENTS.md");
-    fireEvent.click(screen.getByRole("button", { name: "Skill Library" }));
+    fireEvent.click(screen.getByRole("button", { name: "Libraries" }));
     fireEvent.click(screen.getByRole("tab", { name: "MCP Servers" }));
 
     expect(screen.getByRole("region", { name: "MCP library" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Library summary" })).toHaveTextContent(
+      "MCP Servers"
+    );
+    expect(screen.getByRole("complementary", { name: "Library summary" })).not.toHaveTextContent(
+      "Total skills"
+    );
     expect(screen.getByRole("group", { name: "MCP library item context7" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("MCP library id"), {

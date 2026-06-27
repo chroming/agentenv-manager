@@ -3,6 +3,7 @@ import type { McpLibraryEntry, McpTransport, SaveMcpServerInput } from "../../sh
 
 interface McpLibraryPanelProps {
   mcpServers: McpLibraryEntry[];
+  mcpUsage: Record<string, string[]>;
   onSave(input: SaveMcpServerInput): void;
   onRemove(id: string): void;
 }
@@ -24,7 +25,7 @@ const commandLabel = (server: McpLibraryEntry) => {
   return server.url ?? "";
 };
 
-export const McpLibraryPanel = ({ mcpServers, onSave, onRemove }: McpLibraryPanelProps) => {
+export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpLibraryPanelProps) => {
   const [draft, setDraft] = useState<SaveMcpServerInput>(defaultDraft);
   const [argsText, setArgsText] = useState("");
 
@@ -56,12 +57,52 @@ export const McpLibraryPanel = ({ mcpServers, onSave, onRemove }: McpLibraryPane
         </div>
       </div>
 
+      <section className="resource-section" aria-label="MCP servers">
+        <div>
+          <div className="resource-heading">Servers</div>
+          <p className="muted">
+            {mcpServers.length === 0
+              ? "No shared MCP servers yet."
+              : `${mcpServers.length} shared MCP server${mcpServers.length === 1 ? "" : "s"}`}
+          </p>
+        </div>
+        <div className="resource-list library-list">
+          {mcpServers.map((server) => (
+            <div
+              aria-label={`MCP library item ${server.id}`}
+              className="resource-row library-row"
+              key={server.id}
+              role="group"
+            >
+              <span className="resource-chip">MCP</span>
+              <div className="resource-row__main">
+                <span>{server.name}</span>
+                <small>{server.transport}</small>
+                <small>{commandLabel(server)}</small>
+                <small>
+                  {(mcpUsage[server.id] ?? []).length > 0
+                    ? `Used by ${(mcpUsage[server.id] ?? []).join(", ")}`
+                    : "Not used by any profile"}
+                </small>
+              </div>
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={() => onRemove(server.id)}
+              >
+                Remove {server.id}
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="resource-section library-import-panel" aria-label="MCP server editor">
         <div>
           <div className="resource-heading">Server Definition</div>
           <p className="muted">Use env variable names only; do not store secret values here.</p>
         </div>
-        <div className="library-import-grid">
+        <div className="mcp-server-form">
           <label>
             <span>ID</span>
             <input
@@ -94,33 +135,38 @@ export const McpLibraryPanel = ({ mcpServers, onSave, onRemove }: McpLibraryPane
               <option value="sse">sse</option>
             </select>
           </label>
-          <label>
-            <span>Command</span>
-            <input
-              aria-label="MCP command"
-              placeholder="npx"
-              value={draft.command ?? ""}
-              onChange={(event) => setDraft({ ...draft, command: event.currentTarget.value })}
-            />
-          </label>
-          <label>
-            <span>Args</span>
-            <textarea
-              aria-label="MCP args"
-              placeholder="-y&#10;@upstash/context7-mcp"
-              value={argsText}
-              onChange={(event) => setArgsText(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>URL</span>
-            <input
-              aria-label="MCP URL"
-              placeholder="https://example.com/mcp"
-              value={draft.url ?? ""}
-              onChange={(event) => setDraft({ ...draft, url: event.currentTarget.value })}
-            />
-          </label>
+          {draft.transport === "stdio" ? (
+            <>
+              <label>
+                <span>Command</span>
+                <input
+                  aria-label="MCP command"
+                  placeholder="npx"
+                  value={draft.command ?? ""}
+                  onChange={(event) => setDraft({ ...draft, command: event.currentTarget.value })}
+                />
+              </label>
+              <label className="mcp-server-form__wide">
+                <span>Args</span>
+                <textarea
+                  aria-label="MCP args"
+                  placeholder="-y&#10;@upstash/context7-mcp"
+                  value={argsText}
+                  onChange={(event) => setArgsText(event.currentTarget.value)}
+                />
+              </label>
+            </>
+          ) : (
+            <label className="mcp-server-form__wide">
+              <span>URL</span>
+              <input
+                aria-label="MCP URL"
+                placeholder="https://example.com/mcp"
+                value={draft.url ?? ""}
+                onChange={(event) => setDraft({ ...draft, url: event.currentTarget.value })}
+              />
+            </label>
+          )}
           <button
             className="primary-action library-import-action"
             type="button"
@@ -129,41 +175,6 @@ export const McpLibraryPanel = ({ mcpServers, onSave, onRemove }: McpLibraryPane
           >
             Save MCP server
           </button>
-        </div>
-      </section>
-
-      <section className="resource-section" aria-label="MCP servers">
-        <div>
-          <div className="resource-heading">Servers</div>
-          <p className="muted">
-            {mcpServers.length === 0
-              ? "No shared MCP servers yet."
-              : `${mcpServers.length} shared MCP server${mcpServers.length === 1 ? "" : "s"}`}
-          </p>
-        </div>
-        <div className="resource-list library-list">
-          {mcpServers.map((server) => (
-            <div
-              aria-label={`MCP library item ${server.id}`}
-              className="resource-row library-row"
-              key={server.id}
-              role="group"
-            >
-              <span className="resource-chip">MCP</span>
-              <div className="resource-row__main">
-                <span>{server.name}</span>
-                <small>{server.transport}</small>
-                <small>{commandLabel(server)}</small>
-              </div>
-              <button
-                className="secondary-action"
-                type="button"
-                onClick={() => onRemove(server.id)}
-              >
-                Remove {server.id}
-              </button>
-            </div>
-          ))}
         </div>
       </section>
     </section>

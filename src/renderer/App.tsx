@@ -13,12 +13,15 @@ import type {
   RollbackPreview,
   SaveProfileInput,
   AgentEnvSettings,
+  ManageTargetSkillInput,
   McpLibraryEntry,
   SaveMcpServerInput,
+  SkillInventoryEntry,
   SkillLibraryEntry,
   SkillUpdateInfo,
-  TargetInfo,
-  UnmanagedSkillEntry
+  SkillUpdatePlan,
+  SkillUpdateSourceInput,
+  TargetInfo
 } from "../shared/types";
 import { ActivationPanel } from "./components/ActivationPanel";
 import { AgentsEditor } from "./components/AgentsEditor";
@@ -212,12 +215,14 @@ export const App = () => {
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
   const [mcpServers, setMcpServers] = useState<McpLibraryEntry[]>([]);
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
-  const [unmanagedSkills, setUnmanagedSkills] = useState<UnmanagedSkillEntry[]>([]);
+  const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
+  const [selectedSkillUpdatePlan, setSelectedSkillUpdatePlan] = useState<SkillUpdatePlan>();
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
     skillSyncMethod: "symlink",
     skillStorageLocation: "appData"
   });
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
+  const [mcpUsage, setMcpUsage] = useState<Record<string, string[]>>({});
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string>();
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
@@ -239,7 +244,7 @@ export const App = () => {
       skillItems,
       mcpItems,
       skillUpdateItems,
-      unmanagedItems,
+      skillInventoryItems,
       settings
     ] = await Promise.all([
       window.agentEnv.listTargets(),
@@ -248,16 +253,22 @@ export const App = () => {
       window.agentEnv.listSkillLibrary(),
       window.agentEnv.listMcpLibrary(),
       window.agentEnv.checkSkillLibraryUpdates(),
-      window.agentEnv.scanUnmanagedSkills(),
+      window.agentEnv.scanSkillInventory(),
       window.agentEnv.readSettings()
     ]);
     const profileDetails = await Promise.all(
       profileItems.map((profile) => window.agentEnv.readProfile(profile.id))
     );
     const usage: Record<string, string[]> = {};
+    const nextMcpUsage: Record<string, string[]> = {};
     for (const profile of profileDetails) {
       for (const skillRef of profile.assetPolicy.skillRefs ?? []) {
         usage[skillRef.libraryId] = (usage[skillRef.libraryId] ?? []).concat(
+          profile.manifest.name
+        );
+      }
+      for (const mcpRef of profile.assetPolicy.mcpRefs ?? []) {
+        nextMcpUsage[mcpRef.libraryId] = (nextMcpUsage[mcpRef.libraryId] ?? []).concat(
           profile.manifest.name
         );
       }
@@ -268,9 +279,10 @@ export const App = () => {
     setLibrarySkills(skillItems);
     setMcpServers(mcpItems);
     setSkillUpdates(skillUpdateItems);
-    setUnmanagedSkills(unmanagedItems);
+    setSkillInventory(skillInventoryItems);
     setSkillSettings(settings);
     setSkillUsage(usage);
+    setMcpUsage(nextMcpUsage);
     setSelectedTargetId((current) => current ?? targetItems[0]?.id);
     return { targetItems, profileItems, backupItems };
   };
@@ -463,6 +475,7 @@ export const App = () => {
     setError(undefined);
     try {
       await window.agentEnv.importSkillToLibrary(sourcePath);
+      setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -476,27 +489,7 @@ export const App = () => {
     setError(undefined);
     try {
       await window.agentEnv.updateLibrarySkill(id);
-      await refreshProfiles();
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const updateAvailableLibrarySkills = async () => {
-    const skillIds = skillUpdates
-      .filter((update) => update.updateAvailable)
-      .map((update) => update.id);
-    if (skillIds.length === 0) {
-      return;
-    }
-    setBusy(true);
-    setError(undefined);
-    try {
-      for (const id of skillIds) {
-        await window.agentEnv.updateLibrarySkill(id);
-      }
+      setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -522,7 +515,48 @@ export const App = () => {
     setError(undefined);
     try {
       await window.agentEnv.importGitHubSkillToLibrary(input);
+      setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const manageTargetSkill = async (input: ManageTargetSkillInput) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.manageTargetSkill(input);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setSkillUpdateSource = async (input: SkillUpdateSourceInput) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.setSkillUpdateSource(input);
+      setSelectedSkillUpdatePlan(undefined);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const previewLibrarySkillUpdate = async (id: string) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const updatePlan = await window.agentEnv.previewLibrarySkillUpdate(id);
+      setSelectedSkillUpdatePlan(updatePlan);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -624,19 +658,23 @@ export const App = () => {
               <SkillLibraryPanel
                 librarySkills={librarySkills}
                 skillUpdates={skillUpdates}
-                unmanagedSkills={unmanagedSkills}
+                skillInventory={skillInventory}
+                selectedUpdatePlan={selectedSkillUpdatePlan}
                 skillSettings={skillSettings}
                 skillUsage={skillUsage}
                 onImportUnmanaged={importUnmanagedSkill}
                 onImportGitHubSkill={importGitHubSkill}
+                onManageTargetSkill={manageTargetSkill}
+                onSetUpdateSource={setSkillUpdateSource}
+                onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onUpdateLibrarySkill={updateLibrarySkill}
-                onUpdateAllAvailable={updateAvailableLibrarySkills}
                 onCheckUpdates={checkSkillUpdates}
                 onSkillSettingsChange={updateSkillSettings}
               />
             ) : (
               <McpLibraryPanel
                 mcpServers={mcpServers}
+                mcpUsage={mcpUsage}
                 onSave={saveMcpServer}
                 onRemove={removeMcpServer}
               />
@@ -773,9 +811,12 @@ export const App = () => {
 
       {activeWorkspace === "skill-library" ? (
         <LibrarySummaryPanel
+          activeTab={activeLibraryTab}
           librarySkills={librarySkills}
+          mcpServers={mcpServers}
           skillUpdates={skillUpdates}
           skillSettings={skillSettings}
+          mcpUsage={mcpUsage}
         />
       ) : (
         <ActivationPanel
