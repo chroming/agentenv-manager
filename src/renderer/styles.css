@@ -1861,32 +1861,6 @@ summary {
   padding: 12px 14px 18px;
 }
 
-.window-controls {
-  display: flex;
-  gap: 8px;
-  height: 16px;
-  padding: 2px 2px 0;
-}
-
-.window-control {
-  border-radius: 999px;
-  display: inline-flex;
-  height: 11px;
-  width: 11px;
-}
-
-.window-control--close {
-  background: #ff5f57;
-}
-
-.window-control--minimize {
-  background: #ffbd2e;
-}
-
-.window-control--zoom {
-  background: #28c840;
-}
-
 .global-sidebar .sidebar__header {
   padding: 14px 6px 18px;
 }
@@ -2717,7 +2691,7 @@ summary {
 .profile-list-toolbar {
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 1fr) 36px 36px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .profile-search {
@@ -2754,7 +2728,7 @@ summary {
   border-radius: 0;
   display: grid;
   gap: 12px;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr);
   min-height: 86px;
   padding: 14px 10px;
 }
@@ -2842,13 +2816,6 @@ summary {
   flex-wrap: wrap;
   font-size: 11px;
   gap: 10px;
-}
-
-.profile-row__freshness {
-  align-self: end;
-  color: var(--muted);
-  font-size: 11px;
-  white-space: nowrap;
 }
 
 .profile-new-button {

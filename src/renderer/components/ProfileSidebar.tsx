@@ -113,11 +113,6 @@ export const ProfileSidebar = ({
 
   return (
     <aside className="sidebar global-sidebar" aria-label="Global navigation">
-      <div className="window-controls" aria-hidden="true">
-        <span className="window-control window-control--close" />
-        <span className="window-control window-control--minimize" />
-        <span className="window-control window-control--zoom" />
-      </div>
       <div className="sidebar__header">
         <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true">

@@ -3,11 +3,9 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   Copy,
   Database,
   BookOpenText,
-  Filter,
   FolderKanban,
   HardDrive,
   Monitor,
@@ -21,7 +19,6 @@ import {
   ScanLine,
   Search,
   Settings2,
-  SlidersHorizontal,
   Trash2
 } from "lucide-react";
 import {
@@ -928,15 +925,7 @@ export const App = () => {
                       Scan local Skills
                     </button>
                   </>
-                ) : (
-                  <button className="primary-inline-action" type="button">
-                    <Plus size={16} strokeWidth={2.4} />
-                    New MCP server
-                  </button>
-                )}
-                <button className="icon-action" type="button" aria-label="More library actions">
-                  <MoreHorizontal size={16} strokeWidth={2.2} />
-                </button>
+                ) : null}
               </div>
             </header>
             <section className="metric-strip" aria-label="Library command center">
@@ -984,24 +973,22 @@ export const App = () => {
                   <span>{activeLibraryTab === "skills" ? "Installed instances" : `${readyTargetCount}/${targets.length || 0} targets ready`}</span>
                 </div>
               </div>
-              <button
-                className="metric-tile metric-tile--button"
-                type="button"
-                onClick={() => setSkillLibraryTool("discoveries")}
-              >
-                <span className="metric-icon metric-icon--slate" aria-hidden="true">
-                  {activeLibraryTab === "skills" ? (
+              {activeLibraryTab === "skills" ? (
+                <button
+                  className="metric-tile metric-tile--button"
+                  type="button"
+                  onClick={() => setSkillLibraryTool("discoveries")}
+                >
+                  <span className="metric-icon metric-icon--slate" aria-hidden="true">
                     <HardDrive size={21} strokeWidth={2.2} />
-                  ) : (
-                    <Database size={21} strokeWidth={2.2} />
-                  )}
-                </span>
-                <div>
-                  <strong>{needsManagementCount}</strong>
-                  <small>Needs management</small>
-                  <span>Imported target skills</span>
-                </div>
-              </button>
+                  </span>
+                  <div>
+                    <strong>{needsManagementCount}</strong>
+                    <small>Needs management</small>
+                    <span>Imported target skills</span>
+                  </div>
+                </button>
+              ) : null}
             </section>
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
@@ -1128,12 +1115,6 @@ export const App = () => {
                       onChange={(event) => setProfileSearch(event.currentTarget.value)}
                     />
                   </label>
-                  <button className="icon-action" type="button" aria-label="Filter profile list">
-                    <Filter size={15} strokeWidth={2.2} />
-                  </button>
-                  <button className="icon-action" type="button" aria-label="Sort profile list">
-                    <SlidersHorizontal size={15} strokeWidth={2.2} />
-                  </button>
                 </div>
                 <div className="profile-list">
                   {isLoading ? <p className="muted">Loading profiles...</p> : null}
@@ -1153,7 +1134,7 @@ export const App = () => {
                       <span className="profile-row__content">
                         <span className="profile-row__title">
                           {profile.name}
-                          {profile.id === selectedProfileId ? <strong>Default</strong> : null}
+                          <strong>{selectedTarget?.name ?? profile.targetId}</strong>
                         </span>
                         <small>{profile.description || "No description"}</small>
                         <span className="profile-row__stats">
@@ -1162,7 +1143,6 @@ export const App = () => {
                           <span>1 Instructions</span>
                         </span>
                       </span>
-                      <span className="profile-row__freshness">Ready</span>
                     </button>
                     );
                   })}
@@ -1195,7 +1175,7 @@ export const App = () => {
                           {draftProfile.manifest.description || "No description"}
                         </p>
                         <div className="profile-hero__meta">
-                          <span className="success-pill">Default Profile</span>
+                          <span className="success-pill">{activeTargetName}</span>
                           <span>
                             <CalendarDays size={14} strokeWidth={2.2} />
                             Local profile
@@ -1310,9 +1290,7 @@ export const App = () => {
                             </div>
                             {directTarget && target.health.status === "ready" ? (
                               <CheckCircle2 size={15} strokeWidth={2.2} />
-                            ) : (
-                              <ChevronRight size={15} strokeWidth={2.2} />
-                            )}
+                            ) : null}
                           </div>
                         );
                       })}
