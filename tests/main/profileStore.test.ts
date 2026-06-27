@@ -11,13 +11,14 @@ const writeProfile = async (profileRoot: string) => {
   await mkdir(profileDir, { recursive: true });
   await writeFile(
     join(profileDir, "profile.json"),
-    JSON.stringify({
-      id: "daily-coding",
-      name: "Daily Coding",
-      description: "Default",
-      version: 1,
-      managed: { agents: true, mcp: true, skills: true }
-    })
+      JSON.stringify({
+        id: "daily-coding",
+        targetId: "codex",
+        name: "Daily Coding",
+        description: "Default",
+        version: 1,
+        managed: { instructions: true, config: true, assets: true }
+      })
   );
   await writeFile(join(profileDir, "AGENTS.md"), "# Agent\n");
   await writeFile(join(profileDir, "mcp.toml"), "[mcp_servers.docs]\n");
@@ -45,7 +46,12 @@ describe("profile store", () => {
     const store = createProfileStore({ appDataRoot: root });
 
     await expect(store.listProfiles()).resolves.toEqual([
-      { id: "daily-coding", name: "Daily Coding", description: "Default" }
+      {
+        id: "daily-coding",
+        targetId: "codex",
+        name: "Daily Coding",
+        description: "Default"
+      }
     ]);
   });
 
@@ -57,9 +63,9 @@ describe("profile store", () => {
     const profile = await store.readProfile("daily-coding");
 
     expect(profile.manifest.name).toBe("Daily Coding");
-    expect(profile.agentsMd).toBe("# Agent\n");
-    expect(profile.mcpToml).toBe("[mcp_servers.docs]\n");
-    expect(profile.skillsPolicy.ownedSkillDirs).toEqual([]);
+    expect(profile.instructions).toBe("# Agent\n");
+    expect(profile.configText).toBe("[mcp_servers.docs]\n");
+    expect(profile.assetPolicy.ownedDirs).toEqual([]);
   });
 
   it("rejects unsafe profile ids", async () => {

@@ -1,17 +1,23 @@
-import type { ProfileSummary } from "../../shared/types";
+import type { ProfileSummary, TargetDescriptor } from "../../shared/types";
 
 interface ProfileSidebarProps {
+  targets: TargetDescriptor[];
   profiles: ProfileSummary[];
   selectedProfileId?: string;
+  selectedTargetId?: string;
   isLoading: boolean;
+  onTargetSelect(targetId: string): void;
   onSelect(profileId: string): void;
   onCreate(): void;
 }
 
 export const ProfileSidebar = ({
+  targets,
   profiles,
   selectedProfileId,
+  selectedTargetId,
   isLoading,
+  onTargetSelect,
   onSelect,
   onCreate
 }: ProfileSidebarProps) => (
@@ -22,6 +28,19 @@ export const ProfileSidebar = ({
         New
       </button>
     </div>
+    <label className="target-picker">
+      <span>Target</span>
+      <select
+        value={selectedTargetId ?? ""}
+        onChange={(event) => onTargetSelect(event.currentTarget.value)}
+      >
+        {targets.map((target) => (
+          <option key={target.id} value={target.id}>
+            {target.name}
+          </option>
+        ))}
+      </select>
+    </label>
     <div className="profile-list">
       {isLoading ? <p className="muted">Loading profiles...</p> : null}
       {!isLoading && profiles.length === 0 ? (

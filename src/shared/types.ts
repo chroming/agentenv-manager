@@ -1,16 +1,19 @@
 export interface ProfileSummary {
   id: string;
+  targetId: string;
   name: string;
   description: string;
 }
 
-export type { ProfileManifest, SkillsPolicy } from "./schemas";
-import type { ProfileManifest, SkillsPolicy } from "./schemas";
+export type { AssetPolicy, ProfileManifest } from "./schemas";
+import type { AssetPolicy, ProfileManifest } from "./schemas";
 
 export interface AgentEnvApi {
+  listTargets(): Promise<TargetDescriptor[]>;
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
+  createProfile(targetId: string): Promise<ProfileDetail>;
   previewApply(profileId: string): Promise<ActivationPreview>;
   applyProfile(profileId: string, previewId: string): Promise<ApplyResult>;
   listBackups(): Promise<BackupSummary[]>;
@@ -18,20 +21,53 @@ export interface AgentEnvApi {
   rollback(backupId: string): Promise<RollbackResult>;
 }
 
+export interface TargetDescriptor {
+  id: string;
+  name: string;
+  description: string;
+  instructionsLabel: string;
+  configLabel: string;
+  configLanguage: "jsonc" | "toml" | "text";
+  realWritesEnabled: boolean;
+}
+
+export interface TargetPaths {
+  targetId: string;
+  configDir: string;
+  instructionsPath: string;
+  instructionsOverridePath?: string;
+  configPath: string;
+  agentsDir?: string;
+  skillsDir?: string;
+}
+
+export interface TargetState {
+  managedConfigKeys: string[];
+  managedMcpNames: string[];
+}
+
+export interface TargetActivationPreview {
+  changes: PlannedFileChange[];
+  warnings: string[];
+  errors: string[];
+  liveFingerprints: Record<string, string>;
+  targetState: TargetState;
+}
+
 export interface ProfileDetail {
   id: string;
   profileDir?: string;
   manifest: ProfileManifest;
-  agentsMd: string;
-  mcpToml: string;
-  skillsPolicy: SkillsPolicy;
+  instructions: string;
+  configText: string;
+  assetPolicy: AssetPolicy;
 }
 
 export interface SaveProfileInput {
   manifest: ProfileManifest;
-  agentsMd: string;
-  mcpToml: string;
-  skillsPolicy: SkillsPolicy;
+  instructions: string;
+  configText: string;
+  assetPolicy: AssetPolicy;
 }
 
 export interface PlannedFileChange {
@@ -49,6 +85,8 @@ export interface ActivationPreview {
   errors: string[];
   changes: PlannedFileChange[];
   liveFingerprints: Record<string, string>;
+  targetId: string;
+  targetState: TargetState;
 }
 
 export interface BackupEntry {

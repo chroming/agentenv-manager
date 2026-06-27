@@ -1,8 +1,8 @@
-import type { SkillsPolicy } from "../../shared/types";
+import type { AssetPolicy } from "../../shared/types";
 
 interface SkillsEditorProps {
-  value: SkillsPolicy;
-  onChange(value: SkillsPolicy): void;
+  value: AssetPolicy;
+  onChange(value: AssetPolicy): void;
 }
 
 export const SkillsEditor = ({ value, onChange }: SkillsEditorProps) => (
@@ -26,13 +26,15 @@ export const SkillsEditor = ({ value, onChange }: SkillsEditorProps) => (
       />
     </label>
     <div className="owned-skill-list">
-      {value.ownedSkillDirs.length === 0 ? (
-        <p className="muted">No owned skills</p>
+      {value.ownedDirs.length === 0 ? (
+        <p className="muted">No owned assets</p>
       ) : (
-        value.ownedSkillDirs.map((skill) => (
-          <div className="owned-skill" key={`${skill.source}:${skill.targetName}`}>
-            <span>{skill.targetName}</span>
-            <small>{skill.source}</small>
+        value.ownedDirs.map((asset) => (
+          <div className="owned-skill" key={`${asset.kind}:${asset.source}:${asset.targetName}`}>
+            <span>{asset.targetName}</span>
+            <small>
+              {asset.kind}: {asset.source}
+            </small>
           </div>
         ))
       )}

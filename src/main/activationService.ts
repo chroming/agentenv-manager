@@ -1,35 +1,33 @@
-import {
-  appendFile,
-  cp,
-  mkdir,
-  readFile,
-  rename,
-  rm,
-  stat,
-  writeFile
-} from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import {
-  createActivationPreview,
-  hashText
-} from "./activationPlanner";
+import { createHash } from "node:crypto";
+import { appendFile, mkdir, readFile, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
 import { createUnifiedDiff } from "./diff";
+import {
+  readTextIfExists,
+  writeAtomic
+} from "./fileUtils";
 import type { AgentEnvPaths } from "./paths";
 import type { ProfileStore } from "./profileStore";
+import {
+  createTargetRegistry,
+  type TargetRegistry
+} from "./targets/registry";
 import type {
   ActivationPreview,
   ApplyResult,
   BackupManifest,
   PlannedFileChange,
   RollbackPreview,
-  RollbackResult
+  RollbackResult,
+  TargetState
 } from "../shared/types";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
   profileStore: ProfileStore;
+  targetRegistry?: TargetRegistry;
   allowRealHomeWrites?: boolean;
 }
 
@@ -40,31 +38,13 @@ export interface ActivationService {
   rollback(backupId: string): Promise<RollbackResult>;
 }
 
-const isMissingFileError = (error: unknown) =>
-  Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
-  );
-
-const readTextIfExists = async (path: string): Promise<string> => {
-  try {
-    return await readFile(path, "utf8");
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return "";
-    }
-    throw error;
-  }
+const DEFAULT_TARGET_STATE: TargetState = {
+  managedConfigKeys: [],
+  managedMcpNames: []
 };
 
-const writeAtomic = async (targetPath: string, content: string) => {
-  await mkdir(dirname(targetPath), { recursive: true });
-  const tempPath = `${targetPath}.agentenv-tmp-${process.pid}-${Date.now()}`;
-  await writeFile(tempPath, content, "utf8");
-  await rename(tempPath, targetPath);
-};
+const hashText = (content: string): string =>
+  createHash("sha256").update(content).digest("hex");
 
 const appendHistory = async (
   paths: AgentEnvPaths,
@@ -78,13 +58,26 @@ const appendHistory = async (
   );
 };
 
+const normalizeTargetState = (value: unknown): TargetState => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return DEFAULT_TARGET_STATE;
+  }
+  const record = value as Partial<TargetState>;
+  return {
+    managedConfigKeys: Array.isArray(record.managedConfigKeys)
+      ? record.managedConfigKeys.filter((item): item is string => typeof item === "string")
+      : [],
+    managedMcpNames: Array.isArray(record.managedMcpNames)
+      ? record.managedMcpNames.filter((item): item is string => typeof item === "string")
+      : []
+  };
+};
+
 const createRollbackChange = async (
   entry: BackupManifest["entries"][number]
 ): Promise<PlannedFileChange> => {
   const before = await readTextIfExists(entry.sourcePath);
-  const after = entry.missing
-    ? ""
-    : await readFile(entry.backupPath ?? "", "utf8");
+  const after = entry.missing ? "" : await readFile(entry.backupPath ?? "", "utf8");
 
   return {
     path: entry.sourcePath,
@@ -94,84 +87,74 @@ const createRollbackChange = async (
   };
 };
 
-const markerPathFor = (targetDir: string) =>
-  join(targetDir, ".agentenv-owner.json");
-
-const isAgentEnvOwnedSkillDir = async (targetDir: string) => {
-  try {
-    await readFile(markerPathFor(targetDir), "utf8");
-    return true;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return false;
-    }
-    throw error;
-  }
-};
-
-const pathExists = async (path: string) => {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return false;
-    }
-    throw error;
-  }
-};
-
 export const createActivationService = ({
   paths,
   profileStore,
+  targetRegistry = createTargetRegistry(),
   allowRealHomeWrites = false
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
   const previews = new Map<string, ActivationPreview>();
 
+  const statePathFor = (targetId: string) =>
+    join(paths.targetStatesDir, `${targetId}.json`);
+
+  const readTargetStateFile = async (targetId: string) => {
+    const path = statePathFor(targetId);
+    const content = await readTextIfExists(path);
+    if (content.trim().length === 0) {
+      return { path, content, state: DEFAULT_TARGET_STATE };
+    }
+
+    try {
+      return {
+        path,
+        content,
+        state: normalizeTargetState(JSON.parse(content))
+      };
+    } catch {
+      return {
+        path,
+        content,
+        state: DEFAULT_TARGET_STATE
+      };
+    }
+  };
+
+  const writeTargetState = async (targetId: string, state: TargetState) => {
+    await mkdir(paths.targetStatesDir, { recursive: true, mode: 0o700 });
+    await writeAtomic(statePathFor(targetId), `${JSON.stringify(state, null, 2)}\n`);
+  };
+
   const previewProfile = async (profileId: string): Promise<ActivationPreview> => {
     const profile = await profileStore.readProfile(profileId);
-    const preview = await createActivationPreview({ paths, profile });
+    const adapter = targetRegistry.get(profile.manifest.targetId);
+    const targetPaths = adapter.createTargetPaths({
+      homeDir: paths.homeDir,
+      fakeHomeRoot: paths.fakeHomeRoot
+    });
+    const stateFile = await readTargetStateFile(adapter.descriptor.id);
+    const targetPreview = await adapter.createPreview({
+      profile,
+      targetPaths,
+      state: stateFile.state
+    });
+    const preview: ActivationPreview = {
+      id: randomUUID(),
+      profileId: profile.id,
+      targetId: adapter.descriptor.id,
+      createdAt: new Date().toISOString(),
+      warnings: targetPreview.warnings,
+      errors: targetPreview.errors,
+      changes: targetPreview.changes,
+      liveFingerprints: {
+        ...targetPreview.liveFingerprints,
+        [stateFile.path]: hashText(stateFile.content)
+      },
+      targetState: targetPreview.targetState
+    };
     previews.set(preview.id, preview);
     return preview;
-  };
-
-  const findSkillCopyErrors = async (profileId: string): Promise<string[]> => {
-    const profile = await profileStore.readProfile(profileId);
-    const errors: string[] = [];
-
-    for (const ownedSkill of profile.skillsPolicy.ownedSkillDirs) {
-      const targetDir = join(paths.userSkillsDir, ownedSkill.targetName);
-      if ((await pathExists(targetDir)) && !(await isAgentEnvOwnedSkillDir(targetDir))) {
-        errors.push(
-          `Skill target already exists and is not AgentEnv-owned: ${targetDir}`
-        );
-      }
-    }
-
-    return errors;
-  };
-
-  const copyOwnedSkills = async (profileId: string) => {
-    const profile = await profileStore.readProfile(profileId);
-    const profileDir = profile.profileDir ?? join(paths.profilesDir, profile.id);
-
-    for (const ownedSkill of profile.skillsPolicy.ownedSkillDirs) {
-      const sourceDir = join(profileDir, ownedSkill.source);
-      const targetDir = join(paths.userSkillsDir, ownedSkill.targetName);
-
-      if (await isAgentEnvOwnedSkillDir(targetDir)) {
-        await rm(targetDir, { recursive: true, force: true });
-      }
-
-      await mkdir(dirname(targetDir), { recursive: true });
-      await cp(sourceDir, targetDir, { recursive: true });
-      await writeFile(
-        markerPathFor(targetDir),
-        `${JSON.stringify({ profileId, source: ownedSkill.source }, null, 2)}\n`,
-        "utf8"
-      );
-    }
   };
 
   const applyProfile = async (
@@ -186,14 +169,21 @@ export const createActivationService = ({
       return { ok: false, errors: preview.errors };
     }
 
-    const realCodexHome = resolve(homedir(), ".codex");
-    const realSkillsDir = resolve(homedir(), ".agents", "skills");
+    const profile = await profileStore.readProfile(profileId);
+    const adapter = targetRegistry.get(preview.targetId);
+    const targetPaths = adapter.createTargetPaths({
+      homeDir: paths.homeDir,
+      fakeHomeRoot: paths.fakeHomeRoot
+    });
     if (
       !allowRealHomeWrites &&
-      (resolve(paths.codexHome) === realCodexHome ||
-        resolve(paths.userSkillsDir) === realSkillsDir)
+      !adapter.descriptor.realWritesEnabled &&
+      resolve(paths.fakeHomeRoot) === resolve(paths.homeDir)
     ) {
-      return { ok: false, errors: ["Real Codex writes are disabled"] };
+      return {
+        ok: false,
+        errors: [`Real ${adapter.descriptor.name} writes are disabled`]
+      };
     }
 
     for (const [path, fingerprint] of Object.entries(preview.liveFingerprints)) {
@@ -203,23 +193,27 @@ export const createActivationService = ({
       }
     }
 
-    const skillErrors = await findSkillCopyErrors(profileId);
-    if (skillErrors.length > 0) {
-      return { ok: false, errors: skillErrors };
+    const assetErrors = await adapter.validateAssets({ profile, targetPaths });
+    if (assetErrors.length > 0) {
+      return { ok: false, errors: assetErrors };
     }
 
-    const backup = await backupStore.createBackup(
-      preview.changes.map((change) => change.path)
-    );
+    const statePath = statePathFor(preview.targetId);
+    const backup = await backupStore.createBackup([
+      ...preview.changes.map((change) => change.path),
+      statePath
+    ]);
 
     for (const change of preview.changes) {
       await writeAtomic(change.path, change.after);
     }
 
-    await copyOwnedSkills(profileId);
+    await adapter.applyAssets({ profile, targetPaths });
+    await writeTargetState(preview.targetId, preview.targetState);
     await appendHistory(paths, {
       type: "apply",
       profileId,
+      targetId: preview.targetId,
       previewId,
       backupId: backup.id
     });

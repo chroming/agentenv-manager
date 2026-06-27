@@ -1,13 +1,14 @@
 interface AgentsEditorProps {
+  label: string;
   value: string;
   onChange(value: string): void;
 }
 
-export const AgentsEditor = ({ value, onChange }: AgentsEditorProps) => (
+export const AgentsEditor = ({ label, value, onChange }: AgentsEditorProps) => (
   <label className="field-block">
-    <span>AGENTS.md</span>
+    <span>{label}</span>
     <textarea
-      aria-label="AGENTS.md"
+      aria-label={label}
       spellCheck={false}
       value={value}
       onChange={(event) => onChange(event.currentTarget.value)}

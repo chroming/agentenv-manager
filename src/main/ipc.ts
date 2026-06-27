@@ -4,11 +4,13 @@ import type { BackupStore } from "./backupStore";
 import type { ProfileStore } from "./profileStore";
 import { SafeIdSchema } from "../shared/schemas";
 import type { SaveProfileInput } from "../shared/types";
+import type { TargetRegistry } from "./targets/registry";
 
 export interface IpcServices {
   profileStore: ProfileStore;
   activationService: ActivationService;
   backupStore: BackupStore;
+  targetRegistry: TargetRegistry;
 }
 
 const parseId = (value: unknown, label: string): string => {
@@ -22,14 +24,19 @@ const parseId = (value: unknown, label: string): string => {
 export const registerIpcHandlers = ({
   profileStore,
   activationService,
-  backupStore
+  backupStore,
+  targetRegistry
 }: IpcServices) => {
+  ipcMain.handle("targets:list", () => targetRegistry.list());
   ipcMain.handle("profiles:list", () => profileStore.listProfiles());
   ipcMain.handle("profiles:read", (_event, id: unknown) =>
     profileStore.readProfile(parseId(id, "profile id"))
   );
   ipcMain.handle("profiles:save", (_event, input: SaveProfileInput) =>
     profileStore.saveProfile(input)
+  );
+  ipcMain.handle("profiles:create", (_event, targetId: unknown) =>
+    profileStore.createProfile(parseId(targetId, "target id"))
   );
   ipcMain.handle("activation:preview", (_event, profileId: unknown) =>
     activationService.previewProfile(parseId(profileId, "profile id"))

@@ -95,6 +95,29 @@ h2 {
   margin-bottom: 20px;
 }
 
+.target-picker {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.target-picker span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.target-picker select {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  padding: 0 10px;
+}
+
 .profile-list,
 .editor-grid,
 .diff-list,

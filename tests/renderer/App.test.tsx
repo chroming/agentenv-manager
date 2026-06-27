@@ -15,38 +15,60 @@ const profile: ProfileDetail = {
   profileDir: "/tmp/profiles/daily-coding",
   manifest: {
     id: "daily-coding",
+    targetId: "opencode",
     name: "Daily Coding",
     description: "Default",
     version: 1,
-    managed: { agents: true, mcp: true, skills: true }
+    managed: { instructions: true, config: true, assets: true }
   },
-  agentsMd: "# Agent\n",
-  mcpToml: '[mcp_servers.context7]\ncommand = "npx"\n',
-  skillsPolicy: {
-    ownedSkillDirs: [],
+  instructions: "# Agent\n",
+  configText: '{\n  "mcp": {}\n}\n',
+  assetPolicy: {
+    ownedDirs: [],
     disabledSkillPaths: []
   }
 };
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    listTargets: vi.fn().mockResolvedValue([
+      {
+        id: "opencode",
+        name: "OpenCode",
+        description: "Manage OpenCode.",
+        instructionsLabel: "AGENTS.md",
+        configLabel: "opencode.json",
+        configLanguage: "jsonc",
+        realWritesEnabled: true
+      }
+    ]),
     listProfiles: vi
       .fn()
-      .mockResolvedValue([{ id: "daily-coding", name: "Daily Coding", description: "Default" }]),
+      .mockResolvedValue([
+        {
+          id: "daily-coding",
+          targetId: "opencode",
+          name: "Daily Coding",
+          description: "Default"
+        }
+      ]),
     readProfile: vi.fn().mockResolvedValue(profile),
     saveProfile: vi.fn().mockImplementation(async (input) => ({
       ...profile,
       ...input,
       id: input.manifest.id
     })),
+    createProfile: vi.fn().mockResolvedValue(profile),
     previewApply: vi.fn().mockResolvedValue({
       id: "preview-1",
       profileId: "daily-coding",
+      targetId: "opencode",
       createdAt: "2026-06-30T00:00:00.000Z",
       warnings: [],
       errors: [],
       changes: [],
-      liveFingerprints: {}
+      liveFingerprints: {},
+      targetState: { managedConfigKeys: [], managedMcpNames: [] }
     }),
     applyProfile: vi.fn().mockResolvedValue({ ok: true, backupId: "backup-1" }),
     listBackups: vi.fn().mockResolvedValue([]),
@@ -83,9 +105,7 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Daily Coding/ }));
 
     expect(await screen.findByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
-    expect(screen.getByLabelText("MCP Servers")).toHaveValue(
-      '[mcp_servers.context7]\ncommand = "npx"\n'
-    );
+    expect(screen.getByLabelText("opencode.json")).toHaveValue('{\n  "mcp": {}\n}\n');
   });
 
   it("previews the selected profile before apply is enabled", async () => {

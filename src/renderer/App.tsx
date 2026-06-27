@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import type {
   ActivationPreview,
+  AssetPolicy,
   BackupSummary,
   ProfileDetail,
   ProfileSummary,
   SaveProfileInput,
-  SkillsPolicy
+  TargetDescriptor
 } from "../shared/types";
 import { ActivationPanel } from "./components/ActivationPanel";
 import { AgentsEditor } from "./components/AgentsEditor";
@@ -14,35 +15,23 @@ import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileSidebar } from "./components/ProfileSidebar";
 import { SkillsEditor } from "./components/SkillsEditor";
 
-const emptySkillsPolicy: SkillsPolicy = {
-  ownedSkillDirs: [],
+const emptyAssetPolicy: AssetPolicy = {
+  ownedDirs: [],
   disabledSkillPaths: []
 };
 
 const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   manifest: profile.manifest,
-  agentsMd: profile.agentsMd,
-  mcpToml: profile.mcpToml,
-  skillsPolicy: profile.skillsPolicy
-});
-
-const createDraftProfile = (id: string): ProfileDetail => ({
-  id,
-  manifest: {
-    id,
-    name: "New Profile",
-    description: "",
-    version: 1,
-    managed: { agents: true, mcp: true, skills: true }
-  },
-  agentsMd: "# Agent Instructions\n",
-  mcpToml: "",
-  skillsPolicy: emptySkillsPolicy
+  instructions: profile.instructions,
+  configText: profile.configText,
+  assetPolicy: profile.assetPolicy
 });
 
 export const App = () => {
+  const [targets, setTargets] = useState<TargetDescriptor[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [backups, setBackups] = useState<BackupSummary[]>([]);
+  const [selectedTargetId, setSelectedTargetId] = useState<string>();
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
@@ -51,12 +40,15 @@ export const App = () => {
   const [error, setError] = useState<string>();
 
   const refreshProfiles = async () => {
-    const [profileItems, backupItems] = await Promise.all([
+    const [targetItems, profileItems, backupItems] = await Promise.all([
+      window.agentEnv.listTargets(),
       window.agentEnv.listProfiles(),
       window.agentEnv.listBackups()
     ]);
+    setTargets(targetItems);
     setProfiles(profileItems);
     setBackups(backupItems);
+    setSelectedTargetId((current) => current ?? targetItems[0]?.id);
   };
 
   useEffect(() => {
@@ -106,13 +98,24 @@ export const App = () => {
   };
 
   const createProfile = async () => {
-    const id = `profile-${Date.now()}`;
-    const saved = await window.agentEnv.saveProfile(toSaveInput(createDraftProfile(id)));
+    const targetId = selectedTargetId ?? targets[0]?.id;
+    if (!targetId) {
+      setError("No target available");
+      return;
+    }
+    const saved = await window.agentEnv.createProfile(targetId);
     await refreshProfiles();
     setSelectedProfileId(saved.id);
     setDraftProfile(saved);
     setPreview(undefined);
   };
+
+  const selectedTarget = targets.find(
+    (target) => target.id === (draftProfile?.manifest.targetId ?? selectedTargetId)
+  );
+  const visibleProfiles = profiles.filter(
+    (profile) => !selectedTargetId || profile.targetId === selectedTargetId
+  );
 
   const previewSelectedProfile = async () => {
     setBusy(true);
@@ -156,9 +159,17 @@ export const App = () => {
   return (
     <main className="app-shell">
       <ProfileSidebar
-        profiles={profiles}
+        targets={targets}
+        profiles={visibleProfiles}
         selectedProfileId={selectedProfileId}
+        selectedTargetId={selectedTargetId}
         isLoading={isLoading}
+        onTargetSelect={(targetId) => {
+          setSelectedTargetId(targetId);
+          setSelectedProfileId(undefined);
+          setDraftProfile(undefined);
+          setPreview(undefined);
+        }}
         onSelect={selectProfile}
         onCreate={createProfile}
       />
@@ -169,7 +180,9 @@ export const App = () => {
           <>
             <header className="editor-header">
               <div>
-                <p className="eyebrow">Global Codex Environment</p>
+                <p className="eyebrow">
+                  {selectedTarget?.name ?? draftProfile.manifest.targetId} Environment
+                </p>
                 <h2>{draftProfile.manifest.name}</h2>
               </div>
               <button type="button" disabled={busy} onClick={saveDraft}>
@@ -178,23 +191,25 @@ export const App = () => {
             </header>
             <div className="editor-grid">
               <AgentsEditor
-                value={draftProfile.agentsMd}
-                onChange={(agentsMd) => {
-                  setDraftProfile({ ...draftProfile, agentsMd });
+                label={selectedTarget?.instructionsLabel ?? "Instructions"}
+                value={draftProfile.instructions}
+                onChange={(instructions) => {
+                  setDraftProfile({ ...draftProfile, instructions });
                   setPreview(undefined);
                 }}
               />
               <McpEditor
-                value={draftProfile.mcpToml}
-                onChange={(mcpToml) => {
-                  setDraftProfile({ ...draftProfile, mcpToml });
+                label={selectedTarget?.configLabel ?? "Config"}
+                value={draftProfile.configText}
+                onChange={(configText) => {
+                  setDraftProfile({ ...draftProfile, configText });
                   setPreview(undefined);
                 }}
               />
               <SkillsEditor
-                value={draftProfile.skillsPolicy}
-                onChange={(skillsPolicy) => {
-                  setDraftProfile({ ...draftProfile, skillsPolicy });
+                value={draftProfile.assetPolicy ?? emptyAssetPolicy}
+                onChange={(assetPolicy) => {
+                  setDraftProfile({ ...draftProfile, assetPolicy });
                   setPreview(undefined);
                 }}
               />

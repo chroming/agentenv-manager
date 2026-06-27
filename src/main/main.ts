@@ -6,6 +6,7 @@ import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
 import { seedDefaultProfiles } from "./seedProfiles";
+import { createTargetRegistry } from "./targets/registry";
 
 const createWindow = () => {
   const win = new BrowserWindow({
@@ -32,24 +33,25 @@ const createWindow = () => {
 const createServices = async () => {
   const appDataRoot =
     process.env.AGENTENV_DATA_ROOT ?? join(app.getPath("userData"), "data");
-  const fakeHomeRoot =
-    process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home");
   const paths = createPaths({
     appDataRoot,
-    codexHome: join(fakeHomeRoot, ".codex"),
-    userSkillsDir: join(fakeHomeRoot, ".agents", "skills")
+    fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });
+  const targetRegistry = createTargetRegistry();
   const profileStore = createProfileStore({
     appDataRoot: paths.appDataRoot,
-    codexHome: paths.codexHome,
-    userSkillsDir: paths.userSkillsDir
-  });
+    fakeHomeRoot: paths.fakeHomeRoot
+  }, targetRegistry);
   const backupStore = createBackupStore(paths);
-  const activationService = createActivationService({ paths, profileStore });
+  const activationService = createActivationService({
+    paths,
+    profileStore,
+    targetRegistry
+  });
 
-  await seedDefaultProfiles(paths);
+  await seedDefaultProfiles(paths, targetRegistry);
 
-  return { profileStore, backupStore, activationService };
+  return { profileStore, backupStore, activationService, targetRegistry };
 };
 
 void app.whenReady().then(() => {

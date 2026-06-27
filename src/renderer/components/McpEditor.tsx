@@ -1,13 +1,14 @@
 interface McpEditorProps {
+  label: string;
   value: string;
   onChange(value: string): void;
 }
 
-export const McpEditor = ({ value, onChange }: McpEditorProps) => (
+export const McpEditor = ({ label, value, onChange }: McpEditorProps) => (
   <label className="field-block">
-    <span>MCP Servers</span>
+    <span>{label}</span>
     <textarea
-      aria-label="MCP Servers"
+      aria-label={label}
       spellCheck={false}
       value={value}
       onChange={(event) => onChange(event.currentTarget.value)}

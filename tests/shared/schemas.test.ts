@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  ProfileManifestSchema,
-  SkillsPolicySchema
+  AssetPolicySchema,
+  ProfileManifestSchema
 } from "../../src/shared/schemas";
 
 describe("profile schemas", () => {
@@ -9,10 +9,11 @@ describe("profile schemas", () => {
     expect(
       ProfileManifestSchema.parse({
         id: "daily-coding",
+        targetId: "opencode",
         name: "Daily Coding",
         description: "Default coding environment.",
         version: 1,
-        managed: { agents: true, mcp: true, skills: true }
+        managed: { instructions: true, config: true, assets: true }
       }).id
     ).toBe("daily-coding");
   });
@@ -21,22 +22,27 @@ describe("profile schemas", () => {
     expect(() =>
       ProfileManifestSchema.parse({
         id: "../bad",
+        targetId: "opencode",
         name: "Bad",
         description: "",
         version: 1,
-        managed: { agents: true, mcp: true, skills: true }
+        managed: { instructions: true, config: true, assets: true }
       })
     ).toThrow();
   });
 
-  it("accepts explicit owned skill targets", () => {
+  it("accepts explicit owned asset targets", () => {
     expect(
-      SkillsPolicySchema.parse({
-        ownedSkillDirs: [
-          { source: "skills/example", targetName: "agentenv-daily-example" }
+      AssetPolicySchema.parse({
+        ownedDirs: [
+          {
+            kind: "skill",
+            source: "skills/example",
+            targetName: "agentenv-daily-example"
+          }
         ],
         disabledSkillPaths: ["/Users/example/.agents/skills/old/SKILL.md"]
-      }).ownedSkillDirs
+      }).ownedDirs
     ).toHaveLength(1);
   });
 });

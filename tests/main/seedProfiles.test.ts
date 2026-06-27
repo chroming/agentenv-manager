@@ -24,14 +24,14 @@ afterEach(async () => {
 });
 
 describe("seed profiles", () => {
-  it("creates daily-coding when no profiles exist", async () => {
+  it("creates opencode-daily-coding when no profiles exist", async () => {
     const paths = await makePaths();
 
     await seedDefaultProfiles(paths);
 
     await expect(
-      readFile(join(paths.profilesDir, "daily-coding", "profile.json"), "utf8")
-    ).resolves.toContain("Daily Coding");
+      readFile(join(paths.profilesDir, "opencode-daily-coding", "profile.json"), "utf8")
+    ).resolves.toContain("OpenCode Daily Coding");
   });
 
   it("does not overwrite existing profiles", async () => {
@@ -46,7 +46,7 @@ describe("seed profiles", () => {
       readFile(join(paths.profilesDir, "custom", "profile.json"), "utf8")
     ).resolves.toBe("{}");
     await expect(
-      readFile(join(paths.profilesDir, "daily-coding", "profile.json"), "utf8")
+      readFile(join(paths.profilesDir, "opencode-daily-coding", "profile.json"), "utf8")
     ).rejects.toThrow();
   });
 });

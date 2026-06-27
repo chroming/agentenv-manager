@@ -1,0 +1,169 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parse } from "jsonc-parser";
+import { afterEach, describe, expect, it } from "vitest";
+import { createOpenCodeTargetAdapter } from "../../../src/main/targets/opencodeTarget";
+import type { ProfileDetail, TargetState } from "../../../src/shared/types";
+
+let root = "";
+
+const makeProfile = (configText: string): ProfileDetail => ({
+  id: "daily-coding",
+  manifest: {
+    id: "daily-coding",
+    targetId: "opencode",
+    name: "Daily Coding",
+    description: "OpenCode profile",
+    version: 1,
+    managed: { instructions: true, config: true, assets: true }
+  },
+  instructions: "# OpenCode instructions\n",
+  configText,
+  assetPolicy: {
+    ownedDirs: [
+      { kind: "agent", source: "agents/reviewer", targetName: "reviewer" },
+      { kind: "skill", source: "skills/reviewer", targetName: "agentenv-reviewer" }
+    ],
+    disabledSkillPaths: []
+  }
+});
+
+afterEach(async () => {
+  if (root) {
+    await rm(root, { recursive: true, force: true });
+    root = "";
+  }
+});
+
+describe("OpenCode target adapter", () => {
+  it("plans instructions, JSONC overlay, and managed MCP state without clobbering unmanaged config", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.instructionsPath, "# Old instructions\n", "utf8");
+    await writeFile(
+      targetPaths.configPath,
+      [
+        "{",
+        "  // user preference",
+        '  "theme": "system",',
+        '  "permission": { "bash": "allow" },',
+        '  "mcp": {',
+        '    "old-managed": { "type": "local", "command": ["old"] },',
+        '    "unmanaged": { "type": "remote", "url": "https://example.com/mcp" }',
+        "  }",
+        "}",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const profile = makeProfile(
+      JSON.stringify(
+        {
+          permission: { bash: "ask" },
+          mcp: {
+            context7: {
+              type: "remote",
+              url: "https://mcp.context7.com/mcp"
+            }
+          }
+        },
+        null,
+        2
+      )
+    );
+    const state: TargetState = {
+      managedConfigKeys: ["permission"],
+      managedMcpNames: ["old-managed"]
+    };
+
+    const preview = await adapter.createPreview({ profile, targetPaths, state });
+
+    expect(preview.errors).toEqual([]);
+    const configChange = preview.changes.find((change) =>
+      change.path.endsWith("opencode.json")
+    );
+    expect(configChange).toBeDefined();
+    const parsed = parse(configChange?.after ?? "") as Record<string, unknown>;
+    expect(parsed).toMatchObject({
+      theme: "system",
+      permission: { bash: "ask" },
+      mcp: {
+        unmanaged: { type: "remote", url: "https://example.com/mcp" },
+        context7: { type: "remote", url: "https://mcp.context7.com/mcp" }
+      }
+    });
+    expect((parsed.mcp as Record<string, unknown>)["old-managed"]).toBeUndefined();
+    expect(preview.targetState).toEqual({
+      managedConfigKeys: ["permission"],
+      managedMcpNames: ["context7"]
+    });
+  });
+
+  it("reports unmanaged MCP name conflicts before apply", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(
+      targetPaths.configPath,
+      JSON.stringify({
+        mcp: {
+          context7: {
+            type: "remote",
+            url: "https://example.com/existing"
+          }
+        }
+      }),
+      "utf8"
+    );
+
+    const profile = makeProfile(
+      JSON.stringify({
+        mcp: {
+          context7: {
+            type: "remote",
+            url: "https://mcp.context7.com/mcp"
+          }
+        }
+      })
+    );
+
+    const preview = await adapter.createPreview({
+      profile,
+      targetPaths,
+      state: { managedConfigKeys: [], managedMcpNames: [] }
+    });
+
+    expect(preview.errors).toContain(
+      "MCP server context7 already exists outside AgentEnv management"
+    );
+  });
+
+  it("copies owned OpenCode agent and skill directories only after validating sources", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const profileDir = join(root, "profiles", "daily-coding");
+    await mkdir(join(profileDir, "agents", "reviewer"), { recursive: true });
+    await mkdir(join(profileDir, "skills", "reviewer"), { recursive: true });
+    await writeFile(join(profileDir, "agents", "reviewer", "AGENTS.md"), "# Agent\n");
+    await writeFile(join(profileDir, "skills", "reviewer", "SKILL.md"), "# Skill\n");
+    const profile = { ...makeProfile("{}"), profileDir };
+
+    const errors = await adapter.validateAssets({ profile, targetPaths });
+    expect(errors).toEqual([]);
+
+    await adapter.applyAssets({ profile, targetPaths });
+
+    await expect(
+      readFile(join(targetPaths.agentsDir ?? "", "reviewer", "AGENTS.md"), "utf8")
+    ).resolves.toBe("# Agent\n");
+    await expect(
+      readFile(join(targetPaths.skillsDir ?? "", "agentenv-reviewer", "SKILL.md"), "utf8")
+    ).resolves.toBe("# Skill\n");
+  });
+});
