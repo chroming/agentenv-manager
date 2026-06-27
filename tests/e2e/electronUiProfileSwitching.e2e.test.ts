@@ -6,6 +6,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   readlink,
   rm,
   writeFile
@@ -30,6 +31,21 @@ const fileExists = async (path: string) => {
 
 const writeJson = async (path: string, value: unknown) => {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+};
+
+const findProfileByName = async (appDataRoot: string, name: string) => {
+  const profileIds = await readdir(join(appDataRoot, "profiles"));
+  for (const profileId of profileIds) {
+    const content = await readFile(
+      join(appDataRoot, "profiles", profileId, "profile.json"),
+      "utf8"
+    );
+    const manifest = JSON.parse(content) as { id: string; name: string; description: string };
+    if (manifest.name === name) {
+      return manifest;
+    }
+  }
+  return undefined;
 };
 
 const writeOpenCodeProfile = async (
@@ -325,11 +341,17 @@ const selectProfile = async (page: Page, name: string) => {
   await page.getByRole("heading", { name }).waitFor({ state: "visible" });
 };
 
+const selectTarget = async (page: Page, name: string) => {
+  await page.getByRole("button", { name: "Select apply target" }).click();
+  await page.getByRole("menuitemradio", { name }).click();
+};
+
 const previewAndApply = async (page: Page, targetName: "OpenCode" | "Codex") => {
-  await page.getByRole("button", { name: /Preview changes|Preview again/ }).click();
-  await page.getByText("Ready to apply").waitFor({ state: "visible" });
   await page.getByRole("button", { name: `Apply to ${targetName}` }).click();
-  await page.getByText("Preview required").waitFor({ state: "visible" });
+  const previewDialog = page.getByRole("dialog", { name: "Preview" });
+  await previewDialog.waitFor({ state: "visible" });
+  await previewDialog.getByRole("button", { name: "Confirm" }).click();
+  await previewDialog.waitFor({ state: "hidden" });
 };
 
 afterEach(async () => {
@@ -374,7 +396,67 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("button", { name: "Import from GitHub" }).isEnabled()).toBe(true);
 
     await selectProfile(page, "UI OpenCode alpha");
-    expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(1);
+    expect(await page.getByRole("button", { name: "Apply to OpenCode" }).count()).toBe(1);
+    expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
+  }, 30_000);
+
+  it("creates, edits, duplicates, and deletes profiles through the rendered app", async () => {
+    const { appDataRoot, page } = await launchApp();
+
+    await page.getByRole("button", { name: "Profiles" }).click();
+    await page.getByRole("button", { name: "Apply to OpenCode" }).waitFor({
+      state: "visible",
+      timeout: 10_000
+    });
+    await page.getByRole("button", { name: "Create profile" }).click({ timeout: 5_000 });
+    const createDialog = page.getByRole("dialog", { name: "New profile" });
+    await createDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await createDialog.getByLabel("Profile name").fill("Docs Writing");
+    await createDialog.getByLabel("Description").fill("Writing workspace");
+    await createDialog.getByRole("button", { name: "Create" }).click();
+    await page.getByRole("heading", { name: "Docs Writing" }).waitFor({
+      state: "visible",
+      timeout: 10_000
+    });
+    expect(await findProfileByName(appDataRoot, "Docs Writing")).toMatchObject({
+      name: "Docs Writing",
+      description: "Writing workspace"
+    });
+
+    await page.getByRole("button", { name: "Edit profile details" }).click({ timeout: 5_000 });
+    const editDialog = page.getByRole("dialog", { name: "Edit profile" });
+    await editDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await editDialog.getByLabel("Profile name").fill("Docs Writing v2");
+    await editDialog.getByLabel("Description").fill("Updated writing workspace");
+    await editDialog.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({
+      state: "visible",
+      timeout: 10_000
+    });
+    expect(await findProfileByName(appDataRoot, "Docs Writing v2")).toMatchObject({
+      name: "Docs Writing v2",
+      description: "Updated writing workspace"
+    });
+
+    await page.getByRole("button", { name: "More profile actions" }).click({ timeout: 5_000 });
+    await page.getByRole("menuitem", { name: "Duplicate profile" }).click({ timeout: 5_000 });
+    await page.getByRole("heading", { name: "Docs Writing v2 Copy" }).waitFor({
+      state: "visible",
+      timeout: 10_000
+    });
+    const duplicate = await findProfileByName(appDataRoot, "Docs Writing v2 Copy");
+    expect(duplicate).toMatchObject({ name: "Docs Writing v2 Copy" });
+
+    await page.getByRole("button", { name: "More profile actions" }).click({ timeout: 5_000 });
+    await page.getByRole("menuitem", { name: "Delete profile" }).click({ timeout: 5_000 });
+    const deleteDialog = page.getByRole("dialog", { name: "Delete profile" });
+    await deleteDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await deleteDialog.getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({
+      state: "visible",
+      timeout: 10_000
+    });
+    expect(await findProfileByName(appDataRoot, "Docs Writing v2 Copy")).toBeUndefined();
   }, 30_000);
 
   it("imports an existing target skill into the shared library", async () => {
@@ -655,7 +737,8 @@ describe("Electron UI profile switching e2e", () => {
     await newSkill.getByLabel("Target name").fill("target-only-reviewer");
     await page.getByRole("button", { name: "Save" }).click();
 
-    await page.getByRole("button", { name: /Preview changes|Preview again/ }).click();
+    await page.getByRole("button", { name: "Apply to OpenCode" }).click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await page
       .getByText(`skill target already exists and is not AgentEnv-owned: ${join(
         opencodeDir,
@@ -663,7 +746,7 @@ describe("Electron UI profile switching e2e", () => {
         "target-only-reviewer"
       )}`)
       .waitFor({ state: "visible" });
-    expect(await page.getByRole("button", { name: "Apply to OpenCode" }).isDisabled()).toBe(true);
+    expect(await previewDialog.getByRole("button", { name: "Confirm" }).isDisabled()).toBe(true);
   }, 30_000);
 
   it("imports and updates a GitHub-backed skill through the rendered app", async () => {
@@ -717,7 +800,7 @@ describe("Electron UI profile switching e2e", () => {
     const { codexDir, page } = await launchApp();
 
     await page.getByRole("button", { name: "Profiles" }).click();
-    await page.locator(".profile-target-filter select").selectOption({ label: "Codex" });
+    await selectTarget(page, "Codex");
     await selectProfile(page, "UI Codex alpha");
     await page.getByRole("tab", { name: "Resources" }).click();
     await page.getByRole("button", { name: "Advanced" }).click();
@@ -812,7 +895,7 @@ describe("Electron UI profile switching e2e", () => {
       "https://example.com/shared-docs/mcp"
     );
 
-    await page.locator(".profile-target-filter select").selectOption({ label: "Codex" });
+    await selectTarget(page, "Codex");
     await selectProfile(page, "UI Codex alpha");
     await previewAndApply(page, "Codex");
     await expect(readFile(join(codexDir, "config.toml"), "utf8")).resolves.toContain(
@@ -827,8 +910,6 @@ describe("Electron UI profile switching e2e", () => {
     const { opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByTitle(opencodeDir, { exact: true }).first().waitFor({ state: "attached" });
-    expect(await page.getByTitle(opencodeDir, { exact: true }).count()).toBeGreaterThan(0);
     await previewAndApply(page, "OpenCode");
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain(
       "Active UI profile: alpha"
@@ -855,7 +936,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: /Preview rollback/ }).first().click();
     await page.getByRole("button", { name: "Restore backup" }).waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Restore backup" }).click();
-    await page.getByText("Preview required").waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Restore backup" }).waitFor({ state: "hidden" });
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain(
       "Active UI profile: alpha"
     );
@@ -868,9 +949,8 @@ describe("Electron UI profile switching e2e", () => {
     const { codexDir, homeDir, page } = await launchApp();
 
     await page.getByRole("button", { name: "Profiles" }).click();
-    await page.locator(".profile-target-filter select").selectOption({ label: "Codex" });
+    await selectTarget(page, "Codex");
     await selectProfile(page, "UI Codex alpha");
-    expect(await page.getByTitle(codexDir, { exact: true }).count()).toBeGreaterThan(0);
     await previewAndApply(page, "Codex");
     await expect(readFile(join(codexDir, "AGENTS.md"), "utf8")).resolves.toContain(
       "Active Codex UI profile: alpha"

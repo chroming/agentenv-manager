@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -73,5 +73,38 @@ describe("profile store", () => {
     const store = createProfileStore({ appDataRoot: root });
 
     await expect(store.readProfile("../bad")).rejects.toThrow("Invalid profile id");
+  });
+
+  it("duplicates a profile including profile-owned files", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-"));
+    await writeProfile(root);
+    await mkdir(join(root, "profiles", "daily-coding", "skills", "reviewer"), {
+      recursive: true
+    });
+    await writeFile(
+      join(root, "profiles", "daily-coding", "skills", "reviewer", "SKILL.md"),
+      "# Reviewer\n"
+    );
+
+    const store = createProfileStore({ appDataRoot: root });
+    const duplicate = await store.duplicateProfile("daily-coding");
+
+    expect(duplicate.id).not.toBe("daily-coding");
+    expect(duplicate.manifest.name).toBe("Daily Coding Copy");
+    await expect(
+      readFile(join(duplicate.profileDir ?? "", "skills", "reviewer", "SKILL.md"), "utf8")
+    ).resolves.toBe("# Reviewer\n");
+    await expect(store.listProfiles()).resolves.toHaveLength(2);
+  });
+
+  it("deletes a profile directory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-"));
+    await writeProfile(root);
+
+    const store = createProfileStore({ appDataRoot: root });
+    await store.deleteProfile("daily-coding");
+
+    await expect(store.listProfiles()).resolves.toEqual([]);
+    await expect(store.readProfile("daily-coding")).rejects.toThrow();
   });
 });

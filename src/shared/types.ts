@@ -28,7 +28,9 @@ export interface AgentEnvApi {
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
-  createProfile(targetId: string): Promise<ProfileDetail>;
+  createProfile(input: CreateProfileInput): Promise<ProfileDetail>;
+  duplicateProfile(id: string): Promise<ProfileDetail>;
+  deleteProfile(id: string): Promise<void>;
   previewApply(profileId: string): Promise<ActivationPreview>;
   applyProfile(profileId: string, previewId: string): Promise<ApplyResult>;
   listBackups(): Promise<BackupSummary[]>;
@@ -134,6 +136,12 @@ export interface AgentEnvSettings {
   skillStorageLocation: SkillStorageLocation;
   skillAutoCheckEnabled: boolean;
   skillAutoCheckIntervalMinutes: number;
+}
+
+export interface CreateProfileInput {
+  targetId: string;
+  name?: string;
+  description?: string;
 }
 
 export interface TargetDescriptor {

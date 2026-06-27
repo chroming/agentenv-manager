@@ -21,7 +21,9 @@ const api: AgentEnvApi = {
   listProfiles: () => ipcRenderer.invoke("profiles:list"),
   readProfile: (id) => ipcRenderer.invoke("profiles:read", id),
   saveProfile: (input) => ipcRenderer.invoke("profiles:save", input),
-  createProfile: (targetId) => ipcRenderer.invoke("profiles:create", targetId),
+  createProfile: (input) => ipcRenderer.invoke("profiles:create", input),
+  duplicateProfile: (id) => ipcRenderer.invoke("profiles:duplicate", id),
+  deleteProfile: (id) => ipcRenderer.invoke("profiles:delete", id),
   previewApply: (profileId) => ipcRenderer.invoke("activation:preview", profileId),
   applyProfile: (profileId, previewId) =>
     ipcRenderer.invoke("activation:apply", profileId, previewId),

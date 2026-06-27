@@ -210,7 +210,27 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       ...input,
       id: input.manifest.id
     })),
-    createProfile: vi.fn().mockResolvedValue(profile),
+    createProfile: vi.fn().mockImplementation(async (input) => ({
+      ...profile,
+      id: `${input.targetId}-created`,
+      manifest: {
+        ...profile.manifest,
+        id: `${input.targetId}-created`,
+        targetId: input.targetId,
+        name: input.name ?? "New profile",
+        description: input.description ?? ""
+      }
+    })),
+    duplicateProfile: vi.fn().mockResolvedValue({
+      ...profile,
+      id: "daily-coding-copy",
+      manifest: {
+        ...profile.manifest,
+        id: "daily-coding-copy",
+        name: "Daily Coding Copy"
+      }
+    }),
+    deleteProfile: vi.fn().mockResolvedValue(undefined),
     previewApply: vi.fn().mockResolvedValue(preview),
     applyProfile: vi.fn().mockResolvedValue({ ok: true, backupId: "backup-1" }),
     listBackups: vi.fn().mockResolvedValue([]),
@@ -244,23 +264,22 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    expect(await screen.findByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
+    expect(await screen.findByRole("region", { name: "Profile overview" })).toBeInTheDocument();
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
-    const readiness = screen.getByRole("region", { name: "Target readiness" });
-    expect(within(readiness).getByText("Ready")).toBeInTheDocument();
-    expect(
-      within(readiness).getByText("/tmp/home/.config/opencode")
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply to OpenCode" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Target readiness" })).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Resources" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Skills" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Skill Library" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Skills" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Assets" })).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Instructions" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
       "true"
     );
 
+    fireEvent.click(screen.getByRole("tab", { name: "Instructions" }));
+    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
     fireEvent.click(screen.getByRole("tab", { name: "Config" }));
     expect(screen.getByLabelText("opencode.json")).toHaveValue('{\n  "mcp": {}\n}\n');
   });
@@ -395,17 +414,76 @@ describe("App", () => {
 
     await openProfiles();
     const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
-    expect(applyButton).toBeDisabled();
-    expect(screen.getByText("Preview required")).toBeInTheDocument();
+    expect(applyButton).toBeEnabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview changes" }));
+    fireEvent.click(applyButton);
 
     await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding"));
-    expect(screen.getByText("Ready to apply")).toBeInTheDocument();
-    expect(screen.getByText("2 files will change")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Preview again" })).toBeEnabled();
-    expect(screen.getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
-    expect(applyButton).toBeEnabled();
+    const previewDialog = screen.getByRole("dialog", { name: "Preview" });
+    expect(within(previewDialog).getByText("2 files in this diff")).toBeInTheDocument();
+    expect(within(previewDialog).getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
+    expect(within(previewDialog).getByRole("button", { name: "Confirm" })).toBeEnabled();
+
+    fireEvent.click(within(previewDialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Preview" })).not.toBeInTheDocument();
+  });
+
+  it("creates, edits, duplicates, and deletes profiles from the profile workspace", async () => {
+    const api = installApi();
+    render(<App />);
+
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit profile details" }));
+    const editDialog = screen.getByRole("dialog", { name: "Edit profile" });
+    fireEvent.change(within(editDialog).getByLabelText("Profile name"), {
+      target: { value: "Review Focus" }
+    });
+    fireEvent.change(within(editDialog).getByLabelText("Description"), {
+      target: { value: "Review and quality checks" }
+    });
+    fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(api.saveProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          manifest: expect.objectContaining({
+            id: "daily-coding",
+            name: "Review Focus",
+            description: "Review and quality checks"
+          })
+        })
+      )
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "More profile actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate profile" }));
+    await waitFor(() => expect(api.duplicateProfile).toHaveBeenCalledWith("daily-coding"));
+
+    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    const createDialog = screen.getByRole("dialog", { name: "New profile" });
+    fireEvent.change(within(createDialog).getByLabelText("Profile name"), {
+      target: { value: "Docs Writing" }
+    });
+    fireEvent.change(within(createDialog).getByLabelText("Description"), {
+      target: { value: "Writing setup" }
+    });
+    fireEvent.click(within(createDialog).getByRole("button", { name: "Create" }));
+
+    await waitFor(() =>
+      expect(api.createProfile).toHaveBeenCalledWith({
+        targetId: "opencode",
+        name: "Docs Writing",
+        description: "Writing setup"
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "More profile actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete profile" }));
+    const deleteDialog = screen.getByRole("dialog", { name: "Delete profile" });
+    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(api.deleteProfile).toHaveBeenCalledWith("opencode-created"));
   });
 
   it("keeps apply disabled when target discovery says writes are blocked", async () => {
@@ -429,14 +507,11 @@ describe("App", () => {
     await openProfiles();
     const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview changes" }));
+    fireEvent.click(applyButton);
 
     await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding"));
-    const readiness = screen.getByRole("region", { name: "Target readiness" });
-    expect(within(readiness).getByText("Fix target access before applying.")).toBeInTheDocument();
-    expect(screen.getByText("Cannot apply yet")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Preview again" })).toBeEnabled();
-    expect(applyButton).toBeDisabled();
+    const previewDialog = screen.getByRole("dialog", { name: "Preview" });
+    expect(within(previewDialog).getByRole("button", { name: "Confirm" })).toBeDisabled();
   });
 
   it("previews and restores a backup from history", async () => {
@@ -460,6 +535,6 @@ describe("App", () => {
     fireEvent.click(within(history).getByRole("button", { name: "Restore backup" }));
 
     await waitFor(() => expect(api.rollback).toHaveBeenCalledWith(backup.id));
-    expect(screen.getByText("Preview required")).toBeInTheDocument();
+    expect(screen.queryByText("Rollback preview")).not.toBeInTheDocument();
   });
 });

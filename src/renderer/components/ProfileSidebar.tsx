@@ -215,7 +215,12 @@ export const ProfileSidebar = ({
           })}
         </div>
       </section>
-      <button className="create-button sidebar-action" type="button" onClick={onCreate}>
+      <button
+        aria-label="Create profile"
+        className="create-button sidebar-action"
+        type="button"
+        onClick={onCreate}
+      >
         New profile
       </button>
     </aside>

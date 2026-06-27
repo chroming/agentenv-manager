@@ -8,6 +8,7 @@ import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import { SafeIdSchema } from "../shared/schemas";
 import type {
+  CreateProfileInput,
   GitHubSkillImportInput,
   ManageTargetSkillInput,
   SaveMcpServerInput,
@@ -105,8 +106,16 @@ export const registerIpcHandlers = ({
   ipcMain.handle("profiles:save", (_event, input: SaveProfileInput) =>
     profileStore.saveProfile(input)
   );
-  ipcMain.handle("profiles:create", (_event, targetId: unknown) =>
-    profileStore.createProfile(parseId(targetId, "target id"))
+  ipcMain.handle("profiles:create", (_event, input: CreateProfileInput | string) =>
+    profileStore.createProfile(
+      typeof input === "string" ? { targetId: parseId(input, "target id") } : input
+    )
+  );
+  ipcMain.handle("profiles:duplicate", (_event, id: unknown) =>
+    profileStore.duplicateProfile(parseId(id, "profile id"))
+  );
+  ipcMain.handle("profiles:delete", (_event, id: unknown) =>
+    profileStore.deleteProfile(parseId(id, "profile id"))
   );
   ipcMain.handle("activation:preview", (_event, profileId: unknown) =>
     activationService.previewProfile(parseId(profileId, "profile id"))
