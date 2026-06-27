@@ -8,7 +8,8 @@ import {
   stat,
   writeFile
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import {
   createActivationPreview,
   hashText
@@ -29,6 +30,7 @@ import type {
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
   profileStore: ProfileStore;
+  allowRealHomeWrites?: boolean;
 }
 
 export interface ActivationService {
@@ -121,7 +123,8 @@ const pathExists = async (path: string) => {
 
 export const createActivationService = ({
   paths,
-  profileStore
+  profileStore,
+  allowRealHomeWrites = false
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
   const previews = new Map<string, ActivationPreview>();
@@ -181,6 +184,16 @@ export const createActivationService = ({
     }
     if (preview.errors.length > 0) {
       return { ok: false, errors: preview.errors };
+    }
+
+    const realCodexHome = resolve(homedir(), ".codex");
+    const realSkillsDir = resolve(homedir(), ".agents", "skills");
+    if (
+      !allowRealHomeWrites &&
+      (resolve(paths.codexHome) === realCodexHome ||
+        resolve(paths.userSkillsDir) === realSkillsDir)
+    ) {
+      return { ok: false, errors: ["Real Codex writes are disabled"] };
     }
 
     for (const [path, fingerprint] of Object.entries(preview.liveFingerprints)) {

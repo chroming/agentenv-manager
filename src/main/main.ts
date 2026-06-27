@@ -5,6 +5,7 @@ import { createBackupStore } from "./backupStore";
 import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
+import { seedDefaultProfiles } from "./seedProfiles";
 
 const createWindow = () => {
   const win = new BrowserWindow({
@@ -28,7 +29,7 @@ const createWindow = () => {
   }
 };
 
-const createServices = () => {
+const createServices = async () => {
   const appDataRoot =
     process.env.AGENTENV_DATA_ROOT ?? join(app.getPath("userData"), "data");
   const fakeHomeRoot =
@@ -46,12 +47,16 @@ const createServices = () => {
   const backupStore = createBackupStore(paths);
   const activationService = createActivationService({ paths, profileStore });
 
+  await seedDefaultProfiles(paths);
+
   return { profileStore, backupStore, activationService };
 };
 
 void app.whenReady().then(() => {
-  registerIpcHandlers(createServices());
-  createWindow();
+  void createServices().then((services) => {
+    registerIpcHandlers(services);
+    createWindow();
+  });
 });
 
 app.on("activate", () => {

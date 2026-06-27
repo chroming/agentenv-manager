@@ -5,6 +5,7 @@ import {
   rm,
   writeFile
 } from "node:fs/promises";
+import { homedir } from "node:os";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -162,5 +163,34 @@ describe("activation service", () => {
     await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe(
       "# Old agents\n"
     );
+  });
+
+  it("refuses real Codex home writes by default", async () => {
+    const { paths } = await makeEnv();
+    const guardedPaths = createPaths({
+      appDataRoot: paths.appDataRoot,
+      codexHome: join(homedir(), ".codex"),
+      userSkillsDir: paths.userSkillsDir,
+      globalAgentsPath: paths.globalAgentsPath,
+      codexConfigPath: paths.codexConfigPath
+    });
+    const guardedProfileStore = createProfileStore({
+      appDataRoot: guardedPaths.appDataRoot,
+      codexHome: guardedPaths.codexHome,
+      userSkillsDir: guardedPaths.userSkillsDir
+    });
+    const guardedService = createActivationService({
+      paths: guardedPaths,
+      profileStore: guardedProfileStore
+    });
+    await writeFile(guardedPaths.globalAgentsPath, "# Old agents\n");
+
+    const preview = await guardedService.previewProfile("daily-coding");
+    const result = await guardedService.applyProfile("daily-coding", preview.id);
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Real Codex writes are disabled"]
+    });
   });
 });
