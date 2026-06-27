@@ -98,7 +98,9 @@ type GitHubContentItem = GitHubContentFile | GitHubContentDir;
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   skillSyncMethod: "symlink",
-  skillStorageLocation: "appData"
+  skillStorageLocation: "appData",
+  skillAutoCheckEnabled: true,
+  skillAutoCheckIntervalMinutes: 60
 };
 
 const isMissingFileError = (error: unknown) =>

@@ -22,17 +22,23 @@ describe("settings store", () => {
 
     expect(await store.readSettings()).toEqual({
       skillSyncMethod: "symlink",
-      skillStorageLocation: "appData"
+      skillStorageLocation: "appData",
+      skillAutoCheckEnabled: true,
+      skillAutoCheckIntervalMinutes: 60
     });
 
     await store.updateSettings({
       skillSyncMethod: "copy",
-      skillStorageLocation: "agents"
+      skillStorageLocation: "agents",
+      skillAutoCheckEnabled: false,
+      skillAutoCheckIntervalMinutes: 120
     });
 
     expect(await store.readSettings()).toEqual({
       skillSyncMethod: "copy",
-      skillStorageLocation: "agents"
+      skillStorageLocation: "agents",
+      skillAutoCheckEnabled: false,
+      skillAutoCheckIntervalMinutes: 120
     });
     expect(resolveSkillsLibraryDir(paths, await store.readSettings())).toBe(
       join(root, "home", ".agents", "skills")

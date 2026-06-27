@@ -181,6 +181,36 @@ const writeLibrarySkill = async (appDataRoot: string) => {
   return { libraryDir, sourceDir };
 };
 
+const writeTrackedLibrarySkill = async (
+  appDataRoot: string,
+  id: string,
+  currentDescription: string,
+  nextDescription: string
+) => {
+  const sourceDir = join(appDataRoot, "source-skills", id);
+  const libraryDir = join(appDataRoot, "skills-library", id);
+  await mkdir(sourceDir, { recursive: true });
+  await mkdir(libraryDir, { recursive: true });
+  await writeFile(
+    join(libraryDir, "SKILL.md"),
+    `---\nname: ${id}\ndescription: ${currentDescription}\n---\n\n# ${id}\n\nCurrent content.\n`,
+    "utf8"
+  );
+  await writeFile(
+    join(sourceDir, "SKILL.md"),
+    `---\nname: ${id}\ndescription: ${nextDescription}\n---\n\n# ${id}\n\nUpdated content.\n`,
+    "utf8"
+  );
+  await writeJson(join(libraryDir, ".agentenv-skill.json"), {
+    sourceType: "local",
+    source: sourceDir,
+    contentHash: "seed",
+    updatedAt: "2026-07-02T00:00:00.000Z"
+  });
+
+  return { libraryDir, sourceDir };
+};
+
 const writeGitHubFixtureSkill = async (fixtureRoot: string, version: "v1" | "v2") => {
   const skillDir = join(fixtureRoot, "acme", "agent-skills", "main", "skills", "reviewer");
   await mkdir(join(skillDir, "references"), { recursive: true });
@@ -461,6 +491,49 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, 30_000);
 
+  it("updates all available library skill updates from the rendered app", async () => {
+    const { appDataRoot, librarySkill, page } = await launchApp();
+    const helperSkill = await writeTrackedLibrarySkill(
+      appDataRoot,
+      "batch-helper",
+      "Batch helper v1.",
+      "Batch helper v2."
+    );
+
+    await writeFile(
+      join(librarySkill.sourceDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Batch shared v2.\n---\n\n# Shared Reviewer\n\nBatch updated shared content.\n",
+      "utf8"
+    );
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByText("Update available")
+      .waitFor({ state: "visible" });
+    await page
+      .getByRole("group", { name: "Library item batch-helper" })
+      .getByText("Update available")
+      .waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: "Update all skills" }).click();
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByText("Batch shared v2.")
+      .waitFor({ state: "visible" });
+    await page
+      .getByRole("group", { name: "Library item batch-helper" })
+      .getByText("Batch helper v2.")
+      .waitFor({ state: "visible" });
+
+    await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "Batch updated shared content."
+    );
+    await expect(readFile(join(helperSkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "Updated content."
+    );
+  }, 30_000);
+
   it("installs library skills using copy mode from Settings", async () => {
     const { opencodeDir, page } = await launchApp();
 
@@ -502,6 +575,26 @@ describe("Electron UI profile switching e2e", () => {
 
     const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
     await expect(readlink(installedSkillMd)).resolves.toBe(movedSkillMd);
+  }, 30_000);
+
+  it("persists skill background update check settings from Settings", async () => {
+    const { appDataRoot, page } = await launchApp();
+
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByLabel("Skill auto update check").selectOption("disabled");
+    await expect
+      .poll(() => page.getByLabel("Skill auto update check").inputValue())
+      .toBe("disabled");
+    await page.getByLabel("Skill auto update check").selectOption("enabled");
+    await page.getByLabel("Skill auto check interval minutes").fill("15");
+    await expect
+      .poll(async () =>
+        JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8"))
+      )
+      .toMatchObject({
+        skillAutoCheckEnabled: true,
+        skillAutoCheckIntervalMinutes: 15
+      });
   }, 30_000);
 
   it("adds and removes a profile-owned skill from the rendered Resources editor", async () => {

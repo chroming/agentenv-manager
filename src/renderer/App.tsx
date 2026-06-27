@@ -231,7 +231,9 @@ export const App = () => {
   const [selectedSkillUpdatePlan, setSelectedSkillUpdatePlan] = useState<SkillUpdatePlan>();
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
     skillSyncMethod: "symlink",
-    skillStorageLocation: "appData"
+    skillStorageLocation: "appData",
+    skillAutoCheckEnabled: true,
+    skillAutoCheckIntervalMinutes: 60
   });
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
   const [mcpUsage, setMcpUsage] = useState<Record<string, string[]>>({});
@@ -332,6 +334,22 @@ export const App = () => {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (isLoading || !skillSettings.skillAutoCheckEnabled) {
+      return undefined;
+    }
+
+    const intervalMs =
+      Math.max(5, skillSettings.skillAutoCheckIntervalMinutes) * 60 * 1000;
+    const timer = window.setInterval(() => {
+      refreshProfiles().catch((unknownError) => {
+        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      });
+    }, intervalMs);
+
+    return () => window.clearInterval(timer);
+  }, [isLoading, skillSettings.skillAutoCheckEnabled, skillSettings.skillAutoCheckIntervalMinutes]);
 
   const selectProfile = async (profileId: string) => {
     setBusy(true);
@@ -508,6 +526,38 @@ export const App = () => {
       await window.agentEnv.updateLibrarySkill(id);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateAllLibrarySkills = async (ids: string[]) => {
+    if (ids.length === 0) {
+      return;
+    }
+
+    setBusy(true);
+    setError(undefined);
+    try {
+      const results = await Promise.allSettled(
+        ids.map((id) => window.agentEnv.updateLibrarySkill(id))
+      );
+      const failures = results.filter((result): result is PromiseRejectedResult =>
+        result.status === "rejected"
+      );
+      setSelectedSkillUpdatePlan(undefined);
+      await refreshProfiles();
+      if (failures.length > 0) {
+        setError(
+          failures
+            .map((failure) =>
+              failure.reason instanceof Error ? failure.reason.message : String(failure.reason)
+            )
+            .join("\n")
+        );
+      }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -776,6 +826,7 @@ export const App = () => {
                 onSetUpdateSource={setSkillUpdateSource}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onUpdateLibrarySkill={updateLibrarySkill}
+                onUpdateAllLibrarySkills={updateAllLibrarySkills}
                 onCheckUpdates={checkSkillUpdates}
               />
             ) : (
@@ -1062,6 +1113,37 @@ export const App = () => {
                     <option value="appData">App data</option>
                     <option value="agents">~/.agents/skills</option>
                   </select>
+                </label>
+                <label>
+                  <span>Auto-check</span>
+                  <select
+                    aria-label="Skill auto update check"
+                    value={skillSettings.skillAutoCheckEnabled ? "enabled" : "disabled"}
+                    onChange={(event) =>
+                      updateSkillSettings({
+                        skillAutoCheckEnabled: event.currentTarget.value === "enabled"
+                      })
+                    }
+                  >
+                    <option value="enabled">Enabled</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Check interval</span>
+                  <input
+                    aria-label="Skill auto check interval minutes"
+                    min={5}
+                    max={1440}
+                    step={5}
+                    type="number"
+                    value={skillSettings.skillAutoCheckIntervalMinutes}
+                    onChange={(event) =>
+                      updateSkillSettings({
+                        skillAutoCheckIntervalMinutes: Number(event.currentTarget.value)
+                      })
+                    }
+                  />
                 </label>
               </div>
             </section>

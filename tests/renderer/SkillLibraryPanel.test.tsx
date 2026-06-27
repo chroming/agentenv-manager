@@ -13,6 +13,7 @@ describe("SkillLibraryPanel", () => {
     const onImportGitHubSkill = vi.fn();
     const onPreviewLibrarySkillUpdate = vi.fn();
     const onUpdateLibrarySkill = vi.fn();
+    const onUpdateAllLibrarySkills = vi.fn();
     const onCheckUpdates = vi.fn();
     const onSetUpdateSource = vi.fn();
     const onManageTargetSkill = vi.fn();
@@ -80,6 +81,21 @@ describe("SkillLibraryPanel", () => {
             currentRevision: "revision-1",
             latestRevision: "revision-2",
             updateAvailable: true
+          },
+          {
+            id: "shared-reviewer",
+            name: "Shared Reviewer",
+            sourceType: "local",
+            currentRevision: "abc123",
+            latestRevision: "abc124",
+            updateAvailable: true
+          },
+          {
+            id: "broken-reviewer",
+            name: "Broken Reviewer",
+            sourceType: "github",
+            updateAvailable: false,
+            error: "Network failed"
           }
         ]}
         selectedUpdatePlan={{
@@ -107,6 +123,7 @@ describe("SkillLibraryPanel", () => {
         onImportGitHubSkill={onImportGitHubSkill}
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
         onUpdateLibrarySkill={onUpdateLibrarySkill}
+        onUpdateAllLibrarySkills={onUpdateAllLibrarySkills}
         onCheckUpdates={onCheckUpdates}
         onSetUpdateSource={onSetUpdateSource}
         onManageTargetSkill={onManageTargetSkill}
@@ -128,6 +145,8 @@ describe("SkillLibraryPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Update all skills" }));
+    expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith(["github-reviewer", "shared-reviewer"]);
 
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));

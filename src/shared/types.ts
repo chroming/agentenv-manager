@@ -132,6 +132,8 @@ export interface SaveMcpServerInput {
 export interface AgentEnvSettings {
   skillSyncMethod: SkillSyncMethod;
   skillStorageLocation: SkillStorageLocation;
+  skillAutoCheckEnabled: boolean;
+  skillAutoCheckIntervalMinutes: number;
 }
 
 export interface TargetDescriptor {

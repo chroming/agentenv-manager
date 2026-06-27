@@ -5,7 +5,8 @@ import {
   render,
   screen,
   waitFor,
-  within
+  within,
+  act
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../src/renderer/App";
@@ -183,11 +184,15 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     }),
     readSettings: vi.fn().mockResolvedValue({
       skillSyncMethod: "symlink",
-      skillStorageLocation: "appData"
+      skillStorageLocation: "appData",
+      skillAutoCheckEnabled: true,
+      skillAutoCheckIntervalMinutes: 60
     }),
     updateSettings: vi.fn().mockImplementation(async (input) => ({
       skillSyncMethod: input.skillSyncMethod ?? "symlink",
-      skillStorageLocation: input.skillStorageLocation ?? "appData"
+      skillStorageLocation: input.skillStorageLocation ?? "appData",
+      skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
+      skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60
     })),
     listProfiles: vi
       .fn()
@@ -225,6 +230,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("App", () => {
@@ -295,6 +301,42 @@ describe("App", () => {
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
+  });
+
+  it("checks skill updates on the configured background interval", async () => {
+    let intervalCallback: (() => void) | undefined;
+    const setIntervalSpy = vi.spyOn(window, "setInterval").mockImplementation((callback, timeout) => {
+      intervalCallback = callback as () => void;
+      expect(timeout).toBe(5 * 60 * 1000);
+      return 1 as unknown as ReturnType<typeof window.setInterval>;
+    });
+    const api = installApi({
+      readSettings: vi.fn().mockResolvedValue({
+        skillSyncMethod: "symlink",
+        skillStorageLocation: "appData",
+        skillAutoCheckEnabled: true,
+        skillAutoCheckIntervalMinutes: 5
+      }),
+      checkSkillLibraryUpdates: vi.fn().mockResolvedValue([])
+    });
+    render(<App />);
+
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve();
+      }
+    });
+    expect(api.checkSkillLibraryUpdates).toHaveBeenCalledTimes(1);
+    expect(setIntervalSpy).toHaveBeenCalled();
+    expect(intervalCallback).toBeDefined();
+
+    await act(async () => {
+      intervalCallback?.();
+      for (let index = 0; index < 10; index += 1) {
+        await Promise.resolve();
+      }
+    });
+    expect(api.checkSkillLibraryUpdates).toHaveBeenCalledTimes(2);
   });
 
   it("opens the MCP library and saves reusable MCP servers", async () => {

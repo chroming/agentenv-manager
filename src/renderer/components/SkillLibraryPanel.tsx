@@ -41,6 +41,7 @@ interface SkillLibraryPanelProps {
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
   onPreviewLibrarySkillUpdate(id: string): void;
   onUpdateLibrarySkill(id: string): void;
+  onUpdateAllLibrarySkills(ids: string[]): void;
   onCheckUpdates(): void;
 }
 
@@ -79,6 +80,7 @@ export const SkillLibraryPanel = ({
   onSetUpdateSource,
   onPreviewLibrarySkillUpdate,
   onUpdateLibrarySkill,
+  onUpdateAllLibrarySkills,
   onCheckUpdates
 }: SkillLibraryPanelProps) => {
   const [githubUrl, setGithubUrl] = useState("");
@@ -95,7 +97,10 @@ export const SkillLibraryPanel = ({
     Record<string, { sourceType: SkillSourceType; source: string }>
   >({});
   const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
-  const availableUpdateCount = skillUpdates.filter((update) => update.updateAvailable).length;
+  const updateableSkillIds = skillUpdates
+    .filter((update) => update.updateAvailable && !update.error)
+    .map((update) => update.id);
+  const availableUpdateCount = updateableSkillIds.length;
   const installsFor = (libraryId: string) =>
     skillInventory.filter((skill) => skill.libraryId === libraryId || skill.id === libraryId);
   const filteredSkills = librarySkills.filter((skill) => {
@@ -232,6 +237,16 @@ export const SkillLibraryPanel = ({
           <button className="secondary-action" type="button" onClick={onCheckUpdates}>
             <RefreshCw size={15} strokeWidth={2.2} />
             Check updates
+          </button>
+          <button
+            className="secondary-action"
+            type="button"
+            aria-label="Update all skills"
+            disabled={updateableSkillIds.length === 0}
+            onClick={() => onUpdateAllLibrarySkills(updateableSkillIds)}
+          >
+            <Sparkles size={15} strokeWidth={2.2} />
+            Update all
           </button>
         </div>
       </div>
