@@ -38,6 +38,7 @@ export interface TargetPaths {
   instructionsPath: string;
   instructionsOverridePath?: string;
   configPath: string;
+  mcpConfigPath?: string;
   agentsDir?: string;
   skillsDir?: string;
 }
@@ -50,7 +51,13 @@ export interface TargetState {
 export type TargetHealthStatus = "ready" | "needs-setup" | "missing" | "guarded";
 
 export interface TargetPathCheck {
-  id: "configDir" | "instructions" | "config" | "agentsDir" | "skillsDir";
+  id:
+    | "configDir"
+    | "instructions"
+    | "config"
+    | "mcpConfig"
+    | "agentsDir"
+    | "skillsDir";
   label: string;
   path: string;
   exists: boolean;

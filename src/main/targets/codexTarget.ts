@@ -15,6 +15,11 @@ import type {
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
 import { replaceManagedSection } from "../managedSections";
+import {
+  createOwnerMarkerContent,
+  isAgentEnvOwnedDir,
+  markerPathFor
+} from "../ownershipMarkers";
 import { findSecretWarnings } from "../secretWarnings";
 import { findUnmanagedMcpConflicts, validateToml } from "../tomlConfig";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
@@ -54,11 +59,6 @@ const buildSkillsConfigToml = (profile: ProfileDetail): string => {
 
 const invalidMessage = (label: string, message: string) => `${label}: ${message}`;
 
-const markerPathFor = (targetDir: string) => join(targetDir, ".agentenv-owner.json");
-
-const isAgentEnvOwnedDir = async (targetDir: string) =>
-  (await pathExists(markerPathFor(targetDir)));
-
 const validateAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
   const errors: string[] = [];
   if (!targetPaths.skillsDir && profile.assetPolicy.ownedDirs.length > 0) {
@@ -76,7 +76,13 @@ const validateAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
     if (!(await pathExists(sourceDir))) {
       errors.push(`Owned skill source does not exist: ${sourceDir}`);
     }
-    if ((await pathExists(targetDir)) && !(await isAgentEnvOwnedDir(targetDir))) {
+    if (
+      (await pathExists(targetDir)) &&
+      !(await isAgentEnvOwnedDir(targetDir, {
+        targetId: targetPaths.targetId,
+        kind: "skill"
+      }))
+    ) {
       errors.push(`Skill target already exists and is not AgentEnv-owned: ${targetDir}`);
     }
   }
@@ -102,7 +108,12 @@ const removeStaleOwnedSkills = async ({ profile, targetPaths }: TargetAssetInput
     }
 
     const targetDir = join(targetPaths.skillsDir, entry.name);
-    if (await isAgentEnvOwnedDir(targetDir)) {
+    if (
+      await isAgentEnvOwnedDir(targetDir, {
+        targetId: targetPaths.targetId,
+        kind: "skill"
+      })
+    ) {
       await rm(targetDir, { recursive: true, force: true });
     }
   }
@@ -132,7 +143,12 @@ const getAssetBackupPaths = async ({ profile, targetPaths }: TargetAssetInput) =
       }
 
       const targetDir = join(targetPaths.skillsDir, entry.name);
-      if (await isAgentEnvOwnedDir(targetDir)) {
+      if (
+        await isAgentEnvOwnedDir(targetDir, {
+          targetId: targetPaths.targetId,
+          kind: "skill"
+        })
+      ) {
         paths.add(targetDir);
       }
     }
@@ -148,7 +164,12 @@ const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
     const sourceDir = join(profile.profileDir ?? "", ownedDir.source);
     const targetDir = join(targetPaths.skillsDir ?? "", ownedDir.targetName);
 
-    if (await isAgentEnvOwnedDir(targetDir)) {
+    if (
+      await isAgentEnvOwnedDir(targetDir, {
+        targetId: targetPaths.targetId,
+        kind: "skill"
+      })
+    ) {
       await rm(targetDir, { recursive: true, force: true });
     }
 
@@ -156,16 +177,12 @@ const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
     await cp(sourceDir, targetDir, { recursive: true });
     await writeFile(
       markerPathFor(targetDir),
-      `${JSON.stringify(
-        {
-          profileId: profile.id,
-          targetId: profile.manifest.targetId,
-          kind: ownedDir.kind,
-          source: ownedDir.source
-        },
-        null,
-        2
-      )}\n`,
+      createOwnerMarkerContent({
+        profileId: profile.id,
+        targetId: profile.manifest.targetId,
+        kind: ownedDir.kind,
+        source: ownedDir.source
+      }),
       "utf8"
     );
   }

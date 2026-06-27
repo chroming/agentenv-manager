@@ -70,13 +70,21 @@ const getMcpResources = (
       error: errors.map((error) => printParseErrorCode(error.error)).join(", ")
     };
   }
-  if (!isRecord(parsed) || !isRecord(parsed.mcp)) {
+  if (!isRecord(parsed)) {
+    return { resources: [] };
+  }
+  const mcp = isRecord(parsed.mcp)
+    ? parsed.mcp
+    : isRecord(parsed.mcpServers)
+      ? parsed.mcpServers
+      : undefined;
+  if (!mcp) {
     return { resources: [] };
   }
 
   const managedNames = new Set(preview?.targetState.managedMcpNames ?? []);
   return {
-    resources: Object.entries(parsed.mcp).map(([name, server]) => {
+    resources: Object.entries(mcp).map(([name, server]) => {
       const hasConflict = preview?.errors.some((error) => error.includes(`MCP server ${name}`));
       return {
         name,

@@ -37,6 +37,22 @@ afterEach(async () => {
 });
 
 describe("OpenCode target adapter", () => {
+  const writeOwnerMarker = async (
+    targetDir: string,
+    marker: Record<string, unknown> = {
+      owner: "agentenv-manager",
+      profileId: "daily-coding",
+      targetId: "opencode",
+      kind: "skill",
+      source: "skills/reviewer"
+    }
+  ) => {
+    await writeFile(
+      join(targetDir, ".agentenv-owner.json"),
+      `${JSON.stringify(marker, null, 2)}\n`
+    );
+  };
+
   it("plans instructions, JSONC overlay, and managed MCP state without clobbering unmanaged config", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
     const adapter = createOpenCodeTargetAdapter();
@@ -167,6 +183,35 @@ describe("OpenCode target adapter", () => {
     ).resolves.toBe("# Skill\n");
   });
 
+  it("does not trust a target directory just because it contains an owner marker file", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const profileDir = join(root, "profiles", "daily-coding");
+    await mkdir(join(profileDir, "skills", "reviewer"), { recursive: true });
+    await writeFile(join(profileDir, "skills", "reviewer", "SKILL.md"), "# Skill\n");
+    const targetDir = join(targetPaths.skillsDir ?? "", "agentenv-reviewer");
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(join(targetDir, ".agentenv-owner.json"), "{}\n");
+
+    const profile: ProfileDetail = {
+      ...makeProfile("{}"),
+      profileDir,
+      assetPolicy: {
+        ownedDirs: [
+          { kind: "skill", source: "skills/reviewer", targetName: "agentenv-reviewer" }
+        ],
+        disabledSkillPaths: []
+      }
+    };
+
+    await expect(
+      adapter.validateAssets({ profile, targetPaths })
+    ).resolves.toContain(
+      `skill target already exists and is not AgentEnv-owned: ${targetDir}`
+    );
+  });
+
   it("removes stale AgentEnv-owned OpenCode agents and skills when switching profiles", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
     const adapter = createOpenCodeTargetAdapter();
@@ -183,9 +228,15 @@ describe("OpenCode target adapter", () => {
     await mkdir(staleSkillDir, { recursive: true });
     await mkdir(staleAgentDir, { recursive: true });
     await mkdir(unmanagedSkillDir, { recursive: true });
-    await writeFile(join(staleSkillDir, ".agentenv-owner.json"), "{}\n");
+    await writeOwnerMarker(staleSkillDir);
     await writeFile(join(staleSkillDir, "SKILL.md"), "# Old skill\n");
-    await writeFile(join(staleAgentDir, ".agentenv-owner.json"), "{}\n");
+    await writeOwnerMarker(staleAgentDir, {
+      owner: "agentenv-manager",
+      profileId: "daily-coding",
+      targetId: "opencode",
+      kind: "agent",
+      source: "agents/reviewer"
+    });
     await writeFile(join(staleAgentDir, "AGENTS.md"), "# Old agent\n");
     await writeFile(join(unmanagedSkillDir, "SKILL.md"), "# User skill\n");
 

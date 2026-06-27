@@ -119,6 +119,28 @@ const createRollbackChange = async (
   };
 };
 
+const restoreBackupEntries = async (backup: BackupManifest) => {
+  for (const entry of backup.entries) {
+    if (entry.missing) {
+      await rm(entry.sourcePath, { recursive: true, force: true });
+      continue;
+    }
+
+    if (entry.kind === "directory") {
+      await rm(entry.sourcePath, { recursive: true, force: true });
+      await mkdir(dirname(entry.sourcePath), { recursive: true });
+      await cp(entry.backupPath ?? "", entry.sourcePath, { recursive: true });
+      continue;
+    }
+
+    const content = await readFile(entry.backupPath ?? "", "utf8");
+    await writeAtomic(entry.sourcePath, content);
+  }
+};
+
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 const validateProfileStructure = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>) => {
   const errors: string[] = [];
 
@@ -253,12 +275,33 @@ export const createActivationService = ({
       statePath
     ]);
 
-    for (const change of preview.changes) {
-      await writeAtomic(change.path, change.after);
+    try {
+      for (const change of preview.changes) {
+        await writeAtomic(change.path, change.after);
+      }
+
+      await adapter.applyAssets({ profile, targetPaths });
+      await writeTargetState(preview.targetId, preview.targetState);
+    } catch (error) {
+      try {
+        await restoreBackupEntries(backup);
+      } catch (restoreError) {
+        return {
+          ok: false,
+          errors: [
+            `Failed to apply profile and failed to restore backup ${backup.id}: ${errorMessage(
+              error
+            )}; restore error: ${errorMessage(restoreError)}`
+          ]
+        };
+      }
+
+      return {
+        ok: false,
+        errors: [`Failed to apply profile; restored backup: ${errorMessage(error)}`]
+      };
     }
 
-    await adapter.applyAssets({ profile, targetPaths });
-    await writeTargetState(preview.targetId, preview.targetState);
     await appendHistory(paths, {
       type: "apply",
       profileId,
@@ -286,22 +329,7 @@ export const createActivationService = ({
   const rollback = async (backupId: string): Promise<RollbackResult> => {
     const backup = await backupStore.readBackup(backupId);
 
-    for (const entry of backup.entries) {
-      if (entry.missing) {
-        await rm(entry.sourcePath, { recursive: true, force: true });
-        continue;
-      }
-
-      if (entry.kind === "directory") {
-        await rm(entry.sourcePath, { recursive: true, force: true });
-        await mkdir(dirname(entry.sourcePath), { recursive: true });
-        await cp(entry.backupPath ?? "", entry.sourcePath, { recursive: true });
-        continue;
-      } else {
-        const content = await readFile(entry.backupPath ?? "", "utf8");
-        await writeAtomic(entry.sourcePath, content);
-      }
-    }
+    await restoreBackupEntries(backup);
 
     await appendHistory(paths, {
       type: "rollback",

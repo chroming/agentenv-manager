@@ -1,0 +1,242 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { parse } from "jsonc-parser";
+import { afterEach, describe, expect, it } from "vitest";
+import { createClaudeCodeTargetAdapter } from "../../../src/main/targets/claudeCodeTarget";
+import type { ProfileDetail, TargetState } from "../../../src/shared/types";
+
+let root = "";
+
+const makeProfile = (configText: string): ProfileDetail => ({
+  id: "claude-daily-coding",
+  manifest: {
+    id: "claude-daily-coding",
+    targetId: "claude-code",
+    name: "Claude Code Daily Coding",
+    description: "Claude Code profile",
+    version: 1,
+    managed: { instructions: true, config: true, assets: true }
+  },
+  instructions: "# Claude Code instructions\n",
+  configText,
+  assetPolicy: {
+    ownedDirs: [
+      { kind: "agent", source: "agents/reviewer", targetName: "reviewer" },
+      { kind: "skill", source: "skills/reviewer", targetName: "reviewer" }
+    ],
+    disabledSkillPaths: []
+  }
+});
+
+afterEach(async () => {
+  if (root) {
+    await rm(root, { recursive: true, force: true });
+    root = "";
+  }
+});
+
+describe("Claude Code target adapter", () => {
+  it("plans CLAUDE.md, settings.json, and user-scope MCP overlay without clobbering unmanaged config", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.instructionsPath, "# Old Claude\n", "utf8");
+    await writeFile(
+      targetPaths.configPath,
+      JSON.stringify(
+        {
+          $schema: "https://json.schemastore.org/claude-code-settings.json",
+          theme: "dark",
+          model: "sonnet",
+          permissions: { allow: ["Bash(npm test)"] }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+    await writeFile(
+      targetPaths.mcpConfigPath ?? "",
+      JSON.stringify(
+        {
+          projects: { "/repo": { allowedTools: ["Read"] } },
+          mcpServers: {
+            "old-managed": { type: "stdio", command: "old" },
+            unmanaged: { type: "http", url: "https://example.com/mcp" }
+          }
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const profile = makeProfile(
+      JSON.stringify(
+        {
+          settings: {
+            $schema: "https://json.schemastore.org/claude-code-settings.json",
+            model: "opus",
+            permissions: { deny: ["Read(./.env)"] }
+          },
+          mcpServers: {
+            context7: {
+              type: "http",
+              url: "https://mcp.context7.com/mcp"
+            }
+          }
+        },
+        null,
+        2
+      )
+    );
+    const state: TargetState = {
+      managedConfigKeys: ["model", "permissions"],
+      managedMcpNames: ["old-managed"]
+    };
+
+    const preview = await adapter.createPreview({ profile, targetPaths, state });
+
+    expect(preview.errors).toEqual([]);
+    const settingsChange = preview.changes.find((change) =>
+      change.path.endsWith("settings.json")
+    );
+    const mcpChange = preview.changes.find((change) =>
+      change.path.endsWith(".claude.json")
+    );
+    expect(settingsChange).toBeDefined();
+    expect(mcpChange).toBeDefined();
+    expect(parse(settingsChange?.after ?? "")).toMatchObject({
+      $schema: "https://json.schemastore.org/claude-code-settings.json",
+      theme: "dark",
+      model: "opus",
+      permissions: { deny: ["Read(./.env)"] }
+    });
+    expect(parse(mcpChange?.after ?? "")).toMatchObject({
+      projects: { "/repo": { allowedTools: ["Read"] } },
+      mcpServers: {
+        unmanaged: { type: "http", url: "https://example.com/mcp" },
+        context7: { type: "http", url: "https://mcp.context7.com/mcp" }
+      }
+    });
+    const mcp = (parse(mcpChange?.after ?? "") as { mcpServers: Record<string, unknown> })
+      .mcpServers;
+    expect(mcp["old-managed"]).toBeUndefined();
+    expect(preview.targetState).toEqual({
+      managedConfigKeys: ["model", "permissions"],
+      managedMcpNames: ["context7"]
+    });
+  });
+
+  it("reports unmanaged settings and MCP conflicts before apply", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.configPath, JSON.stringify({ model: "sonnet" }), "utf8");
+    await writeFile(
+      targetPaths.mcpConfigPath ?? "",
+      JSON.stringify({
+        mcpServers: {
+          context7: {
+            type: "http",
+            url: "https://example.com/existing"
+          }
+        }
+      }),
+      "utf8"
+    );
+
+    const profile = makeProfile(
+      JSON.stringify({
+        settings: { model: "opus" },
+        mcpServers: {
+          context7: {
+            type: "http",
+            url: "https://mcp.context7.com/mcp"
+          }
+        }
+      })
+    );
+
+    const preview = await adapter.createPreview({
+      profile,
+      targetPaths,
+      state: { managedConfigKeys: [], managedMcpNames: [] }
+    });
+
+    expect(preview.errors).toContain(
+      "Config key model already exists outside AgentEnv management"
+    );
+    expect(preview.errors).toContain(
+      "MCP server context7 already exists outside AgentEnv management"
+    );
+  });
+
+  it("does not write wrapper-only mcpServers into settings.json", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const profile = makeProfile(
+      JSON.stringify({
+        mcpServers: {
+          docs: {
+            type: "http",
+            url: "https://example.com/docs"
+          }
+        }
+      })
+    );
+
+    const preview = await adapter.createPreview({
+      profile,
+      targetPaths,
+      state: { managedConfigKeys: [], managedMcpNames: [] }
+    });
+
+    const settingsChange = preview.changes.find((change) =>
+      change.path.endsWith("settings.json")
+    );
+    const mcpChange = preview.changes.find((change) =>
+      change.path.endsWith(".claude.json")
+    );
+    expect(preview.errors).toEqual([]);
+    expect(parse(settingsChange?.after ?? "")).toEqual({});
+    expect(parse(mcpChange?.after ?? "")).toMatchObject({
+      mcpServers: {
+        docs: {
+          type: "http",
+          url: "https://example.com/docs"
+        }
+      }
+    });
+  });
+
+  it("does not treat an empty owner marker as permission to replace user skills", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const profileDir = join(root, "profiles", "claude-daily-coding");
+    await mkdir(join(profileDir, "skills", "reviewer"), { recursive: true });
+    await writeFile(join(profileDir, "skills", "reviewer", "SKILL.md"), "# Skill\n");
+    const targetDir = join(targetPaths.skillsDir ?? "", "reviewer");
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(join(targetDir, ".agentenv-owner.json"), "{}\n");
+    const profile: ProfileDetail = {
+      ...makeProfile("{}"),
+      profileDir,
+      assetPolicy: {
+        ownedDirs: [{ kind: "skill", source: "skills/reviewer", targetName: "reviewer" }],
+        disabledSkillPaths: []
+      }
+    };
+
+    await expect(
+      adapter.validateAssets({ profile, targetPaths })
+    ).resolves.toContain(
+      `skill target already exists and is not AgentEnv-owned: ${targetDir}`
+    );
+  });
+});

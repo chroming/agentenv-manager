@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPaths } from "../../src/main/paths";
+import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
 import { createTargetDiscoveryService } from "../../src/main/targetDiscovery";
 import { createCodexTargetAdapter } from "../../src/main/targets/codexTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
@@ -21,6 +22,7 @@ const makeService = async () => {
   });
   const targetRegistry = createTargetRegistry([
     createOpenCodeTargetAdapter(),
+    createClaudeCodeTargetAdapter(),
     createCodexTargetAdapter()
   ]);
   const service = createTargetDiscoveryService({
@@ -99,6 +101,34 @@ describe("target discovery", () => {
 
     expect(opencode?.health.status).toBe("needs-setup");
     expect(opencode?.health.canWrite).toBe(true);
+  });
+
+  it("marks Claude Code ready when the CLI and writable user config files are present", async () => {
+    const { binDir, service } = await makeService();
+    const executable = join(binDir, "claude");
+    const configDir = join(root, ".claude");
+    await writeFile(executable, "#!/bin/sh\n");
+    await chmod(executable, 0o755);
+    await mkdir(configDir, { recursive: true });
+    await writeFile(join(configDir, "CLAUDE.md"), "# Claude\n");
+    await writeFile(join(configDir, "settings.json"), "{}\n");
+    await writeFile(join(root, ".claude.json"), "{}\n");
+
+    const targets = await service.listTargets();
+    const claude = targets.find((target) => target.id === "claude-code");
+
+    expect(claude?.health.status).toBe("ready");
+    expect(claude?.health.executablePath).toBe(executable);
+    expect(claude?.health.canWrite).toBe(true);
+    expect(claude?.health.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "mcpConfig",
+          path: join(root, ".claude.json"),
+          exists: true
+        })
+      ])
+    );
   });
 
   it("keeps detected Codex guarded even when its CLI exists", async () => {

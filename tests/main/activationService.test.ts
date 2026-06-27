@@ -13,6 +13,8 @@ import { createActivationService } from "../../src/main/activationService";
 import { createBackupStore } from "../../src/main/backupStore";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
+import { createTargetRegistry } from "../../src/main/targets/registry";
+import type { AgentTargetAdapter } from "../../src/main/targets/types";
 
 let root = "";
 
@@ -213,5 +215,78 @@ describe("activation service", () => {
       ok: false,
       errors: ["Real Codex writes are disabled"]
     });
+  });
+
+  it("restores already-written files when target asset apply fails", async () => {
+    const { paths } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Old agents\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+    const baseProfileStore = createProfileStore({
+      appDataRoot: paths.appDataRoot,
+      codexHome: paths.codexHome,
+      userSkillsDir: paths.userSkillsDir
+    });
+    const failingAdapter: AgentTargetAdapter = {
+      descriptor: {
+        id: "codex",
+        name: "Failing Codex",
+        description: "Test adapter",
+        instructionsLabel: "AGENTS.md",
+        configLabel: "config.toml",
+        configLanguage: "toml",
+        realWritesEnabled: false
+      },
+      createTargetPaths: () => ({
+        targetId: "codex",
+        configDir: paths.codexHome,
+        instructionsPath: paths.globalAgentsPath,
+        configPath: paths.codexConfigPath,
+        skillsDir: paths.userSkillsDir
+      }),
+      createDefaultProfile: () => {
+        throw new Error("not used");
+      },
+      readProfileFiles: () => {
+        throw new Error("not used");
+      },
+      writeProfileFiles: () => {
+        throw new Error("not used");
+      },
+      createPreview: async () => ({
+        warnings: [],
+        errors: [],
+        changes: [
+          {
+            path: paths.globalAgentsPath,
+            before: "# Old agents\n",
+            after: "# New agents\n",
+            diff: ""
+          }
+        ],
+        liveFingerprints: {},
+        targetState: { managedConfigKeys: [], managedMcpNames: [] }
+      }),
+      validateAssets: async () => [],
+      getAssetBackupPaths: async () => [],
+      applyAssets: async () => {
+        throw new Error("asset copy exploded");
+      }
+    };
+    const service = createActivationService({
+      paths,
+      profileStore: baseProfileStore,
+      targetRegistry: createTargetRegistry([failingAdapter])
+    });
+
+    const preview = await service.previewProfile("daily-coding");
+    const result = await service.applyProfile("daily-coding", preview.id);
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ["Failed to apply profile; restored backup: asset copy exploded"]
+    });
+    await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe(
+      "# Old agents\n"
+    );
   });
 });

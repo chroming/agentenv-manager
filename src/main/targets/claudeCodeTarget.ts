@@ -99,43 +99,62 @@ const setJsoncProperty = (content: string, path: string[], value: unknown) => {
   );
 };
 
-const applyJsoncOverlay = (
+const parseProfileConfig = (profileConfig: Record<string, unknown>) => ({
+  settings:
+    "settings" in profileConfig || "mcpServers" in profileConfig
+      ? isRecord(profileConfig.settings)
+        ? profileConfig.settings
+        : ({} as Record<string, unknown>)
+      : profileConfig,
+  mcpServers: isRecord(profileConfig.mcpServers)
+    ? profileConfig.mcpServers
+    : ({} as Record<string, unknown>)
+});
+
+const applySettingsOverlay = (
   liveContent: string,
-  liveConfig: Record<string, unknown>,
-  profileConfig: Record<string, unknown>,
+  liveSettings: Record<string, unknown>,
+  profileSettings: Record<string, unknown>,
   state: TargetState
 ) => {
   let nextContent = liveContent.trim().length === 0 ? "{}\n" : liveContent;
-  const nextMcp = isRecord(liveConfig.mcp)
-    ? cloneJson(liveConfig.mcp)
-    : ({} as Record<string, unknown>);
-  const profileMcp = isRecord(profileConfig.mcp)
-    ? profileConfig.mcp
-    : ({} as Record<string, unknown>);
-  const profileConfigKeys = Object.keys(profileConfig).filter(
-    (key) => key !== "mcp" && !METADATA_CONFIG_KEYS.has(key)
+  const profileConfigKeys = Object.keys(profileSettings).filter(
+    (key) => !METADATA_CONFIG_KEYS.has(key)
   );
-  const profileMetadataKeys = Object.keys(profileConfig).filter((key) =>
+  const profileMetadataKeys = Object.keys(profileSettings).filter((key) =>
     METADATA_CONFIG_KEYS.has(key)
   );
 
   for (const key of state.managedConfigKeys) {
-    if (
-      key !== "mcp" &&
-      !METADATA_CONFIG_KEYS.has(key) &&
-      !profileConfigKeys.includes(key)
-    ) {
+    if (!METADATA_CONFIG_KEYS.has(key) && !profileConfigKeys.includes(key)) {
       nextContent = setJsoncProperty(nextContent, [key], undefined);
     }
   }
 
   for (const key of profileMetadataKeys) {
-    nextContent = setJsoncProperty(nextContent, [key], profileConfig[key]);
+    nextContent = setJsoncProperty(nextContent, [key], profileSettings[key]);
   }
 
   for (const key of profileConfigKeys) {
-    nextContent = setJsoncProperty(nextContent, [key], profileConfig[key]);
+    nextContent = setJsoncProperty(nextContent, [key], profileSettings[key]);
   }
+
+  return {
+    nextContent,
+    managedConfigKeys: profileConfigKeys
+  };
+};
+
+const applyMcpOverlay = (
+  liveContent: string,
+  liveConfig: Record<string, unknown>,
+  profileMcp: Record<string, unknown>,
+  state: TargetState
+) => {
+  let nextContent = liveContent.trim().length === 0 ? "{}\n" : liveContent;
+  const nextMcp = isRecord(liveConfig.mcpServers)
+    ? cloneJson(liveConfig.mcpServers)
+    : ({} as Record<string, unknown>);
 
   for (const name of state.managedMcpNames) {
     delete nextMcp[name];
@@ -146,34 +165,32 @@ const applyJsoncOverlay = (
 
   nextContent = setJsoncProperty(
     nextContent,
-    ["mcp"],
+    ["mcpServers"],
     Object.keys(nextMcp).length > 0 ? nextMcp : undefined
   );
 
   return {
     nextContent,
-    targetState: {
-      managedConfigKeys: profileConfigKeys,
-      managedMcpNames: Object.keys(profileMcp).sort((a, b) => a.localeCompare(b))
-    }
+    managedMcpNames: Object.keys(profileMcp).sort((a, b) => a.localeCompare(b))
   };
 };
 
 const findOverlayConflicts = (
-  liveConfig: Record<string, unknown>,
-  profileConfig: Record<string, unknown>,
+  liveSettings: Record<string, unknown>,
+  liveMcpConfig: Record<string, unknown>,
+  profileSettings: Record<string, unknown>,
+  profileMcp: Record<string, unknown>,
   state: TargetState
 ) => {
   const errors: string[] = [];
   const managedConfigKeys = new Set(state.managedConfigKeys);
-  const liveMcp = isRecord(liveConfig.mcp) ? liveConfig.mcp : {};
-  const profileMcp = isRecord(profileConfig.mcp) ? profileConfig.mcp : {};
+  const liveMcp = isRecord(liveMcpConfig.mcpServers) ? liveMcpConfig.mcpServers : {};
   const managedMcpNames = new Set(state.managedMcpNames);
 
-  for (const key of Object.keys(profileConfig).filter(
-    (name) => name !== "mcp" && !METADATA_CONFIG_KEYS.has(name)
+  for (const key of Object.keys(profileSettings).filter(
+    (name) => !METADATA_CONFIG_KEYS.has(name)
   )) {
-    if (key in liveConfig && !managedConfigKeys.has(key)) {
+    if (key in liveSettings && !managedConfigKeys.has(key)) {
       errors.push(`Config key ${key} already exists outside AgentEnv management`);
     }
   }
@@ -340,47 +357,57 @@ const applyAssets = async ({ profile, targetPaths }: TargetAssetInput) => {
   }
 };
 
-export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
+export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
   descriptor: {
-    id: "opencode",
-    name: "OpenCode",
-    description: "Manage global OpenCode instructions, JSONC config, agents, and skills.",
-    instructionsLabel: "AGENTS.md",
-    configLabel: "opencode.json",
+    id: "claude-code",
+    name: "Claude Code",
+    description: "Manage global Claude Code memory, settings, user MCP, agents, and skills.",
+    instructionsLabel: "CLAUDE.md",
+    configLabel: "settings + user MCP JSONC",
     configLanguage: "jsonc",
     realWritesEnabled: true,
-    executableName: "opencode"
+    executableName: "claude"
   },
   createTargetPaths: ({ homeDir }) => {
-    const configDir = join(homeDir, ".config", "opencode");
+    const claudeDir = join(homeDir, ".claude");
     return {
-      targetId: "opencode",
-      configDir,
-      instructionsPath: join(configDir, "AGENTS.md"),
-      configPath: join(configDir, "opencode.json"),
-      agentsDir: join(configDir, "agents"),
-      skillsDir: join(configDir, "skills")
+      targetId: "claude-code",
+      configDir: claudeDir,
+      instructionsPath: join(claudeDir, "CLAUDE.md"),
+      configPath: join(claudeDir, "settings.json"),
+      mcpConfigPath: join(homeDir, ".claude.json"),
+      agentsDir: join(claudeDir, "agents"),
+      skillsDir: join(claudeDir, "skills")
     };
   },
   createDefaultProfile: (id) => ({
     id,
     manifest: {
       id,
-      targetId: "opencode",
-      name: "OpenCode Daily Coding",
-      description: "Default OpenCode environment",
+      targetId: "claude-code",
+      name: "Claude Code Daily Coding",
+      description: "Default Claude Code environment",
       version: 1,
       managed: { instructions: true, config: true, assets: true }
     },
     instructions:
-      "# OpenCode Guidance\n\n- Keep changes scoped and reversible.\n- Preview environment changes before applying them.\n",
-    configText: "{}\n",
+      "# Claude Code Guidance\n\n- Keep changes scoped and reversible.\n- Preview environment changes before applying them.\n",
+    configText: `${JSON.stringify(
+      {
+        settings: {
+          $schema: "https://json.schemastore.org/claude-code-settings.json"
+        },
+        mcpServers: {}
+      },
+      null,
+      2
+    )}\n`,
     assetPolicy: { ownedDirs: [], disabledSkillPaths: [] }
   }),
   readProfileFiles: async (profileDir, manifest) => {
     const [instructions, configText, assetPolicyContent] = await Promise.all([
-      readFile(join(profileDir, "AGENTS.md"), "utf8"),
-      readFile(join(profileDir, "opencode.json"), "utf8"),
+      readFile(join(profileDir, "CLAUDE.md"), "utf8"),
+      readFile(join(profileDir, "claude-code.json"), "utf8"),
       readFile(join(profileDir, "assets.json"), "utf8")
     ]);
     return {
@@ -395,8 +422,8 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   writeProfileFiles: async (profileDir, profile) => {
     await mkdir(profileDir, { recursive: true });
     await Promise.all([
-      writeFile(join(profileDir, "AGENTS.md"), profile.instructions, "utf8"),
-      writeFile(join(profileDir, "opencode.json"), profile.configText, "utf8"),
+      writeFile(join(profileDir, "CLAUDE.md"), profile.instructions, "utf8"),
+      writeFile(join(profileDir, "claude-code.json"), profile.configText, "utf8"),
       writeFile(
         join(profileDir, "assets.json"),
         `${JSON.stringify(AssetPolicySchema.parse(profile.assetPolicy), null, 2)}\n`,
@@ -411,9 +438,10 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     );
     const errors: string[] = [];
     const changes: PlannedFileChange[] = [];
-    const [liveInstructions, liveConfigText] = await Promise.all([
+    const [liveInstructions, liveSettingsText, liveMcpText] = await Promise.all([
       readTextIfExists(targetPaths.instructionsPath),
-      readTextIfExists(targetPaths.configPath)
+      readTextIfExists(targetPaths.configPath),
+      readTextIfExists(targetPaths.mcpConfigPath ?? "")
     ]);
 
     addChange(
@@ -423,30 +451,64 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       profile.instructions
     );
 
-    const liveConfig = parseJsoncObject(liveConfigText, "Invalid live opencode.json");
+    const liveSettings = parseJsoncObject(liveSettingsText, "Invalid live settings.json");
+    const liveMcp = parseJsoncObject(liveMcpText, "Invalid live .claude.json");
     const profileConfig = parseJsoncObject(
       profile.configText,
-      "Invalid profile opencode.json"
+      "Invalid profile Claude Code config"
     );
     let targetState: TargetState = activeState;
-    if (!liveConfig.ok) {
-      errors.push(liveConfig.message);
+
+    if (!liveSettings.ok) {
+      errors.push(liveSettings.message);
+    }
+    if (!liveMcp.ok) {
+      errors.push(liveMcp.message);
     }
     if (!profileConfig.ok) {
       errors.push(profileConfig.message);
     }
 
-    if (liveConfig.ok && profileConfig.ok) {
-      errors.push(...findOverlayConflicts(liveConfig.value, profileConfig.value, activeState));
+    if (liveSettings.ok && liveMcp.ok && profileConfig.ok) {
+      const { settings, mcpServers } = parseProfileConfig(profileConfig.value);
+      errors.push(
+        ...findOverlayConflicts(
+          liveSettings.value,
+          liveMcp.value,
+          settings,
+          mcpServers,
+          activeState
+        )
+      );
       if (errors.length === 0) {
-        const planned = applyJsoncOverlay(
-          liveConfigText,
-          liveConfig.value,
-          profileConfig.value,
+        const plannedSettings = applySettingsOverlay(
+          liveSettingsText,
+          liveSettings.value,
+          settings,
           activeState
         );
-        targetState = planned.targetState;
-        addChange(changes, targetPaths.configPath, liveConfigText, planned.nextContent);
+        const plannedMcp = applyMcpOverlay(
+          liveMcpText,
+          liveMcp.value,
+          mcpServers,
+          activeState
+        );
+        targetState = {
+          managedConfigKeys: plannedSettings.managedConfigKeys,
+          managedMcpNames: plannedMcp.managedMcpNames
+        };
+        addChange(
+          changes,
+          targetPaths.configPath,
+          liveSettingsText,
+          plannedSettings.nextContent
+        );
+        addChange(
+          changes,
+          targetPaths.mcpConfigPath ?? "",
+          liveMcpText,
+          plannedMcp.nextContent
+        );
       }
     }
 
@@ -456,7 +518,8 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       changes,
       liveFingerprints: {
         [targetPaths.instructionsPath]: hashText(liveInstructions),
-        [targetPaths.configPath]: hashText(liveConfigText)
+        [targetPaths.configPath]: hashText(liveSettingsText),
+        [targetPaths.mcpConfigPath ?? ""]: hashText(liveMcpText)
       },
       targetState
     };
