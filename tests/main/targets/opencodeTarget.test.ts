@@ -103,7 +103,7 @@ describe("OpenCode target adapter", () => {
 
     expect(preview.errors).toEqual([]);
     const configChange = preview.changes.find((change) =>
-      change.path.endsWith("opencode.json")
+      change.path.endsWith("opencode.jsonc")
     );
     expect(configChange).toBeDefined();
     const parsed = parse(configChange?.after ?? "") as Record<string, unknown>;
@@ -160,6 +160,27 @@ describe("OpenCode target adapter", () => {
     expect(preview.errors).toContain(
       "MCP server context7 already exists outside AgentEnv management"
     );
+  });
+
+  it("reads legacy profile config files named opencode.json", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const profileDir = join(root, "profiles", "daily-coding");
+    const profile = makeProfile('{\n  "theme": "dark"\n}\n');
+    await mkdir(profileDir, { recursive: true });
+    await writeFile(join(profileDir, "AGENTS.md"), profile.instructions, "utf8");
+    await writeFile(join(profileDir, "opencode.json"), profile.configText, "utf8");
+    await writeFile(
+      join(profileDir, "assets.json"),
+      `${JSON.stringify(profile.assetPolicy, null, 2)}\n`,
+      "utf8"
+    );
+
+    await expect(
+      adapter.readProfileFiles(profileDir, profile.manifest)
+    ).resolves.toMatchObject({
+      configText: profile.configText
+    });
   });
 
   it("copies owned OpenCode agent and skill directories only after validating sources", async () => {

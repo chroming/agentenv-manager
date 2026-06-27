@@ -17,7 +17,7 @@ import type {
   TargetState
 } from "../../shared/types";
 import { createUnifiedDiff } from "../diff";
-import { pathExists, readTextIfExists } from "../fileUtils";
+import { isMissingFileError, pathExists, readTextIfExists } from "../fileUtils";
 import {
   createOwnerMarkerContent,
   isAgentEnvOwnedDir,
@@ -208,6 +208,17 @@ const targetDirFor = (
   return join(root, targetName);
 };
 
+const readOpenCodeProfileConfig = async (profileDir: string) => {
+  try {
+    return await readFile(join(profileDir, "opencode.jsonc"), "utf8");
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return readFile(join(profileDir, "opencode.json"), "utf8");
+    }
+    throw error;
+  }
+};
+
 const validateAssets = async (input: TargetAssetInput) => {
   const { profile, targetPaths } = input;
   const errors: string[] = [];
@@ -369,7 +380,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     name: "OpenCode",
     description: "Manage global OpenCode instructions, JSONC config, agents, and skills.",
     instructionsLabel: "AGENTS.md",
-    configLabel: "opencode.json",
+    configLabel: "opencode.jsonc",
     configLanguage: "jsonc",
     realWritesEnabled: true,
     executableName: "opencode"
@@ -380,7 +391,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       targetId: "opencode",
       configDir,
       instructionsPath: join(configDir, "AGENTS.md"),
-      configPath: join(configDir, "opencode.json"),
+      configPath: join(configDir, "opencode.jsonc"),
       agentsDir: join(configDir, "agents"),
       skillsDir: join(configDir, "skills")
     };
@@ -403,7 +414,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   readProfileFiles: async (profileDir, manifest) => {
     const [instructions, configText, assetPolicyContent] = await Promise.all([
       readFile(join(profileDir, "AGENTS.md"), "utf8"),
-      readFile(join(profileDir, "opencode.json"), "utf8"),
+      readOpenCodeProfileConfig(profileDir),
       readFile(join(profileDir, "assets.json"), "utf8")
     ]);
     return {
@@ -419,7 +430,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     await mkdir(profileDir, { recursive: true });
     await Promise.all([
       writeFile(join(profileDir, "AGENTS.md"), profile.instructions, "utf8"),
-      writeFile(join(profileDir, "opencode.json"), profile.configText, "utf8"),
+      writeFile(join(profileDir, "opencode.jsonc"), profile.configText, "utf8"),
       writeFile(
         join(profileDir, "assets.json"),
         `${JSON.stringify(AssetPolicySchema.parse(profile.assetPolicy), null, 2)}\n`,
@@ -446,10 +457,10 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       profile.instructions
     );
 
-    const liveConfig = parseJsoncObject(liveConfigText, "Invalid live opencode.json");
+    const liveConfig = parseJsoncObject(liveConfigText, "Invalid live opencode.jsonc");
     const profileConfig = parseJsoncObject(
       profile.configText,
-      "Invalid profile opencode.json"
+      "Invalid profile opencode.jsonc"
     );
     let targetState: TargetState = activeState;
     if (!liveConfig.ok) {

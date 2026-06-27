@@ -13,10 +13,10 @@ const preview: ActivationPreview = {
   errors: [],
   changes: [
     {
-      path: "/tmp/home/.config/opencode/opencode.json",
+      path: "/tmp/home/.config/opencode/opencode.jsonc",
       before: "{}\n",
       after: '{\n  "mcp": {}\n}\n',
-      diff: "--- opencode.json\n+++ opencode.json\n@@\n-{}\n+{\"mcp\":{}}\n"
+      diff: "--- opencode.jsonc\n+++ opencode.jsonc\n@@\n-{}\n+{\"mcp\":{}}\n"
     }
   ],
   liveFingerprints: {},
@@ -32,7 +32,7 @@ describe("PreviewDialog", () => {
     render(<PreviewDialog preview={preview} />);
 
     const diff = await screen.findByRole("table", {
-      name: "Formatted diff for /tmp/home/.config/opencode/opencode.json"
+      name: "Formatted diff for /tmp/home/.config/opencode/opencode.jsonc"
     });
 
     expect(within(diff).getByText("-")).toBeInTheDocument();

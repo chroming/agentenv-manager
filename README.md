@@ -8,7 +8,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 
 这是一个本地优先的 Electron 客户端，目前已经可以用于真实测试 OpenCode / Claude Code / Codex 的 profile 切换流程。
 
-项目仍处在早期阶段：`npm run build` 可以生成 Electron/Vite 的运行产物，但还没有接入 `electron-builder` 或 `electron-forge` 这类安装包工具，所以暂时还不会生成 `.dmg`、`.zip`、`.app` 或 Windows/Linux 安装包。
+项目仍处在早期阶段，但已经接入 `electron-builder`。`npm run build` 用来生成 Electron/Vite 运行产物，`npm run pack` / `npm run dist` 用来生成本地可运行程序或安装包。
 
 ## 功能
 
@@ -119,25 +119,37 @@ npx electron .
 
 ## 打包安装包
 
-当前项目还没有正式打包脚本。
+项目使用 `electron-builder` 打包。常用入口：
 
-如果要生成 macOS `.dmg` / `.zip` / `.app`，建议下一步接入一个成熟打包工具，例如：
-
-- `electron-builder`
-- `electron-forge`
-
-建议优先使用 `electron-builder`，然后增加类似脚本：
-
-```json
-{
-  "scripts": {
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder"
-  }
-}
+```bash
+npm run pack
 ```
 
-在接入前，`npm run build` 只能说明代码可以被构建，不能替代真正的应用分发打包。
+生成未压缩的本地 app，适合快速验证。输出在：
+
+```text
+release/mac-arm64/AgentEnv Manager.app
+```
+
+生成可分发安装包：
+
+```bash
+npm run dist
+```
+
+只生成 macOS 安装包：
+
+```bash
+npm run dist:mac
+```
+
+默认输出目录：
+
+```text
+release/
+```
+
+当前 macOS 目标包含 `.dmg` 和 `.zip`。正式分发前还需要补应用图标、签名和 notarization；本地自用可以先直接运行 `.app`。
 
 ## 运行数据
 
@@ -218,7 +230,7 @@ AGENTENV_DATA_ROOT=.agentenv-runtime npm run dev
 
 比较值得继续补的事情：
 
-- 接入正式应用打包工具。
+- 补应用图标、macOS 签名和 notarization。
 - 清理界面里还没有真实动作的占位控件。
 - 完善 Settings 中和真实写入、安全边界相关的说明。
 - 为新增 target adapter 写更明确的开发文档。

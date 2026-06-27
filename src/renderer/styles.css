@@ -167,16 +167,10 @@ h2 {
 }
 
 .brand-mark {
-  align-items: center;
-  background: #172033;
-  border-radius: 8px;
-  color: #ffffff;
-  display: inline-flex;
+  display: block;
   flex: 0 0 auto;
-  font-size: 13px;
-  font-weight: 800;
   height: 32px;
-  justify-content: center;
+  overflow: hidden;
   width: 32px;
 }
 
@@ -788,7 +782,7 @@ textarea[aria-label="AGENTS.md"] {
   min-height: 260px;
 }
 
-textarea[aria-label="opencode.json"] {
+textarea[aria-label="opencode.jsonc"] {
   min-height: 280px;
 }
 
@@ -1870,10 +1864,7 @@ summary {
 }
 
 .brand-mark {
-  background: #eff6ff;
-  border: 1px solid #cfe0ff;
-  color: var(--accent);
-  font-size: 11px;
+  border-radius: 9px;
 }
 
 .brand-lockup h1 {
@@ -3190,9 +3181,11 @@ button svg,
   box-shadow: 0 8px 18px rgba(23, 105, 245, 0.12);
 }
 
-.brand-mark svg {
-  height: 18px;
-  width: 18px;
+.brand-icon {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }
 
 .workspace-button__icon {

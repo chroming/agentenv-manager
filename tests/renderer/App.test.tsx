@@ -49,10 +49,10 @@ const preview = {
       diff: "--- AGENTS.md\n+++ AGENTS.md\n@@\n-# Old\n+# Agent\n"
     },
     {
-      path: "/tmp/home/.config/opencode/opencode.json",
+      path: "/tmp/home/.config/opencode/opencode.jsonc",
       before: "{}\n",
       after: '{\n  "mcp": {}\n}\n',
-      diff: "--- opencode.json\n+++ opencode.json\n@@\n-{}\n+{\"mcp\":{}}\n"
+      diff: "--- opencode.jsonc\n+++ opencode.jsonc\n@@\n-{}\n+{\"mcp\":{}}\n"
     }
   ],
   liveFingerprints: {},
@@ -86,7 +86,7 @@ const target: TargetInfo = {
   name: "OpenCode",
   description: "Manage OpenCode.",
   instructionsLabel: "AGENTS.md",
-  configLabel: "opencode.json",
+  configLabel: "opencode.jsonc",
   configLanguage: "jsonc",
   realWritesEnabled: true,
   executableName: "opencode",
@@ -94,7 +94,7 @@ const target: TargetInfo = {
     targetId: "opencode",
     configDir: "/tmp/home/.config/opencode",
     instructionsPath: "/tmp/home/.config/opencode/AGENTS.md",
-    configPath: "/tmp/home/.config/opencode/opencode.json",
+    configPath: "/tmp/home/.config/opencode/opencode.jsonc",
     agentsDir: "/tmp/home/.config/opencode/agents",
     skillsDir: "/tmp/home/.config/opencode/skills"
   },
@@ -261,9 +261,12 @@ describe("App", () => {
 
   it("loads profiles and shows the selected profile", async () => {
     const api = installApi();
-    render(<App />);
+    const { container } = render(<App />);
 
     await openProfiles();
+    const brandIcon = container.querySelector<HTMLImageElement>(".brand-icon");
+    expect(brandIcon).toBeInTheDocument();
+    expect(brandIcon?.getAttribute("src")).toContain("app-icon");
     expect(await screen.findByRole("region", { name: "Profile overview" })).toBeInTheDocument();
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.getByRole("button", { name: "Apply to OpenCode" })).toBeInTheDocument();
@@ -281,7 +284,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Instructions" }));
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
     fireEvent.click(screen.getByRole("tab", { name: "Config" }));
-    expect(screen.getByLabelText("opencode.json")).toHaveValue('{\n  "mcp": {}\n}\n');
+    expect(screen.getByLabelText("opencode.jsonc")).toHaveValue('{\n  "mcp": {}\n}\n');
   });
 
   it("opens libraries as an app-level workspace", async () => {

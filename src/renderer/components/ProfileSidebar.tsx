@@ -1,7 +1,6 @@
 import {
   Activity,
   BookOpen,
-  Bot,
   Boxes,
   Monitor,
   Network,
@@ -10,6 +9,7 @@ import {
 } from "lucide-react";
 import type { ProfileSummary, TargetHealthStatus, TargetInfo } from "../../shared/types";
 
+const appIconUrl = new URL("../assets/app-icon.png", import.meta.url).href;
 const claudeIconUrl = new URL("../assets/target-icons/claude.svg", import.meta.url).href;
 const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.url).href;
 const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
@@ -116,7 +116,7 @@ export const ProfileSidebar = ({
       <div className="sidebar__header">
         <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true">
-            <Bot size={18} strokeWidth={2.3} />
+            <img className="brand-icon" src={appIconUrl} alt="" />
           </div>
           <div>
             <h1>AgentEnv Manager</h1>

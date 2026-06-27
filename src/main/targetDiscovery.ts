@@ -118,9 +118,13 @@ const createChecks = async (paths: TargetPaths): Promise<TargetPathCheck[]> => {
 const summarizeHealth = (
   status: TargetHealthStatus,
   executableName: string | undefined,
-  executableFound: boolean
+  executableFound: boolean,
+  missingRequiredPaths: number
 ) => {
   if (status === "ready") {
+    if (missingRequiredPaths > 0) {
+      return "Ready; setup files will be created";
+    }
     return "Ready";
   }
   if (status === "guarded") {
@@ -154,7 +158,7 @@ export const createTargetDiscoveryService = ({
         const executableFound = executableName ? Boolean(executablePath) : true;
         const checks = await createChecks(targetPaths);
         const requiredChecks = checks.filter((check) => check.required);
-        const requiredPathsExist = requiredChecks.every((check) => check.exists);
+        const missingRequiredPaths = requiredChecks.filter((check) => !check.exists).length;
         const requiredPathsWritable = requiredChecks.every((check) => check.writable);
         const canWrite =
           adapter.descriptor.realWritesEnabled &&
@@ -164,7 +168,7 @@ export const createTargetDiscoveryService = ({
           ? "guarded"
           : !executableFound
             ? "missing"
-            : requiredPathsExist && requiredPathsWritable
+            : requiredPathsWritable
               ? "ready"
               : "needs-setup";
         const health: TargetHealth = {
@@ -173,7 +177,12 @@ export const createTargetDiscoveryService = ({
           executablePath,
           executableFound,
           canWrite,
-          summary: summarizeHealth(status, executableName, executableFound),
+          summary: summarizeHealth(
+            status,
+            executableName,
+            executableFound,
+            missingRequiredPaths
+          ),
           checks
         };
 

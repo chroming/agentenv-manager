@@ -65,7 +65,7 @@ describe("target discovery", () => {
         }),
         expect.objectContaining({
           id: "config",
-          path: join(root, ".config", "opencode", "opencode.json"),
+          path: join(root, ".config", "opencode", "opencode.jsonc"),
           exists: false
         })
       ])
@@ -80,7 +80,7 @@ describe("target discovery", () => {
     await chmod(executable, 0o755);
     await mkdir(configDir, { recursive: true });
     await writeFile(join(configDir, "AGENTS.md"), "# OpenCode\n");
-    await writeFile(join(configDir, "opencode.json"), "{}\n");
+    await writeFile(join(configDir, "opencode.jsonc"), "{}\n");
 
     const targets = await service.listTargets();
     const opencode = targets.find((target) => target.id === "opencode");
@@ -90,7 +90,7 @@ describe("target discovery", () => {
     expect(opencode?.health.canWrite).toBe(true);
   });
 
-  it("marks OpenCode setup as writable when the CLI exists and config paths can be created", async () => {
+  it("marks OpenCode ready when the CLI exists and config paths can be created", async () => {
     const { binDir, service } = await makeService();
     const executable = join(binDir, "opencode");
     await writeFile(executable, "#!/bin/sh\n");
@@ -99,7 +99,7 @@ describe("target discovery", () => {
     const targets = await service.listTargets();
     const opencode = targets.find((target) => target.id === "opencode");
 
-    expect(opencode?.health.status).toBe("needs-setup");
+    expect(opencode?.health.status).toBe("ready");
     expect(opencode?.health.canWrite).toBe(true);
   });
 

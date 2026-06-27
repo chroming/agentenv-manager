@@ -69,7 +69,7 @@ const writeOpenCodeProfile = async (
     `# UI ${variant.toUpperCase()}\n\n- Active UI profile: ${variant}.\n`,
     "utf8"
   );
-  await writeJson(join(profileDir, "opencode.json"), {
+  await writeJson(join(profileDir, "opencode.jsonc"), {
     $schema: "https://opencode.ai/config.json",
     username: `ui-${variant}`,
     mcp: {
@@ -282,7 +282,7 @@ const launchApp = async () => {
   await writeFile(codexExecutable, "#!/bin/sh\necho fake-codex\n", "utf8");
   await chmod(codexExecutable, 0o755);
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Existing UI OpenCode\n", "utf8");
-  await writeJson(join(opencodeDir, "opencode.json"), {
+  await writeJson(join(opencodeDir, "opencode.jsonc"), {
     shell: "/bin/zsh",
     mcp: {
       "user-managed": {
@@ -891,7 +891,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
-    await expect(readFile(join(opencodeDir, "opencode.json"), "utf8")).resolves.toContain(
+    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
       "https://example.com/shared-docs/mcp"
     );
 
@@ -920,7 +920,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode beta");
     await previewAndApply(page, "OpenCode");
-    const betaConfig = await readFile(join(opencodeDir, "opencode.json"), "utf8");
+    const betaConfig = await readFile(join(opencodeDir, "opencode.jsonc"), "utf8");
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain(
       "Active UI profile: beta"
     );

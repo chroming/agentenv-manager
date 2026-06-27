@@ -25,7 +25,7 @@ OpenCode is the first real target. It writes to:
 
 ```text
 ~/.config/opencode/AGENTS.md
-~/.config/opencode/opencode.json
+~/.config/opencode/opencode.jsonc
 ~/.config/opencode/agents
 ~/.config/opencode/skills
 ```

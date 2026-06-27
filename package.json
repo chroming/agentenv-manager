@@ -1,12 +1,17 @@
 {
   "name": "agentenv-manager",
   "version": "0.1.0",
+  "description": "Local desktop manager for switching agent environments.",
+  "author": "AgentEnv Manager Contributors",
   "private": true,
   "type": "module",
   "main": "out/main/main.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
     "test": "vitest run",
     "test:e2e": "npm run build && vitest run tests/e2e",
     "test:watch": "vitest"
@@ -29,11 +34,35 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^42.5.1",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "jsdom": "^29.1.1",
     "playwright-core": "^1.61.1",
     "typescript": "^6.0.3",
     "vite": "^7.3.6",
     "vitest": "^4.1.9"
+  },
+  "build": {
+    "appId": "com.agentenv.manager",
+    "productName": "AgentEnv Manager",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
   }
 }

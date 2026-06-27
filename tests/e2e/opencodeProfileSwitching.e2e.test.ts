@@ -177,7 +177,7 @@ describe("OpenCode profile switching e2e", () => {
     const targetDir = join(paths.homeDir, ".config", "opencode");
     await mkdir(targetDir, { recursive: true });
     await writeFile(
-      join(targetDir, "opencode.json"),
+      join(targetDir, "opencode.jsonc"),
       `${JSON.stringify(
         {
           $schema: "https://opencode.ai/config.json",
@@ -200,7 +200,7 @@ describe("OpenCode profile switching e2e", () => {
     const beta = await createOpenCodeProfile(profileStore, "beta");
 
     await expectApplyOk(activationService, alpha.id);
-    const alphaConfig = await readJsonc(join(targetDir, "opencode.json"));
+    const alphaConfig = await readJsonc(join(targetDir, "opencode.jsonc"));
     expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toContain(
       "Active profile: alpha"
     );
@@ -225,7 +225,7 @@ describe("OpenCode profile switching e2e", () => {
     ).resolves.toBe(true);
 
     await expectApplyOk(activationService, beta.id);
-    const betaConfig = await readJsonc(join(targetDir, "opencode.json"));
+    const betaConfig = await readJsonc(join(targetDir, "opencode.jsonc"));
     const backups = await createBackupStore(paths).listBackups();
     const targets = await listTargets();
     const opencode = targets.find((target) => target.id === "opencode");
@@ -340,9 +340,9 @@ describe("OpenCode profile switching e2e", () => {
     const beta = await createOpenCodeProfile(profileStore, "beta");
     await expectApplyOk(activationService, alpha.id);
 
-    const liveConfig = await readJsonc(join(targetDir, "opencode.json"));
+    const liveConfig = await readJsonc(join(targetDir, "opencode.jsonc"));
     await writeFile(
-      join(targetDir, "opencode.json"),
+      join(targetDir, "opencode.jsonc"),
       `${JSON.stringify(
         {
           ...liveConfig,
@@ -372,7 +372,7 @@ describe("OpenCode profile switching e2e", () => {
         "MCP server agentenv-beta-mcp already exists outside AgentEnv management"
       );
     }
-    const configAfterBlockedSwitch = await readJsonc(join(targetDir, "opencode.json"));
+    const configAfterBlockedSwitch = await readJsonc(join(targetDir, "opencode.jsonc"));
     expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toContain(
       "Active profile: alpha"
     );
@@ -409,7 +409,7 @@ describe("OpenCode profile switching e2e", () => {
     const targetDir = join(paths.homeDir, ".config", "opencode");
     await mkdir(targetDir, { recursive: true });
     await writeFile(
-      join(targetDir, "opencode.json"),
+      join(targetDir, "opencode.jsonc"),
       `${JSON.stringify(
         {
           $schema: "https://opencode.ai/config.json",
@@ -441,7 +441,7 @@ describe("OpenCode profile switching e2e", () => {
     expect(rollbackPreview.changes.map((change) => change.path)).toEqual(
       expect.arrayContaining([
         join(targetDir, "AGENTS.md"),
-        join(targetDir, "opencode.json"),
+        join(targetDir, "opencode.jsonc"),
         join(targetDir, "agents", "agentenv-alpha-agent"),
         join(targetDir, "skills", "agentenv-alpha-skill"),
         join(targetDir, "agents", "agentenv-beta-agent"),
@@ -452,7 +452,7 @@ describe("OpenCode profile switching e2e", () => {
     const rollbackResult = await activationService.rollback(betaApply.backupId);
     expect(rollbackResult.ok).toBe(true);
 
-    const rolledBackConfig = await readJsonc(join(targetDir, "opencode.json"));
+    const rolledBackConfig = await readJsonc(join(targetDir, "opencode.jsonc"));
     expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toContain(
       "Active profile: alpha"
     );
