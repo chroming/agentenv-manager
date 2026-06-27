@@ -228,10 +228,16 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  const openProfiles = async () => {
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
+  };
+
   it("loads profiles and shows the selected profile", async () => {
     const api = installApi();
     render(<App />);
 
+    await openProfiles();
     expect(await screen.findByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     const readiness = screen.getByRole("region", { name: "Target readiness" });
@@ -239,12 +245,8 @@ describe("App", () => {
     expect(
       within(readiness).getByText("/tmp/home/.config/opencode")
     ).toBeInTheDocument();
-    const targetStatus = screen.getByRole("region", { name: "Target status" });
-    expect(within(targetStatus).getByText("Config directory")).not.toBeVisible();
-    fireEvent.click(within(targetStatus).getByText("Target details"));
-    expect(within(targetStatus).getByText("Config directory")).toBeVisible();
     expect(screen.getByRole("tab", { name: "Resources" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Libraries" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Skills" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Skill Library" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Skills" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Assets" })).not.toBeInTheDocument();
@@ -286,13 +288,11 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByLabelText("AGENTS.md");
-    fireEvent.click(screen.getByRole("button", { name: "Libraries" }));
-
+    expect(await screen.findByRole("group", { name: "Library item github-reviewer" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
-    expect(screen.getByRole("complementary", { name: "Library summary" })).toHaveTextContent(
-      "1 update available"
-    );
+    expect(screen.getByRole("heading", { name: "Library/Skills" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent("Update available");
+    expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
   });
@@ -312,17 +312,12 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByLabelText("AGENTS.md");
-    fireEvent.click(screen.getByRole("button", { name: "Libraries" }));
-    fireEvent.click(screen.getByRole("tab", { name: "MCP Servers" }));
+    await screen.findByRole("region", { name: "Skill library" });
+    fireEvent.click(screen.getByRole("button", { name: "MCP Servers" }));
 
     expect(screen.getByRole("region", { name: "MCP library" })).toBeInTheDocument();
-    expect(screen.getByRole("complementary", { name: "Library summary" })).toHaveTextContent(
-      "MCP Servers"
-    );
-    expect(screen.getByRole("complementary", { name: "Library summary" })).not.toHaveTextContent(
-      "Total skills"
-    );
+    expect(screen.getByRole("heading", { name: "Library/MCP Servers" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.getByRole("group", { name: "MCP library item context7" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("MCP library id"), {
@@ -356,6 +351,7 @@ describe("App", () => {
     const api = installApi();
     render(<App />);
 
+    await openProfiles();
     const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
     expect(applyButton).toBeDisabled();
     expect(screen.getByText("Preview required")).toBeInTheDocument();
@@ -388,6 +384,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openProfiles();
     const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
 
     fireEvent.click(screen.getByRole("button", { name: "Preview changes" }));
@@ -406,6 +403,7 @@ describe("App", () => {
     });
     render(<App />);
 
+    await openProfiles();
     const history = await screen.findByRole("region", { name: "History" });
     fireEvent.click(
       within(history).getByRole("button", {

@@ -1,5 +1,17 @@
 import { useEffect, useState } from "react";
 import {
+  Database,
+  BookOpenText,
+  FolderKanban,
+  HardDrive,
+  MonitorCheck,
+  MoreHorizontal,
+  Network,
+  Plus,
+  RefreshCw,
+  ScanLine
+} from "lucide-react";
+import {
   parse as parseJsonc,
   printParseErrorCode,
   type ParseError
@@ -25,11 +37,11 @@ import type {
 } from "../shared/types";
 import { ActivationPanel } from "./components/ActivationPanel";
 import { AgentsEditor } from "./components/AgentsEditor";
-import { LibrarySummaryPanel } from "./components/LibrarySummaryPanel";
+import { HistoryView } from "./components/HistoryView";
 import { McpEditor } from "./components/McpEditor";
 import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
-import { ProfileSidebar } from "./components/ProfileSidebar";
+import { ProfileSidebar, type AppWorkspace, type LibraryTab } from "./components/ProfileSidebar";
 import { SkillLibraryPanel } from "./components/SkillLibraryPanel";
 import { SkillsEditor } from "./components/SkillsEditor";
 
@@ -229,8 +241,9 @@ export const App = () => {
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
-  const [activeWorkspace, setActiveWorkspace] = useState<"profile" | "skill-library">("profile");
-  const [activeLibraryTab, setActiveLibraryTab] = useState<"skills" | "mcp">("skills");
+  const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
+  const [activeLibraryTab, setActiveLibraryTab] = useState<LibraryTab>("skills");
+  const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
   const [activeTab, setActiveTab] = useState<EditorTab>("instructions");
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -326,7 +339,7 @@ export const App = () => {
     setPreview(undefined);
     setRollbackPreview(undefined);
     setActiveTab("instructions");
-    setActiveWorkspace("profile");
+    setActiveWorkspace("profiles");
     setSelectedProfileId(profileId);
     try {
       const profile = await window.agentEnv.readProfile(profileId);
@@ -360,7 +373,7 @@ export const App = () => {
     setSelectedProfileId(saved.id);
     setDraftProfile(saved);
     setActiveTab("instructions");
-    setActiveWorkspace("profile");
+    setActiveWorkspace("profiles");
     setPreview(undefined);
     setRollbackPreview(undefined);
   };
@@ -392,6 +405,10 @@ export const App = () => {
   const validationRows = draftProfile
     ? createValidationRows(draftProfile, selectedTarget, preview)
     : [];
+
+  const totalResources = librarySkills.length + mcpServers.length;
+  const updateCount = skillUpdates.filter((update) => update.updateAvailable).length;
+  const readyTargetCount = targets.filter((target) => target.health.status === "ready").length;
 
   const previewSelectedProfile = async () => {
     setBusy(true);
@@ -604,64 +621,155 @@ export const App = () => {
     }
   };
 
+  const totalInstalledSkills = new Set(
+    skillInventory.flatMap((skill) => skill.foundIn.map((targetId) => `${targetId}:${skill.id}`))
+  ).size;
+  const githubSkillCount = librarySkills.filter((skill) => skill.sourceType === "github").length;
+  const localSkillCount = librarySkills.filter((skill) => skill.sourceType === "local").length;
+  const usedSkillCount = librarySkills.filter((skill) => (skillUsage[skill.id] ?? []).length > 0).length;
+  const needsManagementCount = skillInventory.filter((skill) => skill.status !== "managed").length;
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell${activeWorkspace === "library" ? " app-shell--library" : ""}`}>
       <ProfileSidebar
         targets={targets}
-        profiles={visibleProfiles}
-        selectedProfileId={selectedProfileId}
-        selectedTargetId={selectedTargetId}
+        profiles={profiles}
         isLoading={isLoading}
         activeWorkspace={activeWorkspace}
+        activeLibraryTab={activeLibraryTab}
         onWorkspaceSelect={setActiveWorkspace}
-        onTargetSelect={(targetId) => {
-          setSelectedTargetId(targetId);
-          setSelectedProfileId(undefined);
-          setDraftProfile(undefined);
-          setPreview(undefined);
-          setRollbackPreview(undefined);
-          setActiveTab("instructions");
-          setActiveWorkspace("profile");
-        }}
-        onSelect={selectProfile}
+        onLibraryTabSelect={setActiveLibraryTab}
         onCreate={createProfile}
       />
 
       <section
         className="editor-panel"
-        aria-label={activeWorkspace === "skill-library" ? "Skill library workspace" : "Profile editor"}
+        aria-label={
+          activeWorkspace === "library"
+            ? "Library workspace"
+            : activeWorkspace === "profiles"
+              ? "Profile editor"
+              : `${activeWorkspace} workspace`
+        }
       >
         {error ? <p className="error">{error}</p> : null}
-        {activeWorkspace === "skill-library" ? (
+        {activeWorkspace === "library" ? (
           <>
-            <div className="tab-list" role="tablist" aria-label="Library sections">
+            <header className="page-header library-page-header">
+              <div>
+                <h2>
+                  <span>Library</span>
+                  <span className="breadcrumb-separator">/</span>
+                  <span>{activeLibraryTab === "skills" ? "Skills" : "MCP Servers"}</span>
+                </h2>
+                <p className="muted">
+                  Manage reusable resources, track updates, and reuse them across profiles and targets.
+                </p>
+              </div>
+              <div className="page-actions">
+                {activeLibraryTab === "skills" ? (
+                  <>
+                    <button
+                      className="primary-inline-action"
+                      type="button"
+                      onClick={() => setSkillLibraryTool("import")}
+                    >
+                      <Plus size={16} strokeWidth={2.4} />
+                      Import Skill
+                    </button>
+                    <button
+                      className="secondary-action"
+                      type="button"
+                      onClick={() => setSkillLibraryTool("discoveries")}
+                    >
+                      <ScanLine size={15} strokeWidth={2.2} />
+                      Scan local Skills
+                    </button>
+                  </>
+                ) : (
+                  <button className="primary-inline-action" type="button">
+                    <Plus size={16} strokeWidth={2.4} />
+                    New MCP server
+                  </button>
+                )}
+                <button className="icon-action" type="button" aria-label="More library actions">
+                  <MoreHorizontal size={16} strokeWidth={2.2} />
+                </button>
+              </div>
+            </header>
+            <section className="metric-strip" aria-label="Library command center">
+              <div className="metric-tile">
+                <span className="metric-icon metric-icon--purple" aria-hidden="true">
+                  {activeLibraryTab === "skills" ? (
+                    <BookOpenText size={21} strokeWidth={2.2} />
+                  ) : (
+                    <Network size={21} strokeWidth={2.2} />
+                  )}
+                </span>
+                <div>
+                  <strong>{activeLibraryTab === "skills" ? librarySkills.length : mcpServers.length}</strong>
+                  <small>{activeLibraryTab === "skills" ? "Total Skills" : "MCP Servers"}</small>
+                  <span>{activeLibraryTab === "skills" ? `${localSkillCount} local · ${githubSkillCount} GitHub` : `${totalResources} library resources`}</span>
+                </div>
+              </div>
+              <div className="metric-tile">
+                <span className="metric-icon metric-icon--green" aria-hidden="true">
+                  <RefreshCw size={21} strokeWidth={2.2} />
+                </span>
+                <div>
+                  <strong>{updateCount}</strong>
+                  <small>Updates</small>
+                  <span>{skillUpdates.length} tracked checks</span>
+                </div>
+              </div>
+              <div className="metric-tile">
+                <span className="metric-icon metric-icon--amber" aria-hidden="true">
+                  <FolderKanban size={21} strokeWidth={2.2} />
+                </span>
+                <div>
+                  <strong>{activeLibraryTab === "skills" ? usedSkillCount : Object.keys(mcpUsage).length}</strong>
+                  <small>In use</small>
+                  <span>Across {profiles.length} profiles</span>
+                </div>
+              </div>
+              <div className="metric-tile">
+                <span className="metric-icon metric-icon--blue" aria-hidden="true">
+                  <MonitorCheck size={21} strokeWidth={2.2} />
+                </span>
+                <div>
+                  <strong>{activeLibraryTab === "skills" ? totalInstalledSkills : readyTargetCount}</strong>
+                  <small>Target installs</small>
+                  <span>{activeLibraryTab === "skills" ? "Installed instances" : `${readyTargetCount}/${targets.length || 0} targets ready`}</span>
+                </div>
+              </div>
               <button
-                className={`tab-button${activeLibraryTab === "skills" ? " is-active" : ""}`}
+                className="metric-tile metric-tile--button"
                 type="button"
-                role="tab"
-                aria-selected={activeLibraryTab === "skills"}
-                onClick={() => setActiveLibraryTab("skills")}
+                onClick={() => setSkillLibraryTool("discoveries")}
               >
-                Skills
+                <span className="metric-icon metric-icon--slate" aria-hidden="true">
+                  {activeLibraryTab === "skills" ? (
+                    <HardDrive size={21} strokeWidth={2.2} />
+                  ) : (
+                    <Database size={21} strokeWidth={2.2} />
+                  )}
+                </span>
+                <div>
+                  <strong>{needsManagementCount}</strong>
+                  <small>Needs management</small>
+                  <span>Imported target skills</span>
+                </div>
               </button>
-              <button
-                className={`tab-button${activeLibraryTab === "mcp" ? " is-active" : ""}`}
-                type="button"
-                role="tab"
-                aria-selected={activeLibraryTab === "mcp"}
-                onClick={() => setActiveLibraryTab("mcp")}
-              >
-                MCP Servers
-              </button>
-            </div>
+            </section>
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
                 librarySkills={librarySkills}
                 skillUpdates={skillUpdates}
                 skillInventory={skillInventory}
                 selectedUpdatePlan={selectedSkillUpdatePlan}
-                skillSettings={skillSettings}
                 skillUsage={skillUsage}
+                activeTool={skillLibraryTool}
+                onCloseTool={() => setSkillLibraryTool(undefined)}
                 onImportUnmanaged={importUnmanagedSkill}
                 onImportGitHubSkill={importGitHubSkill}
                 onManageTargetSkill={manageTargetSkill}
@@ -669,7 +777,6 @@ export const App = () => {
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onCheckUpdates={checkSkillUpdates}
-                onSkillSettingsChange={updateSkillSettings}
               />
             ) : (
               <McpLibraryPanel
@@ -680,8 +787,57 @@ export const App = () => {
               />
             )}
           </>
-        ) : draftProfile ? (
+        ) : activeWorkspace === "profiles" ? (
           <>
+            <header className="page-header">
+              <div>
+                <h2>Profiles</h2>
+                <p className="muted">Compose reusable library resources into ready-to-apply environments.</p>
+              </div>
+              <label className="profile-target-filter">
+                <span>Target</span>
+                <select
+                  aria-label="Profile target"
+                  value={selectedTargetId ?? ""}
+                  onChange={(event) => {
+                    setSelectedTargetId(event.currentTarget.value);
+                    setSelectedProfileId(undefined);
+                    setDraftProfile(undefined);
+                    setPreview(undefined);
+                    setRollbackPreview(undefined);
+                    setActiveTab("instructions");
+                  }}
+                >
+                  {targets.map((target) => (
+                    <option key={target.id} value={target.id}>
+                      {target.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </header>
+            <section className="profile-workbench" aria-label="Profiles">
+              <aside className="profile-index" aria-label="Profile list">
+                <div className="section-title">Profiles</div>
+                <div className="profile-list">
+                  {isLoading ? <p className="muted">Loading profiles...</p> : null}
+                  {!isLoading && visibleProfiles.length === 0 ? <p className="muted">No profiles</p> : null}
+                  {visibleProfiles.map((profile) => (
+                    <button
+                      className={`profile-row${profile.id === selectedProfileId ? " is-active" : ""}`}
+                      type="button"
+                      key={profile.id}
+                      onClick={() => selectProfile(profile.id)}
+                    >
+                      <span>{profile.name}</span>
+                      <small>{profile.description}</small>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+              <div className="profile-editor-surface">
+                {draftProfile ? (
+                  <>
             <header className="editor-header">
               <div className="editor-title">
                 <p className="eyebrow">{activeTargetName} Environment</p>
@@ -799,7 +955,117 @@ export const App = () => {
               preview={rollbackPreview ?? preview}
               title={rollbackPreview ? "Rollback preview" : "Preview"}
             />
+                  </>
+                ) : (
+                  <div className="empty-state">
+                    <h2>No profile selected</h2>
+                    <p className="muted">Choose a profile from the list or create a new one.</p>
+                  </div>
+                )}
+              </div>
+            </section>
           </>
+        ) : activeWorkspace === "targets" ? (
+          <section className="target-page" aria-label="Targets">
+            <header className="page-header">
+              <div>
+                <h2>Targets</h2>
+                <p className="muted">Local agent runtimes that receive managed resources.</p>
+              </div>
+            </header>
+            <div className="target-grid">
+              {targets.map((target) => (
+                <article className="target-card" key={target.id}>
+                  <div className="target-card__header">
+                    <div>
+                      <strong>{target.name}</strong>
+                      <small>{target.description}</small>
+                    </div>
+                    <span className={`target-badge target-badge--${target.health.status}`}>
+                      {targetStatusLabel[target.health.status]}
+                    </span>
+                  </div>
+                  <code title={target.paths.configDir}>{target.paths.configDir}</code>
+                  <div className="target-checks">
+                    {target.health.checks.map((check) => (
+                      <div className="target-check" key={check.id}>
+                        <div>
+                          <span>{check.label}</span>
+                          <code title={check.path}>{check.path}</code>
+                        </div>
+                        <strong>{check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing"}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : activeWorkspace === "activity" ? (
+          <section className="activity-page" aria-label="Activity">
+            <header className="page-header">
+              <div>
+                <h2>Activity</h2>
+                <p className="muted">Backups, rollback previews, and recent safety checkpoints.</p>
+              </div>
+            </header>
+            <HistoryView
+              backups={backups}
+              busy={busy}
+              rollbackPreview={rollbackPreview}
+              onPreviewRollback={previewSelectedRollback}
+              onRestoreRollback={restoreSelectedRollback}
+            />
+            {rollbackPreview ? <PreviewDialog preview={rollbackPreview} title="Rollback preview" /> : null}
+          </section>
+        ) : activeWorkspace === "settings" ? (
+          <section className="settings-page" aria-label="Settings">
+            <header className="page-header">
+              <div>
+                <h2>Settings</h2>
+                <p className="muted">Global library storage and target install defaults.</p>
+              </div>
+            </header>
+            <section className="resource-section">
+              <div>
+                <div className="resource-heading">Library install defaults</div>
+                <p className="muted">These settings control how library skills are placed onto targets.</p>
+              </div>
+              <div className="resource-settings-grid">
+                <label>
+                  <span>Sync</span>
+                  <select
+                    aria-label="Global skill sync method"
+                    value={skillSettings.skillSyncMethod}
+                    onChange={(event) =>
+                      updateSkillSettings({
+                        skillSyncMethod: event.currentTarget.value as AgentEnvSettings["skillSyncMethod"]
+                      })
+                    }
+                  >
+                    <option value="symlink">Symlink</option>
+                    <option value="copy">Copy</option>
+                    <option value="auto">Auto</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Storage</span>
+                  <select
+                    aria-label="Global skill storage location"
+                    value={skillSettings.skillStorageLocation}
+                    onChange={(event) =>
+                      updateSkillSettings({
+                        skillStorageLocation: event.currentTarget.value as AgentEnvSettings["skillStorageLocation"]
+                      })
+                    }
+                  >
+                    <option value="appData">App data</option>
+                    <option value="agents">~/.agents/skills</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+          </section>
         ) : rollbackPreview ? (
           <PreviewDialog preview={rollbackPreview} title="Rollback preview" />
         ) : (
@@ -809,16 +1075,7 @@ export const App = () => {
         )}
       </section>
 
-      {activeWorkspace === "skill-library" ? (
-        <LibrarySummaryPanel
-          activeTab={activeLibraryTab}
-          librarySkills={librarySkills}
-          mcpServers={mcpServers}
-          skillUpdates={skillUpdates}
-          skillSettings={skillSettings}
-          mcpUsage={mcpUsage}
-        />
-      ) : (
+      {activeWorkspace === "profiles" ? (
         <ActivationPanel
           selectedProfileId={draftProfile?.id}
           targetName={activeTargetName}
@@ -833,7 +1090,28 @@ export const App = () => {
           onPreviewRollback={previewSelectedRollback}
           onRestoreRollback={restoreSelectedRollback}
         />
-      )}
+      ) : activeWorkspace !== "library" ? (
+        <aside className="activation-panel library-summary-panel" aria-label="Workspace summary">
+          <div className="activation-header">
+            <p className="section-title">{activeWorkspace}</p>
+            <h2>{activeWorkspace === "targets" ? "Runtime health" : activeWorkspace === "activity" ? "Safety log" : "Global defaults"}</h2>
+          </div>
+          <section className="safety-checks">
+            <div className="check-row">
+              <span>Targets ready</span>
+              <strong>{readyTargetCount}/{targets.length || 0}</strong>
+            </div>
+            <div className="check-row">
+              <span>Backups</span>
+              <strong>{backups.length}</strong>
+            </div>
+            <div className="check-row">
+              <span>Library resources</span>
+              <strong>{totalResources}</strong>
+            </div>
+          </section>
+        </aside>
+      ) : null}
     </main>
   );
 };

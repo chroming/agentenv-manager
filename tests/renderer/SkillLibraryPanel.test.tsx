@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillLibraryPanel } from "../../src/renderer/components/SkillLibraryPanel";
 
@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 describe("SkillLibraryPanel", () => {
-  it("manages global library skills separately from profile resources", () => {
+  it("keeps the skill list clean and routes secondary workflows through drawers and row actions", () => {
     const onImportUnmanaged = vi.fn();
     const onImportGitHubSkill = vi.fn();
     const onPreviewLibrarySkillUpdate = vi.fn();
@@ -16,9 +16,9 @@ describe("SkillLibraryPanel", () => {
     const onCheckUpdates = vi.fn();
     const onSetUpdateSource = vi.fn();
     const onManageTargetSkill = vi.fn();
-    const onSettingsChange = vi.fn();
+    const onCloseTool = vi.fn();
 
-    render(
+    const renderPanel = (activeTool?: "import" | "discoveries") => (
       <SkillLibraryPanel
         librarySkills={[
           {
@@ -100,11 +100,9 @@ describe("SkillLibraryPanel", () => {
           ],
           errors: []
         }}
-        skillSettings={{
-          skillSyncMethod: "symlink",
-          skillStorageLocation: "appData"
-        }}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
+        activeTool={activeTool}
+        onCloseTool={onCloseTool}
         onImportUnmanaged={onImportUnmanaged}
         onImportGitHubSkill={onImportGitHubSkill}
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
@@ -112,11 +110,15 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={onCheckUpdates}
         onSetUpdateSource={onSetUpdateSource}
         onManageTargetSkill={onManageTargetSkill}
-        onSkillSettingsChange={onSettingsChange}
       />
     );
 
+    const { rerender } = render(renderPanel());
+
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "GitHub skill import" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Environment skills" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Library storage settings" })).not.toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Library item shared-reviewer" })).toHaveTextContent(
       "Daily Coding"
     );
@@ -126,30 +128,9 @@ describe("SkillLibraryPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Update all" })).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("GitHub skill URL"), {
-      target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
-    });
-    fireEvent.change(screen.getByLabelText("GitHub skill library id"), {
-      target: { value: "github-reviewer" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Import from GitHub" }));
-    expect(onImportGitHubSkill).toHaveBeenCalledWith({
-      url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
-      id: "github-reviewer"
-    });
-
-    expect(screen.getByRole("region", { name: "Environment skills" })).toHaveTextContent(
-      "Managed"
-    );
-    expect(screen.getByRole("region", { name: "Environment skills" })).toHaveTextContent(
-      "Imported"
-    );
-    expect(screen.getByRole("region", { name: "Environment skills" })).toHaveTextContent(
-      "Unmanaged"
-    );
-
+    const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
+    fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.change(screen.getByLabelText("Update source for shared-reviewer"), {
       target: { value: "/tmp/source/shared-reviewer" }
     });
@@ -167,6 +148,25 @@ describe("SkillLibraryPanel", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Apply update shared-reviewer" }));
     expect(onUpdateLibrarySkill).toHaveBeenCalledWith("shared-reviewer");
+
+    rerender(renderPanel("import"));
+    fireEvent.change(screen.getByLabelText("GitHub skill URL"), {
+      target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
+    });
+    fireEvent.change(screen.getByLabelText("GitHub skill library id"), {
+      target: { value: "github-reviewer" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import from GitHub" }));
+    expect(onImportGitHubSkill).toHaveBeenCalledWith({
+      url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+      id: "github-reviewer"
+    });
+
+    rerender(renderPanel("discoveries"));
+    const discoveries = screen.getByRole("region", { name: "Environment skills" });
+    expect(discoveries).toHaveTextContent("Managed");
+    expect(discoveries).toHaveTextContent("Imported");
+    expect(discoveries).toHaveTextContent("Unmanaged");
     fireEvent.click(screen.getByRole("button", { name: "Manage legacy-reviewer" }));
     expect(onManageTargetSkill).toHaveBeenCalledWith({
       targetId: "opencode",
@@ -175,9 +175,5 @@ describe("SkillLibraryPanel", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Import target-only-reviewer" }));
     expect(onImportUnmanaged).toHaveBeenCalledWith("/tmp/opencode/skills/target-only-reviewer");
-    fireEvent.change(screen.getByLabelText("Skill sync method"), {
-      target: { value: "copy" }
-    });
-    expect(onSettingsChange).toHaveBeenCalledWith({ skillSyncMethod: "copy" });
   });
 });

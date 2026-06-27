@@ -1,6 +1,22 @@
 import { useState } from "react";
+import {
+  BookOpenText,
+  CheckCircle2,
+  ExternalLink,
+  Folder,
+  GitBranch,
+  MoreHorizontal,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Settings2,
+  SlidersHorizontal,
+  Sparkles,
+  TriangleAlert,
+  Users,
+  X
+} from "lucide-react";
 import type {
-  AgentEnvSettings,
   GitHubSkillImportInput,
   ManageTargetSkillInput,
   SkillInventoryEntry,
@@ -16,8 +32,9 @@ interface SkillLibraryPanelProps {
   skillUpdates: SkillUpdateInfo[];
   skillInventory: SkillInventoryEntry[];
   selectedUpdatePlan?: SkillUpdatePlan;
-  skillSettings: AgentEnvSettings;
   skillUsage: Record<string, string[]>;
+  activeTool?: "import" | "discoveries";
+  onCloseTool?(): void;
   onImportUnmanaged(sourcePath: string): void;
   onImportGitHubSkill(input: GitHubSkillImportInput): void;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
@@ -25,7 +42,6 @@ interface SkillLibraryPanelProps {
   onPreviewLibrarySkillUpdate(id: string): void;
   onUpdateLibrarySkill(id: string): void;
   onCheckUpdates(): void;
-  onSkillSettingsChange(input: Partial<AgentEnvSettings>): void;
 }
 
 const sourceLabel = (skill: SkillLibraryEntry) => {
@@ -38,29 +54,82 @@ const sourceLabel = (skill: SkillLibraryEntry) => {
   return skill.source ?? skill.sourceType;
 };
 
+const shortRevision = (skill: SkillLibraryEntry) =>
+  (skill.remoteRevision ?? skill.contentHash ?? "local").slice(0, 7);
+
+const sourceName = (skill: SkillLibraryEntry) => {
+  const source = sourceLabel(skill);
+  if (source.startsWith("https://github.com/")) {
+    return source.replace("https://github.com/", "").replace("/tree/", "/");
+  }
+  return source;
+};
+
 export const SkillLibraryPanel = ({
   librarySkills,
   skillUpdates,
   skillInventory,
   selectedUpdatePlan,
-  skillSettings,
   skillUsage,
+  activeTool,
+  onCloseTool,
   onImportUnmanaged,
   onImportGitHubSkill,
   onManageTargetSkill,
   onSetUpdateSource,
   onPreviewLibrarySkillUpdate,
   onUpdateLibrarySkill,
-  onCheckUpdates,
-  onSkillSettingsChange
+  onCheckUpdates
 }: SkillLibraryPanelProps) => {
   const [githubUrl, setGithubUrl] = useState("");
   const [githubId, setGithubId] = useState("");
+  const [search, setSearch] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<"all" | SkillSourceType>("all");
+  const [usageFilter, setUsageFilter] = useState<"all" | "used" | "unused">("all");
+  const [targetFilter, setTargetFilter] = useState<
+    "all" | SkillInventoryEntry["status"] | "not-installed"
+  >("all");
+  const [updateFilter, setUpdateFilter] = useState<"all" | "updates">("all");
+  const [openActionId, setOpenActionId] = useState<string>();
   const [sourceDrafts, setSourceDrafts] = useState<
     Record<string, { sourceType: SkillSourceType; source: string }>
   >({});
   const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
   const availableUpdateCount = skillUpdates.filter((update) => update.updateAvailable).length;
+  const installsFor = (libraryId: string) =>
+    skillInventory.filter((skill) => skill.libraryId === libraryId || skill.id === libraryId);
+  const filteredSkills = librarySkills.filter((skill) => {
+    const installs = installsFor(skill.id);
+    const usage = skillUsage[skill.id] ?? [];
+    const query = search.trim().toLowerCase();
+    const matchesSearch =
+      query.length === 0 ||
+      [skill.id, skill.name, skill.description, sourceLabel(skill)]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(query));
+    const matchesSource = sourceFilter === "all" || skill.sourceType === sourceFilter;
+    const matchesUsage =
+      usageFilter === "all" ||
+      (usageFilter === "used" ? usage.length > 0 : usage.length === 0);
+    const matchesTarget =
+      targetFilter === "all" ||
+      (targetFilter === "not-installed"
+        ? installs.length === 0
+        : installs.some((install) => install.status === targetFilter));
+    const matchesUpdate =
+      updateFilter === "all" || Boolean(updatesById.get(skill.id)?.updateAvailable);
+
+    return matchesSearch && matchesSource && matchesUsage && matchesTarget && matchesUpdate;
+  });
+  const resetFilters = () => {
+    setSearch("");
+    setSourceFilter("all");
+    setUsageFilter("all");
+    setTargetFilter("all");
+    setUpdateFilter("all");
+  };
+  const usedSkillCount = librarySkills.filter((skill) => (skillUsage[skill.id] ?? []).length > 0).length;
+  const unusedSkillCount = Math.max(librarySkills.length - usedSkillCount, 0);
 
   const importGitHubSkill = () => {
     const url = githubUrl.trim();
@@ -77,38 +146,116 @@ export const SkillLibraryPanel = ({
 
   return (
     <section className="skill-library-panel" aria-label="Skill library">
-      <div className="asset-editor-header">
-        <div>
-          <div className="section-title">Skill Library</div>
-          <p className="muted">Reusable skills live once here, then profiles reference them.</p>
+      <div className="library-control-deck">
+        <div className="library-quick-tabs" role="tablist" aria-label="Skill status filters">
+          <button
+            className={`library-quick-tab${updateFilter === "all" && usageFilter === "all" ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={updateFilter === "all" && usageFilter === "all"}
+            onClick={() => {
+              setUpdateFilter("all");
+              setUsageFilter("all");
+            }}
+          >
+            All <strong>{librarySkills.length}</strong>
+          </button>
+          <button
+            className={`library-quick-tab${updateFilter === "updates" ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={updateFilter === "updates"}
+            onClick={() => setUpdateFilter("updates")}
+          >
+            Updates <strong>{availableUpdateCount}</strong>
+          </button>
+          <button
+            className={`library-quick-tab${usageFilter === "used" ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={usageFilter === "used"}
+            onClick={() => {
+              setUsageFilter("used");
+              setUpdateFilter("all");
+            }}
+          >
+            In use <strong>{usedSkillCount}</strong>
+          </button>
+          <button
+            className={`library-quick-tab${usageFilter === "unused" ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={usageFilter === "unused"}
+            onClick={() => {
+              setUsageFilter("unused");
+              setUpdateFilter("all");
+            }}
+          >
+            Unused <strong>{unusedSkillCount}</strong>
+          </button>
         </div>
-        <div className="asset-editor-actions">
+        <div className="library-toolbar">
+          <label className="library-search">
+            <span>Search</span>
+            <Search size={16} strokeWidth={2.1} aria-hidden="true" />
+            <input
+              aria-label="Search skills"
+              placeholder="Search skill name or description..."
+              value={search}
+              onChange={(event) => setSearch(event.currentTarget.value)}
+            />
+          </label>
+          <button className="secondary-action" type="button" onClick={resetFilters}>
+            <RotateCcw size={15} strokeWidth={2.2} />
+            Reset filters
+          </button>
+          <select
+            aria-label="Skill source filter"
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.currentTarget.value as typeof sourceFilter)}
+          >
+            <option value="all">Source: All</option>
+            <option value="github">GitHub</option>
+            <option value="local">Local</option>
+          </select>
+          <select
+            aria-label="Skill target filter"
+            value={targetFilter}
+            onChange={(event) => setTargetFilter(event.currentTarget.value as typeof targetFilter)}
+          >
+            <option value="all">Target: All</option>
+            <option value="managed">Managed</option>
+            <option value="library">Imported</option>
+            <option value="unmanaged">Unmanaged</option>
+            <option value="not-installed">Not installed</option>
+          </select>
           <button className="secondary-action" type="button" onClick={onCheckUpdates}>
+            <RefreshCw size={15} strokeWidth={2.2} />
             Check updates
           </button>
         </div>
       </div>
 
-      <section className="resource-section" aria-label="Library skills">
-        <div className="library-section-title-row">
-          <div>
-            <div className="resource-heading">Skills</div>
-            <p className="muted">
-              {librarySkills.length === 0
-                ? "No shared skills yet."
-                : `${librarySkills.length} shared skill${librarySkills.length === 1 ? "" : "s"}`}
-            </p>
-          </div>
-          {availableUpdateCount > 0 ? (
-            <strong className="resource-status">{availableUpdateCount} update available</strong>
-          ) : null}
+      <section className="library-table" aria-label="Library skills">
+        <div className="library-table__head">
+          <span>Skill</span>
+          <span>Source</span>
+          <span>Version</span>
+          <span>Update status</span>
+          <span>Usage</span>
+          <span>Installs</span>
+          <span>Actions</span>
         </div>
-        <div className="resource-list library-list">
+        <div className="library-table__body">
           {librarySkills.length === 0 ? (
-            <p className="muted">Import a skill from a folder or GitHub to start the library.</p>
+            <p className="muted library-empty">Import a skill from a folder or GitHub to start the library.</p>
           ) : null}
-          {librarySkills.map((skill) => {
+          {librarySkills.length > 0 && filteredSkills.length === 0 ? (
+            <p className="muted library-empty">No skills match the current filters.</p>
+          ) : null}
+          {filteredSkills.map((skill) => {
             const updateInfo = updatesById.get(skill.id);
+            const installs = installsFor(skill.id);
             const sourceDraft = sourceDrafts[skill.id] ?? {
               sourceType: skill.sourceType,
               source: sourceLabel(skill)
@@ -117,87 +264,178 @@ export const SkillLibraryPanel = ({
               ? "Check failed"
               : updateInfo?.updateAvailable
                 ? "Update available"
-                : skill.sourceType === "github" && updateInfo
+                : updateInfo
                   ? "Up to date"
                   : skill.sourceType === "local"
-                    ? "Local only"
+                    ? "Local source"
                     : skill.sourceType;
+            const hasUpdate = Boolean(updateInfo?.updateAvailable);
+            const hasError = Boolean(updateInfo?.error);
             return (
               <div
                 aria-label={`Library item ${skill.id}`}
-                className="resource-row library-row"
+                className="library-table-row"
                 key={skill.id}
                 role="group"
               >
-                <span className={`resource-chip resource-chip--${skill.sourceType}`}>
-                  {skill.sourceType}
-                </span>
-                <div className="resource-row__main">
-                  <span>{skill.name}</span>
-                  <small>{skill.description || skill.id}</small>
-                  <small title={sourceLabel(skill)}>{sourceLabel(skill)}</small>
-                  <small>
-                    {(skillUsage[skill.id] ?? []).length > 0
-                      ? `Used by ${(skillUsage[skill.id] ?? []).join(", ")}`
-                      : "Not used by any profile"}
-                  </small>
-                  <div className="library-source-editor">
-                    <select
-                      aria-label={`Update source type for ${skill.id}`}
-                      value={sourceDraft.sourceType}
-                      onChange={(event) =>
-                        setSourceDrafts({
-                          ...sourceDrafts,
-                          [skill.id]: {
-                            ...sourceDraft,
-                            sourceType: event.currentTarget.value as SkillSourceType
-                          }
-                        })
-                      }
-                    >
-                      <option value="local">Local folder</option>
-                      <option value="github">GitHub directory</option>
-                    </select>
-                    <input
-                      aria-label={`Update source for ${skill.id}`}
-                      placeholder={
-                        sourceDraft.sourceType === "github"
-                          ? "https://github.com/owner/repo/tree/main/path/to/skill"
-                          : "/path/to/skill"
-                      }
-                      value={sourceDraft.source}
-                      onChange={(event) =>
-                        setSourceDrafts({
-                          ...sourceDrafts,
-                          [skill.id]: { ...sourceDraft, source: event.currentTarget.value }
-                        })
-                      }
-                    />
-                    <button
-                      className="secondary-action"
-                      type="button"
-                      disabled={!sourceDraft.source.trim()}
-                      onClick={() =>
-                        onSetUpdateSource({
-                          id: skill.id,
-                          sourceType: sourceDraft.sourceType,
-                          source: sourceDraft.source.trim()
-                        })
-                      }
-                    >
-                      Save source for {skill.id}
-                    </button>
+                <div className="library-resource-cell">
+                  <span className="resource-avatar" aria-hidden="true">
+                    <BookOpenText size={18} strokeWidth={2.2} />
+                  </span>
+                  <div className="skill-title-stack">
+                    <strong className="skill-title">{skill.name}</strong>
+                    <p className="skill-description" title={skill.description || skill.id}>
+                      {skill.description || skill.id}
+                    </p>
                   </div>
                 </div>
-                <div className="library-row__actions">
-                  <strong className="resource-status">{updateLabel}</strong>
+                <div className="library-source-cell">
+                  <span className={`resource-chip resource-chip--${skill.sourceType}`}>
+                    {skill.sourceType === "github" ? (
+                      <GitBranch size={13} strokeWidth={2.2} />
+                    ) : (
+                      <Folder size={13} strokeWidth={2.2} />
+                    )}
+                    {skill.sourceType === "github" ? "GitHub" : "Local"}
+                  </span>
+                  <small title={sourceLabel(skill)}>{sourceName(skill)}</small>
+                </div>
+                <div className="library-version-cell">
+                  <strong>{skill.remoteRef ?? "v1.0.0"}</strong>
+                  <small>{shortRevision(skill)}</small>
+                </div>
+                <div className="library-update-cell">
+                  <strong
+                    className={`resource-status${hasUpdate ? " is-warning" : ""}${
+                      hasError ? " is-error" : ""
+                    }`}
+                  >
+                    {hasError ? (
+                      <TriangleAlert size={13} strokeWidth={2.2} />
+                    ) : hasUpdate ? (
+                      <Sparkles size={13} strokeWidth={2.2} />
+                    ) : (
+                      <CheckCircle2 size={13} strokeWidth={2.2} />
+                    )}
+                    {updateLabel}
+                  </strong>
+                  {updateInfo?.latestRevision ? (
+                    <small>
+                      {updateInfo.latestRevision.slice(0, 7)} {hasUpdate ? "available" : "current"}
+                    </small>
+                  ) : null}
+                </div>
+                <div className="library-usage-cell">
+                  <strong className="usage-summary">
+                    <Users size={13} strokeWidth={2.2} />
+                    {(skillUsage[skill.id] ?? []).length || 0} profiles
+                  </strong>
+                  <small>
+                    {(skillUsage[skill.id] ?? []).length > 0
+                      ? (skillUsage[skill.id] ?? []).join(", ")
+                      : "Not used"}
+                  </small>
+                </div>
+                <div className="library-installs-cell">
+                  {installs.length === 0 ? <small>Not installed</small> : null}
+                  {installs.slice(0, 3).map((install) => (
+                    <span key={install.path}>
+                      {install.foundIn.join(", ")}
+                      <strong className={`resource-chip resource-chip--${install.status}`}>
+                        <SlidersHorizontal size={13} strokeWidth={2.2} />
+                        {install.status === "managed"
+                          ? "Managed"
+                          : install.status === "library"
+                            ? "Imported"
+                            : "Unmanaged"}
+                      </strong>
+                    </span>
+                  ))}
+                </div>
+                <div className="library-actions-cell">
                   <button
-                    className="secondary-action"
+                    className="icon-action"
                     type="button"
+                    aria-label={`Preview update ${skill.id}`}
                     onClick={() => onPreviewLibrarySkillUpdate(skill.id)}
                   >
-                    Preview update {skill.id}
+                    <ExternalLink size={15} strokeWidth={2.2} />
                   </button>
+                  <div className="row-action-menu">
+                    <button
+                      className="icon-action"
+                      type="button"
+                      aria-label={`More actions for ${skill.id}`}
+                      onClick={() => setOpenActionId(openActionId === skill.id ? undefined : skill.id)}
+                    >
+                      <MoreHorizontal size={16} strokeWidth={2.2} />
+                    </button>
+                    {openActionId === skill.id ? (
+                      <div className="row-action-popover">
+                      <button
+                        className="secondary-action"
+                        type="button"
+                        onClick={() => onPreviewLibrarySkillUpdate(skill.id)}
+                      >
+                        <ExternalLink size={14} strokeWidth={2.2} />
+                        Preview update
+                      </button>
+                      <div className="row-action-source">
+                        <div className="row-action-source-title">
+                          <Settings2 size={14} strokeWidth={2.2} />
+                          Source and actions
+                        </div>
+                        <div className="library-source-editor row-action-source-editor">
+                          <select
+                            aria-label={`Update source type for ${skill.id}`}
+                            value={sourceDraft.sourceType}
+                            onChange={(event) =>
+                              setSourceDrafts({
+                                ...sourceDrafts,
+                                [skill.id]: {
+                                  ...sourceDraft,
+                                  sourceType: event.currentTarget.value as SkillSourceType
+                                }
+                              })
+                            }
+                          >
+                            <option value="local">Local folder</option>
+                            <option value="github">GitHub directory</option>
+                          </select>
+                          <input
+                            aria-label={`Update source for ${skill.id}`}
+                            placeholder={
+                              sourceDraft.sourceType === "github"
+                                ? "https://github.com/owner/repo/tree/main/path/to/skill"
+                                : "/path/to/skill"
+                            }
+                            value={sourceDraft.source}
+                            onChange={(event) =>
+                              setSourceDrafts({
+                                ...sourceDrafts,
+                                [skill.id]: { ...sourceDraft, source: event.currentTarget.value }
+                              })
+                            }
+                          />
+                          <button
+                            className="secondary-action"
+                            type="button"
+                            disabled={!sourceDraft.source.trim()}
+                            onClick={() =>
+                              onSetUpdateSource({
+                                id: skill.id,
+                                sourceType: sourceDraft.sourceType,
+                                source: sourceDraft.source.trim()
+                              })
+                            }
+                          >
+                            Save source for {skill.id}
+                          </button>
+                        </div>
+                      </div>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 {selectedUpdatePlan?.id === skill.id ? (
                   <section
@@ -240,13 +478,14 @@ export const SkillLibraryPanel = ({
                     <button
                       className="primary-action"
                       type="button"
+                      aria-label={`Apply update ${skill.id}`}
                       disabled={
                         selectedUpdatePlan.errors.length > 0 ||
                         selectedUpdatePlan.changes.length === 0
                       }
                       onClick={() => onUpdateLibrarySkill(skill.id)}
                     >
-                      Apply update {skill.id}
+                      Apply update
                     </button>
                   </section>
                 ) : null}
@@ -256,11 +495,21 @@ export const SkillLibraryPanel = ({
         </div>
       </section>
 
-      {skillInventory.length > 0 ? (
-        <section className="resource-section" aria-label="Environment skills">
+      {activeTool === "discoveries" ? (
+        <section className="library-drawer" aria-label="Environment skills">
+          <div className="library-drawer__header">
+            <div>
+              <strong>Target discoveries</strong>
+              <p className="muted">Skills detected on targets that may need import or management.</p>
+            </div>
+            <button className="icon-action" type="button" aria-label="Close library tool" onClick={onCloseTool}>
+              <X size={16} strokeWidth={2.2} />
+            </button>
+          </div>
+        <section className="resource-section target-discovery-section">
           <div>
-            <div className="resource-heading">Environment skills</div>
-            <p className="muted">Inspect target skills and move unmanaged folders into the shared library.</p>
+            <div className="resource-heading">Target discoveries</div>
+            <p className="muted">Skills detected on targets that may need import or management.</p>
           </div>
           <div className="resource-list resource-list--unmanaged">
             {skillInventory.map((skill) => (
@@ -313,9 +562,21 @@ export const SkillLibraryPanel = ({
             ))}
           </div>
         </section>
+        </section>
       ) : null}
 
-      <section className="resource-section library-import-panel" aria-label="GitHub skill import">
+      {activeTool === "import" ? (
+        <section className="library-drawer" aria-label="GitHub skill import">
+          <div className="library-drawer__header">
+            <div>
+              <strong>Import Skill</strong>
+              <p className="muted">Use the header action for imports; local target imports live under Needs management.</p>
+            </div>
+            <button className="icon-action" type="button" aria-label="Close library tool" onClick={onCloseTool}>
+              <X size={16} strokeWidth={2.2} />
+            </button>
+          </div>
+      <section className="resource-section library-import-panel">
         <div>
           <div className="resource-heading">Import from GitHub directory</div>
           <p className="muted">
@@ -352,47 +613,8 @@ export const SkillLibraryPanel = ({
           </button>
         </div>
       </section>
-
-      <section className="resource-section" aria-label="Library storage settings">
-        <div>
-          <div className="resource-heading">Storage</div>
-          <p className="muted">Choose how library skills are placed into each agent target.</p>
-        </div>
-        <div className="resource-settings-grid">
-          <label>
-            <span>Sync</span>
-            <select
-              aria-label="Skill sync method"
-              value={skillSettings.skillSyncMethod}
-              onChange={(event) =>
-                onSkillSettingsChange({
-                  skillSyncMethod: event.currentTarget.value as AgentEnvSettings["skillSyncMethod"]
-                })
-              }
-            >
-              <option value="symlink">Symlink</option>
-              <option value="copy">Copy</option>
-              <option value="auto">Auto</option>
-            </select>
-          </label>
-          <label>
-            <span>Storage</span>
-            <select
-              aria-label="Skill storage location"
-              value={skillSettings.skillStorageLocation}
-              onChange={(event) =>
-                onSkillSettingsChange({
-                  skillStorageLocation: event.currentTarget
-                    .value as AgentEnvSettings["skillStorageLocation"]
-                })
-              }
-            >
-              <option value="appData">App data</option>
-              <option value="agents">~/.agents/skills</option>
-            </select>
-          </label>
-        </div>
-      </section>
+        </section>
+      ) : null}
     </section>
   );
 };

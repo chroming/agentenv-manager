@@ -1,6 +1,7 @@
 import type {
   AgentEnvSettings,
   McpLibraryEntry,
+  SkillInventoryEntry,
   SkillLibraryEntry,
   SkillUpdateInfo
 } from "../../shared/types";
@@ -11,6 +12,8 @@ interface LibrarySummaryPanelProps {
   mcpServers: McpLibraryEntry[];
   skillUpdates: SkillUpdateInfo[];
   skillSettings: AgentEnvSettings;
+  skillUsage: Record<string, string[]>;
+  skillInventory: SkillInventoryEntry[];
   mcpUsage: Record<string, string[]>;
 }
 
@@ -20,6 +23,8 @@ export const LibrarySummaryPanel = ({
   mcpServers,
   skillUpdates,
   skillSettings,
+  skillUsage,
+  skillInventory,
   mcpUsage
 }: LibrarySummaryPanelProps) => {
   const updateCount = skillUpdates.filter((update) => update.updateAvailable).length;
@@ -29,6 +34,11 @@ export const LibrarySummaryPanel = ({
   const stdioCount = mcpServers.filter((server) => server.transport === "stdio").length;
   const remoteCount = mcpServers.filter((server) => server.transport !== "stdio").length;
   const usedMcpCount = mcpServers.filter((server) => (mcpUsage[server.id] ?? []).length > 0).length;
+  const selectedSkill = librarySkills[0];
+  const selectedUpdate = selectedSkill ? skillUpdates.find((update) => update.id === selectedSkill.id) : undefined;
+  const selectedInstalls = selectedSkill
+    ? skillInventory.filter((skill) => skill.libraryId === selectedSkill.id || skill.id === selectedSkill.id)
+    : [];
 
   if (activeTab === "mcp") {
     return (
@@ -83,26 +93,72 @@ export const LibrarySummaryPanel = ({
   return (
     <aside className="activation-panel library-summary-panel" aria-label="Library summary">
       <div className="activation-header">
-        <p className="section-title">Library</p>
-        <h2>Skills</h2>
+        <p className="section-title">Resource inspector</p>
+        <h2>{selectedSkill?.name ?? "Skills"}</h2>
       </div>
-      <div className={`status-card${failedChecks > 0 ? " is-blocked" : ""}`}>
-        <span className={`status-dot${updateCount === 0 && failedChecks === 0 ? " is-ready" : ""}`} />
-        <div>
-          <strong>
-            {failedChecks > 0
-              ? `${failedChecks} check failed`
-              : updateCount > 0
-                ? `${updateCount} update available`
-                : "Library current"}
-          </strong>
-          <small>
-            {librarySkills.length} skill{librarySkills.length === 1 ? "" : "s"} in the shared library
-          </small>
-        </div>
-      </div>
-      <section className="safety-checks" aria-label="Library inventory">
-        <div className="section-title">Inventory</div>
+      {selectedSkill ? (
+        <>
+          <section className="inspector-section" aria-label="Resource overview">
+            <div className="section-title">Overview</div>
+            <p>{selectedSkill.description || selectedSkill.id}</p>
+            <a href={selectedSkill.source} title={selectedSkill.source}>
+              {selectedSkill.source ?? selectedSkill.path}
+            </a>
+          </section>
+          <section className="safety-checks" aria-label="Source monitor">
+            <div className="section-title">Source monitor</div>
+            <div className="check-row">
+              <span>Source</span>
+              <strong>{selectedSkill.sourceType}</strong>
+            </div>
+            <div className="check-row">
+              <span>Auto update</span>
+              <strong>{selectedSkill.source ? "Enabled" : "Manual"}</strong>
+            </div>
+            <div className="check-row">
+              <span>Last updated</span>
+              <strong>{new Date(selectedSkill.updatedAt).toLocaleDateString()}</strong>
+            </div>
+          </section>
+          <section className="safety-checks" aria-label="Profiles using selected resource">
+            <div className="section-title">Used by profiles</div>
+            {(skillUsage[selectedSkill.id] ?? []).length === 0 ? (
+              <p className="muted">Not used by any profile</p>
+            ) : null}
+            {(skillUsage[selectedSkill.id] ?? []).map((profile) => (
+              <div className="check-row" key={profile}>
+                <span>{profile}</span>
+                <strong>Profile</strong>
+              </div>
+            ))}
+          </section>
+          <section className="safety-checks" aria-label="Targets with selected resource">
+            <div className="section-title">Installed on targets</div>
+            {selectedInstalls.length === 0 ? <p className="muted">Not installed on targets</p> : null}
+            {selectedInstalls.map((install) => (
+              <div className="check-row" key={install.path}>
+                <span>{install.foundIn.join(", ")}</span>
+                <strong>{install.status}</strong>
+              </div>
+            ))}
+          </section>
+          <section className={`status-card${selectedUpdate?.error ? " is-blocked" : ""}`} aria-label="Update preview summary">
+            <span className={`status-dot${selectedUpdate?.updateAvailable ? "" : " is-ready"}`} />
+            <div>
+              <strong>
+                {selectedUpdate?.error
+                  ? "Check failed"
+                  : selectedUpdate?.updateAvailable
+                    ? "Update available"
+                    : "No update pending"}
+              </strong>
+              <small>{selectedUpdate?.latestRevision ?? "Current library version"}</small>
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="safety-checks" aria-label="Library inventory">
+          <div className="section-title">Inventory</div>
         <div className="check-row">
           <span>Total skills</span>
           <strong>{librarySkills.length}</strong>
@@ -115,7 +171,8 @@ export const LibrarySummaryPanel = ({
           <span>Local only</span>
           <strong>{localCount}</strong>
         </div>
-      </section>
+        </section>
+      )}
       <section className="safety-checks" aria-label="Library settings summary">
         <div className="section-title">Settings</div>
         <div className="check-row">

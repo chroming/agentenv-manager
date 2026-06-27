@@ -249,12 +249,15 @@ const launchApp = async () => {
     }
   });
   const page = await app.firstWindow();
+  await page.setViewportSize({ width: 1440, height: 960 });
   await page.waitForLoadState("domcontentloaded");
 
   return { appDataRoot, homeDir, opencodeDir, codexDir, librarySkill, page };
 };
 
 const selectProfile = async (page: Page, name: string) => {
+  await page.getByRole("button", { name: "Profiles" }).click();
+  await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: new RegExp(name) }).click();
   await page.getByRole("heading", { name }).waitFor({ state: "visible" });
 };
@@ -278,39 +281,44 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
-  it("opens the Libraries workspace as a top-level app area", async () => {
+  it("opens the Library workspace as the global app area", async () => {
     const { page } = await launchApp();
 
-    await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("tablist", { name: "Profile sections" }).waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Libraries" }).click();
     await page
       .getByRole("region", { name: "Skill library", exact: true })
       .waitFor({ state: "visible" });
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .waitFor({ state: "visible" });
 
-    expect(await page.getByRole("complementary", { name: "Library summary" }).count()).toBe(1);
+    expect(await page.getByRole("complementary", { name: "Library summary" }).count()).toBe(0);
     expect(await page.getByRole("group", { name: "Library item shared-reviewer" }).count()).toBe(
       1
     );
-    expect(await page.getByText("Shared review guidance for multiple profiles.").count()).toBe(1);
+    expect(
+      await page
+        .getByRole("group", { name: "Library item shared-reviewer" })
+        .getByText("Shared review guidance for multiple profiles.")
+        .count()
+    ).toBe(1);
     expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
     expect(await page.getByRole("tablist", { name: "Profile sections" }).count()).toBe(0);
 
+    await page.getByRole("button", { name: "Import Skill" }).click();
     await page
       .getByLabel("GitHub skill URL")
       .fill("https://github.com/acme/agent-skills/tree/main/skills/reviewer");
     expect(await page.getByRole("button", { name: "Import from GitHub" }).isEnabled()).toBe(true);
 
-    await page.getByRole("button", { name: "Profiles" }).click();
-    await page.getByRole("tablist", { name: "Profile sections" }).waitFor({ state: "visible" });
+    await selectProfile(page, "UI OpenCode alpha");
     expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(1);
   }, 30_000);
 
   it("imports an existing target skill into the shared library", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
 
-    await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("button", { name: "Libraries" }).click();
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await page.getByRole("button", { name: "Scan local Skills" }).click();
     await page
       .getByRole("group", { name: "Environment skill target-only-reviewer" })
       .waitFor({ state: "visible" });
@@ -354,8 +362,7 @@ describe("Electron UI profile switching e2e", () => {
       "---\nname: Shared Reviewer\ndescription: Updated shared review guidance.\n---\n\n# Shared Reviewer\n\nUse the refreshed source content.\n",
       "utf8"
     );
-    await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("button", { name: "Libraries" }).click();
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .waitFor({ state: "visible" });
@@ -365,7 +372,10 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("region", { name: "Update preview for shared-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
-    await page.getByText("Updated shared review guidance.").waitFor({ state: "visible" });
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByText("Updated shared review guidance.")
+      .waitFor({ state: "visible" });
 
     await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
       "Use the refreshed source content."
@@ -382,11 +392,14 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
 
-    await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("button", { name: "Libraries" }).click();
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .waitFor({ state: "visible" });
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByRole("button", { name: "More actions for shared-reviewer" })
+      .click();
     await page.getByLabel("Update source for shared-reviewer").fill(newSourceDir);
     await page.getByRole("button", { name: "Save source for shared-reviewer" }).click();
     await page
@@ -400,7 +413,10 @@ describe("Electron UI profile switching e2e", () => {
       .getByText("SKILL.md", { exact: true })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
-    await page.getByText("Alternate source guidance.").waitFor({ state: "visible" });
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByText("Alternate source guidance.")
+      .waitFor({ state: "visible" });
 
     await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
       "Use the alternate configured source."
@@ -416,7 +432,7 @@ describe("Electron UI profile switching e2e", () => {
       "https://example.com/shared-docs/mcp"
     );
 
-    await page.getByRole("combobox").selectOption({ label: "Codex" });
+    await page.locator(".profile-target-filter select").selectOption({ label: "Codex" });
     await selectProfile(page, "UI Codex alpha");
     await previewAndApply(page, "Codex");
     await expect(readFile(join(codexDir, "config.toml"), "utf8")).resolves.toContain(
@@ -430,10 +446,9 @@ describe("Electron UI profile switching e2e", () => {
   it("switches OpenCode profiles through the rendered app and restores from history", async () => {
     const { opencodeDir, page } = await launchApp();
 
+    await selectProfile(page, "UI OpenCode alpha");
     await page.getByTitle(opencodeDir, { exact: true }).first().waitFor({ state: "attached" });
     expect(await page.getByTitle(opencodeDir, { exact: true }).count()).toBeGreaterThan(0);
-
-    await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain(
       "Active UI profile: alpha"
@@ -472,10 +487,10 @@ describe("Electron UI profile switching e2e", () => {
   it("switches Codex profiles through the rendered app without touching auth", async () => {
     const { codexDir, homeDir, page } = await launchApp();
 
-    await page.getByRole("combobox").selectOption({ label: "Codex" });
-    expect(await page.getByTitle(codexDir, { exact: true }).count()).toBeGreaterThan(0);
-
+    await page.getByRole("button", { name: "Profiles" }).click();
+    await page.locator(".profile-target-filter select").selectOption({ label: "Codex" });
     await selectProfile(page, "UI Codex alpha");
+    expect(await page.getByTitle(codexDir, { exact: true }).count()).toBeGreaterThan(0);
     await previewAndApply(page, "Codex");
     await expect(readFile(join(codexDir, "AGENTS.md"), "utf8")).resolves.toContain(
       "Active Codex UI profile: alpha"

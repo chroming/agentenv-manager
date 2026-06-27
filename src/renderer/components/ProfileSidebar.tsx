@@ -1,15 +1,30 @@
+import {
+  Activity,
+  BookOpen,
+  Bot,
+  Boxes,
+  Monitor,
+  Network,
+  Settings,
+  type LucideIcon
+} from "lucide-react";
 import type { ProfileSummary, TargetHealthStatus, TargetInfo } from "../../shared/types";
+
+const claudeIconUrl = new URL("../assets/target-icons/claude.svg", import.meta.url).href;
+const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.url).href;
+const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
+
+export type AppWorkspace = "library" | "profiles" | "targets" | "activity" | "settings";
+export type LibraryTab = "skills" | "mcp";
 
 interface ProfileSidebarProps {
   targets: TargetInfo[];
   profiles: ProfileSummary[];
-  selectedProfileId?: string;
-  selectedTargetId?: string;
-  activeWorkspace: "profile" | "skill-library";
+  activeWorkspace: AppWorkspace;
+  activeLibraryTab: LibraryTab;
   isLoading: boolean;
-  onWorkspaceSelect(workspace: "profile" | "skill-library"): void;
-  onTargetSelect(targetId: string): void;
-  onSelect(profileId: string): void;
+  onWorkspaceSelect(workspace: AppWorkspace): void;
+  onLibraryTabSelect(tab: LibraryTab): void;
   onCreate(): void;
 }
 
@@ -20,115 +35,189 @@ const targetStatusLabel: Record<TargetHealthStatus, string> = {
   guarded: "Guarded"
 };
 
+type TargetIconFlavor = "opencode" | "codex" | "claude" | "generic";
+
+const targetInitials = (target: TargetInfo) => {
+  const source = target.name || target.id;
+  const words = source.split(/[\s-_]+/).filter(Boolean);
+  const initials = words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
+
+  return initials || "A";
+};
+
+const targetIconFor = (target: TargetInfo): { flavor: TargetIconFlavor; assetUrl?: string } => {
+  const key = `${target.id} ${target.name}`.toLowerCase();
+
+  if (key.includes("opencode")) {
+    return { flavor: "opencode", assetUrl: openCodeIconUrl };
+  }
+  if (key.includes("claude")) {
+    return { flavor: "claude", assetUrl: claudeIconUrl };
+  }
+  if (key.includes("codex")) {
+    return { flavor: "codex", assetUrl: openAiIconUrl };
+  }
+
+  return { flavor: "generic" };
+};
+
+const targetDisplayRank = (target: TargetInfo) => {
+  const flavor = targetIconFor(target).flavor;
+  const rank: Record<TargetIconFlavor, number> = {
+    opencode: 0,
+    codex: 1,
+    claude: 2,
+    generic: 3
+  };
+
+  return rank[flavor];
+};
+
 export const ProfileSidebar = ({
   targets,
   profiles,
-  selectedProfileId,
-  selectedTargetId,
   activeWorkspace,
+  activeLibraryTab,
   isLoading,
   onWorkspaceSelect,
-  onTargetSelect,
-  onSelect,
+  onLibraryTabSelect,
   onCreate
 }: ProfileSidebarProps) => {
-  const selectedTarget = targets.find((target) => target.id === selectedTargetId);
-  const selectedTargetStatus = selectedTarget
-    ? targetStatusLabel[selectedTarget.health.status]
-    : undefined;
+  const readyTargets = targets.filter((target) => target.health.status === "ready").length;
+  const statusTargets = [...targets]
+    .sort((left, right) => targetDisplayRank(left) - targetDisplayRank(right))
+    .slice(0, 3);
+
+  const libraryItems: Array<{
+    id: LibraryTab;
+    label: string;
+    detail: string;
+    icon: LucideIcon;
+  }> = [
+    { id: "skills", label: "Skills", detail: "Skill library", icon: BookOpen },
+    { id: "mcp", label: "MCP Servers", detail: "Shared servers", icon: Network }
+  ];
+  const workspaceItems: Array<{
+    id: AppWorkspace;
+    label: string;
+    detail: string;
+    icon: LucideIcon;
+  }> = [
+    { id: "profiles", label: "Profiles", detail: "Compose environments", icon: Boxes },
+    { id: "targets", label: "Targets", detail: "Local agent runtimes", icon: Monitor },
+    { id: "activity", label: "Activity", detail: "Backups and changes", icon: Activity }
+  ];
 
   return (
-    <aside className="sidebar" aria-label="Profiles">
+    <aside className="sidebar global-sidebar" aria-label="Global navigation">
+      <div className="window-controls" aria-hidden="true">
+        <span className="window-control window-control--close" />
+        <span className="window-control window-control--minimize" />
+        <span className="window-control window-control--zoom" />
+      </div>
       <div className="sidebar__header">
         <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">A</div>
+          <div className="brand-mark" aria-hidden="true">
+            <Bot size={18} strokeWidth={2.3} />
+          </div>
           <div>
-            <h1>AgentEnv</h1>
-            <p className="muted">Local agent environments</p>
+            <h1>AgentEnv Manager</h1>
+            <p className="muted">v0.1.0</p>
           </div>
         </div>
-        <button className="create-button" type="button" onClick={onCreate}>
-          New
-        </button>
       </div>
-      <label className="target-picker">
-        <span>Target</span>
-        <select
-          value={selectedTargetId ?? ""}
-          onChange={(event) => onTargetSelect(event.currentTarget.value)}
-        >
-          {targets.map((target) => (
-            <option key={target.id} value={target.id}>
-              {target.name}
-            </option>
-          ))}
-        </select>
-        {selectedTarget ? <small>{selectedTarget.description}</small> : null}
-      </label>
-      {selectedTarget ? (
-        <section className="target-status" aria-label="Target status">
-          <div className="target-status__summary">
-            <strong className={`target-badge target-badge--${selectedTarget.health.status}`}>
-              {selectedTargetStatus}
-            </strong>
-            {selectedTarget.health.summary !== selectedTargetStatus ? (
-              <small>{selectedTarget.health.summary}</small>
-            ) : null}
-          </div>
-          <details className="target-details">
-            <summary>Target details</summary>
-            <div className="target-checks">
-              {selectedTarget.health.checks.map((check) => (
-                <div className="target-check" key={check.id}>
-                  <div>
-                    <span>{check.label}</span>
-                    <code title={check.path}>{check.path}</code>
-                  </div>
-                  <strong>
-                    {check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing"}
-                  </strong>
-                </div>
-              ))}
-            </div>
-          </details>
-        </section>
-      ) : null}
       <nav className="workspace-nav" aria-label="Workspace">
+        <div className="nav-section-label">Library</div>
+        {libraryItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              aria-label={item.label}
+              className={`workspace-button${
+                activeWorkspace === "library" && activeLibraryTab === item.id ? " is-active" : ""
+              }`}
+              type="button"
+              key={item.id}
+              onClick={() => {
+                onWorkspaceSelect("library");
+                onLibraryTabSelect(item.id);
+              }}
+            >
+              <span className="workspace-button__icon" aria-hidden="true">
+                <Icon size={16} strokeWidth={2.2} />
+              </span>
+              <span>{item.label}</span>
+              <small>{item.detail}</small>
+            </button>
+          );
+        })}
+        <div className="nav-section-label">Workspace</div>
+        {workspaceItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              aria-label={item.label}
+              className={`workspace-button${activeWorkspace === item.id ? " is-active" : ""}`}
+              type="button"
+              key={item.id}
+              onClick={() => onWorkspaceSelect(item.id)}
+            >
+              <span className="workspace-button__icon" aria-hidden="true">
+                <Icon size={16} strokeWidth={2.2} />
+              </span>
+              <span>{item.label}</span>
+              <small>{item.detail}</small>
+            </button>
+          );
+        })}
+        <div className="nav-section-label">Settings</div>
         <button
-          aria-label="Profiles"
-          className={`workspace-button${activeWorkspace === "profile" ? " is-active" : ""}`}
+          aria-label="Settings"
+          className={`workspace-button${activeWorkspace === "settings" ? " is-active" : ""}`}
           type="button"
-          onClick={() => onWorkspaceSelect("profile")}
+          onClick={() => onWorkspaceSelect("settings")}
         >
-          <span>Profiles</span>
-          <small>Edit and apply environments</small>
-        </button>
-        <button
-          aria-label="Libraries"
-          className={`workspace-button${activeWorkspace === "skill-library" ? " is-active" : ""}`}
-          type="button"
-          onClick={() => onWorkspaceSelect("skill-library")}
-        >
-          <span>Libraries</span>
-          <small>Manage shared skills and MCP</small>
+          <span className="workspace-button__icon" aria-hidden="true">
+            <Settings size={16} strokeWidth={2.2} />
+          </span>
+          <span>Settings</span>
+          <small>Storage and safety</small>
         </button>
       </nav>
-      <div className="section-title">Profiles</div>
-      <div className="profile-list">
-        {isLoading ? <p className="muted">Loading profiles...</p> : null}
-        {!isLoading && profiles.length === 0 ? <p className="muted">No profiles</p> : null}
-        {profiles.map((profile) => (
-          <button
-            className={`profile-row${profile.id === selectedProfileId ? " is-active" : ""}`}
-            type="button"
-            key={profile.id}
-            onClick={() => onSelect(profile.id)}
-          >
-            <span>{profile.name}</span>
-            <small>{profile.description}</small>
-          </button>
-        ))}
-      </div>
+      <section className="system-status-card" aria-label="System status">
+        <div>
+          <span className="status-dot is-ready" />
+          <strong>Connected</strong>
+        </div>
+        <small>
+          {readyTargets}/{targets.length} targets · {isLoading ? "Loading" : `${profiles.length} profiles`}
+        </small>
+        <div className="agent-chip-row" aria-label="Connected targets">
+          {statusTargets.map((target) => {
+            const targetIcon = targetIconFor(target);
+
+            return (
+              <span
+                className={`agent-chip agent-chip--${target.health.status} agent-chip--${targetIcon.flavor}`}
+                title={`${target.name} · ${targetStatusLabel[target.health.status]}`}
+                key={target.id}
+              >
+                {targetIcon.assetUrl ? (
+                  <img className="agent-chip__logo" src={targetIcon.assetUrl} alt="" />
+                ) : (
+                  targetInitials(target)
+                )}
+              </span>
+            );
+          })}
+        </div>
+      </section>
+      <button className="create-button sidebar-action" type="button" onClick={onCreate}>
+        New profile
+      </button>
     </aside>
   );
 };
