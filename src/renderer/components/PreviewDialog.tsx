@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ActivationPreview, RollbackPreview } from "../../shared/types";
 import { DiffViewer } from "./DiffViewer";
 
@@ -11,6 +11,16 @@ interface PreviewDialogProps {
   onCancel?(): void;
   onConfirm?(): void;
 }
+
+const FOCUSABLE_SELECTOR = [
+  "summary",
+  "button:not([disabled])",
+  "[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])"
+].join(",");
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
@@ -77,20 +87,60 @@ export const PreviewDialog = ({
   onConfirm
 }: PreviewDialogProps) => {
   const hasActions = Boolean(onCancel || onConfirm);
+  const isModalOpen = Boolean(preview && hasActions);
+  const dialogRef = useRef<HTMLElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
   useEffect(() => {
-    if (!hasActions || !onCancel) {
+    if (!isModalOpen) {
       return undefined;
     }
 
+    const invokingControl =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    cancelButtonRef.current?.focus();
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onCancel();
+        if (onCancelRef.current) {
+          event.preventDefault();
+          onCancelRef.current();
+        }
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const focusableControls = dialogRef.current
+        ? Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+        : [];
+      if (focusableControls.length === 0) {
+        return;
+      }
+
+      const firstControl = focusableControls[0];
+      const lastControl = focusableControls.at(-1);
+      if (event.shiftKey && document.activeElement === firstControl) {
+        event.preventDefault();
+        lastControl?.focus();
+      } else if (!event.shiftKey && document.activeElement === lastControl) {
+        event.preventDefault();
+        firstControl.focus();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [hasActions, onCancel]);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      if (invokingControl?.isConnected) {
+        invokingControl.focus();
+      }
+    };
+  }, [isModalOpen]);
 
   if (!preview) {
     return null;
@@ -105,6 +155,7 @@ export const PreviewDialog = ({
 
   const content = (
     <section
+      ref={dialogRef}
       className={`preview-dialog${hasActions ? " preview-dialog--modal" : ""}`}
       role={hasActions ? "dialog" : undefined}
       aria-label="Preview"
@@ -167,7 +218,12 @@ export const PreviewDialog = ({
       </div>
       {hasActions ? (
         <footer className="preview-actions">
-          <button className="secondary-action" type="button" onClick={onCancel}>
+          <button
+            ref={cancelButtonRef}
+            className="secondary-action"
+            type="button"
+            onClick={onCancel}
+          >
             {cancelLabel}
           </button>
           <button
