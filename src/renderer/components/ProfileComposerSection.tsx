@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, useId, type ReactNode } from "react";
 
 export interface ProfileComposerSectionProps {
   id: string;
@@ -24,22 +24,28 @@ export const ProfileComposerSection = ({
   onToggle,
   children
 }: ProfileComposerSectionProps) => {
-  const triggerId = `${id}-trigger`;
-  const titleId = `${id}-title`;
-  const descriptionId = `${id}-description`;
-  const panelId = `${id}-panel`;
+  const generatedId = useId();
+  const triggerId = `${generatedId}-trigger`;
+  const titleId = `${generatedId}-title`;
+  const descriptionId = `${generatedId}-description`;
+  const countId = `${generatedId}-count`;
+  const summaryId = `${generatedId}-summary`;
+  const panelId = `${generatedId}-panel`;
   const uniqueChipNames = [...new Set(chipNames)];
   const visibleChipNames = uniqueChipNames.slice(0, 3);
   const overflowCount = Math.max(0, uniqueChipNames.length - visibleChipNames.length);
 
   return (
-    <section className={`profile-composer-section${expanded ? " is-expanded" : ""}`}>
+    <section
+      className={`profile-composer-section${expanded ? " is-expanded" : ""}`}
+      data-profile-composer-id={id}
+    >
       <button
         className="profile-composer-section__trigger"
         id={triggerId}
         type="button"
         aria-controls={panelId}
-        aria-describedby={descriptionId}
+        aria-describedby={`${descriptionId} ${countId} ${summaryId}`}
         aria-expanded={expanded}
         aria-labelledby={titleId}
         onClick={onToggle}
@@ -55,20 +61,23 @@ export const ProfileComposerSection = ({
             {description}
           </span>
         </span>
-        <span
-          className="profile-composer-section__count"
-          aria-label={`${count} resource${count === 1 ? "" : "s"}`}
-        >
+        <span className="profile-composer-section__count" id={countId}>
           {count}
         </span>
-        <span className="profile-composer-section__summary" aria-label={`${title} summary`}>
-          {visibleChipNames.map((chipName) => (
-            <span className="resource-chip" data-testid="profile-composer-chip" key={chipName}>
-              {chipName}
-            </span>
+        <span className="profile-composer-section__summary" id={summaryId}>
+          {visibleChipNames.map((chipName, index) => (
+            <Fragment key={chipName}>
+              {index > 0 ? " " : null}
+              <span className="resource-chip" data-testid="profile-composer-chip">
+                {chipName}
+              </span>
+            </Fragment>
           ))}
           {overflowCount > 0 ? (
-            <span className="resource-chip resource-chip--muted">+{overflowCount}</span>
+            <>
+              {visibleChipNames.length > 0 ? " " : null}
+              <span className="resource-chip resource-chip--muted">+{overflowCount}</span>
+            </>
           ) : null}
         </span>
         <ChevronDown
