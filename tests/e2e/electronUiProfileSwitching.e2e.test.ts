@@ -364,6 +364,24 @@ const selectTarget = async (page: Page, name: string) => {
   await page.getByRole("menuitemradio", { name }).click();
 };
 
+type ComposerSectionName = "Instructions" | "Skills" | "MCP Servers" | "Advanced";
+
+const expandComposerSection = async (page: Page, name: ComposerSectionName) => {
+  const composer = page.getByRole("region", { name: "Profile composer" });
+  const trigger = composer.getByRole("button", { name, exact: true });
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
+    await trigger.click();
+  }
+  await expect.poll(() => trigger.getAttribute("aria-expanded")).toBe("true");
+};
+
+const openSkillLibrary = async (page: Page) => {
+  await page
+    .getByRole("complementary", { name: "Global navigation" })
+    .getByRole("button", { name: "Skills", exact: true })
+    .click();
+};
+
 const expectInViewport = async (page: Page, locator: Locator) => {
   const box = await locator.boundingBox();
   const viewport = page.viewportSize();
@@ -405,6 +423,13 @@ const previewAndApply = async (page: Page, targetName: "OpenCode" | "Codex") => 
   await previewDialog.waitFor({ state: "visible" });
   await previewDialog.getByRole("button", { name: "Confirm" }).click();
   await previewDialog.waitFor({ state: "hidden" });
+};
+
+const saveProfile = async (page: Page) => {
+  const saveButton = page.getByRole("button", { name: "Save", exact: true });
+  await saveButton.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => saveButton.isDisabled()).toBe(true);
 };
 
 const addLibrarySkillToProfile = async (page: Page, skillName = "Shared Reviewer") => {
@@ -527,8 +552,8 @@ describe("Electron UI profile switching e2e", () => {
     await editDialog.waitFor({ state: "visible", timeout: 5_000 });
     await editDialog.getByLabel("Profile name").fill("Docs Writing v2");
     await editDialog.getByLabel("Description").fill("Updated writing workspace");
-    await editDialog.getByRole("button", { name: "Save" }).click();
-    await page.getByRole("button", { name: "Save" }).click();
+    await editDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await saveProfile(page);
     await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({
       state: "visible",
       timeout: 10_000
@@ -588,7 +613,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.mouse.click(240, 120);
     await targetMenu.waitFor({ state: "hidden", timeout: 5_000 });
 
-    await page.getByRole("button", { name: "Skills", exact: true }).click({ timeout: 5_000 });
+    await openSkillLibrary(page);
     await page.getByRole("button", { name: "Import Skill" }).click({ timeout: 5_000 });
     const importDrawer = page.getByRole("region", { name: "GitHub skill import" });
     await importDrawer.waitFor({ state: "visible", timeout: 5_000 });
@@ -605,7 +630,7 @@ describe("Electron UI profile switching e2e", () => {
       "skill"
     );
 
-    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local Skills" }).click();
     await page
       .getByRole("group", { name: "Cleanup group target-only-reviewer" })
@@ -653,7 +678,7 @@ describe("Electron UI profile switching e2e", () => {
       "Local copy intentionally left unmanaged."
     );
 
-    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local Skills" }).click();
     const cleanupGroup = page.getByRole("group", { name: "Cleanup group ui-alpha-skill" });
     await cleanupGroup.waitFor({ state: "visible" });
@@ -776,7 +801,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.mouse.click(240, 120);
     await actionsMenu.waitFor({ state: "hidden" });
 
-    await page.getByRole("tab", { name: "Resources" }).click();
+    await expandComposerSection(page, "Skills");
     await page.getByRole("button", { name: "Add library skill" }).click();
     const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
     await skillPicker.waitFor({ state: "visible" });
@@ -788,7 +813,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Escape");
     await skillPicker.waitFor({ state: "hidden" });
 
-    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await openSkillLibrary(page);
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
@@ -926,12 +951,12 @@ describe("Electron UI profile switching e2e", () => {
     const { librarySkill, opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("tab", { name: "Resources" }).click();
+    await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page);
     await page
       .getByRole("group", { name: "Library skill agentenv-shared-reviewer" })
       .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Save" }).click();
+    await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
     const installedSkillMd = join(
@@ -959,9 +984,9 @@ describe("Electron UI profile switching e2e", () => {
     const { librarySkill, opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("tab", { name: "Resources" }).click();
+    await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page);
-    await page.getByRole("button", { name: "Save" }).click();
+    await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
     const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
@@ -974,7 +999,7 @@ describe("Electron UI profile switching e2e", () => {
       "---\nname: Shared Reviewer\ndescription: Installed update guidance.\n---\n\n# Shared Reviewer\n\nUse the installed update path.\n",
       "utf8"
     );
-    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await openSkillLibrary(page);
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
@@ -1006,7 +1031,7 @@ describe("Electron UI profile switching e2e", () => {
       "---\nname: Shared Reviewer\ndescription: Batch shared v2.\n---\n\n# Shared Reviewer\n\nBatch updated shared content.\n",
       "utf8"
     );
-    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await openSkillLibrary(page);
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
@@ -1045,9 +1070,9 @@ describe("Electron UI profile switching e2e", () => {
       .toBe("copy");
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("tab", { name: "Resources" }).click();
+    await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page);
-    await page.getByRole("button", { name: "Save" }).click();
+    await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
     const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
@@ -1069,9 +1094,9 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe(false);
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("tab", { name: "Resources" }).click();
+    await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page);
-    await page.getByRole("button", { name: "Save" }).click();
+    await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
     const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
@@ -1106,13 +1131,13 @@ describe("Electron UI profile switching e2e", () => {
     const installedSkillDir = join(opencodeDir, "skills", "ui-alpha-skill");
     await expect(fileExists(installedSkillDir)).resolves.toBe(true);
 
-    await page.getByRole("tab", { name: "Resources" }).click();
+    await expandComposerSection(page, "Skills");
     expect(await page.getByRole("button", { name: "Add skill" }).count()).toBe(0);
     await page
       .getByRole("group", { name: "Skill ui-alpha-skill" })
       .getByRole("button", { name: "Remove" })
       .click();
-    await page.getByRole("button", { name: "Save" }).click();
+    await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
@@ -1122,10 +1147,10 @@ describe("Electron UI profile switching e2e", () => {
     const { opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("tab", { name: "Resources" }).click();
+    await expandComposerSection(page, "Skills");
     const alphaSkill = page.getByRole("group", { name: "Skill ui-alpha-skill" });
     await alphaSkill.getByLabel("Target name").fill("target-only-reviewer");
-    await page.getByRole("button", { name: "Save" }).click();
+    await saveProfile(page);
 
     await applyActionButton(page, "OpenCode").click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
@@ -1188,12 +1213,11 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Profiles" }).click();
     await selectTarget(page, "Codex");
     await selectProfile(page, "UI Codex alpha");
-    await page.getByRole("tab", { name: "Resources" }).click();
-    await page.getByRole("button", { name: "Advanced" }).click();
+    await expandComposerSection(page, "Advanced");
     await page
       .getByRole("textbox", { name: "Disabled Skill Paths" })
       .fill("/Users/example/.agents/skills/legacy-reviewer\n/Users/example/.agents/skills/noisy-helper");
-    await page.getByRole("button", { name: "Save" }).click();
+    await saveProfile(page);
     await previewAndApply(page, "Codex");
 
     const codexConfig = await readFile(join(codexDir, "config.toml"), "utf8");
@@ -1211,7 +1235,7 @@ describe("Electron UI profile switching e2e", () => {
       "---\nname: Shared Reviewer\ndescription: Updated shared review guidance.\n---\n\n# Shared Reviewer\n\nUse the refreshed source content.\n",
       "utf8"
     );
-    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await openSkillLibrary(page);
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .waitFor({ state: "visible" });
@@ -1248,7 +1272,7 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
 
-    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await openSkillLibrary(page);
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .waitFor({ state: "visible" });
@@ -1311,7 +1335,7 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible" });
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("tab", { name: "Resources" }).click();
+    await expandComposerSection(page, "MCP Servers");
     await page.getByRole("button", { name: "Add library MCP" }).click();
     const picker = page.getByRole("dialog", { name: "Add library MCP servers" });
     await picker.waitFor({ state: "visible" });
@@ -1323,7 +1347,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "MCP local-search" })
       .waitFor({ state: "visible" });
 
-    await page.getByRole("button", { name: "Save" }).click();
+    await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
     await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
@@ -1368,6 +1392,7 @@ describe("Electron UI profile switching e2e", () => {
       true
     );
 
+    await expandComposerSection(page, "Advanced");
     await page.getByRole("button", { name: /Preview rollback/ }).first().click();
     await page.getByRole("button", { name: "Restore backup" }).waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Restore backup" }).click();

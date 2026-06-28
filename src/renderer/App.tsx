@@ -380,6 +380,17 @@ export const App = () => {
   const profilePageActionsRef = useRef<HTMLDivElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const targetMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
+  const profileFlowRequestRef = useRef(0);
+  const activeProfileFlowRequestRef = useRef<number | undefined>(undefined);
+
+  const invalidateProfileFlow = () => {
+    profileFlowRequestRef.current += 1;
+    if (activeProfileFlowRequestRef.current !== undefined) {
+      activeProfileFlowRequestRef.current = undefined;
+      setBusy(false);
+    }
+  };
 
   const refreshProfiles = async () => {
     const [
@@ -470,8 +481,9 @@ export const App = () => {
         setSelectedTargetId(initialProfile.targetId);
         setSelectedProfileId(initialProfile.id);
         setActiveComposerSection("skills");
+        const requestId = ++profileFlowRequestRef.current;
         const profile = await window.agentEnv.readProfile(initialProfile.id);
-        if (isMounted) {
+        if (isMounted && requestId === profileFlowRequestRef.current) {
           setDraftProfile(profile);
           setIsProfileDirty(false);
           setProfileSaveStatus("");
@@ -510,6 +522,9 @@ export const App = () => {
   }, [isLoading, skillSettings.skillAutoCheckEnabled, skillSettings.skillAutoCheckIntervalMinutes]);
 
   const selectProfile = async (profileId: string) => {
+    const requestId = ++profileFlowRequestRef.current;
+    activeProfileFlowRequestRef.current = requestId;
+    const profileSummary = profiles.find((profile) => profile.id === profileId);
     setBusy(true);
     setError(undefined);
     setPreview(undefined);
@@ -517,20 +532,32 @@ export const App = () => {
     setActiveComposerSection("skills");
     setActiveWorkspace("profiles");
     setSelectedProfileId(profileId);
+    if (profileSummary) {
+      setSelectedTargetId(profileSummary.targetId);
+    }
     try {
       const profile = await window.agentEnv.readProfile(profileId);
+      if (requestId !== profileFlowRequestRef.current) {
+        return;
+      }
       setSelectedTargetId(profile.manifest.targetId);
       setDraftProfile(profile);
       setIsProfileDirty(false);
       setProfileSaveStatus("");
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      if (requestId === profileFlowRequestRef.current) {
+        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      }
     } finally {
-      setBusy(false);
+      if (requestId === profileFlowRequestRef.current) {
+        activeProfileFlowRequestRef.current = undefined;
+        setBusy(false);
+      }
     }
   };
 
   const updateDraftProfile = (profile: ProfileDetail) => {
+    invalidateProfileFlow();
     setDraftProfile(profile);
     setIsProfileDirty(true);
     setProfileSaveStatus("Unsaved changes");
@@ -641,6 +668,7 @@ export const App = () => {
     setBusy(true);
     setError(undefined);
     setIsProfileActionsOpen(false);
+    profileActionsButtonRef.current?.focus();
     try {
       const saved = await window.agentEnv.duplicateProfile(selectedProfileId);
       await refreshProfiles();
@@ -697,6 +725,13 @@ export const App = () => {
   };
 
   const selectTarget = (targetId: string) => {
+    setIsTargetMenuOpen(false);
+    targetMenuButtonRef.current?.focus();
+    if (targetId === selectedTargetId) {
+      return;
+    }
+
+    invalidateProfileFlow();
     setSelectedTargetId(targetId);
     setSelectedProfileId(undefined);
     setDraftProfile(undefined);
@@ -705,8 +740,6 @@ export const App = () => {
     setPreview(undefined);
     setRollbackPreview(undefined);
     setActiveComposerSection("skills");
-    setIsTargetMenuOpen(false);
-    targetMenuButtonRef.current?.focus();
   };
 
   useEffect(() => {
@@ -724,6 +757,7 @@ export const App = () => {
       }
       if (isProfileActionsOpen) {
         setIsProfileActionsOpen(false);
+        profileActionsButtonRef.current?.focus();
         return;
       }
       if (isTargetMenuOpen) {
@@ -759,6 +793,8 @@ export const App = () => {
       setIsProfileActionsOpen(false);
       if (isTargetMenuOpen) {
         targetMenuButtonRef.current?.focus();
+      } else if (isProfileActionsOpen) {
+        profileActionsButtonRef.current?.focus();
       }
     };
 
@@ -840,9 +876,14 @@ export const App = () => {
       return;
     }
 
+    const requestId = ++profileFlowRequestRef.current;
+    activeProfileFlowRequestRef.current = requestId;
     setBusy(true);
     try {
       const nextPreview = await window.agentEnv.previewApply(draftProfile.id);
+      if (requestId !== profileFlowRequestRef.current) {
+        return;
+      }
       const rendererBlockers = [
         ...(!selectedTarget?.health.canWrite
           ? [selectedTarget?.health.summary || `${selectedTarget?.name ?? "Target"} is unavailable`]
@@ -854,9 +895,14 @@ export const App = () => {
         errors: [...new Set([...rendererBlockers, ...nextPreview.errors])]
       });
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      if (requestId === profileFlowRequestRef.current) {
+        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      }
     } finally {
-      setBusy(false);
+      if (requestId === profileFlowRequestRef.current) {
+        activeProfileFlowRequestRef.current = undefined;
+        setBusy(false);
+      }
     }
   };
 
@@ -1554,7 +1600,10 @@ export const App = () => {
                       aria-haspopup="menu"
                       aria-label="Select apply target"
                       title="Select apply target"
-                      onClick={() => setIsTargetMenuOpen((current) => !current)}
+                      onClick={() => {
+                        setIsProfileActionsOpen(false);
+                        setIsTargetMenuOpen((current) => !current);
+                      }}
                     >
                       <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
                     </button>
@@ -1584,6 +1633,7 @@ export const App = () => {
                   </span>
                 </div>
                 <button
+                  ref={profileActionsButtonRef}
                   className="icon-action"
                   type="button"
                   aria-expanded={isProfileActionsOpen}
@@ -1591,7 +1641,10 @@ export const App = () => {
                   aria-label="More profile actions"
                   title="More profile actions"
                   disabled={!selectedProfileId}
-                  onClick={() => setIsProfileActionsOpen((current) => !current)}
+                  onClick={() => {
+                    setIsTargetMenuOpen(false);
+                    setIsProfileActionsOpen((current) => !current);
+                  }}
                 >
                   <MoreHorizontal size={16} strokeWidth={2.2} />
                 </button>
@@ -1731,8 +1784,8 @@ export const App = () => {
                           <button
                             className="icon-action"
                             type="button"
-                            aria-label="Edit profile"
-                            title="Edit profile"
+                            aria-label="Edit profile details"
+                            title="Edit profile details"
                             onClick={openEditProfileDialog}
                           >
                             <Pencil size={15} strokeWidth={2.2} />

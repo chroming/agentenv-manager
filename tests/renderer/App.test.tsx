@@ -158,6 +158,30 @@ const codexProfile: ProfileDetail = {
   configText: "[mcp_servers.context7]\ncommand = \"npx\"\n"
 };
 
+const profileB: ProfileDetail = {
+  ...profile,
+  id: "profile-b",
+  manifest: {
+    ...profile.manifest,
+    id: "profile-b",
+    name: "Profile B",
+    description: "Second profile"
+  },
+  instructions: "# Profile B\n"
+};
+
+const profileC: ProfileDetail = {
+  ...profile,
+  id: "profile-c",
+  manifest: {
+    ...profile.manifest,
+    id: "profile-c",
+    name: "Profile C",
+    description: "Third profile"
+  },
+  instructions: "# Profile C\n"
+};
+
 const richProfile: ProfileDetail = {
   ...profile,
   configText: `{
@@ -191,6 +215,16 @@ const summaryOf = (detail: ProfileDetail) => ({
   name: detail.manifest.name,
   description: detail.manifest.description
 });
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
 
 const managedState = (overrides: Partial<TargetManagementState> = {}): TargetManagementState => ({
   targetId: "opencode",
@@ -778,10 +812,10 @@ describe("App", () => {
     expect(newProfileButtons).toHaveLength(1);
     expect(newProfileButtons[0].closest("header")).toHaveClass("profile-page-header");
 
-    const edit = screen.getByRole("button", { name: "Edit profile" });
+    const edit = screen.getByRole("button", { name: "Edit profile details" });
     const more = screen.getByRole("button", { name: "More profile actions" });
     const targetMenu = screen.getByRole("button", { name: "Select apply target" });
-    expect(edit).toHaveAttribute("title", "Edit profile");
+    expect(edit).toHaveAttribute("title", "Edit profile details");
     expect(more).toHaveAttribute("title", "More profile actions");
     expect(targetMenu).toHaveAttribute("title", "Select apply target");
   });
@@ -861,6 +895,184 @@ describe("App", () => {
         { name: "Codex" }
       )
     ).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("preserves a dirty draft when the checked target is re-selected", async () => {
+    installApi();
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    const instructions = screen.getByLabelText("AGENTS.md");
+    fireEvent.change(instructions, { target: { value: "# Unsaved target-safe draft\n" } });
+
+    const targetButton = screen.getByRole("button", { name: "Select apply target" });
+    targetButton.focus();
+    fireEvent.click(targetButton);
+    const checkedTarget = screen.getByRole("menuitemradio", { name: "OpenCode" });
+    expect(checkedTarget).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(checkedTarget);
+
+    expect(screen.queryByRole("menu", { name: "Profile targets" })).not.toBeInTheDocument();
+    expect(targetButton).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
+    expect(instructions).toHaveValue("# Unsaved target-safe draft\n");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(
+      within(screen.getByRole("complementary", { name: "Profile list" })).getByRole("button", {
+        name: /Daily Coding/
+      })
+    ).toHaveTextContent("Unsaved");
+  });
+
+  it("ignores profile reads that resolve out of selection order", async () => {
+    const profileBRead = deferred<ProfileDetail>();
+    const profileCRead = deferred<ProfileDetail>();
+    let deferSelectionReads = false;
+    installApi({
+      listProfiles: vi
+        .fn()
+        .mockResolvedValue([summaryOf(profile), summaryOf(profileB), summaryOf(profileC)]),
+      readProfile: vi.fn().mockImplementation(async (profileId) => {
+        if (deferSelectionReads && profileId === profileB.id) return profileBRead.promise;
+        if (deferSelectionReads && profileId === profileC.id) return profileCRead.promise;
+        return profileId === profileB.id ? profileB : profileId === profileC.id ? profileC : profile;
+      })
+    });
+    render(<App />);
+
+    await openProfiles();
+    await screen.findByRole("heading", { name: "Daily Coding" });
+    deferSelectionReads = true;
+    const profileList = screen.getByRole("complementary", { name: "Profile list" });
+    fireEvent.click(within(profileList).getByRole("button", { name: /Profile B/ }));
+    fireEvent.click(within(profileList).getByRole("button", { name: /Profile C/ }));
+
+    await act(async () => {
+      profileCRead.resolve(profileC);
+      await profileCRead.promise;
+    });
+    expect(await screen.findByRole("heading", { name: "Profile C" })).toBeInTheDocument();
+
+    await act(async () => {
+      profileBRead.resolve(profileB);
+      await profileBRead.promise;
+    });
+    expect(screen.getByRole("heading", { name: "Profile C" })).toBeInTheDocument();
+    expect(
+      within(profileList).getByRole("button", { name: /Profile C/ })
+    ).toHaveAttribute("aria-current", "page");
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Profile C\n");
+    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeEnabled();
+  });
+
+  it("keeps busy state owned by the newest profile read", async () => {
+    const profileBRead = deferred<ProfileDetail>();
+    const profileCRead = deferred<ProfileDetail>();
+    let deferSelectionReads = false;
+    installApi({
+      listProfiles: vi
+        .fn()
+        .mockResolvedValue([summaryOf(profile), summaryOf(profileB), summaryOf(profileC)]),
+      readProfile: vi.fn().mockImplementation(async (profileId) => {
+        if (deferSelectionReads && profileId === profileB.id) return profileBRead.promise;
+        if (deferSelectionReads && profileId === profileC.id) return profileCRead.promise;
+        return profileId === profileB.id ? profileB : profileId === profileC.id ? profileC : profile;
+      })
+    });
+    render(<App />);
+
+    await openProfiles();
+    await screen.findByRole("heading", { name: "Daily Coding" });
+    deferSelectionReads = true;
+    const profileList = screen.getByRole("complementary", { name: "Profile list" });
+    fireEvent.click(within(profileList).getByRole("button", { name: /Profile B/ }));
+    fireEvent.click(within(profileList).getByRole("button", { name: /Profile C/ }));
+
+    await act(async () => {
+      profileBRead.resolve(profileB);
+      await profileBRead.promise;
+    });
+    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeDisabled();
+
+    await act(async () => {
+      profileCRead.resolve(profileC);
+      await profileCRead.promise;
+    });
+    expect(await screen.findByRole("heading", { name: "Profile C" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeEnabled();
+  });
+
+  it("ignores a stale preview after selecting another profile", async () => {
+    const stalePreview = deferred<typeof preview>();
+    const profileCRead = deferred<ProfileDetail>();
+    let deferProfileC = false;
+    const api = installApi({
+      listProfiles: vi
+        .fn()
+        .mockResolvedValue([summaryOf(profileB), summaryOf(profileC)]),
+      readProfile: vi.fn().mockImplementation(async (profileId) => {
+        if (deferProfileC && profileId === profileC.id) return profileCRead.promise;
+        return profileId === profileC.id ? profileC : profileB;
+      }),
+      previewApply: vi.fn().mockImplementation(() => stalePreview.promise)
+    });
+    render(<App />);
+
+    await openProfiles();
+    await screen.findByRole("heading", { name: "Profile B" });
+    fireEvent.click(screen.getByRole("button", { name: "Take over OpenCode" }));
+    await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("profile-b"));
+
+    deferProfileC = true;
+    const profileList = screen.getByRole("complementary", { name: "Profile list" });
+    fireEvent.click(within(profileList).getByRole("button", { name: /Profile C/ }));
+    await act(async () => {
+      stalePreview.resolve({ ...preview, profileId: profileB.id });
+      await stalePreview.promise;
+    });
+
+    expect(screen.queryByRole("dialog", { name: "Preview" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeDisabled();
+
+    await act(async () => {
+      profileCRead.resolve(profileC);
+      await profileCRead.promise;
+    });
+    expect(await screen.findByRole("heading", { name: "Profile C" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeEnabled();
+  });
+
+  it("keeps header menus exclusive and restores trigger focus", async () => {
+    const api = installApi();
+    render(<App />);
+
+    await openProfiles();
+    const targetButton = screen.getByRole("button", { name: "Select apply target" });
+    const moreButton = screen.getByRole("button", { name: "More profile actions" });
+
+    fireEvent.click(targetButton);
+    expect(screen.getByRole("menu", { name: "Profile targets" })).toBeInTheDocument();
+    fireEvent.click(moreButton);
+    expect(screen.queryByRole("menu", { name: "Profile targets" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Profile actions" })).toBeInTheDocument();
+
+    fireEvent.click(targetButton);
+    expect(screen.queryByRole("menu", { name: "Profile actions" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Profile targets" })).toBeInTheDocument();
+
+    fireEvent.click(moreButton);
+    moreButton.focus();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Profile actions" })).not.toBeInTheDocument();
+    expect(moreButton).toHaveFocus();
+
+    fireEvent.click(moreButton);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate profile" }));
+    await waitFor(() => expect(api.duplicateProfile).toHaveBeenCalledWith("daily-coding"));
+    expect(screen.queryByRole("menu", { name: "Profile actions" })).not.toBeInTheDocument();
+    expect(moreButton).toHaveFocus();
   });
 
   it("shows lifecycle-aware readiness and apply actions", async () => {
@@ -1017,7 +1229,7 @@ describe("App", () => {
 
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit profile details" }));
     const editDialog = screen.getByRole("dialog", { name: "Edit profile" });
     fireEvent.change(within(editDialog).getByLabelText("Profile name"), {
       target: { value: "Review Focus" }
