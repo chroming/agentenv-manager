@@ -61,7 +61,7 @@ describe("profile summary", () => {
       }
     });
 
-    expect(summarizeProfile(profile, "jsonc")).toEqual({
+    expect(summarizeProfile(profile, { id: "opencode", configLanguage: "jsonc" })).toEqual({
       instructions: { count: 1 },
       skills: {
         count: 3,
@@ -106,7 +106,7 @@ describe("profile summary", () => {
       }
     });
 
-    expect(summarizeProfile(profile, "toml")).toMatchObject({
+    expect(summarizeProfile(profile, { id: "codex", configLanguage: "toml" })).toMatchObject({
       skills: { count: 3, names: ["alpha", "beta", "gamma"] },
       mcp: {
         count: 3,
@@ -126,7 +126,9 @@ describe("profile summary", () => {
       }`
     });
 
-    expect(summarizeProfile(profile, "jsonc")).toMatchObject({
+    expect(
+      summarizeProfile(profile, { id: "claude-code", configLanguage: "jsonc" })
+    ).toMatchObject({
       instructions: { count: 0 },
       mcp: { count: 2, names: ["context7", "docs"] }
     });
@@ -138,7 +140,32 @@ describe("profile summary", () => {
       },
       instructions: "Nonempty but unmanaged"
     });
-    expect(summarizeProfile(unmanagedInstructions, "jsonc").instructions.count).toBe(0);
+    expect(
+      summarizeProfile(unmanagedInstructions, {
+        id: "claude-code",
+        configLanguage: "jsonc"
+      }).instructions.count
+    ).toBe(0);
+  });
+
+  it("uses only the raw MCP property owned by the selected target", () => {
+    const profile = makeProfile({
+      configText: `{
+        "mcp": {
+          "opencode-search": { "type": "remote" }
+        },
+        "mcpServers": {
+          "claude-docs": { "command": "npx" }
+        }
+      }`
+    });
+
+    expect(
+      summarizeProfile(profile, { id: "opencode", configLanguage: "jsonc" }).mcp
+    ).toEqual({ count: 1, names: ["opencode-search"] });
+    expect(
+      summarizeProfile(profile, { id: "claude-code", configLanguage: "jsonc" }).mcp
+    ).toEqual({ count: 1, names: ["claude-docs"] });
   });
 
   it("finds the newest matching target application", () => {

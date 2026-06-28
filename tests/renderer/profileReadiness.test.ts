@@ -44,8 +44,7 @@ describe("profile readiness", () => {
     ).toEqual({
       status: "no-profile",
       label: "No profile",
-      message: "Create a profile to continue",
-      remediationLabel: "New Profile"
+      message: "Create a profile to continue using New Profile in the page header"
     });
 
     expect(
@@ -119,7 +118,11 @@ describe("profile readiness", () => {
     const cases = [
       {
         input: { isDirty: true },
-        expected: ["no-profile", "Create a profile to continue", "New Profile"]
+        expected: [
+          "no-profile",
+          "Create a profile to continue using New Profile in the page header",
+          undefined
+        ]
       },
       {
         input: { profile, isDirty: true },

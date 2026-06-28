@@ -21,7 +21,7 @@ export interface ProfileReadiness {
   status: ProfileReadinessStatus;
   label: "No profile" | "No target" | "Unsaved" | "Target unavailable" | "Needs review" | "Ready";
   message: string;
-  remediationLabel?: "New Profile" | "Open Targets" | "Save now" | "Review Advanced" | "Review preview";
+  remediationLabel?: "Open Targets" | "Save now" | "Review Advanced" | "Review preview";
 }
 
 export interface ProfileReadinessInput {
@@ -48,8 +48,7 @@ export const deriveProfileReadiness = ({
     return {
       status: "no-profile",
       label: "No profile",
-      message: "Create a profile to continue",
-      remediationLabel: "New Profile"
+      message: "Create a profile to continue using New Profile in the page header"
     };
   }
 

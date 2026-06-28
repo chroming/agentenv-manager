@@ -22,16 +22,19 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const unique = (names: readonly string[]): string[] => [...new Set(names)];
 
-const jsoncMcpNames = (configText: string): string[] => {
+type ProfileTargetSchema = Pick<TargetInfo, "id" | "configLanguage">;
+
+const jsoncMcpNames = (
+  configText: string,
+  property: "mcp" | "mcpServers"
+): string[] => {
   const errors: ParseError[] = [];
   const parsed = parseJsonc(configText.trim() || "{}", errors, { allowTrailingComma: true });
   if (errors.length > 0 || !isRecord(parsed)) {
     return [];
   }
 
-  const mcpNames = isRecord(parsed.mcp) ? Object.keys(parsed.mcp) : [];
-  const mcpServerNames = isRecord(parsed.mcpServers) ? Object.keys(parsed.mcpServers) : [];
-  return unique([...mcpNames, ...mcpServerNames]);
+  return isRecord(parsed[property]) ? Object.keys(parsed[property]) : [];
 };
 
 const tomlMcpNames = (configText: string): string[] => {
@@ -45,12 +48,15 @@ const tomlMcpNames = (configText: string): string[] => {
 
 const rawMcpNames = (
   configText: string,
-  configLanguage: TargetInfo["configLanguage"]
+  target: ProfileTargetSchema
 ): string[] => {
-  if (configLanguage === "jsonc") {
-    return jsoncMcpNames(configText);
+  if (target.id === "opencode" && target.configLanguage === "jsonc") {
+    return jsoncMcpNames(configText, "mcp");
   }
-  if (configLanguage === "toml") {
+  if (target.id === "claude-code" && target.configLanguage === "jsonc") {
+    return jsoncMcpNames(configText, "mcpServers");
+  }
+  if (target.id === "codex" && target.configLanguage === "toml") {
     return tomlMcpNames(configText);
   }
   return [];
@@ -58,7 +64,7 @@ const rawMcpNames = (
 
 export const summarizeProfile = (
   profile: Pick<ProfileDetail, "manifest" | "instructions" | "configText" | "assetPolicy">,
-  configLanguage: TargetInfo["configLanguage"]
+  target: ProfileTargetSchema
 ): ProfileResourceSummary => {
   const profileOwnedSkills = [...profile.assetPolicy.ownedDirs, ...profile.assetPolicy.ownedFiles]
     .filter((asset) => asset.kind === "skill")
@@ -69,7 +75,7 @@ export const summarizeProfile = (
   ]);
   const mcpNames = unique([
     ...profile.assetPolicy.mcpRefs.map((server) => server.targetName),
-    ...rawMcpNames(profile.configText, configLanguage)
+    ...rawMcpNames(profile.configText, target)
   ]);
 
   return {
