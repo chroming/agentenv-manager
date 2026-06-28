@@ -362,15 +362,18 @@ export const App = () => {
     let isMounted = true;
 
     refreshProfiles()
-      .then(async ({ profileItems }) => {
-        if (!isMounted || profileItems.length !== 1) {
+      .then(async ({ profileItems, targetItems }) => {
+        if (!isMounted || profileItems.length === 0) {
           return;
         }
 
-        const [onlyProfile] = profileItems;
-        setSelectedProfileId(onlyProfile.id);
+        const initialTargetId = targetItems[0]?.id;
+        const initialProfile =
+          profileItems.find((profile) => !initialTargetId || profile.targetId === initialTargetId) ??
+          profileItems[0];
+        setSelectedProfileId(initialProfile.id);
         setActiveTab("overview");
-        const profile = await window.agentEnv.readProfile(onlyProfile.id);
+        const profile = await window.agentEnv.readProfile(initialProfile.id);
         if (isMounted) {
           setDraftProfile(profile);
         }

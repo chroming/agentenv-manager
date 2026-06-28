@@ -638,14 +638,26 @@ h2 {
 }
 
 .empty-state {
-  align-items: center;
+  align-content: center;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: #4f5b6d;
-  display: flex;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
   min-height: 190px;
   padding: 22px;
+}
+
+.empty-state h2 {
+  color: #334155;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.empty-state p {
+  line-height: 1.45;
 }
 
 .editor-grid {
@@ -3579,13 +3591,13 @@ button svg,
 .library-table-row {
   column-gap: 12px;
   grid-template-areas:
-    "resource update actions"
-    "source usage actions"
-    "version installs actions";
-  grid-template-columns: minmax(0, 1fr) minmax(132px, 0.42fr) 76px;
-  min-height: 96px;
-  padding: 12px 14px;
-  row-gap: 6px;
+    "resource source update actions"
+    "resource version usage actions"
+    "resource version installs actions";
+  grid-template-columns: minmax(320px, 1fr) minmax(220px, 0.72fr) minmax(172px, 0.52fr) 76px;
+  min-height: 112px;
+  padding: 14px 16px;
+  row-gap: 5px;
 }
 
 .library-resource-cell {
@@ -3594,10 +3606,18 @@ button svg,
 
 .library-source-cell {
   grid-area: source;
+  align-content: start;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
 }
 
 .library-version-cell {
   grid-area: version;
+  align-content: start;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
 }
 
 .library-update-cell {
@@ -3615,6 +3635,18 @@ button svg,
 .library-actions-cell {
   grid-area: actions;
   justify-content: end;
+}
+
+.library-version-cell::before {
+  color: #94a3b8;
+  content: "Version";
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.library-version-cell strong,
+.library-version-cell small {
+  min-width: 0;
 }
 
 .metric-tile--button {
@@ -3992,4 +4024,134 @@ button svg,
 .skill-description,
 .muted {
   text-wrap: pretty;
+}
+
+.profile-editor-surface > .empty-state {
+  align-content: center;
+  justify-items: center;
+  min-height: 100%;
+  text-align: center;
+}
+
+.profile-editor-surface > .empty-state h2,
+.profile-editor-surface > .empty-state p {
+  margin: 0;
+}
+
+.profile-editor-surface > .empty-state p {
+  max-width: 34ch;
+}
+
+.library-table-row {
+  align-items: center;
+  column-gap: 12px;
+  grid-template-areas:
+    "resource source version update usage actions"
+    "resource source installs update usage actions";
+  grid-template-columns:
+    minmax(300px, 1fr)
+    minmax(165px, 0.52fr)
+    minmax(78px, 0.24fr)
+    minmax(150px, 0.44fr)
+    minmax(150px, 0.44fr)
+    74px;
+  min-height: 96px;
+  padding: 13px 16px;
+  row-gap: 5px;
+}
+
+.library-resource-cell {
+  align-content: center;
+  align-items: start;
+  gap: 11px;
+  grid-area: resource;
+}
+
+.library-source-cell {
+  align-content: center;
+  align-items: center;
+  column-gap: 8px;
+  display: grid;
+  grid-area: source;
+  grid-template-columns: auto minmax(0, 1fr);
+  row-gap: 4px;
+}
+
+.library-source-cell small {
+  color: #56657a;
+  max-width: 100%;
+}
+
+.library-version-cell {
+  align-content: center;
+  align-items: center;
+  color: #64748b;
+  column-gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  grid-area: version;
+  row-gap: 3px;
+}
+
+.library-version-cell::before {
+  color: #94a3b8;
+  content: "Version";
+  font-size: 11px;
+  font-weight: 780;
+}
+
+.library-version-cell strong {
+  color: #0f172a;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.library-version-cell small {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.library-update-cell,
+.library-usage-cell,
+.library-installs-cell {
+  align-content: center;
+  gap: 5px;
+}
+
+.library-update-cell {
+  grid-area: update;
+}
+
+.library-usage-cell {
+  grid-area: usage;
+}
+
+.library-installs-cell {
+  grid-area: installs;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.library-installs-cell span,
+.library-installs-cell small,
+.library-update-cell small,
+.library-usage-cell small {
+  max-width: 100%;
+}
+
+.library-actions-cell {
+  align-content: start;
+  align-items: start;
+  grid-area: actions;
+  justify-content: end;
+  padding-top: 0;
+}
+
+@media (max-width: 1260px) {
+  .library-table-row {
+    grid-template-areas:
+      "resource update actions"
+      "source usage actions"
+      "version installs actions";
+    grid-template-columns: minmax(330px, 1fr) minmax(190px, 0.52fr) 74px;
+  }
 }
