@@ -1131,6 +1131,54 @@ summary {
   min-width: 0;
 }
 
+.diff-list summary {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.diff-list summary > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.change-kind {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 8px;
+}
+
+.change-kind--add {
+  background: #ecfdf3;
+  color: #167445;
+}
+
+.change-kind--replace {
+  background: #eef4ff;
+  color: #245bb8;
+}
+
+.change-kind--remove {
+  background: #fff1f0;
+  color: #b42318;
+}
+
+.diff-file-meta {
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .diff-language {
   color: var(--subtle);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
@@ -4160,6 +4208,8 @@ button svg,
   grid-template-columns: 16px minmax(0, 1fr);
   margin-bottom: 12px;
   min-height: 38px;
+  min-width: 0;
+  overflow: hidden;
   padding: 10px 12px;
 }
 
@@ -4168,6 +4218,7 @@ button svg,
   display: block;
   font-size: 13px;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .app-feedback span {
@@ -4176,6 +4227,7 @@ button svg,
   font-size: 12px;
   line-height: 1.45;
   margin-top: 2px;
+  overflow-wrap: anywhere;
 }
 
 .app-feedback--loading {
@@ -4434,13 +4486,13 @@ button svg,
     "resource source version update usage actions"
     "resource source installs update usage actions";
   grid-template-columns:
-    minmax(300px, 1fr)
-    minmax(165px, 0.52fr)
-    minmax(78px, 0.24fr)
-    minmax(150px, 0.44fr)
-    minmax(150px, 0.44fr)
-    74px;
-  min-height: 96px;
+    minmax(240px, 1fr)
+    minmax(126px, 0.44fr)
+    minmax(70px, 0.22fr)
+    minmax(118px, 0.36fr)
+    minmax(112px, 0.34fr)
+    116px;
+  min-height: 88px;
   padding: 13px 16px;
   row-gap: 5px;
 }
@@ -4465,6 +4517,9 @@ button svg,
 .library-source-cell small {
   color: #56657a;
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .library-version-cell {
@@ -4476,6 +4531,7 @@ button svg,
   flex-wrap: wrap;
   grid-area: version;
   row-gap: 3px;
+  min-width: 0;
 }
 
 .library-version-cell::before {
@@ -4489,11 +4545,19 @@ button svg,
   color: #0f172a;
   font-size: 12px;
   line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .library-version-cell small {
   color: #94a3b8;
   font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .library-update-cell,
@@ -4521,6 +4585,9 @@ button svg,
 .library-update-cell small,
 .library-usage-cell small {
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .library-actions-cell {
@@ -4534,13 +4601,18 @@ button svg,
 .library-actions-cell .library-row-update-action {
   gap: 6px;
   justify-content: center;
-  min-width: 76px;
+  min-width: 110px;
 }
 
 .library-actions-cell .library-row-update-action span {
   font-size: 12px;
   font-weight: 760;
   line-height: 1;
+}
+
+.row-action-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .library-actions-cell .library-row-update-action.is-update {
@@ -4566,6 +4638,6 @@ button svg,
       "resource update actions"
       "source usage actions"
       "version installs actions";
-    grid-template-columns: minmax(330px, 1fr) minmax(190px, 0.52fr) 74px;
+    grid-template-columns: minmax(240px, 1fr) minmax(160px, 0.48fr) 116px;
   }
 }

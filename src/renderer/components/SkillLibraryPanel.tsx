@@ -38,7 +38,7 @@ import type {
 import { InfoTip } from "./InfoTip";
 
 export type SkillUpdateCheckStatus = {
-  state: "checking" | "success" | "error";
+  state: "checking" | "success" | "error" | "info";
   message: string;
 };
 
@@ -79,6 +79,9 @@ const shortRevision = (skill: SkillLibraryEntry) =>
   (skill.remoteRevision ?? skill.contentHash ?? "local").slice(0, 7);
 
 const sourceName = (skill: SkillLibraryEntry) => {
+  if (skill.sourceType === "local" && !skill.source) {
+    return "Library copy";
+  }
   const source = sourceLabel(skill);
   if (source.startsWith("https://github.com/")) {
     return source.replace("https://github.com/", "").replace("/tree/", "/");
@@ -527,19 +530,21 @@ export const SkillLibraryPanel = ({
             const installs = installsFor(skill.id);
             const sourceDraft = sourceDrafts[skill.id] ?? {
               sourceType: skill.sourceType,
-              source: sourceLabel(skill)
+              source: skill.source ?? ""
             };
+            const hasUpdateSource = Boolean(skill.source);
             const updateLabel = updateInfo?.error
               ? "Check failed"
               : updateInfo?.updateAvailable
                 ? "Update available"
                 : updateInfo
                   ? "Up to date"
-                  : skill.sourceType === "local"
-                    ? "Local source"
-                    : skill.sourceType;
+                  : hasUpdateSource
+                    ? "Not checked"
+                    : "No update source";
             const hasUpdate = Boolean(updateInfo?.updateAvailable);
             const hasError = Boolean(updateInfo?.error);
+            const canCheckUpdate = hasUpdateSource && updateCheckStatus?.state !== "checking";
             return (
               <div
                 aria-label={`Library item ${skill.id}`}
@@ -628,13 +633,15 @@ export const SkillLibraryPanel = ({
                     }`}
                     type="button"
                     aria-label={
-                      hasUpdate
+                      !hasUpdateSource
+                        ? `No update source ${skill.id}`
+                        : hasUpdate
                         ? `Update ${skill.id}`
                         : hasError
                           ? `Retry update check ${skill.id}`
                           : `Check update ${skill.id}`
                     }
-                    disabled={updateCheckStatus?.state === "checking"}
+                    disabled={!canCheckUpdate}
                     onClick={() =>
                       hasUpdate ? onUpdateLibrarySkill(skill.id) : onPreviewLibrarySkillUpdate(skill.id)
                     }
@@ -646,7 +653,9 @@ export const SkillLibraryPanel = ({
                     ) : (
                       <RefreshCw size={15} strokeWidth={2.2} />
                     )}
-                    <span>{hasUpdate ? "Update" : hasError ? "Retry" : "Check"}</span>
+                    <span>
+                      {!hasUpdateSource ? "No source" : hasUpdate ? "Update" : hasError ? "Retry" : "Check"}
+                    </span>
                   </button>
                   <div className="row-action-menu">
                     <button
@@ -671,6 +680,7 @@ export const SkillLibraryPanel = ({
                             className="row-action-item"
                             type="button"
                             role="menuitem"
+                            disabled={!hasUpdateSource}
                             onClick={() => {
                               onPreviewLibrarySkillUpdate(skill.id);
                               setOpenAction(undefined);
@@ -678,9 +688,17 @@ export const SkillLibraryPanel = ({
                           >
                             <RefreshCw size={14} strokeWidth={2.2} />
                             <span>
-                              <strong>{hasUpdate ? "Preview update" : "Check update"}</strong>
+                              <strong>
+                                {!hasUpdateSource
+                                  ? "No update source"
+                                  : hasUpdate
+                                    ? "Preview update"
+                                    : "Check update"}
+                              </strong>
                               <small>
-                                {hasUpdate
+                                {!hasUpdateSource
+                                  ? "Set a source below to enable checks."
+                                  : hasUpdate
                                   ? "Review changes before updating."
                                   : "Preview changes from the tracked source."}
                               </small>

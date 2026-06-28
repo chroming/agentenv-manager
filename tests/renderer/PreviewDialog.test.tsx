@@ -31,6 +31,10 @@ describe("PreviewDialog", () => {
   it("renders a structured syntax-highlighted diff", async () => {
     render(<PreviewDialog preview={preview} />);
 
+    expect(screen.getByText("Replace")).toBeInTheDocument();
+    expect(screen.getByText("1 line before")).toBeInTheDocument();
+    expect(screen.getByText("3 lines after")).toBeInTheDocument();
+
     const diff = await screen.findByRole("table", {
       name: "Formatted diff for /tmp/home/.config/opencode/opencode.jsonc"
     });

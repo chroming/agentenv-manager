@@ -722,10 +722,12 @@ describe("App", () => {
     expect(api.saveProfile).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Take over OpenCode" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Save profile before applying");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Save this profile before applying it to OpenCode"
+    );
     expect(api.previewApply).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(api.saveProfile).toHaveBeenCalledWith(
@@ -786,7 +788,7 @@ describe("App", () => {
     fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
     expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
     expect(api.saveProfile).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(api.saveProfile).toHaveBeenCalledWith(

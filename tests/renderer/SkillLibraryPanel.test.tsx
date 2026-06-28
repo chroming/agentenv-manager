@@ -47,6 +47,15 @@ describe("SkillLibraryPanel", () => {
             remoteRevision: "revision-1",
             contentHash: "def456",
             updatedAt: "2026-07-02T00:00:00.000Z"
+          },
+          {
+            id: "copied-local",
+            name: "Copied Local",
+            description: "Copied into the library",
+            path: "/tmp/skills-library/copied-local",
+            sourceType: "local",
+            contentHash: "ghi789",
+            updatedAt: "2026-07-02T00:00:00.000Z"
           }
         ]}
         skillInventory={[
@@ -175,6 +184,9 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent(
       "Update available"
     );
+    const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
+    expect(copiedLocalRow).toHaveTextContent("No update source");
+    expect(within(copiedLocalRow).getByRole("button", { name: "No update source copied-local" })).toBeDisabled();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));

@@ -528,7 +528,7 @@ describe("Electron UI profile switching e2e", () => {
     await editDialog.getByLabel("Profile name").fill("Docs Writing v2");
     await editDialog.getByLabel("Description").fill("Updated writing workspace");
     await editDialog.getByRole("button", { name: "Save" }).click();
-    await page.getByRole("button", { name: "Save profile" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
     await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({
       state: "visible",
       timeout: 10_000
@@ -931,7 +931,7 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("group", { name: "Library skill agentenv-shared-reviewer" })
       .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Save profile" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
     const installedSkillMd = join(
@@ -961,7 +961,7 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("tab", { name: "Resources" }).click();
     await addLibrarySkillToProfile(page);
-    await page.getByRole("button", { name: "Save profile" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
     const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
@@ -1047,7 +1047,7 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("tab", { name: "Resources" }).click();
     await addLibrarySkillToProfile(page);
-    await page.getByRole("button", { name: "Save profile" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
     const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
@@ -1071,7 +1071,7 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("tab", { name: "Resources" }).click();
     await addLibrarySkillToProfile(page);
-    await page.getByRole("button", { name: "Save profile" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
     const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
@@ -1112,7 +1112,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Skill ui-alpha-skill" })
       .getByRole("button", { name: "Remove" })
       .click();
-    await page.getByRole("button", { name: "Save profile" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
@@ -1125,7 +1125,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("tab", { name: "Resources" }).click();
     const alphaSkill = page.getByRole("group", { name: "Skill ui-alpha-skill" });
     await alphaSkill.getByLabel("Target name").fill("target-only-reviewer");
-    await page.getByRole("button", { name: "Save profile" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
 
     await applyActionButton(page, "OpenCode").click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
@@ -1193,7 +1193,7 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("textbox", { name: "Disabled Skill Paths" })
       .fill("/Users/example/.agents/skills/legacy-reviewer\n/Users/example/.agents/skills/noisy-helper");
-    await page.getByRole("button", { name: "Save profile" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "Codex");
 
     const codexConfig = await readFile(join(codexDir, "config.toml"), "utf8");
@@ -1323,7 +1323,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "MCP local-search" })
       .waitFor({ state: "visible" });
 
-    await page.getByRole("button", { name: "Save profile" }).click();
+    await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
     await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(

@@ -628,7 +628,10 @@ export const createSkillLibraryStore = (
       throw new Error(`Library skill already exists: ${safeId}`);
     }
     await removeAndCopy(sourcePath, targetDir);
-    await writeMetadata(targetDir, { sourceType, source: sourcePath });
+    await writeMetadata(
+      targetDir,
+      sourceType === "local" ? { sourceType: "local" } : { sourceType, source: sourcePath }
+    );
     return entryFor(safeId, targetDir);
   };
 
@@ -722,7 +725,7 @@ export const createSkillLibraryStore = (
   const checkUpdates = async (): Promise<SkillUpdateInfo[]> => {
     const skills = await listSkills();
     const updates: SkillUpdateInfo[] = [];
-    for (const skill of skills.filter((item) => item.sourceType === "github" || item.source)) {
+    for (const skill of skills.filter((item) => Boolean(item.source))) {
       const metadata = await readLibraryMetadata(skill.path);
       if (!metadata.source) {
         updates.push({
@@ -766,8 +769,8 @@ export const createSkillLibraryStore = (
         updates.push({
           id: skill.id,
           name: skill.name,
-          sourceType: "github",
-          currentRevision: metadata.remoteRevision,
+          sourceType: metadata.sourceType ?? skill.sourceType,
+          currentRevision: metadata.remoteRevision ?? metadata.contentHash,
           updateAvailable: false,
           error: error instanceof Error ? error.message : String(error)
         });

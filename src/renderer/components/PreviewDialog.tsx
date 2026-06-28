@@ -50,6 +50,23 @@ const isInstallChange = (change: ActivationPreview["changes"][number]) =>
 const isReplaceChange = (change: ActivationPreview["changes"][number]) =>
   !isInstallChange(change);
 
+const lineCount = (text: string) => {
+  if (text.length === 0) {
+    return 0;
+  }
+  return text.endsWith("\n") ? text.split("\n").length - 1 : text.split("\n").length;
+};
+
+const changeKind = (change: ActivationPreview["changes"][number]) => {
+  if (change.before.length === 0 && change.after.length > 0) {
+    return "Add";
+  }
+  if (change.before.length > 0 && change.after.length === 0) {
+    return "Remove";
+  }
+  return "Replace";
+};
+
 export const PreviewDialog = ({
   preview,
   title = "Preview",
@@ -134,7 +151,16 @@ export const PreviewDialog = ({
       <div className="diff-list">
         {preview.changes.map((change) => (
           <details key={change.path} open>
-            <summary>{change.path}</summary>
+            <summary>
+              <span>{change.path}</span>
+              <strong className={`change-kind change-kind--${changeKind(change).toLowerCase()}`}>
+                {changeKind(change)}
+              </strong>
+            </summary>
+            <div className="diff-file-meta">
+              <span>{plural(lineCount(change.before), "line")} before</span>
+              <span>{plural(lineCount(change.after), "line")} after</span>
+            </div>
             <DiffViewer path={change.path} diff={change.diff} />
           </details>
         ))}

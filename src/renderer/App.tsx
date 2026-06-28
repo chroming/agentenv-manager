@@ -88,6 +88,13 @@ const summarizeSkillUpdateChecks = (skillUpdateItems: SkillUpdateInfo[]): SkillU
     };
   }
 
+  if (skillUpdateItems.length === 0) {
+    return {
+      state: "info",
+      message: "No tracked update sources"
+    };
+  }
+
   return {
     state: "success",
     message:
@@ -819,7 +826,7 @@ export const App = () => {
         return;
       }
       if (isProfileDirty) {
-        setProfileSaveStatus("Save profile before applying");
+        setProfileSaveStatus(`Save this profile before applying it to ${selectedTarget?.name ?? "the target"}`);
         setSkillUpdateCheckStatus(undefined);
         return;
       }
@@ -1267,7 +1274,9 @@ export const App = () => {
               ? "loading"
               : skillUpdateCheckStatus.state === "error"
                 ? "error"
-                : "success",
+                : skillUpdateCheckStatus.state === "info"
+                  ? "info"
+                  : "success",
           title: skillUpdateCheckStatus.message
         }
       : profileSaveStatus
@@ -1468,7 +1477,7 @@ export const App = () => {
                     disabled={busy || !isProfileDirty}
                     onClick={saveSelectedProfile}
                   >
-                    Save profile
+                    Save
                   </button>
                 </div>
                 <div className="profile-apply-control">

@@ -71,7 +71,7 @@ describe("skill library store", () => {
       name: "reviewer",
       description: "Source skill.",
       sourceType: "local",
-      source: sourceDir
+      source: undefined
     });
     await expect(
       readFile(join(paths.skillsLibraryDir, "shared-reviewer", "prompt.md"), "utf8")
@@ -82,6 +82,27 @@ describe("skill library store", () => {
     await expect(
       readFile(join(paths.skillsLibraryDir, "shared-reviewer", ".agentenv-skill.json"), "utf8")
     ).resolves.toContain('"sourceType": "local"');
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "shared-reviewer", ".agentenv-skill.json"), "utf8")
+    ).resolves.not.toContain(sourceDir);
+  });
+
+  it("does not check a copied local import after the original source folder is removed", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "opencode", "skills", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n\n# Reviewer\n", "utf8");
+
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({
+      sourcePath: sourceDir,
+      id: "shared-reviewer",
+      sourceType: "local"
+    });
+    await rm(sourceDir, { recursive: true, force: true });
+
+    await expect(store.checkUpdates()).resolves.toEqual([]);
   });
 
   it("removes a skill from the central library without mutating its source directory", async () => {
@@ -538,6 +559,7 @@ describe("skill library store", () => {
 
     const store = createSkillLibraryStore(paths);
     await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
+    await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
     await writeFile(join(sourceDir, "new.md"), "add me\n", "utf8");
     await rm(join(sourceDir, "old.md"));
@@ -569,6 +591,7 @@ describe("skill library store", () => {
       id: "reviewer",
       sourceType: "local"
     });
+    await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n\n# v2\n", "utf8");
 
     const updated = await store.updateSkill("reviewer");
