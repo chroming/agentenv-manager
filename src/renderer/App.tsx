@@ -69,6 +69,47 @@ const emptyAssetPolicy: AssetPolicy = {
 type EditorTab = "overview" | "instructions" | "config" | "resources" | "validation";
 type ProfileDialogMode = "create" | "edit";
 
+const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
+const summarizeSkillUpdateChecks = (skillUpdateItems: SkillUpdateInfo[]): SkillUpdateCheckStatus => {
+  const failedChecks = skillUpdateItems.filter((update) => update.error).length;
+  const availableUpdates = skillUpdateItems.filter(
+    (update) => update.updateAvailable && !update.error
+  ).length;
+
+  if (failedChecks > 0) {
+    return {
+      state: "error",
+      message: `${plural(failedChecks, "check")} failed`
+    };
+  }
+
+  return {
+    state: "success",
+    message:
+      availableUpdates > 0
+        ? `${plural(availableUpdates, "update")} available`
+        : "All tracked skills are up to date"
+  };
+};
+
+const summarizeSkillUpdateResult = (
+  skillId: string,
+  skillUpdateItems: SkillUpdateInfo[]
+): SkillUpdateCheckStatus => {
+  const remainingUpdates = skillUpdateItems.filter(
+    (update) => update.updateAvailable && !update.error
+  ).length;
+
+  return {
+    state: "success",
+    message:
+      remainingUpdates > 0
+        ? `Updated ${skillId} · ${plural(remainingUpdates, "update")} remain`
+        : `Updated ${skillId} · All tracked skills are up to date`
+  };
+};
+
 const editorTabs: Array<{ id: EditorTab; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "instructions", label: "Instructions" },
@@ -773,7 +814,8 @@ export const App = () => {
     try {
       await window.agentEnv.updateLibrarySkill(id);
       setSelectedSkillUpdatePlan(undefined);
-      await refreshProfiles();
+      const { skillUpdateItems } = await refreshProfiles();
+      setSkillUpdateCheckStatus(summarizeSkillUpdateResult(id, skillUpdateItems));
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -796,8 +838,21 @@ export const App = () => {
         result.status === "rejected"
       );
       setSelectedSkillUpdatePlan(undefined);
-      await refreshProfiles();
+      const { skillUpdateItems } = await refreshProfiles();
+      if (failures.length === 0) {
+        setSkillUpdateCheckStatus({
+          state: "success",
+          message:
+            skillUpdateItems.filter((update) => update.updateAvailable && !update.error).length > 0
+              ? `Updated ${plural(ids.length, "skill")} · More updates remain`
+              : `Updated ${plural(ids.length, "skill")} · All tracked skills are up to date`
+        });
+      }
       if (failures.length > 0) {
+        setSkillUpdateCheckStatus({
+          state: "error",
+          message: `${plural(failures.length, "update")} failed`
+        });
         setError(
           failures
             .map((failure) =>
@@ -819,24 +874,7 @@ export const App = () => {
     setSkillUpdateCheckStatus({ state: "checking", message: "Checking library updates..." });
     try {
       const { skillUpdateItems } = await refreshProfiles();
-      const failedChecks = skillUpdateItems.filter((update) => update.error).length;
-      const availableUpdates = skillUpdateItems.filter(
-        (update) => update.updateAvailable && !update.error
-      ).length;
-      if (failedChecks > 0) {
-        setSkillUpdateCheckStatus({
-          state: "error",
-          message: `${failedChecks} check${failedChecks === 1 ? "" : "s"} failed`
-        });
-      } else {
-        setSkillUpdateCheckStatus({
-          state: "success",
-          message:
-            availableUpdates > 0
-              ? `${availableUpdates} update${availableUpdates === 1 ? "" : "s"} available`
-              : "All tracked skills are up to date"
-        });
-      }
+      setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(skillUpdateItems));
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);

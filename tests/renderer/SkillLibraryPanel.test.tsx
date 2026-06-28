@@ -142,6 +142,12 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("group", { name: "Library item shared-reviewer" })).toHaveTextContent(
       "Daily Coding"
     );
+    const sharedDescription = screen.getByText("Review code");
+    expect(sharedDescription).not.toHaveAttribute("title");
+    fireEvent.mouseEnter(sharedDescription);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Review code");
+    fireEvent.mouseLeave(sharedDescription);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent(
       "Update available"
     );
@@ -170,13 +176,16 @@ describe("SkillLibraryPanel", () => {
       source: "/tmp/source/shared-reviewer"
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Check update shared-reviewer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update shared-reviewer" }));
+    expect(onUpdateLibrarySkill).toHaveBeenCalledWith("shared-reviewer");
+    fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Preview update/ }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("shared-reviewer");
     expect(screen.getByRole("region", { name: "Update preview for shared-reviewer" })).toHaveTextContent(
       "SKILL.md"
     );
     fireEvent.click(screen.getByRole("button", { name: "Apply update shared-reviewer" }));
-    expect(onUpdateLibrarySkill).toHaveBeenCalledWith("shared-reviewer");
+    expect(onUpdateLibrarySkill).toHaveBeenCalledTimes(2);
 
     rerender(renderPanel("import"));
     fireEvent.click(screen.getByRole("button", { name: "Choose local skill folder" }));

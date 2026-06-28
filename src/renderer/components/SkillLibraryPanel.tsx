@@ -1,4 +1,11 @@
-import { useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState
+} from "react";
 import {
   BookOpenText,
   CheckCircle2,
@@ -15,6 +22,7 @@ import {
   Users,
   X
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import type {
   GitHubSkillImportInput,
   ManageTargetSkillInput,
@@ -71,6 +79,105 @@ const sourceName = (skill: SkillLibraryEntry) => {
     return source.replace("https://github.com/", "").replace("/tree/", "/");
   }
   return source;
+};
+
+interface DescriptionTooltipPosition {
+  left: number;
+  maxWidth: number;
+  placement: "top" | "bottom";
+  top: number;
+}
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(Math.max(value, min), max);
+
+const SkillDescription = ({ text }: { text: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState<DescriptionTooltipPosition>();
+  const triggerRef = useRef<HTMLParagraphElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) {
+      return;
+    }
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const maxWidth = Math.max(220, Math.min(420, window.innerWidth - 24));
+    const measured = tooltipRef.current?.getBoundingClientRect();
+    const width = Math.min(measured?.width ?? maxWidth, maxWidth);
+    const height = measured?.height ?? 52;
+    const gap = 8;
+    const margin = 12;
+    const preferredTop = triggerRect.bottom + gap;
+    const placement =
+      preferredTop + height <= window.innerHeight - margin ? "bottom" : "top";
+    const unclampedTop =
+      placement === "bottom" ? preferredTop : triggerRect.top - height - gap;
+    const maxTop = Math.max(margin, window.innerHeight - height - margin);
+
+    setPosition({
+      left: clamp(triggerRect.left, margin, Math.max(margin, window.innerWidth - width - margin)),
+      maxWidth,
+      placement,
+      top: clamp(unclampedTop, margin, maxTop)
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (isOpen) {
+      updatePosition();
+    }
+  }, [isOpen, text, updatePosition]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen, updatePosition]);
+
+  const tooltipStyle = {
+    left: position?.left ?? -9999,
+    maxWidth: position?.maxWidth ?? 420,
+    top: position?.top ?? -9999
+  } as CSSProperties;
+
+  return (
+    <>
+      <p
+        className="skill-description"
+        ref={triggerRef}
+        tabIndex={0}
+        onBlur={() => setIsOpen(false)}
+        onFocus={() => setIsOpen(true)}
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+      >
+        {text}
+      </p>
+      {isOpen
+        ? createPortal(
+            <div
+              className={`skill-description-tooltip skill-description-tooltip--${position?.placement ?? "bottom"}`}
+              ref={tooltipRef}
+              role="tooltip"
+              style={tooltipStyle}
+            >
+              {text}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  );
 };
 
 export const SkillLibraryPanel = ({
@@ -340,21 +447,6 @@ export const SkillLibraryPanel = ({
             <RefreshCw size={15} strokeWidth={2.2} />
             {updateCheckStatus?.state === "checking" ? "Checking..." : "Check updates"}
           </button>
-          {updateCheckStatus ? (
-            <span
-              className={`library-update-feedback is-${updateCheckStatus.state}`}
-              role="status"
-            >
-              {updateCheckStatus.state === "checking" ? (
-                <RefreshCw size={13} strokeWidth={2.2} />
-              ) : updateCheckStatus.state === "error" ? (
-                <TriangleAlert size={13} strokeWidth={2.2} />
-              ) : (
-                <CheckCircle2 size={13} strokeWidth={2.2} />
-              )}
-              {updateCheckStatus.message}
-            </span>
-          ) : null}
           <button
             className="secondary-action"
             type="button"
@@ -366,6 +458,18 @@ export const SkillLibraryPanel = ({
             Update all
           </button>
         </div>
+        {updateCheckStatus ? (
+          <div className={`library-update-feedback is-${updateCheckStatus.state}`} role="status">
+            {updateCheckStatus.state === "checking" ? (
+              <RefreshCw size={14} strokeWidth={2.2} />
+            ) : updateCheckStatus.state === "error" ? (
+              <TriangleAlert size={14} strokeWidth={2.2} />
+            ) : (
+              <CheckCircle2 size={14} strokeWidth={2.2} />
+            )}
+            <span>{updateCheckStatus.message}</span>
+          </div>
+        ) : null}
       </div>
 
       <section className="library-table" aria-label="Library skills">
@@ -416,9 +520,7 @@ export const SkillLibraryPanel = ({
                   </span>
                   <div className="skill-title-stack">
                     <strong className="skill-title">{skill.name}</strong>
-                    <p className="skill-description" title={skill.description || skill.id}>
-                      {skill.description || skill.id}
-                    </p>
+                    <SkillDescription text={skill.description || skill.id} />
                   </div>
                 </div>
                 <div className="library-source-cell">
@@ -486,12 +588,30 @@ export const SkillLibraryPanel = ({
                 </div>
                 <div className="library-actions-cell">
                   <button
-                    className="icon-action"
+                    className={`icon-action library-row-update-action${
+                      hasUpdate ? " is-update" : hasError ? " is-error" : ""
+                    }`}
                     type="button"
-                    aria-label={`Check update ${skill.id}`}
-                    onClick={() => onPreviewLibrarySkillUpdate(skill.id)}
+                    aria-label={
+                      hasUpdate
+                        ? `Update ${skill.id}`
+                        : hasError
+                          ? `Retry update check ${skill.id}`
+                          : `Check update ${skill.id}`
+                    }
+                    disabled={updateCheckStatus?.state === "checking"}
+                    onClick={() =>
+                      hasUpdate ? onUpdateLibrarySkill(skill.id) : onPreviewLibrarySkillUpdate(skill.id)
+                    }
                   >
-                    <RefreshCw size={15} strokeWidth={2.2} />
+                    {hasUpdate ? (
+                      <Sparkles size={15} strokeWidth={2.2} />
+                    ) : hasError ? (
+                      <TriangleAlert size={15} strokeWidth={2.2} />
+                    ) : (
+                      <RefreshCw size={15} strokeWidth={2.2} />
+                    )}
+                    <span>{hasUpdate ? "Update" : hasError ? "Retry" : "Check"}</span>
                   </button>
                   <div className="row-action-menu">
                     <button
@@ -503,83 +623,96 @@ export const SkillLibraryPanel = ({
                     >
                       <MoreHorizontal size={16} strokeWidth={2.2} />
                     </button>
-                    {openActionId === skill.id ? (
-                      <div
-                        className="row-action-popover"
-                        role="menu"
-                        aria-label={`Actions for ${skill.id}`}
-                        style={{ left: openAction?.left, top: openAction?.top }}
-                      >
-                      <button
-                        className="row-action-item"
-                        type="button"
-                        role="menuitem"
-                        onClick={() => onPreviewLibrarySkillUpdate(skill.id)}
-                      >
-                        <RefreshCw size={14} strokeWidth={2.2} />
-                        <span>
-                          <strong>Check update</strong>
-                          <small>Preview changes from the tracked source.</small>
-                        </span>
-                      </button>
-                      <div className="row-action-source">
-                        <div className="row-action-source-title">
-                          <Settings2 size={14} strokeWidth={2.2} />
-                          Update source
-                          <InfoTip label="Use a local skill folder or a GitHub tree directory. The library stores the source path, not duplicated skill copies per profile." />
-                        </div>
-                        <div className="library-source-editor row-action-source-editor">
-                          <select
-                            aria-label={`Update source type for ${skill.id}`}
-                            value={sourceDraft.sourceType}
-                            onChange={(event) =>
-                              setSourceDrafts({
-                                ...sourceDrafts,
-                                [skill.id]: {
-                                  ...sourceDraft,
-                                  sourceType: event.currentTarget.value as SkillSourceType
-                                }
-                              })
-                            }
-                          >
-                            <option value="local">Local folder</option>
-                            <option value="github">GitHub directory</option>
-                          </select>
-                          <input
-                            aria-label={`Update source for ${skill.id}`}
-                            placeholder={
-                              sourceDraft.sourceType === "github"
-                                ? "https://github.com/owner/repo/tree/main/path/to/skill"
-                                : "/path/to/skill"
-                            }
-                            value={sourceDraft.source}
-                            onChange={(event) =>
-                              setSourceDrafts({
-                                ...sourceDrafts,
-                                [skill.id]: { ...sourceDraft, source: event.currentTarget.value }
-                              })
-                            }
-                          />
+                  </div>
+                  {openActionId === skill.id && openAction
+                    ? createPortal(
+                        <div
+                          className="row-action-popover"
+                          role="menu"
+                          aria-label={`Actions for ${skill.id}`}
+                          style={{ left: openAction.left, top: openAction.top }}
+                        >
                           <button
-                            className="secondary-action"
+                            className="row-action-item"
                             type="button"
-                            disabled={!sourceDraft.source.trim()}
+                            role="menuitem"
                             onClick={() => {
-                              onSetUpdateSource({
-                                id: skill.id,
-                                sourceType: sourceDraft.sourceType,
-                                source: sourceDraft.source.trim()
-                              });
+                              onPreviewLibrarySkillUpdate(skill.id);
                               setOpenAction(undefined);
                             }}
                           >
-                            Save source
+                            <RefreshCw size={14} strokeWidth={2.2} />
+                            <span>
+                              <strong>{hasUpdate ? "Preview update" : "Check update"}</strong>
+                              <small>
+                                {hasUpdate
+                                  ? "Review changes before updating."
+                                  : "Preview changes from the tracked source."}
+                              </small>
+                            </span>
                           </button>
-                        </div>
-                      </div>
-                      </div>
-                    ) : null}
-                  </div>
+                          <div className="row-action-source">
+                            <div className="row-action-source-title">
+                              <Settings2 size={14} strokeWidth={2.2} />
+                              Update source
+                              <InfoTip label="Use a local skill folder or a GitHub tree directory. The library stores the source path, not duplicated skill copies per profile." />
+                            </div>
+                            <div className="library-source-editor row-action-source-editor">
+                              <select
+                                aria-label={`Update source type for ${skill.id}`}
+                                value={sourceDraft.sourceType}
+                                onChange={(event) =>
+                                  setSourceDrafts({
+                                    ...sourceDrafts,
+                                    [skill.id]: {
+                                      ...sourceDraft,
+                                      sourceType: event.currentTarget.value as SkillSourceType
+                                    }
+                                  })
+                                }
+                              >
+                                <option value="local">Local folder</option>
+                                <option value="github">GitHub directory</option>
+                              </select>
+                              <input
+                                aria-label={`Update source for ${skill.id}`}
+                                placeholder={
+                                  sourceDraft.sourceType === "github"
+                                    ? "https://github.com/owner/repo/tree/main/path/to/skill"
+                                    : "/path/to/skill"
+                                }
+                                value={sourceDraft.source}
+                                onChange={(event) =>
+                                  setSourceDrafts({
+                                    ...sourceDrafts,
+                                    [skill.id]: {
+                                      ...sourceDraft,
+                                      source: event.currentTarget.value
+                                    }
+                                  })
+                                }
+                              />
+                              <button
+                                className="secondary-action"
+                                type="button"
+                                disabled={!sourceDraft.source.trim()}
+                                onClick={() => {
+                                  onSetUpdateSource({
+                                    id: skill.id,
+                                    sourceType: sourceDraft.sourceType,
+                                    source: sourceDraft.source.trim()
+                                  });
+                                  setOpenAction(undefined);
+                                }}
+                              >
+                                Save source
+                              </button>
+                            </div>
+                          </div>
+                        </div>,
+                        document.body
+                      )
+                    : null}
                 </div>
                 {selectedUpdatePlan?.id === skill.id ? (
                   <section

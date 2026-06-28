@@ -20,10 +20,6 @@
     "@iarna/toml": "^2.2.5",
     "diff": "^9.0.0",
     "jsonc-parser": "^3.3.1",
-    "lucide-react": "^1.23.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "shiki": "^4.3.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -37,7 +33,11 @@
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "jsdom": "^29.1.1",
+    "lucide-react": "^1.23.0",
     "playwright-core": "^1.61.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "shiki": "^4.3.0",
     "typescript": "^6.0.3",
     "vite": "^7.3.6",
     "vitest": "^4.1.9"
