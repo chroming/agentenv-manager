@@ -424,6 +424,9 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("MCP URL"), {
       target: { value: "https://example.com/shared-docs/mcp" }
     });
+    fireEvent.change(screen.getByLabelText("MCP env"), {
+      target: { value: "DOCS_TOKEN\nCACHE_DIR=AGENTENV_CACHE_DIR" }
+    });
     fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
 
     await waitFor(() =>
@@ -434,7 +437,10 @@ describe("App", () => {
         command: undefined,
         url: "https://example.com/shared-docs/mcp",
         args: [],
-        env: {}
+        env: {
+          CACHE_DIR: "AGENTENV_CACHE_DIR",
+          DOCS_TOKEN: "DOCS_TOKEN"
+        }
       })
     );
   });
@@ -457,6 +463,35 @@ describe("App", () => {
 
     fireEvent.click(within(previewDialog).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog", { name: "Preview" })).not.toBeInTheDocument();
+  });
+
+  it("dismisses profile modals and menus with Escape or outside clicks", async () => {
+    installApi();
+    render(<App />);
+
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply to OpenCode" }));
+    await screen.findByRole("dialog", { name: "Preview" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Preview" })).not.toBeInTheDocument()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit profile details" }));
+    const editDialog = screen.getByRole("dialog", { name: "Edit profile" });
+    fireEvent.click(editDialog.parentElement!);
+    expect(screen.queryByRole("dialog", { name: "Edit profile" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Select apply target" }));
+    expect(screen.getByRole("menu", { name: "Profile targets" })).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole("menu", { name: "Profile targets" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "More profile actions" }));
+    expect(screen.getByRole("menu", { name: "Profile actions" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Profile actions" })).not.toBeInTheDocument();
   });
 
   it("creates, edits, duplicates, and deletes profiles from the profile workspace", async () => {

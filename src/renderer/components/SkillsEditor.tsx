@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   parse as parseJsonc,
   printParseErrorCode,
@@ -28,12 +28,6 @@ interface McpResource {
   detail: string;
   status: "Conflict" | "Configured" | "Managed";
 }
-
-const defaultSkill = {
-  kind: "skill" as const,
-  source: "skills/new-skill",
-  targetName: "agentenv-new-skill"
-};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -224,6 +218,9 @@ export const SkillsEditor = ({
   onChange
 }: SkillsEditorProps) => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [activePicker, setActivePicker] = useState<"skills" | "mcp">();
+  const [selectedLibrarySkillIds, setSelectedLibrarySkillIds] = useState<string[]>([]);
+  const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>([]);
   const skillEntries = value.ownedDirs
     .map((ownedDir, index) => ({ ownedDir, index }))
     .filter((entry) => entry.ownedDir.kind === "skill");
@@ -239,8 +236,8 @@ export const SkillsEditor = ({
     librarySkillEntries.length > 0 ||
     libraryMcpEntries.length > 0 ||
     mcpState.resources.length > 0;
-  const firstLibrarySkill = librarySkills[0];
-  const firstMcpServer = mcpServers[0];
+  const attachedSkillIds = new Set(librarySkillEntries.map((entry) => entry.libraryId));
+  const attachedMcpIds = new Set(libraryMcpEntries.map((entry) => entry.libraryId));
 
   const updateOwnedDir = (
     index: number,
@@ -261,27 +258,96 @@ export const SkillsEditor = ({
     });
   };
 
-  const addLibrarySkill = () => {
-    const libraryId = firstLibrarySkill?.id ?? "shared-skill";
+  const removeSkillRef = (index: number) => {
     onChange({
       ...value,
-      skillRefs: (value.skillRefs ?? []).concat({
-        libraryId,
-        targetName: `agentenv-${libraryId}`
-      })
+      skillRefs: (value.skillRefs ?? []).filter((_, currentIndex) => currentIndex !== index)
     });
   };
 
-  const addLibraryMcp = () => {
-    const libraryId = firstMcpServer?.id ?? "shared-mcp";
+  const removeMcpRef = (index: number) => {
     onChange({
       ...value,
-      mcpRefs: (value.mcpRefs ?? []).concat({
-        libraryId,
-        targetName: libraryId
-      })
+      mcpRefs: (value.mcpRefs ?? []).filter((_, currentIndex) => currentIndex !== index)
     });
   };
+
+  const openSkillPicker = () => {
+    setSelectedLibrarySkillIds([]);
+    setActivePicker("skills");
+  };
+
+  const openMcpPicker = () => {
+    setSelectedMcpIds([]);
+    setActivePicker("mcp");
+  };
+
+  const closePicker = () => {
+    setActivePicker(undefined);
+    setSelectedLibrarySkillIds([]);
+    setSelectedMcpIds([]);
+  };
+
+  const toggleSelectedSkill = (id: string) => {
+    setSelectedLibrarySkillIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : current.concat(id)
+    );
+  };
+
+  const toggleSelectedMcp = (id: string) => {
+    setSelectedMcpIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : current.concat(id)
+    );
+  };
+
+  const addSelectedLibrarySkills = () => {
+    const additions = selectedLibrarySkillIds
+      .filter((libraryId) => !attachedSkillIds.has(libraryId))
+      .map((libraryId) => ({
+        libraryId,
+        targetName: `agentenv-${libraryId}`
+      }));
+    if (additions.length === 0) {
+      return;
+    }
+    onChange({
+      ...value,
+      skillRefs: (value.skillRefs ?? []).concat(additions)
+    });
+    closePicker();
+  };
+
+  const addSelectedMcpServers = () => {
+    const additions = selectedMcpIds
+      .filter((libraryId) => !attachedMcpIds.has(libraryId))
+      .map((libraryId) => ({
+        libraryId,
+        targetName: libraryId
+      }));
+    if (additions.length === 0) {
+      return;
+    }
+    onChange({
+      ...value,
+      mcpRefs: (value.mcpRefs ?? []).concat(additions)
+    });
+    closePicker();
+  };
+
+  useEffect(() => {
+    if (!activePicker) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closePicker();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [activePicker]);
 
   return (
     <section className="skills-editor" aria-label="Resources">
@@ -291,31 +357,55 @@ export const SkillsEditor = ({
           <p className="muted">Skills and MCP servers managed by this profile.</p>
         </div>
         <div className="asset-editor-actions">
-          <button
-            className="secondary-action"
-            type="button"
-            onClick={() =>
-              onChange({ ...value, ownedDirs: value.ownedDirs.concat(defaultSkill) })
-            }
-          >
-            Add skill
-          </button>
-          <button className="secondary-action" type="button" onClick={addLibrarySkill}>
+          <button className="secondary-action" type="button" onClick={openSkillPicker}>
             Add library skill
           </button>
-          <button className="secondary-action" type="button" onClick={addLibraryMcp}>
+          <button className="secondary-action" type="button" onClick={openMcpPicker}>
             Add library MCP
           </button>
           <button
             aria-expanded={advancedOpen}
+            aria-controls="advanced-resource-settings"
             className="secondary-action"
             type="button"
             onClick={() => setAdvancedOpen((current) => !current)}
           >
-            Advanced
+            {advancedOpen ? "Hide advanced" : "Advanced"}
           </button>
         </div>
       </div>
+
+      {advancedOpen ? (
+        <section
+          aria-label="Advanced resource settings"
+          className="resource-section resource-section--advanced"
+          id="advanced-resource-settings"
+        >
+          <div>
+            <div className="resource-heading">Advanced resource settings</div>
+            <p className="muted">
+              Disable noisy target skills by absolute path when a profile is applied.
+            </p>
+          </div>
+          <label className="field-block">
+            <span>Disabled Skill Paths</span>
+            <textarea
+              aria-label="Disabled Skill Paths"
+              spellCheck={false}
+              value={value.disabledSkillPaths.join("\n")}
+              onChange={(event) =>
+                onChange({
+                  ...value,
+                  disabledSkillPaths: event.currentTarget.value
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                })
+              }
+            />
+          </label>
+        </section>
+      ) : null}
 
       <section className="resource-section" aria-label="Resource inventory">
         <div>
@@ -410,7 +500,16 @@ export const SkillsEditor = ({
                   <small>{librarySkill?.name ?? asset.libraryId}</small>
                   <small>{librarySkill?.path ?? `skills-library/${asset.libraryId}`}</small>
                 </div>
-                <strong className="resource-status">Configured</strong>
+                <div className="resource-row__actions">
+                  <strong className="resource-status">Configured</strong>
+                  <button
+                    className="secondary-action"
+                    type="button"
+                    onClick={() => removeSkillRef(index)}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -434,7 +533,16 @@ export const SkillsEditor = ({
                       : mcpServer?.url ?? `mcp-library/${asset.libraryId}`}
                   </small>
                 </div>
-                <strong className="resource-status">Configured</strong>
+                <div className="resource-row__actions">
+                  <strong className="resource-status">Configured</strong>
+                  <button
+                    className="secondary-action"
+                    type="button"
+                    onClick={() => removeMcpRef(index)}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -462,24 +570,127 @@ export const SkillsEditor = ({
         </div>
       </section>
 
-      {advancedOpen ? (
-        <label className="field-block resource-section--advanced">
-          <span>Disabled Skill Paths</span>
-          <textarea
-            aria-label="Disabled Skill Paths"
-            spellCheck={false}
-            value={value.disabledSkillPaths.join("\n")}
-            onChange={(event) =>
-              onChange({
-                ...value,
-                disabledSkillPaths: event.currentTarget.value
-                  .split("\n")
-                  .map((line) => line.trim())
-                  .filter(Boolean)
-              })
-            }
-          />
-        </label>
+      {activePicker === "skills" ? (
+        <div className="preview-modal-backdrop" onClick={closePicker}>
+          <section
+            aria-label="Add library skills"
+            aria-modal="true"
+            className="profile-form-dialog resource-picker-dialog"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">Add library skills</div>
+                <p className="muted">Select one or more shared skills for this profile.</p>
+              </div>
+            </header>
+            <div className="resource-picker-list">
+              {librarySkills.length === 0 ? (
+                <p className="muted">No library skills available. Import skills in Library first.</p>
+              ) : null}
+              {librarySkills.map((skill) => {
+                const isAttached = attachedSkillIds.has(skill.id);
+                return (
+                  <label className="resource-picker-option" key={skill.id}>
+                    <input
+                      aria-label={skill.name}
+                      checked={selectedLibrarySkillIds.includes(skill.id)}
+                      disabled={isAttached}
+                      type="checkbox"
+                      onChange={() => toggleSelectedSkill(skill.id)}
+                    />
+                    <span>
+                      <strong>{skill.name}</strong>
+                      <small>{skill.description || skill.id}</small>
+                    </span>
+                    {isAttached ? <em>Already added</em> : null}
+                  </label>
+                );
+              })}
+              {librarySkills.length > 0 &&
+              librarySkills.every((skill) => attachedSkillIds.has(skill.id)) ? (
+                <p className="muted">All library skills are already attached.</p>
+              ) : null}
+            </div>
+            <footer className="preview-actions">
+              <button className="secondary-action" type="button" onClick={closePicker}>
+                Cancel
+              </button>
+              <button
+                className="primary-action"
+                type="button"
+                disabled={selectedLibrarySkillIds.length === 0}
+                onClick={addSelectedLibrarySkills}
+              >
+                Add selected skills
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {activePicker === "mcp" ? (
+        <div className="preview-modal-backdrop" onClick={closePicker}>
+          <section
+            aria-label="Add library MCP servers"
+            aria-modal="true"
+            className="profile-form-dialog resource-picker-dialog"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">Add library MCP servers</div>
+                <p className="muted">Select one or more reusable MCP servers for this profile.</p>
+              </div>
+            </header>
+            <div className="resource-picker-list">
+              {mcpServers.length === 0 ? (
+                <p className="muted">No library MCP servers available. Add servers in MCP Library first.</p>
+              ) : null}
+              {mcpServers.map((server) => {
+                const isAttached = attachedMcpIds.has(server.id);
+                const detail =
+                  server.transport === "stdio"
+                    ? [server.command, ...(server.args ?? [])].filter(Boolean).join(" ")
+                    : server.url;
+                return (
+                  <label className="resource-picker-option" key={server.id}>
+                    <input
+                      aria-label={server.name}
+                      checked={selectedMcpIds.includes(server.id)}
+                      disabled={isAttached}
+                      type="checkbox"
+                      onChange={() => toggleSelectedMcp(server.id)}
+                    />
+                    <span>
+                      <strong>{server.name}</strong>
+                      <small>{detail || server.id}</small>
+                    </span>
+                    {isAttached ? <em>Already added</em> : null}
+                  </label>
+                );
+              })}
+              {mcpServers.length > 0 && mcpServers.every((server) => attachedMcpIds.has(server.id)) ? (
+                <p className="muted">All library MCP servers are already attached.</p>
+              ) : null}
+            </div>
+            <footer className="preview-actions">
+              <button className="secondary-action" type="button" onClick={closePicker}>
+                Cancel
+              </button>
+              <button
+                className="primary-action"
+                type="button"
+                disabled={selectedMcpIds.length === 0}
+                onClick={addSelectedMcpServers}
+              >
+                Add selected MCP servers
+              </button>
+            </footer>
+          </section>
+        </div>
       ) : null}
     </section>
   );

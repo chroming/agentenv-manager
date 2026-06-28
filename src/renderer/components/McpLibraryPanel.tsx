@@ -25,9 +25,28 @@ const commandLabel = (server: McpLibraryEntry) => {
   return server.url ?? "";
 };
 
+const parseEnvText = (value: string) =>
+  Object.fromEntries(
+    value
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const equalsIndex = line.indexOf("=");
+        if (equalsIndex < 0) {
+          return [line, line];
+        }
+        const key = line.slice(0, equalsIndex).trim();
+        const envName = line.slice(equalsIndex + 1).trim();
+        return [key, envName || key];
+      })
+      .filter(([key]) => key.length > 0)
+  );
+
 export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpLibraryPanelProps) => {
   const [draft, setDraft] = useState<SaveMcpServerInput>(defaultDraft);
   const [argsText, setArgsText] = useState("");
+  const [envText, setEnvText] = useState("");
 
   const saveDraft = () => {
     if (!draft.id.trim() || !draft.name.trim()) {
@@ -42,10 +61,12 @@ export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpL
       args: argsText
         .split("\n")
         .map((line) => line.trim())
-        .filter(Boolean)
+        .filter(Boolean),
+      env: parseEnvText(envText)
     });
     setDraft(defaultDraft);
     setArgsText("");
+    setEnvText("");
   };
 
   return (
@@ -79,6 +100,13 @@ export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpL
                 <span>{server.name}</span>
                 <small>{server.transport}</small>
                 <small>{commandLabel(server)}</small>
+                <small>
+                  {Object.keys(server.env ?? {}).length > 0
+                    ? `${Object.keys(server.env ?? {}).length} env variable${
+                        Object.keys(server.env ?? {}).length === 1 ? "" : "s"
+                      }`
+                    : "No env variables"}
+                </small>
                 <small>
                   {(mcpUsage[server.id] ?? []).length > 0
                     ? `Used by ${(mcpUsage[server.id] ?? []).join(", ")}`
@@ -167,6 +195,15 @@ export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpL
               />
             </label>
           )}
+          <label className="mcp-server-form__wide">
+            <span>Environment variables</span>
+            <textarea
+              aria-label="MCP env"
+              placeholder="GITHUB_TOKEN&#10;DOCS_TOKEN=DOCS_RUNTIME_TOKEN"
+              value={envText}
+              onChange={(event) => setEnvText(event.currentTarget.value)}
+            />
+          </label>
           <button
             className="primary-action library-import-action"
             type="button"

@@ -1376,6 +1376,14 @@ summary {
   white-space: nowrap;
 }
 
+.resource-row__actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
 .resource-chip,
 .resource-status {
   border-radius: 999px;
@@ -1427,6 +1435,58 @@ summary {
 
 .resource-edit-grid button {
   min-height: 36px;
+}
+
+.resource-picker-dialog {
+  max-width: 560px;
+  width: min(560px, calc(100vw - 48px));
+}
+
+.resource-picker-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  max-height: min(420px, calc(100vh - 280px));
+  overflow: auto;
+}
+
+.resource-picker-option {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 10px;
+}
+
+.resource-picker-option input {
+  margin: 0;
+}
+
+.resource-picker-option span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.resource-picker-option strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.resource-picker-option small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-picker-option em {
+  color: var(--subtle);
+  font-size: 12px;
+  font-style: normal;
+  white-space: nowrap;
 }
 
 .resource-legend {

@@ -88,9 +88,9 @@ afterEach(() => {
 });
 
 describe("SkillsEditor", () => {
-  it("adds and edits switchable skills", () => {
+  it("does not expose the incomplete profile-owned skill creation flow", () => {
     const onChange = vi.fn();
-    const { rerender } = render(
+    render(
       <SkillsEditor
         value={emptyPolicy}
         configText="{}"
@@ -99,27 +99,24 @@ describe("SkillsEditor", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add skill" }));
-    expect(screen.queryByRole("button", { name: "Add agent" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add skill" })).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 
-    expect(onChange).toHaveBeenLastCalledWith({
-      ownedDirs: [
-        {
-          kind: "skill",
-          source: "skills/new-skill",
-          targetName: "agentenv-new-skill"
-        }
-      ],
-      ownedFiles: [],
-      skillRefs: [],
-      mcpRefs: [],
-      disabledSkillPaths: []
-    });
-
-    const nextPolicy = onChange.mock.lastCall?.[0] as AssetPolicy;
-    rerender(
+  it("edits existing profile-owned skills without offering new profile-owned skill creation", () => {
+    const onChange = vi.fn();
+    render(
       <SkillsEditor
-        value={nextPolicy}
+        value={{
+          ...emptyPolicy,
+          ownedDirs: [
+            {
+              kind: "skill",
+              source: "skills/new-skill",
+              targetName: "agentenv-new-skill"
+            }
+          ]
+        }}
         configText="{}"
         configLanguage="jsonc"
         onChange={onChange}
@@ -149,7 +146,7 @@ describe("SkillsEditor", () => {
     });
   });
 
-  it("lists shared library skills and preserves them during skill edits", () => {
+  it("adds multiple shared library skills from a chooser and preserves existing resources", () => {
     const onChange = vi.fn();
     render(
       <SkillsEditor
@@ -200,34 +197,75 @@ describe("SkillsEditor", () => {
     expect(screen.getByRole("group", { name: "MCP context7" })).toHaveTextContent("Library");
 
     fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
+    const skillDialog = screen.getByRole("dialog", { name: "Add library skills" });
+    expect(within(skillDialog).getByLabelText("Shared Reviewer")).toBeDisabled();
+    fireEvent.click(within(skillDialog).getByLabelText("GitHub Reviewer"));
+    fireEvent.click(within(skillDialog).getByRole("button", { name: "Add selected skills" }));
 
     expect(onChange).toHaveBeenLastCalledWith({
       ...mixedPolicy,
       skillRefs: [
         mixedPolicy.skillRefs[0],
         {
-          libraryId: "shared-reviewer",
-          targetName: "agentenv-shared-reviewer"
+          libraryId: "github-reviewer",
+          targetName: "agentenv-github-reviewer"
         }
       ],
       mcpRefs: mixedPolicy.mcpRefs
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Add library MCP" }));
+    const mcpDialog = screen.getByRole("dialog", { name: "Add library MCP servers" });
+    expect(within(mcpDialog).getByLabelText("Context7")).toBeDisabled();
+    expect(within(mcpDialog).getByText("All library MCP servers are already attached.")).toBeInTheDocument();
+  });
+
+  it("adds multiple reusable MCP servers from a chooser", () => {
+    const onChange = vi.fn();
+    render(
+      <SkillsEditor
+        value={emptyPolicy}
+        configText="{}"
+        configLanguage="jsonc"
+        mcpServers={[
+          {
+            id: "context7",
+            name: "Context7",
+            transport: "stdio",
+            command: "npx",
+            args: ["-y", "@upstash/context7-mcp"],
+            env: {}
+          },
+          {
+            id: "docs",
+            name: "Docs Search",
+            transport: "http",
+            url: "https://example.com/mcp"
+          }
+        ]}
+        onChange={onChange}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add library MCP" }));
+    const mcpDialog = screen.getByRole("dialog", { name: "Add library MCP servers" });
+    fireEvent.click(within(mcpDialog).getByLabelText("Context7"));
+    fireEvent.click(within(mcpDialog).getByLabelText("Docs Search"));
+    fireEvent.click(within(mcpDialog).getByRole("button", { name: "Add selected MCP servers" }));
 
     expect(onChange).toHaveBeenLastCalledWith({
-      ...mixedPolicy,
+      ...emptyPolicy,
       mcpRefs: [
-        mixedPolicy.mcpRefs[0],
         {
           libraryId: "context7",
           targetName: "context7"
+        },
+        {
+          libraryId: "docs",
+          targetName: "docs"
         }
       ]
     });
-
-    expect(screen.queryByRole("region", { name: "Skill library" })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("GitHub skill URL")).not.toBeInTheDocument();
   });
 
   it("lists skills and MCP servers as profile resources", () => {
@@ -262,6 +300,7 @@ describe("SkillsEditor", () => {
     expect(screen.queryByRole("textbox", { name: "Disabled Skill Paths" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    expect(screen.getByRole("region", { name: "Advanced resource settings" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Disabled Skill Paths" })).toBeInTheDocument();
   });
 

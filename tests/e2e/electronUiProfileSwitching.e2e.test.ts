@@ -367,6 +367,15 @@ const previewAndApply = async (page: Page, targetName: "OpenCode" | "Codex") => 
   await previewDialog.waitFor({ state: "hidden" });
 };
 
+const addLibrarySkillToProfile = async (page: Page, skillName = "Shared Reviewer") => {
+  await page.getByRole("button", { name: "Add library skill" }).click();
+  const picker = page.getByRole("dialog", { name: "Add library skills" });
+  await picker.waitFor({ state: "visible" });
+  await picker.getByLabel(skillName).check();
+  await picker.getByRole("button", { name: "Add selected skills" }).click();
+  await picker.waitFor({ state: "hidden" });
+};
+
 afterEach(async () => {
   if (app) {
     await app.close();
@@ -494,6 +503,43 @@ describe("Electron UI profile switching e2e", () => {
     expect(await findProfileByName(appDataRoot, "Docs Writing v2 Copy")).toBeUndefined();
   }, 30_000);
 
+  it("dismisses modal tools with Escape and outside clicks in the rendered app", async () => {
+    const { page } = await launchApp();
+
+    await page.getByRole("button", { name: "Profiles" }).click();
+    await page.getByRole("button", { name: "Apply to OpenCode" }).waitFor({
+      state: "visible",
+      timeout: 10_000
+    });
+    await page.getByRole("button", { name: "Create profile" }).click({ timeout: 5_000 });
+    const createDialog = page.getByRole("dialog", { name: "New profile" });
+    await createDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await page
+      .locator(".preview-modal-backdrop")
+      .click({ position: { x: 8, y: 8 }, timeout: 5_000 });
+    await createDialog.waitFor({ state: "hidden", timeout: 5_000 });
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await page.getByRole("button", { name: "Apply to OpenCode" }).click({ timeout: 5_000 });
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await page.keyboard.press("Escape");
+    await previewDialog.waitFor({ state: "hidden", timeout: 5_000 });
+
+    await page.getByRole("button", { name: "Select apply target" }).click({ timeout: 5_000 });
+    const targetMenu = page.getByRole("menu", { name: "Profile targets" });
+    await targetMenu.waitFor({ state: "visible", timeout: 5_000 });
+    await page.mouse.click(240, 120);
+    await targetMenu.waitFor({ state: "hidden", timeout: 5_000 });
+
+    await page.getByRole("button", { name: "Skills", exact: true }).click({ timeout: 5_000 });
+    await page.getByRole("button", { name: "Import Skill" }).click({ timeout: 5_000 });
+    const importDrawer = page.getByRole("region", { name: "GitHub skill import" });
+    await importDrawer.waitFor({ state: "visible", timeout: 5_000 });
+    await page.mouse.click(240, 120);
+    await importDrawer.waitFor({ state: "hidden", timeout: 5_000 });
+  }, 30_000);
+
   it("imports an existing target skill into the shared library", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
     await writeUnmanagedTargetSkill(
@@ -619,18 +665,28 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByLabel("MCP library name").fill("Local Search");
     await page.getByLabel("MCP command").fill("node");
     await page.getByLabel("MCP args").fill("server.js\n--stdio");
+    await page.getByLabel("MCP env").fill("SEARCH_TOKEN\nCACHE_DIR=AGENTENV_CACHE_DIR");
     await page.getByRole("button", { name: "Save MCP server" }).click();
 
     const localSearch = page.getByRole("group", { name: "MCP library item local-search" });
     await localSearch.waitFor({ state: "visible" });
     await expect.poll(() => localSearch.textContent()).toContain("node server.js --stdio");
+    await expect.poll(() => localSearch.textContent()).toContain("2 env variables");
     await expect
-      .poll(async () => readJson<Array<{ id: string; command?: string; args?: string[] }>>(mcpLibraryPath))
+      .poll(async () =>
+        readJson<
+          Array<{ id: string; command?: string; args?: string[]; env?: Record<string, string> }>
+        >(mcpLibraryPath)
+      )
       .toContainEqual(
         expect.objectContaining({
           id: "local-search",
           command: "node",
-          args: ["server.js", "--stdio"]
+          args: ["server.js", "--stdio"],
+          env: {
+            CACHE_DIR: "AGENTENV_CACHE_DIR",
+            SEARCH_TOKEN: "SEARCH_TOKEN"
+          }
         })
       );
 
@@ -650,7 +706,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("tab", { name: "Resources" }).click();
-    await page.getByRole("button", { name: "Add library skill" }).click();
+    await addLibrarySkillToProfile(page);
     await page
       .getByRole("group", { name: "Library skill agentenv-shared-reviewer" })
       .waitFor({ state: "visible" });
@@ -683,7 +739,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("tab", { name: "Resources" }).click();
-    await page.getByRole("button", { name: "Add library skill" }).click();
+    await addLibrarySkillToProfile(page);
     await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
@@ -773,7 +829,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("tab", { name: "Resources" }).click();
-    await page.getByRole("button", { name: "Add library skill" }).click();
+    await addLibrarySkillToProfile(page);
     await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
@@ -797,7 +853,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("tab", { name: "Resources" }).click();
-    await page.getByRole("button", { name: "Add library skill" }).click();
+    await addLibrarySkillToProfile(page);
     await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
@@ -825,32 +881,18 @@ describe("Electron UI profile switching e2e", () => {
       });
   }, 30_000);
 
-  it("adds and removes a profile-owned skill from the rendered Resources editor", async () => {
-    const { appDataRoot, opencodeDir, page } = await launchApp();
-    const profileSkillDir = join(appDataRoot, "profiles", "ui-opencode-alpha", "skills", "new-skill");
-    await mkdir(profileSkillDir, { recursive: true });
-    await writeFile(
-      join(profileSkillDir, "SKILL.md"),
-      "---\nname: UI New Skill\ndescription: Added from the Resources editor.\n---\n\n# UI New Skill\n",
-      "utf8"
-    );
-
+  it("removes an existing profile-owned skill from the rendered Resources editor", async () => {
+    const { opencodeDir, page } = await launchApp();
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("tab", { name: "Resources" }).click();
-    await page.getByRole("button", { name: "Add skill" }).click();
-    await page
-      .getByRole("group", { name: "Skill agentenv-new-skill" })
-      .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Save" }).click();
     await previewAndApply(page, "OpenCode");
 
-    const installedSkillDir = join(opencodeDir, "skills", "agentenv-new-skill");
-    await expect(readFile(join(installedSkillDir, "SKILL.md"), "utf8")).resolves.toContain(
-      "Added from the Resources editor."
-    );
+    const installedSkillDir = join(opencodeDir, "skills", "ui-alpha-skill");
+    await expect(fileExists(installedSkillDir)).resolves.toBe(true);
 
+    await page.getByRole("tab", { name: "Resources" }).click();
+    expect(await page.getByRole("button", { name: "Add skill" }).count()).toBe(0);
     await page
-      .getByRole("group", { name: "Skill agentenv-new-skill" })
+      .getByRole("group", { name: "Skill ui-alpha-skill" })
       .getByRole("button", { name: "Remove" })
       .click();
     await page.getByRole("button", { name: "Save" }).click();
@@ -860,27 +902,12 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("shows profile-owned skill conflicts before applying from the rendered app", async () => {
-    const { appDataRoot, opencodeDir, page } = await launchApp();
-    const conflictSourceDir = join(
-      appDataRoot,
-      "profiles",
-      "ui-opencode-alpha",
-      "skills",
-      "conflict-skill"
-    );
-    await mkdir(conflictSourceDir, { recursive: true });
-    await writeFile(
-      join(conflictSourceDir, "SKILL.md"),
-      "---\nname: Conflict Skill\n---\n\n# Conflict\n",
-      "utf8"
-    );
+    const { opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("tab", { name: "Resources" }).click();
-    await page.getByRole("button", { name: "Add skill" }).click();
-    const newSkill = page.getByRole("group", { name: "Skill agentenv-new-skill" });
-    await newSkill.getByLabel("Source").fill("skills/conflict-skill");
-    await newSkill.getByLabel("Target name").fill("target-only-reviewer");
+    const alphaSkill = page.getByRole("group", { name: "Skill ui-alpha-skill" });
+    await alphaSkill.getByLabel("Target name").fill("target-only-reviewer");
     await page.getByRole("button", { name: "Save" }).click();
 
     await page.getByRole("button", { name: "Apply to OpenCode" }).click();
@@ -1049,6 +1076,48 @@ describe("Electron UI profile switching e2e", () => {
     );
     await expect(readFile(join(codexDir, "config.toml"), "utf8")).resolves.toContain(
       'url = "https://example.com/shared-docs/mcp"'
+    );
+  }, 30_000);
+
+  it("adds reusable MCP servers to a profile from the rendered Resources picker", async () => {
+    const { opencodeDir, page } = await launchApp();
+
+    await page.getByRole("button", { name: "MCP Servers" }).click();
+    await page.getByRole("region", { name: "MCP library" }).waitFor({ state: "visible" });
+    await page.getByLabel("MCP library id").fill("local-search");
+    await page.getByLabel("MCP library name").fill("Local Search");
+    await page.getByLabel("MCP command").fill("node");
+    await page.getByLabel("MCP args").fill("server.js\n--stdio");
+    await page.getByLabel("MCP env").fill("SEARCH_TOKEN");
+    await page.getByRole("button", { name: "Save MCP server" }).click();
+    await page
+      .getByRole("group", { name: "MCP library item local-search" })
+      .waitFor({ state: "visible" });
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await page.getByRole("tab", { name: "Resources" }).click();
+    await page.getByRole("button", { name: "Add library MCP" }).click();
+    const picker = page.getByRole("dialog", { name: "Add library MCP servers" });
+    await picker.waitFor({ state: "visible" });
+    expect(await picker.getByLabel("Shared Docs").isDisabled()).toBe(true);
+    await picker.getByLabel("Local Search").check();
+    await picker.getByRole("button", { name: "Add selected MCP servers" }).click();
+    await picker.waitFor({ state: "hidden" });
+    await page
+      .getByRole("group", { name: "MCP local-search" })
+      .waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await previewAndApply(page, "OpenCode");
+
+    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
+      "local-search"
+    );
+    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
+      "server.js"
+    );
+    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
+      '"SEARCH_TOKEN": "SEARCH_TOKEN"'
     );
   }, 30_000);
 

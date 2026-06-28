@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreviewDialog } from "../../src/renderer/components/PreviewDialog";
 import type { ActivationPreview } from "../../src/shared/types";
 
@@ -41,5 +41,22 @@ describe("PreviewDialog", () => {
     expect(diff.querySelector(".diff-row--deletion")).toBeTruthy();
     expect(diff.querySelector(".diff-row--addition")).toBeTruthy();
     expect(diff.querySelector(".syntax-token")).toBeTruthy();
+  });
+
+  it("dismisses modal previews with Escape and backdrop clicks", async () => {
+    const onCancel = vi.fn();
+    render(<PreviewDialog preview={preview} onCancel={onCancel} onConfirm={vi.fn()} />);
+
+    const dialog = screen.getByRole("dialog", { name: "Preview" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+
+    const backdrop = dialog.parentElement;
+    expect(backdrop).toHaveClass("preview-modal-backdrop");
+    fireEvent.click(backdrop!);
+    expect(onCancel).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(dialog);
+    expect(onCancel).toHaveBeenCalledTimes(2);
   });
 });

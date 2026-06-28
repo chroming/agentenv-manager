@@ -152,6 +152,12 @@ describe("SkillLibraryPanel", () => {
 
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByLabelText("Update source for shared-reviewer")).not.toBeInTheDocument();
+    fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByLabelText("Update source for shared-reviewer")).not.toBeInTheDocument();
+    fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.change(screen.getByLabelText("Update source for shared-reviewer"), {
       target: { value: "/tmp/source/shared-reviewer" }
     });
@@ -192,9 +198,13 @@ describe("SkillLibraryPanel", () => {
       url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
       id: "github-reviewer"
     });
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onCloseTool).toHaveBeenCalledTimes(1);
 
     rerender(renderPanel("discoveries"));
     const discoveries = screen.getByRole("region", { name: "Environment skills" });
+    fireEvent.mouseDown(document.body);
+    expect(onCloseTool).toHaveBeenCalledTimes(2);
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Imported");
     expect(discoveries).toHaveTextContent("Unmanaged");

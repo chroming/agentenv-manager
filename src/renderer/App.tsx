@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -296,6 +296,7 @@ export const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const profilePageActionsRef = useRef<HTMLDivElement>(null);
 
   const refreshProfiles = async () => {
     const [
@@ -572,6 +573,59 @@ export const App = () => {
     setActiveTab("overview");
     setIsTargetMenuOpen(false);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (profileDialogMode || deleteProfileDialogOpen) {
+        closeProfileDialog();
+        return;
+      }
+      if (skillLibraryTool) {
+        setSkillLibraryTool(undefined);
+        return;
+      }
+      if (isProfileActionsOpen) {
+        setIsProfileActionsOpen(false);
+        return;
+      }
+      if (isTargetMenuOpen) {
+        setIsTargetMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [
+    deleteProfileDialogOpen,
+    isProfileActionsOpen,
+    isTargetMenuOpen,
+    profileDialogMode,
+    skillLibraryTool
+  ]);
+
+  useEffect(() => {
+    if (!isTargetMenuOpen && !isProfileActionsOpen) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (profilePageActionsRef.current?.contains(target)) {
+        return;
+      }
+      setIsTargetMenuOpen(false);
+      setIsProfileActionsOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isProfileActionsOpen, isTargetMenuOpen]);
 
   const selectedTarget = targets.find(
     (target) => target.id === (draftProfile?.manifest.targetId ?? selectedTargetId)
@@ -1042,7 +1096,7 @@ export const App = () => {
                 <h2>Profiles</h2>
                 <p className="muted">Manage reusable work environments and apply them to local agent targets.</p>
               </div>
-              <div className="profile-page-actions">
+              <div className="profile-page-actions" ref={profilePageActionsRef}>
                 <div className="profile-apply-control">
                   <span>Apply to</span>
                   <span className="profile-apply-split">
@@ -1411,8 +1465,14 @@ export const App = () => {
                 )}
               </div>
               {profileDialogMode ? (
-                <div className="preview-modal-backdrop">
-                  <section className="profile-form-dialog" role="dialog" aria-label={profileDialogMode === "create" ? "New profile" : "Edit profile"} aria-modal="true">
+                <div className="preview-modal-backdrop" onClick={closeProfileDialog}>
+                  <section
+                    className="profile-form-dialog"
+                    role="dialog"
+                    aria-label={profileDialogMode === "create" ? "New profile" : "Edit profile"}
+                    aria-modal="true"
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     <header className="profile-dialog-header">
                       <div>
                         <div className="section-title">
@@ -1483,8 +1543,14 @@ export const App = () => {
                 </div>
               ) : null}
               {deleteProfileDialogOpen && draftProfile ? (
-                <div className="preview-modal-backdrop">
-                  <section className="profile-form-dialog profile-form-dialog--compact" role="dialog" aria-label="Delete profile" aria-modal="true">
+                <div className="preview-modal-backdrop" onClick={closeProfileDialog}>
+                  <section
+                    className="profile-form-dialog profile-form-dialog--compact"
+                    role="dialog"
+                    aria-label="Delete profile"
+                    aria-modal="true"
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     <header className="profile-dialog-header">
                       <div>
                         <div className="section-title">Delete profile</div>

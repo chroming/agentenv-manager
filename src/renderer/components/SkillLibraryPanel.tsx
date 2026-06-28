@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpenText,
   CheckCircle2,
@@ -104,6 +104,46 @@ export const SkillLibraryPanel = ({
     .filter((update) => update.updateAvailable && !update.error)
     .map((update) => update.id);
   const availableUpdateCount = updateableSkillIds.length;
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (openActionId) {
+        setOpenActionId(undefined);
+        return;
+      }
+      if (activeTool) {
+        onCloseTool?.();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [activeTool, onCloseTool, openActionId]);
+
+  useEffect(() => {
+    if (!openActionId && !activeTool) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (openActionId && !target.closest(".row-action-menu")) {
+        setOpenActionId(undefined);
+      }
+      if (activeTool && !target.closest(".library-drawer")) {
+        onCloseTool?.();
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [activeTool, onCloseTool, openActionId]);
+
   const installsFor = (libraryId: string) =>
     skillInventory.filter((skill) => skill.libraryId === libraryId || skill.id === libraryId);
   const filteredSkills = librarySkills.filter((skill) => {
@@ -463,13 +503,14 @@ export const SkillLibraryPanel = ({
                             className="secondary-action"
                             type="button"
                             disabled={!sourceDraft.source.trim()}
-                            onClick={() =>
+                            onClick={() => {
                               onSetUpdateSource({
                                 id: skill.id,
                                 sourceType: sourceDraft.sourceType,
                                 source: sourceDraft.source.trim()
-                              })
-                            }
+                              });
+                              setOpenActionId(undefined);
+                            }}
                           >
                             Save source for {skill.id}
                           </button>

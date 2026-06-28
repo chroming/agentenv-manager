@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { ActivationPreview, RollbackPreview } from "../../shared/types";
 import { DiffViewer } from "./DiffViewer";
 
@@ -25,12 +26,29 @@ export const PreviewDialog = ({
   }
 
   const hasActions = Boolean(onCancel || onConfirm);
+
+  useEffect(() => {
+    if (!hasActions || !onCancel) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onCancel();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [hasActions, onCancel]);
+
   const content = (
     <section
       className={`preview-dialog${hasActions ? " preview-dialog--modal" : ""}`}
       role={hasActions ? "dialog" : undefined}
       aria-label="Preview"
       aria-modal={hasActions ? true : undefined}
+      onClick={(event) => event.stopPropagation()}
     >
       <header className="preview-header">
         <div>
@@ -79,5 +97,9 @@ export const PreviewDialog = ({
     return content;
   }
 
-  return <div className="preview-modal-backdrop">{content}</div>;
+  return (
+    <div className="preview-modal-backdrop" onClick={onCancel}>
+      {content}
+    </div>
+  );
 };
