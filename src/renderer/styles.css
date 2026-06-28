@@ -19,11 +19,11 @@
   --shadow-soft: 0 16px 38px rgba(29, 41, 57, 0.08);
   --motion-fast: 150ms ease;
   --motion-standard: 220ms ease;
-  --z-dropdown: 40;
-  --z-drawer: 60;
-  --z-modal: 100;
+  --z-dropdown: 80;
+  --z-drawer: 90;
   --z-popover: 120;
-  --z-tooltip: 130;
+  --z-modal: 200;
+  --z-tooltip: 260;
   color: var(--text);
   background: var(--page);
   font-family:
@@ -718,6 +718,8 @@ h2 {
   display: grid;
   gap: 16px;
   max-width: 520px;
+  max-height: calc(100vh - 80px);
+  overflow: auto;
   padding: 18px;
   width: min(520px, calc(100vw - 80px));
 }
@@ -2716,12 +2718,14 @@ summary {
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.14);
   display: grid;
   gap: 4px;
+  max-height: min(360px, calc(100vh - 96px));
   min-width: 204px;
+  overflow: auto;
   padding: 8px;
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  z-index: var(--z-dropdown);
+  z-index: var(--z-popover);
 }
 
 .profile-actions-menu {
@@ -3748,7 +3752,6 @@ button svg,
   position: relative;
   vertical-align: middle;
   width: 18px;
-  z-index: var(--z-dropdown);
 }
 
 .info-tip:hover,
@@ -3774,6 +3777,18 @@ button svg,
   text-transform: none;
   transform: translateX(-50%);
   width: max-content;
+  z-index: var(--z-tooltip);
+}
+
+.info-tip__bubble--portal {
+  bottom: auto;
+  display: block;
+  left: 0;
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  transform: none;
+  white-space: normal;
   z-index: var(--z-tooltip);
 }
 
@@ -3847,10 +3862,17 @@ button svg,
   border: 6px solid transparent;
   border-top-color: #111827;
   content: "";
-  left: 50%;
+  left: var(--tip-arrow-left, 50%);
   position: absolute;
   top: 100%;
   transform: translateX(-50%);
+}
+
+.info-tip__bubble--bottom::after {
+  border-bottom-color: #111827;
+  border-top-color: transparent;
+  bottom: 100%;
+  top: auto;
 }
 
 .info-tip:hover .info-tip__bubble,
@@ -3908,6 +3930,8 @@ button svg,
     0 1px 0 rgba(255, 255, 255, 0.92) inset;
   display: grid;
   gap: 8px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
   padding: 10px;
   position: fixed;
   right: auto;

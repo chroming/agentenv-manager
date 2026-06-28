@@ -103,6 +103,32 @@ describe("target discovery", () => {
     expect(opencode?.health.canWrite).toBe(true);
   });
 
+  it("finds CLIs in common user bin paths when the GUI PATH is sparse", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-discovery-"));
+    const executable = join(root, ".local", "bin", "opencode");
+    await mkdir(join(root, ".local", "bin"), { recursive: true });
+    await writeFile(executable, "#!/bin/sh\n");
+    await chmod(executable, 0o755);
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir: root,
+      fakeHomeRoot: root
+    });
+    const service = createTargetDiscoveryService({
+      paths,
+      targetRegistry: createTargetRegistry([createOpenCodeTargetAdapter()]),
+      pathEnv: "",
+      shellPathLookup: false
+    });
+
+    const targets = await service.listTargets();
+    const opencode = targets.find((target) => target.id === "opencode");
+
+    expect(opencode?.health.executableFound).toBe(true);
+    expect(opencode?.health.executablePath).toBe(executable);
+    expect(opencode?.health.status).toBe("ready");
+  });
+
   it("marks Claude Code ready when the CLI and writable user config files are present", async () => {
     const { binDir, service } = await makeService();
     const executable = join(binDir, "claude");

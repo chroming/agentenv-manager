@@ -14,7 +14,12 @@ import {
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import electronPath from "electron";
-import { _electron as electron, type ElectronApplication, type Page } from "playwright-core";
+import {
+  _electron as electron,
+  type ElectronApplication,
+  type Locator,
+  type Page
+} from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 
 let root = "";
@@ -359,6 +364,17 @@ const selectTarget = async (page: Page, name: string) => {
   await page.getByRole("menuitemradio", { name }).click();
 };
 
+const expectInViewport = async (page: Page, locator: Locator) => {
+  const box = await locator.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
+};
+
 const previewAndApply = async (page: Page, targetName: "OpenCode" | "Codex") => {
   await page.getByRole("button", { name: `Apply to ${targetName}` }).click();
   const previewDialog = page.getByRole("dialog", { name: "Preview" });
@@ -615,6 +631,57 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByRole("status").textContent())
       .toMatch(/up to date|update.*available|failed/i);
+  }, 30_000);
+
+  it("keeps menus, dialogs, and info tips inside the visible app window", async () => {
+    const { page } = await launchApp();
+    await page.setViewportSize({ width: 1180, height: 760 });
+
+    await page.locator(".page-header .info-tip").first().hover();
+    const headerTip = page.getByRole("tooltip");
+    await headerTip.waitFor({ state: "visible" });
+    await expectInViewport(page, headerTip);
+    await page.mouse.move(10, 10);
+    await headerTip.waitFor({ state: "hidden" });
+
+    await page.getByRole("button", { name: "Profiles" }).click();
+    await page.getByRole("button", { name: "Select apply target" }).click();
+    const targetMenu = page.getByRole("menu", { name: "Profile targets" });
+    await targetMenu.waitFor({ state: "visible" });
+    await expectInViewport(page, targetMenu);
+    await page.mouse.click(240, 120);
+    await targetMenu.waitFor({ state: "hidden" });
+
+    await page.getByRole("button", { name: "More profile actions" }).click();
+    const actionsMenu = page.getByRole("menu", { name: "Profile actions" });
+    await actionsMenu.waitFor({ state: "visible" });
+    await expectInViewport(page, actionsMenu);
+    await page.mouse.click(240, 120);
+    await actionsMenu.waitFor({ state: "hidden" });
+
+    await page.getByRole("tab", { name: "Resources" }).click();
+    await page.getByRole("button", { name: "Add library skill" }).click();
+    const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
+    await skillPicker.waitFor({ state: "visible" });
+    await expectInViewport(page, skillPicker);
+    await skillPicker.locator(".info-tip").hover();
+    const pickerTip = page.getByRole("tooltip");
+    await pickerTip.waitFor({ state: "visible" });
+    await expectInViewport(page, pickerTip);
+    await page.keyboard.press("Escape");
+    await skillPicker.waitFor({ state: "hidden" });
+
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
+    await sharedRow.waitFor({ state: "visible" });
+    await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
+    const rowMenu = page.getByRole("menu", { name: "Actions for shared-reviewer" });
+    await rowMenu.waitFor({ state: "visible" });
+    await expectInViewport(page, rowMenu);
+    await rowMenu.locator(".info-tip").hover();
+    const rowTip = page.getByRole("tooltip");
+    await rowTip.waitFor({ state: "visible" });
+    await expectInViewport(page, rowTip);
   }, 30_000);
 
   it("imports a local skill folder from the Import Skill drawer", async () => {
