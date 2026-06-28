@@ -123,4 +123,96 @@ describe("PreviewDialog", () => {
 
     expect(lastControl).toHaveFocus();
   });
+
+  it("keeps focus inside when the focused Confirm becomes disabled", () => {
+    const onCancel = vi.fn();
+    const onConfirm = vi.fn();
+    const renderDialog = (confirmDisabled: boolean) => (
+      <PreviewDialog
+        preview={preview}
+        confirmDisabled={confirmDisabled}
+        onCancel={onCancel}
+        onConfirm={onConfirm}
+      />
+    );
+    const { rerender } = render(renderDialog(false));
+    const dialog = screen.getByRole("dialog", { name: "Preview" });
+    const firstControl = dialog.querySelector<HTMLElement>("summary");
+    const confirm = within(dialog).getByRole("button", { name: "Confirm" });
+    confirm.focus();
+
+    rerender(renderDialog(true));
+    fireEvent.keyDown(document, { key: "Tab" });
+
+    expect(firstControl).toHaveFocus();
+
+    rerender(renderDialog(false));
+    within(dialog).getByRole("button", { name: "Confirm" }).focus();
+    rerender(renderDialog(true));
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+  });
+
+  it("closes only the topmost modal and restores focus inside the outer dialog", () => {
+    const outerCancel = vi.fn();
+    const innerCancel = vi.fn();
+    const NestedPreviewHarness = () => {
+      const [isOuterOpen, setIsOuterOpen] = useState(false);
+      const [isInnerOpen, setIsInnerOpen] = useState(false);
+
+      return (
+        <>
+          <button type="button" onClick={() => setIsOuterOpen(true)}>
+            Open outer preview
+          </button>
+          {isOuterOpen ? (
+            <PreviewDialog
+              preview={preview}
+              title="Outer preview"
+              cancelLabel="Close outer"
+              confirmLabel="Open inner preview"
+              onCancel={() => {
+                outerCancel();
+                setIsOuterOpen(false);
+              }}
+              onConfirm={() => setIsInnerOpen(true)}
+            />
+          ) : null}
+          {isInnerOpen ? (
+            <PreviewDialog
+              preview={preview}
+              title="Inner preview"
+              cancelLabel="Close inner"
+              confirmLabel="Confirm inner"
+              onCancel={() => {
+                innerCancel();
+                setIsInnerOpen(false);
+              }}
+              onConfirm={vi.fn()}
+            />
+          ) : null}
+        </>
+      );
+    };
+
+    render(<NestedPreviewHarness />);
+    const outerTrigger = screen.getByRole("button", { name: "Open outer preview" });
+    outerTrigger.focus();
+    fireEvent.click(outerTrigger);
+    const outerConfirm = screen.getByRole("button", { name: "Open inner preview" });
+    outerConfirm.focus();
+    fireEvent.click(outerConfirm);
+
+    expect(screen.getAllByRole("dialog", { name: "Preview" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Close inner" })).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(innerCancel).toHaveBeenCalledTimes(1);
+    expect(outerCancel).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("dialog", { name: "Preview" })).toHaveLength(1);
+    expect(screen.getByText("Outer preview")).toBeInTheDocument();
+    expect(outerConfirm).toHaveFocus();
+  });
 });

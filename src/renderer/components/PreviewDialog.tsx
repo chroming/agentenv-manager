@@ -103,6 +103,19 @@ export const PreviewDialog = ({
     cancelButtonRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" && event.key !== "Tab") {
+        return;
+      }
+
+      const dialog = dialogRef.current;
+      const modalDialogs = document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-modal="true"]'
+      );
+      const topmostDialog = modalDialogs.item(modalDialogs.length - 1);
+      if (!dialog || topmostDialog !== dialog) {
+        return;
+      }
+
       if (event.key === "Escape") {
         if (onCancelRef.current) {
           event.preventDefault();
@@ -111,19 +124,25 @@ export const PreviewDialog = ({
         return;
       }
 
-      if (event.key !== "Tab") {
-        return;
-      }
-
-      const focusableControls = dialogRef.current
-        ? Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-        : [];
+      const focusableControls = Array.from(
+        dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+      );
       if (focusableControls.length === 0) {
         return;
       }
 
       const firstControl = focusableControls[0];
       const lastControl = focusableControls.at(-1);
+      if (!focusableControls.includes(document.activeElement as HTMLElement)) {
+        event.preventDefault();
+        if (event.shiftKey) {
+          lastControl?.focus();
+        } else {
+          firstControl.focus();
+        }
+        return;
+      }
+
       if (event.shiftKey && document.activeElement === firstControl) {
         event.preventDefault();
         lastControl?.focus();
