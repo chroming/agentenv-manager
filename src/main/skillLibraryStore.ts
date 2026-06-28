@@ -7,6 +7,7 @@ import type {
   AgentEnvSettings,
   GitHubSkillImportInput,
   PlannedFileChange,
+  SkillCleanupIgnoreRule,
   SkillInventoryEntry,
   SkillLibraryEntry,
   SkillSourceType,
@@ -47,6 +48,8 @@ export interface ManageTargetSkillStoreInput {
 export interface SkillLibraryStore {
   listSkills(): Promise<SkillLibraryEntry[]>;
   scanInventory(targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]>;
+  ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
+  unignoreSkillGroup(skillKey: string): Promise<void>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   importSkill(input: ImportSkillInput): Promise<SkillLibraryEntry>;
   importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
@@ -116,6 +119,9 @@ const metadataValue = (content: string, key: "name" | "description") => {
   const match = content.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
   return match?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
 };
+
+export const normalizeSkillKey = (value: string) =>
+  value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
 
 const readJsonIfExists = async <T>(path: string): Promise<T | undefined> => {
   try {
@@ -307,8 +313,62 @@ export const createSkillLibraryStore = (
 ): SkillLibraryStore => {
   const readSettings = () => settingsStore?.readSettings() ?? Promise.resolve(DEFAULT_SETTINGS);
   const libraryDir = async () => resolveSkillsLibraryDir(paths, await readSettings());
+  const ignoreRulesPath = join(paths.appDataRoot, "skill-cleanup-ignore-rules.json");
   const fetchImpl = options.fetch ?? fetch;
   const authTokenProvider = options.authTokenProvider;
+
+  const readIgnoreRules = async () =>
+    (await readJsonIfExists<SkillCleanupIgnoreRule[]>(ignoreRulesPath))?.filter(
+      (rule) =>
+        rule &&
+        (rule.scope === "group" || rule.scope === "location") &&
+        (typeof rule.skillKey === "string" || typeof rule.path === "string")
+    ) ?? [];
+
+  const writeIgnoreRules = async (rules: SkillCleanupIgnoreRule[]) => {
+    await mkdir(dirname(ignoreRulesPath), { recursive: true });
+    await writeFile(ignoreRulesPath, `${JSON.stringify(rules, null, 2)}\n`, "utf8");
+  };
+
+  const findIgnoreRule = (
+    rules: SkillCleanupIgnoreRule[],
+    input: { skillKey: string; path: string }
+  ) =>
+    rules.find((rule) =>
+      rule.scope === "location"
+        ? rule.path === input.path
+        : rule.skillKey === input.skillKey
+    );
+
+  const ignoreSkillGroup = async (skillKey: string): Promise<SkillCleanupIgnoreRule> => {
+    const normalized = normalizeSkillKey(skillKey);
+    if (!normalized) {
+      throw new Error("Skill key is required");
+    }
+    const rules = await readIgnoreRules();
+    const existing = rules.find((rule) => rule.scope === "group" && rule.skillKey === normalized);
+    if (existing) {
+      return existing;
+    }
+    const now = new Date().toISOString();
+    const rule: SkillCleanupIgnoreRule = {
+      id: `ignore-${normalized}`,
+      scope: "group",
+      skillKey: normalized,
+      createdAt: now,
+      updatedAt: now
+    };
+    await writeIgnoreRules([...rules, rule]);
+    return rule;
+  };
+
+  const unignoreSkillGroup = async (skillKey: string): Promise<void> => {
+    const normalized = normalizeSkillKey(skillKey);
+    const rules = await readIgnoreRules();
+    await writeIgnoreRules(
+      rules.filter((rule) => !(rule.scope === "group" && rule.skillKey === normalized))
+    );
+  };
 
   const githubRequestInit = async (): Promise<RequestInit | undefined> => {
     const token = await authTokenProvider?.();
@@ -485,6 +545,7 @@ export const createSkillLibraryStore = (
 
   const scanInventory = async (targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]> => {
     const libraryIds = new Set((await listSkills()).map((skill) => skill.id));
+    const ignoreRules = await readIgnoreRules();
     const byKey = new Map<string, SkillInventoryEntry>();
     for (const target of targetPaths) {
       const scanRoots = [...new Set([target.skillsDir, ...(target.skillScanDirs ?? [])].filter(Boolean))];
@@ -503,7 +564,15 @@ export const createSkillLibraryStore = (
           }
           const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
           const markerId = await markerLibraryId(skillDir, target);
-          const status = markerId ? "managed" : libraryIds.has(entry.name) ? "library" : "unmanaged";
+          const skillKey = normalizeSkillKey(entry.name);
+          const ignoreRule = findIgnoreRule(ignoreRules, { skillKey, path: skillDir });
+          const status = markerId
+            ? "managed"
+            : ignoreRule
+              ? "ignored"
+              : libraryIds.has(entry.name)
+                ? "library"
+                : "unmanaged";
           const libraryId = markerId ?? (status === "library" ? entry.name : undefined);
           const key = `${status}:${libraryId ?? entry.name}:${skillDir}`;
           const existing = byKey.get(key);
@@ -520,7 +589,10 @@ export const createSkillLibraryStore = (
             path: skillDir,
             foundIn: [target.targetId],
             status,
-            libraryId
+            libraryId,
+            skillKey,
+            contentHash: await computeContentHash(skillDir),
+            ignoreRuleId: ignoreRule?.id
           });
         }
       }
@@ -843,6 +915,8 @@ export const createSkillLibraryStore = (
   return {
     listSkills,
     scanInventory,
+    ignoreSkillGroup,
+    unignoreSkillGroup,
     scanUnmanaged,
     importSkill,
     importGitHubSkill,

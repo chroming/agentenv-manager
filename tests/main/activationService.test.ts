@@ -193,6 +193,39 @@ describe("activation service", () => {
     );
   });
 
+  it("reports ignored unmanaged skill conflicts during profile preview", async () => {
+    const { paths, service } = await makeEnv();
+    await mkdir(join(paths.userSkillsDir, "agentenv-daily-coding-example-skill"), {
+      recursive: true
+    });
+    await writeFile(
+      join(paths.userSkillsDir, "agentenv-daily-coding-example-skill", "SKILL.md"),
+      "---\nname: Local copy\ndescription: Keep unmanaged.\n---\n"
+    );
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await writeFile(
+      join(paths.appDataRoot, "skill-cleanup-ignore-rules.json"),
+      JSON.stringify([
+        {
+          id: "ignore-agentenv-daily-coding-example-skill",
+          scope: "group",
+          skillKey: "agentenv-daily-coding-example-skill",
+          createdAt: "2026-07-09T00:00:00.000Z",
+          updatedAt: "2026-07-09T00:00:00.000Z"
+        }
+      ])
+    );
+
+    const preview = await service.previewProfile("daily-coding");
+
+    expect(preview.errors).toContain(
+      `Cannot install agentenv-daily-coding-example-skill because an ignored unmanaged skill already exists at ${join(
+        paths.userSkillsDir,
+        "agentenv-daily-coding-example-skill"
+      )}`
+    );
+  });
+
   it("rolls back files from a backup", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");

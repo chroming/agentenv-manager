@@ -17,6 +17,8 @@ describe("SkillLibraryPanel", () => {
     const onCheckUpdates = vi.fn();
     const onSetUpdateSource = vi.fn();
     const onManageTargetSkill = vi.fn();
+    const onIgnoreSkillGroup = vi.fn();
+    const onUnignoreSkillGroup = vi.fn();
     const onCloseTool = vi.fn();
     const onSelectLocalSkillFolder = vi.fn().mockResolvedValue("/tmp/local-skills/path-reviewer");
 
@@ -54,7 +56,9 @@ describe("SkillLibraryPanel", () => {
             path: "/tmp/opencode/skills/shared-reviewer",
             foundIn: ["opencode"],
             status: "managed",
-            libraryId: "shared-reviewer"
+            libraryId: "shared-reviewer",
+            skillKey: "shared-reviewer",
+            contentHash: "shared-hash"
           },
           {
             id: "legacy-reviewer",
@@ -63,7 +67,9 @@ describe("SkillLibraryPanel", () => {
             path: "/tmp/opencode/skills/legacy-reviewer",
             foundIn: ["opencode"],
             status: "library",
-            libraryId: "legacy-reviewer"
+            libraryId: "legacy-reviewer",
+            skillKey: "legacy-reviewer",
+            contentHash: "legacy-hash"
           },
           {
             id: "target-only-reviewer",
@@ -71,7 +77,21 @@ describe("SkillLibraryPanel", () => {
             description: "Found on disk",
             path: "/tmp/opencode/skills/target-only-reviewer",
             foundIn: ["opencode"],
-            status: "unmanaged"
+            status: "unmanaged",
+            skillKey: "target-only-reviewer",
+            contentHash: "target-only-hash"
+          },
+          {
+            id: "target-only-reviewer",
+            name: "Target Only Reviewer",
+            description: "Found on disk",
+            path: "/tmp/codex/skills/target-only-reviewer",
+            foundIn: ["codex"],
+            status: "ignored",
+            libraryId: undefined,
+            skillKey: "target-only-reviewer",
+            contentHash: "target-only-hash",
+            ignoreRuleId: "ignore-target-only-reviewer"
           }
         ]}
         skillUpdates={[
@@ -129,6 +149,8 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={onCheckUpdates}
         onSetUpdateSource={onSetUpdateSource}
         onManageTargetSkill={onManageTargetSkill}
+        onIgnoreSkillGroup={onIgnoreSkillGroup}
+        onUnignoreSkillGroup={onUnignoreSkillGroup}
         updateCheckStatus={{ state: "success", message: "2 updates available" }}
       />
     );
@@ -218,7 +240,14 @@ describe("SkillLibraryPanel", () => {
     expect(onCloseTool).toHaveBeenCalledTimes(2);
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Imported");
-    expect(discoveries).toHaveTextContent("Unmanaged");
+    expect(discoveries).toHaveTextContent("Ignored");
+    expect(screen.getByRole("group", { name: "Cleanup group target-only-reviewer" })).toHaveTextContent(
+      "2 locations"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Ignore group target-only-reviewer" }));
+    expect(onIgnoreSkillGroup).toHaveBeenCalledWith("target-only-reviewer");
+    fireEvent.click(screen.getByRole("button", { name: "Unignore group target-only-reviewer" }));
+    expect(onUnignoreSkillGroup).toHaveBeenCalledWith("target-only-reviewer");
     fireEvent.click(screen.getByRole("button", { name: "Manage legacy-reviewer" }));
     expect(onManageTargetSkill).toHaveBeenCalledWith({
       targetId: "opencode",

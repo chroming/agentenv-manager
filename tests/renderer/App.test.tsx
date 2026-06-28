@@ -124,6 +124,14 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     listTargets: vi.fn().mockResolvedValue([target]),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
     scanSkillInventory: vi.fn().mockResolvedValue([]),
+    ignoreSkillGroup: vi.fn().mockResolvedValue({
+      id: "ignore-skill",
+      scope: "group",
+      skillKey: "skill",
+      createdAt: "2026-07-09T00:00:00.000Z",
+      updatedAt: "2026-07-09T00:00:00.000Z"
+    }),
+    unignoreSkillGroup: vi.fn().mockResolvedValue(undefined),
     listMcpLibrary: vi.fn().mockResolvedValue([]),
     saveMcpServer: vi.fn().mockImplementation(async (input) => input),
     removeMcpServer: vi.fn().mockResolvedValue(undefined),
@@ -420,7 +428,7 @@ describe("App", () => {
     expect(await screen.findByRole("region", { name: "Environment skills" })).toBeInTheDocument();
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(2);
     expect(
-      await screen.findByRole("group", { name: "Environment skill target-only-reviewer" })
+      await screen.findByRole("group", { name: "Cleanup group target-only-reviewer" })
     ).toHaveTextContent("Found on disk");
   });
 

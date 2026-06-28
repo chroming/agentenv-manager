@@ -68,6 +68,12 @@ export const registerIpcHandlers = ({
       .listTargets()
       .then((targets) => skillLibraryStore.scanInventory(targets.map((target) => target.paths)))
   );
+  ipcMain.handle("skills:ignore-group", (_event, skillKey: unknown) =>
+    skillLibraryStore.ignoreSkillGroup(String(skillKey))
+  );
+  ipcMain.handle("skills:unignore-group", (_event, skillKey: unknown) =>
+    skillLibraryStore.unignoreSkillGroup(String(skillKey))
+  );
   ipcMain.handle("mcp:list-library", () => mcpLibraryStore.listServers());
   ipcMain.handle("mcp:save-library", (_event, input: SaveMcpServerInput) =>
     mcpLibraryStore.saveServer(input)

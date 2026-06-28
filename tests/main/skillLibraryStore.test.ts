@@ -223,7 +223,7 @@ describe("skill library store", () => {
       }
     ]);
 
-    expect(inventory).toEqual([
+    expect(inventory).toMatchObject([
       {
         id: "legacy",
         name: "Legacy",
@@ -231,7 +231,8 @@ describe("skill library store", () => {
         path: unmanagedDir,
         foundIn: ["opencode"],
         status: "unmanaged",
-        libraryId: undefined
+        libraryId: undefined,
+        skillKey: "legacy"
       },
       {
         id: "reviewer",
@@ -240,9 +241,89 @@ describe("skill library store", () => {
         path: managedTargetDir,
         foundIn: ["opencode"],
         status: "managed",
-        libraryId: "shared-reviewer"
+        libraryId: "shared-reviewer",
+        skillKey: "reviewer"
       }
     ]);
+    expect(inventory.every((skill) => skill.contentHash.length === 64)).toBe(true);
+  });
+
+  it("marks ignored local skill groups without hiding them from inventory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const codexCopy = join(root, "home", ".agents", "skills", "duplicate-reviewer");
+    const opencodeCopy = join(root, "home", ".config", "opencode", "skills", "duplicate-reviewer");
+    await mkdir(codexCopy, { recursive: true });
+    await mkdir(opencodeCopy, { recursive: true });
+    await writeFile(
+      join(codexCopy, "SKILL.md"),
+      "---\nname: Duplicate Reviewer\ndescription: Same skill.\n---\n",
+      "utf8"
+    );
+    await writeFile(
+      join(opencodeCopy, "SKILL.md"),
+      "---\nname: Duplicate Reviewer\ndescription: Same skill.\n---\n",
+      "utf8"
+    );
+
+    const store = createSkillLibraryStore(paths);
+    const firstScan = await store.scanInventory([
+      {
+        targetId: "codex",
+        configDir: join(root, "home", ".codex"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: join(root, "home", ".agents", "skills")
+      },
+      {
+        targetId: "opencode",
+        configDir: join(root, "home", ".config", "opencode"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: join(root, "home", ".config", "opencode", "skills")
+      }
+    ]);
+
+    expect(firstScan.map((skill) => skill.skillKey)).toEqual([
+      "duplicate-reviewer",
+      "duplicate-reviewer"
+    ]);
+    expect(new Set(firstScan.map((skill) => skill.contentHash)).size).toBe(1);
+
+    await store.ignoreSkillGroup("duplicate-reviewer");
+    const ignoredScan = await store.scanInventory([
+      {
+        targetId: "codex",
+        configDir: join(root, "home", ".codex"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: join(root, "home", ".agents", "skills")
+      },
+      {
+        targetId: "opencode",
+        configDir: join(root, "home", ".config", "opencode"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: join(root, "home", ".config", "opencode", "skills")
+      }
+    ]);
+
+    expect(ignoredScan).toHaveLength(2);
+    expect(ignoredScan.map((skill) => skill.status)).toEqual(["ignored", "ignored"]);
+    expect(ignoredScan.every((skill) => skill.ignoreRuleId)).toBe(true);
+
+    await store.unignoreSkillGroup("duplicate-reviewer");
+    await expect(
+      store.scanInventory([
+        {
+          targetId: "codex",
+          configDir: join(root, "home", ".codex"),
+          instructionsPath: "",
+          configPath: "",
+          skillsDir: join(root, "home", ".agents", "skills")
+        }
+      ])
+    ).resolves.toMatchObject([{ status: "unmanaged" }]);
   });
 
   it("scans additional target skill roots such as singular OpenCode skill directories", async () => {

@@ -980,6 +980,54 @@ export const App = () => {
     }
   };
 
+  const ignoreSkillGroup = async (skillKey: string) => {
+    setBusy(true);
+    setError(undefined);
+    setProfileSaveStatus("");
+    setSkillUpdateCheckStatus({
+      state: "checking",
+      message: `Ignoring ${skillKey}...`
+    });
+    try {
+      await window.agentEnv.ignoreSkillGroup(skillKey);
+      setSkillInventory(await window.agentEnv.scanSkillInventory());
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: `Ignored ${skillKey}`
+      });
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      setSkillUpdateCheckStatus({ state: "error", message: "Ignore failed" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unignoreSkillGroup = async (skillKey: string) => {
+    setBusy(true);
+    setError(undefined);
+    setProfileSaveStatus("");
+    setSkillUpdateCheckStatus({
+      state: "checking",
+      message: `Restoring ${skillKey}...`
+    });
+    try {
+      await window.agentEnv.unignoreSkillGroup(skillKey);
+      setSkillInventory(await window.agentEnv.scanSkillInventory());
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: `Restored ${skillKey}`
+      });
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      setSkillUpdateCheckStatus({ state: "error", message: "Restore failed" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const importGitHubSkill = async (input: { url: string; id?: string }) => {
     setBusy(true);
     setError(undefined);
@@ -1346,6 +1394,12 @@ export const App = () => {
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onUpdateAllLibrarySkills={updateAllLibrarySkills}
                 onCheckUpdates={checkSkillUpdates}
+                onIgnoreSkillGroup={(skillKey) => {
+                  void ignoreSkillGroup(skillKey);
+                }}
+                onUnignoreSkillGroup={(skillKey) => {
+                  void unignoreSkillGroup(skillKey);
+                }}
                 updateCheckStatus={skillUpdateCheckStatus}
               />
             ) : (

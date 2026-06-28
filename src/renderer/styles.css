@@ -1492,6 +1492,21 @@ summary {
   color: var(--warning);
 }
 
+.resource-chip--ignored {
+  background: #f3f5f8;
+  color: #647084;
+}
+
+.resource-chip--duplicate {
+  background: #edfdf8;
+  color: #0f8a68;
+}
+
+.resource-chip--conflict {
+  background: #fff1f0;
+  color: #bd3b32;
+}
+
 .resource-list--unmanaged {
   border-top: 1px solid var(--border);
   padding-top: 10px;
@@ -1553,6 +1568,20 @@ summary {
   gap: 8px;
   justify-content: flex-end;
   min-width: 0;
+}
+
+.cleanup-group-row {
+  align-items: start;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+}
+
+.cleanup-group-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  max-width: 320px;
 }
 
 .resource-chip,

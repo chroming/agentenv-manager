@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState
 } from "react";
@@ -57,6 +58,8 @@ interface SkillLibraryPanelProps {
   onUpdateLibrarySkill(id: string): void;
   onUpdateAllLibrarySkills(ids: string[]): void;
   onCheckUpdates(): void;
+  onIgnoreSkillGroup(skillKey: string): void;
+  onUnignoreSkillGroup(skillKey: string): void;
   updateCheckStatus?: SkillUpdateCheckStatus;
 }
 
@@ -197,6 +200,8 @@ export const SkillLibraryPanel = ({
   onUpdateLibrarySkill,
   onUpdateAllLibrarySkills,
   onCheckUpdates,
+  onIgnoreSkillGroup,
+  onUnignoreSkillGroup,
   updateCheckStatus
 }: SkillLibraryPanelProps) => {
   const [githubUrl, setGithubUrl] = useState("");
@@ -321,6 +326,37 @@ export const SkillLibraryPanel = ({
     updateFilter !== "all";
   const usedSkillCount = librarySkills.filter((skill) => (skillUsage[skill.id] ?? []).length > 0).length;
   const unusedSkillCount = Math.max(librarySkills.length - usedSkillCount, 0);
+  const cleanupGroups = useMemo(() => {
+    const byKey = new Map<string, SkillInventoryEntry[]>();
+    for (const skill of skillInventory) {
+      const key = skill.skillKey ?? skill.id;
+      byKey.set(key, [...(byKey.get(key) ?? []), skill]);
+    }
+
+    return [...byKey.entries()]
+      .map(([skillKey, items]) => {
+        const hashes = new Set(items.map((item) => item.contentHash).filter(Boolean));
+        const statuses = new Set(items.map((item) => item.status));
+        const state = statuses.has("ignored")
+          ? "ignored"
+          : hashes.size > 1
+            ? "conflict"
+            : items.length > 1
+              ? "duplicate"
+              : statuses.has("unmanaged")
+                ? "unmanaged"
+                : statuses.has("library")
+                  ? "library"
+                  : "managed";
+        return {
+          skillKey,
+          items,
+          state,
+          primary: items[0]
+        };
+      })
+      .sort((a, b) => (a.primary?.name ?? a.skillKey).localeCompare(b.primary?.name ?? b.skillKey));
+  }, [skillInventory]);
 
   const importGitHubSkill = () => {
     const url = githubUrl.trim();
@@ -436,6 +472,7 @@ export const SkillLibraryPanel = ({
             <option value="managed">Managed</option>
             <option value="library">Imported</option>
             <option value="unmanaged">Unmanaged</option>
+            <option value="ignored">Ignored</option>
             <option value="not-installed">Not installed</option>
           </select>
           <button
@@ -569,7 +606,9 @@ export const SkillLibraryPanel = ({
                           ? "Managed"
                           : install.status === "library"
                             ? "Imported"
-                            : "Unmanaged"}
+                            : install.status === "ignored"
+                              ? "Ignored"
+                              : "Unmanaged"}
                       </strong>
                     </span>
                   ))}
@@ -773,66 +812,107 @@ export const SkillLibraryPanel = ({
               <X size={16} strokeWidth={2.2} />
             </button>
           </div>
-        <section className="resource-section target-discovery-section">
-          <div>
-            <div className="resource-heading">Target discoveries</div>
-          </div>
-          <div className="resource-list resource-list--unmanaged">
-            {skillInventory.length === 0 ? (
-              <p className="muted library-empty">
-                No target skills detected. Install skills into a supported target and scan again.
-              </p>
-            ) : null}
-            {skillInventory.map((skill) => (
-              <div
-                aria-label={`Environment skill ${skill.id}`}
-                className="resource-row"
-                key={skill.path}
-                role="group"
-              >
-                <span className={`resource-chip resource-chip--${skill.status}`}>
-                  {skill.status === "managed"
-                    ? "Managed"
-                    : skill.status === "library"
-                      ? "Imported"
-                      : "Unmanaged"}
-                </span>
-                <div className="resource-row__main">
-                  <span>{skill.name}</span>
-                  <small>{skill.description || skill.id}</small>
-                  <small title={skill.path}>
-                    {skill.foundIn.join(", ")}
-                    {skill.libraryId ? ` · ${skill.libraryId}` : ""} · {skill.path}
-                  </small>
-                </div>
-                {skill.status === "library" && skill.libraryId ? (
-                  <button
-                    className="secondary-action"
-                    type="button"
-                    onClick={() =>
-                      onManageTargetSkill({
-                        targetId: skill.foundIn[0] ?? "",
-                        targetName: skill.id,
-                        libraryId: skill.libraryId ?? skill.id
-                      })
-                    }
+          <section className="resource-section target-discovery-section">
+            <div>
+              <div className="resource-heading">Cleanup groups</div>
+            </div>
+            <div className="resource-list resource-list--unmanaged">
+              {cleanupGroups.length === 0 ? (
+                <p className="muted library-empty">
+                  No target skills detected. Install skills into a supported target and scan again.
+                </p>
+              ) : null}
+              {cleanupGroups.map((group) => {
+                const firstLibrarySkill = group.items.find((skill) => skill.status === "library" && skill.libraryId);
+                const firstUnmanagedSkill = group.items.find((skill) => skill.status === "unmanaged");
+                const isIgnored = group.items.some((skill) => skill.status === "ignored");
+                const canIgnore = isIgnored || group.items.some((skill) => skill.status !== "managed");
+                const chipLabel =
+                  group.state === "ignored"
+                    ? "Ignored"
+                    : group.state === "conflict"
+                      ? "Conflict"
+                      : group.state === "duplicate"
+                        ? "Duplicate"
+                        : group.state === "library"
+                          ? "Imported"
+                          : group.state === "managed"
+                            ? "Managed"
+                            : "Unmanaged";
+
+                return (
+                  <div
+                    aria-label={`Cleanup group ${group.skillKey}`}
+                    className="resource-row cleanup-group-row"
+                    key={group.skillKey}
+                    role="group"
                   >
-                    Manage {skill.id}
-                  </button>
-                ) : null}
-                {skill.status === "unmanaged" ? (
-                  <button
-                    className="secondary-action"
-                    type="button"
-                    onClick={() => onImportUnmanaged(skill.path)}
-                  >
-                    Import {skill.id}
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </section>
+                    <span className={`resource-chip resource-chip--${group.state}`}>
+                      {chipLabel}
+                    </span>
+                    <div className="resource-row__main">
+                      <span>{group.primary?.name ?? group.skillKey}</span>
+                      <small>
+                        {group.primary?.description || group.skillKey} · {group.items.length}{" "}
+                        {group.items.length === 1 ? "location" : "locations"}
+                      </small>
+                      <small title={group.items.map((skill) => skill.path).join("\n")}>
+                        {group.items
+                          .map((skill) => `${skill.foundIn.join(", ")} · ${skill.path}`)
+                          .join(" | ")}
+                      </small>
+                    </div>
+                    <div className="cleanup-group-actions">
+                      {firstLibrarySkill?.libraryId ? (
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          onClick={() =>
+                            onManageTargetSkill({
+                              targetId: firstLibrarySkill.foundIn[0] ?? "",
+                              targetName: firstLibrarySkill.id,
+                              libraryId: firstLibrarySkill.libraryId ?? firstLibrarySkill.id
+                            })
+                          }
+                        >
+                          Manage {firstLibrarySkill.id}
+                        </button>
+                      ) : null}
+                      {firstUnmanagedSkill ? (
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          onClick={() => onImportUnmanaged(firstUnmanagedSkill.path)}
+                        >
+                          Import {firstUnmanagedSkill.id}
+                        </button>
+                      ) : null}
+                      {canIgnore ? (
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          aria-label={`Ignore group ${group.skillKey}`}
+                          onClick={() => onIgnoreSkillGroup(group.skillKey)}
+                        >
+                          Ignore
+                        </button>
+                      ) : null}
+                      {isIgnored ? (
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          aria-label={`Unignore group ${group.skillKey}`}
+                          onClick={() => onUnignoreSkillGroup(group.skillKey)}
+                        >
+                          Unignore
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </section>
       ) : null}
 

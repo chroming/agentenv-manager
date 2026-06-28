@@ -22,6 +22,10 @@ import {
   type SettingsStore
 } from "./settingsStore";
 import {
+  createSkillLibraryStore,
+  type SkillLibraryStore
+} from "./skillLibraryStore";
+import {
   createTargetRegistry,
   type TargetRegistry
 } from "./targets/registry";
@@ -32,6 +36,7 @@ import type {
   PlannedFileChange,
   RollbackPreview,
   RollbackResult,
+  TargetPaths,
   TargetState
 } from "../shared/types";
 
@@ -42,6 +47,7 @@ export interface ActivationServiceOptions {
   allowRealHomeWrites?: boolean;
   settingsStore?: SettingsStore;
   mcpLibraryStore?: McpLibraryStore;
+  skillLibraryStore?: SkillLibraryStore;
 }
 
 export interface ActivationService {
@@ -172,7 +178,8 @@ export const createActivationService = ({
   targetRegistry = createTargetRegistry(),
   allowRealHomeWrites = false,
   settingsStore = createSettingsStore(paths),
-  mcpLibraryStore = createMcpLibraryStore(paths)
+  mcpLibraryStore = createMcpLibraryStore(paths),
+  skillLibraryStore = createSkillLibraryStore(paths, settingsStore)
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
   const previews = new Map<string, ActivationPreview>();
@@ -207,6 +214,29 @@ export const createActivationService = ({
     await writeAtomic(statePathFor(targetId), `${JSON.stringify(state, null, 2)}\n`);
   };
 
+  const ignoredSkillConflicts = async (
+    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+    targetPaths: TargetPaths
+  ) => {
+    const desiredSkillTargets = new Set(
+      profile.assetPolicy.ownedDirs
+        .filter((ownedDir) => ownedDir.kind === "skill")
+        .map((ownedDir) => ownedDir.targetName)
+        .concat((profile.assetPolicy.skillRefs ?? []).map((skillRef) => skillRef.targetName))
+    );
+    if (desiredSkillTargets.size === 0) {
+      return [];
+    }
+
+    const inventory = await skillLibraryStore.scanInventory([targetPaths]);
+    return inventory
+      .filter((skill) => skill.status === "ignored" && desiredSkillTargets.has(skill.id))
+      .map(
+        (skill) =>
+          `Cannot install ${skill.id} because an ignored unmanaged skill already exists at ${skill.path}`
+      );
+  };
+
   const previewProfile = async (profileId: string): Promise<ActivationPreview> => {
     const profile = await profileStore.readProfile(profileId);
     const mcpLibrary = await mcpLibraryStore.listServers();
@@ -233,13 +263,14 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod
     });
+    const ignoredErrors = await ignoredSkillConflicts(materializedProfile, targetPaths);
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
       warnings: targetPreview.warnings,
-      errors: targetPreview.errors.concat(profileErrors, assetErrors),
+      errors: targetPreview.errors.concat(profileErrors, assetErrors, ignoredErrors),
       changes: targetPreview.changes,
       liveFingerprints: {
         ...targetPreview.liveFingerprints,

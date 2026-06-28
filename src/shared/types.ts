@@ -13,6 +13,8 @@ export interface AgentEnvApi {
   listTargets(): Promise<TargetInfo[]>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   scanSkillInventory(): Promise<SkillInventoryEntry[]>;
+  ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
+  unignoreSkillGroup(skillKey: string): Promise<void>;
   listMcpLibrary(): Promise<McpLibraryEntry[]>;
   saveMcpServer(input: SaveMcpServerInput): Promise<McpLibraryEntry>;
   removeMcpServer(id: string): Promise<void>;
@@ -96,11 +98,14 @@ export interface SkillUpdatePlan {
   errors: string[];
 }
 
-export type SkillInventoryStatus = "managed" | "library" | "unmanaged";
+export type SkillInventoryStatus = "managed" | "library" | "unmanaged" | "ignored";
 
 export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   status: SkillInventoryStatus;
   libraryId?: string;
+  skillKey: string;
+  contentHash: string;
+  ignoreRuleId?: string;
 }
 
 export interface UnmanagedSkillEntry {
@@ -114,6 +119,16 @@ export interface UnmanagedSkillEntry {
 export type SkillSourceType = "local" | "github" | "zip";
 export type SkillSyncMethod = "symlink" | "copy" | "auto";
 export type SkillStorageLocation = "appData" | "agents";
+
+export interface SkillCleanupIgnoreRule {
+  id: string;
+  scope: "group" | "location";
+  skillKey?: string;
+  path?: string;
+  reason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type McpTransport = "stdio" | "http" | "sse";
 

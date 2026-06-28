@@ -587,10 +587,10 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("button", { name: "Scan local Skills" }).click();
     await page
-      .getByRole("group", { name: "Environment skill target-only-reviewer" })
+      .getByRole("group", { name: "Cleanup group target-only-reviewer" })
       .waitFor({ state: "visible" });
     await page
-      .getByRole("group", { name: "Environment skill late-target-reviewer" })
+      .getByRole("group", { name: "Cleanup group late-target-reviewer" })
       .waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: "Import target-only-reviewer" }).click();
@@ -603,7 +603,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(
       await page
-        .getByRole("group", { name: "Environment skill target-only-reviewer" })
+        .getByRole("group", { name: "Cleanup group target-only-reviewer" })
         .textContent()
     ).toContain("Imported");
     await expect(
@@ -613,7 +613,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Manage target-only-reviewer" }).click();
     await expect
       .poll(async () =>
-        page.getByRole("group", { name: "Environment skill target-only-reviewer" }).textContent()
+        page.getByRole("group", { name: "Cleanup group target-only-reviewer" }).textContent()
       )
       .toContain("Managed");
     await expect(
@@ -622,6 +622,33 @@ describe("Electron UI profile switching e2e", () => {
         "utf8"
       )
     ).resolves.toContain('"source": "skills-library/target-only-reviewer"');
+  }, 30_000);
+
+  it("keeps ignored local skill groups visible and blocks conflicting profile apply", async () => {
+    const { opencodeDir, page } = await launchApp();
+    await writeUnmanagedTargetSkill(
+      opencodeDir,
+      "ui-alpha-skill",
+      "Local copy intentionally left unmanaged."
+    );
+
+    await page.getByRole("button", { name: "Skills", exact: true }).click();
+    await page.getByRole("button", { name: "Scan local Skills" }).click();
+    const cleanupGroup = page.getByRole("group", { name: "Cleanup group ui-alpha-skill" });
+    await cleanupGroup.waitFor({ state: "visible" });
+    await cleanupGroup.getByRole("button", { name: "Ignore group ui-alpha-skill" }).click();
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Ignored");
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await page.getByRole("button", { name: "Apply to OpenCode" }).click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await expect
+      .poll(() => previewDialog.textContent())
+      .toContain("Cannot install ui-alpha-skill because an ignored unmanaged skill already exists");
+    await expect
+      .poll(() => previewDialog.getByRole("button", { name: "Confirm" }).isDisabled())
+      .toBe(true);
   }, 30_000);
 
   it("shows polished skill row actions and update check feedback in the rendered app", async () => {
