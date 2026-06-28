@@ -19,6 +19,7 @@ import {
   ScanLine,
   Search,
   Settings2,
+  TriangleAlert,
   Trash2
 } from "lucide-react";
 import {
@@ -134,6 +135,42 @@ const targetStatusLabel: Record<TargetInfo["health"]["status"], string> = {
   "needs-setup": "Needs setup",
   missing: "Missing",
   guarded: "Guarded"
+};
+
+type AppFeedbackKind = "loading" | "success" | "error" | "info";
+
+interface AppFeedbackMessage {
+  kind: AppFeedbackKind;
+  title: string;
+  message?: string;
+}
+
+const AppFeedback = ({ feedback }: { feedback?: AppFeedbackMessage }) => {
+  if (!feedback) {
+    return null;
+  }
+
+  const Icon =
+    feedback.kind === "error"
+      ? TriangleAlert
+      : feedback.kind === "loading"
+        ? RefreshCw
+        : feedback.kind === "success"
+          ? CheckCircle2
+          : Settings2;
+
+  return (
+    <div
+      className={`app-feedback app-feedback--${feedback.kind}`}
+      role={feedback.kind === "error" ? "alert" : "status"}
+    >
+      <Icon size={15} strokeWidth={2.2} aria-hidden="true" />
+      <div>
+        <strong>{feedback.title}</strong>
+        {feedback.message ? <span>{feedback.message}</span> : null}
+      </div>
+    </div>
+  );
 };
 
 const countProfileResources = (profile: ProfileDetail) => {
@@ -337,6 +374,8 @@ export const App = () => {
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
+  const [isProfileDirty, setIsProfileDirty] = useState(false);
+  const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
   const [activeTab, setActiveTab] = useState<EditorTab>("overview");
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
@@ -429,6 +468,8 @@ export const App = () => {
         const profile = await window.agentEnv.readProfile(initialProfile.id);
         if (isMounted) {
           setDraftProfile(profile);
+          setIsProfileDirty(false);
+          setProfileSaveStatus("");
         }
       })
       .catch((unknownError) => {
@@ -474,11 +515,22 @@ export const App = () => {
     try {
       const profile = await window.agentEnv.readProfile(profileId);
       setDraftProfile(profile);
+      setIsProfileDirty(false);
+      setProfileSaveStatus("");
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setBusy(false);
     }
+  };
+
+  const updateDraftProfile = (profile: ProfileDetail) => {
+    setDraftProfile(profile);
+    setIsProfileDirty(true);
+    setProfileSaveStatus("Unsaved changes");
+    setSkillUpdateCheckStatus(undefined);
+    setPreview(undefined);
+    setRollbackPreview(undefined);
   };
 
   const saveDraft = async () => {
@@ -488,8 +540,23 @@ export const App = () => {
 
     const saved = await window.agentEnv.saveProfile(toSaveInput(draftProfile));
     setDraftProfile(saved);
+    setIsProfileDirty(false);
+    setProfileSaveStatus("Profile saved");
+    setSkillUpdateCheckStatus(undefined);
     await refreshProfiles();
     return saved;
+  };
+
+  const saveSelectedProfile = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await saveDraft();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const openCreateProfileDialog = () => {
@@ -547,10 +614,7 @@ export const App = () => {
             description
           }
         };
-        const saved = await window.agentEnv.saveProfile(toSaveInput(updatedProfile));
-        await refreshProfiles();
-        setSelectedProfileId(saved.id);
-        setDraftProfile(saved);
+        updateDraftProfile(updatedProfile);
       }
       setActiveTab("overview");
       setActiveWorkspace("profiles");
@@ -734,11 +798,15 @@ export const App = () => {
     setError(undefined);
     setRollbackPreview(undefined);
     try {
-      const saved = await saveDraft();
-      if (!saved) {
+      if (!draftProfile) {
         return;
       }
-      const nextPreview = await window.agentEnv.previewApply(saved.id);
+      if (isProfileDirty) {
+        setProfileSaveStatus("Save profile before applying");
+        setSkillUpdateCheckStatus(undefined);
+        return;
+      }
+      const nextPreview = await window.agentEnv.previewApply(draftProfile.id);
       setPreview(nextPreview);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -754,6 +822,7 @@ export const App = () => {
 
     setBusy(true);
     setError(undefined);
+    setProfileSaveStatus("");
     try {
       const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id);
       if (!result.ok) {
@@ -791,6 +860,7 @@ export const App = () => {
 
     setBusy(true);
     setError(undefined);
+    setProfileSaveStatus("");
     try {
       const result = await window.agentEnv.rollback(rollbackPreview.backupId);
       if (!result.ok) {
@@ -883,6 +953,7 @@ export const App = () => {
   const checkSkillUpdates = async () => {
     setBusy(true);
     setError(undefined);
+    setProfileSaveStatus("");
     setSkillUpdateCheckStatus({ state: "checking", message: "Checking library updates..." });
     try {
       const { skillUpdateItems } = await refreshProfiles();
@@ -953,11 +1024,28 @@ export const App = () => {
   const previewLibrarySkillUpdate = async (id: string) => {
     setBusy(true);
     setError(undefined);
+    setProfileSaveStatus("");
+    setSkillUpdateCheckStatus({ state: "checking", message: `Checking ${id}...` });
     try {
       const updatePlan = await window.agentEnv.previewLibrarySkillUpdate(id);
       setSelectedSkillUpdatePlan(updatePlan);
+      if (updatePlan.errors.length > 0) {
+        setSkillUpdateCheckStatus({
+          state: "error",
+          message: `${id} check failed`
+        });
+      } else {
+        setSkillUpdateCheckStatus({
+          state: "success",
+          message: updatePlan.updateAvailable
+            ? `1 update available for ${id}`
+            : `${id} is up to date`
+        });
+      }
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      setSkillUpdateCheckStatus({ state: "error", message: `${id} check failed` });
     } finally {
       setBusy(false);
     }
@@ -1083,6 +1171,35 @@ export const App = () => {
   const localSkillCount = librarySkills.filter((skill) => skill.sourceType === "local").length;
   const usedSkillCount = librarySkills.filter((skill) => (skillUsage[skill.id] ?? []).length > 0).length;
   const needsManagementCount = skillInventory.filter((skill) => skill.status !== "managed").length;
+  const appFeedback: AppFeedbackMessage | undefined = error
+    ? { kind: "error", title: "Action failed", message: error }
+    : skillUpdateCheckStatus
+      ? {
+          kind:
+            skillUpdateCheckStatus.state === "checking"
+              ? "loading"
+              : skillUpdateCheckStatus.state === "error"
+                ? "error"
+                : "success",
+          title: skillUpdateCheckStatus.message
+        }
+      : profileSaveStatus
+        ? {
+            kind: profileSaveStatus === "Profile saved" ? "success" : "info",
+            title: profileSaveStatus
+          }
+        : githubLoginMessage
+          ? {
+              kind: githubLoginMessage.startsWith("Signed") ? "success" : "info",
+              title: githubLoginMessage
+            }
+          : githubAuthStatus.error
+            ? {
+                kind: "error",
+                title: "GitHub connection needs attention",
+                message: githubAuthStatus.error
+              }
+        : undefined;
 
   return (
     <main
@@ -1098,7 +1215,6 @@ export const App = () => {
         activeLibraryTab={activeLibraryTab}
         onWorkspaceSelect={setActiveWorkspace}
         onLibraryTabSelect={setActiveLibraryTab}
-        onCreate={openCreateProfileDialog}
       />
 
       <section
@@ -1111,12 +1227,7 @@ export const App = () => {
               : `${activeWorkspace} workspace`
         }
       >
-        {error ? (
-          <div className="app-notice app-notice--error" role="alert">
-            <strong>Action failed</strong>
-            <span>{error}</span>
-          </div>
-        ) : null}
+        <AppFeedback feedback={appFeedback} />
         {activeWorkspace === "library" ? (
           <>
             <header className="page-header library-page-header">
@@ -1256,6 +1367,16 @@ export const App = () => {
                 </h2>
               </div>
               <div className="profile-page-actions" ref={profilePageActionsRef}>
+                <div className="profile-save-control">
+                  <button
+                    className="save-button"
+                    type="button"
+                    disabled={busy || !isProfileDirty}
+                    onClick={saveSelectedProfile}
+                  >
+                    Save profile
+                  </button>
+                </div>
                 <div className="profile-apply-control">
                   <span>Apply to</span>
                   <span className="profile-apply-split">
@@ -1446,17 +1567,6 @@ export const App = () => {
                 </button>
               ))}
             </div>
-            {activeTab !== "overview" ? (
-              <section className="profile-editor-actions" aria-label="Profile edit actions">
-                <div>
-                  <strong>Unsaved profile edits</strong>
-                  <small>Save changes before applying this profile.</small>
-                </div>
-                <button className="save-button" type="button" disabled={busy} onClick={saveDraft}>
-                  Save
-                </button>
-              </section>
-            ) : null}
             <div
               className="editor-grid"
               id={activeTabPanelId}
@@ -1556,9 +1666,7 @@ export const App = () => {
                   label={selectedTarget?.instructionsLabel ?? "Instructions"}
                   value={draftProfile.instructions}
                   onChange={(instructions) => {
-                    setDraftProfile({ ...draftProfile, instructions });
-                    setPreview(undefined);
-                    setRollbackPreview(undefined);
+                    updateDraftProfile({ ...draftProfile, instructions });
                   }}
                 />
               ) : null}
@@ -1567,9 +1675,7 @@ export const App = () => {
                   label={selectedTarget?.configLabel ?? "Config"}
                   value={draftProfile.configText}
                   onChange={(configText) => {
-                    setDraftProfile({ ...draftProfile, configText });
-                    setPreview(undefined);
-                    setRollbackPreview(undefined);
+                    updateDraftProfile({ ...draftProfile, configText });
                   }}
                 />
               ) : null}
@@ -1582,9 +1688,7 @@ export const App = () => {
                   librarySkills={librarySkills}
                   mcpServers={mcpServers}
                   onChange={(assetPolicy) => {
-                    setDraftProfile({ ...draftProfile, assetPolicy });
-                    setPreview(undefined);
-                    setRollbackPreview(undefined);
+                    updateDraftProfile({ ...draftProfile, assetPolicy });
                   }}
                 />
               ) : null}
@@ -1944,7 +2048,7 @@ export const App = () => {
                 </div>
               </div>
               {githubDeviceLogin ? (
-                <div className="github-device-card" role="status">
+                <div className="github-device-card">
                   <div>
                     <span>Device code</span>
                     <strong>{githubDeviceLogin.userCode}</strong>
@@ -1970,11 +2074,6 @@ export const App = () => {
                   </strong>
                   <span>Resets {formatShortDate(githubAuthStatus.rateLimit.resetAt)}</span>
                 </div>
-              ) : null}
-              {githubLoginMessage || githubAuthStatus.error ? (
-                <p className="settings-muted" role="status">
-                  {githubLoginMessage || githubAuthStatus.error}
-                </p>
               ) : null}
             </section>
           </section>

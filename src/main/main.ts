@@ -3,6 +3,11 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createActivationService } from "./activationService";
+import {
+  legacyElectronAppDataRoot,
+  migrateLegacyAppDataRoot,
+  resolveAppDataRoot
+} from "./appDataRoot";
 import { createBackupStore } from "./backupStore";
 import { createFileGitHubTokenStore, createGitHubAuthService } from "./githubAuthService";
 import { createMcpLibraryStore } from "./mcpLibraryStore";
@@ -95,8 +100,16 @@ const createWindow = () => {
 };
 
 const createServices = async () => {
-  const appDataRoot =
-    process.env.AGENTENV_DATA_ROOT ?? join(app.getPath("userData"), "data");
+  const appDataRoot = resolveAppDataRoot({
+    homeDir: app.getPath("home"),
+    userDataDir: app.getPath("userData")
+  });
+  if (!process.env.AGENTENV_DATA_ROOT) {
+    await migrateLegacyAppDataRoot({
+      legacyRoot: legacyElectronAppDataRoot(app.getPath("userData")),
+      nextRoot: appDataRoot
+    });
+  }
   const paths = createPaths({
     appDataRoot,
     homeDir: process.env.AGENTENV_HOME,

@@ -151,7 +151,7 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent(
       "Update available"
     );
-    expect(screen.getByRole("status")).toHaveTextContent("2 updates available");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();

@@ -360,6 +360,43 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 update available"));
   });
 
+  it("shows global feedback when checking one local library skill", async () => {
+    const api = installApi({
+      listSkillLibrary: vi.fn().mockResolvedValue([
+        {
+          id: "local-reviewer",
+          name: "Local Reviewer",
+          description: "Review from a local source",
+          path: "/tmp/skills-library/local-reviewer",
+          sourceType: "local",
+          source: "/tmp/source/local-reviewer",
+          contentHash: "hash",
+          updatedAt: "2026-07-02T00:00:00.000Z"
+        }
+      ]),
+      previewLibrarySkillUpdate: vi.fn().mockResolvedValue({
+        id: "local-reviewer",
+        name: "Local Reviewer",
+        sourceType: "local",
+        source: "/tmp/source/local-reviewer",
+        currentRevision: "hash",
+        latestRevision: "hash",
+        updateAvailable: false,
+        changes: [],
+        errors: []
+      })
+    });
+    render(<App />);
+
+    expect(await screen.findByRole("group", { name: "Library item local-reviewer" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Check update local-reviewer" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("local-reviewer is up to date")
+    );
+    expect(api.previewLibrarySkillUpdate).toHaveBeenCalledWith("local-reviewer");
+  });
+
   it("rescans local target skills when opening local skill discoveries", async () => {
     const api = installApi({
       scanSkillInventory: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([
@@ -537,6 +574,38 @@ describe("App", () => {
     expect(screen.queryByRole("dialog", { name: "Preview" })).not.toBeInTheDocument();
   });
 
+  it("keeps profile edits in a draft until the page-level save button is clicked", async () => {
+    const api = installApi();
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(screen.getByRole("tab", { name: "Instructions" }));
+    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
+      target: { value: "# Updated Agent\n" }
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
+    expect(api.saveProfile).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply to OpenCode" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Save profile before applying");
+    expect(api.previewApply).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() =>
+      expect(api.saveProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          instructions: "# Updated Agent\n"
+        })
+      )
+    );
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Profile saved"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply to OpenCode" }));
+    await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding"));
+  });
+
   it("dismisses profile modals and menus with Escape or outside clicks", async () => {
     installApi();
     render(<App />);
@@ -581,6 +650,9 @@ describe("App", () => {
       target: { value: "Review and quality checks" }
     });
     fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
+    expect(api.saveProfile).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
 
     await waitFor(() =>
       expect(api.saveProfile).toHaveBeenCalledWith(

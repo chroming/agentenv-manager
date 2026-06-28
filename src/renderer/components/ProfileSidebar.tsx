@@ -25,7 +25,6 @@ interface ProfileSidebarProps {
   isLoading: boolean;
   onWorkspaceSelect(workspace: AppWorkspace): void;
   onLibraryTabSelect(tab: LibraryTab): void;
-  onCreate(): void;
 }
 
 const targetStatusLabel: Record<TargetHealthStatus, string> = {
@@ -83,8 +82,7 @@ export const ProfileSidebar = ({
   activeLibraryTab,
   isLoading,
   onWorkspaceSelect,
-  onLibraryTabSelect,
-  onCreate
+  onLibraryTabSelect
 }: ProfileSidebarProps) => {
   const readyTargets = targets.filter((target) => target.health.status === "ready").length;
   const statusTargets = [...targets]
@@ -210,14 +208,6 @@ export const ProfileSidebar = ({
           })}
         </div>
       </section>
-      <button
-        aria-label="Create profile"
-        className="create-button sidebar-action"
-        type="button"
-        onClick={onCreate}
-      >
-        New profile
-      </button>
     </aside>
   );
 };

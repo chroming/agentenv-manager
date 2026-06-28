@@ -458,18 +458,6 @@ export const SkillLibraryPanel = ({
             Update all
           </button>
         </div>
-        {updateCheckStatus ? (
-          <div className={`library-update-feedback is-${updateCheckStatus.state}`} role="status">
-            {updateCheckStatus.state === "checking" ? (
-              <RefreshCw size={14} strokeWidth={2.2} />
-            ) : updateCheckStatus.state === "error" ? (
-              <TriangleAlert size={14} strokeWidth={2.2} />
-            ) : (
-              <CheckCircle2 size={14} strokeWidth={2.2} />
-            )}
-            <span>{updateCheckStatus.message}</span>
-          </div>
-        ) : null}
       </div>
 
       <section className="library-table" aria-label="Library skills">

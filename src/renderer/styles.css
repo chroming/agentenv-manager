@@ -1815,10 +1815,6 @@ summary {
   font-weight: 700;
 }
 
-.sidebar-action {
-  width: 100%;
-}
-
 .user-avatar {
   align-items: center;
   background: #64748b;
@@ -2791,6 +2787,13 @@ summary {
   position: relative;
 }
 
+.profile-save-control {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
 .profile-apply-control {
   align-items: center;
   background: transparent;
@@ -3109,41 +3112,6 @@ summary {
 .status-card--compact {
   min-height: 52px;
   padding: 10px 12px;
-}
-
-.profile-editor-actions {
-  align-items: center;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-left: 0;
-  border-right: 0;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) 74px;
-  padding: 10px 16px;
-}
-
-.profile-editor-actions div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.profile-editor-actions strong {
-  font-size: 13px;
-}
-
-.profile-editor-actions small {
-  color: var(--muted);
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-editor-actions .save-button {
-  min-height: 34px;
-  width: 100%;
 }
 
 .profile-overview {
@@ -4000,27 +3968,57 @@ button svg,
   z-index: var(--z-tooltip);
 }
 
-.app-notice {
+.app-feedback {
   align-items: start;
   border: 1px solid var(--border);
   border-radius: 8px;
+  color: #475569;
   display: grid;
-  gap: 3px;
+  gap: 8px;
+  grid-template-columns: 16px minmax(0, 1fr);
   margin-bottom: 12px;
+  min-height: 38px;
   padding: 10px 12px;
 }
 
-.app-notice strong {
+.app-feedback strong {
+  color: inherit;
+  display: block;
   font-size: 13px;
+  line-height: 1.25;
 }
 
-.app-notice span {
+.app-feedback span {
   color: var(--muted);
+  display: block;
   font-size: 12px;
   line-height: 1.45;
+  margin-top: 2px;
 }
 
-.app-notice--error {
+.app-feedback--loading {
+  background: #f8fbff;
+  border-color: #cbd9f4;
+  color: var(--accent);
+}
+
+.app-feedback--loading svg {
+  animation: spin 0.9s linear infinite;
+}
+
+.app-feedback--success {
+  background: var(--success-bg);
+  border-color: #bfe8d2;
+  color: var(--success);
+}
+
+.app-feedback--info {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.app-feedback--error {
   background: var(--danger-bg);
   border-color: #ffd4cf;
   color: var(--danger);
@@ -4086,42 +4084,6 @@ button svg,
 .info-tip:hover .info-tip__bubble,
 .info-tip:focus-visible .info-tip__bubble {
   display: block;
-}
-
-.library-update-feedback {
-  align-items: center;
-  background: #f8fafc;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: #475569;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 720;
-  gap: 6px;
-  grid-column: 1 / -1;
-  min-height: 32px;
-  padding: 0 12px;
-  white-space: normal;
-}
-
-.library-update-feedback.is-checking {
-  color: var(--accent);
-}
-
-.library-update-feedback.is-checking svg {
-  animation: spin 0.9s linear infinite;
-}
-
-.library-update-feedback.is-success {
-  background: var(--success-bg);
-  border-color: #bfe8d2;
-  color: var(--success);
-}
-
-.library-update-feedback.is-error {
-  background: var(--danger-bg);
-  border-color: #ffd4cf;
-  color: var(--danger);
 }
 
 @keyframes spin {
