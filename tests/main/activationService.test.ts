@@ -153,6 +153,45 @@ describe("activation service", () => {
     );
   });
 
+  it("blocks preview when an AgentEnv-managed file was changed outside the app after apply", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Old agents\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+
+    const firstPreview = await service.previewProfile("daily-coding");
+    const firstApply = await service.applyProfile("daily-coding", firstPreview.id);
+    expect(firstApply.ok).toBe(true);
+
+    await writeFile(paths.globalAgentsPath, "# Changed outside AgentEnv\n");
+    const secondPreview = await service.previewProfile("daily-coding");
+
+    expect(secondPreview.errors).toContain(
+      `External changes detected in AgentEnv-managed instructions instructions: ${paths.globalAgentsPath}`
+    );
+  });
+
+  it("keeps newly added unmanaged skills visible as warnings without blocking preview", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Old agents\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+
+    const firstPreview = await service.previewProfile("daily-coding");
+    const firstApply = await service.applyProfile("daily-coding", firstPreview.id);
+    expect(firstApply.ok).toBe(true);
+
+    const manualSkillDir = join(paths.userSkillsDir, "manual-reviewer");
+    await mkdir(manualSkillDir, { recursive: true });
+    await writeFile(
+      join(manualSkillDir, "SKILL.md"),
+      "---\nname: Manual Reviewer\ndescription: Added outside AgentEnv.\n---\n"
+    );
+
+    const secondPreview = await service.previewProfile("daily-coding");
+
+    expect(secondPreview.errors).toEqual([]);
+    expect(secondPreview.warnings).toContain(`Unmanaged local skill kept: ${manualSkillDir}`);
+  });
+
   it("reports missing owned asset sources during preview", async () => {
     const { paths, service } = await makeEnv();
     await rm(join(paths.profilesDir, "daily-coding", "skills", "example-skill"), {

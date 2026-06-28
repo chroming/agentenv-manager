@@ -226,6 +226,26 @@ export interface TargetPaths {
 export interface TargetState {
   managedConfigKeys: string[];
   managedMcpNames: string[];
+  activeProfileId?: string;
+  lastAppliedAt?: string;
+  managedResources?: ManagedResourceSnapshot[];
+}
+
+export type ManagedResourceKind =
+  | "instructions"
+  | "config"
+  | "mcp"
+  | "skill"
+  | "agent"
+  | "file"
+  | "directory";
+
+export interface ManagedResourceSnapshot {
+  kind: ManagedResourceKind;
+  id: string;
+  path: string;
+  contentHash: string;
+  source?: string;
 }
 
 export type TargetHealthStatus = "ready" | "needs-setup" | "missing" | "guarded";

@@ -651,6 +651,24 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(true);
   }, 30_000);
 
+  it("blocks profile apply when the managed OpenCode environment drifted outside AgentEnv", async () => {
+    const { opencodeDir, page } = await launchApp();
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    await writeFile(join(opencodeDir, "AGENTS.md"), "# Changed outside AgentEnv\n", "utf8");
+
+    await page.getByRole("button", { name: "Apply to OpenCode" }).click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await expect
+      .poll(() => previewDialog.textContent())
+      .toContain("External changes detected in AgentEnv-managed instructions instructions");
+    await expect
+      .poll(() => previewDialog.getByRole("button", { name: "Confirm" }).isDisabled())
+      .toBe(true);
+  }, 30_000);
+
   it("shows polished skill row actions and update check feedback in the rendered app", async () => {
     const { page } = await launchApp();
 

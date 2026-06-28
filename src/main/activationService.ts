@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { appendFile, cp, mkdir, readFile, rm } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rm } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
 import { createUnifiedDiff } from "./diff";
@@ -33,6 +33,8 @@ import type {
   ActivationPreview,
   ApplyResult,
   BackupManifest,
+  ManagedResourceKind,
+  ManagedResourceSnapshot,
   PlannedFileChange,
   RollbackPreview,
   RollbackResult,
@@ -59,11 +61,41 @@ export interface ActivationService {
 
 const DEFAULT_TARGET_STATE: TargetState = {
   managedConfigKeys: [],
-  managedMcpNames: []
+  managedMcpNames: [],
+  managedResources: []
 };
 
 const hashText = (content: string): string =>
   createHash("sha256").update(content).digest("hex");
+
+const hashPath = async (path: string): Promise<string | undefined> => {
+  if (!(await pathExists(path))) {
+    return undefined;
+  }
+
+  const hash = createHash("sha256");
+  const walk = async (currentPath: string) => {
+    const stats = await lstat(currentPath);
+    hash.update(relative(dirname(path), currentPath));
+    if (stats.isSymbolicLink()) {
+      hash.update(`symlink:${await readlink(currentPath)}`);
+      return;
+    }
+    if (stats.isDirectory()) {
+      const entries = await readdir(currentPath, { withFileTypes: true });
+      for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+        await walk(join(currentPath, entry.name));
+      }
+      return;
+    }
+    if (stats.isFile()) {
+      hash.update(await readFile(currentPath));
+    }
+  };
+
+  await walk(path);
+  return hash.digest("hex");
+};
 
 const isDirectoryReadError = (error: unknown) =>
   Boolean(
@@ -101,13 +133,31 @@ const normalizeTargetState = (value: unknown): TargetState => {
     return DEFAULT_TARGET_STATE;
   }
   const record = value as Partial<TargetState>;
+  const managedResources = Array.isArray(record.managedResources)
+    ? record.managedResources.filter(
+        (item): item is ManagedResourceSnapshot =>
+          Boolean(item) &&
+          typeof item === "object" &&
+          "kind" in item &&
+          "id" in item &&
+          "path" in item &&
+          "contentHash" in item &&
+          typeof item.kind === "string" &&
+          typeof item.id === "string" &&
+          typeof item.path === "string" &&
+          typeof item.contentHash === "string"
+      )
+    : [];
   return {
     managedConfigKeys: Array.isArray(record.managedConfigKeys)
       ? record.managedConfigKeys.filter((item): item is string => typeof item === "string")
       : [],
     managedMcpNames: Array.isArray(record.managedMcpNames)
       ? record.managedMcpNames.filter((item): item is string => typeof item === "string")
-      : []
+      : [],
+    activeProfileId: typeof record.activeProfileId === "string" ? record.activeProfileId : undefined,
+    lastAppliedAt: typeof record.lastAppliedAt === "string" ? record.lastAppliedAt : undefined,
+    managedResources
   };
 };
 
@@ -214,6 +264,120 @@ export const createActivationService = ({
     await writeAtomic(statePathFor(targetId), `${JSON.stringify(state, null, 2)}\n`);
   };
 
+  const desiredSkillTargets = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>) =>
+    new Set(
+      profile.assetPolicy.ownedDirs
+        .filter((ownedDir) => ownedDir.kind === "skill")
+        .map((ownedDir) => ownedDir.targetName)
+        .concat((profile.assetPolicy.skillRefs ?? []).map((skillRef) => skillRef.targetName))
+    );
+
+  const desiredManagedPaths = (
+    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+    targetPaths: TargetPaths
+  ) => {
+    const desired = new Set<string>();
+    if (profile.manifest.managed.instructions) {
+      desired.add(targetPaths.instructionsPath);
+    }
+    if (profile.manifest.managed.config) {
+      desired.add(targetPaths.configPath);
+    }
+    if (targetPaths.skillsDir) {
+      for (const targetName of desiredSkillTargets(profile)) {
+        desired.add(join(targetPaths.skillsDir, targetName));
+      }
+    }
+    if (targetPaths.agentsDir) {
+      for (const ownedDir of profile.assetPolicy.ownedDirs.filter((item) => item.kind === "agent")) {
+        desired.add(join(targetPaths.agentsDir, ownedDir.targetName));
+      }
+    }
+    return desired;
+  };
+
+  const findManagedDrift = async (
+    state: TargetState,
+    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+    targetPaths: TargetPaths
+  ) => {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const desired = desiredManagedPaths(profile, targetPaths);
+    for (const resource of state.managedResources ?? []) {
+      const currentHash = await hashPath(resource.path);
+      if (!currentHash) {
+        if (desired.has(resource.path)) {
+          warnings.push(`Will restore missing managed ${resource.kind} ${resource.id}: ${resource.path}`);
+        }
+        continue;
+      }
+      if (currentHash !== resource.contentHash) {
+        errors.push(
+          `External changes detected in AgentEnv-managed ${resource.kind} ${resource.id}: ${resource.path}`
+        );
+      }
+    }
+    return { errors, warnings };
+  };
+
+  const unmanagedSkillWarnings = async (
+    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+    targetPaths: TargetPaths
+  ) => {
+    const desired = desiredSkillTargets(profile);
+    const inventory = await skillLibraryStore.scanInventory([targetPaths]);
+    return inventory
+      .filter(
+        (skill) =>
+          (skill.status === "unmanaged" || skill.status === "ignored") && !desired.has(skill.id)
+      )
+      .map((skill) =>
+        skill.status === "ignored"
+          ? `Ignored local skill kept: ${skill.path}`
+          : `Unmanaged local skill kept: ${skill.path}`
+      );
+  };
+
+  const resourceKindForPath = (
+    path: string,
+    targetPaths: TargetPaths
+  ): { kind: ManagedResourceKind; id: string } => {
+    if (path === targetPaths.instructionsPath) {
+      return { kind: "instructions", id: "instructions" };
+    }
+    if (path === targetPaths.configPath || path === targetPaths.mcpConfigPath) {
+      return { kind: "config", id: "config" };
+    }
+    if (targetPaths.skillsDir && path.startsWith(`${targetPaths.skillsDir}/`)) {
+      return { kind: "skill", id: basename(path) };
+    }
+    if (targetPaths.agentsDir && path.startsWith(`${targetPaths.agentsDir}/`)) {
+      return { kind: "agent", id: basename(path) };
+    }
+    return { kind: "file", id: basename(path) || path };
+  };
+
+  const snapshotManagedResources = async (
+    pathsToSnapshot: string[],
+    targetPaths: TargetPaths
+  ) => {
+    const snapshots: ManagedResourceSnapshot[] = [];
+    for (const path of [...new Set(pathsToSnapshot)]) {
+      const contentHash = await hashPath(path);
+      if (!contentHash) {
+        continue;
+      }
+      snapshots.push({
+        ...resourceKindForPath(path, targetPaths),
+        path,
+        contentHash,
+        source: "profile-apply"
+      });
+    }
+    return snapshots.sort((a, b) => a.path.localeCompare(b.path));
+  };
+
   const ignoredSkillConflicts = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
     targetPaths: TargetPaths
@@ -263,14 +427,16 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod
     });
+    const drift = await findManagedDrift(stateFile.state, materializedProfile, targetPaths);
+    const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, targetPaths);
     const ignoredErrors = await ignoredSkillConflicts(materializedProfile, targetPaths);
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
-      warnings: targetPreview.warnings,
-      errors: targetPreview.errors.concat(profileErrors, assetErrors, ignoredErrors),
+      warnings: targetPreview.warnings.concat(drift.warnings, unmanagedWarnings),
+      errors: targetPreview.errors.concat(profileErrors, assetErrors, drift.errors, ignoredErrors),
       changes: targetPreview.changes,
       liveFingerprints: {
         ...targetPreview.liveFingerprints,
@@ -356,7 +522,16 @@ export const createActivationService = ({
         skillLibraryDir,
         skillSyncMethod: settings.skillSyncMethod
       });
-      await writeTargetState(preview.targetId, preview.targetState);
+      const managedResources = await snapshotManagedResources(
+        [...preview.changes.map((change) => change.path), ...assetBackupPaths],
+        targetPaths
+      );
+      await writeTargetState(preview.targetId, {
+        ...preview.targetState,
+        activeProfileId: profile.id,
+        lastAppliedAt: new Date().toISOString(),
+        managedResources
+      });
     } catch (error) {
       try {
         await restoreBackupEntries(backup);
