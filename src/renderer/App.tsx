@@ -985,7 +985,12 @@ export const App = () => {
               : `${activeWorkspace} workspace`
         }
       >
-        {error ? <p className="error">{error}</p> : null}
+        {error ? (
+          <div className="app-notice app-notice--error" role="alert">
+            <strong>Action failed</strong>
+            <span>{error}</span>
+          </div>
+        ) : null}
         {activeWorkspace === "library" ? (
           <>
             <header className="page-header library-page-header">
@@ -1119,8 +1124,10 @@ export const App = () => {
           <>
             <header className="page-header profile-page-header">
               <div>
-                <h2>Profiles</h2>
-                <p className="muted">Manage reusable work environments and apply them to local agent targets.</p>
+                <h2 aria-label="Profiles">
+                  Profiles
+                  <InfoTip label="Profiles combine instructions, skills, and MCP servers. Applying a profile previews changes before writing to a local target." />
+                </h2>
               </div>
               <div className="profile-page-actions" ref={profilePageActionsRef}>
                 <div className="profile-apply-control">
@@ -1215,8 +1222,20 @@ export const App = () => {
                   </label>
                 </div>
                 <div className="profile-list">
-                  {isLoading ? <p className="muted">Loading profiles...</p> : null}
-                  {!isLoading && visibleProfiles.length === 0 ? <p className="muted">No profiles</p> : null}
+                  {isLoading ? (
+                    <div className="inline-state inline-state--loading" role="status">
+                      <span className="inline-state__icon" aria-hidden="true" />
+                      <span>Loading profiles</span>
+                    </div>
+                  ) : null}
+                  {!isLoading && visibleProfiles.length === 0 ? (
+                    <div className="inline-state">
+                      <span className="inline-state__icon" aria-hidden="true">
+                        <Search size={15} strokeWidth={2.2} />
+                      </span>
+                      <span>No profiles match this view</span>
+                    </div>
+                  ) : null}
                   {visibleProfiles.map((profile, index) => {
                     const counts = profileResourceCounts[profile.id];
                     return (
@@ -1486,7 +1505,7 @@ export const App = () => {
                 ) : (
                   <div className="empty-state">
                     <h2>No profile selected</h2>
-                    <p className="muted">Choose a profile from the list or create a new one.</p>
+                    <p className="muted">Choose a profile or create one.</p>
                   </div>
                 )}
               </div>
@@ -1602,11 +1621,21 @@ export const App = () => {
           <section className="target-page" aria-label="Targets">
             <header className="page-header">
               <div>
-                <h2>Targets</h2>
-                <p className="muted">Local agent runtimes that receive managed resources.</p>
+                <h2 aria-label="Targets">
+                  Targets
+                  <InfoTip label="Targets are local agent runtimes. A target is ready when its command and writable config paths are available." />
+                </h2>
               </div>
             </header>
             <div className="target-grid">
+              {targets.length === 0 ? (
+                <div className="inline-state inline-state--panel">
+                  <span className="inline-state__icon" aria-hidden="true">
+                    <Monitor size={15} strokeWidth={2.2} />
+                  </span>
+                  <span>No supported targets detected</span>
+                </div>
+              ) : null}
               {targets.map((target) => (
                 <article
                   aria-label={`Target ${target.name}`}
@@ -1642,8 +1671,10 @@ export const App = () => {
           <section className="activity-page" aria-label="Activity">
             <header className="page-header">
               <div>
-                <h2>Activity</h2>
-                <p className="muted">Backups, rollback previews, and recent safety checkpoints.</p>
+                <h2 aria-label="Activity">
+                  Activity
+                  <InfoTip label="Activity shows backups created before apply operations. Use it to preview and restore a previous target state." />
+                </h2>
               </div>
             </header>
             <HistoryView
@@ -1659,14 +1690,15 @@ export const App = () => {
           <section className="settings-page" aria-label="Settings">
             <header className="page-header">
               <div>
-                <h2>Settings</h2>
-                <p className="muted">Global library storage and target install defaults.</p>
+                <h2 aria-label="Settings">
+                  Settings
+                  <InfoTip label="These defaults control how shared library skills are stored and installed onto targets." />
+                </h2>
               </div>
             </header>
             <section className="resource-section">
               <div>
                 <div className="resource-heading">Library install defaults</div>
-                <p className="muted">These settings control how library skills are placed onto targets.</p>
               </div>
               <div className="resource-settings-grid">
                 <label>

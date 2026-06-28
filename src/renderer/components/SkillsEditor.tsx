@@ -11,6 +11,7 @@ import type {
   SkillLibraryEntry,
   TargetInfo
 } from "../../shared/types";
+import { InfoTip } from "./InfoTip";
 
 interface SkillsEditorProps {
   value: AssetPolicy;
@@ -353,8 +354,10 @@ export const SkillsEditor = ({
     <section className="skills-editor" aria-label="Resources">
       <div className="asset-editor-header">
         <div>
-          <div className="section-title">Resources</div>
-          <p className="muted">Skills and MCP servers managed by this profile.</p>
+          <div className="section-title">
+            Resources
+            <InfoTip label="Attach shared library skills and MCP servers to this profile. Preview before apply verifies target paths and ownership." />
+          </div>
         </div>
         <div className="asset-editor-actions">
           <button className="secondary-action" type="button" onClick={openSkillPicker}>
@@ -382,10 +385,10 @@ export const SkillsEditor = ({
           id="advanced-resource-settings"
         >
           <div>
-            <div className="resource-heading">Advanced resource settings</div>
-            <p className="muted">
-              Disable noisy target skills by absolute path when a profile is applied.
-            </p>
+            <div className="resource-heading">
+              Advanced resource settings
+              <InfoTip label="Use absolute target paths here to disable skills that should be ignored when this profile is applied." />
+            </div>
           </div>
           <label className="field-block">
             <span>Disabled Skill Paths</span>
@@ -409,8 +412,10 @@ export const SkillsEditor = ({
 
       <section className="resource-section" aria-label="Resource inventory">
         <div>
-          <div className="resource-heading">Inventory</div>
-          <p className="muted">Review what this environment switches before previewing.</p>
+          <div className="resource-heading">
+            Inventory
+            <InfoTip label="This list shows profile-owned resources, shared library references, and MCP servers that will be considered during preview and apply." />
+          </div>
         </div>
         <div className="resource-table-head" aria-hidden="true">
           <span>Type</span>
@@ -581,13 +586,18 @@ export const SkillsEditor = ({
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">Add library skills</div>
-                <p className="muted">Select one or more shared skills for this profile.</p>
+                <div className="section-title">
+                  Add library skills
+                  <InfoTip label="Select shared skills from the global library. Already attached skills stay disabled." />
+                </div>
               </div>
             </header>
             <div className="resource-picker-list">
               {librarySkills.length === 0 ? (
-                <p className="muted">No library skills available. Import skills in Library first.</p>
+                <div className="inline-state">
+                  <span className="inline-state__icon" aria-hidden="true" />
+                  <span>No library skills available</span>
+                </div>
               ) : null}
               {librarySkills.map((skill) => {
                 const isAttached = attachedSkillIds.has(skill.id);
@@ -641,13 +651,18 @@ export const SkillsEditor = ({
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">Add library MCP servers</div>
-                <p className="muted">Select one or more reusable MCP servers for this profile.</p>
+                <div className="section-title">
+                  Add library MCP servers
+                  <InfoTip label="Select reusable MCP server definitions from the global MCP library. Already attached servers stay disabled." />
+                </div>
               </div>
             </header>
             <div className="resource-picker-list">
               {mcpServers.length === 0 ? (
-                <p className="muted">No library MCP servers available. Add servers in MCP Library first.</p>
+                <div className="inline-state">
+                  <span className="inline-state__icon" aria-hidden="true" />
+                  <span>No library MCP servers available</span>
+                </div>
               ) : null}
               {mcpServers.map((server) => {
                 const isAttached = attachedMcpIds.has(server.id);

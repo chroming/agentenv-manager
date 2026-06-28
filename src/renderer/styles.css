@@ -17,6 +17,13 @@
   --danger-bg: #fff0ee;
   --warning-bg: #fff6df;
   --shadow-soft: 0 16px 38px rgba(29, 41, 57, 0.08);
+  --motion-fast: 150ms ease;
+  --motion-standard: 220ms ease;
+  --z-dropdown: 40;
+  --z-drawer: 60;
+  --z-modal: 100;
+  --z-popover: 120;
+  --z-tooltip: 130;
   color: var(--text);
   background: var(--page);
   font-family:
@@ -66,12 +73,22 @@ button {
   overflow: hidden;
   padding: 0 13px;
   text-align: center;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-fast);
   white-space: nowrap;
 }
 
 button:hover:not(:disabled) {
   background: #f8fafc;
   border-color: #9aa6b8;
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
 }
 
 button:focus-visible,
@@ -657,7 +674,7 @@ h2 {
   justify-content: center;
   padding: 40px;
   position: fixed;
-  z-index: 100;
+  z-index: var(--z-modal);
 }
 
 .preview-dialog--modal {
@@ -2692,7 +2709,7 @@ summary {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  z-index: 20;
+  z-index: var(--z-dropdown);
 }
 
 .profile-actions-menu {
@@ -3613,7 +3630,7 @@ button svg,
 
 .row-action-popover {
   width: min(420px, calc(100vw - 320px));
-  z-index: 20;
+  z-index: var(--z-popover);
 }
 
 .row-action-source {
@@ -3656,7 +3673,7 @@ button svg,
   right: 24px;
   top: 88px;
   width: min(520px, calc(100vw - 260px));
-  z-index: 60;
+  z-index: var(--z-drawer);
 }
 
 .library-drawer__header {
@@ -3681,6 +3698,7 @@ button svg,
 }
 
 .page-header h2,
+.section-title,
 .library-drawer__header strong,
 .resource-heading,
 .row-action-source-title {
@@ -3698,7 +3716,7 @@ button svg,
   position: relative;
   vertical-align: middle;
   width: 18px;
-  z-index: 40;
+  z-index: var(--z-dropdown);
 }
 
 .info-tip:hover,
@@ -3724,7 +3742,73 @@ button svg,
   text-transform: none;
   transform: translateX(-50%);
   width: max-content;
-  z-index: 130;
+  z-index: var(--z-tooltip);
+}
+
+.app-notice {
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+}
+
+.app-notice strong {
+  font-size: 13px;
+}
+
+.app-notice span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.app-notice--error {
+  background: var(--danger-bg);
+  border-color: #ffd4cf;
+  color: var(--danger);
+}
+
+.inline-state {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  color: #64748b;
+  display: flex;
+  font-size: 12px;
+  font-weight: 720;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.inline-state--panel {
+  grid-column: 1 / -1;
+}
+
+.inline-state__icon {
+  align-items: center;
+  background: #eef4ff;
+  border-radius: 7px;
+  color: var(--accent);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.inline-state--loading .inline-state__icon::after {
+  animation: spin 0.9s linear infinite;
+  border: 2px solid rgba(49, 95, 220, 0.22);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  content: "";
+  height: 12px;
+  width: 12px;
 }
 
 .info-tip__bubble::after {
@@ -3797,7 +3881,7 @@ button svg,
   right: auto;
   top: auto;
   width: min(420px, calc(100vw - 32px));
-  z-index: 120;
+  z-index: var(--z-popover);
 }
 
 .row-action-item {
@@ -3856,4 +3940,56 @@ button svg,
   font-weight: 800;
   min-height: 24px;
   padding: 0;
+}
+
+.workspace-button,
+.profile-row,
+.library-table-row,
+.target-card,
+.resource-overview-card,
+.compatibility-item,
+.metric-tile,
+.resource-row,
+.resource-picker-option {
+  transition:
+    background-color var(--motion-standard),
+    border-color var(--motion-standard),
+    box-shadow var(--motion-standard),
+    transform var(--motion-standard);
+}
+
+.workspace-button:hover:not(:disabled),
+.profile-row:hover:not(:disabled),
+.resource-picker-option:hover,
+.resource-row:hover,
+.target-card:hover,
+.resource-overview-card:hover,
+.compatibility-item:hover,
+.metric-tile--button:hover {
+  transform: translateY(-1px);
+}
+
+.profile-row:active:not(:disabled),
+.workspace-button:active:not(:disabled),
+.metric-tile--button:active {
+  transform: translateY(0) scale(0.995);
+}
+
+.metric-tile strong,
+.resource-overview-card strong,
+.profile-stat strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.page-header h2,
+.profile-hero__title h2,
+.skill-title,
+.profile-row__title {
+  text-wrap: balance;
+}
+
+.profile-description,
+.skill-description,
+.muted {
+  text-wrap: pretty;
 }
