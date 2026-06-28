@@ -780,6 +780,7 @@ export const App = () => {
     return `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedProfileSearch);
   });
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
+  const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
   const isSelectedTargetManaged = Boolean(selectedTargetState?.activeProfileId);
   const applyActionVerb = isSelectedTargetManaged ? "Apply to" : "Take over";
@@ -1966,35 +1967,61 @@ export const App = () => {
                   <span>No supported targets detected</span>
                 </div>
               ) : null}
-              {targets.map((target) => (
-                <article
-                  aria-label={`Target ${target.name}`}
-                  className="target-card"
-                  key={target.id}
-                >
-                  <div className="target-card__header">
-                    <div>
-                      <strong>{target.name}</strong>
-                      <small>{target.description}</small>
-                    </div>
-                    <span className={`target-badge target-badge--${target.health.status}`}>
-                      {targetStatusLabel[target.health.status]}
-                    </span>
-                  </div>
-                  <code title={target.paths.configDir}>{target.paths.configDir}</code>
-                  <div className="target-checks">
-                    {target.health.checks.map((check) => (
-                      <div className="target-check" key={check.id}>
-                        <div>
-                          <span>{check.label}</span>
-                          <code title={check.path}>{check.path}</code>
-                        </div>
-                        <strong>{check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing"}</strong>
+              {targets.map((target) => {
+                const targetState = targetStateById.get(target.id);
+                const isManaged = Boolean(targetState?.activeProfileId);
+                return (
+                  <article
+                    aria-label={`Target ${target.name}`}
+                    className="target-card"
+                    key={target.id}
+                  >
+                    <div className="target-card__header">
+                      <div>
+                        <strong>{target.name}</strong>
+                        <small>{target.description}</small>
                       </div>
-                    ))}
-                  </div>
-                </article>
-              ))}
+                      <span className={`target-badge target-badge--${target.health.status}`}>
+                        {targetStatusLabel[target.health.status]}
+                      </span>
+                    </div>
+                    <div className={`target-management-strip${isManaged ? " is-managed" : ""}`}>
+                      <span className="target-management-strip__icon" aria-hidden="true">
+                        {isManaged ? (
+                          <MonitorCheck size={17} strokeWidth={2.2} />
+                        ) : (
+                          <Monitor size={17} strokeWidth={2.2} />
+                        )}
+                      </span>
+                      <div>
+                        <strong>{isManaged ? "Managed by AgentEnv" : "Not managed"}</strong>
+                        <small>
+                          {isManaged
+                            ? `Active profile: ${targetState?.activeProfileName ?? targetState?.activeProfileId}`
+                            : "Ready for first Take over"}
+                        </small>
+                      </div>
+                      <span className="target-management-strip__meta">
+                        {isManaged
+                          ? plural(targetState?.managedResourceCount ?? 0, "managed resource")
+                          : "No managed resources"}
+                      </span>
+                    </div>
+                    <code title={target.paths.configDir}>{target.paths.configDir}</code>
+                    <div className="target-checks">
+                      {target.health.checks.map((check) => (
+                        <div className="target-check" key={check.id}>
+                          <div>
+                            <span>{check.label}</span>
+                            <code title={check.path}>{check.path}</code>
+                          </div>
+                          <strong>{check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing"}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </section>
         ) : activeWorkspace === "activity" ? (

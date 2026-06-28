@@ -472,6 +472,7 @@ describe("Electron UI profile switching e2e", () => {
     const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
     await openCodeCard.waitFor({ state: "visible" });
     await expect.poll(() => openCodeCard.textContent()).toContain("Ready");
+    await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
     await expect.poll(() => openCodeCard.textContent()).toContain(
       join(homeDir, ".config", "opencode")
     );
@@ -482,6 +483,20 @@ describe("Electron UI profile switching e2e", () => {
     await codexCard.waitFor({ state: "visible" });
     await expect.poll(() => codexCard.textContent()).toContain("Ready");
     await expect.poll(() => codexCard.textContent()).toContain(join(homeDir, ".codex"));
+  }, 30_000);
+
+  it("updates target cards after taking over OpenCode", async () => {
+    const { page } = await launchApp();
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    await page.getByRole("button", { name: "Targets" }).click();
+
+    const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
+    await openCodeCard.waitFor({ state: "visible" });
+    await expect.poll(() => openCodeCard.textContent()).toContain("Managed by AgentEnv");
+    await expect.poll(() => openCodeCard.textContent()).toContain("Active profile: UI OpenCode alpha");
+    await expect.poll(() => openCodeCard.textContent()).toContain("managed resources");
   }, 30_000);
 
   it("creates, edits, duplicates, and deletes profiles through the rendered app", async () => {

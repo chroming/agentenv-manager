@@ -3461,6 +3461,66 @@ summary {
   white-space: nowrap;
 }
 
+.target-management-strip {
+  align-items: center;
+  background: #fbfcff;
+  border: 1px solid #edf1f6;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 10px;
+}
+
+.target-management-strip.is-managed {
+  background: #f7fffb;
+  border-color: rgba(37, 176, 121, 0.22);
+}
+
+.target-management-strip__icon {
+  align-items: center;
+  background: #eef4ff;
+  border-radius: 7px;
+  color: var(--accent);
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.target-management-strip.is-managed .target-management-strip__icon {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.target-management-strip strong {
+  color: var(--text);
+  display: block;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.target-management-strip small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-management-strip small,
+.target-management-strip__meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.target-management-strip__meta {
+  font-weight: 720;
+  grid-column: 2;
+  justify-self: start;
+  white-space: nowrap;
+}
+
 .inspector-section {
   border: 1px solid var(--border);
   border-radius: 8px;

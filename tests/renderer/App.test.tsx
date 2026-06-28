@@ -612,6 +612,32 @@ describe("App", () => {
     expect(screen.getByText("Active profile: Daily Coding")).toBeInTheDocument();
   });
 
+  it("shows target management status on the Targets page", async () => {
+    installApi({
+      listTargetStates: vi.fn().mockResolvedValue([
+        {
+          targetId: "opencode",
+          activeProfileId: "daily-coding",
+          activeProfileName: "Daily Coding",
+          status: "managed",
+          lastAppliedAt: "2026-07-09T00:00:00.000Z",
+          managedResourceCount: 3,
+          warningCount: 0,
+          errorCount: 0
+        }
+      ])
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Targets" }));
+
+    const openCodeCard = await screen.findByRole("article", { name: "Target OpenCode" });
+    expect(within(openCodeCard).getByText("Managed by AgentEnv")).toBeInTheDocument();
+    expect(within(openCodeCard).getByText("Active profile: Daily Coding")).toBeInTheDocument();
+    expect(within(openCodeCard).getByText("3 managed resources")).toBeInTheDocument();
+  });
+
   it("uses clearer preview wording for drifted managed content", async () => {
     installApi({
       previewApply: vi.fn().mockResolvedValue({
