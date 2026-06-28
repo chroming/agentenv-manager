@@ -14,7 +14,7 @@ import type {
 import { InfoTip } from "./InfoTip";
 
 interface SkillsEditorProps {
-  mode: "skills" | "mcp" | "advanced";
+  mode?: "skills" | "mcp" | "advanced";
   value: AssetPolicy;
   configText: string;
   configLanguage?: TargetInfo["configLanguage"];
@@ -30,6 +30,15 @@ interface McpResource {
   detail: string;
   status: "Conflict" | "Configured" | "Managed";
 }
+
+const FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])"
+].join(",");
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -211,7 +220,7 @@ const getMcpResources = (
 };
 
 export const SkillsEditor = ({
-  mode,
+  mode: requestedMode,
   value,
   configText,
   configLanguage,
@@ -220,23 +229,41 @@ export const SkillsEditor = ({
   mcpServers = [],
   onChange
 }: SkillsEditorProps) => {
+  const mode = requestedMode ?? "all";
+  const showsSkills = mode === "skills" || mode === "all";
+  const showsMcp = mode === "mcp" || mode === "all";
   const [activePicker, setActivePicker] = useState<"skills" | "mcp">();
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedLibrarySkillIds, setSelectedLibrarySkillIds] = useState<string[]>([]);
   const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>([]);
   const skillPickerButtonRef = useRef<HTMLButtonElement>(null);
   const mcpPickerButtonRef = useRef<HTMLButtonElement>(null);
   const pickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const pickerCancelButtonRef = useRef<HTMLButtonElement>(null);
+  const pickerDialogRef = useRef<HTMLElement>(null);
   const skillEntries = value.ownedDirs
     .map((ownedDir, index) => ({ ownedDir, index }))
     .filter((entry) => entry.ownedDir.kind === "skill");
+  const agentFileEntries = (value.ownedFiles ?? []).filter(
+    (ownedFile) => ownedFile.kind === "agent"
+  );
   const librarySkillEntries = value.skillRefs ?? [];
   const libraryMcpEntries = value.mcpRefs ?? [];
   const mcpState = getMcpResources(configText, configLanguage, preview);
   const hasResources =
-    mode === "skills"
+    mode === "all"
+      ? skillEntries.length > 0 ||
+        agentFileEntries.length > 0 ||
+        librarySkillEntries.length > 0 ||
+        libraryMcpEntries.length > 0 ||
+        mcpState.resources.length > 0
+      : mode === "skills"
       ? skillEntries.length > 0 || librarySkillEntries.length > 0
       : libraryMcpEntries.length > 0 || mcpState.resources.length > 0;
+  const activePickerIsValid =
+    !activePicker ||
+    (activePicker === "skills" && showsSkills) ||
+    (activePicker === "mcp" && showsMcp);
   const attachedSkillIds = new Set(librarySkillEntries.map((entry) => entry.libraryId));
   const attachedMcpIds = new Set(libraryMcpEntries.map((entry) => entry.libraryId));
 
@@ -338,7 +365,7 @@ export const SkillsEditor = ({
   };
 
   useEffect(() => {
-    if (!activePicker) {
+    if (!activePicker || !activePickerIsValid) {
       return undefined;
     }
 
@@ -349,15 +376,50 @@ export const SkillsEditor = ({
       if (event.key === "Escape") {
         event.preventDefault();
         closePicker();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const dialog = pickerDialogRef.current;
+      const focusableControls = dialog
+        ? Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+        : [];
+      if (focusableControls.length === 0) {
+        return;
+      }
+
+      const firstControl = focusableControls[0];
+      const lastControl = focusableControls.at(-1);
+      if (event.shiftKey && document.activeElement === firstControl) {
+        event.preventDefault();
+        lastControl?.focus();
+      } else if (!event.shiftKey && document.activeElement === lastControl) {
+        event.preventDefault();
+        firstControl.focus();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      trigger?.focus();
+      const restoreTarget = trigger?.isConnected
+        ? trigger
+        : skillPickerButtonRef.current ?? mcpPickerButtonRef.current;
+      restoreTarget?.focus();
+      if (pickerTriggerRef.current === trigger) {
+        pickerTriggerRef.current = null;
+      }
     };
-  }, [activePicker, closePicker]);
+  }, [activePicker, activePickerIsValid, closePicker]);
+
+  useEffect(() => {
+    if (activePicker && !activePickerIsValid) {
+      closePicker();
+    }
+  }, [activePicker, activePickerIsValid, closePicker]);
 
   return (
     <section className="skills-editor" aria-label="Resources">
@@ -365,10 +427,12 @@ export const SkillsEditor = ({
         <div className="asset-editor-header">
           <div>
             <div className="section-title">
-              {mode === "skills" ? "Skills" : "MCP servers"}
+              {mode === "all" ? "Resources" : mode === "skills" ? "Skills" : "MCP servers"}
               <InfoTip
                 label={
-                  mode === "skills"
+                  mode === "all"
+                    ? "Attach shared library skills and MCP servers to this profile. Preview before apply verifies target paths and ownership."
+                    : mode === "skills"
                     ? "Attach profile-owned and shared library skills to this profile."
                     : "Attach shared library MCP servers and review raw-config MCP servers."
                 }
@@ -376,7 +440,7 @@ export const SkillsEditor = ({
             </div>
           </div>
           <div className="asset-editor-actions">
-            {mode === "skills" ? (
+            {showsSkills ? (
               <button
                 className="secondary-action"
                 ref={skillPickerButtonRef}
@@ -385,7 +449,8 @@ export const SkillsEditor = ({
               >
                 Add library skill
               </button>
-            ) : (
+            ) : null}
+            {showsMcp ? (
               <button
                 className="secondary-action"
                 ref={mcpPickerButtonRef}
@@ -394,12 +459,23 @@ export const SkillsEditor = ({
               >
                 Add library MCP
               </button>
-            )}
+            ) : null}
+            {mode === "all" ? (
+              <button
+                aria-expanded={advancedOpen}
+                aria-controls="advanced-resource-settings"
+                className="secondary-action"
+                type="button"
+                onClick={() => setAdvancedOpen((current) => !current)}
+              >
+                {advancedOpen ? "Hide advanced" : "Advanced"}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
 
-      {mode === "advanced" ? (
+      {mode === "advanced" || (mode === "all" && advancedOpen) ? (
         <section
           aria-label="Advanced resource settings"
           className="resource-section resource-section--advanced"
@@ -445,18 +521,14 @@ export const SkillsEditor = ({
             <span>Status</span>
           </div>
           <div className="resource-list">
-            {mode === "mcp" && mcpState.error ? (
+            {showsMcp && mcpState.error ? (
               <p className="warning">Config parse error: {mcpState.error}</p>
             ) : null}
-            {mode === "mcp" && mcpState.note ? (
-              <p className="muted">{mcpState.note}</p>
-            ) : null}
-            {!(mode === "mcp" && mcpState.error) &&
-            !(mode === "mcp" && mcpState.note) &&
-            !hasResources ? (
+            {showsMcp && mcpState.note ? <p className="muted">{mcpState.note}</p> : null}
+            {!(showsMcp && mcpState.error) && !(showsMcp && mcpState.note) && !hasResources ? (
               <p className="muted">No resources configured</p>
             ) : null}
-            {mode === "skills" && skillEntries.length > 0
+            {showsSkills && skillEntries.length > 0
               ? skillEntries.map(({ ownedDir: asset, index }) => (
                   <fieldset
                     className="owned-skill resource-item"
@@ -501,7 +573,25 @@ export const SkillsEditor = ({
                   </fieldset>
                 ))
               : null}
-            {mode === "skills"
+            {mode === "all"
+              ? agentFileEntries.map((asset, index) => (
+                  <div
+                    aria-label={`Agent ${asset.targetName}`}
+                    className="resource-row"
+                    key={`${asset.kind}:${asset.source}:${asset.targetName}:${index}`}
+                    role="group"
+                  >
+                    <span className="resource-chip">Agent</span>
+                    <div className="resource-row__main">
+                      <span>{asset.targetName}</span>
+                      <small>Profile-owned</small>
+                      <small>{asset.source}</small>
+                    </div>
+                    <strong className="resource-status">Configured</strong>
+                  </div>
+                ))
+              : null}
+            {showsSkills
               ? librarySkillEntries.map((asset, index) => {
                   const librarySkill = librarySkills.find(
                     (skill) => skill.id === asset.libraryId
@@ -536,7 +626,7 @@ export const SkillsEditor = ({
                   );
                 })
               : null}
-            {mode === "mcp"
+            {showsMcp
               ? libraryMcpEntries.map((asset, index) => {
                   const mcpServer = mcpServers.find(
                     (server) => server.id === asset.libraryId
@@ -575,7 +665,7 @@ export const SkillsEditor = ({
                   );
                 })
               : null}
-            {mode === "mcp"
+            {showsMcp
               ? mcpState.resources.map((resource) => (
                   <div
                     aria-label={`MCP ${resource.name}`}
@@ -602,12 +692,13 @@ export const SkillsEditor = ({
         </section>
       ) : null}
 
-      {mode === "skills" && activePicker === "skills" ? (
+      {showsSkills && activePicker === "skills" ? (
         <div className="preview-modal-backdrop" onClick={closePicker}>
           <section
             aria-label="Add library skills"
             aria-modal="true"
             className="profile-form-dialog resource-picker-dialog"
+            ref={pickerDialogRef}
             role="dialog"
             onClick={(event) => event.stopPropagation()}
           >
@@ -672,12 +763,13 @@ export const SkillsEditor = ({
         </div>
       ) : null}
 
-      {mode === "mcp" && activePicker === "mcp" ? (
+      {showsMcp && activePicker === "mcp" ? (
         <div className="preview-modal-backdrop" onClick={closePicker}>
           <section
             aria-label="Add library MCP servers"
             aria-modal="true"
             className="profile-form-dialog resource-picker-dialog"
+            ref={pickerDialogRef}
             role="dialog"
             onClick={(event) => event.stopPropagation()}
           >
@@ -746,8 +838,4 @@ export const SkillsEditor = ({
       ) : null}
     </section>
   );
-};
-
-SkillsEditor.defaultProps = {
-  mode: "skills" as const
 };

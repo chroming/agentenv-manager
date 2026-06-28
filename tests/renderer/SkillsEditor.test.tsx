@@ -132,9 +132,39 @@ const preview: ActivationPreview = {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe("SkillsEditor", () => {
+  it("preserves the full editor when mode is omitted", () => {
+    render(
+      <SkillsEditor
+        value={mixedPolicy}
+        configText={configWithMcp}
+        configLanguage="jsonc"
+        librarySkills={librarySkills}
+        mcpServers={mcpServers}
+        onChange={vi.fn()}
+      />
+    );
+
+    const inventory = screen.getByRole("region", { name: "Resource inventory" });
+    expect(
+      within(inventory).getByRole("group", { name: "Skill agentenv-reviewer" })
+    ).toBeInTheDocument();
+    expect(
+      within(inventory).getByRole("group", { name: "Agent reviewer.toml" })
+    ).toBeInTheDocument();
+    expect(within(inventory).getAllByRole("group", { name: "MCP context7" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Add library skill" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add library MCP" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    expect(screen.getByRole("textbox", { name: "Disabled Skill Paths" })).toHaveValue(
+      "/tmp/disabled-skill"
+    );
+  });
+
   it("renders only skill resources in skills mode", () => {
     const onChange = vi.fn();
     render(
@@ -336,6 +366,93 @@ describe("SkillsEditor", () => {
         cleanup();
       }
     }
+  });
+
+  it("cleans up an invalid picker when mode changes", () => {
+    const addEventListener = vi.spyOn(document, "addEventListener");
+    const removeEventListener = vi.spyOn(document, "removeEventListener");
+    const props = {
+      value: emptyPolicy,
+      configText: "{}",
+      configLanguage: "jsonc" as const,
+      librarySkills: librarySkills.slice(1),
+      mcpServers: mcpServers.slice(1),
+      onChange: vi.fn()
+    };
+    const { rerender } = render(<SkillsEditor {...props} mode="skills" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
+    const skillDialog = screen.getByRole("dialog", { name: "Add library skills" });
+    fireEvent.click(within(skillDialog).getByLabelText("GitHub Reviewer"));
+    const keydownHandler = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "keydown"
+    )?.[1];
+    expect(keydownHandler).toBeDefined();
+
+    rerender(<SkillsEditor {...props} mode="mcp" />);
+
+    expect(screen.queryByRole("dialog", { name: "Add library skills" })).not.toBeInTheDocument();
+    expect(removeEventListener).toHaveBeenCalledWith("keydown", keydownHandler);
+    expect(screen.getByRole("button", { name: "Add library MCP" })).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    rerender(<SkillsEditor {...props} mode="skills" />);
+    expect(screen.queryByRole("dialog", { name: "Add library skills" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
+    expect(screen.getByLabelText("GitHub Reviewer")).not.toBeChecked();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByRole("button", { name: "Add library skill" })).toHaveFocus();
+  });
+
+  it("wraps Tab from the last resource picker control to the first", () => {
+    render(
+      <SkillsEditor
+        mode="skills"
+        value={emptyPolicy}
+        configText="{}"
+        configLanguage="jsonc"
+        librarySkills={librarySkills.slice(1)}
+        onChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
+    const dialog = screen.getByRole("dialog", { name: "Add library skills" });
+    fireEvent.click(within(dialog).getByLabelText("GitHub Reviewer"));
+    const firstControl = dialog.querySelector<HTMLElement>(".info-tip");
+    const lastControl = within(dialog).getByRole("button", { name: "Add selected skills" });
+    lastControl.focus();
+
+    fireEvent.keyDown(document, { key: "Tab" });
+
+    expect(firstControl).toHaveFocus();
+  });
+
+  it("wraps Shift+Tab from the first resource picker control to the last", () => {
+    render(
+      <SkillsEditor
+        mode="mcp"
+        value={emptyPolicy}
+        configText="{}"
+        configLanguage="jsonc"
+        mcpServers={mcpServers.slice(1)}
+        onChange={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add library MCP" }));
+    const dialog = screen.getByRole("dialog", { name: "Add library MCP servers" });
+    fireEvent.click(within(dialog).getByLabelText("Docs Search"));
+    const firstControl = dialog.querySelector<HTMLElement>(".info-tip");
+    const lastControl = within(dialog).getByRole("button", {
+      name: "Add selected MCP servers"
+    });
+    firstControl?.focus();
+
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+
+    expect(lastControl).toHaveFocus();
   });
 
   it("lists Codex TOML MCP servers in mcp mode", () => {
