@@ -48,7 +48,7 @@ export const deriveProfileReadiness = ({
     return {
       status: "no-profile",
       label: "No profile",
-      message: "Create a profile to continue using New Profile in the page header"
+      message: "Create a profile to continue"
     };
   }
 
