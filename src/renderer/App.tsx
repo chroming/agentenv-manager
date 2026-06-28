@@ -46,7 +46,8 @@ import type {
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdateSourceInput,
-  TargetInfo
+  TargetInfo,
+  TargetManagementState
 } from "../shared/types";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { HistoryView } from "./components/HistoryView";
@@ -340,6 +341,7 @@ const createValidationRows = (
 
 export const App = () => {
   const [targets, setTargets] = useState<TargetInfo[]>([]);
+  const [targetStates, setTargetStates] = useState<TargetManagementState[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
   const [mcpServers, setMcpServers] = useState<McpLibraryEntry[]>([]);
@@ -395,6 +397,7 @@ export const App = () => {
   const refreshProfiles = async () => {
     const [
       targetItems,
+      targetStateItems,
       profileItems,
       backupItems,
       skillItems,
@@ -405,6 +408,7 @@ export const App = () => {
       githubStatus
     ] = await Promise.all([
       window.agentEnv.listTargets(),
+      window.agentEnv.listTargetStates(),
       window.agentEnv.listProfiles(),
       window.agentEnv.listBackups(),
       window.agentEnv.listSkillLibrary(),
@@ -434,6 +438,14 @@ export const App = () => {
       }
     }
     setTargets(targetItems);
+    setTargetStates(
+      targetStateItems.map((targetState) => ({
+        ...targetState,
+        activeProfileName:
+          profileItems.find((profile) => profile.id === targetState.activeProfileId)?.name ??
+          targetState.activeProfileName
+      }))
+    );
     setProfiles(profileItems);
     setBackups(backupItems);
     setLibrarySkills(skillItems);
@@ -768,6 +780,10 @@ export const App = () => {
     return `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedProfileSearch);
   });
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
+  const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
+  const isSelectedTargetManaged = Boolean(selectedTargetState?.activeProfileId);
+  const applyActionVerb = isSelectedTargetManaged ? "Apply to" : "Take over";
+  const applyActionLabel = `${applyActionVerb} ${selectedTarget?.name ?? "Target"}`;
   const activeTabPanelId = `editor-panel-${activeTab}`;
   const managedSurfaces = draftProfile
     ? Object.entries(draftProfile.manifest.managed)
@@ -1432,12 +1448,12 @@ export const App = () => {
                   </button>
                 </div>
                 <div className="profile-apply-control">
-                  <span>Apply to</span>
+                  <span>{applyActionVerb}</span>
                   <span className="profile-apply-split">
                     <button
                       className="profile-apply-button"
                       type="button"
-                      aria-label={`Apply to ${selectedTarget?.name ?? "Target"}`}
+                      aria-label={applyActionLabel}
                       disabled={!selectedProfileId || busy}
                       onClick={previewSelectedProfile}
                     >
@@ -1629,6 +1645,36 @@ export const App = () => {
             >
               {activeTab === "overview" ? (
                 <section className="profile-overview" aria-label="Profile overview">
+                  <section className="profile-overview-section target-management-section" aria-label="Target management">
+                    <div className="profile-section-heading">Target management</div>
+                    <div className={`target-management-card${isSelectedTargetManaged ? " is-managed" : ""}`}>
+                      <span
+                        className={`target-management-card__icon${isSelectedTargetManaged ? " is-managed" : ""}`}
+                        aria-hidden="true"
+                      >
+                        {isSelectedTargetManaged ? (
+                          <MonitorCheck size={21} strokeWidth={2.2} />
+                        ) : (
+                          <Monitor size={21} strokeWidth={2.2} />
+                        )}
+                      </span>
+                      <div>
+                        <strong>
+                          {activeTargetName} is {isSelectedTargetManaged ? "managed" : "not managed"}
+                        </strong>
+                        <small>
+                          {isSelectedTargetManaged
+                            ? `Active profile: ${selectedTargetState?.activeProfileName ?? selectedTargetState?.activeProfileId}`
+                            : "Use Take over to capture a backup and apply this profile."}
+                        </small>
+                      </div>
+                      <span className="target-management-card__meta">
+                        {isSelectedTargetManaged
+                          ? `${selectedTargetState?.managedResourceCount ?? 0} managed resources`
+                          : "First apply"}
+                      </span>
+                    </div>
+                  </section>
                   <section className="profile-overview-section" aria-label="Resource overview">
                     <div className="profile-section-heading">Resource overview</div>
                     <div className="resource-overview-grid">

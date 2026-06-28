@@ -38,6 +38,7 @@ import type {
   PlannedFileChange,
   RollbackPreview,
   RollbackResult,
+  TargetManagementState,
   TargetPaths,
   TargetState
 } from "../shared/types";
@@ -53,6 +54,7 @@ export interface ActivationServiceOptions {
 }
 
 export interface ActivationService {
+  listTargetStates(): Promise<TargetManagementState[]>;
   previewProfile(profileId: string): Promise<ActivationPreview>;
   applyProfile(profileId: string, previewId: string): Promise<ApplyResult>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
@@ -257,6 +259,37 @@ export const createActivationService = ({
         state: DEFAULT_TARGET_STATE
       };
     }
+  };
+
+  const listTargetStates = async (): Promise<TargetManagementState[]> => {
+    if (!(await pathExists(paths.targetStatesDir))) {
+      return [];
+    }
+    const entries = await readdir(paths.targetStatesDir, { withFileTypes: true });
+    const states = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+        .map(async (entry): Promise<TargetManagementState | undefined> => {
+          const targetId = entry.name.replace(/\.json$/, "");
+          const { state } = await readTargetStateFile(targetId);
+          if (!state.activeProfileId && (state.managedResources ?? []).length === 0) {
+            return undefined;
+          }
+          return {
+            targetId,
+            activeProfileId: state.activeProfileId,
+            status: state.activeProfileId ? "managed" : "unmanaged",
+            lastAppliedAt: state.lastAppliedAt,
+            managedResourceCount: state.managedResources?.length ?? 0,
+            warningCount: 0,
+            errorCount: 0
+          };
+        })
+    );
+
+    return states
+      .filter((state): state is TargetManagementState => Boolean(state))
+      .sort((a, b) => a.targetId.localeCompare(b.targetId));
   };
 
   const writeTargetState = async (targetId: string, state: TargetState) => {
@@ -590,6 +623,7 @@ export const createActivationService = ({
   };
 
   return {
+    listTargetStates,
     previewProfile,
     applyProfile,
     previewRollback,

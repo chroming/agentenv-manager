@@ -804,8 +804,8 @@ export const SkillLibraryPanel = ({
           <div className="library-drawer__header">
             <div>
               <strong>
-                Target discoveries
-                <InfoTip label="Scans supported local targets for skills that can be imported into the shared library or attached to profile management." />
+                Local Skill Cleanup
+                <InfoTip label="Scans supported local targets for skills that can be imported into the shared library, ignored, or kept outside AgentEnv management." />
               </strong>
             </div>
             <button className="icon-action" type="button" aria-label="Close library tool" onClick={onCloseTool}>
@@ -814,7 +814,7 @@ export const SkillLibraryPanel = ({
           </div>
           <section className="resource-section target-discovery-section">
             <div>
-              <div className="resource-heading">Cleanup groups</div>
+            <div className="resource-heading">Cleanup groups</div>
             </div>
             <div className="resource-list resource-list--unmanaged">
               {cleanupGroups.length === 0 ? (

@@ -393,8 +393,14 @@ const expectTopmost = async (locator: Locator) => {
   expect(isTopmost).toBe(true);
 };
 
+const applyActionButton = (page: Page, targetName: "OpenCode" | "Codex") =>
+  page
+    .getByRole("button", { name: `Apply to ${targetName}` })
+    .or(page.getByRole("button", { name: `Take over ${targetName}` }))
+    .first();
+
 const previewAndApply = async (page: Page, targetName: "OpenCode" | "Codex") => {
-  await page.getByRole("button", { name: `Apply to ${targetName}` }).click();
+  await applyActionButton(page, targetName).click();
   const previewDialog = page.getByRole("dialog", { name: "Preview" });
   await previewDialog.waitFor({ state: "visible" });
   await previewDialog.getByRole("button", { name: "Confirm" }).click();
@@ -452,7 +458,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("button", { name: "Import from GitHub" }).isEnabled()).toBe(true);
 
     await selectProfile(page, "UI OpenCode alpha");
-    expect(await page.getByRole("button", { name: "Apply to OpenCode" }).count()).toBe(1);
+    expect(await applyActionButton(page, "OpenCode").count()).toBe(1);
     expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
   }, 30_000);
 
@@ -482,7 +488,7 @@ describe("Electron UI profile switching e2e", () => {
     const { appDataRoot, page } = await launchApp();
 
     await page.getByRole("button", { name: "Profiles" }).click();
-    await page.getByRole("button", { name: "Apply to OpenCode" }).waitFor({
+    await applyActionButton(page, "OpenCode").waitFor({
       state: "visible",
       timeout: 10_000
     });
@@ -542,7 +548,7 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp();
 
     await page.getByRole("button", { name: "Profiles" }).click();
-    await page.getByRole("button", { name: "Apply to OpenCode" }).waitFor({
+    await applyActionButton(page, "OpenCode").waitFor({
       state: "visible",
       timeout: 10_000
     });
@@ -555,7 +561,7 @@ describe("Electron UI profile switching e2e", () => {
     await createDialog.waitFor({ state: "hidden", timeout: 5_000 });
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("button", { name: "Apply to OpenCode" }).click({ timeout: 5_000 });
+    await applyActionButton(page, "OpenCode").click({ timeout: 5_000 });
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible", timeout: 5_000 });
     await page.keyboard.press("Escape");
@@ -640,7 +646,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => cleanupGroup.textContent()).toContain("Ignored");
 
     await selectProfile(page, "UI OpenCode alpha");
-    await page.getByRole("button", { name: "Apply to OpenCode" }).click();
+    await applyActionButton(page, "OpenCode").click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
     await expect
@@ -658,12 +664,12 @@ describe("Electron UI profile switching e2e", () => {
     await previewAndApply(page, "OpenCode");
     await writeFile(join(opencodeDir, "AGENTS.md"), "# Changed outside AgentEnv\n", "utf8");
 
-    await page.getByRole("button", { name: "Apply to OpenCode" }).click();
+    await applyActionButton(page, "OpenCode").click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
     await expect
       .poll(() => previewDialog.textContent())
-      .toContain("External changes detected in AgentEnv-managed instructions instructions");
+      .toContain("OpenCode instructions changed outside AgentEnv");
     await expect
       .poll(() => previewDialog.getByRole("button", { name: "Confirm" }).isDisabled())
       .toBe(true);
@@ -1078,7 +1084,7 @@ describe("Electron UI profile switching e2e", () => {
     await alphaSkill.getByLabel("Target name").fill("target-only-reviewer");
     await page.getByRole("button", { name: "Save profile" }).click();
 
-    await page.getByRole("button", { name: "Apply to OpenCode" }).click();
+    await applyActionButton(page, "OpenCode").click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await page
       .getByText(`skill target already exists and is not AgentEnv-owned: ${join(

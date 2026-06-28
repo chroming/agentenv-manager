@@ -698,6 +698,50 @@ h2 {
   width: min(920px, calc(100vw - 80px));
 }
 
+.preview-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.preview-summary-card {
+  background: #fbfcff;
+  border: 1px solid #edf1f6;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.preview-summary-card.is-blocked {
+  border-color: rgba(255, 77, 79, 0.22);
+}
+
+.preview-summary-card > strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.preview-summary-card > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preview-summary-card .warning,
+.preview-summary-card .error {
+  margin: 0;
+}
+
+.preview-summary-card small {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .preview-actions {
   align-items: center;
   border-top: 1px solid var(--border);
@@ -3161,6 +3205,55 @@ summary {
   color: var(--text);
   font-size: 14px;
   font-weight: 780;
+}
+
+.target-management-card {
+  align-items: center;
+  background: #fbfcff;
+  border: 1px solid #edf1f6;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 14px;
+}
+
+.target-management-card.is-managed {
+  background: #f7fffb;
+  border-color: rgba(37, 176, 121, 0.22);
+}
+
+.target-management-card__icon {
+  align-items: center;
+  background: #eef4ff;
+  border-radius: 8px;
+  color: var(--accent);
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.target-management-card__icon.is-managed {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.target-management-card strong,
+.target-management-card small {
+  display: block;
+  min-width: 0;
+}
+
+.target-management-card small {
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.target-management-card__meta {
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 720;
 }
 
 .resource-overview-grid {

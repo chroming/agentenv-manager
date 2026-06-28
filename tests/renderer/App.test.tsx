@@ -39,7 +39,9 @@ const preview = {
   profileId: "daily-coding",
   targetId: "opencode",
   createdAt: "2026-06-30T00:00:00.000Z",
-  warnings: [],
+  warnings: [
+    "Unmanaged local skill kept: /tmp/home/.config/opencode/skills/manual-reviewer"
+  ],
   errors: [],
   changes: [
     {
@@ -122,6 +124,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     selectSkillFolder: vi.fn().mockResolvedValue(undefined),
     listTargets: vi.fn().mockResolvedValue([target]),
+    listTargetStates: vi.fn().mockResolvedValue([]),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
     scanSkillInventory: vi.fn().mockResolvedValue([]),
     ignoreSkillGroup: vi.fn().mockResolvedValue({
@@ -309,7 +312,7 @@ describe("App", () => {
     expect(brandIcon?.getAttribute("src")).toContain("app-icon");
     expect(await screen.findByRole("region", { name: "Profile overview" })).toBeInTheDocument();
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
-    expect(screen.getByRole("button", { name: "Apply to OpenCode" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Target readiness" })).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Resources" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Skills" })).toBeInTheDocument();
@@ -567,7 +570,7 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
+    const applyButton = await screen.findByRole("button", { name: "Take over OpenCode" });
     expect(applyButton).toBeEnabled();
 
     fireEvent.click(applyButton);
@@ -575,11 +578,59 @@ describe("App", () => {
     await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding"));
     const previewDialog = screen.getByRole("dialog", { name: "Preview" });
     expect(within(previewDialog).getByText("2 files in this diff")).toBeInTheDocument();
+    expect(within(previewDialog).getByText("Will keep")).toBeInTheDocument();
+    expect(within(previewDialog).getByText("Will replace")).toBeInTheDocument();
+    expect(within(previewDialog).getByText("Will install")).toBeInTheDocument();
     expect(within(previewDialog).getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
     expect(within(previewDialog).getByRole("button", { name: "Confirm" })).toBeEnabled();
 
     fireEvent.click(within(previewDialog).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog", { name: "Preview" })).not.toBeInTheDocument();
+  });
+
+  it("shows managed target state and uses Apply after takeover", async () => {
+    installApi({
+      listTargetStates: vi.fn().mockResolvedValue([
+        {
+          targetId: "opencode",
+          activeProfileId: "daily-coding",
+          activeProfileName: "Daily Coding",
+          status: "managed",
+          lastAppliedAt: "2026-07-09T00:00:00.000Z",
+          managedResourceCount: 3,
+          warningCount: 0,
+          errorCount: 0
+        }
+      ])
+    });
+    render(<App />);
+
+    await openProfiles();
+
+    expect(await screen.findByRole("button", { name: "Apply to OpenCode" })).toBeInTheDocument();
+    expect(screen.getByText("OpenCode is managed")).toBeInTheDocument();
+    expect(screen.getByText("Active profile: Daily Coding")).toBeInTheDocument();
+  });
+
+  it("uses clearer preview wording for drifted managed content", async () => {
+    installApi({
+      previewApply: vi.fn().mockResolvedValue({
+        ...preview,
+        warnings: [],
+        errors: [
+          "External changes detected in AgentEnv-managed instructions instructions: /tmp/home/.config/opencode/AGENTS.md"
+        ]
+      })
+    });
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(await screen.findByRole("button", { name: "Take over OpenCode" }));
+
+    const previewDialog = await screen.findByRole("dialog", { name: "Preview" });
+    expect(within(previewDialog).getByText("Blocked")).toBeInTheDocument();
+    expect(within(previewDialog).getByText("OpenCode instructions changed outside AgentEnv")).toBeInTheDocument();
+    expect(within(previewDialog).getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
   });
 
   it("keeps profile edits in a draft until the page-level save button is clicked", async () => {
@@ -595,7 +646,7 @@ describe("App", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
     expect(api.saveProfile).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply to OpenCode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take over OpenCode" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Save profile before applying");
     expect(api.previewApply).not.toHaveBeenCalled();
 
@@ -610,7 +661,7 @@ describe("App", () => {
     );
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Profile saved"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply to OpenCode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take over OpenCode" }));
     await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("daily-coding"));
   });
 
@@ -620,7 +671,7 @@ describe("App", () => {
 
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "Apply to OpenCode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Take over OpenCode" }));
     await screen.findByRole("dialog", { name: "Preview" });
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>
@@ -723,7 +774,7 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    const applyButton = await screen.findByRole("button", { name: "Apply to OpenCode" });
+    const applyButton = await screen.findByRole("button", { name: "Take over OpenCode" });
 
     fireEvent.click(applyButton);
 

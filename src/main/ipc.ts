@@ -62,6 +62,7 @@ export const registerIpcHandlers = ({
     return result.canceled ? undefined : result.filePaths[0];
   });
   ipcMain.handle("targets:list", () => targetDiscoveryService.listTargets());
+  ipcMain.handle("targets:list-states", () => activationService.listTargetStates());
   ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
   ipcMain.handle("skills:scan-inventory", () =>
     targetDiscoveryService

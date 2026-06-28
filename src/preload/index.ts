@@ -4,6 +4,7 @@ import type { AgentEnvApi } from "../shared/types";
 const api: AgentEnvApi = {
   selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),
   listTargets: () => ipcRenderer.invoke("targets:list"),
+  listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),
   scanSkillInventory: () => ipcRenderer.invoke("skills:scan-inventory"),
   ignoreSkillGroup: (skillKey) => ipcRenderer.invoke("skills:ignore-group", skillKey),

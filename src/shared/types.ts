@@ -11,6 +11,7 @@ import type { AssetPolicy, ProfileManifest } from "./schemas";
 export interface AgentEnvApi {
   selectSkillFolder(): Promise<string | undefined>;
   listTargets(): Promise<TargetInfo[]>;
+  listTargetStates(): Promise<TargetManagementState[]>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   scanSkillInventory(): Promise<SkillInventoryEntry[]>;
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
@@ -229,6 +230,19 @@ export interface TargetState {
   activeProfileId?: string;
   lastAppliedAt?: string;
   managedResources?: ManagedResourceSnapshot[];
+}
+
+export type TargetManagementStatus = "unmanaged" | "managed";
+
+export interface TargetManagementState {
+  targetId: string;
+  activeProfileId?: string;
+  activeProfileName?: string;
+  status: TargetManagementStatus;
+  lastAppliedAt?: string;
+  managedResourceCount: number;
+  warningCount: number;
+  errorCount: number;
 }
 
 export type ManagedResourceKind =
