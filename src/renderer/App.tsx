@@ -524,11 +524,17 @@ export const App = () => {
   const selectProfile = async (profileId: string) => {
     const requestId = ++profileFlowRequestRef.current;
     activeProfileFlowRequestRef.current = requestId;
+    const isDifferentProfile = profileId !== selectedProfileId;
     const profileSummary = profiles.find((profile) => profile.id === profileId);
     setBusy(true);
     setError(undefined);
     setPreview(undefined);
     setRollbackPreview(undefined);
+    if (isDifferentProfile) {
+      setDraftProfile(undefined);
+      setIsProfileDirty(false);
+      setProfileSaveStatus("");
+    }
     setActiveComposerSection("skills");
     setActiveWorkspace("profiles");
     setSelectedProfileId(profileId);
@@ -1784,8 +1790,8 @@ export const App = () => {
                           <button
                             className="icon-action"
                             type="button"
-                            aria-label="Edit profile details"
-                            title="Edit profile details"
+                            aria-label="Edit profile"
+                            title="Edit profile"
                             onClick={openEditProfileDialog}
                           >
                             <Pencil size={15} strokeWidth={2.2} />

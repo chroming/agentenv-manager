@@ -547,7 +547,7 @@ describe("Electron UI profile switching e2e", () => {
       description: "Writing workspace"
     });
 
-    await page.getByRole("button", { name: "Edit profile details" }).click({ timeout: 5_000 });
+    await page.getByRole("button", { name: "Edit profile" }).click({ timeout: 5_000 });
     const editDialog = page.getByRole("dialog", { name: "Edit profile" });
     await editDialog.waitFor({ state: "visible", timeout: 5_000 });
     await editDialog.getByLabel("Profile name").fill("Docs Writing v2");

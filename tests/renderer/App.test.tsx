@@ -812,10 +812,10 @@ describe("App", () => {
     expect(newProfileButtons).toHaveLength(1);
     expect(newProfileButtons[0].closest("header")).toHaveClass("profile-page-header");
 
-    const edit = screen.getByRole("button", { name: "Edit profile details" });
+    const edit = screen.getByRole("button", { name: "Edit profile" });
     const more = screen.getByRole("button", { name: "More profile actions" });
     const targetMenu = screen.getByRole("button", { name: "Select apply target" });
-    expect(edit).toHaveAttribute("title", "Edit profile details");
+    expect(edit).toHaveAttribute("title", "Edit profile");
     expect(more).toHaveAttribute("title", "More profile actions");
     expect(targetMenu).toHaveAttribute("title", "Select apply target");
   });
@@ -923,6 +923,41 @@ describe("App", () => {
         name: /Daily Coding/
       })
     ).toHaveTextContent("Unsaved");
+  });
+
+  it("hides the previous editor while a different profile is loading", async () => {
+    const profileBRead = deferred<ProfileDetail>();
+    let deferProfileB = false;
+    installApi({
+      listProfiles: vi.fn().mockResolvedValue([summaryOf(profile), summaryOf(profileB)]),
+      readProfile: vi.fn().mockImplementation(async (profileId) => {
+        if (deferProfileB && profileId === profileB.id) return profileBRead.promise;
+        return profileId === profileB.id ? profileB : profile;
+      })
+    });
+    render(<App />);
+
+    await openProfiles();
+    await screen.findByRole("heading", { name: "Daily Coding" });
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
+
+    deferProfileB = true;
+    const profileList = screen.getByRole("complementary", { name: "Profile list" });
+    fireEvent.click(within(profileList).getByRole("button", { name: /Profile B/ }));
+
+    expect(screen.queryByRole("heading", { name: "Daily Coding" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Profile composer" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("AGENTS.md")).not.toBeInTheDocument();
+
+    await act(async () => {
+      profileBRead.resolve(profileB);
+      await profileBRead.promise;
+    });
+    expect(await screen.findByRole("heading", { name: "Profile B" })).toBeInTheDocument();
+    const composer = screen.getByRole("region", { name: "Profile composer" });
+    fireEvent.click(within(composer).getByRole("button", { name: "Instructions" }));
+    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Profile B\n");
   });
 
   it("ignores profile reads that resolve out of selection order", async () => {
@@ -1229,7 +1264,7 @@ describe("App", () => {
 
     await openProfiles();
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit profile details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     const editDialog = screen.getByRole("dialog", { name: "Edit profile" });
     fireEvent.change(within(editDialog).getByLabelText("Profile name"), {
       target: { value: "Review Focus" }
