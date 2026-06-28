@@ -922,6 +922,28 @@ export const App = () => {
     }
   };
 
+  const removeLibrarySkill = async (id: string) => {
+    setBusy(true);
+    setError(undefined);
+    setSelectedSkillUpdatePlan(undefined);
+    try {
+      await window.agentEnv.removeSkillFromLibrary(id);
+      await refreshProfiles();
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: `Deleted ${id} from library`
+      });
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setSkillUpdateCheckStatus({
+        state: "error",
+        message: `Delete ${id} failed`
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const updateAllLibrarySkills = async (ids: string[]) => {
     if (ids.length === 0) {
       return;
@@ -1410,6 +1432,7 @@ export const App = () => {
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onUpdateAllLibrarySkills={updateAllLibrarySkills}
+                onRemoveLibrarySkill={removeLibrarySkill}
                 onCheckUpdates={checkSkillUpdates}
                 onIgnoreSkillGroup={(skillKey) => {
                   void ignoreSkillGroup(skillKey);
@@ -1957,6 +1980,17 @@ export const App = () => {
                   <InfoTip label="Targets are local agent runtimes. A target is ready when its command and writable config paths are available." />
                 </h2>
               </div>
+              <button
+                className="secondary-action"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void refreshProfiles();
+                }}
+              >
+                <RefreshCw size={15} strokeWidth={2.2} />
+                Refresh targets
+              </button>
             </header>
             <div className="target-grid">
               {targets.length === 0 ? (

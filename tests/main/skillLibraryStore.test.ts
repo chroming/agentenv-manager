@@ -84,6 +84,33 @@ describe("skill library store", () => {
     ).resolves.toContain('"sourceType": "local"');
   });
 
+  it("removes a skill from the central library without mutating its source directory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "source", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(
+      join(sourceDir, "SKILL.md"),
+      "---\nname: reviewer\ndescription: Source skill.\n---\n\n# Reviewer\n",
+      "utf8"
+    );
+
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({
+      sourcePath: sourceDir,
+      id: "shared-reviewer",
+      sourceType: "local"
+    });
+
+    await store.removeSkill("shared-reviewer");
+
+    await expect(store.listSkills()).resolves.toEqual([]);
+    await expect(readFile(join(sourceDir, "SKILL.md"), "utf8")).resolves.toContain("# Reviewer");
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "shared-reviewer", "SKILL.md"), "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("uses the configured GitHub access token when importing a GitHub skill", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

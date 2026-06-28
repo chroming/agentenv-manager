@@ -19,6 +19,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   TriangleAlert,
   Users,
   X
@@ -57,6 +58,7 @@ interface SkillLibraryPanelProps {
   onPreviewLibrarySkillUpdate(id: string): void;
   onUpdateLibrarySkill(id: string): void;
   onUpdateAllLibrarySkills(ids: string[]): void;
+  onRemoveLibrarySkill(id: string): void;
   onCheckUpdates(): void;
   onIgnoreSkillGroup(skillKey: string): void;
   onUnignoreSkillGroup(skillKey: string): void;
@@ -199,6 +201,7 @@ export const SkillLibraryPanel = ({
   onPreviewLibrarySkillUpdate,
   onUpdateLibrarySkill,
   onUpdateAllLibrarySkills,
+  onRemoveLibrarySkill,
   onCheckUpdates,
   onIgnoreSkillGroup,
   onUnignoreSkillGroup,
@@ -216,6 +219,7 @@ export const SkillLibraryPanel = ({
   const [updateFilter, setUpdateFilter] = useState<"all" | "updates">("all");
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
   const openActionId = openAction?.id;
+  const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
   const [sourceDrafts, setSourceDrafts] = useState<
     Record<string, { sourceType: SkillSourceType; source: string }>
   >({});
@@ -233,6 +237,10 @@ export const SkillLibraryPanel = ({
         setOpenAction(undefined);
         return;
       }
+      if (deleteCandidate) {
+        setDeleteCandidate(undefined);
+        return;
+      }
       if (activeTool) {
         onCloseTool?.();
       }
@@ -240,7 +248,7 @@ export const SkillLibraryPanel = ({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, onCloseTool, openActionId]);
+  }, [activeTool, deleteCandidate, onCloseTool, openActionId]);
 
   useEffect(() => {
     if (!openActionId && !activeTool) {
@@ -736,6 +744,21 @@ export const SkillLibraryPanel = ({
                               </button>
                             </div>
                           </div>
+                          <button
+                            className="row-action-item row-action-item--danger"
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              setDeleteCandidate(skill);
+                              setOpenAction(undefined);
+                            }}
+                          >
+                            <Trash2 size={14} strokeWidth={2.2} />
+                            <span>
+                              <strong>Delete from library</strong>
+                              <small>Remove the shared library copy only.</small>
+                            </span>
+                          </button>
                         </div>,
                         document.body
                       )
@@ -798,6 +821,46 @@ export const SkillLibraryPanel = ({
           })}
         </div>
       </section>
+
+      {deleteCandidate ? (
+        <div className="preview-modal-backdrop" onClick={() => setDeleteCandidate(undefined)}>
+          <section
+            className="profile-form-dialog profile-form-dialog--compact"
+            role="dialog"
+            aria-label="Delete library skill"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">Delete library skill</div>
+                <p className="muted">
+                  Delete {deleteCandidate.name} from the shared library? Installed target copies are not removed.
+                </p>
+              </div>
+            </header>
+            <footer className="preview-actions">
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={() => setDeleteCandidate(undefined)}
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-action"
+                type="button"
+                onClick={() => {
+                  onRemoveLibrarySkill(deleteCandidate.id);
+                  setDeleteCandidate(undefined);
+                }}
+              >
+                Delete skill
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       {activeTool === "discoveries" ? (
         <section className="library-drawer" aria-label="Environment skills">

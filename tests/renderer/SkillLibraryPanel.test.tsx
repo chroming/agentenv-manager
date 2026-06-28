@@ -14,6 +14,7 @@ describe("SkillLibraryPanel", () => {
     const onPreviewLibrarySkillUpdate = vi.fn();
     const onUpdateLibrarySkill = vi.fn();
     const onUpdateAllLibrarySkills = vi.fn();
+    const onRemoveLibrarySkill = vi.fn();
     const onCheckUpdates = vi.fn();
     const onSetUpdateSource = vi.fn();
     const onManageTargetSkill = vi.fn();
@@ -146,6 +147,7 @@ describe("SkillLibraryPanel", () => {
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
         onUpdateLibrarySkill={onUpdateLibrarySkill}
         onUpdateAllLibrarySkills={onUpdateAllLibrarySkills}
+        onRemoveLibrarySkill={onRemoveLibrarySkill}
         onCheckUpdates={onCheckUpdates}
         onSetUpdateSource={onSetUpdateSource}
         onManageTargetSkill={onManageTargetSkill}
@@ -203,6 +205,13 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Preview update/ }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("shared-reviewer");
+    fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Delete from library/ }));
+    const deleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });
+    expect(deleteDialog).toHaveTextContent("Shared Reviewer");
+    expect(deleteDialog).toHaveTextContent("Installed target copies are not removed");
+    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete skill" }));
+    expect(onRemoveLibrarySkill).toHaveBeenCalledWith("shared-reviewer");
     expect(screen.getByRole("region", { name: "Update preview for shared-reviewer" })).toHaveTextContent(
       "SKILL.md"
     );

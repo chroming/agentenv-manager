@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { McpLibraryEntry, McpTransport, SaveMcpServerInput } from "../../shared/types";
 
 interface McpLibraryPanelProps {
@@ -47,6 +47,38 @@ export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpL
   const [draft, setDraft] = useState<SaveMcpServerInput>(defaultDraft);
   const [argsText, setArgsText] = useState("");
   const [envText, setEnvText] = useState("");
+  const [deleteCandidate, setDeleteCandidate] = useState<McpLibraryEntry>();
+
+  useEffect(() => {
+    if (!deleteCandidate) {
+      return undefined;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDeleteCandidate(undefined);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [deleteCandidate]);
+
+  const editServer = (server: McpLibraryEntry) => {
+    setDraft({
+      id: server.id,
+      name: server.name,
+      transport: server.transport,
+      command: server.command,
+      args: server.args ?? [],
+      url: server.url,
+      env: server.env ?? {}
+    });
+    setArgsText((server.args ?? []).join("\n"));
+    setEnvText(
+      Object.entries(server.env ?? {})
+        .map(([key, value]) => (key === value ? key : `${key}=${value}`))
+        .join("\n")
+    );
+  };
 
   const saveDraft = () => {
     if (!draft.id.trim() || !draft.name.trim()) {
@@ -56,12 +88,15 @@ export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpL
       ...draft,
       id: draft.id.trim(),
       name: draft.name.trim(),
-      command: draft.command?.trim() || undefined,
-      url: draft.url?.trim() || undefined,
-      args: argsText
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
+      command: draft.transport === "stdio" ? draft.command?.trim() || undefined : undefined,
+      url: draft.transport === "stdio" ? undefined : draft.url?.trim() || undefined,
+      args:
+        draft.transport === "stdio"
+          ? argsText
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean)
+          : [],
       env: parseEnvText(envText)
     });
     setDraft(defaultDraft);
@@ -113,13 +148,22 @@ export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpL
                     : "Not used by any profile"}
                 </small>
               </div>
-              <button
-                className="secondary-action"
-                type="button"
-                onClick={() => onRemove(server.id)}
-              >
-                Remove {server.id}
-              </button>
+              <div className="resource-row__actions">
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => editServer(server)}
+                >
+                  Edit {server.id}
+                </button>
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => setDeleteCandidate(server)}
+                >
+                  Remove {server.id}
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -214,6 +258,46 @@ export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpL
           </button>
         </div>
       </section>
+
+      {deleteCandidate ? (
+        <div className="preview-modal-backdrop" onClick={() => setDeleteCandidate(undefined)}>
+          <section
+            className="profile-form-dialog profile-form-dialog--compact"
+            role="dialog"
+            aria-label="Delete MCP server"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">Delete MCP server</div>
+                <p className="muted">
+                  Delete {deleteCandidate.name} from the shared MCP library? Profile references are not changed.
+                </p>
+              </div>
+            </header>
+            <footer className="preview-actions">
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={() => setDeleteCandidate(undefined)}
+              >
+                Cancel
+              </button>
+              <button
+                className="danger-action"
+                type="button"
+                onClick={() => {
+                  onRemove(deleteCandidate.id);
+                  setDeleteCandidate(undefined);
+                }}
+              >
+                Delete server
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 };

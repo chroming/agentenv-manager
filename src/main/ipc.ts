@@ -93,6 +93,9 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>
     skillLibraryStore.importGitHubSkill(input)
   );
+  ipcMain.handle("skills:remove-library", (_event, id: unknown) =>
+    skillLibraryStore.removeSkill(parseId(id, "skill id"))
+  );
   ipcMain.handle("skills:manage-target", async (_event, input: ManageTargetSkillInput) => {
     const targetId = parseId(input.targetId, "target id");
     const libraryId = parseId(input.libraryId, "skill id");

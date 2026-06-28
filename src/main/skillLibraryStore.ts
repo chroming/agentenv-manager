@@ -53,6 +53,7 @@ export interface SkillLibraryStore {
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   importSkill(input: ImportSkillInput): Promise<SkillLibraryEntry>;
   importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
+  removeSkill(id: string): Promise<void>;
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   checkUpdates(): Promise<SkillUpdateInfo[]>;
   setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
@@ -631,6 +632,11 @@ export const createSkillLibraryStore = (
     return entryFor(safeId, targetDir);
   };
 
+  const removeSkill = async (id: string): Promise<void> => {
+    const safeId = SafeIdSchema.parse(id);
+    await rm(join(await libraryDir(), safeId), { recursive: true, force: true });
+  };
+
   const importGitHubSkill = async ({
     url,
     id
@@ -920,6 +926,7 @@ export const createSkillLibraryStore = (
     scanUnmanaged,
     importSkill,
     importGitHubSkill,
+    removeSkill,
     manageTargetSkill,
     checkUpdates,
     setUpdateSource,

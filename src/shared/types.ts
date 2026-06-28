@@ -22,6 +22,7 @@ export interface AgentEnvApi {
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   importSkillToLibrary(sourcePath: string): Promise<SkillLibraryEntry>;
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
+  removeSkillFromLibrary(id: string): Promise<void>;
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
   checkSkillLibraryUpdates(): Promise<SkillUpdateInfo[]>;
   setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;

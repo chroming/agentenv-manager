@@ -4335,6 +4335,15 @@ button svg,
   white-space: normal;
 }
 
+.row-action-item--danger > svg {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.row-action-item--danger strong {
+  color: #be123c;
+}
+
 .row-action-popover .row-action-source {
   background: #f8fafc;
   border: 1px solid #eef2f7;

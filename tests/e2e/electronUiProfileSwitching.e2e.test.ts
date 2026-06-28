@@ -721,6 +721,26 @@ describe("Electron UI profile switching e2e", () => {
       .toMatch(/up to date|update.*available|failed/i);
   }, 30_000);
 
+  it("deletes a skill from the shared library through the rendered app", async () => {
+    const { appDataRoot, page } = await launchApp();
+
+    const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
+    await sharedRow.waitFor({ state: "visible" });
+    await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
+    await page.getByRole("menuitem", { name: /Delete from library/ }).click();
+
+    const deleteDialog = page.getByRole("dialog", { name: "Delete library skill" });
+    await deleteDialog.waitFor({ state: "visible" });
+    await expect.poll(() => deleteDialog.textContent()).toContain("Installed target copies are not removed");
+    await deleteDialog.getByRole("button", { name: "Delete skill" }).click();
+
+    await sharedRow.waitFor({ state: "hidden" });
+    await expect
+      .poll(() => page.getByRole("status").textContent())
+      .toContain("Deleted shared-reviewer from library");
+    await expect(fileExists(join(appDataRoot, "skills-library", "shared-reviewer"))).resolves.toBe(false);
+  }, 30_000);
+
   it("keeps menus, dialogs, and info tips inside the visible app window", async () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 760 });
@@ -883,7 +903,15 @@ describe("Electron UI profile switching e2e", () => {
         })
       );
 
+    await localSearch.getByRole("button", { name: "Edit local-search" }).click();
+    await expect.poll(() => page.getByLabel("MCP library id").inputValue()).toBe("local-search");
+    await expect.poll(() => page.getByLabel("MCP args").inputValue()).toBe("server.js\n--stdio");
+
     await localSearch.getByRole("button", { name: "Remove local-search" }).click();
+    const deleteDialog = page.getByRole("dialog", { name: "Delete MCP server" });
+    await deleteDialog.waitFor({ state: "visible" });
+    await expect.poll(() => deleteDialog.textContent()).toContain("Local Search");
+    await deleteDialog.getByRole("button", { name: "Delete server" }).click();
     await localSearch.waitFor({ state: "detached" });
     await expect
       .poll(async () =>

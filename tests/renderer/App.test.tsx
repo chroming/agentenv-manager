@@ -161,6 +161,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       contentHash: "hash",
       updatedAt: "2026-07-02T00:00:00.000Z"
     }),
+    removeSkillFromLibrary: vi.fn().mockResolvedValue(undefined),
     checkSkillLibraryUpdates: vi.fn().mockResolvedValue([]),
     manageTargetSkill: vi.fn().mockResolvedValue(undefined),
     setSkillUpdateSource: vi.fn().mockImplementation(async (input) => ({
@@ -530,7 +531,14 @@ describe("App", () => {
     expect(screen.getByRole("region", { name: "MCP library" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Library/MCP Servers" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "MCP library item context7" })).toBeInTheDocument();
+    const context7Row = screen.getByRole("group", { name: "MCP library item context7" });
+    expect(context7Row).toBeInTheDocument();
+
+    fireEvent.click(within(context7Row).getByRole("button", { name: "Edit context7" }));
+    expect(screen.getByLabelText("MCP library id")).toHaveValue("context7");
+    expect(screen.getByLabelText("MCP library name")).toHaveValue("Context7");
+    expect(screen.getByLabelText("MCP command")).toHaveValue("npx");
+    expect(screen.getByLabelText("MCP args")).toHaveValue("-y\n@upstash/context7-mcp");
 
     fireEvent.change(screen.getByLabelText("MCP library id"), {
       target: { value: "shared-docs" }
@@ -562,6 +570,47 @@ describe("App", () => {
           DOCS_TOKEN: "DOCS_TOKEN"
         }
       })
+    );
+
+    fireEvent.click(within(context7Row).getByRole("button", { name: "Remove context7" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Delete MCP server" })).not.toBeInTheDocument();
+    fireEvent.click(within(context7Row).getByRole("button", { name: "Remove context7" }));
+    const deleteDialog = screen.getByRole("dialog", { name: "Delete MCP server" });
+    expect(deleteDialog).toHaveTextContent("Context7");
+    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete server" }));
+    await waitFor(() => expect(api.removeMcpServer).toHaveBeenCalledWith("context7"));
+  });
+
+  it("refreshes target discovery from the Targets page", async () => {
+    const refreshedTarget = {
+      ...target,
+      health: {
+        ...target.health,
+        status: "missing" as const,
+        executableFound: false,
+        executablePath: undefined,
+        canWrite: true,
+        summary: "opencode CLI not found"
+      }
+    };
+    const api = installApi({
+      listTargets: vi
+        .fn()
+        .mockResolvedValueOnce([target])
+        .mockResolvedValue([refreshedTarget])
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Skill library" });
+    fireEvent.click(screen.getByRole("button", { name: "Targets" }));
+    expect(await screen.findByRole("article", { name: "Target OpenCode" })).toHaveTextContent("Ready");
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh targets" }));
+
+    await waitFor(() => expect(api.listTargets).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByRole("article", { name: "Target OpenCode" })).toHaveTextContent("Missing")
     );
   });
 

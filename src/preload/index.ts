@@ -15,6 +15,7 @@ const api: AgentEnvApi = {
   scanUnmanagedSkills: () => ipcRenderer.invoke("skills:scan-unmanaged"),
   importSkillToLibrary: (sourcePath) => ipcRenderer.invoke("skills:import-library", sourcePath),
   importGitHubSkillToLibrary: (input) => ipcRenderer.invoke("skills:import-github", input),
+  removeSkillFromLibrary: (id) => ipcRenderer.invoke("skills:remove-library", id),
   manageTargetSkill: (input) => ipcRenderer.invoke("skills:manage-target", input),
   checkSkillLibraryUpdates: () => ipcRenderer.invoke("skills:check-updates"),
   setSkillUpdateSource: (input) => ipcRenderer.invoke("skills:set-update-source", input),
