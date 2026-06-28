@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  CalendarDays,
   CheckCircle2,
   ChevronDown,
   Copy,
@@ -55,12 +54,22 @@ import { InfoTip } from "./components/InfoTip";
 import { McpEditor } from "./components/McpEditor";
 import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
+import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { ProfileSidebar, type AppWorkspace, type LibraryTab } from "./components/ProfileSidebar";
 import {
   SkillLibraryPanel,
   type SkillUpdateCheckStatus
 } from "./components/SkillLibraryPanel";
 import { SkillsEditor } from "./components/SkillsEditor";
+import {
+  deriveApplyActionLabel,
+  deriveProfileReadiness
+} from "./profileReadiness";
+import {
+  findRecentProfileApplication,
+  summarizeProfile,
+  type ProfileResourceSummary
+} from "./profileSummary";
 
 const emptyAssetPolicy: AssetPolicy = {
   ownedDirs: [],
@@ -70,7 +79,7 @@ const emptyAssetPolicy: AssetPolicy = {
   disabledSkillPaths: []
 };
 
-type EditorTab = "overview" | "instructions" | "config" | "resources" | "validation";
+type ComposerSection = "instructions" | "skills" | "mcp" | "advanced";
 type ProfileDialogMode = "create" | "edit";
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
@@ -121,22 +130,12 @@ const summarizeSkillUpdateResult = (
   };
 };
 
-const editorTabs: Array<{ id: EditorTab; label: string }> = [
-  { id: "overview", label: "Overview" },
-  { id: "instructions", label: "Instructions" },
-  { id: "config", label: "Config" },
-  { id: "resources", label: "Resources" },
-  { id: "validation", label: "Validation" }
-];
-
 const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   manifest: profile.manifest,
   instructions: profile.instructions,
   configText: profile.configText,
   assetPolicy: profile.assetPolicy
 });
-
-const managedSurfaceLabel = (key: string) => (key === "assets" ? "skills" : key);
 
 const targetStatusLabel: Record<TargetInfo["health"]["status"], string> = {
   ready: "Ready",
@@ -180,28 +179,6 @@ const AppFeedback = ({ feedback }: { feedback?: AppFeedbackMessage }) => {
     </div>
   );
 };
-
-const countProfileResources = (profile: ProfileDetail) => {
-  const ownedSkills =
-    profile.assetPolicy.ownedDirs.filter((entry) => entry.kind === "skill").length +
-    profile.assetPolicy.ownedFiles.filter((entry) => entry.kind === "skill").length;
-  const ownedAgents =
-    profile.assetPolicy.ownedDirs.filter((entry) => entry.kind === "agent").length +
-    profile.assetPolicy.ownedFiles.filter((entry) => entry.kind === "agent").length;
-  const librarySkills = profile.assetPolicy.skillRefs.length;
-  const mcpServers = profile.assetPolicy.mcpRefs.length;
-
-  return {
-    agents: ownedAgents,
-    skills: ownedSkills + librarySkills,
-    librarySkills,
-    mcpServers,
-    disabledSkills: profile.assetPolicy.disabledSkillPaths.length,
-    total: ownedAgents + ownedSkills + librarySkills + mcpServers
-  };
-};
-
-type ProfileResourceSummary = ReturnType<typeof countProfileResources>;
 
 const formatShortDate = (value?: string) => {
   if (!value) {
@@ -386,7 +363,8 @@ export const App = () => {
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<EditorTab>("overview");
+  const [activeComposerSection, setActiveComposerSection] =
+    useState<ComposerSection>("skills");
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
   const [isProfileActionsOpen, setIsProfileActionsOpen] = useState(false);
   const [profileDialogMode, setProfileDialogMode] = useState<ProfileDialogMode>();
@@ -400,6 +378,8 @@ export const App = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const profilePageActionsRef = useRef<HTMLDivElement>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+  const targetMenuButtonRef = useRef<HTMLButtonElement>(null);
 
   const refreshProfiles = async () => {
     const [
@@ -432,7 +412,12 @@ export const App = () => {
     const nextMcpUsage: Record<string, string[]> = {};
     const nextProfileResourceCounts: Record<string, ProfileResourceSummary> = {};
     for (const profile of profileDetails) {
-      nextProfileResourceCounts[profile.id] = countProfileResources(profile);
+      const profileTarget = targetItems.find(
+        (targetItem) => targetItem.id === profile.manifest.targetId
+      );
+      if (profileTarget) {
+        nextProfileResourceCounts[profile.id] = summarizeProfile(profile, profileTarget);
+      }
       for (const skillRef of profile.assetPolicy.skillRefs ?? []) {
         usage[skillRef.libraryId] = (usage[skillRef.libraryId] ?? []).concat(
           profile.manifest.name
@@ -482,8 +467,9 @@ export const App = () => {
         const initialProfile =
           profileItems.find((profile) => !initialTargetId || profile.targetId === initialTargetId) ??
           profileItems[0];
+        setSelectedTargetId(initialProfile.targetId);
         setSelectedProfileId(initialProfile.id);
-        setActiveTab("overview");
+        setActiveComposerSection("skills");
         const profile = await window.agentEnv.readProfile(initialProfile.id);
         if (isMounted) {
           setDraftProfile(profile);
@@ -528,11 +514,12 @@ export const App = () => {
     setError(undefined);
     setPreview(undefined);
     setRollbackPreview(undefined);
-    setActiveTab("overview");
+    setActiveComposerSection("skills");
     setActiveWorkspace("profiles");
     setSelectedProfileId(profileId);
     try {
       const profile = await window.agentEnv.readProfile(profileId);
+      setSelectedTargetId(profile.manifest.targetId);
       setDraftProfile(profile);
       setIsProfileDirty(false);
       setProfileSaveStatus("");
@@ -635,7 +622,7 @@ export const App = () => {
         };
         updateDraftProfile(updatedProfile);
       }
-      setActiveTab("overview");
+      setActiveComposerSection("skills");
       setActiveWorkspace("profiles");
       setProfileDialogMode(undefined);
       setPreview(undefined);
@@ -660,7 +647,7 @@ export const App = () => {
       setSelectedTargetId(saved.manifest.targetId);
       setSelectedProfileId(saved.id);
       setDraftProfile(saved);
-      setActiveTab("overview");
+      setActiveComposerSection("skills");
       setPreview(undefined);
       setRollbackPreview(undefined);
     } catch (unknownError) {
@@ -713,10 +700,13 @@ export const App = () => {
     setSelectedTargetId(targetId);
     setSelectedProfileId(undefined);
     setDraftProfile(undefined);
+    setIsProfileDirty(false);
+    setProfileSaveStatus("");
     setPreview(undefined);
     setRollbackPreview(undefined);
-    setActiveTab("overview");
+    setActiveComposerSection("skills");
     setIsTargetMenuOpen(false);
+    targetMenuButtonRef.current?.focus();
   };
 
   useEffect(() => {
@@ -738,6 +728,7 @@ export const App = () => {
       }
       if (isTargetMenuOpen) {
         setIsTargetMenuOpen(false);
+        targetMenuButtonRef.current?.focus();
       }
     };
 
@@ -766,15 +757,16 @@ export const App = () => {
       }
       setIsTargetMenuOpen(false);
       setIsProfileActionsOpen(false);
+      if (isTargetMenuOpen) {
+        targetMenuButtonRef.current?.focus();
+      }
     };
 
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [isProfileActionsOpen, isTargetMenuOpen]);
 
-  const selectedTarget = targets.find(
-    (target) => target.id === (draftProfile?.manifest.targetId ?? selectedTargetId)
-  );
+  const selectedTarget = targets.find((target) => target.id === selectedTargetId);
   const targetProfiles = profiles.filter(
     (profile) => !selectedTargetId || profile.targetId === selectedTargetId
   );
@@ -789,53 +781,104 @@ export const App = () => {
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
-  const isSelectedTargetManaged = Boolean(selectedTargetState?.activeProfileId);
-  const applyActionVerb = isSelectedTargetManaged ? "Apply to" : "Take over";
-  const applyActionLabel = `${applyActionVerb} ${selectedTarget?.name ?? "Target"}`;
-  const activeTabPanelId = `editor-panel-${activeTab}`;
-  const managedSurfaces = draftProfile
-    ? Object.entries(draftProfile.manifest.managed)
-        .filter(([, enabled]) => enabled)
-        .map(([key]) => managedSurfaceLabel(key))
-        .join(" / ")
-    : "";
-  const managedSurfaceCount = draftProfile
-    ? Object.values(draftProfile.manifest.managed).filter(Boolean).length
-    : 0;
-  const resourceSummary = draftProfile ? countProfileResources(draftProfile) : undefined;
   const validationRows = draftProfile
     ? createValidationRows(draftProfile, selectedTarget, preview)
     : [];
+  const localValidationErrors = validationRows
+    .filter(
+      (row) =>
+        row.level === "error" && row.label !== "Target access" && row.label !== "Live conflicts"
+    )
+    .map((row) => row.detail ?? `${row.label} is invalid`);
+  const resourceSummary =
+    draftProfile && selectedTarget
+      ? summarizeProfile(draftProfile, selectedTarget)
+      : undefined;
+  const readinessInput = {
+    profile: draftProfile,
+    target: selectedTarget,
+    targetState: selectedTargetState,
+    isDirty: isProfileDirty,
+    localValidationErrors,
+    preview
+  };
+  const readiness = deriveProfileReadiness(readinessInput);
+  const applyActionLabel = deriveApplyActionLabel(readinessInput);
+  const managedResourceCount = selectedTargetState?.managedResourceCount ?? 0;
+  const applyDisabled = !draftProfile || !selectedTarget || busy;
+  const applyDescription = !draftProfile
+    ? "Select a profile before previewing changes"
+    : !selectedTarget
+      ? "Select a target before previewing changes"
+      : busy
+        ? "An action is in progress"
+        : readiness.message;
   const canApply = Boolean(
     preview &&
       preview.errors.length === 0 &&
+      localValidationErrors.length === 0 &&
       !rollbackPreview &&
       (selectedTarget?.health.canWrite ?? false)
   );
 
   const totalResources = librarySkills.length + mcpServers.length;
   const updateCount = skillUpdates.filter((update) => update.updateAvailable).length;
-  const readyTargetCount = targets.filter((target) => target.health.status === "ready").length;
+  const readyTargetCount = targets.filter(
+    (target) => target.health.status === "ready" && target.health.canWrite
+  ).length;
 
   const previewSelectedProfile = async () => {
-    setBusy(true);
     setError(undefined);
     setRollbackPreview(undefined);
+    if (!draftProfile) {
+      return;
+    }
+    if (isProfileDirty) {
+      setProfileSaveStatus("Save this profile before previewing changes");
+      setSkillUpdateCheckStatus(undefined);
+      saveButtonRef.current?.focus();
+      return;
+    }
+
+    setBusy(true);
     try {
-      if (!draftProfile) {
-        return;
-      }
-      if (isProfileDirty) {
-        setProfileSaveStatus(`Save this profile before applying it to ${selectedTarget?.name ?? "the target"}`);
-        setSkillUpdateCheckStatus(undefined);
-        return;
-      }
       const nextPreview = await window.agentEnv.previewApply(draftProfile.id);
-      setPreview(nextPreview);
+      const rendererBlockers = [
+        ...(!selectedTarget?.health.canWrite
+          ? [selectedTarget?.health.summary || `${selectedTarget?.name ?? "Target"} is unavailable`]
+          : []),
+        ...localValidationErrors
+      ];
+      setPreview({
+        ...nextPreview,
+        errors: [...new Set([...rendererBlockers, ...nextPreview.errors])]
+      });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const runReadinessRemediation = () => {
+    if (readiness.remediationLabel === "Open Targets") {
+      setActiveWorkspace("targets");
+      return;
+    }
+    if (readiness.remediationLabel === "Save now") {
+      saveButtonRef.current?.focus();
+      return;
+    }
+    if (readiness.remediationLabel === "Review Advanced") {
+      setActiveComposerSection("advanced");
+      return;
+    }
+    if (readiness.remediationLabel === "Review preview") {
+      document
+        .querySelector<HTMLButtonElement>(
+          '[role="dialog"][aria-label="Preview"] .secondary-action'
+        )
+        ?.focus();
     }
   };
 
@@ -1470,8 +1513,17 @@ export const App = () => {
                 </h2>
               </div>
               <div className="profile-page-actions" ref={profilePageActionsRef}>
+                <button
+                  className="profile-new-button"
+                  type="button"
+                  onClick={openCreateProfileDialog}
+                >
+                  <Plus size={15} strokeWidth={2.3} aria-hidden="true" />
+                  New Profile
+                </button>
                 <div className="profile-save-control">
                   <button
+                    ref={saveButtonRef}
                     className="save-button"
                     type="button"
                     disabled={busy || !isProfileDirty}
@@ -1481,24 +1533,27 @@ export const App = () => {
                   </button>
                 </div>
                 <div className="profile-apply-control">
-                  <span>{applyActionVerb}</span>
                   <span className="profile-apply-split">
                     <button
                       className="profile-apply-button"
                       type="button"
                       aria-label={applyActionLabel}
-                      disabled={!selectedProfileId || busy}
+                      aria-describedby="profile-apply-description"
+                      title={applyActionLabel}
+                      disabled={applyDisabled}
                       onClick={previewSelectedProfile}
                     >
                       <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
                       <strong>{selectedTarget?.name ?? "Target"}</strong>
                     </button>
                     <button
+                      ref={targetMenuButtonRef}
                       className="profile-target-menu-button"
                       type="button"
                       aria-expanded={isTargetMenuOpen}
                       aria-haspopup="menu"
                       aria-label="Select apply target"
+                      title="Select apply target"
                       onClick={() => setIsTargetMenuOpen((current) => !current)}
                     >
                       <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
@@ -1524,6 +1579,9 @@ export const App = () => {
                       ))}
                     </div>
                   ) : null}
+                  <span id="profile-apply-description" hidden>
+                    {applyDescription}
+                  </span>
                 </div>
                 <button
                   className="icon-action"
@@ -1531,6 +1589,7 @@ export const App = () => {
                   aria-expanded={isProfileActionsOpen}
                   aria-haspopup="menu"
                   aria-label="More profile actions"
+                  title="More profile actions"
                   disabled={!selectedProfileId}
                   onClick={() => setIsProfileActionsOpen((current) => !current)}
                 >
@@ -1558,6 +1617,31 @@ export const App = () => {
                 ) : null}
               </div>
             </header>
+            <section
+              className={`profile-readiness-strip profile-readiness-strip--${readiness.status}`}
+              role="status"
+              aria-label="Profile readiness"
+            >
+              <div className="profile-readiness-strip__state">
+                <strong>{readiness.label}</strong>
+                <span>{readiness.message}</span>
+              </div>
+              <div className="profile-readiness-strip__metric">
+                <strong>{managedResourceCount}</strong>
+                <span>
+                  {` managed resource${managedResourceCount === 1 ? "" : "s"}`}
+                </span>
+              </div>
+              <div className="profile-readiness-strip__metric">
+                <strong>{readyTargetCount}</strong>
+                <span>{` ready target${readyTargetCount === 1 ? "" : "s"}`}</span>
+              </div>
+              {readiness.remediationLabel ? (
+                <button type="button" onClick={runReadinessRemediation}>
+                  {readiness.remediationLabel}
+                </button>
+              ) : null}
+            </section>
             <section className="profile-workbench" aria-label="Profiles">
               <aside className="profile-index" aria-label="Profile list">
                 <div className="profile-list-toolbar">
@@ -1588,10 +1672,17 @@ export const App = () => {
                   ) : null}
                   {visibleProfiles.map((profile, index) => {
                     const counts = profileResourceCounts[profile.id];
+                    const recentApplication = findRecentProfileApplication(
+                      profile.id,
+                      targetStates,
+                      targets
+                    );
+                    const isSelected = profile.id === selectedProfileId;
                     return (
                     <button
-                      className={`profile-row${profile.id === selectedProfileId ? " is-active" : ""}`}
+                      className={`profile-row${isSelected ? " is-active" : ""}`}
                       type="button"
+                      aria-current={isSelected ? "page" : undefined}
                       key={profile.id}
                       onClick={() => selectProfile(profile.id)}
                     >
@@ -1601,23 +1692,31 @@ export const App = () => {
                       <span className="profile-row__content">
                         <span className="profile-row__title">
                           {profile.name}
-                          <strong>{selectedTarget?.name ?? profile.targetId}</strong>
+                          {isSelected && isProfileDirty ? <strong>Unsaved</strong> : null}
                         </span>
                         <small>{profile.description || "No description"}</small>
                         <span className="profile-row__stats">
-                          <span>{counts?.skills ?? 0} Skills</span>
-                          <span>{counts?.mcpServers ?? 0} MCP</span>
-                          <span>1 Instructions</span>
+                          <span>{counts?.skills.count ?? 0} Skills</span>
+                          <span>{counts?.mcp.count ?? 0} MCP</span>
+                          <span>
+                            {plural(counts?.instructions.count ?? 0, "Instruction")}
+                          </span>
                         </span>
+                        {recentApplication?.state.lastAppliedAt ? (
+                          <span className="profile-row__recent">
+                            <span>
+                              Last applied to {recentApplication.target?.name ?? recentApplication.state.targetId}
+                            </span>
+                            <time dateTime={recentApplication.state.lastAppliedAt}>
+                              {formatShortDate(recentApplication.state.lastAppliedAt)}
+                            </time>
+                          </span>
+                        ) : null}
                       </span>
                     </button>
                     );
                   })}
                 </div>
-                <button className="profile-new-button" type="button" onClick={openCreateProfileDialog}>
-                  <Plus size={15} strokeWidth={2.3} />
-                  New Profile
-                </button>
               </aside>
               <div className="profile-editor-surface">
                 {draftProfile ? (
@@ -1632,7 +1731,8 @@ export const App = () => {
                           <button
                             className="icon-action"
                             type="button"
-                            aria-label="Edit profile details"
+                            aria-label="Edit profile"
+                            title="Edit profile"
                             onClick={openEditProfileDialog}
                           >
                             <Pencil size={15} strokeWidth={2.2} />
@@ -1642,159 +1742,28 @@ export const App = () => {
                           {draftProfile.manifest.description || "No description"}
                         </p>
                         <div className="profile-hero__meta">
-                          <span className="success-pill">{activeTargetName}</span>
-                          <span>
-                            <CalendarDays size={14} strokeWidth={2.2} />
-                            Local profile
+                          <span className="success-pill">
+                            Compatible with {selectedTarget?.name ?? draftProfile.manifest.targetId}
                           </span>
-                          <span>
-                            <RefreshCw size={14} strokeWidth={2.2} />
-                            {formatShortDate(backups[0]?.createdAt)}
-                          </span>
+                          <span>Target-specific profile</span>
                         </div>
                       </div>
                     </header>
-            <div className="tab-list" role="tablist" aria-label="Profile sections">
-              {editorTabs.map((tab) => (
-                <button
-                  className={`tab-button${activeTab === tab.id ? " is-active" : ""}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === tab.id}
-                  aria-controls={`editor-panel-${tab.id}`}
-                  id={`editor-tab-${tab.id}`}
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div
-              className="editor-grid"
-              id={activeTabPanelId}
-              role="tabpanel"
-              aria-labelledby={`editor-tab-${activeTab}`}
-            >
-              {activeTab === "overview" ? (
-                <section className="profile-overview" aria-label="Profile overview">
-                  <section className="profile-overview-section target-management-section" aria-label="Target management">
-                    <div className="profile-section-heading">Target management</div>
-                    <div className={`target-management-card${isSelectedTargetManaged ? " is-managed" : ""}`}>
-                      <span
-                        className={`target-management-card__icon${isSelectedTargetManaged ? " is-managed" : ""}`}
-                        aria-hidden="true"
-                      >
-                        {isSelectedTargetManaged ? (
-                          <MonitorCheck size={21} strokeWidth={2.2} />
-                        ) : (
-                          <Monitor size={21} strokeWidth={2.2} />
-                        )}
-                      </span>
-                      <div>
-                        <strong>
-                          {activeTargetName} is {isSelectedTargetManaged ? "managed" : "not managed"}
-                        </strong>
-                        <small>
-                          {isSelectedTargetManaged
-                            ? `Active profile: ${selectedTargetState?.activeProfileName ?? selectedTargetState?.activeProfileId}`
-                            : "Use Take over to capture a backup and apply this profile."}
-                        </small>
-                      </div>
-                      <span className="target-management-card__meta">
-                        {isSelectedTargetManaged
-                          ? `${selectedTargetState?.managedResourceCount ?? 0} managed resources`
-                          : "First apply"}
-                      </span>
-                    </div>
-                  </section>
-                  <section className="profile-overview-section" aria-label="Resource overview">
-                    <div className="profile-section-heading">Resource overview</div>
-                    <div className="resource-overview-grid">
-                      <div className="resource-overview-card">
-                        <span className="resource-overview-icon resource-overview-icon--purple">
-                          <BookOpenText size={21} strokeWidth={2.2} />
-                        </span>
-                        <div>
-                          <strong>{draftProfile.manifest.managed.instructions ? 1 : 0}</strong>
-                          <span>Instructions</span>
-                          <small>From profile</small>
-                        </div>
-                      </div>
-                      <div className="resource-overview-card">
-                        <span className="resource-overview-icon resource-overview-icon--green">
-                          <Database size={21} strokeWidth={2.2} />
-                        </span>
-                        <div>
-                          <strong>{resourceSummary?.skills ?? 0}</strong>
-                          <span>Skills</span>
-                          <small>{resourceSummary?.librarySkills ?? 0} from Library</small>
-                        </div>
-                      </div>
-                      <div className="resource-overview-card">
-                        <span className="resource-overview-icon resource-overview-icon--blue">
-                          <Network size={21} strokeWidth={2.2} />
-                        </span>
-                        <div>
-                          <strong>{resourceSummary?.mcpServers ?? 0}</strong>
-                          <span>MCP Servers</span>
-                          <small>From Library</small>
-                        </div>
-                      </div>
-                      <div className="resource-overview-card">
-                        <span className="resource-overview-icon resource-overview-icon--amber">
-                          <Settings2 size={21} strokeWidth={2.2} />
-                        </span>
-                        <div>
-                          <strong>{managedSurfaceCount}</strong>
-                          <span>Managed areas</span>
-                          <small>{managedSurfaces || "None"}</small>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-                  <section className="profile-overview-section" aria-label="Target compatibility">
-                    <div className="profile-section-heading">Target compatibility</div>
-                    <div className="compatibility-grid">
-                      {targets.map((target) => {
-                        const directTarget = target.id === draftProfile.manifest.targetId;
-                        const tone = directTarget ? target.health.status : "guarded";
-                        return (
-                          <div className="compatibility-item" key={target.id}>
-                            <span className={`compatibility-icon compatibility-icon--${tone}`}>
-                              <Monitor size={20} strokeWidth={2.2} />
-                            </span>
-                            <div>
-                              <strong>{target.name}</strong>
-                              <small>
-                                {directTarget
-                                  ? target.health.status === "ready"
-                                    ? "Direct apply"
-                                    : targetStatusLabel[target.health.status]
-                                  : "Target-specific profile required"}
-                              </small>
-                            </div>
-                            {directTarget && target.health.status === "ready" ? (
-                              <CheckCircle2 size={15} strokeWidth={2.2} />
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                  <section className="profile-overview-section recent-apply-section">
-                    <div className="profile-section-heading">Recent application records</div>
-                    <HistoryView
-                      backups={backups}
-                      busy={busy}
-                      rollbackPreview={rollbackPreview}
-                      onPreviewRollback={previewSelectedRollback}
-                      onRestoreRollback={restoreSelectedRollback}
-                    />
-                  </section>
-                </section>
-              ) : null}
-              {activeTab === "instructions" ? (
+            <section className="profile-composer" aria-label="Profile composer">
+              <ProfileComposerSection
+                id="instructions"
+                icon={<BookOpenText size={18} strokeWidth={2.2} />}
+                title="Instructions"
+                description="Target-specific instructions"
+                count={resourceSummary?.instructions.count ?? 0}
+                chipNames={
+                  resourceSummary?.instructions.count
+                    ? [selectedTarget?.instructionsLabel ?? "Instructions"]
+                    : []
+                }
+                expanded={activeComposerSection === "instructions"}
+                onToggle={() => setActiveComposerSection("instructions")}
+              >
                 <AgentsEditor
                   label={selectedTarget?.instructionsLabel ?? "Instructions"}
                   value={draftProfile.instructions}
@@ -1802,18 +1771,19 @@ export const App = () => {
                     updateDraftProfile({ ...draftProfile, instructions });
                   }}
                 />
-              ) : null}
-              {activeTab === "config" ? (
-                <McpEditor
-                  label={selectedTarget?.configLabel ?? "Config"}
-                  value={draftProfile.configText}
-                  onChange={(configText) => {
-                    updateDraftProfile({ ...draftProfile, configText });
-                  }}
-                />
-              ) : null}
-              {activeTab === "resources" ? (
+              </ProfileComposerSection>
+              <ProfileComposerSection
+                id="skills"
+                icon={<Database size={18} strokeWidth={2.2} />}
+                title="Skills"
+                description="Profile and Library skills"
+                count={resourceSummary?.skills.count ?? 0}
+                chipNames={resourceSummary?.skills.names ?? []}
+                expanded={activeComposerSection === "skills"}
+                onToggle={() => setActiveComposerSection("skills")}
+              >
                 <SkillsEditor
+                  mode="skills"
                   value={draftProfile.assetPolicy ?? emptyAssetPolicy}
                   configText={draftProfile.configText}
                   configLanguage={selectedTarget?.configLanguage}
@@ -1824,8 +1794,59 @@ export const App = () => {
                     updateDraftProfile({ ...draftProfile, assetPolicy });
                   }}
                 />
-              ) : null}
-              {activeTab === "validation" ? (
+              </ProfileComposerSection>
+              <ProfileComposerSection
+                id="mcp"
+                icon={<Network size={18} strokeWidth={2.2} />}
+                title="MCP Servers"
+                description="Library and raw-config servers"
+                count={resourceSummary?.mcp.count ?? 0}
+                chipNames={resourceSummary?.mcp.names ?? []}
+                expanded={activeComposerSection === "mcp"}
+                onToggle={() => setActiveComposerSection("mcp")}
+              >
+                <SkillsEditor
+                  mode="mcp"
+                  value={draftProfile.assetPolicy ?? emptyAssetPolicy}
+                  configText={draftProfile.configText}
+                  configLanguage={selectedTarget?.configLanguage}
+                  preview={preview}
+                  librarySkills={librarySkills}
+                  mcpServers={mcpServers}
+                  onChange={(assetPolicy) => {
+                    updateDraftProfile({ ...draftProfile, assetPolicy });
+                  }}
+                />
+              </ProfileComposerSection>
+              <ProfileComposerSection
+                id="advanced"
+                icon={<Settings2 size={18} strokeWidth={2.2} />}
+                title="Advanced"
+                description="Raw config, disabled skills, validation, and history"
+                count={draftProfile.assetPolicy.disabledSkillPaths.length}
+                chipNames={draftProfile.assetPolicy.disabledSkillPaths}
+                expanded={activeComposerSection === "advanced"}
+                onToggle={() => setActiveComposerSection("advanced")}
+              >
+                <McpEditor
+                  label={selectedTarget?.configLabel ?? "Config"}
+                  value={draftProfile.configText}
+                  onChange={(configText) => {
+                    updateDraftProfile({ ...draftProfile, configText });
+                  }}
+                />
+                <SkillsEditor
+                  mode="advanced"
+                  value={draftProfile.assetPolicy ?? emptyAssetPolicy}
+                  configText={draftProfile.configText}
+                  configLanguage={selectedTarget?.configLanguage}
+                  preview={preview}
+                  librarySkills={librarySkills}
+                  mcpServers={mcpServers}
+                  onChange={(assetPolicy) => {
+                    updateDraftProfile({ ...draftProfile, assetPolicy });
+                  }}
+                />
                 <section className="validation-panel" aria-label="Validation">
                   <div className="section-title">Validation</div>
                   <div className="validation-grid">
@@ -1850,8 +1871,15 @@ export const App = () => {
                     </p>
                   ))}
                 </section>
-              ) : null}
-            </div>
+                <HistoryView
+                  backups={backups}
+                  busy={busy}
+                  rollbackPreview={rollbackPreview}
+                  onPreviewRollback={previewSelectedRollback}
+                  onRestoreRollback={restoreSelectedRollback}
+                />
+              </ProfileComposerSection>
+            </section>
             {rollbackPreview ? (
               <PreviewDialog preview={rollbackPreview} title="Rollback preview" />
             ) : null}
