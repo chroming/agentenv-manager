@@ -47,11 +47,15 @@ import type {
 } from "../shared/types";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { HistoryView } from "./components/HistoryView";
+import { InfoTip } from "./components/InfoTip";
 import { McpEditor } from "./components/McpEditor";
 import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileSidebar, type AppWorkspace, type LibraryTab } from "./components/ProfileSidebar";
-import { SkillLibraryPanel } from "./components/SkillLibraryPanel";
+import {
+  SkillLibraryPanel,
+  type SkillUpdateCheckStatus
+} from "./components/SkillLibraryPanel";
 import { SkillsEditor } from "./components/SkillsEditor";
 
 const emptyAssetPolicy: AssetPolicy = {
@@ -282,6 +286,8 @@ export const App = () => {
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
   const [activeLibraryTab, setActiveLibraryTab] = useState<LibraryTab>("skills");
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
+  const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
+    useState<SkillUpdateCheckStatus>();
   const [profileSearch, setProfileSearch] = useState("");
   const [activeTab, setActiveTab] = useState<EditorTab>("overview");
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
@@ -349,7 +355,7 @@ export const App = () => {
     setMcpUsage(nextMcpUsage);
     setProfileResourceCounts(nextProfileResourceCounts);
     setSelectedTargetId((current) => current ?? targetItems[0]?.id);
-    return { targetItems, profileItems, backupItems };
+    return { targetItems, profileItems, backupItems, skillUpdateItems };
   };
 
   useEffect(() => {
@@ -807,10 +813,31 @@ export const App = () => {
   const checkSkillUpdates = async () => {
     setBusy(true);
     setError(undefined);
+    setSkillUpdateCheckStatus({ state: "checking", message: "Checking library updates..." });
     try {
-      await refreshProfiles();
+      const { skillUpdateItems } = await refreshProfiles();
+      const failedChecks = skillUpdateItems.filter((update) => update.error).length;
+      const availableUpdates = skillUpdateItems.filter(
+        (update) => update.updateAvailable && !update.error
+      ).length;
+      if (failedChecks > 0) {
+        setSkillUpdateCheckStatus({
+          state: "error",
+          message: `${failedChecks} check${failedChecks === 1 ? "" : "s"} failed`
+        });
+      } else {
+        setSkillUpdateCheckStatus({
+          state: "success",
+          message:
+            availableUpdates > 0
+              ? `${availableUpdates} update${availableUpdates === 1 ? "" : "s"} available`
+              : "All tracked skills are up to date"
+        });
+      }
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      setSkillUpdateCheckStatus({ state: "error", message: "Update check failed" });
     } finally {
       setBusy(false);
     }
@@ -963,14 +990,12 @@ export const App = () => {
           <>
             <header className="page-header library-page-header">
               <div>
-                <h2>
+                <h2 aria-label={`Library/${activeLibraryTab === "skills" ? "Skills" : "MCP Servers"}`}>
                   <span>Library</span>
                   <span className="breadcrumb-separator">/</span>
                   <span>{activeLibraryTab === "skills" ? "Skills" : "MCP Servers"}</span>
+                  <InfoTip label="Library is the shared resource layer. Profiles reference these skills and MCP servers instead of duplicating files in every profile." />
                 </h2>
-                <p className="muted">
-                  Manage reusable resources, track updates, and reuse them across profiles and targets.
-                </p>
               </div>
               <div className="page-actions">
                 {activeLibraryTab === "skills" ? (
@@ -1079,6 +1104,7 @@ export const App = () => {
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onUpdateAllLibrarySkills={updateAllLibrarySkills}
                 onCheckUpdates={checkSkillUpdates}
+                updateCheckStatus={skillUpdateCheckStatus}
               />
             ) : (
               <McpLibraryPanel

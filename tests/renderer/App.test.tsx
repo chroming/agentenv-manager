@@ -324,6 +324,9 @@ describe("App", () => {
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 update available"));
   });
 
   it("rescans local target skills when opening local skill discoveries", async () => {

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   BookOpenText,
   CheckCircle2,
-  ExternalLink,
   Folder,
   GitBranch,
   MoreHorizontal,
@@ -26,6 +25,12 @@ import type {
   SkillUpdatePlan,
   SkillUpdateSourceInput
 } from "../../shared/types";
+import { InfoTip } from "./InfoTip";
+
+export type SkillUpdateCheckStatus = {
+  state: "checking" | "success" | "error";
+  message: string;
+};
 
 interface SkillLibraryPanelProps {
   librarySkills: SkillLibraryEntry[];
@@ -44,6 +49,7 @@ interface SkillLibraryPanelProps {
   onUpdateLibrarySkill(id: string): void;
   onUpdateAllLibrarySkills(ids: string[]): void;
   onCheckUpdates(): void;
+  updateCheckStatus?: SkillUpdateCheckStatus;
 }
 
 const sourceLabel = (skill: SkillLibraryEntry) => {
@@ -83,7 +89,8 @@ export const SkillLibraryPanel = ({
   onPreviewLibrarySkillUpdate,
   onUpdateLibrarySkill,
   onUpdateAllLibrarySkills,
-  onCheckUpdates
+  onCheckUpdates,
+  updateCheckStatus
 }: SkillLibraryPanelProps) => {
   const [githubUrl, setGithubUrl] = useState("");
   const [githubId, setGithubId] = useState("");
@@ -95,7 +102,8 @@ export const SkillLibraryPanel = ({
     "all" | SkillInventoryEntry["status"] | "not-installed"
   >("all");
   const [updateFilter, setUpdateFilter] = useState<"all" | "updates">("all");
-  const [openActionId, setOpenActionId] = useState<string>();
+  const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
+  const openActionId = openAction?.id;
   const [sourceDrafts, setSourceDrafts] = useState<
     Record<string, { sourceType: SkillSourceType; source: string }>
   >({});
@@ -110,7 +118,7 @@ export const SkillLibraryPanel = ({
         return;
       }
       if (openActionId) {
-        setOpenActionId(undefined);
+        setOpenAction(undefined);
         return;
       }
       if (activeTool) {
@@ -132,8 +140,12 @@ export const SkillLibraryPanel = ({
       if (!(target instanceof Element)) {
         return;
       }
-      if (openActionId && !target.closest(".row-action-menu")) {
-        setOpenActionId(undefined);
+      if (
+        openActionId &&
+        !target.closest(".row-action-menu") &&
+        !target.closest(".row-action-popover")
+      ) {
+        setOpenAction(undefined);
       }
       if (activeTool && !target.closest(".library-drawer")) {
         onCloseTool?.();
@@ -175,6 +187,24 @@ export const SkillLibraryPanel = ({
     setUsageFilter("all");
     setTargetFilter("all");
     setUpdateFilter("all");
+  };
+
+  const toggleActionMenu = (skillId: string, button: HTMLButtonElement) => {
+    if (openActionId === skillId) {
+      setOpenAction(undefined);
+      return;
+    }
+
+    const rect = button.getBoundingClientRect();
+    const popoverWidth = Math.min(420, window.innerWidth - 32);
+    const estimatedHeight = 250;
+    const left = Math.min(window.innerWidth - popoverWidth - 16, Math.max(16, rect.right - popoverWidth));
+    const belowTop = rect.bottom + 8;
+    const top =
+      belowTop + estimatedHeight > window.innerHeight - 16
+        ? Math.max(16, rect.top - estimatedHeight - 8)
+        : belowTop;
+    setOpenAction({ id: skillId, left, top });
   };
   const hasActiveFilters =
     search.trim().length > 0 ||
@@ -301,10 +331,30 @@ export const SkillLibraryPanel = ({
             <option value="unmanaged">Unmanaged</option>
             <option value="not-installed">Not installed</option>
           </select>
-          <button className="secondary-action" type="button" onClick={onCheckUpdates}>
+          <button
+            className="secondary-action"
+            type="button"
+            disabled={updateCheckStatus?.state === "checking"}
+            onClick={onCheckUpdates}
+          >
             <RefreshCw size={15} strokeWidth={2.2} />
-            Check updates
+            {updateCheckStatus?.state === "checking" ? "Checking..." : "Check updates"}
           </button>
+          {updateCheckStatus ? (
+            <span
+              className={`library-update-feedback is-${updateCheckStatus.state}`}
+              role="status"
+            >
+              {updateCheckStatus.state === "checking" ? (
+                <RefreshCw size={13} strokeWidth={2.2} />
+              ) : updateCheckStatus.state === "error" ? (
+                <TriangleAlert size={13} strokeWidth={2.2} />
+              ) : (
+                <CheckCircle2 size={13} strokeWidth={2.2} />
+              )}
+              {updateCheckStatus.message}
+            </span>
+          ) : null}
           <button
             className="secondary-action"
             type="button"
@@ -438,34 +488,45 @@ export const SkillLibraryPanel = ({
                   <button
                     className="icon-action"
                     type="button"
-                    aria-label={`Preview update ${skill.id}`}
+                    aria-label={`Check update ${skill.id}`}
                     onClick={() => onPreviewLibrarySkillUpdate(skill.id)}
                   >
-                    <ExternalLink size={15} strokeWidth={2.2} />
+                    <RefreshCw size={15} strokeWidth={2.2} />
                   </button>
                   <div className="row-action-menu">
                     <button
                       className="icon-action"
                       type="button"
                       aria-label={`More actions for ${skill.id}`}
-                      onClick={() => setOpenActionId(openActionId === skill.id ? undefined : skill.id)}
+                      aria-expanded={openActionId === skill.id}
+                      onClick={(event) => toggleActionMenu(skill.id, event.currentTarget)}
                     >
                       <MoreHorizontal size={16} strokeWidth={2.2} />
                     </button>
                     {openActionId === skill.id ? (
-                      <div className="row-action-popover">
+                      <div
+                        className="row-action-popover"
+                        role="menu"
+                        aria-label={`Actions for ${skill.id}`}
+                        style={{ left: openAction?.left, top: openAction?.top }}
+                      >
                       <button
-                        className="secondary-action"
+                        className="row-action-item"
                         type="button"
+                        role="menuitem"
                         onClick={() => onPreviewLibrarySkillUpdate(skill.id)}
                       >
-                        <ExternalLink size={14} strokeWidth={2.2} />
-                        Preview update
+                        <RefreshCw size={14} strokeWidth={2.2} />
+                        <span>
+                          <strong>Check update</strong>
+                          <small>Preview changes from the tracked source.</small>
+                        </span>
                       </button>
                       <div className="row-action-source">
                         <div className="row-action-source-title">
                           <Settings2 size={14} strokeWidth={2.2} />
-                          Source and actions
+                          Update source
+                          <InfoTip label="Use a local skill folder or a GitHub tree directory. The library stores the source path, not duplicated skill copies per profile." />
                         </div>
                         <div className="library-source-editor row-action-source-editor">
                           <select
@@ -509,10 +570,10 @@ export const SkillLibraryPanel = ({
                                 sourceType: sourceDraft.sourceType,
                                 source: sourceDraft.source.trim()
                               });
-                              setOpenActionId(undefined);
+                              setOpenAction(undefined);
                             }}
                           >
-                            Save source for {skill.id}
+                            Save source
                           </button>
                         </div>
                       </div>
@@ -582,8 +643,10 @@ export const SkillLibraryPanel = ({
         <section className="library-drawer" aria-label="Environment skills">
           <div className="library-drawer__header">
             <div>
-              <strong>Target discoveries</strong>
-              <p className="muted">Skills detected on targets that may need import or management.</p>
+              <strong>
+                Target discoveries
+                <InfoTip label="Scans supported local targets for skills that can be imported into the shared library or attached to profile management." />
+              </strong>
             </div>
             <button className="icon-action" type="button" aria-label="Close library tool" onClick={onCloseTool}>
               <X size={16} strokeWidth={2.2} />
@@ -592,7 +655,6 @@ export const SkillLibraryPanel = ({
         <section className="resource-section target-discovery-section">
           <div>
             <div className="resource-heading">Target discoveries</div>
-            <p className="muted">Skills detected on targets that may need import or management.</p>
           </div>
           <div className="resource-list resource-list--unmanaged">
             {skillInventory.length === 0 ? (
@@ -657,8 +719,10 @@ export const SkillLibraryPanel = ({
         <section className="library-drawer" aria-label="GitHub skill import">
           <div className="library-drawer__header">
             <div>
-              <strong>Import Skill</strong>
-              <p className="muted">Import a local skill folder or track a GitHub skill directory.</p>
+              <strong>
+                Import Skill
+                <InfoTip label="Add one shared skill to the library from a local folder, or track a public GitHub skill directory for future updates." />
+              </strong>
             </div>
             <button className="icon-action" type="button" aria-label="Close library tool" onClick={onCloseTool}>
               <X size={16} strokeWidth={2.2} />
@@ -666,8 +730,10 @@ export const SkillLibraryPanel = ({
           </div>
           <section className="resource-section library-import-panel">
             <div>
-              <div className="resource-heading">Import from local folder</div>
-              <p className="muted">Choose an existing skill folder that contains a SKILL.md file.</p>
+              <div className="resource-heading">
+                Import from local folder
+                <InfoTip label="Choose an existing skill folder that contains a SKILL.md file." />
+              </div>
             </div>
             <div className="library-import-grid">
               <label>
@@ -701,11 +767,10 @@ export const SkillLibraryPanel = ({
           </section>
       <section className="resource-section library-import-panel">
         <div>
-          <div className="resource-heading">Import from GitHub directory</div>
-          <p className="muted">
-            Paste a public GitHub skill folder URL. AgentEnv tracks the directory revision for
-            future updates.
-          </p>
+          <div className="resource-heading">
+            Import from GitHub directory
+            <InfoTip label="Paste a public GitHub tree URL. AgentEnv tracks the directory revision for future updates." />
+          </div>
         </div>
         <div className="library-import-grid">
           <label>

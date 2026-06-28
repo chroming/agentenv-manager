@@ -129,6 +129,7 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={onCheckUpdates}
         onSetUpdateSource={onSetUpdateSource}
         onManageTargetSkill={onManageTargetSkill}
+        updateCheckStatus={{ state: "success", message: "2 updates available" }}
       />
     );
 
@@ -144,6 +145,7 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent(
       "Update available"
     );
+    expect(screen.getByRole("status")).toHaveTextContent("2 updates available");
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();
@@ -161,14 +163,14 @@ describe("SkillLibraryPanel", () => {
     fireEvent.change(screen.getByLabelText("Update source for shared-reviewer"), {
       target: { value: "/tmp/source/shared-reviewer" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save source for shared-reviewer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save source" }));
     expect(onSetUpdateSource).toHaveBeenCalledWith({
       id: "shared-reviewer",
       sourceType: "local",
       source: "/tmp/source/shared-reviewer"
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Preview update shared-reviewer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Check update shared-reviewer" }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("shared-reviewer");
     expect(screen.getByRole("region", { name: "Update preview for shared-reviewer" })).toHaveTextContent(
       "SKILL.md"
