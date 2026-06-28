@@ -2,7 +2,12 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillsEditor } from "../../src/renderer/components/SkillsEditor";
-import type { ActivationPreview, AssetPolicy } from "../../src/shared/types";
+import type {
+  ActivationPreview,
+  AssetPolicy,
+  McpLibraryEntry,
+  SkillLibraryEntry
+} from "../../src/shared/types";
 
 const emptyPolicy: AssetPolicy = {
   ownedDirs: [],
@@ -44,8 +49,50 @@ const mixedPolicy: AssetPolicy = {
       targetName: "context7"
     }
   ],
-  disabledSkillPaths: []
+  disabledSkillPaths: ["/tmp/disabled-skill"]
 };
+
+const librarySkills: SkillLibraryEntry[] = [
+  {
+    id: "shared-reviewer",
+    name: "Shared Reviewer",
+    description: "Review code",
+    path: "/tmp/skills-library/shared-reviewer",
+    sourceType: "local",
+    source: "/tmp/source/shared-reviewer",
+    contentHash: "abc123",
+    updatedAt: "2026-07-02T00:00:00.000Z"
+  },
+  {
+    id: "github-reviewer",
+    name: "GitHub Reviewer",
+    description: "Review from GitHub",
+    path: "/tmp/skills-library/github-reviewer",
+    sourceType: "github",
+    source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+    remoteRef: "main",
+    remoteRevision: "revision-1",
+    contentHash: "def456",
+    updatedAt: "2026-07-02T00:00:00.000Z"
+  }
+];
+
+const mcpServers: McpLibraryEntry[] = [
+  {
+    id: "context7",
+    name: "Context7",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@upstash/context7-mcp"],
+    env: {}
+  },
+  {
+    id: "docs",
+    name: "Docs Search",
+    transport: "http",
+    url: "https://example.com/mcp"
+  }
+];
 
 const configWithMcp = `{
   "mcp": {
@@ -88,120 +135,56 @@ afterEach(() => {
 });
 
 describe("SkillsEditor", () => {
-  it("does not expose the incomplete profile-owned skill creation flow", () => {
+  it("renders only skill resources in skills mode", () => {
     const onChange = vi.fn();
     render(
       <SkillsEditor
-        value={emptyPolicy}
-        configText="{}"
+        mode="skills"
+        value={mixedPolicy}
+        configText={configWithMcp}
         configLanguage="jsonc"
+        librarySkills={librarySkills}
+        mcpServers={mcpServers}
         onChange={onChange}
       />
     );
 
+    const inventory = screen.getByRole("region", { name: "Resource inventory" });
+    const ownedSkill = within(inventory).getByRole("group", {
+      name: "Skill agentenv-reviewer"
+    });
+    expect(ownedSkill).toBeInTheDocument();
+    const librarySkill = within(inventory).getByRole("group", {
+      name: "Library skill agentenv-shared-reviewer"
+    });
+    expect(librarySkill).toBeInTheDocument();
+    expect(
+      within(inventory).queryByRole("group", { name: "Agent reviewer.toml" })
+    ).not.toBeInTheDocument();
+    expect(within(inventory).queryByRole("group", { name: /MCP / })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add library MCP" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Disabled Skill Paths" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add skill" })).not.toBeInTheDocument();
-    expect(onChange).not.toHaveBeenCalled();
-  });
 
-  it("edits existing profile-owned skills without offering new profile-owned skill creation", () => {
-    const onChange = vi.fn();
-    render(
-      <SkillsEditor
-        value={{
-          ...emptyPolicy,
-          ownedDirs: [
-            {
-              kind: "skill",
-              source: "skills/new-skill",
-              targetName: "agentenv-new-skill"
-            }
-          ]
-        }}
-        configText="{}"
-        configLanguage="jsonc"
-        onChange={onChange}
-      />
-    );
-    const row = screen.getByRole("group", { name: "Skill agentenv-new-skill" });
-
-    fireEvent.change(within(row).getByLabelText("Source"), {
-      target: { value: "skills/reviewer" }
+    fireEvent.change(within(ownedSkill).getByLabelText("Target name"), {
+      target: { value: "agentenv-updated-reviewer" }
     });
-    fireEvent.change(within(row).getByLabelText("Target name"), {
-      target: { value: "agentenv-reviewer" }
-    });
-
     expect(onChange).toHaveBeenLastCalledWith({
+      ...mixedPolicy,
       ownedDirs: [
         {
-          kind: "skill",
-          source: "skills/new-skill",
-          targetName: "agentenv-reviewer"
-        }
-      ],
-      ownedFiles: [],
-      skillRefs: [],
-      mcpRefs: [],
-      disabledSkillPaths: []
+          ...mixedPolicy.ownedDirs[0],
+          targetName: "agentenv-updated-reviewer"
+        },
+        mixedPolicy.ownedDirs[1]
+      ]
     });
-  });
-
-  it("adds multiple shared library skills from a chooser and preserves existing resources", () => {
-    const onChange = vi.fn();
-    render(
-      <SkillsEditor
-        value={mixedPolicy}
-        configText="{}"
-        configLanguage="jsonc"
-        librarySkills={[
-          {
-            id: "shared-reviewer",
-            name: "Shared Reviewer",
-            description: "Review code",
-            path: "/tmp/skills-library/shared-reviewer",
-            sourceType: "local",
-            source: "/tmp/source/shared-reviewer",
-            contentHash: "abc123",
-            updatedAt: "2026-07-02T00:00:00.000Z"
-          },
-          {
-            id: "github-reviewer",
-            name: "GitHub Reviewer",
-            description: "Review from GitHub",
-            path: "/tmp/skills-library/github-reviewer",
-            sourceType: "github",
-            source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
-            remoteRef: "main",
-            remoteRevision: "revision-1",
-            contentHash: "def456",
-            updatedAt: "2026-07-02T00:00:00.000Z"
-          }
-        ]}
-        mcpServers={[
-          {
-            id: "context7",
-            name: "Context7",
-            transport: "stdio",
-            command: "npx",
-            args: ["-y", "@upstash/context7-mcp"],
-            env: {}
-          }
-        ]}
-        onChange={onChange}
-      />
-    );
-
-    expect(screen.getByRole("group", { name: "Skill agentenv-reviewer" })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Agent reviewer.toml" })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Library skill agentenv-shared-reviewer" })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "MCP context7" })).toHaveTextContent("Library");
 
     fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
-    const skillDialog = screen.getByRole("dialog", { name: "Add library skills" });
-    expect(within(skillDialog).getByLabelText("Shared Reviewer")).toBeDisabled();
-    fireEvent.click(within(skillDialog).getByLabelText("GitHub Reviewer"));
-    fireEvent.click(within(skillDialog).getByRole("button", { name: "Add selected skills" }));
-
+    const dialog = screen.getByRole("dialog", { name: "Add library skills" });
+    expect(within(dialog).getByLabelText("Shared Reviewer")).toBeDisabled();
+    fireEvent.click(within(dialog).getByLabelText("GitHub Reviewer"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add selected skills" }));
     expect(onChange).toHaveBeenLastCalledWith({
       ...mixedPolicy,
       skillRefs: [
@@ -210,104 +193,155 @@ describe("SkillsEditor", () => {
           libraryId: "github-reviewer",
           targetName: "agentenv-github-reviewer"
         }
-      ],
-      mcpRefs: mixedPolicy.mcpRefs
+      ]
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Add library MCP" }));
-    const mcpDialog = screen.getByRole("dialog", { name: "Add library MCP servers" });
-    expect(within(mcpDialog).getByLabelText("Context7")).toBeDisabled();
-    expect(within(mcpDialog).getByText("All library MCP servers are already attached.")).toBeInTheDocument();
+    fireEvent.click(within(ownedSkill).getByRole("button", { name: "Remove" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...mixedPolicy,
+      ownedDirs: [mixedPolicy.ownedDirs[1]]
+    });
+
+    fireEvent.click(within(librarySkill).getByRole("button", { name: "Remove" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...mixedPolicy,
+      skillRefs: []
+    });
   });
 
-  it("adds multiple reusable MCP servers from a chooser", () => {
+  it("renders only MCP resources in mcp mode", () => {
     const onChange = vi.fn();
     render(
       <SkillsEditor
-        value={emptyPolicy}
-        configText="{}"
+        mode="mcp"
+        value={mixedPolicy}
+        configText={configWithMcp}
         configLanguage="jsonc"
-        mcpServers={[
-          {
-            id: "context7",
-            name: "Context7",
-            transport: "stdio",
-            command: "npx",
-            args: ["-y", "@upstash/context7-mcp"],
-            env: {}
-          },
-          {
-            id: "docs",
-            name: "Docs Search",
-            transport: "http",
-            url: "https://example.com/mcp"
-          }
-        ]}
+        preview={preview}
+        librarySkills={librarySkills}
+        mcpServers={mcpServers}
         onChange={onChange}
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add library MCP" }));
-    const mcpDialog = screen.getByRole("dialog", { name: "Add library MCP servers" });
-    fireEvent.click(within(mcpDialog).getByLabelText("Context7"));
-    fireEvent.click(within(mcpDialog).getByLabelText("Docs Search"));
-    fireEvent.click(within(mcpDialog).getByRole("button", { name: "Add selected MCP servers" }));
+    const inventory = screen.getByRole("region", { name: "Resource inventory" });
+    const contextRows = within(inventory).getAllByRole("group", { name: "MCP context7" });
+    expect(contextRows).toHaveLength(2);
+    expect(contextRows[0]).toHaveTextContent("Library");
+    expect(contextRows[1]).toHaveTextContent("Raw config");
+    expect(within(inventory).getByRole("group", { name: "MCP filesystem" })).toHaveTextContent(
+      "npx -y @modelcontextprotocol/server-filesystem"
+    );
+    expect(within(inventory).queryByRole("group", { name: /Skill / })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add library skill" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Disabled Skill Paths" })).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Add library MCP" }));
+    const dialog = screen.getByRole("dialog", { name: "Add library MCP servers" });
+    expect(within(dialog).getByLabelText("Context7")).toBeDisabled();
+    fireEvent.click(within(dialog).getByLabelText("Docs Search"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add selected MCP servers" }));
     expect(onChange).toHaveBeenLastCalledWith({
-      ...emptyPolicy,
+      ...mixedPolicy,
       mcpRefs: [
-        {
-          libraryId: "context7",
-          targetName: "context7"
-        },
+        mixedPolicy.mcpRefs[0],
         {
           libraryId: "docs",
           targetName: "docs"
         }
       ]
     });
+
+    fireEvent.click(within(contextRows[0]).getByRole("button", { name: "Remove" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...mixedPolicy,
+      mcpRefs: []
+    });
   });
 
-  it("lists skills and MCP servers as profile resources", () => {
+  it("renders only disabled paths in advanced mode", () => {
     const onChange = vi.fn();
     render(
       <SkillsEditor
+        mode="advanced"
         value={mixedPolicy}
         configText={configWithMcp}
         configLanguage="jsonc"
-        preview={preview}
+        librarySkills={librarySkills}
+        mcpServers={mcpServers}
         onChange={onChange}
       />
     );
 
-    expect(screen.getByRole("region", { name: "Resources" })).toBeInTheDocument();
-    const inventory = screen.getByRole("region", { name: "Resource inventory" });
-    expect(within(inventory).getByRole("group", { name: "Skill agentenv-reviewer" })).toBeInTheDocument();
-    expect(within(inventory).getByRole("group", { name: "Agent reviewer.toml" })).toBeInTheDocument();
-    expect(within(inventory).getByRole("group", { name: "Library skill agentenv-shared-reviewer" })).toBeInTheDocument();
-    const mcpRows = within(inventory).getAllByRole("group", { name: "MCP context7" });
-    expect(mcpRows).toHaveLength(2);
-    expect(mcpRows[0]).toHaveTextContent("Library");
-    expect(mcpRows[1]).toHaveTextContent("Raw config");
-    expect(within(inventory).getByText("https://mcp.context7.com/mcp")).toBeInTheDocument();
-    expect(within(inventory).getByRole("group", { name: "MCP filesystem" })).toBeInTheDocument();
-    expect(
-      within(inventory).getByText("npx -y @modelcontextprotocol/server-filesystem")
-    ).toBeInTheDocument();
-    expect(within(inventory).getAllByText("MCP")).toHaveLength(3);
-    expect(within(inventory).getAllByText("Managed")).toHaveLength(2);
-    expect(screen.queryByRole("region", { name: "MCP servers" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: "Disabled Skill Paths" })).not.toBeInTheDocument();
+    const disabledPaths = screen.getByRole("textbox", { name: "Disabled Skill Paths" });
+    expect(disabledPaths).toHaveValue("/tmp/disabled-skill");
+    expect(screen.queryByRole("region", { name: "Resource inventory" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add library/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /Skill |MCP |Agent / })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
-    expect(screen.getByRole("region", { name: "Advanced resource settings" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Disabled Skill Paths" })).toBeInTheDocument();
+    fireEvent.change(disabledPaths, {
+      target: { value: " /tmp/first \n\n/tmp/second " }
+    });
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...mixedPolicy,
+      disabledSkillPaths: ["/tmp/first", "/tmp/second"]
+    });
   });
 
-  it("lists Codex TOML MCP servers as profile resources", () => {
-    const onChange = vi.fn();
+  it("restores focus to resource picker triggers", () => {
+    const cases = [
+      { mode: "skills" as const, trigger: "Add library skill", dialog: "Add library skills" },
+      { mode: "mcp" as const, trigger: "Add library MCP", dialog: "Add library MCP servers" }
+    ];
+    const closePaths = ["Escape", "Cancel", "backdrop", "selection"] as const;
+
+    for (const picker of cases) {
+      for (const closePath of closePaths) {
+        const onChange = vi.fn();
+        render(
+          <SkillsEditor
+            mode={picker.mode}
+            value={emptyPolicy}
+            configText="{}"
+            configLanguage="jsonc"
+            librarySkills={librarySkills.slice(1)}
+            mcpServers={mcpServers.slice(1)}
+            onChange={onChange}
+          />
+        );
+
+        const trigger = screen.getByRole("button", { name: picker.trigger });
+        fireEvent.click(trigger);
+        const dialog = screen.getByRole("dialog", { name: picker.dialog });
+        const cancel = within(dialog).getByRole("button", { name: "Cancel" });
+        expect(cancel).toHaveFocus();
+
+        if (closePath === "Escape") {
+          fireEvent.keyDown(document, { key: "Escape" });
+        } else if (closePath === "Cancel") {
+          fireEvent.click(cancel);
+        } else if (closePath === "backdrop") {
+          fireEvent.click(dialog.parentElement as HTMLElement);
+        } else if (picker.mode === "skills") {
+          fireEvent.click(within(dialog).getByLabelText("GitHub Reviewer"));
+          fireEvent.click(within(dialog).getByRole("button", { name: "Add selected skills" }));
+        } else {
+          fireEvent.click(within(dialog).getByLabelText("Docs Search"));
+          fireEvent.click(within(dialog).getByRole("button", { name: "Add selected MCP servers" }));
+        }
+
+        expect(screen.queryByRole("dialog", { name: picker.dialog })).not.toBeInTheDocument();
+        expect(trigger).toHaveFocus();
+        expect(onChange).toHaveBeenCalledTimes(closePath === "selection" ? 1 : 0);
+        cleanup();
+      }
+    }
+  });
+
+  it("lists Codex TOML MCP servers in mcp mode", () => {
     render(
       <SkillsEditor
+        mode="mcp"
         value={emptyPolicy}
         configText={codexTomlWithMcp}
         configLanguage="toml"
@@ -319,14 +353,16 @@ describe("SkillsEditor", () => {
             managedMcpNames: ["context7", "figma"]
           }
         }}
-        onChange={onChange}
+        onChange={vi.fn()}
       />
     );
 
     const inventory = screen.getByRole("region", { name: "Resource inventory" });
-    expect(within(inventory).getByRole("group", { name: "MCP context7" })).toBeInTheDocument();
-    expect(within(inventory).getByText("npx -y @upstash/context7-mcp")).toBeInTheDocument();
-    expect(within(inventory).getByRole("group", { name: "MCP figma" })).toBeInTheDocument();
-    expect(within(inventory).getByText("https://mcp.figma.com/mcp")).toBeInTheDocument();
+    expect(within(inventory).getByRole("group", { name: "MCP context7" })).toHaveTextContent(
+      "npx -y @upstash/context7-mcp"
+    );
+    expect(within(inventory).getByRole("group", { name: "MCP figma" })).toHaveTextContent(
+      "https://mcp.figma.com/mcp"
+    );
   });
 });

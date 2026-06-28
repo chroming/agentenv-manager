@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   parse as parseJsonc,
   printParseErrorCode,
@@ -14,6 +14,7 @@ import type {
 import { InfoTip } from "./InfoTip";
 
 interface SkillsEditorProps {
+  mode: "skills" | "mcp" | "advanced";
   value: AssetPolicy;
   configText: string;
   configLanguage?: TargetInfo["configLanguage"];
@@ -210,6 +211,7 @@ const getMcpResources = (
 };
 
 export const SkillsEditor = ({
+  mode,
   value,
   configText,
   configLanguage,
@@ -218,25 +220,23 @@ export const SkillsEditor = ({
   mcpServers = [],
   onChange
 }: SkillsEditorProps) => {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [activePicker, setActivePicker] = useState<"skills" | "mcp">();
   const [selectedLibrarySkillIds, setSelectedLibrarySkillIds] = useState<string[]>([]);
   const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>([]);
+  const skillPickerButtonRef = useRef<HTMLButtonElement>(null);
+  const mcpPickerButtonRef = useRef<HTMLButtonElement>(null);
+  const pickerTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const pickerCancelButtonRef = useRef<HTMLButtonElement>(null);
   const skillEntries = value.ownedDirs
     .map((ownedDir, index) => ({ ownedDir, index }))
     .filter((entry) => entry.ownedDir.kind === "skill");
-  const agentFileEntries = (value.ownedFiles ?? []).filter(
-    (ownedFile) => ownedFile.kind === "agent"
-  );
   const librarySkillEntries = value.skillRefs ?? [];
   const libraryMcpEntries = value.mcpRefs ?? [];
   const mcpState = getMcpResources(configText, configLanguage, preview);
   const hasResources =
-    skillEntries.length > 0 ||
-    agentFileEntries.length > 0 ||
-    librarySkillEntries.length > 0 ||
-    libraryMcpEntries.length > 0 ||
-    mcpState.resources.length > 0;
+    mode === "skills"
+      ? skillEntries.length > 0 || librarySkillEntries.length > 0
+      : libraryMcpEntries.length > 0 || mcpState.resources.length > 0;
   const attachedSkillIds = new Set(librarySkillEntries.map((entry) => entry.libraryId));
   const attachedMcpIds = new Set(libraryMcpEntries.map((entry) => entry.libraryId));
 
@@ -274,20 +274,22 @@ export const SkillsEditor = ({
   };
 
   const openSkillPicker = () => {
+    pickerTriggerRef.current = skillPickerButtonRef.current;
     setSelectedLibrarySkillIds([]);
     setActivePicker("skills");
   };
 
   const openMcpPicker = () => {
+    pickerTriggerRef.current = mcpPickerButtonRef.current;
     setSelectedMcpIds([]);
     setActivePicker("mcp");
   };
 
-  const closePicker = () => {
+  const closePicker = useCallback(() => {
     setActivePicker(undefined);
     setSelectedLibrarySkillIds([]);
     setSelectedMcpIds([]);
-  };
+  }, []);
 
   const toggleSelectedSkill = (id: string) => {
     setSelectedLibrarySkillIds((current) =>
@@ -340,45 +342,64 @@ export const SkillsEditor = ({
       return undefined;
     }
 
+    const trigger = pickerTriggerRef.current;
+    pickerCancelButtonRef.current?.focus();
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         closePicker();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activePicker]);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      trigger?.focus();
+    };
+  }, [activePicker, closePicker]);
 
   return (
     <section className="skills-editor" aria-label="Resources">
-      <div className="asset-editor-header">
-        <div>
-          <div className="section-title">
-            Resources
-            <InfoTip label="Attach shared library skills and MCP servers to this profile. Preview before apply verifies target paths and ownership." />
+      {mode !== "advanced" ? (
+        <div className="asset-editor-header">
+          <div>
+            <div className="section-title">
+              {mode === "skills" ? "Skills" : "MCP servers"}
+              <InfoTip
+                label={
+                  mode === "skills"
+                    ? "Attach profile-owned and shared library skills to this profile."
+                    : "Attach shared library MCP servers and review raw-config MCP servers."
+                }
+              />
+            </div>
+          </div>
+          <div className="asset-editor-actions">
+            {mode === "skills" ? (
+              <button
+                className="secondary-action"
+                ref={skillPickerButtonRef}
+                type="button"
+                onClick={openSkillPicker}
+              >
+                Add library skill
+              </button>
+            ) : (
+              <button
+                className="secondary-action"
+                ref={mcpPickerButtonRef}
+                type="button"
+                onClick={openMcpPicker}
+              >
+                Add library MCP
+              </button>
+            )}
           </div>
         </div>
-        <div className="asset-editor-actions">
-          <button className="secondary-action" type="button" onClick={openSkillPicker}>
-            Add library skill
-          </button>
-          <button className="secondary-action" type="button" onClick={openMcpPicker}>
-            Add library MCP
-          </button>
-          <button
-            aria-expanded={advancedOpen}
-            aria-controls="advanced-resource-settings"
-            className="secondary-action"
-            type="button"
-            onClick={() => setAdvancedOpen((current) => !current)}
-          >
-            {advancedOpen ? "Hide advanced" : "Advanced"}
-          </button>
-        </div>
-      </div>
+      ) : null}
 
-      {advancedOpen ? (
+      {mode === "advanced" ? (
         <section
           aria-label="Advanced resource settings"
           className="resource-section resource-section--advanced"
@@ -410,172 +431,178 @@ export const SkillsEditor = ({
         </section>
       ) : null}
 
-      <section className="resource-section" aria-label="Resource inventory">
-        <div>
-          <div className="resource-heading">
-            Inventory
-            <InfoTip label="This list shows profile-owned resources, shared library references, and MCP servers that will be considered during preview and apply." />
+      {mode !== "advanced" ? (
+        <section className="resource-section" aria-label="Resource inventory">
+          <div>
+            <div className="resource-heading">
+              Inventory
+              <InfoTip label="This list shows profile-owned resources, shared library references, and MCP servers that will be considered during preview and apply." />
+            </div>
           </div>
-        </div>
-        <div className="resource-table-head" aria-hidden="true">
-          <span>Type</span>
-          <span>Name and source</span>
-          <span>Status</span>
-        </div>
-        <div className="resource-list">
-          {mcpState.error ? <p className="warning">Config parse error: {mcpState.error}</p> : null}
-          {mcpState.note ? <p className="muted">{mcpState.note}</p> : null}
-          {!mcpState.error && !mcpState.note && !hasResources ? (
-            <p className="muted">No resources configured</p>
-          ) : null}
-          {skillEntries.length > 0 ? (
-            skillEntries.map(({ ownedDir: asset, index }) => (
-              <fieldset
-                className="owned-skill resource-item"
-                aria-label={`Skill ${asset.targetName}`}
-                key={`${asset.kind}:${asset.source}:${asset.targetName}:${index}`}
-              >
-                <legend className="resource-legend">Skill</legend>
-                <div className="resource-row resource-row--editable">
-                  <span className="resource-chip">Skill</span>
-                  <div className="resource-row__main">
-                    <span>{asset.targetName}</span>
-                    <small>Profile-owned</small>
-                    <small>{asset.source}</small>
+          <div className="resource-table-head" aria-hidden="true">
+            <span>Type</span>
+            <span>Name and source</span>
+            <span>Status</span>
+          </div>
+          <div className="resource-list">
+            {mode === "mcp" && mcpState.error ? (
+              <p className="warning">Config parse error: {mcpState.error}</p>
+            ) : null}
+            {mode === "mcp" && mcpState.note ? (
+              <p className="muted">{mcpState.note}</p>
+            ) : null}
+            {!(mode === "mcp" && mcpState.error) &&
+            !(mode === "mcp" && mcpState.note) &&
+            !hasResources ? (
+              <p className="muted">No resources configured</p>
+            ) : null}
+            {mode === "skills" && skillEntries.length > 0
+              ? skillEntries.map(({ ownedDir: asset, index }) => (
+                  <fieldset
+                    className="owned-skill resource-item"
+                    aria-label={`Skill ${asset.targetName}`}
+                    key={`${asset.kind}:${asset.source}:${asset.targetName}:${index}`}
+                  >
+                    <legend className="resource-legend">Skill</legend>
+                    <div className="resource-row resource-row--editable">
+                      <span className="resource-chip">Skill</span>
+                      <div className="resource-row__main">
+                        <span>{asset.targetName}</span>
+                        <small>Profile-owned</small>
+                        <small>{asset.source}</small>
+                      </div>
+                      <strong className="resource-status">Configured</strong>
+                    </div>
+                    <div className="resource-edit-grid">
+                      <label>
+                        <span>Source</span>
+                        <input
+                          aria-label="Source"
+                          value={asset.source}
+                          onChange={(event) =>
+                            updateOwnedDir(index, { source: event.currentTarget.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        <span>Target name</span>
+                        <input
+                          aria-label="Target name"
+                          value={asset.targetName}
+                          onChange={(event) =>
+                            updateOwnedDir(index, { targetName: event.currentTarget.value })
+                          }
+                        />
+                      </label>
+                      <button type="button" onClick={() => removeOwnedDir(index)}>
+                        Remove
+                      </button>
+                    </div>
+                  </fieldset>
+                ))
+              : null}
+            {mode === "skills"
+              ? librarySkillEntries.map((asset, index) => {
+                  const librarySkill = librarySkills.find(
+                    (skill) => skill.id === asset.libraryId
+                  );
+                  return (
+                    <div
+                      aria-label={`Library skill ${asset.targetName}`}
+                      className="resource-row"
+                      key={`${asset.libraryId}:${asset.targetName}:${index}`}
+                      role="group"
+                    >
+                      <span className="resource-chip">Skill</span>
+                      <div className="resource-row__main">
+                        <span>{asset.targetName}</span>
+                        <small>Library</small>
+                        <small>{librarySkill?.name ?? asset.libraryId}</small>
+                        <small>
+                          {librarySkill?.path ?? `skills-library/${asset.libraryId}`}
+                        </small>
+                      </div>
+                      <div className="resource-row__actions">
+                        <strong className="resource-status">Configured</strong>
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          onClick={() => removeSkillRef(index)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              : null}
+            {mode === "mcp"
+              ? libraryMcpEntries.map((asset, index) => {
+                  const mcpServer = mcpServers.find(
+                    (server) => server.id === asset.libraryId
+                  );
+                  return (
+                    <div
+                      aria-label={`MCP ${asset.targetName}`}
+                      className="resource-row"
+                      key={`${asset.libraryId}:${asset.targetName}:${index}`}
+                      role="group"
+                    >
+                      <span className="resource-chip">MCP</span>
+                      <div className="resource-row__main">
+                        <span>{asset.targetName}</span>
+                        <small>Library</small>
+                        <small>{mcpServer?.name ?? asset.libraryId}</small>
+                        <small>
+                          {mcpServer?.transport === "stdio"
+                            ? [mcpServer.command, ...(mcpServer.args ?? [])]
+                                .filter(Boolean)
+                                .join(" ")
+                            : mcpServer?.url ?? `mcp-library/${asset.libraryId}`}
+                        </small>
+                      </div>
+                      <div className="resource-row__actions">
+                        <strong className="resource-status">Configured</strong>
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          onClick={() => removeMcpRef(index)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              : null}
+            {mode === "mcp"
+              ? mcpState.resources.map((resource) => (
+                  <div
+                    aria-label={`MCP ${resource.name}`}
+                    className="resource-row"
+                    key={resource.name}
+                    role="group"
+                  >
+                    <span className="resource-chip">MCP</span>
+                    <div className="resource-row__main">
+                      <span>{resource.name}</span>
+                      <small>Raw config</small>
+                      <small>{resource.type}</small>
+                      <small>{resource.detail}</small>
+                    </div>
+                    <strong
+                      className={`resource-status resource-status--${resource.status.toLowerCase()}`}
+                    >
+                      {resource.status}
+                    </strong>
                   </div>
-                  <strong className="resource-status">Configured</strong>
-                </div>
-                <div className="resource-edit-grid">
-                  <label>
-                    <span>Source</span>
-                    <input
-                      aria-label="Source"
-                      value={asset.source}
-                      onChange={(event) =>
-                        updateOwnedDir(index, { source: event.currentTarget.value })
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>Target name</span>
-                    <input
-                      aria-label="Target name"
-                      value={asset.targetName}
-                      onChange={(event) =>
-                        updateOwnedDir(index, { targetName: event.currentTarget.value })
-                      }
-                    />
-                  </label>
-                  <button type="button" onClick={() => removeOwnedDir(index)}>
-                    Remove
-                  </button>
-                </div>
-              </fieldset>
-            ))
-          ) : null}
-          {agentFileEntries.map((asset, index) => (
-            <div
-              aria-label={`Agent ${asset.targetName}`}
-              className="resource-row"
-              key={`${asset.kind}:${asset.source}:${asset.targetName}:${index}`}
-              role="group"
-            >
-              <span className="resource-chip">Agent</span>
-              <div className="resource-row__main">
-                <span>{asset.targetName}</span>
-                <small>Profile-owned</small>
-                <small>{asset.source}</small>
-              </div>
-              <strong className="resource-status">Configured</strong>
-            </div>
-          ))}
-          {librarySkillEntries.map((asset, index) => {
-            const librarySkill = librarySkills.find((skill) => skill.id === asset.libraryId);
-            return (
-              <div
-                aria-label={`Library skill ${asset.targetName}`}
-                className="resource-row"
-                key={`${asset.libraryId}:${asset.targetName}:${index}`}
-                role="group"
-              >
-                <span className="resource-chip">Skill</span>
-                <div className="resource-row__main">
-                  <span>{asset.targetName}</span>
-                  <small>Library</small>
-                  <small>{librarySkill?.name ?? asset.libraryId}</small>
-                  <small>{librarySkill?.path ?? `skills-library/${asset.libraryId}`}</small>
-                </div>
-                <div className="resource-row__actions">
-                  <strong className="resource-status">Configured</strong>
-                  <button
-                    className="secondary-action"
-                    type="button"
-                    onClick={() => removeSkillRef(index)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {libraryMcpEntries.map((asset, index) => {
-            const mcpServer = mcpServers.find((server) => server.id === asset.libraryId);
-            return (
-              <div
-                aria-label={`MCP ${asset.targetName}`}
-                className="resource-row"
-                key={`${asset.libraryId}:${asset.targetName}:${index}`}
-                role="group"
-              >
-                <span className="resource-chip">MCP</span>
-                <div className="resource-row__main">
-                  <span>{asset.targetName}</span>
-                  <small>Library</small>
-                  <small>{mcpServer?.name ?? asset.libraryId}</small>
-                  <small>
-                    {mcpServer?.transport === "stdio"
-                      ? [mcpServer.command, ...(mcpServer.args ?? [])].filter(Boolean).join(" ")
-                      : mcpServer?.url ?? `mcp-library/${asset.libraryId}`}
-                  </small>
-                </div>
-                <div className="resource-row__actions">
-                  <strong className="resource-status">Configured</strong>
-                  <button
-                    className="secondary-action"
-                    type="button"
-                    onClick={() => removeMcpRef(index)}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {mcpState.resources.map((resource) => (
-            <div
-              aria-label={`MCP ${resource.name}`}
-              className="resource-row"
-              key={resource.name}
-              role="group"
-            >
-              <span className="resource-chip">MCP</span>
-              <div className="resource-row__main">
-                <span>{resource.name}</span>
-                <small>Raw config</small>
-                <small>{resource.type}</small>
-                <small>{resource.detail}</small>
-              </div>
-              <strong
-                className={`resource-status resource-status--${resource.status.toLowerCase()}`}
-              >
-                {resource.status}
-              </strong>
-            </div>
-          ))}
-        </div>
-      </section>
+                ))
+              : null}
+          </div>
+        </section>
+      ) : null}
 
-      {activePicker === "skills" ? (
+      {mode === "skills" && activePicker === "skills" ? (
         <div className="preview-modal-backdrop" onClick={closePicker}>
           <section
             aria-label="Add library skills"
@@ -624,7 +651,12 @@ export const SkillsEditor = ({
               ) : null}
             </div>
             <footer className="preview-actions">
-              <button className="secondary-action" type="button" onClick={closePicker}>
+              <button
+                className="secondary-action"
+                ref={pickerCancelButtonRef}
+                type="button"
+                onClick={closePicker}
+              >
                 Cancel
               </button>
               <button
@@ -640,7 +672,7 @@ export const SkillsEditor = ({
         </div>
       ) : null}
 
-      {activePicker === "mcp" ? (
+      {mode === "mcp" && activePicker === "mcp" ? (
         <div className="preview-modal-backdrop" onClick={closePicker}>
           <section
             aria-label="Add library MCP servers"
@@ -692,7 +724,12 @@ export const SkillsEditor = ({
               ) : null}
             </div>
             <footer className="preview-actions">
-              <button className="secondary-action" type="button" onClick={closePicker}>
+              <button
+                className="secondary-action"
+                ref={pickerCancelButtonRef}
+                type="button"
+                onClick={closePicker}
+              >
                 Cancel
               </button>
               <button
@@ -709,4 +746,8 @@ export const SkillsEditor = ({
       ) : null}
     </section>
   );
+};
+
+SkillsEditor.defaultProps = {
+  mode: "skills" as const
 };
