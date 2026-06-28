@@ -35,6 +35,8 @@ import type {
   RollbackPreview,
   SaveProfileInput,
   AgentEnvSettings,
+  GitHubAuthStatus,
+  GitHubDeviceLogin,
   ManageTargetSkillInput,
   McpLibraryEntry,
   SaveMcpServerInput,
@@ -316,6 +318,12 @@ export const App = () => {
     skillAutoCheckEnabled: true,
     skillAutoCheckIntervalMinutes: 60
   });
+  const [githubAuthStatus, setGithubAuthStatus] = useState<GitHubAuthStatus>({
+    state: "signed-out"
+  });
+  const [githubClientIdDraft, setGithubClientIdDraft] = useState("");
+  const [githubDeviceLogin, setGithubDeviceLogin] = useState<GitHubDeviceLogin>();
+  const [githubLoginMessage, setGithubLoginMessage] = useState("");
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
   const [mcpUsage, setMcpUsage] = useState<Record<string, string[]>>({});
   const [backups, setBackups] = useState<BackupSummary[]>([]);
@@ -354,7 +362,8 @@ export const App = () => {
       mcpItems,
       skillUpdateItems,
       skillInventoryItems,
-      settings
+      settings,
+      githubStatus
     ] = await Promise.all([
       window.agentEnv.listTargets(),
       window.agentEnv.listProfiles(),
@@ -363,7 +372,8 @@ export const App = () => {
       window.agentEnv.listMcpLibrary(),
       window.agentEnv.checkSkillLibraryUpdates(),
       window.agentEnv.scanSkillInventory(),
-      window.agentEnv.readSettings()
+      window.agentEnv.readSettings(),
+      window.agentEnv.readGitHubAuthStatus()
     ]);
     const profileDetails = await Promise.all(
       profileItems.map((profile) => window.agentEnv.readProfile(profile.id))
@@ -392,6 +402,8 @@ export const App = () => {
     setSkillUpdates(skillUpdateItems);
     setSkillInventory(skillInventoryItems);
     setSkillSettings(settings);
+    setGithubAuthStatus(githubStatus);
+    setGithubClientIdDraft(settings.githubOAuthClientId ?? githubStatus.clientId ?? "");
     setSkillUsage(usage);
     setMcpUsage(nextMcpUsage);
     setProfileResourceCounts(nextProfileResourceCounts);
@@ -957,7 +969,80 @@ export const App = () => {
     try {
       const nextSettings = await window.agentEnv.updateSettings(input);
       setSkillSettings(nextSettings);
+      if ("githubOAuthClientId" in input) {
+        setGithubClientIdDraft(nextSettings.githubOAuthClientId ?? "");
+        setGithubAuthStatus(await window.agentEnv.readGitHubAuthStatus());
+      }
       await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startGitHubLogin = async () => {
+    setBusy(true);
+    setError(undefined);
+    setGithubLoginMessage("");
+    try {
+      const clientId = githubClientIdDraft.trim();
+      if (!clientId) {
+        throw new Error("GitHub OAuth Client ID is required");
+      }
+      const nextSettings = await window.agentEnv.updateSettings({
+        githubOAuthClientId: clientId
+      });
+      setSkillSettings(nextSettings);
+      const login = await window.agentEnv.startGitHubDeviceLogin();
+      setGithubDeviceLogin(login);
+      setGithubAuthStatus(await window.agentEnv.readGitHubAuthStatus());
+      setGithubLoginMessage(`Enter ${login.userCode} on GitHub, then confirm here.`);
+      await window.agentEnv.openGitHubDevicePage(login.verificationUri);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pollGitHubLogin = async () => {
+    if (!githubDeviceLogin) {
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      const result = await window.agentEnv.pollGitHubDeviceLogin(githubDeviceLogin.id);
+      if (result.state === "signed-in") {
+        const status = result.status ?? (await window.agentEnv.readGitHubAuthStatus());
+        setGithubAuthStatus(status);
+        setGithubDeviceLogin(undefined);
+        setGithubLoginMessage(
+          status.user?.login ? `Signed in as ${status.user.login}` : "Signed in with GitHub"
+        );
+        await refreshProfiles();
+        return;
+      }
+      if (result.state === "expired" || result.state === "denied") {
+        setGithubDeviceLogin(undefined);
+      }
+      setGithubLoginMessage(result.message ?? "GitHub authorization is still pending");
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signOutGitHub = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const status = await window.agentEnv.signOutGitHub();
+      setGithubAuthStatus(status);
+      setGithubDeviceLogin(undefined);
+      setGithubLoginMessage("Signed out of GitHub");
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -1805,6 +1890,92 @@ export const App = () => {
                   />
                 </label>
               </div>
+            </section>
+            <section className="resource-section github-settings-section" aria-label="GitHub OAuth settings">
+              <div className="settings-section-header">
+                <div>
+                  <div className="resource-heading">
+                    GitHub access
+                    <InfoTip label="Optional. Signing in lets GitHub skill imports and update checks use your authenticated API rate limit." />
+                  </div>
+                  <p className="settings-muted">
+                    {githubAuthStatus.state === "signed-in" && githubAuthStatus.user
+                      ? `Signed in as ${githubAuthStatus.user.login}`
+                      : githubAuthStatus.state === "configured"
+                        ? "OAuth app configured"
+                        : "Not connected"}
+                  </p>
+                </div>
+                <span className={`github-status-pill github-status-pill--${githubAuthStatus.state}`}>
+                  {githubAuthStatus.state === "signed-in"
+                    ? "Connected"
+                    : githubAuthStatus.state === "configured"
+                      ? "Ready"
+                      : "Off"}
+                </span>
+              </div>
+              <div className="github-settings-grid">
+                <label>
+                  <span>OAuth Client ID</span>
+                  <input
+                    aria-label="GitHub OAuth Client ID"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={githubClientIdDraft}
+                    onChange={(event) => setGithubClientIdDraft(event.currentTarget.value)}
+                    placeholder="GitHub OAuth App client ID"
+                  />
+                </label>
+                <div className="github-settings-actions">
+                  <button
+                    className="primary-button"
+                    disabled={busy}
+                    onClick={startGitHubLogin}
+                    type="button"
+                  >
+                    Sign in with GitHub
+                  </button>
+                  {githubAuthStatus.state === "signed-in" ? (
+                    <button disabled={busy} onClick={signOutGitHub} type="button">
+                      Sign out
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {githubDeviceLogin ? (
+                <div className="github-device-card" role="status">
+                  <div>
+                    <span>Device code</span>
+                    <strong>{githubDeviceLogin.userCode}</strong>
+                  </div>
+                  <div className="github-device-actions">
+                    <button
+                      onClick={() => window.agentEnv.openGitHubDevicePage(githubDeviceLogin.verificationUri)}
+                      type="button"
+                    >
+                      Open GitHub
+                    </button>
+                    <button className="primary-button" disabled={busy} onClick={pollGitHubLogin} type="button">
+                      Complete sign in
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {githubAuthStatus.rateLimit ? (
+                <div className="github-rate-row">
+                  <span>API limit</span>
+                  <strong>
+                    {githubAuthStatus.rateLimit.remaining}/{githubAuthStatus.rateLimit.limit}
+                  </strong>
+                  <span>Resets {formatShortDate(githubAuthStatus.rateLimit.resetAt)}</span>
+                </div>
+              ) : null}
+              {githubLoginMessage || githubAuthStatus.error ? (
+                <p className="settings-muted" role="status">
+                  {githubLoginMessage || githubAuthStatus.error}
+                </p>
+              ) : null}
             </section>
           </section>
         ) : rollbackPreview ? (

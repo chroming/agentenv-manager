@@ -1216,6 +1216,121 @@ summary {
   width: 100%;
 }
 
+.settings-section-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.settings-muted {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 4px 0 0;
+}
+
+.github-settings-section {
+  display: grid;
+  gap: 12px;
+}
+
+.github-settings-grid {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(260px, 1fr) auto;
+}
+
+.github-settings-grid label {
+  display: grid;
+  gap: 6px;
+}
+
+.github-settings-actions,
+.github-device-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.github-status-pill {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: #475569;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+.github-status-pill--signed-in {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.github-status-pill--configured {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.github-device-card {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.github-device-card span,
+.github-rate-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.github-device-card strong {
+  color: var(--text);
+  display: block;
+  font-family: var(--mono);
+  font-size: 18px;
+  letter-spacing: 0;
+  margin-top: 2px;
+}
+
+.github-rate-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+@media (max-width: 980px) {
+  .github-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .github-settings-actions,
+  .github-device-actions {
+    justify-content: flex-start;
+  }
+}
+
 .skill-library-panel {
   display: grid;
   gap: 12px;

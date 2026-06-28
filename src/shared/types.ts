@@ -26,6 +26,11 @@ export interface AgentEnvApi {
   updateLibrarySkill(id: string): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
+  readGitHubAuthStatus(): Promise<GitHubAuthStatus>;
+  startGitHubDeviceLogin(): Promise<GitHubDeviceLogin>;
+  pollGitHubDeviceLogin(id: string): Promise<GitHubDeviceLoginResult>;
+  signOutGitHub(): Promise<GitHubAuthStatus>;
+  openGitHubDevicePage(url: string): Promise<void>;
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
@@ -137,6 +142,41 @@ export interface AgentEnvSettings {
   skillStorageLocation: SkillStorageLocation;
   skillAutoCheckEnabled: boolean;
   skillAutoCheckIntervalMinutes: number;
+  githubOAuthClientId?: string;
+}
+
+export interface GitHubAuthUser {
+  login: string;
+  name?: string;
+  avatarUrl?: string;
+}
+
+export interface GitHubRateLimit {
+  limit: number;
+  remaining: number;
+  resetAt: string;
+}
+
+export interface GitHubAuthStatus {
+  state: "signed-out" | "configured" | "signed-in";
+  clientId?: string;
+  user?: GitHubAuthUser;
+  rateLimit?: GitHubRateLimit;
+  error?: string;
+}
+
+export interface GitHubDeviceLogin {
+  id: string;
+  userCode: string;
+  verificationUri: string;
+  expiresAt: string;
+  intervalSeconds: number;
+}
+
+export interface GitHubDeviceLoginResult {
+  state: "pending" | "slow-down" | "expired" | "denied" | "signed-in";
+  message?: string;
+  status?: GitHubAuthStatus;
 }
 
 export interface CreateProfileInput {

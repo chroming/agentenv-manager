@@ -84,6 +84,62 @@ describe("skill library store", () => {
     ).resolves.toContain('"sourceType": "local"');
   });
 
+  it("uses the configured GitHub access token when importing a GitHub skill", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith("https://api.github.com/repos/acme/skills/contents/reviewer")) {
+        return new Response(
+          JSON.stringify([
+            {
+              type: "file",
+              name: "SKILL.md",
+              path: "reviewer/SKILL.md",
+              sha: "skill-sha",
+              download_url: "https://raw.githubusercontent.com/acme/skills/main/reviewer/SKILL.md"
+            }
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }
+      if (url === "https://raw.githubusercontent.com/acme/skills/main/reviewer/SKILL.md") {
+        return new Response("---\nname: reviewer\ndescription: GitHub skill.\n---\n", {
+          status: 200
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const store = createSkillLibraryStore(paths, undefined, {
+      authTokenProvider: async () => "token-xyz",
+      fetch: fetchMock
+    });
+
+    await store.importGitHubSkill({
+      url: "https://github.com/acme/skills/tree/main/reviewer"
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("https://api.github.com/repos/acme/skills/contents/reviewer"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token-xyz"
+        })
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://raw.githubusercontent.com/acme/skills/main/reviewer/SKILL.md",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token-xyz"
+        })
+      })
+    );
+  });
+
   it("scans target skill directories for unmanaged skills", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

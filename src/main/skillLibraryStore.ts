@@ -57,7 +57,7 @@ export interface SkillLibraryStore {
   updateSkill(id: string): Promise<SkillLibraryEntry>;
 }
 
-type FetchLike = (url: string) => Promise<{
+type FetchLike = (url: string, init?: RequestInit) => Promise<{
   ok: boolean;
   status: number;
   statusText: string;
@@ -66,6 +66,7 @@ type FetchLike = (url: string) => Promise<{
 }>;
 
 interface SkillLibraryStoreOptions {
+  authTokenProvider?: () => Promise<string | undefined>;
   fetch?: FetchLike;
 }
 
@@ -307,9 +308,23 @@ export const createSkillLibraryStore = (
   const readSettings = () => settingsStore?.readSettings() ?? Promise.resolve(DEFAULT_SETTINGS);
   const libraryDir = async () => resolveSkillsLibraryDir(paths, await readSettings());
   const fetchImpl = options.fetch ?? fetch;
+  const authTokenProvider = options.authTokenProvider;
+
+  const githubRequestInit = async (): Promise<RequestInit | undefined> => {
+    const token = await authTokenProvider?.();
+    if (!token) {
+      return undefined;
+    }
+    return {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28"
+      }
+    };
+  };
 
   const fetchGitHubJson = async (url: string) => {
-    const response = await fetchImpl(url);
+    const response = await fetchImpl(url, await githubRequestInit());
     if (!response.ok) {
       throw new Error(`GitHub request failed (${response.status} ${response.statusText}): ${url}`);
     }
@@ -317,7 +332,7 @@ export const createSkillLibraryStore = (
   };
 
   const fetchGitHubText = async (url: string) => {
-    const response = await fetchImpl(url);
+    const response = await fetchImpl(url, await githubRequestInit());
     if (!response.ok) {
       throw new Error(`GitHub file download failed (${response.status} ${response.statusText}): ${url}`);
     }

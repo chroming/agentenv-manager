@@ -187,14 +187,45 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
-      skillAutoCheckIntervalMinutes: 60
+      skillAutoCheckIntervalMinutes: 60,
+      githubOAuthClientId: "client-123"
     }),
     updateSettings: vi.fn().mockImplementation(async (input) => ({
       skillSyncMethod: input.skillSyncMethod ?? "symlink",
       skillStorageLocation: input.skillStorageLocation ?? "appData",
       skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
-      skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60
+      skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60,
+      githubOAuthClientId: input.githubOAuthClientId ?? "client-123"
     })),
+    readGitHubAuthStatus: vi.fn().mockResolvedValue({
+      state: "configured",
+      clientId: "client-123"
+    }),
+    startGitHubDeviceLogin: vi.fn().mockResolvedValue({
+      id: "login-1",
+      userCode: "ABCD-1234",
+      verificationUri: "https://github.com/login/device",
+      expiresAt: "2026-07-08T00:15:00.000Z",
+      intervalSeconds: 5
+    }),
+    pollGitHubDeviceLogin: vi.fn().mockResolvedValue({
+      state: "signed-in",
+      status: {
+        state: "signed-in",
+        clientId: "client-123",
+        user: { login: "octocat" },
+        rateLimit: {
+          limit: 5000,
+          remaining: 4999,
+          resetAt: "2026-07-08T06:00:00.000Z"
+        }
+      }
+    }),
+    signOutGitHub: vi.fn().mockResolvedValue({
+      state: "configured",
+      clientId: "client-123"
+    }),
+    openGitHubDevicePage: vi.fn().mockResolvedValue(undefined),
     listProfiles: vi
       .fn()
       .mockResolvedValue([
@@ -390,6 +421,44 @@ describe("App", () => {
       }
     });
     expect(api.checkSkillLibraryUpdates).toHaveBeenCalledTimes(2);
+  });
+
+  it("starts and completes GitHub OAuth login from Settings", async () => {
+    const api = installApi({
+      readGitHubAuthStatus: vi
+        .fn()
+        .mockResolvedValueOnce({ state: "configured", clientId: "client-123" })
+        .mockResolvedValueOnce({ state: "configured", clientId: "client-123" })
+        .mockResolvedValue({
+          state: "signed-in",
+          clientId: "client-123",
+          user: { login: "octocat" },
+          rateLimit: {
+            limit: 5000,
+            remaining: 4999,
+            resetAt: "2026-07-08T06:00:00.000Z"
+          }
+        })
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.change(screen.getByLabelText("GitHub OAuth Client ID"), {
+      target: { value: "client-abc" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in with GitHub" }));
+
+    await waitFor(() =>
+      expect(api.updateSettings).toHaveBeenCalledWith({ githubOAuthClientId: "client-abc" })
+    );
+    await waitFor(() => expect(screen.getByText("ABCD-1234")).toBeInTheDocument());
+    expect(api.openGitHubDevicePage).toHaveBeenCalledWith("https://github.com/login/device");
+
+    fireEvent.click(screen.getByRole("button", { name: "Complete sign in" }));
+
+    await waitFor(() => expect(api.pollGitHubDeviceLogin).toHaveBeenCalledWith("login-1"));
+    await waitFor(() => expect(screen.getAllByText("Signed in as octocat")).toHaveLength(2));
   });
 
   it("opens the MCP library and saves reusable MCP servers", async () => {

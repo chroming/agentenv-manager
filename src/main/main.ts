@@ -1,9 +1,10 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, safeStorage } from "electron";
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createActivationService } from "./activationService";
 import { createBackupStore } from "./backupStore";
+import { createFileGitHubTokenStore, createGitHubAuthService } from "./githubAuthService";
 import { createMcpLibraryStore } from "./mcpLibraryStore";
 import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
@@ -26,7 +27,7 @@ const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const shaFor = async (path: string) =>
     createHash("sha1").update(await readFile(path)).digest("hex");
 
-  return async (url: string) => {
+  return async (url: string, _init?: RequestInit) => {
     const parsed = new URL(url);
     if (parsed.protocol === "agentenv-fixture:") {
       const fixturePath = decodeURIComponent(parsed.pathname.slice(1));
@@ -103,6 +104,14 @@ const createServices = async () => {
   });
   const targetRegistry = createTargetRegistry();
   const settingsStore = createSettingsStore(paths);
+  const githubAuthService = createGitHubAuthService({
+    settingsStore,
+    tokenStore: createFileGitHubTokenStore(paths, {
+      decryptString: (value) => safeStorage.decryptString(value),
+      encryptString: (value) => safeStorage.encryptString(value),
+      isEncryptionAvailable: () => safeStorage.isEncryptionAvailable()
+    })
+  });
   const profileStore = createProfileStore({
     appDataRoot: paths.appDataRoot,
     fakeHomeRoot: paths.fakeHomeRoot
@@ -111,9 +120,12 @@ const createServices = async () => {
   const skillLibraryStore = createSkillLibraryStore(
     paths,
     settingsStore,
-    process.env.AGENTENV_GITHUB_FIXTURE_ROOT
-      ? { fetch: createGitHubFixtureFetch(process.env.AGENTENV_GITHUB_FIXTURE_ROOT) }
-      : undefined
+    {
+      authTokenProvider: githubAuthService.readAccessToken,
+      ...(process.env.AGENTENV_GITHUB_FIXTURE_ROOT
+        ? { fetch: createGitHubFixtureFetch(process.env.AGENTENV_GITHUB_FIXTURE_ROOT) }
+        : {})
+    }
   );
   const mcpLibraryStore = createMcpLibraryStore(paths);
   const activationService = createActivationService({
@@ -133,6 +145,7 @@ const createServices = async () => {
   return {
     profileStore,
     backupStore,
+    githubAuthService,
     settingsStore,
     skillLibraryStore,
     mcpLibraryStore,

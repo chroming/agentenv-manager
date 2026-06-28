@@ -1,6 +1,7 @@
-import { BrowserWindow, dialog, ipcMain } from "electron";
+import { BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { ActivationService } from "./activationService";
 import type { BackupStore } from "./backupStore";
+import type { GitHubAuthService } from "./githubAuthService";
 import type { McpLibraryStore } from "./mcpLibraryStore";
 import type { ProfileStore } from "./profileStore";
 import type { SettingsStore } from "./settingsStore";
@@ -21,6 +22,7 @@ export interface IpcServices {
   profileStore: ProfileStore;
   activationService: ActivationService;
   backupStore: BackupStore;
+  githubAuthService: GitHubAuthService;
   settingsStore: SettingsStore;
   skillLibraryStore: SkillLibraryStore;
   mcpLibraryStore: McpLibraryStore;
@@ -40,6 +42,7 @@ export const registerIpcHandlers = ({
   profileStore,
   activationService,
   backupStore,
+  githubAuthService,
   settingsStore,
   skillLibraryStore,
   mcpLibraryStore,
@@ -110,6 +113,15 @@ export const registerIpcHandlers = ({
   ipcMain.handle("settings:read", () => settingsStore.readSettings());
   ipcMain.handle("settings:update", (_event, input: unknown) =>
     settingsStore.updateSettings(input && typeof input === "object" ? input : {})
+  );
+  ipcMain.handle("github:status", () => githubAuthService.readStatus());
+  ipcMain.handle("github:start-device-login", () => githubAuthService.startDeviceLogin());
+  ipcMain.handle("github:poll-device-login", (_event, id: unknown) =>
+    githubAuthService.pollDeviceLogin(String(id))
+  );
+  ipcMain.handle("github:sign-out", () => githubAuthService.signOut());
+  ipcMain.handle("github:open-device-page", (_event, url: unknown) =>
+    shell.openExternal(String(url))
   );
   ipcMain.handle("profiles:list", () => profileStore.listProfiles());
   ipcMain.handle("profiles:read", (_event, id: unknown) =>
