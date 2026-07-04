@@ -240,6 +240,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    copyText: vi.fn().mockResolvedValue(undefined),
     selectSkillFolder: vi.fn().mockResolvedValue(undefined),
     listTargets: vi.fn().mockResolvedValue([target]),
     listTargetStates: vi.fn().mockResolvedValue([]),
@@ -622,11 +623,15 @@ describe("App", () => {
     expect(api.updateSettings).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText("ABCD-1234")).toBeInTheDocument());
     expect(api.openGitHubDevicePage).toHaveBeenCalledWith("https://github.com/login/device");
+    fireEvent.click(screen.getByRole("button", { name: "Copy GitHub device code ABCD-1234" }));
+    await waitFor(() => expect(api.copyText).toHaveBeenCalledWith("ABCD-1234"));
+    expect(screen.getByText("Copied")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Complete sign in" }));
+    window.dispatchEvent(new Event("focus"));
 
     await waitFor(() => expect(api.pollGitHubDeviceLogin).toHaveBeenCalledWith("login-1"));
-    await waitFor(() => expect(screen.getAllByText("Signed in as octocat")).toHaveLength(2));
+    await waitFor(() => expect(screen.getByText("Connected as octocat")).toBeInTheDocument());
+    expect(screen.getByText("Connected")).toBeInTheDocument();
   });
 
   it("opens the MCP library and saves reusable MCP servers", async () => {

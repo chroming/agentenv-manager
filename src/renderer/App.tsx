@@ -5,7 +5,9 @@ import {
   Copy,
   Database,
   BookOpenText,
+  ExternalLink,
   FolderKanban,
+  GitFork,
   HardDrive,
   Monitor,
   MonitorCheck,
@@ -39,6 +41,7 @@ import type {
   AgentEnvSettings,
   GitHubAuthStatus,
   GitHubDeviceLogin,
+  GitHubDeviceLoginResult,
   ManageTargetSkillInput,
   McpLibraryEntry,
   SaveMcpServerInput,
@@ -363,6 +366,10 @@ export const App = () => {
   });
   const [githubDeviceLogin, setGithubDeviceLogin] = useState<GitHubDeviceLogin>();
   const [githubLoginMessage, setGithubLoginMessage] = useState("");
+  const [githubLoginChecking, setGithubLoginChecking] = useState(false);
+  const [githubCodeCopied, setGithubCodeCopied] = useState(false);
+  const githubLoginPollingRef = useRef(false);
+  const githubCopyResetRef = useRef<number | undefined>(undefined);
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
   const [mcpUsage, setMcpUsage] = useState<Record<string, string[]>>({});
   const [backups, setBackups] = useState<BackupSummary[]>([]);
@@ -1441,55 +1448,138 @@ export const App = () => {
   };
 
   const startGitHubLogin = async () => {
-    setBusy(true);
+    setGithubLoginChecking(true);
     setError(undefined);
     setSettingsSaveStatus("");
-    setGithubLoginMessage("");
+    setGithubLoginMessage("Opening GitHub authorization...");
+    setGithubCodeCopied(false);
     try {
       const login = await window.agentEnv.startGitHubDeviceLogin();
       setGithubDeviceLogin(login);
       setGithubAuthStatus(await window.agentEnv.readGitHubAuthStatus());
-      setGithubLoginMessage(`Enter ${login.userCode} on GitHub, then confirm here.`);
+      setGithubLoginMessage("Waiting for authorization. This page updates automatically.");
       await window.agentEnv.openGitHubDevicePage(login.verificationUri);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setGithubLoginMessage("");
     } finally {
-      setBusy(false);
+      setGithubLoginChecking(false);
     }
   };
 
-  const pollGitHubLogin = async () => {
-    if (!githubDeviceLogin) {
-      return;
+  const pollGitHubLogin = async (
+    login = githubDeviceLogin,
+    showProgress = true
+  ): Promise<GitHubDeviceLoginResult | undefined> => {
+    if (!login || githubLoginPollingRef.current) {
+      return undefined;
     }
-    setBusy(true);
+    githubLoginPollingRef.current = true;
+    setGithubLoginChecking(true);
     setError(undefined);
     setSettingsSaveStatus("");
+    if (showProgress) {
+      setGithubLoginMessage("Checking GitHub authorization...");
+    }
     try {
-      const result = await window.agentEnv.pollGitHubDeviceLogin(githubDeviceLogin.id);
+      const result = await window.agentEnv.pollGitHubDeviceLogin(login.id);
       if (result.state === "signed-in") {
         const status = result.status ?? (await window.agentEnv.readGitHubAuthStatus());
         setGithubAuthStatus(status);
         setGithubDeviceLogin(undefined);
+        setGithubCodeCopied(false);
         setGithubLoginMessage(
           status.user?.login ? `Signed in as ${status.user.login}` : "Signed in with GitHub"
         );
         await refreshProfiles();
-        return;
+        return result;
       }
       if (result.state === "expired" || result.state === "denied") {
         setGithubDeviceLogin(undefined);
       }
-      setGithubLoginMessage(result.message ?? "GitHub authorization is still pending");
+      setGithubLoginMessage(
+        result.state === "pending"
+          ? "Waiting for authorization. This page updates automatically."
+          : result.message ?? "GitHub authorization is still pending"
+      );
+      return result;
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return undefined;
     } finally {
-      setBusy(false);
+      githubLoginPollingRef.current = false;
+      setGithubLoginChecking(false);
     }
   };
 
+  const copyGitHubDeviceCode = async () => {
+    if (!githubDeviceLogin) {
+      return;
+    }
+    try {
+      await window.agentEnv.copyText(githubDeviceLogin.userCode);
+      setGithubCodeCopied(true);
+      if (githubCopyResetRef.current) {
+        window.clearTimeout(githubCopyResetRef.current);
+      }
+      githubCopyResetRef.current = window.setTimeout(() => setGithubCodeCopied(false), 1800);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    }
+  };
+
+  useEffect(() => {
+    const login = githubDeviceLogin;
+    if (!login) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let timeoutId: number | undefined;
+    let delayMs = Math.max(login.intervalSeconds * 1000, 1000);
+    const schedule = () => {
+      timeoutId = window.setTimeout(async () => {
+        const result = await pollGitHubLogin(login, false);
+        if (
+          cancelled ||
+          result?.state === "signed-in" ||
+          result?.state === "expired" ||
+          result?.state === "denied"
+        ) {
+          return;
+        }
+        if (result?.state === "slow-down") {
+          delayMs += 5000;
+        }
+        schedule();
+      }, delayMs);
+    };
+    const handleFocus = () => {
+      void pollGitHubLogin(login, false);
+    };
+
+    schedule();
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [githubDeviceLogin?.id]);
+
+  useEffect(
+    () => () => {
+      if (githubCopyResetRef.current) {
+        window.clearTimeout(githubCopyResetRef.current);
+      }
+    },
+    []
+  );
+
   const signOutGitHub = async () => {
-    setBusy(true);
+    setGithubLoginChecking(true);
     setError(undefined);
     setSettingsSaveStatus("");
     try {
@@ -1500,7 +1590,7 @@ export const App = () => {
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
-      setBusy(false);
+      setGithubLoginChecking(false);
     }
   };
 
@@ -1538,7 +1628,6 @@ export const App = () => {
     setProfileSaveStatus("");
     setSettingsSaveStatus("");
     setTargetRefreshStatus(undefined);
-    setGithubLoginMessage("");
   };
   const appFeedback: AppFeedbackMessage | undefined = error
     ? { kind: "error", title: "Action failed", message: error }
@@ -1568,17 +1657,6 @@ export const App = () => {
           ? {
               kind: settingsSaveStatus === "Settings saved" ? "success" : "loading",
               title: settingsSaveStatus
-            }
-        : githubLoginMessage
-          ? {
-              kind: githubLoginMessage.startsWith("Signed") ? "success" : "info",
-              title: githubLoginMessage
-            }
-          : githubAuthStatus.error
-            ? {
-                kind: "error",
-                title: "GitHub connection needs attention",
-                message: githubAuthStatus.error
             }
         : undefined;
   const profileApplyControl = (
@@ -2335,15 +2413,16 @@ export const App = () => {
           <section className="settings-page" aria-label="Settings">
             <header className="page-header">
               <div>
-                <h2 aria-label="Settings">
-                  Settings
-                  <InfoTip label="These defaults control how shared library skills are stored and installed onto targets." />
-                </h2>
+                <h2 aria-label="Settings">Settings</h2>
+                <p>Local defaults and connected services.</p>
               </div>
             </header>
-            <section className="resource-section">
-              <div>
-                <div className="resource-heading">Library install defaults</div>
+            <section className="resource-section settings-section" aria-labelledby="library-defaults-heading">
+              <div className="settings-section-title">
+                <div>
+                  <div className="resource-heading" id="library-defaults-heading">Skills library</div>
+                  <p className="settings-muted">Defaults used when installing managed skills.</p>
+                </div>
               </div>
               <div className="resource-settings-grid">
                 <label>
@@ -2418,71 +2497,90 @@ export const App = () => {
               </div>
             </section>
             <section className="resource-section github-settings-section" aria-label="GitHub OAuth settings">
-              <div className="settings-section-header">
-                <div>
-                  <div className="resource-heading">
-                    GitHub access
-                    <InfoTip label="Optional. Signing in lets GitHub skill imports and update checks use your authenticated API rate limit." />
+              <div className="settings-section-header github-account-header">
+                <div className="github-account-identity">
+                  <span className="settings-service-icon" aria-hidden="true">
+                    <GitFork size={20} strokeWidth={2} />
+                  </span>
+                  <div>
+                    <div className="resource-heading">GitHub</div>
+                    <p className="settings-muted">
+                      {githubAuthStatus.state === "signed-in" && githubAuthStatus.user
+                        ? `Connected as ${githubAuthStatus.user.login}`
+                        : githubDeviceLogin
+                          ? "Authorize AgentEnv Manager in your browser"
+                          : "Connect for reliable GitHub imports and update checks"}
+                    </p>
                   </div>
-                  <p className="settings-muted">
-                    {githubAuthStatus.state === "signed-in" && githubAuthStatus.user
-                      ? `Signed in as ${githubAuthStatus.user.login}`
-                      : githubAuthStatus.state === "configured"
-                        ? "OAuth app configured"
-                        : "Not connected"}
-                  </p>
                 </div>
-                <span className={`github-status-pill github-status-pill--${githubAuthStatus.state}`}>
-                  {githubAuthStatus.state === "signed-in"
-                    ? "Connected"
-                    : githubAuthStatus.state === "configured"
-                      ? "Ready"
-                      : "Off"}
-                </span>
-              </div>
-              <div className="github-settings-grid">
                 <div className="github-settings-actions">
-                  <button
-                    className="primary-button"
-                    disabled={busy}
-                    onClick={startGitHubLogin}
-                    type="button"
-                  >
-                    Sign in with GitHub
-                  </button>
                   {githubAuthStatus.state === "signed-in" ? (
-                    <button disabled={busy} onClick={signOutGitHub} type="button">
+                    <button disabled={busy || githubLoginChecking} onClick={signOutGitHub} type="button">
                       Sign out
+                    </button>
+                  ) : !githubDeviceLogin ? (
+                    <button
+                      className="primary-button"
+                      disabled={busy || githubLoginChecking}
+                      onClick={startGitHubLogin}
+                      type="button"
+                    >
+                      <GitFork size={15} strokeWidth={2.2} aria-hidden="true" />
+                      {githubLoginChecking ? "Connecting..." : "Sign in with GitHub"}
                     </button>
                   ) : null}
                 </div>
               </div>
               {githubDeviceLogin ? (
                 <div className="github-device-card">
-                  <div>
+                  <button
+                    className={`github-device-code${githubCodeCopied ? " is-copied" : ""}`}
+                    type="button"
+                    aria-label={`Copy GitHub device code ${githubDeviceLogin.userCode}`}
+                    onClick={copyGitHubDeviceCode}
+                  >
                     <span>Device code</span>
                     <strong>{githubDeviceLogin.userCode}</strong>
+                    <span className="github-device-copy-state">
+                      {githubCodeCopied ? <CheckCircle2 size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+                      {githubCodeCopied ? "Copied" : "Copy"}
+                    </span>
+                  </button>
+                  <div className="github-device-status" role="status" aria-live="polite">
+                    <RefreshCw className={githubLoginChecking ? "is-spinning" : ""} size={15} aria-hidden="true" />
+                    <span>{githubLoginMessage || "Waiting for authorization. This page updates automatically."}</span>
                   </div>
                   <div className="github-device-actions">
                     <button
+                      className="primary-button"
                       onClick={() => window.agentEnv.openGitHubDevicePage(githubDeviceLogin.verificationUri)}
                       type="button"
                     >
+                      <ExternalLink size={15} aria-hidden="true" />
                       Open GitHub
                     </button>
-                    <button className="primary-button" disabled={busy} onClick={pollGitHubLogin} type="button">
-                      Complete sign in
+                    <button disabled={githubLoginChecking} onClick={() => void pollGitHubLogin()} type="button">
+                      Check now
                     </button>
                   </div>
                 </div>
               ) : null}
-              {githubAuthStatus.rateLimit ? (
-                <div className="github-rate-row">
-                  <span>API limit</span>
-                  <strong>
-                    {githubAuthStatus.rateLimit.remaining}/{githubAuthStatus.rateLimit.limit}
-                  </strong>
-                  <span>Resets {formatShortDate(githubAuthStatus.rateLimit.resetAt)}</span>
+              {githubAuthStatus.state === "signed-in" ? (
+                <div className="github-connected-row" role="status">
+                  <span className="github-connected-indicator" aria-hidden="true" />
+                  <strong>Connected</strong>
+                  {githubAuthStatus.rateLimit ? (
+                    <span>
+                      {githubAuthStatus.rateLimit.remaining.toLocaleString()} of {githubAuthStatus.rateLimit.limit.toLocaleString()} API requests remaining · resets {formatShortDate(githubAuthStatus.rateLimit.resetAt)}
+                    </span>
+                  ) : null}
+                </div>
+              ) : githubLoginMessage && !githubDeviceLogin ? (
+                <div className="github-login-result" role="status">{githubLoginMessage}</div>
+              ) : null}
+              {githubAuthStatus.error ? (
+                <div className="github-login-result github-login-result--error" role="alert">
+                  {githubAuthStatus.error}
                 </div>
               ) : null}
             </section>

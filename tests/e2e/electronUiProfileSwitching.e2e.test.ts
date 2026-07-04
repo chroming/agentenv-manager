@@ -1890,6 +1890,80 @@ describe("Electron UI profile switching e2e", () => {
       });
   }, 30_000);
 
+  it("copies the GitHub device code and refreshes connection state after authorization", async () => {
+    const { app: electronApp, page } = await launchApp();
+    await electronApp.evaluate(({ ipcMain }) => {
+      const state = globalThis as typeof globalThis & {
+        __agentEnvCopiedText?: string;
+        __agentEnvGitHubSignedIn?: boolean;
+      };
+      state.__agentEnvCopiedText = undefined;
+      state.__agentEnvGitHubSignedIn = false;
+
+      for (const channel of [
+        "clipboard:write-text",
+        "github:status",
+        "github:start-device-login",
+        "github:poll-device-login",
+        "github:open-device-page"
+      ]) {
+        ipcMain.removeHandler(channel);
+      }
+      ipcMain.handle("clipboard:write-text", (_event, text) => {
+        state.__agentEnvCopiedText = String(text);
+      });
+      ipcMain.handle("github:status", () =>
+        state.__agentEnvGitHubSignedIn
+          ? {
+              state: "signed-in",
+              clientId: "e2e-client",
+              user: { login: "e2e-user" },
+              rateLimit: { limit: 5000, remaining: 4998, resetAt: "2026-07-12T00:00:00.000Z" }
+            }
+          : { state: "configured", clientId: "e2e-client" }
+      );
+      ipcMain.handle("github:start-device-login", () => ({
+        id: "e2e-login",
+        userCode: "E2E1-CODE",
+        verificationUri: "https://github.com/login/device",
+        expiresAt: "2026-07-12T00:15:00.000Z",
+        intervalSeconds: 10
+      }));
+      ipcMain.handle("github:poll-device-login", () => {
+        state.__agentEnvGitHubSignedIn = true;
+        return {
+          state: "signed-in",
+          status: {
+            state: "signed-in",
+            clientId: "e2e-client",
+            user: { login: "e2e-user" },
+            rateLimit: { limit: 5000, remaining: 4998, resetAt: "2026-07-12T00:00:00.000Z" }
+          }
+        };
+      });
+      ipcMain.handle("github:open-device-page", () => undefined);
+    });
+
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("button", { name: "Sign in with GitHub" }).click();
+    const codeButton = page.getByRole("button", { name: "Copy GitHub device code E2E1-CODE" });
+    await codeButton.click();
+    await expect
+      .poll(() =>
+        electronApp.evaluate(() =>
+          (globalThis as typeof globalThis & { __agentEnvCopiedText?: string })
+            .__agentEnvCopiedText
+        )
+      )
+      .toBe("E2E1-CODE");
+    await page.getByText("Copied", { exact: true }).waitFor();
+
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.getByText("Connected as e2e-user").waitFor();
+    await page.getByText("Connected", { exact: true }).waitFor();
+    expect(await codeButton.count()).toBe(0);
+  }, 30_000);
+
   it("removes an existing profile-owned skill from the rendered Resources editor", async () => {
     const { opencodeDir, page } = await launchApp();
     await selectProfile(page, "UI OpenCode alpha");

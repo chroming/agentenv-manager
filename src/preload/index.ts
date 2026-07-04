@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { AgentEnvApi } from "../shared/types";
 
 const api: AgentEnvApi = {
+  copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),
   listTargets: () => ipcRenderer.invoke("targets:list"),
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),

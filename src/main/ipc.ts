@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
 import type { ActivationService } from "./activationService";
 import type { BackupStore } from "./backupStore";
 import type { GitHubAuthService } from "./githubAuthService";
@@ -49,6 +49,9 @@ export const registerIpcHandlers = ({
   targetRegistry,
   targetDiscoveryService
 }: IpcServices) => {
+  ipcMain.handle("clipboard:write-text", (_event, text: unknown) => {
+    clipboard.writeText(String(text));
+  });
   ipcMain.handle("dialog:select-skill-folder", async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     const options = {

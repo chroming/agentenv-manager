@@ -9,6 +9,7 @@ export type { AssetPolicy, ProfileManifest } from "./schemas";
 import type { AssetPolicy, ProfileManifest } from "./schemas";
 
 export interface AgentEnvApi {
+  copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
   listTargets(): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
