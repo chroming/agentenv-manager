@@ -845,6 +845,29 @@ describe("App", () => {
     expect(saveButton).toHaveFocus();
   });
 
+  it("prevents duplicate saves from the readiness remediation", async () => {
+    const pendingSave = deferred<ProfileDetail>();
+    const api = installApi({ saveProfile: vi.fn().mockReturnValue(pendingSave.promise) });
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
+      target: { value: "# Pending save\n" }
+    });
+
+    const readiness = screen.getByRole("status", { name: "Profile readiness" });
+    const saveNow = within(readiness).getByRole("button", { name: "Save now" });
+    fireEvent.click(saveNow);
+    fireEvent.click(saveNow);
+
+    expect(api.saveProfile).toHaveBeenCalledTimes(1);
+    expect(saveNow).toBeDisabled();
+
+    pendingSave.resolve(profile);
+    await waitFor(() => expect(saveNow).not.toBeInTheDocument());
+  });
+
   it("filters incompatible profiles after target selection", async () => {
     const api = installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
@@ -860,14 +883,20 @@ describe("App", () => {
     menuButton.focus();
     fireEvent.click(menuButton);
     let menu = screen.getByRole("menu", { name: "Profile targets" });
-    expect(within(menu).getByRole("menuitemradio", { name: "OpenCode" })).toHaveAttribute(
+    const openCodeTarget = within(menu).getByRole("menuitemradio", { name: "OpenCode" });
+    const codexTargetItem = within(menu).getByRole("menuitemradio", { name: "Codex" });
+    expect(openCodeTarget).toHaveAttribute(
       "aria-checked",
       "true"
     );
-    expect(within(menu).getByRole("menuitemradio", { name: "Codex" })).toHaveAttribute(
+    expect(codexTargetItem).toHaveAttribute(
       "aria-checked",
       "false"
     );
+    expect(openCodeTarget.querySelector("img")).toHaveClass("profile-target-logo--opencode");
+    expect(codexTargetItem.querySelector("img")).toHaveClass("profile-target-logo--codex");
+    expect(screen.getByRole("button", { name: "Take over OpenCode" }).querySelector("img"))
+      .toHaveClass("profile-target-logo--opencode");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menu", { name: "Profile targets" })).not.toBeInTheDocument();
     expect(menuButton).toHaveFocus();
@@ -1328,19 +1357,73 @@ describe("App", () => {
     await openProfiles();
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     const history = await screen.findByRole("region", { name: "History" });
-    fireEvent.click(
-      within(history).getByRole("button", {
-        name: `Preview rollback ${backup.id}`
-      })
-    );
+    const previewRollbackButton = within(history).getByRole("button", {
+      name: `Preview rollback ${backup.id}`
+    });
+    previewRollbackButton.focus();
+    fireEvent.click(previewRollbackButton);
 
     await waitFor(() => expect(api.previewRollback).toHaveBeenCalledWith(backup.id));
-    expect(screen.getByText("Rollback preview")).toBeInTheDocument();
+    const rollbackDialog = screen.getByRole("dialog", { name: "Preview" });
+    expect(within(rollbackDialog).getByText("Rollback preview")).toBeInTheDocument();
     expect(screen.getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
 
-    fireEvent.click(within(history).getByRole("button", { name: "Restore backup" }));
+    expect(within(history).queryByRole("button", { name: "Restore backup" })).not.toBeInTheDocument();
+    fireEvent.click(within(rollbackDialog).getByRole("button", { name: "Restore backup" }));
 
     await waitFor(() => expect(api.rollback).toHaveBeenCalledWith(backup.id));
     expect(screen.queryByText("Rollback preview")).not.toBeInTheDocument();
+    await waitFor(() => expect(previewRollbackButton).toHaveFocus());
+  });
+
+  it("keeps rollback failures visible inside the confirmation dialog", async () => {
+    const api = installApi({
+      listBackups: vi.fn().mockResolvedValue([backup]),
+      rollback: vi.fn().mockResolvedValue({ ok: false, errors: ["Restore failed"] })
+    });
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    const history = await screen.findByRole("region", { name: "History" });
+    fireEvent.click(
+      within(history).getByRole("button", { name: `Preview rollback ${backup.id}` })
+    );
+
+    const rollbackDialog = await screen.findByRole("dialog", { name: "Preview" });
+    fireEvent.click(within(rollbackDialog).getByRole("button", { name: "Restore backup" }));
+
+    await waitFor(() => expect(api.rollback).toHaveBeenCalledWith(backup.id));
+    expect(within(rollbackDialog).getByText("Restore failed")).toBeInTheDocument();
+    expect(rollbackDialog).toBeInTheDocument();
+  });
+
+  it("prevents dismissing rollback confirmation while restore is running", async () => {
+    const pendingRollback = deferred<{ ok: true }>();
+    const api = installApi({
+      listBackups: vi.fn().mockResolvedValue([backup]),
+      rollback: vi.fn().mockReturnValue(pendingRollback.promise)
+    });
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    const history = await screen.findByRole("region", { name: "History" });
+    fireEvent.click(
+      within(history).getByRole("button", { name: `Preview rollback ${backup.id}` })
+    );
+
+    const rollbackDialog = await screen.findByRole("dialog", { name: "Preview" });
+    fireEvent.click(within(rollbackDialog).getByRole("button", { name: "Restore backup" }));
+    await waitFor(() => expect(api.rollback).toHaveBeenCalledWith(backup.id));
+
+    const cancel = within(rollbackDialog).getByRole("button", { name: "Cancel" });
+    expect(cancel).toBeDisabled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(rollbackDialog.parentElement!);
+    expect(rollbackDialog).toBeInTheDocument();
+
+    pendingRollback.resolve({ ok: true });
+    await waitFor(() => expect(rollbackDialog).not.toBeInTheDocument());
   });
 });

@@ -205,6 +205,25 @@ const writeLibrarySkill = async (appDataRoot: string) => {
   return { libraryDir, sourceDir };
 };
 
+const addOpenCodeAlphaLibrarySkills = async (appDataRoot: string, count: number) => {
+  const refs = [];
+  for (let index = 0; index < count; index += 1) {
+    const id = `layout-skill-${index + 1}`;
+    const skillDir = join(appDataRoot, "skills-library", id);
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      `---\nname: ${id}\ndescription: Layout fixture ${index + 1}.\n---\n\n# ${id}\n`,
+      "utf8"
+    );
+    refs.push({ libraryId: id, targetName: id });
+  }
+
+  const assetsPath = join(appDataRoot, "profiles", "ui-opencode-alpha", "assets.json");
+  const assets = await readJson<Record<string, unknown> & { skillRefs?: unknown[] }>(assetsPath);
+  await writeJson(assetsPath, { ...assets, skillRefs: refs });
+};
+
 const writeTrackedLibrarySkill = async (
   appDataRoot: string,
   id: string,
@@ -281,7 +300,7 @@ const writeMcpLibrary = async (appDataRoot: string) => {
   ]);
 };
 
-const launchApp = async () => {
+const launchApp = async (options: { openCodeAlphaLibrarySkillCount?: number } = {}) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
   const appDataRoot = join(root, "app-data");
   const fakeHomeRoot = join(root, "fake-home");
@@ -321,6 +340,9 @@ const launchApp = async () => {
   await writeCodexProfile(appDataRoot, "alpha");
   await writeCodexProfile(appDataRoot, "beta");
   const librarySkill = await writeLibrarySkill(appDataRoot);
+  if (options.openCodeAlphaLibrarySkillCount) {
+    await addOpenCodeAlphaLibrarySkills(appDataRoot, options.openCodeAlphaLibrarySkillCount);
+  }
   await writeGitHubFixtureSkill(githubFixtureRoot, "v1");
   await writeUnmanagedTargetSkill(opencodeDir);
   await writeMcpLibrary(appDataRoot);
@@ -825,6 +847,142 @@ describe("Electron UI profile switching e2e", () => {
     const rowTip = page.getByRole("tooltip");
     await rowTip.waitFor({ state: "visible" });
     await expectInViewport(page, rowTip);
+  }, 30_000);
+
+  it("keeps the Profiles workbench contained at the default viewport", async () => {
+    const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 8 });
+    await page.setViewportSize({ width: 1180, height: 728 });
+    await selectProfile(page, "UI OpenCode alpha");
+
+    const header = page.locator(".profile-page-header");
+    const readiness = page.locator(".profile-readiness-strip");
+    const workbench = page.locator(".profile-workbench");
+    const profileIndex = page.locator(".profile-index");
+    const editor = page.locator(".profile-editor-surface");
+    const composer = page.getByRole("region", { name: "Profile composer" });
+
+    await expectInViewport(page, header);
+    await expectInViewport(page, readiness);
+    await expectInViewport(page, workbench);
+
+    const shellMetrics = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      documentHeight: document.documentElement.scrollHeight,
+      viewportHeight: document.documentElement.clientHeight
+    }));
+    expect(shellMetrics.documentWidth).toBe(shellMetrics.viewportWidth);
+    expect(shellMetrics.documentHeight).toBe(shellMetrics.viewportHeight);
+
+    const initialWorkbenchBox = await workbench.boundingBox();
+    expect(initialWorkbenchBox).not.toBeNull();
+
+    const initialOverflow = await Promise.all(
+      [profileIndex, editor].map((locator) =>
+        locator.evaluate((element) => ({
+          overflowY: getComputedStyle(element).overflowY,
+          clientHeight: element.clientHeight,
+          scrollHeight: element.scrollHeight
+        }))
+      )
+    );
+    expect(["auto", "scroll"]).toContain(initialOverflow[0].overflowY);
+    expect(initialOverflow[1].overflowY).toBe("hidden");
+    for (const metrics of initialOverflow) {
+      expect(metrics.clientHeight).toBeGreaterThan(0);
+    }
+
+    const skillsTrigger = composer.getByRole("button", { name: "Skills", exact: true });
+    const advancedTrigger = composer.getByRole("button", { name: "Advanced", exact: true });
+    expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("true");
+
+    await expandComposerSection(page, "Advanced");
+    expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("false");
+    expect(await advancedTrigger.getAttribute("aria-expanded")).toBe("true");
+    await page.getByLabel("Disabled Skill Paths").fill(
+      Array.from({ length: 24 }, (_, index) => `/tmp/legacy-skill-${index}`).join("\n")
+    );
+    const advancedPanel = page.locator(
+      '[data-profile-composer-id="advanced"] .profile-composer-section__panel'
+    );
+    const advancedPanelMetrics = await advancedPanel.evaluate((element) => ({
+      overflowY: getComputedStyle(element).overflowY,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight
+    }));
+    expect(["auto", "scroll"]).toContain(advancedPanelMetrics.overflowY);
+    expect(advancedPanelMetrics.scrollHeight).toBeGreaterThan(
+      advancedPanelMetrics.clientHeight
+    );
+    const advancedWorkbenchBox = await workbench.boundingBox();
+    expect(advancedWorkbenchBox).toEqual(initialWorkbenchBox);
+    const [advancedEditorBox, advancedComposerBox] = await Promise.all([
+      editor.boundingBox(),
+      composer.boundingBox()
+    ]);
+    expect(advancedEditorBox).not.toBeNull();
+    expect(advancedComposerBox).not.toBeNull();
+    expect(advancedComposerBox!.y + advancedComposerBox!.height).toBeLessThanOrEqual(
+      advancedEditorBox!.y + advancedEditorBox!.height
+    );
+    for (const sectionName of ["Instructions", "Skills", "MCP Servers", "Advanced"] as const) {
+      await expectInViewport(
+        page,
+        composer.getByRole("button", { name: sectionName, exact: true })
+      );
+    }
+    const advancedDocumentMetrics = await page.evaluate(() => ({
+      documentHeight: document.documentElement.scrollHeight,
+      viewportHeight: document.documentElement.clientHeight
+    }));
+    expect(advancedDocumentMetrics.documentHeight).toBe(
+      advancedDocumentMetrics.viewportHeight
+    );
+
+    await expandComposerSection(page, "Skills");
+    expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("true");
+    expect(await advancedTrigger.getAttribute("aria-expanded")).toBe("false");
+
+    const expandedWorkbenchBox = await workbench.boundingBox();
+    expect(expandedWorkbenchBox).toEqual(initialWorkbenchBox);
+    const [editorBox, composerBox] = await Promise.all([
+      editor.boundingBox(),
+      composer.boundingBox()
+    ]);
+    expect(editorBox).not.toBeNull();
+    expect(composerBox).not.toBeNull();
+    expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(
+      editorBox!.y + editorBox!.height
+    );
+    for (const sectionName of ["Instructions", "Skills", "MCP Servers", "Advanced"] as const) {
+      await expectInViewport(
+        page,
+        composer.getByRole("button", { name: sectionName, exact: true })
+      );
+    }
+    await expectInViewport(page, header);
+    await expectInViewport(page, readiness);
+    await expectInViewport(page, workbench);
+
+    const expandedMetrics = await editor.evaluate((element) => ({
+      overflowY: getComputedStyle(element).overflowY,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      documentHeight: document.documentElement.scrollHeight,
+      viewportHeight: document.documentElement.clientHeight
+    }));
+    const expandedPanel = page.locator(
+      '[data-profile-composer-id="skills"] .profile-composer-section__panel'
+    );
+    const panelMetrics = await expandedPanel.evaluate((element) => ({
+      overflowY: getComputedStyle(element).overflowY,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight
+    }));
+    expect(expandedMetrics.overflowY).toBe("hidden");
+    expect(["auto", "scroll"]).toContain(panelMetrics.overflowY);
+    expect(panelMetrics.scrollHeight).toBeGreaterThan(panelMetrics.clientHeight);
+    expect(expandedMetrics.documentHeight).toBe(expandedMetrics.viewportHeight);
   }, 30_000);
 
   it("imports a local skill folder from the Import Skill drawer", async () => {

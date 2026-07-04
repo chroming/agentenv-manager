@@ -55,7 +55,12 @@ import { McpEditor } from "./components/McpEditor";
 import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
-import { ProfileSidebar, type AppWorkspace, type LibraryTab } from "./components/ProfileSidebar";
+import {
+  ProfileSidebar,
+  targetIconFor,
+  type AppWorkspace,
+  type LibraryTab
+} from "./components/ProfileSidebar";
 import {
   SkillLibraryPanel,
   type SkillUpdateCheckStatus
@@ -355,6 +360,7 @@ export const App = () => {
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
+  const [rollbackError, setRollbackError] = useState<string>();
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
   const [activeLibraryTab, setActiveLibraryTab] = useState<LibraryTab>("skills");
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
@@ -383,6 +389,19 @@ export const App = () => {
   const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
   const profileFlowRequestRef = useRef(0);
   const activeProfileFlowRequestRef = useRef<number | undefined>(undefined);
+  const saveInFlightRef = useRef(false);
+  const rollbackReturnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (rollbackPreview || busy) {
+      return;
+    }
+    const returnFocus = rollbackReturnFocusRef.current;
+    if (returnFocus?.isConnected) {
+      returnFocus.focus();
+    }
+    rollbackReturnFocusRef.current = null;
+  }, [busy, rollbackPreview]);
 
   const invalidateProfileFlow = () => {
     profileFlowRequestRef.current += 1;
@@ -587,6 +606,10 @@ export const App = () => {
   };
 
   const saveSelectedProfile = async () => {
+    if (saveInFlightRef.current) {
+      return;
+    }
+    saveInFlightRef.current = true;
     setBusy(true);
     setError(undefined);
     try {
@@ -594,6 +617,7 @@ export const App = () => {
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
+      saveInFlightRef.current = false;
       setBusy(false);
     }
   };
@@ -846,6 +870,20 @@ export const App = () => {
   };
   const readiness = deriveProfileReadiness(readinessInput);
   const applyActionLabel = deriveApplyActionLabel(readinessInput);
+  const applyContextLabel = applyActionLabel.startsWith("Take over")
+    ? "Take over"
+    : applyActionLabel.startsWith("Review")
+      ? "Review"
+      : applyActionLabel.startsWith("Resolve")
+        ? "Resolve"
+        : "Apply to";
+  const ReadinessIcon =
+    readiness.status === "ready" || readiness.status === "unmanaged"
+      ? CheckCircle2
+      : readiness.status === "dirty"
+        ? RefreshCw
+        : TriangleAlert;
+  const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
   const managedResourceCount = selectedTargetState?.managedResourceCount ?? 0;
   const applyDisabled = !draftProfile || !selectedTarget || busy;
   const applyDescription = !draftProfile
@@ -918,7 +956,7 @@ export const App = () => {
       return;
     }
     if (readiness.remediationLabel === "Save now") {
-      saveButtonRef.current?.focus();
+      void saveSelectedProfile();
       return;
     }
     if (readiness.remediationLabel === "Review Advanced") {
@@ -959,8 +997,11 @@ export const App = () => {
   };
 
   const previewSelectedRollback = async (backupId: string) => {
+    rollbackReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setBusy(true);
     setError(undefined);
+    setRollbackError(undefined);
     setPreview(undefined);
     try {
       const nextPreview = await window.agentEnv.previewRollback(backupId);
@@ -979,19 +1020,29 @@ export const App = () => {
 
     setBusy(true);
     setError(undefined);
+    setRollbackError(undefined);
     setProfileSaveStatus("");
+    let restored = false;
     try {
       const result = await window.agentEnv.rollback(rollbackPreview.backupId);
       if (!result.ok) {
-        setError(result.errors.join("\n"));
+        const message = result.errors.join("\n");
+        setError(message);
+        setRollbackError(message);
         return;
       }
-      setRollbackPreview(undefined);
       await refreshProfiles();
+      restored = true;
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      setRollbackError(message);
     } finally {
       setBusy(false);
+      if (restored) {
+        setRollbackPreview(undefined);
+        setRollbackError(undefined);
+      }
     }
   };
 
@@ -1585,6 +1636,7 @@ export const App = () => {
                   </button>
                 </div>
                 <div className="profile-apply-control">
+                  <span className="profile-apply-label">{applyContextLabel}</span>
                   <span className="profile-apply-split">
                     <button
                       className="profile-apply-button"
@@ -1595,7 +1647,15 @@ export const App = () => {
                       disabled={applyDisabled}
                       onClick={previewSelectedProfile}
                     >
-                      <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
+                      {selectedTargetIcon?.assetUrl ? (
+                        <img
+                          className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`}
+                          src={selectedTargetIcon.assetUrl}
+                          alt=""
+                        />
+                      ) : (
+                        <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
+                      )}
                       <strong>{selectedTarget?.name ?? "Target"}</strong>
                     </button>
                     <button
@@ -1616,22 +1676,33 @@ export const App = () => {
                   </span>
                   {isTargetMenuOpen ? (
                     <div className="profile-target-menu" role="menu" aria-label="Profile targets">
-                      {targets.map((target) => (
-                        <button
-                          className={target.id === selectedTargetId ? "is-selected" : ""}
-                          type="button"
-                          role="menuitemradio"
-                          aria-checked={target.id === selectedTargetId}
-                          key={target.id}
-                          onClick={() => selectTarget(target.id)}
-                        >
-                          <Monitor size={16} strokeWidth={2.2} aria-hidden="true" />
-                          <span>{target.name}</span>
-                          {target.id === selectedTargetId ? (
-                            <CheckCircle2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                          ) : null}
-                        </button>
-                      ))}
+                      {targets.map((target) => {
+                        const targetIcon = targetIconFor(target);
+                        return (
+                          <button
+                            className={target.id === selectedTargetId ? "is-selected" : ""}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={target.id === selectedTargetId}
+                            key={target.id}
+                            onClick={() => selectTarget(target.id)}
+                          >
+                            {targetIcon.assetUrl ? (
+                              <img
+                                className={`profile-target-logo profile-target-logo--${targetIcon.flavor}`}
+                                src={targetIcon.assetUrl}
+                                alt=""
+                              />
+                            ) : (
+                              <Monitor size={16} strokeWidth={2.2} aria-hidden="true" />
+                            )}
+                            <span>{target.name}</span>
+                            {target.id === selectedTargetId ? (
+                              <CheckCircle2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                            ) : null}
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : null}
                   <span id="profile-apply-description" hidden>
@@ -1682,21 +1753,34 @@ export const App = () => {
               aria-label="Profile readiness"
             >
               <div className="profile-readiness-strip__state">
-                <strong>{readiness.label}</strong>
-                <span>{readiness.message}</span>
-              </div>
-              <div className="profile-readiness-strip__metric">
-                <strong>{managedResourceCount}</strong>
-                <span>
-                  {` managed resource${managedResourceCount === 1 ? "" : "s"}`}
+                <span className="profile-readiness-strip__icon" aria-hidden="true">
+                  <ReadinessIcon size={18} strokeWidth={2.3} />
+                </span>
+                <span className="profile-readiness-strip__copy">
+                  <strong>{readiness.label}</strong>
+                  <span>{readiness.message}</span>
                 </span>
               </div>
               <div className="profile-readiness-strip__metric">
-                <strong>{readyTargetCount}</strong>
-                <span>{` ready target${readyTargetCount === 1 ? "" : "s"}`}</span>
+                <span className="profile-readiness-strip__metric-icon" aria-hidden="true">
+                  <Database size={17} strokeWidth={2.25} />
+                </span>
+                <span>
+                  <strong>{managedResourceCount}</strong>
+                  <small>{` managed resource${managedResourceCount === 1 ? "" : "s"}`}</small>
+                </span>
+              </div>
+              <div className="profile-readiness-strip__metric">
+                <span className="profile-readiness-strip__metric-icon" aria-hidden="true">
+                  <Monitor size={17} strokeWidth={2.25} />
+                </span>
+                <span>
+                  <strong>{readyTargetCount}</strong>
+                  <small>{` ready target${readyTargetCount === 1 ? "" : "s"}`}</small>
+                </span>
               </div>
               {readiness.remediationLabel ? (
-                <button type="button" onClick={runReadinessRemediation}>
+                <button type="button" disabled={busy} onClick={runReadinessRemediation}>
                   {readiness.remediationLabel}
                 </button>
               ) : null}
@@ -1933,14 +2017,28 @@ export const App = () => {
                 <HistoryView
                   backups={backups}
                   busy={busy}
-                  rollbackPreview={rollbackPreview}
+                  rollbackPreview={undefined}
                   onPreviewRollback={previewSelectedRollback}
                   onRestoreRollback={restoreSelectedRollback}
                 />
               </ProfileComposerSection>
             </section>
             {rollbackPreview ? (
-              <PreviewDialog preview={rollbackPreview} title="Rollback preview" />
+              <PreviewDialog
+                preview={rollbackPreview}
+                title="Rollback preview"
+                confirmLabel="Restore backup"
+                confirmDisabled={busy || rollbackPreview.errors.length > 0}
+                cancelDisabled={busy}
+                errorMessage={rollbackError}
+                onCancel={busy
+                  ? undefined
+                  : () => {
+                      setRollbackPreview(undefined);
+                      setRollbackError(undefined);
+                    }}
+                onConfirm={restoreSelectedRollback}
+              />
             ) : null}
             {preview ? (
               <PreviewDialog

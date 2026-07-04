@@ -6,8 +6,10 @@ interface PreviewDialogProps {
   preview?: ActivationPreview | RollbackPreview;
   title?: string;
   confirmDisabled?: boolean;
+  cancelDisabled?: boolean;
   confirmLabel?: string;
   cancelLabel?: string;
+  errorMessage?: string;
   onCancel?(): void;
   onConfirm?(): void;
 }
@@ -81,8 +83,10 @@ export const PreviewDialog = ({
   preview,
   title = "Preview",
   confirmDisabled = false,
+  cancelDisabled = false,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
+  errorMessage,
   onCancel,
   onConfirm
 }: PreviewDialogProps) => {
@@ -235,12 +239,18 @@ export const PreviewDialog = ({
           </details>
         ))}
       </div>
+      {errorMessage ? (
+        <p className="error preview-action-error" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
       {hasActions ? (
         <footer className="preview-actions">
           <button
             ref={cancelButtonRef}
             className="secondary-action"
             type="button"
+            disabled={cancelDisabled}
             onClick={onCancel}
           >
             {cancelLabel}

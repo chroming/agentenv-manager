@@ -47,7 +47,7 @@ const targetInitials = (target: TargetInfo) => {
   return initials || "A";
 };
 
-const targetIconFor = (target: TargetInfo): { flavor: TargetIconFlavor; assetUrl?: string } => {
+export const targetIconFor = (target: TargetInfo): { flavor: TargetIconFlavor; assetUrl?: string } => {
   const key = `${target.id} ${target.name}`.toLowerCase();
 
   if (key.includes("opencode")) {
