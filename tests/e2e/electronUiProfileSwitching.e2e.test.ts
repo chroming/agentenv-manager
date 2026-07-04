@@ -520,6 +520,7 @@ describe("Electron UI profile switching e2e", () => {
     await openCodeCard.waitFor({ state: "visible" });
     await expect.poll(() => openCodeCard.textContent()).toContain("Ready");
     await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
+    await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
     await expect.poll(() => openCodeCard.textContent()).toContain(
       join(homeDir, ".config", "opencode")
     );
@@ -529,6 +530,7 @@ describe("Electron UI profile switching e2e", () => {
     const codexCard = page.getByRole("article", { name: "Target Codex" });
     await codexCard.waitFor({ state: "visible" });
     await expect.poll(() => codexCard.textContent()).toContain("Ready");
+    await codexCard.getByRole("button", { name: "Show Codex diagnostics" }).click();
     await expect.poll(() => codexCard.textContent()).toContain(join(homeDir, ".codex"));
   }, 30_000);
 
@@ -542,8 +544,7 @@ describe("Electron UI profile switching e2e", () => {
     const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
     await openCodeCard.waitFor({ state: "visible" });
     await expect.poll(() => openCodeCard.textContent()).toContain("Managed by AgentEnv");
-    await expect.poll(() => openCodeCard.textContent()).toContain("Active profile: UI OpenCode alpha");
-    await expect.poll(() => openCodeCard.textContent()).toContain("managed resources");
+    await expect.poll(() => openCodeCard.textContent()).toContain("Active profileUI OpenCode alpha");
   }, 30_000);
 
   it("creates, edits, duplicates, and deletes profiles through the rendered app", async () => {
@@ -993,6 +994,109 @@ describe("Electron UI profile switching e2e", () => {
     expect(expandedMetrics.documentHeight).toBe(expandedMetrics.viewportHeight);
   }, 30_000);
 
+  it("keeps navigation order and workspace width stable across primary pages", async () => {
+    const { page } = await launchApp();
+    await page.setViewportSize({ width: 1180, height: 728 });
+
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+    const skillsButton = navigation.getByRole("button", { name: "Skills", exact: true });
+    const profilesButton = navigation.getByRole("button", { name: "Profiles", exact: true });
+    const libraryPositions = await Promise.all([skillsButton.boundingBox(), profilesButton.boundingBox()]);
+    expect(libraryPositions[0]).not.toBeNull();
+    expect(libraryPositions[1]).not.toBeNull();
+    expect(libraryPositions[0]!.y).toBeLessThan(libraryPositions[1]!.y);
+
+    await profilesButton.click();
+    const profilePositions = await Promise.all([skillsButton.boundingBox(), profilesButton.boundingBox()]);
+    expect(profilePositions[0]!.y).toBeLessThan(profilePositions[1]!.y);
+
+    await navigation.getByRole("button", { name: "Targets", exact: true }).click();
+    expect(await page.getByRole("complementary", { name: "Workspace summary" }).count()).toBe(0);
+    await navigation.getByRole("button", { name: "Settings", exact: true }).click();
+    expect(await page.getByRole("complementary", { name: "Workspace summary" }).count()).toBe(0);
+
+    const metrics = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth
+    }));
+    expect(metrics.documentWidth).toBe(metrics.viewportWidth);
+  }, 30_000);
+
+  it("opens the apply preview at its summary instead of scrolling to the footer", async () => {
+    const { page } = await launchApp();
+    await page.setViewportSize({ width: 1180, height: 728 });
+    await selectProfile(page, "UI OpenCode alpha");
+
+    await applyActionButton(page, "OpenCode").click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+
+    expect(await previewDialog.evaluate((element) => element.scrollTop)).toBe(0);
+    await expectInViewport(page, previewDialog.locator(".preview-header"));
+    await expectInViewport(page, previewDialog.locator(".preview-actions"));
+  }, 30_000);
+
+  it("makes Targets a sequential management workflow with on-demand diagnostics", async () => {
+    const { page } = await launchApp();
+    await page.setViewportSize({ width: 1180, height: 728 });
+    await page.getByRole("button", { name: "Targets", exact: true }).click();
+
+    const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
+    const claudeCard = page.getByRole("article", { name: "Target Claude Code" });
+    const [openCodeBox, claudeBox] = await Promise.all([
+      openCodeCard.boundingBox(),
+      claudeCard.boundingBox()
+    ]);
+    expect(openCodeBox).not.toBeNull();
+    expect(claudeBox).not.toBeNull();
+    expect(claudeBox!.y).toBeGreaterThan(openCodeBox!.y);
+
+    await openCodeCard
+      .getByRole("button", { name: "Open OpenCode in Profiles" })
+      .waitFor({ state: "visible" });
+    const diagnostics = openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" });
+    await diagnostics.click();
+    await openCodeCard.getByRole("region", { name: "OpenCode diagnostics" }).waitFor({
+      state: "visible"
+    });
+
+    expect(await page.getByRole("button", { name: "Activity", exact: true }).count()).toBe(0);
+    await page.getByRole("region", { name: "Recovery" }).waitFor({ state: "visible" });
+
+    const codexCard = page.getByRole("article", { name: "Target Codex" });
+    await codexCard.getByRole("button", { name: "Open Codex in Profiles" }).click();
+    await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
+    await page.getByText("No profile selected", { exact: true }).waitFor({ state: "visible" });
+  }, 30_000);
+
+  it("opens MCP creation from a clear page action", async () => {
+    const { page } = await launchApp();
+    await page.getByRole("button", { name: "MCP Servers", exact: true }).click();
+
+    expect(await page.getByRole("region", { name: "MCP server editor" }).count()).toBe(0);
+    await page.getByRole("button", { name: "Add MCP server" }).click();
+    const editor = page.getByRole("dialog", { name: "MCP server editor" });
+    await editor.waitFor({ state: "visible" });
+    await page.mouse.click(220, 420);
+    await editor.waitFor({ state: "detached" });
+
+    const addButton = page.getByRole("button", { name: "Add MCP server" });
+    await addButton.click();
+    await editor.waitFor({ state: "visible" });
+    await expect
+      .poll(() =>
+        page
+          .getByLabel("MCP library id")
+          .evaluate((element) => document.activeElement === element)
+      )
+      .toBe(true);
+    await page.keyboard.press("Escape");
+    await editor.waitFor({ state: "detached" });
+    await expect
+      .poll(() => addButton.evaluate((element) => document.activeElement === element))
+      .toBe(true);
+  }, 30_000);
+
   it("edits and persists Instructions from the default-collapsed Composer", async () => {
     const { appDataRoot, page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
@@ -1085,6 +1189,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "MCP Servers" }).click();
     await page.getByRole("region", { name: "MCP library" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Add MCP server" }).click();
     await page.getByLabel("MCP library id").fill("local-search");
     await page.getByLabel("MCP library name").fill("Local Search");
     await page.getByLabel("MCP command").fill("node");
@@ -1117,6 +1222,7 @@ describe("Electron UI profile switching e2e", () => {
     await localSearch.getByRole("button", { name: "Edit local-search" }).click();
     await expect.poll(() => page.getByLabel("MCP library id").inputValue()).toBe("local-search");
     await expect.poll(() => page.getByLabel("MCP args").inputValue()).toBe("server.js\n--stdio");
+    await page.getByRole("button", { name: "Close MCP server editor" }).click();
 
     await localSearch.getByRole("button", { name: "Remove local-search" }).click();
     const deleteDialog = page.getByRole("dialog", { name: "Delete MCP server" });
@@ -1510,6 +1616,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "MCP Servers" }).click();
     await page.getByRole("region", { name: "MCP library" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Add MCP server" }).click();
     await page.getByLabel("MCP library id").fill("local-search");
     await page.getByLabel("MCP library name").fill("Local Search");
     await page.getByLabel("MCP command").fill("node");

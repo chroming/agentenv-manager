@@ -544,7 +544,6 @@ export const SkillLibraryPanel = ({
                     : "No update source";
             const hasUpdate = Boolean(updateInfo?.updateAvailable);
             const hasError = Boolean(updateInfo?.error);
-            const canCheckUpdate = hasUpdateSource && updateCheckStatus?.state !== "checking";
             return (
               <div
                 aria-label={`Library item ${skill.id}`}
@@ -634,17 +633,25 @@ export const SkillLibraryPanel = ({
                     type="button"
                     aria-label={
                       !hasUpdateSource
-                        ? `No update source ${skill.id}`
+                        ? `Set update source ${skill.id}`
                         : hasUpdate
                         ? `Update ${skill.id}`
                         : hasError
                           ? `Retry update check ${skill.id}`
                           : `Check update ${skill.id}`
                     }
-                    disabled={!canCheckUpdate}
-                    onClick={() =>
-                      hasUpdate ? onUpdateLibrarySkill(skill.id) : onPreviewLibrarySkillUpdate(skill.id)
-                    }
+                    disabled={updateCheckStatus?.state === "checking"}
+                    onClick={(event) => {
+                      if (!hasUpdateSource) {
+                        toggleActionMenu(skill.id, event.currentTarget);
+                        return;
+                      }
+                      if (hasUpdate) {
+                        onUpdateLibrarySkill(skill.id);
+                      } else {
+                        onPreviewLibrarySkillUpdate(skill.id);
+                      }
+                    }}
                   >
                     {hasUpdate ? (
                       <Sparkles size={15} strokeWidth={2.2} />
@@ -654,7 +661,7 @@ export const SkillLibraryPanel = ({
                       <RefreshCw size={15} strokeWidth={2.2} />
                     )}
                     <span>
-                      {!hasUpdateSource ? "No source" : hasUpdate ? "Update" : hasError ? "Retry" : "Check"}
+                      {!hasUpdateSource ? "Set source" : hasUpdate ? "Update" : hasError ? "Retry" : "Check"}
                     </span>
                   </button>
                   <div className="row-action-menu">

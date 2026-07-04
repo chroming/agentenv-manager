@@ -704,6 +704,32 @@ describe("App", () => {
     await waitFor(() => expect(api.removeMcpServer).toHaveBeenCalledWith("context7"));
   });
 
+  it("keeps an MCP draft open when persistence fails", async () => {
+    installApi({
+      saveMcpServer: vi.fn().mockRejectedValue(new Error("Library is read-only"))
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Skill library" });
+    fireEvent.click(screen.getByRole("button", { name: "MCP Servers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add MCP server" }));
+    fireEvent.change(screen.getByLabelText("MCP library id"), {
+      target: { value: "local-search" }
+    });
+    fireEvent.change(screen.getByLabelText("MCP library name"), {
+      target: { value: "Local Search" }
+    });
+    fireEvent.change(screen.getByLabelText("MCP command"), {
+      target: { value: "node" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
+
+    await screen.findByRole("alert");
+    expect(screen.getByRole("dialog", { name: "MCP server editor" })).toBeInTheDocument();
+    expect(screen.getByLabelText("MCP library id")).toHaveValue("local-search");
+    expect(screen.getByLabelText("MCP command")).toHaveValue("node");
+  });
+
   it("refreshes target discovery from the Targets page", async () => {
     const refreshedTarget = {
       ...target,
@@ -1165,8 +1191,8 @@ describe("App", () => {
     await openProfiles();
     let readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("OpenCode is ready to take over");
-    expect(readiness).toHaveTextContent("0 Library resources");
-    expect(readiness).toHaveTextContent("1 ready target");
+    expect(readiness).toHaveTextContent("Preview required");
+    expect(readiness).toHaveTextContent("Automatic backup and conflict checks are enabled");
     let action = screen.getByRole("button", { name: "Take over OpenCode" });
     expect(action).toHaveAttribute("title", "Take over OpenCode");
     fireEvent.click(action);
@@ -1182,7 +1208,7 @@ describe("App", () => {
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("OpenCode is ready to preview and apply");
-    expect(readiness).toHaveTextContent("0 Library resources");
+    expect(readiness).toHaveTextContent("Protected apply");
     action = screen.getByRole("button", { name: "Preview & apply to OpenCode" });
     expect(action).toHaveAttribute("title", "Preview & apply to OpenCode");
 
@@ -1293,8 +1319,8 @@ describe("App", () => {
 
     const openCodeCard = await screen.findByRole("article", { name: "Target OpenCode" });
     expect(within(openCodeCard).getByText("Managed by AgentEnv")).toBeInTheDocument();
-    expect(within(openCodeCard).getByText("Active profile: Daily Coding")).toBeInTheDocument();
-    expect(within(openCodeCard).getByText("3 managed resources")).toBeInTheDocument();
+    expect(within(openCodeCard).getByText("Active profile")).toBeInTheDocument();
+    expect(within(openCodeCard).getByText("Daily Coding")).toBeInTheDocument();
   });
 
   it("creates, edits, duplicates, and deletes profiles from the profile workspace", async () => {
@@ -1384,6 +1410,27 @@ describe("App", () => {
     await waitFor(() => expect(api.rollback).toHaveBeenCalledWith(backup.id));
     expect(screen.queryByText("Rollback preview")).not.toBeInTheDocument();
     await waitFor(() => expect(previewRollbackButton).toHaveFocus());
+  });
+
+  it("uses the confirmation preview when recovery starts from Targets", async () => {
+    const api = installApi({
+      listBackups: vi.fn().mockResolvedValue([backup])
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Skill library" });
+    fireEvent.click(screen.getByRole("button", { name: "Targets" }));
+    const history = await screen.findByRole("region", { name: "History" });
+    fireEvent.click(
+      within(history).getByRole("button", { name: `Preview rollback ${backup.id}` })
+    );
+
+    await waitFor(() => expect(api.previewRollback).toHaveBeenCalledWith(backup.id));
+    const rollbackDialog = screen.getByRole("dialog", { name: "Preview" });
+    expect(within(rollbackDialog).getByText("Rollback preview")).toBeInTheDocument();
+    expect(within(history).queryByRole("button", { name: "Restore backup" })).not.toBeInTheDocument();
+    fireEvent.click(within(rollbackDialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Preview" })).not.toBeInTheDocument();
   });
 
   it("keeps rollback failures visible inside the confirmation dialog", async () => {

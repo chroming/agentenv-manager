@@ -67,6 +67,7 @@ import {
   type SkillUpdateCheckStatus
 } from "./components/SkillLibraryPanel";
 import { SkillsEditor } from "./components/SkillsEditor";
+import { TargetWorkspace } from "./components/TargetWorkspace";
 import {
   deriveApplyActionLabel,
   deriveProfileReadiness
@@ -142,13 +143,6 @@ const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   configText: profile.configText,
   assetPolicy: profile.assetPolicy
 });
-
-const targetStatusLabel: Record<TargetInfo["health"]["status"], string> = {
-  ready: "Ready",
-  "needs-setup": "Needs setup",
-  missing: "Missing",
-  guarded: "Guarded"
-};
 
 type AppFeedbackKind = "loading" | "success" | "error" | "info";
 
@@ -369,6 +363,7 @@ export const App = () => {
     useState<SkillUpdateCheckStatus>();
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
+  const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
   const [activeComposerSection, setActiveComposerSection] =
     useState<ComposerSection>();
@@ -403,6 +398,14 @@ export const App = () => {
     }
     rollbackReturnFocusRef.current = null;
   }, [busy, rollbackPreview]);
+
+  useEffect(() => {
+    if (settingsSaveStatus !== "Settings saved") {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => setSettingsSaveStatus(""), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [settingsSaveStatus]);
 
   const invalidateProfileFlow = () => {
     profileFlowRequestRef.current += 1;
@@ -877,13 +880,6 @@ export const App = () => {
   };
   const readiness = deriveProfileReadiness(readinessInput);
   const applyActionLabel = deriveApplyActionLabel(readinessInput);
-  const applyContextLabel = applyActionLabel.startsWith("Take over")
-    ? "Apply to"
-    : applyActionLabel.startsWith("Review")
-      ? "Review"
-      : applyActionLabel.startsWith("Resolve")
-        ? "Resolve"
-        : "Apply to";
   const ReadinessIcon =
     readiness.status === "ready" || readiness.status === "unmanaged"
       ? CheckCircle2
@@ -891,20 +887,22 @@ export const App = () => {
         ? RefreshCw
         : TriangleAlert;
   const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
-  const libraryResourceCount = librarySkills.length + mcpServers.length;
-  const readinessAttentionLabel = readiness.remediationLabel
-    ?? (readiness.status === "no-profile"
-      ? "Profile required"
-      : readiness.status === "unmanaged"
-        ? "Take over required"
-        : "No action needed");
-  const readinessAttentionMessage = readiness.remediationLabel
-    ? readiness.message
-    : readiness.status === "no-profile"
-      ? "Create a profile to continue"
-      : readiness.status === "unmanaged"
-        ? "Preview the first managed apply"
-        : "Workspace is ready";
+  const applySafetyTitle =
+    readiness.status === "unmanaged"
+      ? "Preview required"
+      : readiness.status === "ready"
+        ? "Protected apply"
+        : readiness.status === "no-profile"
+          ? "Profile required"
+          : readiness.status === "no-target"
+            ? "Target required"
+            : readiness.status === "dirty"
+              ? "Save required"
+              : "Review required";
+  const applySafetyMessage =
+    readiness.status === "unmanaged" || readiness.status === "ready"
+      ? "Automatic backup and conflict checks are enabled."
+      : readiness.message;
   const selectedProfileApplication = draftProfile
     ? findRecentProfileApplication(draftProfile.id, targetStates, targets)
     : undefined;
@@ -924,7 +922,6 @@ export const App = () => {
       (selectedTarget?.health.canWrite ?? false)
   );
 
-  const totalResources = librarySkills.length + mcpServers.length;
   const updateCount = skillUpdates.filter((update) => update.updateAvailable).length;
   const readyTargetCount = targets.filter(
     (target) => target.health.status === "ready" && target.health.canWrite
@@ -1321,6 +1318,7 @@ export const App = () => {
   const updateSkillSettings = async (input: Partial<AgentEnvSettings>) => {
     setBusy(true);
     setError(undefined);
+    setSettingsSaveStatus("Saving settings");
     try {
       const nextSettings = await window.agentEnv.updateSettings(input);
       setSkillSettings(nextSettings);
@@ -1329,7 +1327,9 @@ export const App = () => {
         setGithubAuthStatus(await window.agentEnv.readGitHubAuthStatus());
       }
       await refreshProfiles();
+      setSettingsSaveStatus("Settings saved");
     } catch (unknownError) {
+      setSettingsSaveStatus("");
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setBusy(false);
@@ -1339,6 +1339,7 @@ export const App = () => {
   const startGitHubLogin = async () => {
     setBusy(true);
     setError(undefined);
+    setSettingsSaveStatus("");
     setGithubLoginMessage("");
     try {
       const clientId = githubClientIdDraft.trim();
@@ -1367,6 +1368,7 @@ export const App = () => {
     }
     setBusy(true);
     setError(undefined);
+    setSettingsSaveStatus("");
     try {
       const result = await window.agentEnv.pollGitHubDeviceLogin(githubDeviceLogin.id);
       if (result.state === "signed-in") {
@@ -1393,6 +1395,7 @@ export const App = () => {
   const signOutGitHub = async () => {
     setBusy(true);
     setError(undefined);
+    setSettingsSaveStatus("");
     try {
       const status = await window.agentEnv.signOutGitHub();
       setGithubAuthStatus(status);
@@ -1413,6 +1416,7 @@ export const App = () => {
       await refreshProfiles();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      throw unknownError;
     } finally {
       setBusy(false);
     }
@@ -1431,12 +1435,8 @@ export const App = () => {
     }
   };
 
-  const totalInstalledSkills = new Set(
-    skillInventory.flatMap((skill) => skill.foundIn.map((targetId) => `${targetId}:${skill.id}`))
-  ).size;
   const githubSkillCount = librarySkills.filter((skill) => skill.sourceType === "github").length;
   const localSkillCount = librarySkills.filter((skill) => skill.sourceType === "local").length;
-  const usedSkillCount = librarySkills.filter((skill) => (skillUsage[skill.id] ?? []).length > 0).length;
   const needsManagementCount = skillInventory.filter((skill) => skill.status !== "managed").length;
   const appFeedback: AppFeedbackMessage | undefined = error
     ? { kind: "error", title: "Action failed", message: error }
@@ -1457,6 +1457,11 @@ export const App = () => {
             kind: profileSaveStatus === "Profile saved" ? "success" : "info",
             title: profileSaveStatus
           }
+        : settingsSaveStatus
+          ? {
+              kind: settingsSaveStatus === "Settings saved" ? "success" : "loading",
+              title: settingsSaveStatus
+            }
         : githubLoginMessage
           ? {
               kind: githubLoginMessage.startsWith("Signed") ? "success" : "info",
@@ -1533,7 +1538,7 @@ export const App = () => {
                 ) : null}
               </div>
             </header>
-            <section className="metric-strip" aria-label="Library command center">
+            <section className="metric-strip metric-strip--compact" aria-label="Library summary">
               <div className="metric-tile">
                 <span className="metric-icon metric-icon--purple" aria-hidden="true">
                   {activeLibraryTab === "skills" ? (
@@ -1545,57 +1550,38 @@ export const App = () => {
                 <div>
                   <strong>{activeLibraryTab === "skills" ? librarySkills.length : mcpServers.length}</strong>
                   <small>{activeLibraryTab === "skills" ? "Total Skills" : "MCP Servers"}</small>
-                  <span>{activeLibraryTab === "skills" ? `${localSkillCount} local · ${githubSkillCount} GitHub` : `${totalResources} library resources`}</span>
-                </div>
-              </div>
-              <div className="metric-tile">
-                <span className="metric-icon metric-icon--green" aria-hidden="true">
-                  <RefreshCw size={21} strokeWidth={2.2} />
-                </span>
-                <div>
-                  <strong>{updateCount}</strong>
-                  <small>Updates</small>
-                  <span>{skillUpdates.length} tracked checks</span>
-                </div>
-              </div>
-              <div className="metric-tile">
-                <span className="metric-icon metric-icon--amber" aria-hidden="true">
-                  <FolderKanban size={21} strokeWidth={2.2} />
-                </span>
-                <div>
-                  <strong>{activeLibraryTab === "skills" ? usedSkillCount : Object.keys(mcpUsage).length}</strong>
-                  <small>In use</small>
-                  <span>Across {profiles.length} profiles</span>
-                </div>
-              </div>
-              <div className="metric-tile">
-                <span className="metric-icon metric-icon--blue" aria-hidden="true">
-                  <MonitorCheck size={21} strokeWidth={2.2} />
-                </span>
-                <div>
-                  <strong>{activeLibraryTab === "skills" ? totalInstalledSkills : readyTargetCount}</strong>
-                  <small>Installs</small>
-                  <span>{activeLibraryTab === "skills" ? "Target copies" : `${readyTargetCount}/${targets.length || 0} ready`}</span>
+                  <span>{activeLibraryTab === "skills" ? `${localSkillCount} local · ${githubSkillCount} GitHub` : "Shared across profiles"}</span>
                 </div>
               </div>
               {activeLibraryTab === "skills" ? (
-                <button
-                  className="metric-tile metric-tile--button"
-                  type="button"
-                  onClick={() => {
-                    void openSkillDiscoveries();
-                  }}
-                >
-                  <span className="metric-icon metric-icon--slate" aria-hidden="true">
-                    <HardDrive size={21} strokeWidth={2.2} />
-                  </span>
-                  <div>
-                    <strong>{needsManagementCount}</strong>
-                    <small>Unmanaged</small>
-                    <span>Target skills</span>
+                <>
+                  <div className="metric-tile">
+                    <span className="metric-icon metric-icon--green" aria-hidden="true">
+                      <RefreshCw size={21} strokeWidth={2.2} />
+                    </span>
+                    <div>
+                      <strong>{updateCount}</strong>
+                      <small>Updates</small>
+                      <span>{skillUpdates.length} tracked sources</span>
+                    </div>
                   </div>
-                </button>
-              ) : null}
+                  <button className="metric-tile metric-tile--button" type="button" onClick={() => { void openSkillDiscoveries(); }}>
+                    <span className="metric-icon metric-icon--slate" aria-hidden="true"><HardDrive size={21} strokeWidth={2.2} /></span>
+                    <div><strong>{needsManagementCount}</strong><small>Needs attention</small><span>Local target skills</span></div>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="metric-tile">
+                    <span className="metric-icon metric-icon--amber" aria-hidden="true"><FolderKanban size={21} strokeWidth={2.2} /></span>
+                    <div><strong>{Object.keys(mcpUsage).length}</strong><small>In use</small><span>Across {profiles.length} profiles</span></div>
+                  </div>
+                  <div className="metric-tile">
+                    <span className="metric-icon metric-icon--blue" aria-hidden="true"><MonitorCheck size={21} strokeWidth={2.2} /></span>
+                    <div><strong>{readyTargetCount}</strong><small>Ready targets</small><span>{readyTargetCount}/{targets.length || 0} available</span></div>
+                  </div>
+                </>
+              )}
             </section>
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
@@ -1661,7 +1647,6 @@ export const App = () => {
                   </button>
                 </div>
                 <div className="profile-apply-control">
-                  <span className="profile-apply-label">{applyContextLabel}</span>
                   <span className="profile-apply-split">
                     <button
                       className="profile-apply-button"
@@ -1681,7 +1666,7 @@ export const App = () => {
                       ) : (
                         <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
                       )}
-                      <strong>{selectedTarget?.name ?? "Target"}</strong>
+                      <strong>{applyActionLabel}</strong>
                     </button>
                     <button
                       ref={targetMenuButtonRef}
@@ -1786,31 +1771,13 @@ export const App = () => {
                   <span>{readiness.message}</span>
                 </span>
               </div>
-              <div className="profile-readiness-strip__metric">
-                <span className="profile-readiness-strip__metric-icon" aria-hidden="true">
-                  <Database size={17} strokeWidth={2.25} />
-                </span>
-                <span>
-                  <strong>{libraryResourceCount}</strong>
-                  <small> Library resources</small>
-                </span>
-              </div>
-              <div className="profile-readiness-strip__metric">
-                <span className="profile-readiness-strip__metric-icon" aria-hidden="true">
-                  <Monitor size={17} strokeWidth={2.25} />
-                </span>
-                <span>
-                  <strong>{readyTargetCount}</strong>
-                  <small>{` ready target${readyTargetCount === 1 ? "" : "s"}`}</small>
-                </span>
-              </div>
               <div className="profile-readiness-strip__attention">
                 <span className="profile-readiness-strip__attention-icon" aria-hidden="true">
-                  <TriangleAlert size={18} strokeWidth={2.25} />
+                  <ShieldCheck size={18} strokeWidth={2.25} />
                 </span>
                 <span className="profile-readiness-strip__copy">
-                  <strong>{readinessAttentionLabel}</strong>
-                  <span>{readinessAttentionMessage}</span>
+                  <strong>{applySafetyTitle}</strong>
+                  <span>{applySafetyMessage}</span>
                 </span>
                 {readiness.remediationLabel ? (
                   <button type="button" disabled={busy} onClick={runReadinessRemediation}>
@@ -2221,111 +2188,25 @@ export const App = () => {
             </section>
           </>
         ) : activeWorkspace === "targets" ? (
-          <section className="target-page" aria-label="Targets">
-            <header className="page-header">
-              <div>
-                <h2 aria-label="Targets">
-                  Targets
-                  <InfoTip label="Targets are local agent runtimes. A target is ready when its command and writable config paths are available." />
-                </h2>
-              </div>
-              <button
-                className="secondary-action"
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  void refreshProfiles();
-                }}
-              >
-                <RefreshCw size={15} strokeWidth={2.2} />
-                Refresh targets
-              </button>
-            </header>
-            <div className="target-grid">
-              {targets.length === 0 ? (
-                <div className="inline-state inline-state--panel">
-                  <span className="inline-state__icon" aria-hidden="true">
-                    <Monitor size={15} strokeWidth={2.2} />
-                  </span>
-                  <span>No supported targets detected</span>
-                </div>
-              ) : null}
-              {targets.map((target) => {
-                const targetState = targetStateById.get(target.id);
-                const isManaged = Boolean(targetState?.activeProfileId);
-                return (
-                  <article
-                    aria-label={`Target ${target.name}`}
-                    className="target-card"
-                    key={target.id}
-                  >
-                    <div className="target-card__header">
-                      <div>
-                        <strong>{target.name}</strong>
-                        <small>{target.description}</small>
-                      </div>
-                      <span className={`target-badge target-badge--${target.health.status}`}>
-                        {targetStatusLabel[target.health.status]}
-                      </span>
-                    </div>
-                    <div className={`target-management-strip${isManaged ? " is-managed" : ""}`}>
-                      <span className="target-management-strip__icon" aria-hidden="true">
-                        {isManaged ? (
-                          <MonitorCheck size={17} strokeWidth={2.2} />
-                        ) : (
-                          <Monitor size={17} strokeWidth={2.2} />
-                        )}
-                      </span>
-                      <div>
-                        <strong>{isManaged ? "Managed by AgentEnv" : "Not managed"}</strong>
-                        <small>
-                          {isManaged
-                            ? `Active profile: ${targetState?.activeProfileName ?? targetState?.activeProfileId}`
-                            : "Ready for first Take over"}
-                        </small>
-                      </div>
-                      <span className="target-management-strip__meta">
-                        {isManaged
-                          ? plural(targetState?.managedResourceCount ?? 0, "managed resource")
-                          : "No managed resources"}
-                      </span>
-                    </div>
-                    <code title={target.paths.configDir}>{target.paths.configDir}</code>
-                    <div className="target-checks">
-                      {target.health.checks.map((check) => (
-                        <div className="target-check" key={check.id}>
-                          <div>
-                            <span>{check.label}</span>
-                            <code title={check.path}>{check.path}</code>
-                          </div>
-                          <strong>{check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing"}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        ) : activeWorkspace === "activity" ? (
-          <section className="activity-page" aria-label="Activity">
-            <header className="page-header">
-              <div>
-                <h2 aria-label="Activity">
-                  Activity
-                  <InfoTip label="Activity shows backups created before apply operations. Use it to preview and restore a previous target state." />
-                </h2>
-              </div>
-            </header>
-            <HistoryView
-              backups={backups}
-              busy={busy}
-              rollbackPreview={rollbackPreview}
-              onPreviewRollback={previewSelectedRollback}
-              onRestoreRollback={restoreSelectedRollback}
-            />
-            {rollbackPreview ? <PreviewDialog preview={rollbackPreview} title="Rollback preview" /> : null}
-          </section>
+          <TargetWorkspace
+            targets={targets}
+            targetStates={targetStates}
+            backups={backups}
+            rollbackPreview={rollbackPreview}
+            rollbackError={rollbackError}
+            busy={busy}
+            onRefresh={() => { void refreshProfiles(); }}
+            onManageTarget={(targetId) => {
+              selectTarget(targetId);
+              setActiveWorkspace("profiles");
+            }}
+            onPreviewRollback={previewSelectedRollback}
+            onCancelRollback={() => {
+              setRollbackPreview(undefined);
+              setRollbackError(undefined);
+            }}
+            onRestoreRollback={restoreSelectedRollback}
+          />
         ) : activeWorkspace === "settings" ? (
           <section className="settings-page" aria-label="Settings">
             <header className="page-header">
@@ -2429,22 +2310,10 @@ export const App = () => {
                 </span>
               </div>
               <div className="github-settings-grid">
-                <label>
-                  <span>OAuth Client ID</span>
-                  <input
-                    aria-label="GitHub OAuth Client ID"
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    value={githubClientIdDraft}
-                    onChange={(event) => setGithubClientIdDraft(event.currentTarget.value)}
-                    placeholder="GitHub OAuth App client ID"
-                  />
-                </label>
                 <div className="github-settings-actions">
                   <button
                     className="primary-button"
-                    disabled={busy}
+                    disabled={busy || !githubClientIdDraft.trim()}
                     onClick={startGitHubLogin}
                     type="button"
                   >
@@ -2456,6 +2325,24 @@ export const App = () => {
                     </button>
                   ) : null}
                 </div>
+                <details className="settings-advanced">
+                  <summary>Developer OAuth configuration</summary>
+                  <p className="settings-muted">
+                    Production builds should provide an app Client ID. Use this override only for local development.
+                  </p>
+                  <label>
+                    <span>OAuth Client ID</span>
+                    <input
+                      aria-label="GitHub OAuth Client ID"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      value={githubClientIdDraft}
+                      onChange={(event) => setGithubClientIdDraft(event.currentTarget.value)}
+                      placeholder="GitHub OAuth App client ID"
+                    />
+                  </label>
+                </details>
               </div>
               {githubDeviceLogin ? (
                 <div className="github-device-card">
@@ -2496,28 +2383,6 @@ export const App = () => {
         )}
       </section>
 
-      {activeWorkspace !== "library" && activeWorkspace !== "profiles" ? (
-        <aside className="activation-panel library-summary-panel" aria-label="Workspace summary">
-          <div className="activation-header">
-            <p className="section-title">{activeWorkspace}</p>
-            <h2>{activeWorkspace === "targets" ? "Runtime health" : activeWorkspace === "activity" ? "Safety log" : "Global defaults"}</h2>
-          </div>
-          <section className="safety-checks">
-            <div className="check-row">
-              <span>Targets ready</span>
-              <strong>{readyTargetCount}/{targets.length || 0}</strong>
-            </div>
-            <div className="check-row">
-              <span>Backups</span>
-              <strong>{backups.length}</strong>
-            </div>
-            <div className="check-row">
-              <span>Library resources</span>
-              <strong>{totalResources}</strong>
-            </div>
-          </section>
-        </aside>
-      ) : null}
     </main>
   );
 };

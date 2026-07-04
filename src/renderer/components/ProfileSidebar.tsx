@@ -1,5 +1,4 @@
 import {
-  Activity,
   BookOpen,
   Boxes,
   Monitor,
@@ -14,7 +13,7 @@ const claudeIconUrl = new URL("../assets/target-icons/claude.svg", import.meta.u
 const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.url).href;
 const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
 
-export type AppWorkspace = "library" | "profiles" | "targets" | "activity" | "settings";
+export type AppWorkspace = "library" | "profiles" | "targets" | "settings";
 export type LibraryTab = "skills" | "mcp";
 
 interface ProfileSidebarProps {
@@ -105,8 +104,7 @@ export const ProfileSidebar = ({
     icon: LucideIcon;
   }> = [
     { id: "profiles", label: "Profiles", detail: "Compose environments", icon: Boxes },
-    { id: "targets", label: "Targets", detail: "Local agent runtimes", icon: Monitor },
-    { id: "activity", label: "Activity", detail: "Backups and changes", icon: Activity }
+    { id: "targets", label: "Targets", detail: "Local agent runtimes", icon: Monitor }
   ];
 
   return (
@@ -183,7 +181,7 @@ export const ProfileSidebar = ({
       <section className="system-status-card" aria-label="System status">
         <div>
           <span className="status-dot is-ready" />
-          <strong>Connected</strong>
+          <strong>Local agents</strong>
         </div>
         <small>
           {readyTargets}/{targets.length} targets · {isLoading ? "Loading" : `${profiles.length} profiles`}

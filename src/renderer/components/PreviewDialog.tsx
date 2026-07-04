@@ -104,7 +104,10 @@ export const PreviewDialog = ({
 
     const invokingControl =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    cancelButtonRef.current?.focus();
+    if (dialogRef.current) {
+      dialogRef.current.scrollTop = 0;
+    }
+    cancelButtonRef.current?.focus({ preventScroll: true });
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" && event.key !== "Tab") {

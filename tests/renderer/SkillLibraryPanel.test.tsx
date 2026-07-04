@@ -186,7 +186,13 @@ describe("SkillLibraryPanel", () => {
     );
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
     expect(copiedLocalRow).toHaveTextContent("No update source");
-    expect(within(copiedLocalRow).getByRole("button", { name: "No update source copied-local" })).toBeDisabled();
+    const setSourceButton = within(copiedLocalRow).getByRole("button", {
+      name: "Set update source copied-local"
+    });
+    expect(setSourceButton).toBeEnabled();
+    fireEvent.click(setSourceButton);
+    expect(screen.getByLabelText("Update source for copied-local")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
