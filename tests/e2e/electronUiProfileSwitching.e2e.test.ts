@@ -716,6 +716,61 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("status").filter({ hasText: "Profile saved" }).waitFor();
   }, 30_000);
 
+  it("keeps desktop shortcuts behind each real blocking modal category", async () => {
+    const { page } = await launchApp();
+    const expectFocusInside = async (dialog: Locator) =>
+      expect(
+        await dialog.evaluate((element) => element.contains(document.activeElement))
+      ).toBe(true);
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await applyActionButton(page, "OpenCode").click();
+    const preview = page.getByRole("dialog", { name: "Preview" });
+    await preview.waitFor({ state: "visible" });
+    await preview.getByRole("button", { name: "Cancel" }).focus();
+    await page.keyboard.press("Meta+f");
+    await expectFocusInside(preview);
+    await page.keyboard.press("Escape");
+
+    await expandComposerSection(page, "Skills");
+    await page.getByRole("button", { name: "Add library skill" }).click();
+    const picker = page.getByRole("dialog", { name: "Add library skills" });
+    await picker.getByRole("button", { name: "Cancel" }).focus();
+    await page.keyboard.press("Meta+f");
+    await expectFocusInside(picker);
+    await page.keyboard.press("Escape");
+
+    await openSkillLibrary(page);
+    const skillSearch = page.getByRole("textbox", { name: "Search skills" });
+    const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
+    await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
+    await page.getByRole("menuitem", { name: /Delete from library/ }).click();
+    const skillDelete = page.getByRole("dialog", { name: "Delete library skill" });
+    await skillDelete.getByRole("button", { name: "Cancel" }).focus();
+    await page.keyboard.press("Meta+f");
+    await expectFocusInside(skillDelete);
+    expect(await skillSearch.evaluate((element) => document.activeElement === element)).toBe(false);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "MCP Servers", exact: true }).click();
+    const mcpSearch = page.getByRole("textbox", { name: "Search MCP servers" });
+    await page.getByRole("button", { name: "Add MCP server" }).click();
+    const editor = page.getByRole("dialog", { name: "MCP server editor" });
+    await page.keyboard.press("Meta+f");
+    await expectFocusInside(editor);
+    expect(await mcpSearch.evaluate((element) => document.activeElement === element)).toBe(false);
+    await page.keyboard.press("Escape");
+
+    const sharedMcp = page.getByRole("group", { name: "MCP library item shared-docs" });
+    await sharedMcp.getByRole("button", { name: "Remove shared-docs" }).click();
+    const mcpDelete = page.getByRole("dialog", { name: "Delete MCP server" });
+    await mcpDelete.getByRole("button", { name: "Cancel" }).focus();
+    await page.keyboard.press("Meta+f");
+    await expectFocusInside(mcpDelete);
+    expect(await mcpSearch.evaluate((element) => document.activeElement === element)).toBe(false);
+    await page.keyboard.press("Escape");
+  }, 30_000);
+
   it("shows target readiness from installed commands and writable local paths", async () => {
     const { homeDir, page } = await launchApp();
 
