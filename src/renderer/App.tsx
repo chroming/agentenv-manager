@@ -167,13 +167,27 @@ interface AppFeedbackMessage {
   };
 }
 
-const AppFeedback = ({
+export const AppFeedback = ({
   feedback,
   onDismiss
 }: {
   feedback?: AppFeedbackMessage;
   onDismiss(): void;
 }) => {
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  const feedbackKey = feedback
+    ? `${feedback.kind}\u0000${feedback.title}\u0000${feedback.message ?? ""}`
+    : "";
+
+  useEffect(() => {
+    if (!feedback || (feedback.kind !== "success" && feedback.kind !== "info")) {
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => onDismissRef.current(), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [feedbackKey, feedback?.kind]);
+
   if (!feedback) {
     return null;
   }
@@ -189,7 +203,9 @@ const AppFeedback = ({
 
   return (
     <div
-      className={`app-feedback app-feedback--${feedback.kind}`}
+      className={`app-feedback app-feedback--${feedback.kind}${
+        feedback.kind === "error" ? " app-feedback--dismissible" : ""
+      }`}
       role={feedback.kind === "error" ? "alert" : "status"}
     >
       <Icon size={15} strokeWidth={2.2} aria-hidden="true" />
@@ -202,9 +218,11 @@ const AppFeedback = ({
           </button>
         ) : null}
       </div>
-      <button type="button" aria-label="Dismiss message" onClick={onDismiss}>
-        <X size={14} strokeWidth={2.2} aria-hidden="true" />
-      </button>
+      {feedback.kind === "error" ? (
+        <button type="button" aria-label="Dismiss message" onClick={onDismiss}>
+          <X size={14} strokeWidth={2.2} aria-hidden="true" />
+        </button>
+      ) : null}
     </div>
   );
 };

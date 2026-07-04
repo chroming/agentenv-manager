@@ -950,8 +950,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Refresh targets" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Targets refreshed");
-    await page.getByRole("button", { name: "Dismiss message" }).click();
-    await page.getByText("Targets refreshed").waitFor({ state: "hidden" });
+    await page.getByText("Targets refreshed").waitFor({ state: "hidden", timeout: 7000 });
   }, 30_000);
 
   it("updates target cards after taking over OpenCode", async () => {

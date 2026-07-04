@@ -76,6 +76,10 @@
 
 .editor-panel > .app-feedback {
   align-items: center;
+  grid-template-columns: 16px minmax(0, 1fr);
+}
+
+.editor-panel > .app-feedback--dismissible {
   grid-template-columns: 16px minmax(0, 1fr) 28px;
 }
 

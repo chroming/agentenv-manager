@@ -9,7 +9,7 @@ import {
   act
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { App } from "../../src/renderer/App";
+import { App, AppFeedback } from "../../src/renderer/App";
 import type {
   AgentEnvApi,
   ProfileDetail,
@@ -415,6 +415,35 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("auto-dismisses successful feedback after five seconds but keeps errors visible", () => {
+    vi.useFakeTimers();
+    const onDismiss = vi.fn();
+    const { rerender } = render(
+      <AppFeedback
+        feedback={{ kind: "success", title: "Profile saved" }}
+        onDismiss={onDismiss}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Dismiss message" })).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(4999));
+    expect(onDismiss).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+
+    onDismiss.mockClear();
+    rerender(
+      <AppFeedback
+        feedback={{ kind: "error", title: "Action failed", message: "Try again" }}
+        onDismiss={onDismiss}
+      />
+    );
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss message" }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
   const openProfiles = async () => {
     await screen.findByRole("region", { name: "Library workspace" });
     fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
@@ -803,8 +832,7 @@ describe("App", () => {
       expect(screen.getByRole("article", { name: "Target OpenCode" })).toHaveTextContent("Missing")
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Targets refreshed");
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss message" }));
-    expect(screen.queryByText("Targets refreshed")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Dismiss message" })).not.toBeInTheDocument();
   });
 
   it("opens at most one composer section and allows all sections to collapse", async () => {
