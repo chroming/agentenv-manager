@@ -23,30 +23,40 @@ export const useLibraryScrollRestoration = ({
 }: LibraryScrollRestorationOptions) => {
   const [scrollOwner, setScrollOwner] = useState<HTMLElement | null>(null);
   const restorationTokenRef = useRef(0);
+  const restoringRef = useRef<
+    { token: number; view: Exclude<ActiveLibraryView, undefined> } | undefined
+  >(undefined);
+  const liveScrollRef = useRef({ skills: 0, mcp: 0 });
   const onScrollTopChangeRef = useRef(onScrollTopChange);
   onScrollTopChangeRef.current = onScrollTopChange;
 
   const restore = useCallback(() => {
     if (!scrollOwner) {
       restorationTokenRef.current += 1;
+      restoringRef.current = undefined;
       return undefined;
     }
     if (!activeView) {
       restorationTokenRef.current += 1;
+      restoringRef.current = undefined;
       scrollOwner.scrollTop = 0;
       return undefined;
     }
 
     const token = ++restorationTokenRef.current;
+    restoringRef.current = { token, view: activeView };
     const frame = requestAnimationFrame(() => {
       if (token !== restorationTokenRef.current) {
         return;
       }
-      scrollOwner.scrollTop = clampLibraryScrollTop(
+      const restoredTop = clampLibraryScrollTop(
         scrollTop,
         scrollOwner.scrollHeight,
         scrollOwner.clientHeight
       );
+      scrollOwner.scrollTop = restoredTop;
+      liveScrollRef.current[activeView] = restoredTop;
+      restoringRef.current = undefined;
     });
 
     return () => {
@@ -61,7 +71,13 @@ export const useLibraryScrollRestoration = ({
     if (!scrollOwner || !activeView) {
       return undefined;
     }
-    const handleScroll = () => onScrollTopChangeRef.current(scrollOwner.scrollTop);
+    const view = activeView;
+    const handleScroll = () => {
+      if (restoringRef.current?.view === view) {
+        return;
+      }
+      liveScrollRef.current[view] = scrollOwner.scrollTop;
+    };
     scrollOwner.addEventListener("scroll", handleScroll, { passive: true });
     return () => scrollOwner.removeEventListener("scroll", handleScroll);
   }, [activeView, scrollOwner]);
@@ -79,16 +95,21 @@ export const useLibraryScrollRestoration = ({
 
   const captureScroll = useCallback(() => {
     if (scrollOwner && activeView) {
-      onScrollTopChangeRef.current(scrollOwner.scrollTop);
+      const capturedTop =
+        restoringRef.current?.view === activeView ? scrollTop : scrollOwner.scrollTop;
+      liveScrollRef.current[activeView] = capturedTop;
+      onScrollTopChangeRef.current(capturedTop);
     }
-  }, [activeView, scrollOwner]);
+  }, [activeView, scrollOwner, scrollTop]);
 
   const resetScrollNow = useCallback(() => {
     restorationTokenRef.current += 1;
+    restoringRef.current = undefined;
     if (scrollOwner) {
       scrollOwner.scrollTop = 0;
     }
     if (activeView) {
+      liveScrollRef.current[activeView] = 0;
       onScrollTopChangeRef.current(0);
     }
   }, [activeView, scrollOwner]);

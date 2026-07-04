@@ -76,6 +76,8 @@ describe("useLibraryScrollRestoration", () => {
     act(() => frames.shift()?.(0));
     element.scrollTop = 125;
     act(() => element.dispatchEvent(new Event("scroll")));
+    expect(onScrollTopChange).not.toHaveBeenCalled();
+    act(() => result.current.captureScroll());
     expect(onScrollTopChange).toHaveBeenLastCalledWith(125);
 
     Object.defineProperty(element, "scrollHeight", { configurable: true, value: 420 });
@@ -100,6 +102,7 @@ describe("useLibraryScrollRestoration", () => {
       })
     );
     act(() => result.current.setScrollOwner(element));
+    act(() => frames.at(-1)?.(0));
     element.scrollTop = 275;
 
     act(() => result.current.captureScroll());
@@ -125,5 +128,43 @@ describe("useLibraryScrollRestoration", () => {
 
     expect(element.scrollTop).toBe(0);
     expect(onScrollTopChange).toHaveBeenLastCalledWith(0);
+  });
+
+  it("ignores delayed scroll from the previous view while restoring the destination", () => {
+    const skillChange = vi.fn();
+    const mcpChange = vi.fn();
+    const element = document.createElement("section");
+    Object.defineProperties(element, {
+      scrollHeight: { configurable: true, value: 700 },
+      clientHeight: { configurable: true, value: 300 }
+    });
+    const { result, rerender } = renderHook(
+      ({ activeView, scrollTop, onScrollTopChange }) =>
+        useLibraryScrollRestoration({
+          activeView,
+          scrollTop,
+          restoreKey: activeView,
+          onScrollTopChange
+        }),
+      {
+        initialProps: {
+          activeView: "skills" as "skills" | "mcp",
+          scrollTop: 200,
+          onScrollTopChange: skillChange
+        }
+      }
+    );
+    act(() => result.current.setScrollOwner(element));
+    act(() => frames.at(-1)?.(0));
+    element.scrollTop = 260;
+    act(() => element.dispatchEvent(new Event("scroll")));
+
+    rerender({ activeView: "mcp", scrollTop: 40, onScrollTopChange: mcpChange });
+    act(() => element.dispatchEvent(new Event("scroll")));
+    act(() => result.current.captureScroll());
+
+    expect(mcpChange).toHaveBeenLastCalledWith(40);
+    act(() => frames.at(-1)?.(0));
+    expect(element.scrollTop).toBe(40);
   });
 });
