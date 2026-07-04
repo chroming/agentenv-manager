@@ -903,6 +903,45 @@ describe("App", () => {
     await waitFor(() => expect(saveNow).not.toBeInTheDocument());
   });
 
+  it("prevents duplicate shortcut saves while persistence is pending", async () => {
+    const pendingSave = deferred<ProfileDetail>();
+    const api = installApi({ saveProfile: vi.fn().mockReturnValue(pendingSave.promise) });
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
+      target: { value: "# Pending shortcut save\n" }
+    });
+
+    fireEvent.keyDown(document, { key: "s", ctrlKey: true });
+    fireEvent.keyDown(document, { key: "s", ctrlKey: true });
+
+    expect(api.saveProfile).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    pendingSave.resolve(profile);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled());
+  });
+
+  it("preserves a dirty Profile draft when shortcut save fails", async () => {
+    const api = installApi({
+      saveProfile: vi.fn().mockRejectedValue(new Error("Profile storage is read-only"))
+    });
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    const instructions = screen.getByLabelText("AGENTS.md");
+    fireEvent.change(instructions, { target: { value: "# Shortcut draft\n" } });
+
+    fireEvent.keyDown(document, { key: "s", ctrlKey: true });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Profile storage is read-only");
+    expect(api.saveProfile).toHaveBeenCalledTimes(1);
+    expect(instructions).toHaveValue("# Shortcut draft\n");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
   it("filters incompatible profiles after target selection", async () => {
     const api = installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),

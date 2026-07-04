@@ -78,6 +78,7 @@ import {
   updateLibraryScroll
 } from "./libraryViewState";
 import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration";
+import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
 import {
   findRecentProfileApplication,
   summarizeProfile,
@@ -374,6 +375,7 @@ export const App = () => {
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
   const [isProfileDirty, setIsProfileDirty] = useState(false);
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
@@ -395,6 +397,7 @@ export const App = () => {
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const targetMenuButtonRef = useRef<HTMLButtonElement>(null);
   const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
+  const profileSearchInputRef = useRef<HTMLInputElement>(null);
   const skillSearchInputRef = useRef<HTMLInputElement>(null);
   const mcpSearchInputRef = useRef<HTMLInputElement>(null);
   const profileFlowRequestRef = useRef(0);
@@ -651,6 +654,7 @@ export const App = () => {
       return;
     }
     saveInFlightRef.current = true;
+    setIsProfileSaving(true);
     setBusy(true);
     setError(undefined);
     try {
@@ -659,9 +663,20 @@ export const App = () => {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       saveInFlightRef.current = false;
+      setIsProfileSaving(false);
       setBusy(false);
     }
   };
+
+  useDesktopShortcuts({
+    activeWorkspace,
+    activeLibraryTab,
+    isProfileSaving,
+    onSaveProfile: saveSelectedProfile,
+    profileSearchRef: profileSearchInputRef,
+    skillSearchRef: skillSearchInputRef,
+    mcpSearchRef: mcpSearchInputRef
+  });
 
   const openCreateProfileDialog = () => {
     const targetId = selectedTargetId ?? targets[0]?.id;
@@ -1848,6 +1863,7 @@ export const App = () => {
                   <label className="profile-search">
                     <Search size={15} strokeWidth={2.2} aria-hidden="true" />
                     <input
+                      ref={profileSearchInputRef}
                       aria-label="Search profiles"
                       placeholder="Search Profile name..."
                       value={profileSearch}

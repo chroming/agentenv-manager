@@ -601,6 +601,80 @@ describe("Electron UI profile switching e2e", () => {
       .toBeLessThanOrEqual(2);
   }, 30_000);
 
+  it("supports platform-correct desktop shortcuts in real workspaces", async () => {
+    const { appDataRoot, page } = await launchApp();
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+    await selectProfile(page, "UI OpenCode alpha");
+
+    const profileSearch = page.getByRole("textbox", { name: "Search profiles" });
+    await profileSearch.fill("UI OpenCode");
+    await profileSearch.evaluate((element) => (element as HTMLInputElement).blur());
+    await page.keyboard.press("Control+f");
+    expect(await profileSearch.evaluate((element) => document.activeElement === element)).toBe(
+      false
+    );
+    await page.keyboard.press("Meta+f");
+    expect(
+      await profileSearch.evaluate(
+        (element) =>
+          document.activeElement === element &&
+          (element as HTMLInputElement).selectionStart === 0 &&
+          (element as HTMLInputElement).selectionEnd === (element as HTMLInputElement).value.length
+      )
+    ).toBe(true);
+
+    await page.getByRole("button", { name: "New Profile" }).click();
+    const modalName = page.getByRole("dialog", { name: "New profile" }).getByLabel("Profile name");
+    await modalName.fill("Blocked shortcut");
+    await page.keyboard.press("Meta+f");
+    expect(await modalName.evaluate((element) => document.activeElement === element)).toBe(true);
+    await page.keyboard.press("Escape");
+
+    await expandComposerSection(page, "Instructions");
+    const instructions = page.getByRole("textbox", { name: "AGENTS.md" });
+    await instructions.fill("# Shortcut E2E\n");
+    await page.getByRole("button", { name: "New Profile" }).click();
+    await page.keyboard.press("Meta+s");
+    await page.waitForTimeout(50);
+    expect(
+      await readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "AGENTS.md"), "utf8")
+    ).not.toContain("Shortcut E2E");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Control+s");
+    await page.waitForTimeout(50);
+    expect(await page.getByRole("button", { name: "Save", exact: true }).isEnabled()).toBe(true);
+    expect(
+      await readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "AGENTS.md"), "utf8")
+    ).not.toContain("Shortcut E2E");
+
+    await page.keyboard.press("Meta+s");
+    await page.getByRole("status").filter({ hasText: "Profile saved" }).waitFor();
+    await expect(
+      readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "AGENTS.md"), "utf8")
+    ).resolves.toContain("Shortcut E2E");
+
+    await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+    await page.keyboard.press("Meta+f");
+    expect(
+      await page
+        .getByRole("textbox", { name: "Search skills" })
+        .evaluate((element) => document.activeElement === element)
+    ).toBe(true);
+
+    await navigation.getByRole("button", { name: "MCP Servers", exact: true }).click();
+    await page.keyboard.press("Meta+f");
+    expect(
+      await page
+        .getByRole("textbox", { name: "Search MCP servers" })
+        .evaluate((element) => document.activeElement === element)
+    ).toBe(true);
+
+    await navigation.getByRole("button", { name: "Targets", exact: true }).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press("Meta+f");
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  }, 30_000);
+
   it("shows target readiness from installed commands and writable local paths", async () => {
     const { homeDir, page } = await launchApp();
 
