@@ -29,6 +29,42 @@ const jsonResponse = (body: unknown, init?: ResponseInit) =>
   });
 
 describe("GitHub auth service", () => {
+  it("uses the bundled OAuth Client ID when no developer override is configured", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-github-auth-"));
+    const paths = createPaths({ appDataRoot: root });
+    const settingsStore = createSettingsStore(paths);
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url !== "https://github.com/login/device/code") {
+        throw new Error(`Unexpected URL: ${url}`);
+      }
+      expect(init?.body?.toString()).toBe("client_id=Ov23liOAxChYXPhAjVh8");
+      return jsonResponse({
+        device_code: "device-abc",
+        user_code: "ABCD-1234",
+        verification_uri: "https://github.com/login/device",
+        expires_in: 900,
+        interval: 5
+      });
+    });
+    const service = createGitHubAuthService({
+      fetch: fetchMock,
+      settingsStore,
+      tokenStore: {
+        clearToken: vi.fn(),
+        readToken: vi.fn(async () => undefined),
+        writeToken: vi.fn()
+      }
+    });
+
+    await expect(service.readStatus()).resolves.toEqual({
+      state: "configured",
+      clientId: "Ov23liOAxChYXPhAjVh8"
+    });
+    await expect(service.startDeviceLogin()).resolves.toMatchObject({
+      userCode: "ABCD-1234"
+    });
+  });
+
   it("runs the OAuth device flow and stores the access token securely", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-github-auth-"));
     const paths = createPaths({ appDataRoot: root });
