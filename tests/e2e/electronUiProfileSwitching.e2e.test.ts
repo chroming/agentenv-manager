@@ -385,6 +385,7 @@ const launchApp = async (
   await page.waitForLoadState("domcontentloaded");
 
   return {
+    app,
     appDataRoot,
     homeDir,
     opencodeDir,
@@ -673,6 +674,46 @@ describe("Electron UI profile switching e2e", () => {
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press("Meta+f");
     expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+
+    await navigation.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.keyboard.press("Meta+f");
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  }, 30_000);
+
+  it("prevents duplicate Meta saves while the Electron IPC is pending", async () => {
+    const { app: electronApp, page } = await launchApp();
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Instructions");
+    await page.getByRole("textbox", { name: "AGENTS.md" }).fill("# Pending E2E save\n");
+
+    await electronApp.evaluate(({ ipcMain }) => {
+      const state = globalThis as typeof globalThis & { __agentEnvShortcutSaveCalls?: number };
+      state.__agentEnvShortcutSaveCalls = 0;
+      ipcMain.removeHandler("profiles:save");
+      ipcMain.handle("profiles:save", async (_event, input) => {
+        state.__agentEnvShortcutSaveCalls = (state.__agentEnvShortcutSaveCalls ?? 0) + 1;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const value = input as {
+          manifest: { id: string };
+          instructions: string;
+          configText: string;
+          assetPolicy: unknown;
+        };
+        return { id: value.manifest.id, ...value };
+      });
+    });
+
+    await page.keyboard.press("Meta+s");
+    await page.keyboard.press("Meta+s");
+    await page.waitForTimeout(50);
+    expect(
+      await electronApp.evaluate(() =>
+        (globalThis as typeof globalThis & { __agentEnvShortcutSaveCalls?: number })
+          .__agentEnvShortcutSaveCalls
+      )
+    ).toBe(1);
+    await page.getByRole("status").filter({ hasText: "Profile saved" }).waitFor();
   }, 30_000);
 
   it("shows target readiness from installed commands and writable local paths", async () => {

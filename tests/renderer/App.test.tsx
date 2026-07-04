@@ -942,6 +942,21 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
+  it("runs the whole-Profile save path from a clean shortcut", async () => {
+    const api = installApi();
+    render(<App />);
+
+    await openProfiles();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+
+    fireEvent.keyDown(document, { key: "s", ctrlKey: true });
+
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalledTimes(1));
+    expect(api.saveProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ manifest: expect.objectContaining({ id: "daily-coding" }) })
+    );
+  });
+
   it("filters incompatible profiles after target selection", async () => {
     const api = installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
