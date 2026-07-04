@@ -8,9 +8,7 @@ const SettingsSchema = z.object({
   skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("symlink"),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
-  skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
-  githubOAuthClientId: z.string().trim().min(1).optional().or(z.literal(""))
-    .transform((value) => value || undefined)
+  skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60)
 });
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {

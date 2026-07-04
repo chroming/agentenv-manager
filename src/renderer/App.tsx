@@ -361,7 +361,6 @@ export const App = () => {
   const [githubAuthStatus, setGithubAuthStatus] = useState<GitHubAuthStatus>({
     state: "signed-out"
   });
-  const [githubClientIdDraft, setGithubClientIdDraft] = useState("");
   const [githubDeviceLogin, setGithubDeviceLogin] = useState<GitHubDeviceLogin>();
   const [githubLoginMessage, setGithubLoginMessage] = useState("");
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
@@ -556,7 +555,6 @@ export const App = () => {
     setSkillInventory(skillInventoryItems);
     setSkillSettings(settings);
     setGithubAuthStatus(githubStatus);
-    setGithubClientIdDraft(settings.githubOAuthClientId ?? githubStatus.clientId ?? "");
     setSkillUsage(usage);
     setMcpUsage(nextMcpUsage);
     setProfileResourceCounts(nextProfileResourceCounts);
@@ -1417,10 +1415,6 @@ export const App = () => {
     try {
       const nextSettings = await window.agentEnv.updateSettings(input);
       setSkillSettings(nextSettings);
-      if ("githubOAuthClientId" in input) {
-        setGithubClientIdDraft(nextSettings.githubOAuthClientId ?? "");
-        setGithubAuthStatus(await window.agentEnv.readGitHubAuthStatus());
-      }
       await refreshProfiles();
       setSettingsSaveStatus("Settings saved");
     } catch (unknownError) {
@@ -1452,14 +1446,6 @@ export const App = () => {
     setSettingsSaveStatus("");
     setGithubLoginMessage("");
     try {
-      const clientId = githubClientIdDraft.trim();
-      if (!clientId) {
-        throw new Error("GitHub OAuth Client ID is required");
-      }
-      const nextSettings = await window.agentEnv.updateSettings({
-        githubOAuthClientId: clientId
-      });
-      setSkillSettings(nextSettings);
       const login = await window.agentEnv.startGitHubDeviceLogin();
       setGithubDeviceLogin(login);
       setGithubAuthStatus(await window.agentEnv.readGitHubAuthStatus());
@@ -2458,39 +2444,18 @@ export const App = () => {
                 <div className="github-settings-actions">
                   <button
                     className="primary-button"
-                    disabled={busy || !githubClientIdDraft.trim()}
+                    disabled={busy}
                     onClick={startGitHubLogin}
                     type="button"
                   >
                     Sign in with GitHub
                   </button>
-                  {!githubClientIdDraft.trim() ? (
-                    <InfoTip label="GitHub sign-in needs the production OAuth Client ID or a local developer override." />
-                  ) : null}
                   {githubAuthStatus.state === "signed-in" ? (
                     <button disabled={busy} onClick={signOutGitHub} type="button">
                       Sign out
                     </button>
                   ) : null}
                 </div>
-                <details className="settings-advanced">
-                  <summary>Developer OAuth configuration</summary>
-                  <p className="settings-muted">
-                    Production builds should provide an app Client ID. Use this override only for local development.
-                  </p>
-                  <label>
-                    <span>OAuth Client ID</span>
-                    <input
-                      aria-label="GitHub OAuth Client ID"
-                      autoCapitalize="off"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      value={githubClientIdDraft}
-                      onChange={(event) => setGithubClientIdDraft(event.currentTarget.value)}
-                      placeholder="GitHub OAuth App client ID"
-                    />
-                  </label>
-                </details>
               </div>
               {githubDeviceLogin ? (
                 <div className="github-device-card">

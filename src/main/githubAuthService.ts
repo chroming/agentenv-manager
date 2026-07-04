@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type {
-  AgentEnvSettings,
   GitHubAuthStatus,
   GitHubAuthUser,
   GitHubDeviceLogin,
@@ -10,7 +9,6 @@ import type {
   GitHubRateLimit
 } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
-import type { SettingsStore } from "./settingsStore";
 import { DEFAULT_GITHUB_OAUTH_CLIENT_ID } from "./githubConfig";
 
 interface TokenFile {
@@ -79,7 +77,6 @@ type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 interface GitHubAuthServiceOptions {
   fetch?: FetchLike;
-  settingsStore: Pick<SettingsStore, "readSettings">;
   tokenStore: GitHubTokenStore;
 }
 
@@ -109,10 +106,6 @@ const readJsonResponse = async <T>(response: Response): Promise<T> => {
     );
   }
   return value;
-};
-
-const assertClientId = (settings: AgentEnvSettings) => {
-  return settings.githubOAuthClientId ?? DEFAULT_GITHUB_OAUTH_CLIENT_ID;
 };
 
 const toUser = (value: GitHubUserResponse): GitHubAuthUser => {
@@ -181,7 +174,6 @@ export const createFileGitHubTokenStore = (
 
 export const createGitHubAuthService = ({
   fetch: fetchImpl = fetch,
-  settingsStore,
   tokenStore
 }: GitHubAuthServiceOptions): GitHubAuthService => {
   const pendingLogins = new Map<string, PendingDeviceLogin>();
@@ -200,12 +192,9 @@ export const createGitHubAuthService = ({
   };
 
   const readStatus = async (): Promise<GitHubAuthStatus> => {
-    const settings = await settingsStore.readSettings();
-    const clientId = assertClientId(settings);
-
     const token = await tokenStore.readToken();
     if (!token) {
-      return { state: "configured", clientId };
+      return { state: "configured", clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID };
     }
 
     try {
@@ -217,7 +206,7 @@ export const createGitHubAuthService = ({
       ]);
       return {
         state: "signed-in",
-        clientId,
+        clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
         user,
         rateLimit
       };
@@ -225,16 +214,15 @@ export const createGitHubAuthService = ({
       await tokenStore.clearToken();
       return {
         state: "configured",
-        clientId,
+        clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
         error: error instanceof Error ? error.message : String(error)
       };
     }
   };
 
   const startDeviceLogin = async (): Promise<GitHubDeviceLogin> => {
-    const clientId = assertClientId(await settingsStore.readSettings());
     const response = await fetchImpl("https://github.com/login/device/code", {
-      body: new URLSearchParams({ client_id: clientId }),
+      body: new URLSearchParams({ client_id: DEFAULT_GITHUB_OAUTH_CLIENT_ID }),
       headers: jsonHeaders,
       method: "POST"
     });
@@ -280,10 +268,9 @@ export const createGitHubAuthService = ({
       };
     }
 
-    const clientId = assertClientId(await settingsStore.readSettings());
     const response = await fetchImpl("https://github.com/login/oauth/access_token", {
       body: new URLSearchParams({
-        client_id: clientId,
+        client_id: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
         device_code: pending.deviceCode,
         grant_type: "urn:ietf:params:oauth:grant-type:device_code"
       }),

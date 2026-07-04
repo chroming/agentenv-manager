@@ -31,16 +31,14 @@ describe("settings store", () => {
       skillSyncMethod: "copy",
       skillStorageLocation: "agents",
       skillAutoCheckEnabled: false,
-      skillAutoCheckIntervalMinutes: 120,
-      githubOAuthClientId: "client-123"
+      skillAutoCheckIntervalMinutes: 120
     });
 
     expect(await store.readSettings()).toEqual({
       skillSyncMethod: "copy",
       skillStorageLocation: "agents",
       skillAutoCheckEnabled: false,
-      skillAutoCheckIntervalMinutes: 120,
-      githubOAuthClientId: "client-123"
+      skillAutoCheckIntervalMinutes: 120
     });
     expect(resolveSkillsLibraryDir(paths, await store.readSettings())).toBe(
       join(root, "home", ".agents", "skills")

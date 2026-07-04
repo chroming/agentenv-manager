@@ -7,7 +7,6 @@ import {
   createGitHubAuthService
 } from "../../src/main/githubAuthService";
 import { createPaths } from "../../src/main/paths";
-import { createSettingsStore } from "../../src/main/settingsStore";
 
 let root = "";
 
@@ -29,10 +28,8 @@ const jsonResponse = (body: unknown, init?: ResponseInit) =>
   });
 
 describe("GitHub auth service", () => {
-  it("uses the bundled OAuth Client ID when no developer override is configured", async () => {
+  it("uses the bundled OAuth Client ID", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-github-auth-"));
-    const paths = createPaths({ appDataRoot: root });
-    const settingsStore = createSettingsStore(paths);
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url !== "https://github.com/login/device/code") {
         throw new Error(`Unexpected URL: ${url}`);
@@ -48,7 +45,6 @@ describe("GitHub auth service", () => {
     });
     const service = createGitHubAuthService({
       fetch: fetchMock,
-      settingsStore,
       tokenStore: {
         clearToken: vi.fn(),
         readToken: vi.fn(async () => undefined),
@@ -68,8 +64,6 @@ describe("GitHub auth service", () => {
   it("runs the OAuth device flow and stores the access token securely", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-github-auth-"));
     const paths = createPaths({ appDataRoot: root });
-    const settingsStore = createSettingsStore(paths);
-    await settingsStore.updateSettings({ githubOAuthClientId: "client-123" });
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "https://github.com/login/device/code") {
         return jsonResponse({
@@ -110,7 +104,6 @@ describe("GitHub auth service", () => {
     });
     const service = createGitHubAuthService({
       fetch: fetchMock,
-      settingsStore,
       tokenStore
     });
 
@@ -126,7 +119,7 @@ describe("GitHub auth service", () => {
     await expect(service.readAccessToken()).resolves.toBe("token-xyz");
     await expect(service.readStatus()).resolves.toMatchObject({
       state: "signed-in",
-      clientId: "client-123",
+      clientId: "Ov23liOAxChYXPhAjVh8",
       user: {
         login: "octocat",
         name: "The Octocat"
@@ -142,8 +135,6 @@ describe("GitHub auth service", () => {
   it("keeps a device login pending without storing a token", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-github-auth-"));
     const paths = createPaths({ appDataRoot: root });
-    const settingsStore = createSettingsStore(paths);
-    await settingsStore.updateSettings({ githubOAuthClientId: "client-123" });
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "https://github.com/login/device/code") {
         return jsonResponse({
@@ -166,7 +157,6 @@ describe("GitHub auth service", () => {
     });
     const service = createGitHubAuthService({
       fetch: fetchMock,
-      settingsStore,
       tokenStore
     });
 
@@ -183,8 +173,6 @@ describe("GitHub auth service", () => {
   it("clears the saved GitHub token on sign out", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-github-auth-"));
     const paths = createPaths({ appDataRoot: root });
-    const settingsStore = createSettingsStore(paths);
-    await settingsStore.updateSettings({ githubOAuthClientId: "client-123" });
     const tokenStore = createFileGitHubTokenStore(paths, {
       decryptString: (buffer) => buffer.toString("utf8"),
       encryptString: (value) => Buffer.from(value, "utf8"),
@@ -193,7 +181,6 @@ describe("GitHub auth service", () => {
     await tokenStore.writeToken("token-xyz");
     const service = createGitHubAuthService({
       fetch: vi.fn(),
-      settingsStore,
       tokenStore
     });
 
@@ -202,7 +189,7 @@ describe("GitHub auth service", () => {
     await expect(service.readAccessToken()).resolves.toBeUndefined();
     await expect(service.readStatus()).resolves.toMatchObject({
       state: "configured",
-      clientId: "client-123"
+      clientId: "Ov23liOAxChYXPhAjVh8"
     });
   });
 });

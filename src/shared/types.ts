@@ -159,7 +159,6 @@ export interface AgentEnvSettings {
   skillStorageLocation: SkillStorageLocation;
   skillAutoCheckEnabled: boolean;
   skillAutoCheckIntervalMinutes: number;
-  githubOAuthClientId?: string;
 }
 
 export interface GitHubAuthUser {

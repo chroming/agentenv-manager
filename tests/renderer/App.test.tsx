@@ -317,15 +317,13 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
-      skillAutoCheckIntervalMinutes: 60,
-      githubOAuthClientId: "client-123"
+      skillAutoCheckIntervalMinutes: 60
     }),
     updateSettings: vi.fn().mockImplementation(async (input) => ({
       skillSyncMethod: input.skillSyncMethod ?? "symlink",
       skillStorageLocation: input.skillStorageLocation ?? "appData",
       skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
-      skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60,
-      githubOAuthClientId: input.githubOAuthClientId ?? "client-123"
+      skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60
     })),
     readGitHubAuthStatus: vi.fn().mockResolvedValue({
       state: "configured",
@@ -619,14 +617,9 @@ describe("App", () => {
 
     await screen.findByRole("region", { name: "Library workspace" });
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    fireEvent.change(screen.getByLabelText("GitHub OAuth Client ID"), {
-      target: { value: "client-abc" }
-    });
     fireEvent.click(screen.getByRole("button", { name: "Sign in with GitHub" }));
 
-    await waitFor(() =>
-      expect(api.updateSettings).toHaveBeenCalledWith({ githubOAuthClientId: "client-abc" })
-    );
+    expect(api.updateSettings).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText("ABCD-1234")).toBeInTheDocument());
     expect(api.openGitHubDevicePage).toHaveBeenCalledWith("https://github.com/login/device");
 

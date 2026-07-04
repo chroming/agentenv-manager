@@ -118,7 +118,6 @@ const createServices = async () => {
   const targetRegistry = createTargetRegistry();
   const settingsStore = createSettingsStore(paths);
   const githubAuthService = createGitHubAuthService({
-    settingsStore,
     tokenStore: createFileGitHubTokenStore(paths, {
       decryptString: (value) => safeStorage.decryptString(value),
       encryptString: (value) => safeStorage.encryptString(value),
