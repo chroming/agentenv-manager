@@ -239,6 +239,34 @@ export const SkillLibraryPanel = ({
     .filter((update) => update.updateAvailable && !update.error)
     .map((update) => update.id);
   const availableUpdateCount = updateableSkillIds.length;
+  useLayoutEffect(() => {
+    if (!openActionId) {
+      return;
+    }
+    const popover = document.querySelector<HTMLElement>(
+      `[data-skill-action-popover="${CSS.escape(openActionId)}"]`
+    );
+    if (!popover) {
+      return;
+    }
+    const rect = popover.getBoundingClientRect();
+    const margin = 16;
+    const nextLeft = clamp(
+      rect.left,
+      margin,
+      Math.max(margin, window.innerWidth - rect.width - margin)
+    );
+    const nextTop = clamp(
+      rect.top,
+      margin,
+      Math.max(margin, window.innerHeight - rect.height - margin)
+    );
+    if (Math.abs(nextLeft - rect.left) > 0.5 || Math.abs(nextTop - rect.top) > 0.5) {
+      setOpenAction((current) =>
+        current?.id === openActionId ? { ...current, left: nextLeft, top: nextTop } : current
+      );
+    }
+  }, [openActionId]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") {
@@ -691,6 +719,7 @@ export const SkillLibraryPanel = ({
                     ? createPortal(
                         <div
                           className="row-action-popover"
+                          data-skill-action-popover={skill.id}
                           role="menu"
                           aria-label={`Actions for ${skill.id}`}
                           style={{ left: openAction.left, top: openAction.top }}

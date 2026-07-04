@@ -772,6 +772,125 @@ describe("Electron UI profile switching e2e", () => {
     await mcpDelete.waitFor({ state: "hidden" });
   }, 30_000);
 
+  it("keeps Library scale correct and responsive at supported viewports", async () => {
+    const cases = [
+      { count: 100, width: 1180, height: 760, initialBudget: 750, actionBudget: 250 },
+      { count: 100, width: 920, height: 620, initialBudget: 750, actionBudget: 250 },
+      { count: 500, width: 1180, height: 760, initialBudget: 1500, actionBudget: 500 },
+      { count: 500, width: 920, height: 620, initialBudget: 1500, actionBudget: 500 }
+    ];
+    const median = (values: number[]) => [...values].sort((a, b) => a - b)[1];
+    const measurements: Array<Record<string, unknown>> = [];
+
+    for (const testCase of cases) {
+      const { page } = await launchApp({
+        openCodeAlphaLibrarySkillCount: testCase.count
+      });
+      await page.setViewportSize({ width: testCase.width, height: testCase.height });
+      const navigation = page.getByRole("complementary", { name: "Global navigation" });
+      const rows = page.locator('[role="group"][aria-label^="Library item layout-skill-"]');
+      const navigationRuns: number[] = [];
+      const searchRuns: number[] = [];
+      const filterRuns: number[] = [];
+
+      await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
+      for (let run = 0; run < 4; run += 1) {
+        const startedAt = await page.evaluate(() => performance.now());
+        await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+        await expect.poll(() => rows.count()).toBe(testCase.count);
+        const duration = (await page.evaluate(() => performance.now())) - startedAt;
+        if (run > 0) navigationRuns.push(duration);
+        await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
+      }
+      await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+      const search = page.getByRole("textbox", { name: "Search skills" });
+      for (let run = 0; run < 4; run += 1) {
+        const startedAt = await page.evaluate(() => performance.now());
+        await search.fill(`layout-skill-${testCase.count}`);
+        await expect.poll(() => rows.count()).toBe(1);
+        const duration = (await page.evaluate(() => performance.now())) - startedAt;
+        if (run > 0) searchRuns.push(duration);
+        await search.fill("");
+        await expect.poll(() => rows.count()).toBe(testCase.count);
+      }
+      const updatesTab = page.getByRole("tab", { name: /Updates/ });
+      const allTab = page.getByRole("tab", { name: /All/ });
+      for (let run = 0; run < 4; run += 1) {
+        const startedAt = await page.evaluate(() => performance.now());
+        await updatesTab.click();
+        await expect.poll(() => rows.count()).toBe(testCase.count);
+        const duration = (await page.evaluate(() => performance.now())) - startedAt;
+        if (run > 0) filterRuns.push(duration);
+        await allTab.click();
+      }
+
+      const overflow = await page.evaluate(() => {
+        const shell = document.querySelector<HTMLElement>(".app-shell");
+        const panel = document.querySelector<HTMLElement>(".editor-panel");
+        return {
+          document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          shell: shell ? shell.scrollWidth - shell.clientWidth : -1,
+          panel: panel ? panel.scrollWidth - panel.clientWidth : -1
+        };
+      });
+      expect(overflow.document).toBeLessThanOrEqual(0);
+      expect(overflow.shell).toBeLessThanOrEqual(0);
+      expect(overflow.panel).toBeLessThanOrEqual(0);
+
+      const firstRow = page.getByRole("group", {
+        name: "Library item layout-skill-1",
+        exact: true
+      });
+      const lastRow = page.getByRole("group", {
+        name: `Library item layout-skill-${testCase.count}`,
+        exact: true
+      });
+      const firstHeight = (await firstRow.boundingBox())?.height;
+      await firstRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
+      const firstMenu = page.getByRole("menu", { name: "Actions for layout-skill-1" });
+      await expectInViewport(page, firstMenu);
+      await expectTopmost(firstMenu);
+      await page.mouse.click(220, 120);
+      await firstMenu.waitFor({ state: "hidden" });
+
+      await lastRow.scrollIntoViewIfNeeded();
+      const lastHeight = (await lastRow.boundingBox())?.height;
+      await lastRow
+        .getByRole("button", { name: `More actions for layout-skill-${testCase.count}` })
+        .click();
+      const lastMenu = page.getByRole("menu", {
+        name: `Actions for layout-skill-${testCase.count}`
+      });
+      await expectInViewport(page, lastMenu);
+      await expectTopmost(lastMenu);
+      await page.keyboard.press("Escape");
+      await lastMenu.waitFor({ state: "hidden" });
+      expect(firstHeight).toBe(lastHeight);
+
+      const result = {
+        rows: testCase.count,
+        viewport: `${testCase.width}x${testCase.height}`,
+        navigationRuns,
+        searchRuns,
+        filterRuns,
+        navigationMedian: median(navigationRuns),
+        searchMedian: median(searchRuns),
+        filterMedian: median(filterRuns)
+      };
+      measurements.push(result);
+      expect(result.navigationMedian).toBeLessThanOrEqual(testCase.initialBudget);
+      expect(result.searchMedian).toBeLessThanOrEqual(testCase.actionBudget);
+      expect(result.filterMedian).toBeLessThanOrEqual(testCase.actionBudget);
+
+      await app?.close();
+      app = undefined;
+      await rm(root, { recursive: true, force: true });
+      root = "";
+    }
+
+    process.stdout.write(`\nAGENTENV_LIBRARY_SCALE=${JSON.stringify(measurements)}\n`);
+  }, 120_000);
+
   it("shows target readiness from installed commands and writable local paths", async () => {
     const { homeDir, page } = await launchApp();
 
