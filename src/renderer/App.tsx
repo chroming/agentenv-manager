@@ -402,7 +402,7 @@ export const App = () => {
   const saveInFlightRef = useRef(false);
   const rollbackReturnFocusRef = useRef<HTMLElement | null>(null);
   const activeLibraryView = activeWorkspace === "library" ? activeLibraryTab : undefined;
-  const setEditorPanelScrollOwner = useLibraryScrollRestoration({
+  const libraryScroll = useLibraryScrollRestoration({
     activeView: activeLibraryView,
     scrollTop:
       activeLibraryView === "skills"
@@ -1524,12 +1524,18 @@ export const App = () => {
         isLoading={isLoading}
         activeWorkspace={activeWorkspace}
         activeLibraryTab={activeLibraryTab}
-        onWorkspaceSelect={setActiveWorkspace}
-        onLibraryTabSelect={setActiveLibraryTab}
+        onWorkspaceSelect={(workspace) => {
+          libraryScroll.captureScroll();
+          setActiveWorkspace(workspace);
+        }}
+        onLibraryTabSelect={(tab) => {
+          libraryScroll.captureScroll();
+          setActiveLibraryTab(tab);
+        }}
       />
 
       <section
-        ref={setEditorPanelScrollOwner}
+        ref={libraryScroll.setScrollOwner}
         className="editor-panel"
         aria-label={
           activeWorkspace === "library"
@@ -1648,7 +1654,10 @@ export const App = () => {
                 }}
                 updateCheckStatus={skillUpdateCheckStatus}
                 viewState={skillLibraryViewState}
-                onViewStateChange={setSkillLibraryViewState}
+                onViewStateChange={(next) => {
+                  libraryScroll.resetScrollNow();
+                  setSkillLibraryViewState(next);
+                }}
                 searchInputRef={skillSearchInputRef}
               />
             ) : (
@@ -1656,7 +1665,10 @@ export const App = () => {
                 mcpServers={mcpServers}
                 mcpUsage={mcpUsage}
                 viewState={mcpLibraryViewState}
-                onViewStateChange={setMcpLibraryViewState}
+                onViewStateChange={(next) => {
+                  libraryScroll.resetScrollNow();
+                  setMcpLibraryViewState(next);
+                }}
                 searchInputRef={mcpSearchInputRef}
                 onSave={saveMcpServer}
                 onRemove={removeMcpServer}

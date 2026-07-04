@@ -77,5 +77,21 @@ export const useLibraryScrollRestoration = ({
     return () => window.removeEventListener("resize", handleResize);
   }, [activeView, restore]);
 
-  return setScrollOwner;
+  const captureScroll = useCallback(() => {
+    if (scrollOwner && activeView) {
+      onScrollTopChangeRef.current(scrollOwner.scrollTop);
+    }
+  }, [activeView, scrollOwner]);
+
+  const resetScrollNow = useCallback(() => {
+    restorationTokenRef.current += 1;
+    if (scrollOwner) {
+      scrollOwner.scrollTop = 0;
+    }
+    if (activeView) {
+      onScrollTopChangeRef.current(0);
+    }
+  }, [activeView, scrollOwner]);
+
+  return { setScrollOwner, captureScroll, resetScrollNow };
 };

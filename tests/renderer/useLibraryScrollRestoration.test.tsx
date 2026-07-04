@@ -44,7 +44,7 @@ describe("useLibraryScrollRestoration", () => {
       { initialProps: { scrollTop: 360 } }
     );
 
-    act(() => result.current(element));
+    act(() => result.current.setScrollOwner(element));
     expect(frames).toHaveLength(1);
 
     rerender({ scrollTop: 40 });
@@ -72,7 +72,7 @@ describe("useLibraryScrollRestoration", () => {
       })
     );
 
-    act(() => result.current(element));
+    act(() => result.current.setScrollOwner(element));
     act(() => frames.shift()?.(0));
     element.scrollTop = 125;
     act(() => element.dispatchEvent(new Event("scroll")));
@@ -82,5 +82,48 @@ describe("useLibraryScrollRestoration", () => {
     act(() => window.dispatchEvent(new Event("resize")));
     act(() => frames.at(-1)?.(0));
     expect(element.scrollTop).toBe(120);
+  });
+
+  it("captures the live DOM position before navigation without waiting for scroll", () => {
+    const onScrollTopChange = vi.fn();
+    const element = document.createElement("section");
+    Object.defineProperties(element, {
+      scrollHeight: { configurable: true, value: 700 },
+      clientHeight: { configurable: true, value: 300 }
+    });
+    const { result } = renderHook(() =>
+      useLibraryScrollRestoration({
+        activeView: "skills",
+        scrollTop: 0,
+        restoreKey: "skills:30",
+        onScrollTopChange
+      })
+    );
+    act(() => result.current.setScrollOwner(element));
+    element.scrollTop = 275;
+
+    act(() => result.current.captureScroll());
+
+    expect(onScrollTopChange).toHaveBeenLastCalledWith(275);
+  });
+
+  it("resets the live DOM position synchronously", () => {
+    const onScrollTopChange = vi.fn();
+    const element = document.createElement("section");
+    const { result } = renderHook(() =>
+      useLibraryScrollRestoration({
+        activeView: "skills",
+        scrollTop: 200,
+        restoreKey: "skills:30",
+        onScrollTopChange
+      })
+    );
+    act(() => result.current.setScrollOwner(element));
+    element.scrollTop = 200;
+
+    act(() => result.current.resetScrollNow());
+
+    expect(element.scrollTop).toBe(0);
+    expect(onScrollTopChange).toHaveBeenLastCalledWith(0);
   });
 });

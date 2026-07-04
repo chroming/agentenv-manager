@@ -210,12 +210,25 @@ const addOpenCodeAlphaLibrarySkills = async (appDataRoot: string, count: number)
   for (let index = 0; index < count; index += 1) {
     const id = `layout-skill-${index + 1}`;
     const skillDir = join(appDataRoot, "skills-library", id);
+    const sourceDir = join(appDataRoot, "source-skills", id);
     await mkdir(skillDir, { recursive: true });
+    await mkdir(sourceDir, { recursive: true });
     await writeFile(
       join(skillDir, "SKILL.md"),
       `---\nname: ${id}\ndescription: Layout fixture ${index + 1}.\n---\n\n# ${id}\n`,
       "utf8"
     );
+    await writeFile(
+      join(sourceDir, "SKILL.md"),
+      `---\nname: ${id}\ndescription: Updated layout fixture ${index + 1}.\n---\n\n# ${id}\n`,
+      "utf8"
+    );
+    await writeJson(join(skillDir, ".agentenv-skill.json"), {
+      sourceType: "local",
+      source: sourceDir,
+      contentHash: "seed",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    });
     refs.push({ libraryId: id, targetName: id });
   }
 
@@ -527,12 +540,21 @@ describe("Electron UI profile switching e2e", () => {
     const editorPanel = page.getByRole("region", { name: "Library workspace" });
 
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+    await editorPanel.evaluate((element) => {
+      element.scrollTop = Math.min(220, element.scrollHeight - element.clientHeight);
+    });
+    expect(await editorPanel.evaluate((element) => element.scrollTop)).toBeGreaterThan(100);
     await page.getByRole("textbox", { name: "Search skills" }).fill("layout-skill");
+    expect(await editorPanel.evaluate((element) => element.scrollTop)).toBe(0);
     await page.getByRole("combobox", { name: "Skill source filter" }).selectOption("local");
+    await page.getByRole("tab", { name: /In use/ }).click();
+    await page
+      .getByRole("combobox", { name: "Skill target filter" })
+      .selectOption("not-installed");
+    await page.getByRole("tab", { name: /Updates/ }).click();
     await expect.poll(() => editorPanel.evaluate((element) => element.scrollTop)).toBe(0);
     await editorPanel.evaluate((element) => {
       element.scrollTop = Math.min(280, element.scrollHeight - element.clientHeight);
-      element.dispatchEvent(new Event("scroll"));
     });
     const skillScroll = await editorPanel.evaluate((element) => element.scrollTop);
     expect(skillScroll).toBeGreaterThan(100);
@@ -541,7 +563,6 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("textbox", { name: "Search MCP servers" }).fill("Fixture MCP");
     await editorPanel.evaluate((element) => {
       element.scrollTop = Math.min(240, element.scrollHeight - element.clientHeight);
-      element.dispatchEvent(new Event("scroll"));
     });
     const mcpScroll = await editorPanel.evaluate((element) => element.scrollTop);
     expect(mcpScroll).toBeGreaterThan(100);
@@ -554,23 +575,30 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("combobox", { name: "Skill source filter" }).inputValue()).toBe(
       "local"
     );
+    expect(await page.getByRole("combobox", { name: "Skill target filter" }).inputValue()).toBe(
+      "not-installed"
+    );
+    expect(await page.getByRole("tab", { name: /In use/ }).getAttribute("aria-selected")).toBe(
+      "true"
+    );
+    expect(await page.getByRole("tab", { name: /Updates/ }).getAttribute("aria-selected")).toBe(
+      "true"
+    );
     await expect
-      .poll(() => editorPanel.evaluate((element) => element.scrollTop))
-      .toBeGreaterThanOrEqual(skillScroll - 2);
-    await expect
-      .poll(() => editorPanel.evaluate((element) => element.scrollTop))
-      .toBeLessThanOrEqual(skillScroll + 2);
+      .poll(async () =>
+        Math.abs((await editorPanel.evaluate((element) => element.scrollTop)) - skillScroll)
+      )
+      .toBeLessThanOrEqual(2);
 
     await navigation.getByRole("button", { name: "MCP Servers", exact: true }).click();
     expect(await page.getByRole("textbox", { name: "Search MCP servers" }).inputValue()).toBe(
       "Fixture MCP"
     );
     await expect
-      .poll(() => editorPanel.evaluate((element) => element.scrollTop))
-      .toBeGreaterThanOrEqual(mcpScroll - 2);
-    await expect
-      .poll(() => editorPanel.evaluate((element) => element.scrollTop))
-      .toBeLessThanOrEqual(mcpScroll + 2);
+      .poll(async () =>
+        Math.abs((await editorPanel.evaluate((element) => element.scrollTop)) - mcpScroll)
+      )
+      .toBeLessThanOrEqual(2);
   }, 30_000);
 
   it("shows target readiness from installed commands and writable local paths", async () => {
