@@ -27,6 +27,9 @@ export const useLibraryScrollRestoration = ({
     { token: number; view: Exclude<ActiveLibraryView, undefined> } | undefined
   >(undefined);
   const liveScrollRef = useRef({ skills: 0, mcp: 0 });
+  const lastRestoredViewRef = useRef<Exclude<ActiveLibraryView, undefined> | undefined>(
+    undefined
+  );
   const onScrollTopChangeRef = useRef(onScrollTopChange);
   onScrollTopChangeRef.current = onScrollTopChange;
 
@@ -44,18 +47,23 @@ export const useLibraryScrollRestoration = ({
     }
 
     const token = ++restorationTokenRef.current;
+    const requestedTop =
+      lastRestoredViewRef.current === activeView
+        ? liveScrollRef.current[activeView]
+        : scrollTop;
     restoringRef.current = { token, view: activeView };
     const frame = requestAnimationFrame(() => {
       if (token !== restorationTokenRef.current) {
         return;
       }
       const restoredTop = clampLibraryScrollTop(
-        scrollTop,
+        requestedTop,
         scrollOwner.scrollHeight,
         scrollOwner.clientHeight
       );
       scrollOwner.scrollTop = restoredTop;
       liveScrollRef.current[activeView] = restoredTop;
+      lastRestoredViewRef.current = activeView;
       restoringRef.current = undefined;
     });
 
@@ -110,6 +118,7 @@ export const useLibraryScrollRestoration = ({
     }
     if (activeView) {
       liveScrollRef.current[activeView] = 0;
+      lastRestoredViewRef.current = activeView;
       onScrollTopChangeRef.current(0);
     }
   }, [activeView, scrollOwner]);

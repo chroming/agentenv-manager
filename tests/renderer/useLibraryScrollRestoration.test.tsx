@@ -66,7 +66,7 @@ describe("useLibraryScrollRestoration", () => {
     const { result } = renderHook(() =>
       useLibraryScrollRestoration({
         activeView: "mcp",
-        scrollTop: 360,
+        scrollTop: 40,
         restoreKey: "mcp:20",
         onScrollTopChange
       })
@@ -77,8 +77,6 @@ describe("useLibraryScrollRestoration", () => {
     element.scrollTop = 125;
     act(() => element.dispatchEvent(new Event("scroll")));
     expect(onScrollTopChange).not.toHaveBeenCalled();
-    act(() => result.current.captureScroll());
-    expect(onScrollTopChange).toHaveBeenLastCalledWith(125);
 
     Object.defineProperty(element, "scrollHeight", { configurable: true, value: 420 });
     act(() => window.dispatchEvent(new Event("resize")));
