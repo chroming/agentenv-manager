@@ -1,10 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import type { McpLibraryEntry, McpTransport, SaveMcpServerInput } from "../../shared/types";
+import {
+  type McpLibraryViewState,
+  updateMcpLibraryControls
+} from "../libraryViewState";
 
 interface McpLibraryPanelProps {
   mcpServers: McpLibraryEntry[];
   mcpUsage: Record<string, string[]>;
+  viewState: McpLibraryViewState;
+  onViewStateChange(next: McpLibraryViewState): void;
+  searchInputRef?: RefObject<HTMLInputElement | null>;
   onSave(input: SaveMcpServerInput): Promise<void>;
   onRemove(id: string): void;
 }
@@ -53,14 +60,22 @@ const parseEnvText = (value: string) =>
       .filter(([key]) => key.length > 0)
   );
 
-export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpLibraryPanelProps) => {
+export const McpLibraryPanel = ({
+  mcpServers,
+  mcpUsage,
+  viewState,
+  onViewStateChange,
+  searchInputRef,
+  onSave,
+  onRemove
+}: McpLibraryPanelProps) => {
   const [draft, setDraft] = useState<SaveMcpServerInput>(defaultDraft);
   const [argsText, setArgsText] = useState("");
   const [envText, setEnvText] = useState("");
   const [deleteCandidate, setDeleteCandidate] = useState<McpLibraryEntry>();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [search, setSearch] = useState("");
+  const { search } = viewState;
   const editorTriggerRef = useRef<HTMLButtonElement | null>(null);
   const editorFirstFieldRef = useRef<HTMLInputElement>(null);
   const editorDialogRef = useRef<HTMLElement>(null);
@@ -206,10 +221,15 @@ export const McpLibraryPanel = ({ mcpServers, mcpUsage, onSave, onRemove }: McpL
       <label className="mcp-library-search">
         <Search size={15} strokeWidth={2.2} aria-hidden="true" />
         <input
+          ref={searchInputRef}
           aria-label="Search MCP servers"
           placeholder="Search MCP servers..."
           value={search}
-          onChange={(event) => setSearch(event.currentTarget.value)}
+          onChange={(event) =>
+            onViewStateChange(
+              updateMcpLibraryControls(viewState, { search: event.currentTarget.value })
+            )
+          }
         />
       </label>
 

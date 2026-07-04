@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillLibraryPanel } from "../../src/renderer/components/SkillLibraryPanel";
+import { defaultSkillLibraryViewState } from "../../src/renderer/libraryViewState";
 
 afterEach(() => {
   cleanup();
@@ -21,6 +22,7 @@ describe("SkillLibraryPanel", () => {
     const onIgnoreSkillGroup = vi.fn();
     const onUnignoreSkillGroup = vi.fn();
     const onCloseTool = vi.fn();
+    const onViewStateChange = vi.fn();
     const onSelectLocalSkillFolder = vi.fn().mockResolvedValue("/tmp/local-skills/path-reviewer");
 
     const renderPanel = (activeTool?: "import" | "discoveries") => (
@@ -163,10 +165,21 @@ describe("SkillLibraryPanel", () => {
         onIgnoreSkillGroup={onIgnoreSkillGroup}
         onUnignoreSkillGroup={onUnignoreSkillGroup}
         updateCheckStatus={{ state: "success", message: "2 updates available" }}
+        viewState={{ ...defaultSkillLibraryViewState, scrollTop: 180 }}
+        onViewStateChange={onViewStateChange}
       />
     );
 
     const { rerender } = render(renderPanel());
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Search skills" }), {
+      target: { value: "github" }
+    });
+    expect(onViewStateChange).toHaveBeenCalledWith({
+      ...defaultSkillLibraryViewState,
+      search: "github",
+      scrollTop: 0
+    });
 
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "GitHub skill import" })).not.toBeInTheDocument();

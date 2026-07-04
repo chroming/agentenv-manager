@@ -561,8 +561,9 @@ describe("App", () => {
   it("checks skill updates on the configured background interval", async () => {
     let intervalCallback: (() => void) | undefined;
     const setIntervalSpy = vi.spyOn(window, "setInterval").mockImplementation((callback, timeout) => {
-      intervalCallback = callback as () => void;
-      expect(timeout).toBe(5 * 60 * 1000);
+      if (timeout === 5 * 60 * 1000) {
+        intervalCallback = callback as () => void;
+      }
       return 1 as unknown as ReturnType<typeof window.setInterval>;
     });
     const api = installApi({
@@ -582,7 +583,7 @@ describe("App", () => {
       }
     });
     expect(api.checkSkillLibraryUpdates).toHaveBeenCalledTimes(1);
-    expect(setIntervalSpy).toHaveBeenCalled();
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 5 * 60 * 1000);
     expect(intervalCallback).toBeDefined();
 
     await act(async () => {

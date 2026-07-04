@@ -289,18 +289,26 @@ const writeUnmanagedTargetSkill = async (
   return skillDir;
 };
 
-const writeMcpLibrary = async (appDataRoot: string) => {
+const writeMcpLibrary = async (appDataRoot: string, count = 1) => {
   await writeJson(join(appDataRoot, "mcp-library.json"), [
     {
       id: "shared-docs",
       name: "Shared Docs",
       transport: "http",
       url: "https://example.com/shared-docs/mcp"
-    }
+    },
+    ...Array.from({ length: Math.max(0, count - 1) }, (_, index) => ({
+      id: `fixture-mcp-${index + 1}`,
+      name: `Fixture MCP ${index + 1}`,
+      transport: "http",
+      url: `https://example.com/fixture-${index + 1}/mcp`
+    }))
   ]);
 };
 
-const launchApp = async (options: { openCodeAlphaLibrarySkillCount?: number } = {}) => {
+const launchApp = async (
+  options: { openCodeAlphaLibrarySkillCount?: number; mcpLibraryCount?: number } = {}
+) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
   const appDataRoot = join(root, "app-data");
   const fakeHomeRoot = join(root, "fake-home");
@@ -345,7 +353,7 @@ const launchApp = async (options: { openCodeAlphaLibrarySkillCount?: number } = 
   }
   await writeGitHubFixtureSkill(githubFixtureRoot, "v1");
   await writeUnmanagedTargetSkill(opencodeDir);
-  await writeMcpLibrary(appDataRoot);
+  await writeMcpLibrary(appDataRoot, options.mcpLibraryCount);
 
   app = await electron.launch({
     executablePath: electronPath as unknown as string,
@@ -507,6 +515,62 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI OpenCode alpha");
     expect(await applyActionButton(page, "OpenCode").count()).toBe(1);
     expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
+  }, 30_000);
+
+  it("preserves independent Library context across workspaces", async () => {
+    const { page } = await launchApp({
+      openCodeAlphaLibrarySkillCount: 30,
+      mcpLibraryCount: 30
+    });
+    await page.setViewportSize({ width: 920, height: 620 });
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+    const editorPanel = page.getByRole("region", { name: "Library workspace" });
+
+    await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+    await page.getByRole("textbox", { name: "Search skills" }).fill("layout-skill");
+    await page.getByRole("combobox", { name: "Skill source filter" }).selectOption("local");
+    await expect.poll(() => editorPanel.evaluate((element) => element.scrollTop)).toBe(0);
+    await editorPanel.evaluate((element) => {
+      element.scrollTop = Math.min(280, element.scrollHeight - element.clientHeight);
+      element.dispatchEvent(new Event("scroll"));
+    });
+    const skillScroll = await editorPanel.evaluate((element) => element.scrollTop);
+    expect(skillScroll).toBeGreaterThan(100);
+
+    await navigation.getByRole("button", { name: "MCP Servers", exact: true }).click();
+    await page.getByRole("textbox", { name: "Search MCP servers" }).fill("Fixture MCP");
+    await editorPanel.evaluate((element) => {
+      element.scrollTop = Math.min(240, element.scrollHeight - element.clientHeight);
+      element.dispatchEvent(new Event("scroll"));
+    });
+    const mcpScroll = await editorPanel.evaluate((element) => element.scrollTop);
+    expect(mcpScroll).toBeGreaterThan(100);
+
+    await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
+    await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+    expect(await page.getByRole("textbox", { name: "Search skills" }).inputValue()).toBe(
+      "layout-skill"
+    );
+    expect(await page.getByRole("combobox", { name: "Skill source filter" }).inputValue()).toBe(
+      "local"
+    );
+    await expect
+      .poll(() => editorPanel.evaluate((element) => element.scrollTop))
+      .toBeGreaterThanOrEqual(skillScroll - 2);
+    await expect
+      .poll(() => editorPanel.evaluate((element) => element.scrollTop))
+      .toBeLessThanOrEqual(skillScroll + 2);
+
+    await navigation.getByRole("button", { name: "MCP Servers", exact: true }).click();
+    expect(await page.getByRole("textbox", { name: "Search MCP servers" }).inputValue()).toBe(
+      "Fixture MCP"
+    );
+    await expect
+      .poll(() => editorPanel.evaluate((element) => element.scrollTop))
+      .toBeGreaterThanOrEqual(mcpScroll - 2);
+    await expect
+      .poll(() => editorPanel.evaluate((element) => element.scrollTop))
+      .toBeLessThanOrEqual(mcpScroll + 2);
   }, 30_000);
 
   it("shows target readiness from installed commands and writable local paths", async () => {

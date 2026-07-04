@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -36,6 +37,10 @@ import type {
   SkillUpdateSourceInput
 } from "../../shared/types";
 import { InfoTip } from "./InfoTip";
+import {
+  type SkillLibraryViewState,
+  updateSkillLibraryControls
+} from "../libraryViewState";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -63,6 +68,9 @@ interface SkillLibraryPanelProps {
   onIgnoreSkillGroup(skillKey: string): void;
   onUnignoreSkillGroup(skillKey: string): void;
   updateCheckStatus?: SkillUpdateCheckStatus;
+  viewState: SkillLibraryViewState;
+  onViewStateChange(next: SkillLibraryViewState): void;
+  searchInputRef?: RefObject<HTMLInputElement | null>;
 }
 
 const sourceLabel = (skill: SkillLibraryEntry) => {
@@ -208,18 +216,18 @@ export const SkillLibraryPanel = ({
   onCheckUpdates,
   onIgnoreSkillGroup,
   onUnignoreSkillGroup,
-  updateCheckStatus
+  updateCheckStatus,
+  viewState,
+  onViewStateChange,
+  searchInputRef
 }: SkillLibraryPanelProps) => {
   const [githubUrl, setGithubUrl] = useState("");
   const [githubId, setGithubId] = useState("");
   const [localSkillPath, setLocalSkillPath] = useState("");
-  const [search, setSearch] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | SkillSourceType>("all");
-  const [usageFilter, setUsageFilter] = useState<"all" | "used" | "unused">("all");
-  const [targetFilter, setTargetFilter] = useState<
-    "all" | SkillInventoryEntry["status"] | "not-installed"
-  >("all");
-  const [updateFilter, setUpdateFilter] = useState<"all" | "updates">("all");
+  const { search, sourceFilter, usageFilter, targetFilter, updateFilter } = viewState;
+  const updateControls = (
+    patch: Partial<Omit<SkillLibraryViewState, "scrollTop">>
+  ) => onViewStateChange(updateSkillLibraryControls(viewState, patch));
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
@@ -305,11 +313,13 @@ export const SkillLibraryPanel = ({
     return matchesSearch && matchesSource && matchesUsage && matchesTarget && matchesUpdate;
   });
   const resetFilters = () => {
-    setSearch("");
-    setSourceFilter("all");
-    setUsageFilter("all");
-    setTargetFilter("all");
-    setUpdateFilter("all");
+    updateControls({
+      search: "",
+      sourceFilter: "all",
+      usageFilter: "all",
+      targetFilter: "all",
+      updateFilter: "all"
+    });
   };
 
   const toggleActionMenu = (skillId: string, button: HTMLButtonElement) => {
@@ -408,8 +418,7 @@ export const SkillLibraryPanel = ({
             role="tab"
             aria-selected={updateFilter === "all" && usageFilter === "all"}
             onClick={() => {
-              setUpdateFilter("all");
-              setUsageFilter("all");
+              updateControls({ updateFilter: "all", usageFilter: "all" });
             }}
           >
             All <strong>{librarySkills.length}</strong>
@@ -419,7 +428,7 @@ export const SkillLibraryPanel = ({
             type="button"
             role="tab"
             aria-selected={updateFilter === "updates"}
-            onClick={() => setUpdateFilter("updates")}
+            onClick={() => updateControls({ updateFilter: "updates" })}
           >
             Updates <strong>{availableUpdateCount}</strong>
           </button>
@@ -429,8 +438,7 @@ export const SkillLibraryPanel = ({
             role="tab"
             aria-selected={usageFilter === "used"}
             onClick={() => {
-              setUsageFilter("used");
-              setUpdateFilter("all");
+              updateControls({ usageFilter: "used", updateFilter: "all" });
             }}
           >
             In use <strong>{usedSkillCount}</strong>
@@ -441,8 +449,7 @@ export const SkillLibraryPanel = ({
             role="tab"
             aria-selected={usageFilter === "unused"}
             onClick={() => {
-              setUsageFilter("unused");
-              setUpdateFilter("all");
+              updateControls({ usageFilter: "unused", updateFilter: "all" });
             }}
           >
             Unused <strong>{unusedSkillCount}</strong>
@@ -453,10 +460,11 @@ export const SkillLibraryPanel = ({
             <span>Search</span>
             <Search size={16} strokeWidth={2.1} aria-hidden="true" />
             <input
+              ref={searchInputRef}
               aria-label="Search skills"
               placeholder="Search skill name or description..."
               value={search}
-              onChange={(event) => setSearch(event.currentTarget.value)}
+              onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
           </label>
           {hasActiveFilters ? (
@@ -468,7 +476,9 @@ export const SkillLibraryPanel = ({
           <select
             aria-label="Skill source filter"
             value={sourceFilter}
-            onChange={(event) => setSourceFilter(event.currentTarget.value as typeof sourceFilter)}
+            onChange={(event) =>
+              updateControls({ sourceFilter: event.currentTarget.value as typeof sourceFilter })
+            }
           >
             <option value="all">Source: All</option>
             <option value="github">GitHub</option>
@@ -477,7 +487,9 @@ export const SkillLibraryPanel = ({
           <select
             aria-label="Skill target filter"
             value={targetFilter}
-            onChange={(event) => setTargetFilter(event.currentTarget.value as typeof targetFilter)}
+            onChange={(event) =>
+              updateControls({ targetFilter: event.currentTarget.value as typeof targetFilter })
+            }
           >
             <option value="all">Target: All</option>
             <option value="managed">Managed</option>

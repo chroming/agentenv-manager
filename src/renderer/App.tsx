@@ -73,6 +73,12 @@ import {
   deriveProfileReadiness
 } from "./profileReadiness";
 import {
+  defaultMcpLibraryViewState,
+  defaultSkillLibraryViewState,
+  updateLibraryScroll
+} from "./libraryViewState";
+import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration";
+import {
   findRecentProfileApplication,
   summarizeProfile,
   type ProfileResourceSummary
@@ -358,6 +364,12 @@ export const App = () => {
   const [rollbackError, setRollbackError] = useState<string>();
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
   const [activeLibraryTab, setActiveLibraryTab] = useState<LibraryTab>("skills");
+  const [skillLibraryViewState, setSkillLibraryViewState] = useState(
+    defaultSkillLibraryViewState
+  );
+  const [mcpLibraryViewState, setMcpLibraryViewState] = useState(
+    defaultMcpLibraryViewState
+  );
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
@@ -383,10 +395,35 @@ export const App = () => {
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const targetMenuButtonRef = useRef<HTMLButtonElement>(null);
   const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
+  const skillSearchInputRef = useRef<HTMLInputElement>(null);
+  const mcpSearchInputRef = useRef<HTMLInputElement>(null);
   const profileFlowRequestRef = useRef(0);
   const activeProfileFlowRequestRef = useRef<number | undefined>(undefined);
   const saveInFlightRef = useRef(false);
   const rollbackReturnFocusRef = useRef<HTMLElement | null>(null);
+  const activeLibraryView = activeWorkspace === "library" ? activeLibraryTab : undefined;
+  const setEditorPanelScrollOwner = useLibraryScrollRestoration({
+    activeView: activeLibraryView,
+    scrollTop:
+      activeLibraryView === "skills"
+        ? skillLibraryViewState.scrollTop
+        : activeLibraryView === "mcp"
+          ? mcpLibraryViewState.scrollTop
+          : 0,
+    restoreKey:
+      activeLibraryView === "skills"
+        ? librarySkills
+        : activeLibraryView === "mcp"
+          ? mcpServers
+          : activeWorkspace,
+    onScrollTopChange: (scrollTop) => {
+      if (activeLibraryView === "skills") {
+        setSkillLibraryViewState((current) => updateLibraryScroll(current, scrollTop));
+      } else if (activeLibraryView === "mcp") {
+        setMcpLibraryViewState((current) => updateLibraryScroll(current, scrollTop));
+      }
+    }
+  });
 
   useEffect(() => {
     if (rollbackPreview || busy) {
@@ -1492,6 +1529,7 @@ export const App = () => {
       />
 
       <section
+        ref={setEditorPanelScrollOwner}
         className="editor-panel"
         aria-label={
           activeWorkspace === "library"
@@ -1609,11 +1647,17 @@ export const App = () => {
                   void unignoreSkillGroup(skillKey);
                 }}
                 updateCheckStatus={skillUpdateCheckStatus}
+                viewState={skillLibraryViewState}
+                onViewStateChange={setSkillLibraryViewState}
+                searchInputRef={skillSearchInputRef}
               />
             ) : (
               <McpLibraryPanel
                 mcpServers={mcpServers}
                 mcpUsage={mcpUsage}
+                viewState={mcpLibraryViewState}
+                onViewStateChange={setMcpLibraryViewState}
+                searchInputRef={mcpSearchInputRef}
                 onSave={saveMcpServer}
                 onRemove={removeMcpServer}
               />
