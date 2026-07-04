@@ -161,6 +161,10 @@ interface AppFeedbackMessage {
   kind: AppFeedbackKind;
   title: string;
   message?: string;
+  action?: {
+    label: string;
+    onClick(): void;
+  };
 }
 
 const AppFeedback = ({
@@ -192,6 +196,11 @@ const AppFeedback = ({
       <div>
         <strong>{feedback.title}</strong>
         {feedback.message ? <span>{feedback.message}</span> : null}
+        {feedback.action ? (
+          <button className="app-feedback__action" type="button" onClick={feedback.action.onClick}>
+            {feedback.action.label}
+          </button>
+        ) : null}
       </div>
       <button type="button" aria-label="Dismiss message" onClick={onDismiss}>
         <X size={14} strokeWidth={2.2} aria-hidden="true" />
@@ -209,6 +218,9 @@ const formatShortDate = (value?: string) => {
     day: "numeric"
   }).format(new Date(value));
 };
+
+const isGitHubRateLimitError = (message: string) =>
+  /github.*(?:rate limit|api limit)|(?:rate limit|api limit).*github/i.test(message);
 
 type ValidationLevel = "ok" | "warning" | "error" | "pending";
 
@@ -1274,6 +1286,12 @@ export const App = () => {
     try {
       const { skillUpdateItems } = await refreshProfiles();
       setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(skillUpdateItems));
+      const rateLimitError = skillUpdateItems.find(
+        (item) => item.error && isGitHubRateLimitError(item.error)
+      )?.error;
+      if (rateLimitError && githubAuthStatus.state !== "signed-in") {
+        setError(rateLimitError);
+      }
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);
@@ -1398,6 +1416,10 @@ export const App = () => {
           state: "error",
           message: `${id} check failed`
         });
+        const rateLimitError = updatePlan.errors.find(isGitHubRateLimitError);
+        if (rateLimitError && githubAuthStatus.state !== "signed-in") {
+          setError(rateLimitError);
+        }
       } else {
         setSkillUpdateCheckStatus({
           state: "success",
@@ -1629,8 +1651,30 @@ export const App = () => {
     setSettingsSaveStatus("");
     setTargetRefreshStatus(undefined);
   };
+  const openGitHubConnectionSettings = () => {
+    setError(undefined);
+    setSkillUpdateCheckStatus(undefined);
+    setActiveWorkspace("settings");
+    window.setTimeout(() => {
+      const section = document.getElementById("github-connection-settings");
+      section?.focus();
+      section?.scrollIntoView?.({ block: "center" });
+    }, 0);
+  };
+  const showGitHubRecovery =
+    Boolean(error && isGitHubRateLimitError(error)) &&
+    githubAuthStatus.state !== "signed-in";
   const appFeedback: AppFeedbackMessage | undefined = error
-    ? { kind: "error", title: "Action failed", message: error }
+    ? {
+        kind: "error",
+        title: showGitHubRecovery ? "GitHub request limited" : "Action failed",
+        message: showGitHubRecovery
+          ? "Anonymous GitHub requests are limited. Connect your account and try again."
+          : error,
+        action: showGitHubRecovery
+          ? { label: "Connect GitHub", onClick: openGitHubConnectionSettings }
+          : undefined
+      }
     : targetRefreshStatus
       ? {
           kind: targetRefreshStatus === "refreshing" ? "loading" : "success",
@@ -2496,7 +2540,12 @@ export const App = () => {
                 </label>
               </div>
             </section>
-            <section className="resource-section github-settings-section" aria-label="GitHub OAuth settings">
+            <section
+              className="resource-section github-settings-section"
+              id="github-connection-settings"
+              tabIndex={-1}
+              aria-label="GitHub OAuth settings"
+            >
               <div className="settings-section-header github-account-header">
                 <div className="github-account-identity">
                   <span className="settings-service-icon" aria-hidden="true">

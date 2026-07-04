@@ -188,6 +188,29 @@ describe("skill library store", () => {
     );
   });
 
+  it("identifies unauthenticated GitHub rate limit responses", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const store = createSkillLibraryStore(paths, undefined, {
+      fetch: vi.fn(async () =>
+        new Response(JSON.stringify({ message: "API rate limit exceeded" }), {
+          status: 403,
+          statusText: "Forbidden",
+          headers: {
+            "content-type": "application/json",
+            "x-ratelimit-remaining": "0"
+          }
+        })
+      )
+    });
+
+    await expect(
+      store.importGitHubSkill({
+        url: "https://github.com/acme/skills/tree/main/reviewer"
+      })
+    ).rejects.toThrow("GitHub API rate limit reached (403 Forbidden)");
+  });
+
   it("scans target skill directories for unmanaged skills", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

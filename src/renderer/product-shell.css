@@ -88,6 +88,29 @@
   padding: 0;
 }
 
+.app-feedback__action {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 750;
+  margin-top: 6px;
+  min-height: 24px;
+  padding: 0;
+}
+
+.app-feedback__action:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
+#github-connection-settings:focus {
+  border-color: rgba(49, 95, 220, 0.55);
+  box-shadow: 0 0 0 3px rgba(49, 95, 220, 0.1);
+  outline: 0;
+}
+
 .workspace-page-header > div {
   display: grid;
   gap: 5px;

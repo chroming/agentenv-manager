@@ -496,6 +496,46 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 update available"));
   });
 
+  it("offers GitHub connection recovery when an anonymous update check is rate limited", async () => {
+    installApi({
+      listSkillLibrary: vi.fn().mockResolvedValue([
+        {
+          id: "github-reviewer",
+          name: "GitHub Reviewer",
+          description: "Review from GitHub",
+          path: "/tmp/skills-library/github-reviewer",
+          sourceType: "github",
+          source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+          contentHash: "hash",
+          updatedAt: "2026-07-02T00:00:00.000Z"
+        }
+      ]),
+      checkSkillLibraryUpdates: vi.fn().mockResolvedValue([
+        {
+          id: "github-reviewer",
+          name: "GitHub Reviewer",
+          sourceType: "github",
+          currentRevision: "revision-1",
+          updateAvailable: false,
+          error: "GitHub API rate limit reached (403 Forbidden)"
+        }
+      ])
+    });
+    render(<App />);
+
+    await screen.findByRole("group", { name: "Library item github-reviewer" });
+    fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("GitHub request limited");
+    expect(alert).toHaveTextContent("Connect your account and try again");
+    fireEvent.click(within(alert).getByRole("button", { name: "Connect GitHub" }));
+
+    const githubSettings = await screen.findByRole("region", { name: "GitHub OAuth settings" });
+    await waitFor(() => expect(document.activeElement).toBe(githubSettings));
+    expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeInTheDocument();
+  });
+
   it("shows global feedback when checking one local library skill", async () => {
     const api = installApi({
       listSkillLibrary: vi.fn().mockResolvedValue([

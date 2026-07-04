@@ -65,6 +65,7 @@ type FetchLike = (url: string, init?: RequestInit) => Promise<{
   ok: boolean;
   status: number;
   statusText: string;
+  headers?: Pick<Headers, "get">;
   json(): Promise<unknown>;
   text(): Promise<string>;
 }>;
@@ -384,10 +385,25 @@ export const createSkillLibraryStore = (
     };
   };
 
+  const githubRequestError = async (
+    response: Awaited<ReturnType<FetchLike>>,
+    url: string
+  ) => {
+    const detail = await response.text().catch(() => "");
+    const rateLimited =
+      response.status === 429 ||
+      response.headers?.get("x-ratelimit-remaining") === "0" ||
+      /rate limit/i.test(detail);
+    if (rateLimited) {
+      return new Error(`GitHub API rate limit reached (${response.status} ${response.statusText})`);
+    }
+    return new Error(`GitHub request failed (${response.status} ${response.statusText}): ${url}`);
+  };
+
   const fetchGitHubJson = async (url: string) => {
     const response = await fetchImpl(url, await githubRequestInit());
     if (!response.ok) {
-      throw new Error(`GitHub request failed (${response.status} ${response.statusText}): ${url}`);
+      throw await githubRequestError(response, url);
     }
     return response.json();
   };
@@ -395,7 +411,7 @@ export const createSkillLibraryStore = (
   const fetchGitHubText = async (url: string) => {
     const response = await fetchImpl(url, await githubRequestInit());
     if (!response.ok) {
-      throw new Error(`GitHub file download failed (${response.status} ${response.statusText}): ${url}`);
+      throw await githubRequestError(response, url);
     }
     return response.text();
   };
