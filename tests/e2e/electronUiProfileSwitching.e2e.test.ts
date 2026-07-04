@@ -231,6 +231,13 @@ const addOpenCodeAlphaLibrarySkills = async (appDataRoot: string, count: number)
     });
     refs.push({ libraryId: id, targetName: id });
   }
+  const staticSkillDir = join(appDataRoot, "skills-library", "static-reference");
+  await mkdir(staticSkillDir, { recursive: true });
+  await writeFile(
+    join(staticSkillDir, "SKILL.md"),
+    "---\nname: Static Reference\ndescription: Untracked scale-control skill.\n---\n\n# Static Reference\n",
+    "utf8"
+  );
 
   const assetsPath = join(appDataRoot, "profiles", "ui-opencode-alpha", "assets.json");
   const assets = await readJson<Record<string, unknown> & { skillRefs?: unknown[] }>(assetsPath);
@@ -788,7 +795,7 @@ describe("Electron UI profile switching e2e", () => {
       });
       await page.setViewportSize({ width: testCase.width, height: testCase.height });
       const navigation = page.getByRole("complementary", { name: "Global navigation" });
-      const rows = page.locator('[role="group"][aria-label^="Library item layout-skill-"]');
+      const allRows = page.locator('[role="group"][aria-label^="Library item "]');
       const navigationRuns: number[] = [];
       const searchRuns: number[] = [];
       const filterRuns: number[] = [];
@@ -797,7 +804,7 @@ describe("Electron UI profile switching e2e", () => {
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
         await navigation.getByRole("button", { name: "Skills", exact: true }).click();
-        await expect.poll(() => rows.count()).toBe(testCase.count);
+        await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
         const duration = (await page.evaluate(() => performance.now())) - startedAt;
         if (run > 0) navigationRuns.push(duration);
         await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
@@ -807,42 +814,41 @@ describe("Electron UI profile switching e2e", () => {
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
         await search.fill(`layout-skill-${testCase.count}`);
-        await expect.poll(() => rows.count()).toBe(1);
+        await expect.poll(() => allRows.count()).toBe(1);
         const duration = (await page.evaluate(() => performance.now())) - startedAt;
         if (run > 0) searchRuns.push(duration);
         await search.fill("");
-        await expect.poll(() => rows.count()).toBe(testCase.count);
+        await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
       }
       const updatesTab = page.getByRole("tab", { name: /Updates/ });
       const allTab = page.getByRole("tab", { name: /All/ });
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
         await updatesTab.click();
-        await expect.poll(() => rows.count()).toBe(testCase.count);
+        await expect.poll(() => allRows.count()).toBe(testCase.count + 1);
         const duration = (await page.evaluate(() => performance.now())) - startedAt;
         if (run > 0) filterRuns.push(duration);
         await allTab.click();
-        await expect.poll(() => rows.count()).toBe(testCase.count);
+        await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
       }
 
-      const allRows = page.locator('[role="group"][aria-label^="Library item "]');
-      await expect.poll(() => allRows.count()).toBe(testCase.count + 1);
+      await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
       const sourceFilter = page.getByRole("combobox", { name: "Skill source filter" });
       await sourceFilter.selectOption("github");
       await expect.poll(() => allRows.count()).toBe(0);
       await sourceFilter.selectOption("local");
-      await expect.poll(() => allRows.count()).toBe(testCase.count + 1);
+      await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
       await sourceFilter.selectOption("all");
       await page.getByRole("tab", { name: /In use/ }).click();
       await expect.poll(() => allRows.count()).toBe(testCase.count);
       await page.getByRole("tab", { name: /Unused/ }).click();
-      await expect.poll(() => allRows.count()).toBe(1);
+      await expect.poll(() => allRows.count()).toBe(2);
       await allTab.click();
       const targetFilter = page.getByRole("combobox", { name: "Skill target filter" });
       await targetFilter.selectOption("managed");
       await expect.poll(() => allRows.count()).toBe(0);
       await targetFilter.selectOption("all");
-      await expect.poll(() => allRows.count()).toBe(testCase.count + 1);
+      await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
 
       const overflow = await page.evaluate(() => {
         const shell = document.querySelector<HTMLElement>(".app-shell");
