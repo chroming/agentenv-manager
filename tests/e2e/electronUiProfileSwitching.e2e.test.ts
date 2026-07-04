@@ -822,7 +822,27 @@ describe("Electron UI profile switching e2e", () => {
         const duration = (await page.evaluate(() => performance.now())) - startedAt;
         if (run > 0) filterRuns.push(duration);
         await allTab.click();
+        await expect.poll(() => rows.count()).toBe(testCase.count);
       }
+
+      const allRows = page.locator('[role="group"][aria-label^="Library item "]');
+      await expect.poll(() => allRows.count()).toBe(testCase.count + 1);
+      const sourceFilter = page.getByRole("combobox", { name: "Skill source filter" });
+      await sourceFilter.selectOption("github");
+      await expect.poll(() => allRows.count()).toBe(0);
+      await sourceFilter.selectOption("local");
+      await expect.poll(() => allRows.count()).toBe(testCase.count + 1);
+      await sourceFilter.selectOption("all");
+      await page.getByRole("tab", { name: /In use/ }).click();
+      await expect.poll(() => allRows.count()).toBe(testCase.count);
+      await page.getByRole("tab", { name: /Unused/ }).click();
+      await expect.poll(() => allRows.count()).toBe(1);
+      await allTab.click();
+      const targetFilter = page.getByRole("combobox", { name: "Skill target filter" });
+      await targetFilter.selectOption("managed");
+      await expect.poll(() => allRows.count()).toBe(0);
+      await targetFilter.selectOption("all");
+      await expect.poll(() => allRows.count()).toBe(testCase.count + 1);
 
       const overflow = await page.evaluate(() => {
         const shell = document.querySelector<HTMLElement>(".app-shell");
@@ -837,35 +857,40 @@ describe("Electron UI profile switching e2e", () => {
       expect(overflow.shell).toBeLessThanOrEqual(0);
       expect(overflow.panel).toBeLessThanOrEqual(0);
 
-      const firstRow = page.getByRole("group", {
+      const changingRow = page.getByRole("group", {
         name: "Library item layout-skill-1",
         exact: true
       });
-      const lastRow = page.getByRole("group", {
-        name: `Library item layout-skill-${testCase.count}`,
-        exact: true
-      });
-      const firstHeight = (await firstRow.boundingBox())?.height;
-      await firstRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
-      const firstMenu = page.getByRole("menu", { name: "Actions for layout-skill-1" });
+      const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
+      await changingRow.getByRole("button", { name: "Update layout-skill-1" }).click();
+      await changingRow
+        .getByRole("button", { name: "Check update layout-skill-1" })
+        .waitFor({ state: "visible" });
+      const afterUpdateHeight = (await changingRow.boundingBox())?.height;
+      expect(afterUpdateHeight).toBe(beforeUpdateHeight);
+
+      const firstRow = allRows.first();
+      const lastRow = allRows.last();
+      const firstId = (await firstRow.getAttribute("aria-label"))!.replace("Library item ", "");
+      const lastId = (await lastRow.getAttribute("aria-label"))!.replace("Library item ", "");
+      await firstRow.getByRole("button", { name: `More actions for ${firstId}` }).click();
+      const firstMenu = page.getByRole("menu", { name: `Actions for ${firstId}` });
       await expectInViewport(page, firstMenu);
       await expectTopmost(firstMenu);
       await page.mouse.click(220, 120);
       await firstMenu.waitFor({ state: "hidden" });
 
       await lastRow.scrollIntoViewIfNeeded();
-      const lastHeight = (await lastRow.boundingBox())?.height;
       await lastRow
-        .getByRole("button", { name: `More actions for layout-skill-${testCase.count}` })
+        .getByRole("button", { name: `More actions for ${lastId}` })
         .click();
       const lastMenu = page.getByRole("menu", {
-        name: `Actions for layout-skill-${testCase.count}`
+        name: `Actions for ${lastId}`
       });
       await expectInViewport(page, lastMenu);
       await expectTopmost(lastMenu);
       await page.keyboard.press("Escape");
       await lastMenu.waitFor({ state: "hidden" });
-      expect(firstHeight).toBe(lastHeight);
 
       const result = {
         rows: testCase.count,
