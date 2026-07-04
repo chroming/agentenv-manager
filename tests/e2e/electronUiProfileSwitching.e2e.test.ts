@@ -769,6 +769,7 @@ describe("Electron UI profile switching e2e", () => {
     await expectFocusInside(mcpDelete);
     expect(await mcpSearch.evaluate((element) => document.activeElement === element)).toBe(false);
     await page.keyboard.press("Escape");
+    await mcpDelete.waitFor({ state: "hidden" });
   }, 30_000);
 
   it("shows target readiness from installed commands and writable local paths", async () => {
