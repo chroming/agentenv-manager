@@ -1,4 +1,5 @@
 import { BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
+import { basename, dirname, relative, resolve } from "node:path";
 import type { ActivationService } from "./activationService";
 import type { BackupStore } from "./backupStore";
 import type { GitHubAuthService } from "./githubAuthService";
@@ -12,6 +13,7 @@ import type {
   CreateProfileInput,
   GitHubSkillImportInput,
   ManageTargetSkillInput,
+  SkillCleanupRequest,
   SaveMcpServerInput,
   SaveProfileInput,
   SkillUpdateSourceInput
@@ -96,9 +98,23 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>
     skillLibraryStore.importGitHubSkill(input)
   );
-  ipcMain.handle("skills:remove-library", (_event, id: unknown) =>
-    skillLibraryStore.removeSkill(parseId(id, "skill id"))
-  );
+  ipcMain.handle("skills:remove-library", async (_event, id: unknown) => {
+    const skillId = parseId(id, "skill id");
+    const profiles = await profileStore.listProfiles();
+    const references = [] as string[];
+    for (const profile of profiles) {
+      const detail = await profileStore.readProfile(profile.id);
+      if (detail.assetPolicy.skillRefs?.some((reference) => reference.libraryId === skillId)) {
+        references.push(detail.manifest.name);
+      }
+    }
+    if (references.length > 0) {
+      throw new Error(
+        `Library skill ${skillId} is used by ${references.join(", ")}. Remove it from those profiles first.`
+      );
+    }
+    return skillLibraryStore.removeSkill(skillId);
+  });
   ipcMain.handle("skills:manage-target", async (_event, input: ManageTargetSkillInput) => {
     const targetId = parseId(input.targetId, "target id");
     const libraryId = parseId(input.libraryId, "skill id");
@@ -113,6 +129,39 @@ export const registerIpcHandlers = ({
       libraryId
     });
   });
+  ipcMain.handle("skills:consolidate-group", async (_event, input: SkillCleanupRequest) => {
+    const libraryId = parseId(input.libraryId, "skill library id");
+    const skillKey = parseId(input.skillKey, "skill key");
+    const targets = await targetDiscoveryService.listTargets();
+    const locations = input.locations.map((location) => {
+      const targetId = parseId(location.targetId, "target id");
+      const target = targets.find((item) => item.id === targetId);
+      if (!target) {
+        throw new Error(`Target not found: ${targetId}`);
+      }
+      const targetDir = resolve(String(location.path));
+      const allowedRoots = [target.paths.skillsDir, ...(target.paths.skillScanDirs ?? [])]
+        .filter((path): path is string => Boolean(path))
+        .map((path) => resolve(path));
+      const isAllowed = allowedRoots.some((root) => {
+        const child = relative(root, targetDir);
+        return child.length > 0 && !child.startsWith("..") && !child.includes("/../") && dirname(targetDir) === root;
+      });
+      if (!isAllowed || !basename(targetDir)) {
+        throw new Error(`Skill cleanup path is outside ${target.name}: ${targetDir}`);
+      }
+      return { targetPaths: target.paths, targetDir };
+    });
+    return skillLibraryStore.consolidateSkillGroup({
+      skillKey,
+      libraryId,
+      canonicalPath: resolve(String(input.canonicalPath)),
+      locations
+    });
+  });
+  ipcMain.handle("skills:rollback-cleanup", (_event, backupId: unknown) =>
+    skillLibraryStore.rollbackSkillCleanup(parseId(backupId, "cleanup backup id"))
+  );
   ipcMain.handle("skills:check-updates", () => skillLibraryStore.checkUpdates());
   ipcMain.handle("skills:set-update-source", (_event, input: SkillUpdateSourceInput) =>
     skillLibraryStore.setUpdateSource(input)
@@ -151,18 +200,28 @@ export const registerIpcHandlers = ({
   ipcMain.handle("profiles:duplicate", (_event, id: unknown) =>
     profileStore.duplicateProfile(parseId(id, "profile id"))
   );
-  ipcMain.handle("profiles:delete", (_event, id: unknown) =>
-    profileStore.deleteProfile(parseId(id, "profile id"))
-  );
+  ipcMain.handle("profiles:delete", async (_event, id: unknown) => {
+    const profileId = parseId(id, "profile id");
+    const activeTarget = (await activationService.listTargetStates()).find(
+      (state) => state.activeProfileId === profileId
+    );
+    if (activeTarget) {
+      throw new Error("Apply another profile before removing this active profile");
+    }
+    await profileStore.deleteProfile(profileId);
+  });
   ipcMain.handle("activation:preview", (_event, profileId: unknown) =>
     activationService.previewProfile(parseId(profileId, "profile id"))
   );
   ipcMain.handle(
     "activation:apply",
-    (_event, profileId: unknown, previewId: unknown) =>
+    (_event, profileId: unknown, previewId: unknown, options: unknown) =>
       activationService.applyProfile(
         parseId(profileId, "profile id"),
-        String(previewId)
+        String(previewId),
+        options && typeof options === "object" && "allowManagedDrift" in options
+          ? { allowManagedDrift: (options as { allowManagedDrift?: unknown }).allowManagedDrift === true }
+          : undefined
       )
   );
   ipcMain.handle("backups:list", () => backupStore.listBackups());

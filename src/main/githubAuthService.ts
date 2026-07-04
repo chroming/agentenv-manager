@@ -192,12 +192,11 @@ export const createGitHubAuthService = ({
   };
 
   const readStatus = async (): Promise<GitHubAuthStatus> => {
-    const token = await tokenStore.readToken();
-    if (!token) {
-      return { state: "configured", clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID };
-    }
-
     try {
+      const token = await tokenStore.readToken();
+      if (!token) {
+        return { state: "configured", clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID };
+      }
       const [user, rateLimit] = await Promise.all([
         fetchGitHubJson<GitHubUserResponse>("https://api.github.com/user", token).then(toUser),
         fetchGitHubJson<GitHubRateLimitResponse>("https://api.github.com/rate_limit", token).then(
@@ -211,11 +210,11 @@ export const createGitHubAuthService = ({
         rateLimit
       };
     } catch (error) {
-      await tokenStore.clearToken();
+      await tokenStore.clearToken().catch(() => undefined);
       return {
         state: "configured",
         clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
-        error: error instanceof Error ? error.message : String(error)
+        error: "Saved GitHub sign-in was invalid and has been cleared. Sign in again to reconnect."
       };
     }
   };

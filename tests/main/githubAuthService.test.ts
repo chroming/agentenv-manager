@@ -28,6 +28,26 @@ const jsonResponse = (body: unknown, init?: ResponseInit) =>
   });
 
 describe("GitHub auth service", () => {
+  it("clears an unreadable saved token without blocking local app startup", async () => {
+    const clearToken = vi.fn(async () => undefined);
+    const service = createGitHubAuthService({
+      tokenStore: {
+        clearToken,
+        readToken: vi.fn(async () => {
+          throw new Error("Error while decrypting ciphertext");
+        }),
+        writeToken: vi.fn()
+      }
+    });
+
+    await expect(service.readStatus()).resolves.toEqual({
+      state: "configured",
+      clientId: "Ov23liOAxChYXPhAjVh8",
+      error: "Saved GitHub sign-in was invalid and has been cleared. Sign in again to reconnect."
+    });
+    expect(clearToken).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the bundled OAuth Client ID", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-github-auth-"));
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

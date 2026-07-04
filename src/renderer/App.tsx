@@ -46,6 +46,8 @@ import type {
   McpLibraryEntry,
   SaveMcpServerInput,
   SkillInventoryEntry,
+  SkillCleanupRequest,
+  SkillCleanupResult,
   SkillLibraryEntry,
   SkillUpdateInfo,
   SkillUpdatePlan,
@@ -99,6 +101,10 @@ const emptyAssetPolicy: AssetPolicy = {
 
 type ComposerSection = "instructions" | "skills" | "mcp" | "advanced";
 type ProfileDialogMode = "create" | "edit";
+
+interface PendingProfileAction {
+  label: string;
+}
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
@@ -381,7 +387,9 @@ export const App = () => {
   const [mcpServers, setMcpServers] = useState<McpLibraryEntry[]>([]);
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
+  const [skillCleanupResult, setSkillCleanupResult] = useState<SkillCleanupResult>();
   const [selectedSkillUpdatePlan, setSelectedSkillUpdatePlan] = useState<SkillUpdatePlan>();
+  const [bulkSkillUpdatePlans, setBulkSkillUpdatePlans] = useState<SkillUpdatePlan[]>();
   const [profileResourceCounts, setProfileResourceCounts] = useState<
     Record<string, ProfileResourceSummary>
   >({});
@@ -400,6 +408,8 @@ export const App = () => {
   const [githubCodeCopied, setGithubCodeCopied] = useState(false);
   const githubLoginPollingRef = useRef(false);
   const githubCopyResetRef = useRef<number | undefined>(undefined);
+  const pendingProfileActionRef = useRef<(() => void | Promise<void>) | null>(null);
+  const [pendingProfileAction, setPendingProfileAction] = useState<PendingProfileAction>();
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
   const [mcpUsage, setMcpUsage] = useState<Record<string, string[]>>({});
   const [backups, setBackups] = useState<BackupSummary[]>([]);
@@ -407,6 +417,7 @@ export const App = () => {
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
+  const [replaceManagedDrift, setReplaceManagedDrift] = useState(false);
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
@@ -535,10 +546,7 @@ export const App = () => {
       backupItems,
       skillItems,
       mcpItems,
-      skillUpdateItems,
-      skillInventoryItems,
-      settings,
-      githubStatus
+      settings
     ] = await Promise.all([
       window.agentEnv.listTargets(),
       window.agentEnv.listTargetStates(),
@@ -546,11 +554,25 @@ export const App = () => {
       window.agentEnv.listBackups(),
       window.agentEnv.listSkillLibrary(),
       window.agentEnv.listMcpLibrary(),
-      window.agentEnv.checkSkillLibraryUpdates(),
-      window.agentEnv.scanSkillInventory(),
-      window.agentEnv.readSettings(),
-      window.agentEnv.readGitHubAuthStatus()
+      window.agentEnv.readSettings()
     ]);
+    const [skillUpdatesResult, skillInventoryResult, githubStatusResult] =
+      await Promise.allSettled([
+        window.agentEnv.checkSkillLibraryUpdates(),
+        window.agentEnv.scanSkillInventory(),
+        window.agentEnv.readGitHubAuthStatus()
+      ]);
+    const skillUpdateItems =
+      skillUpdatesResult.status === "fulfilled" ? skillUpdatesResult.value : skillUpdates;
+    const skillInventoryItems =
+      skillInventoryResult.status === "fulfilled" ? skillInventoryResult.value : skillInventory;
+    const githubStatus =
+      githubStatusResult.status === "fulfilled"
+        ? githubStatusResult.value
+        : {
+            state: "configured" as const,
+            error: "GitHub is temporarily unavailable. Local resources are still available."
+          };
     const profileDetails = await Promise.all(
       profileItems.map((profile) => window.agentEnv.readProfile(profile.id))
     );
@@ -655,7 +677,7 @@ export const App = () => {
     return () => window.clearInterval(timer);
   }, [isLoading, skillSettings.skillAutoCheckEnabled, skillSettings.skillAutoCheckIntervalMinutes]);
 
-  const selectProfile = async (profileId: string) => {
+  const selectProfileNow = async (profileId: string) => {
     const requestId = ++profileFlowRequestRef.current;
     activeProfileFlowRequestRef.current = requestId;
     const isDifferentProfile = profileId !== selectedProfileId;
@@ -694,6 +716,26 @@ export const App = () => {
         setBusy(false);
       }
     }
+  };
+
+  const guardProfileAction = (
+    label: string,
+    action: () => void | Promise<void>
+  ) => {
+    if (!isProfileDirty) {
+      void action();
+      return;
+    }
+    pendingProfileActionRef.current = action;
+    setPendingProfileAction({ label });
+  };
+
+  const selectProfile = (profileId: string) => {
+    if (profileId === selectedProfileId) {
+      return;
+    }
+    const profileName = profiles.find((profile) => profile.id === profileId)?.name ?? "profile";
+    guardProfileAction(`switch to ${profileName}`, () => selectProfileNow(profileId));
   };
 
   const updateDraftProfile = (profile: ProfileDetail) => {
@@ -749,7 +791,7 @@ export const App = () => {
     mcpSearchRef: mcpSearchInputRef
   });
 
-  const openCreateProfileDialog = () => {
+  const openCreateProfileDialogNow = () => {
     const targetId = selectedTargetId ?? targets[0]?.id;
     if (!targetId) {
       setError("No target available");
@@ -759,6 +801,10 @@ export const App = () => {
     setProfileDialogMode("create");
     setActiveWorkspace("profiles");
     setIsProfileActionsOpen(false);
+  };
+
+  const openCreateProfileDialog = () => {
+    guardProfileAction("create a new profile", openCreateProfileDialogNow);
   };
 
   const openEditProfileDialog = () => {
@@ -818,7 +864,7 @@ export const App = () => {
     }
   };
 
-  const duplicateSelectedProfile = async () => {
+  const duplicateSelectedProfileNow = async () => {
     if (!selectedProfileId) {
       return;
     }
@@ -840,6 +886,10 @@ export const App = () => {
     } finally {
       setBusy(false);
     }
+  };
+
+  const duplicateSelectedProfile = () => {
+    guardProfileAction("duplicate this profile", duplicateSelectedProfileNow);
   };
 
   const deleteSelectedProfile = async () => {
@@ -874,6 +924,15 @@ export const App = () => {
     }
   };
 
+  const openDeleteProfileDialog = () => {
+    guardProfileAction("delete this profile", () => setDeleteProfileDialogOpen(true));
+  };
+
+  const cancelPendingProfileAction = () => {
+    pendingProfileActionRef.current = null;
+    setPendingProfileAction(undefined);
+  };
+
   const closeProfileDialog = () => {
     setProfileDialogMode(undefined);
     setDeleteProfileDialogOpen(false);
@@ -881,7 +940,7 @@ export const App = () => {
     setRollbackPreview(undefined);
   };
 
-  const selectTarget = (targetId: string) => {
+  const selectTargetNow = (targetId: string) => {
     setIsTargetMenuOpen(false);
     targetMenuButtonRef.current?.focus();
     if (targetId === selectedTargetId) {
@@ -899,9 +958,58 @@ export const App = () => {
     setActiveComposerSection(undefined);
   };
 
+  const selectTarget = (targetId: string) => {
+    if (targetId === selectedTargetId) {
+      setIsTargetMenuOpen(false);
+      return;
+    }
+    const targetName = targets.find((target) => target.id === targetId)?.name ?? "target";
+    guardProfileAction(`switch to the ${targetName} workspace`, () => selectTargetNow(targetId));
+  };
+
+  const continuePendingProfileAction = async (saveFirst: boolean) => {
+    const action = pendingProfileActionRef.current;
+    if (!action) {
+      setPendingProfileAction(undefined);
+      return;
+    }
+
+    setBusy(true);
+    setError(undefined);
+    try {
+      if (saveFirst) {
+        await saveDraft();
+      } else {
+        setIsProfileDirty(false);
+        setProfileSaveStatus("");
+      }
+      pendingProfileActionRef.current = null;
+      setPendingProfileAction(undefined);
+      await action();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(
+    () =>
+      window.agentEnv.onWindowCloseRequested(() => {
+        guardProfileAction("close AgentEnv Manager", () =>
+          window.agentEnv.confirmWindowClose()
+        );
+      }),
+    [isProfileDirty]
+  );
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") {
+        return;
+      }
+      if (pendingProfileAction) {
+        cancelPendingProfileAction();
         return;
       }
       if (profileDialogMode || deleteProfileDialogOpen) {
@@ -929,6 +1037,7 @@ export const App = () => {
     deleteProfileDialogOpen,
     isProfileActionsOpen,
     isTargetMenuOpen,
+    pendingProfileAction,
     profileDialogMode,
     skillLibraryTool
   ]);
@@ -983,6 +1092,9 @@ export const App = () => {
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
+  const isSelectedProfileActive = Boolean(
+    selectedProfileId && targetStates.some((state) => state.activeProfileId === selectedProfileId)
+  );
   const validationRows = draftProfile
     ? createValidationRows(draftProfile, selectedTarget, preview)
     : [];
@@ -1044,9 +1156,16 @@ export const App = () => {
       : busy
         ? "An action is in progress"
         : readiness.message;
+  const previewHasOnlyManagedDrift = Boolean(
+    preview &&
+      preview.errors.length > 0 &&
+      preview.errors.every((item) =>
+        item.startsWith("External changes detected in AgentEnv-managed")
+      )
+  );
   const canApply = Boolean(
     preview &&
-      preview.errors.length === 0 &&
+      (preview.errors.length === 0 || (previewHasOnlyManagedDrift && replaceManagedDrift)) &&
       localValidationErrors.length === 0 &&
       !rollbackPreview &&
       (selectedTarget?.health.canWrite ?? false)
@@ -1084,6 +1203,7 @@ export const App = () => {
           : []),
         ...localValidationErrors
       ];
+      setReplaceManagedDrift(false);
       setPreview({
         ...nextPreview,
         errors: [...new Set([...rendererBlockers, ...nextPreview.errors])]
@@ -1135,7 +1255,9 @@ export const App = () => {
     setError(undefined);
     setProfileSaveStatus("");
     try {
-      const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id);
+      const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id, {
+        allowManagedDrift: replaceManagedDrift
+      });
       if (!result.ok) {
         setError(result.errors.join("\n"));
         return;
@@ -1238,7 +1360,7 @@ export const App = () => {
       await refreshProfiles();
       setSkillUpdateCheckStatus({
         state: "success",
-        message: `Deleted ${id} from library`
+        message: `Removed ${id} from library`
       });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -1251,6 +1373,17 @@ export const App = () => {
     }
   };
 
+  const reviewSkillUsage = (id: string) => {
+    const firstProfileName = skillUsage[id]?.[0];
+    const profile = profiles.find((item) => item.name === firstProfileName);
+    setSkillLibraryTool(undefined);
+    if (profile) {
+      selectProfile(profile.id);
+    } else {
+      setActiveWorkspace("profiles");
+    }
+  };
+
   const updateAllLibrarySkills = async (ids: string[]) => {
     if (ids.length === 0) {
       return;
@@ -1258,6 +1391,7 @@ export const App = () => {
 
     setBusy(true);
     setError(undefined);
+    setBulkSkillUpdatePlans(undefined);
     try {
       const results = await Promise.allSettled(
         ids.map((id) => window.agentEnv.updateLibrarySkill(id))
@@ -1294,6 +1428,48 @@ export const App = () => {
     } finally {
       setBusy(false);
     }
+  };
+
+  const previewAllLibrarySkillUpdates = async (ids: string[]) => {
+    if (ids.length === 0) {
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    setSkillUpdateCheckStatus({ state: "checking", message: "Preparing update review..." });
+    try {
+      const plans = await Promise.all(
+        ids.map((id) => window.agentEnv.previewLibrarySkillUpdate(id))
+      );
+      setBulkSkillUpdatePlans(plans);
+      setSkillUpdateCheckStatus(undefined);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setSkillUpdateCheckStatus(undefined);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const syncSkillInstalls = async (id: string) => {
+    const staleCopies = skillInventory.filter(
+      (item) =>
+        item.libraryId === id &&
+        item.installMethod === "copied" &&
+        item.contentMatchesLibrary === false
+    );
+    if (staleCopies.length === 0) {
+      return;
+    }
+    await consolidateSkillGroup({
+      skillKey: staleCopies[0].skillKey,
+      libraryId: id,
+      canonicalPath: staleCopies[0].path,
+      locations: staleCopies.map((item) => ({
+        targetId: item.foundIn[0] ?? "",
+        path: item.path
+      }))
+    });
   };
 
   const checkSkillUpdates = async () => {
@@ -1400,6 +1576,41 @@ export const App = () => {
     try {
       await window.agentEnv.manageTargetSkill(input);
       await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const consolidateSkillGroup = async (input: SkillCleanupRequest) => {
+    setBusy(true);
+    setError(undefined);
+    setSkillUpdateCheckStatus({ state: "checking", message: `Cleaning up ${input.skillKey}...` });
+    try {
+      const result = await window.agentEnv.consolidateSkillGroup(input);
+      setSkillCleanupResult(result);
+      await refreshProfiles();
+      setSkillUpdateCheckStatus(undefined);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setSkillUpdateCheckStatus(undefined);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const undoSkillCleanup = async () => {
+    if (!skillCleanupResult) {
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.rollbackSkillCleanup(skillCleanupResult.backupId);
+      setSkillCleanupResult(undefined);
+      await refreshProfiles();
+      setSkillUpdateCheckStatus({ state: "success", message: "Skill cleanup undone" });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -1668,6 +1879,7 @@ export const App = () => {
     setProfileSaveStatus("");
     setSettingsSaveStatus("");
     setTargetRefreshStatus(undefined);
+    setSkillCleanupResult(undefined);
   };
   const openGitHubConnectionSettings = () => {
     setError(undefined);
@@ -1693,6 +1905,13 @@ export const App = () => {
           ? { label: "Connect GitHub", onClick: openGitHubConnectionSettings }
           : undefined
       }
+    : skillCleanupResult
+      ? {
+          kind: "success",
+          title: `Cleaned up ${skillCleanupResult.libraryId}`,
+          message: `${plural(skillCleanupResult.managedLocations.length, "location")} now use the managed library copy.`,
+          action: { label: "Undo cleanup", onClick: () => void undoSkillCleanup() }
+        }
     : targetRefreshStatus
       ? {
           kind: targetRefreshStatus === "refreshing" ? "loading" : "success",
@@ -1723,45 +1942,50 @@ export const App = () => {
         : undefined;
   const profileApplyControl = (
     <div className="profile-apply-control" ref={profileApplyControlRef}>
-      <span className="profile-apply-split">
-        <button
-          className="profile-apply-button"
-          type="button"
-          aria-label={applyActionLabel}
-          aria-describedby="profile-apply-description"
-          title={applyActionLabel}
-          disabled={applyDisabled}
-          onClick={previewSelectedProfile}
-        >
-          {selectedTargetIcon?.assetUrl ? (
-            <img
-              className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`}
-              src={selectedTargetIcon.assetUrl}
-              alt=""
-            />
-          ) : (
-            <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
-          )}
-          <strong>{applyActionLabel}</strong>
-        </button>
-        <button
-          ref={targetMenuButtonRef}
-          className="profile-target-menu-button"
-          type="button"
-          aria-expanded={isTargetMenuOpen}
-          aria-haspopup="menu"
-          aria-label="Select apply target"
-          title="Select apply target"
-          onClick={() => {
-            setIsProfileActionsOpen(false);
-            setIsTargetMenuOpen((current) => !current);
-          }}
-        >
-          <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
-        </button>
-      </span>
+      <button
+        className="profile-apply-button"
+        type="button"
+        aria-label={applyActionLabel}
+        aria-describedby="profile-apply-description"
+        title={applyActionLabel}
+        disabled={applyDisabled}
+        onClick={previewSelectedProfile}
+      >
+        {selectedTargetIcon?.assetUrl ? (
+          <img
+            className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`}
+            src={selectedTargetIcon.assetUrl}
+            alt=""
+          />
+        ) : (
+          <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
+        )}
+        <strong>{applyActionLabel}</strong>
+      </button>
+      <span id="profile-apply-description" hidden>{applyDescription}</span>
+    </div>
+  );
+  const targetWorkspaceControl = (
+    <div className="profile-target-workspace-control">
+      <button
+        ref={targetMenuButtonRef}
+        className="profile-target-workspace-button"
+        type="button"
+        aria-expanded={isTargetMenuOpen}
+        aria-haspopup="menu"
+        aria-label="Select target workspace"
+        title="Select target workspace"
+        onClick={() => {
+          setIsProfileActionsOpen(false);
+          setIsTargetMenuOpen((current) => !current);
+        }}
+      >
+        {selectedTargetIcon?.assetUrl ? <img className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`} src={selectedTargetIcon.assetUrl} alt="" /> : <Monitor size={16} aria-hidden="true" />}
+        <span>{selectedTarget?.name ?? "Target"} profiles</span>
+        <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
+      </button>
       {isTargetMenuOpen ? (
-        <div className="profile-target-menu" role="menu" aria-label="Profile targets">
+        <div className="profile-target-menu" role="menu" aria-label="Target workspaces">
           {targets.map((target) => {
             const targetIcon = targetIconFor(target);
             return (
@@ -1791,9 +2015,6 @@ export const App = () => {
           })}
         </div>
       ) : null}
-      <span id="profile-apply-description" hidden>
-        {applyDescription}
-      </span>
     </div>
   );
 
@@ -1919,6 +2140,7 @@ export const App = () => {
                 skillUpdates={skillUpdates}
                 skillInventory={skillInventory}
                 selectedUpdatePlan={selectedSkillUpdatePlan}
+                bulkUpdatePlans={bulkSkillUpdatePlans}
                 skillUsage={skillUsage}
                 activeTool={skillLibraryTool}
                 onCloseTool={() => setSkillLibraryTool(undefined)}
@@ -1926,11 +2148,16 @@ export const App = () => {
                 onImportUnmanaged={importUnmanagedSkill}
                 onImportGitHubSkill={importGitHubSkill}
                 onManageTargetSkill={manageTargetSkill}
+                onConsolidateSkillGroup={(input) => void consolidateSkillGroup(input)}
                 onSetUpdateSource={setSkillUpdateSource}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onUpdateAllLibrarySkills={updateAllLibrarySkills}
+                onPreviewAllLibrarySkillUpdates={(ids) => void previewAllLibrarySkillUpdates(ids)}
+                onCloseBulkUpdatePreview={() => setBulkSkillUpdatePlans(undefined)}
+                onSyncSkillInstalls={(id) => void syncSkillInstalls(id)}
                 onRemoveLibrarySkill={removeLibrarySkill}
+                onReviewSkillUsage={reviewSkillUsage}
                 onCheckUpdates={checkSkillUpdates}
                 onIgnoreSkillGroup={(skillKey) => {
                   void ignoreSkillGroup(skillKey);
@@ -1969,6 +2196,7 @@ export const App = () => {
                 <p>Compose reusable environments and apply them safely to local agent targets.</p>
               </div>
               <div className="profile-page-actions" ref={profilePageActionsRef}>
+                {targetWorkspaceControl}
                 <button
                   className="profile-new-button"
                   type="button"
@@ -2015,8 +2243,8 @@ export const App = () => {
                       type="button"
                       role="menuitem"
                       onClick={() => {
-                        setDeleteProfileDialogOpen(true);
                         setIsProfileActionsOpen(false);
+                        openDeleteProfileDialog();
                       }}
                     >
                       <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
@@ -2157,7 +2385,7 @@ export const App = () => {
                         </p>
                         <div className="profile-hero__meta">
                           <span className="success-pill">
-                            Compatible with {selectedTarget?.name ?? draftProfile.manifest.targetId}
+                            {selectedTarget?.name ?? draftProfile.manifest.targetId} profile
                           </span>
                           <span className="profile-hero__recent">
                             <Monitor size={14} strokeWidth={2.2} aria-hidden="true" />
@@ -2327,8 +2555,18 @@ export const App = () => {
               <PreviewDialog
                 preview={preview}
                 title={`Apply preview for ${activeTargetName}`}
+                confirmLabel={replaceManagedDrift ? "Back up and replace" : "Apply profile"}
                 confirmDisabled={!canApply || busy}
-                onCancel={() => setPreview(undefined)}
+                managedDriftAcknowledged={replaceManagedDrift}
+                onManagedDriftAcknowledgedChange={setReplaceManagedDrift}
+                onOpenRecovery={() => {
+                  setPreview(undefined);
+                  setActiveComposerSection("advanced");
+                }}
+                onCancel={() => {
+                  setReplaceManagedDrift(false);
+                  setPreview(undefined);
+                }}
                 onConfirm={applySelectedProfile}
               />
             ) : null}
@@ -2343,6 +2581,37 @@ export const App = () => {
                   </div>
                 )}
               </div>
+              {pendingProfileAction ? (
+                <div className="preview-modal-backdrop" onClick={cancelPendingProfileAction}>
+                  <section
+                    className="profile-form-dialog profile-form-dialog--compact"
+                    role="dialog"
+                    aria-label="Unsaved profile changes"
+                    aria-modal="true"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <header className="profile-dialog-header">
+                      <div>
+                        <div className="section-title">Save profile changes?</div>
+                        <p className="muted">
+                          Save before you {pendingProfileAction.label}, or discard the current draft.
+                        </p>
+                      </div>
+                    </header>
+                    <footer className="preview-actions profile-dirty-actions">
+                      <button className="secondary-action" type="button" disabled={busy} onClick={cancelPendingProfileAction}>
+                        Cancel
+                      </button>
+                      <button className="secondary-action" type="button" disabled={busy} onClick={() => void continuePendingProfileAction(false)}>
+                        Discard changes
+                      </button>
+                      <button className="primary-action" type="button" disabled={busy} onClick={() => void continuePendingProfileAction(true)}>
+                        Save and continue
+                      </button>
+                    </footer>
+                  </section>
+                </div>
+              ) : null}
               {profileDialogMode ? (
                 <div className="preview-modal-backdrop" onClick={closeProfileDialog}>
                   <section
@@ -2415,7 +2684,7 @@ export const App = () => {
                         disabled={busy || profileForm.name.trim().length === 0}
                         onClick={submitProfileDialog}
                       >
-                        {profileDialogMode === "create" ? "Create" : "Save"}
+                        {profileDialogMode === "create" ? "Create" : "Done"}
                       </button>
                     </footer>
                   </section>
@@ -2434,7 +2703,9 @@ export const App = () => {
                       <div>
                         <div className="section-title">Delete profile</div>
                         <p className="muted">
-                          Delete {draftProfile.manifest.name}? Applied target files and backups are not removed.
+                          {isSelectedProfileActive
+                            ? `${draftProfile.manifest.name} is active on ${activeTargetName}. Apply another profile before removing it.`
+                            : `Remove ${draftProfile.manifest.name}? Applied target files and backups are not removed.`}
                         </p>
                       </div>
                     </header>
@@ -2442,9 +2713,11 @@ export const App = () => {
                       <button className="secondary-action" type="button" onClick={closeProfileDialog}>
                         Cancel
                       </button>
-                      <button className="danger-action" type="button" disabled={busy} onClick={deleteSelectedProfile}>
-                        Delete
-                      </button>
+                      {!isSelectedProfileActive ? (
+                        <button className="danger-action" type="button" disabled={busy} onClick={deleteSelectedProfile}>
+                          Remove profile
+                        </button>
+                      ) : null}
                     </footer>
                   </section>
                 </div>

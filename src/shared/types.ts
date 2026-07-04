@@ -9,6 +9,8 @@ export type { AssetPolicy, ProfileManifest } from "./schemas";
 import type { AssetPolicy, ProfileManifest } from "./schemas";
 
 export interface AgentEnvApi {
+  onWindowCloseRequested(callback: () => void): () => void;
+  confirmWindowClose(): void;
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
   listTargets(): Promise<TargetInfo[]>;
@@ -25,6 +27,8 @@ export interface AgentEnvApi {
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   removeSkillFromLibrary(id: string): Promise<void>;
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
+  consolidateSkillGroup(input: SkillCleanupRequest): Promise<SkillCleanupResult>;
+  rollbackSkillCleanup(backupId: string): Promise<void>;
   checkSkillLibraryUpdates(): Promise<SkillUpdateInfo[]>;
   setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
@@ -43,10 +47,18 @@ export interface AgentEnvApi {
   duplicateProfile(id: string): Promise<ProfileDetail>;
   deleteProfile(id: string): Promise<void>;
   previewApply(profileId: string): Promise<ActivationPreview>;
-  applyProfile(profileId: string, previewId: string): Promise<ApplyResult>;
+  applyProfile(
+    profileId: string,
+    previewId: string,
+    options?: ApplyProfileOptions
+  ): Promise<ApplyResult>;
   listBackups(): Promise<BackupSummary[]>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
   rollback(backupId: string): Promise<RollbackResult>;
+}
+
+export interface ApplyProfileOptions {
+  allowManagedDrift?: boolean;
 }
 
 export interface SkillLibraryEntry {
@@ -109,6 +121,26 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   skillKey: string;
   contentHash: string;
   ignoreRuleId?: string;
+  installMethod?: "linked" | "copied";
+  contentMatchesLibrary?: boolean;
+}
+
+export interface SkillCleanupLocationInput {
+  targetId: string;
+  path: string;
+}
+
+export interface SkillCleanupRequest {
+  skillKey: string;
+  libraryId: string;
+  canonicalPath: string;
+  locations: SkillCleanupLocationInput[];
+}
+
+export interface SkillCleanupResult {
+  backupId: string;
+  libraryId: string;
+  managedLocations: string[];
 }
 
 export interface UnmanagedSkillEntry {

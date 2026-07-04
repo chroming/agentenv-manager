@@ -15,10 +15,15 @@ describe("SkillLibraryPanel", () => {
     const onPreviewLibrarySkillUpdate = vi.fn();
     const onUpdateLibrarySkill = vi.fn();
     const onUpdateAllLibrarySkills = vi.fn();
+    const onPreviewAllLibrarySkillUpdates = vi.fn();
+    const onCloseBulkUpdatePreview = vi.fn();
+    const onSyncSkillInstalls = vi.fn();
     const onRemoveLibrarySkill = vi.fn();
+    const onReviewSkillUsage = vi.fn();
     const onCheckUpdates = vi.fn();
     const onSetUpdateSource = vi.fn();
     const onManageTargetSkill = vi.fn();
+    const onConsolidateSkillGroup = vi.fn();
     const onIgnoreSkillGroup = vi.fn();
     const onUnignoreSkillGroup = vi.fn();
     const onCloseTool = vi.fn();
@@ -158,10 +163,15 @@ describe("SkillLibraryPanel", () => {
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
         onUpdateLibrarySkill={onUpdateLibrarySkill}
         onUpdateAllLibrarySkills={onUpdateAllLibrarySkills}
+        onPreviewAllLibrarySkillUpdates={onPreviewAllLibrarySkillUpdates}
+        onCloseBulkUpdatePreview={onCloseBulkUpdatePreview}
+        onSyncSkillInstalls={onSyncSkillInstalls}
         onRemoveLibrarySkill={onRemoveLibrarySkill}
+        onReviewSkillUsage={onReviewSkillUsage}
         onCheckUpdates={onCheckUpdates}
         onSetUpdateSource={onSetUpdateSource}
         onManageTargetSkill={onManageTargetSkill}
+        onConsolidateSkillGroup={onConsolidateSkillGroup}
         onIgnoreSkillGroup={onIgnoreSkillGroup}
         onUnignoreSkillGroup={onUnignoreSkillGroup}
         updateCheckStatus={{ state: "success", message: "2 updates available" }}
@@ -198,12 +208,11 @@ describe("SkillLibraryPanel", () => {
       "Update available"
     );
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
-    expect(copiedLocalRow).toHaveTextContent("No update source");
-    const setSourceButton = within(copiedLocalRow).getByRole("button", {
-      name: "Set update source copied-local"
-    });
-    expect(setSourceButton).toBeEnabled();
-    fireEvent.click(setSourceButton);
+    expect(copiedLocalRow).toHaveTextContent("Snapshot");
+    expect(within(copiedLocalRow).queryByRole("button", { name: /Check update/ })).toBeNull();
+    fireEvent.click(
+      within(copiedLocalRow).getByRole("button", { name: "More actions for copied-local" })
+    );
     expect(screen.getByLabelText("Update source for copied-local")).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -211,7 +220,10 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Update all skills" }));
-    expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith(["github-reviewer", "shared-reviewer"]);
+    expect(onPreviewAllLibrarySkillUpdates).toHaveBeenCalledWith([
+      "github-reviewer",
+      "shared-reviewer"
+    ]);
 
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
@@ -231,23 +243,24 @@ describe("SkillLibraryPanel", () => {
       source: "/tmp/source/shared-reviewer"
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Update shared-reviewer" }));
-    expect(onUpdateLibrarySkill).toHaveBeenCalledWith("shared-reviewer");
-    fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /Preview update/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Review update shared-reviewer" }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("shared-reviewer");
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /Delete from library/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Preview update/ }));
+    expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledTimes(2);
+    fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Remove from library/ }));
     const deleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });
     expect(deleteDialog).toHaveTextContent("Shared Reviewer");
-    expect(deleteDialog).toHaveTextContent("Installed target copies are not removed");
-    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete skill" }));
-    expect(onRemoveLibrarySkill).toHaveBeenCalledWith("shared-reviewer");
+    expect(deleteDialog).toHaveTextContent("used by Daily Coding");
+    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Review profiles" }));
+    expect(onReviewSkillUsage).toHaveBeenCalledWith("shared-reviewer");
+    expect(onRemoveLibrarySkill).not.toHaveBeenCalled();
     expect(screen.getByRole("region", { name: "Update preview for shared-reviewer" })).toHaveTextContent(
       "SKILL.md"
     );
     fireEvent.click(screen.getByRole("button", { name: "Apply update shared-reviewer" }));
-    expect(onUpdateLibrarySkill).toHaveBeenCalledTimes(2);
+    expect(onUpdateLibrarySkill).toHaveBeenCalledTimes(1);
 
     rerender(renderPanel("import"));
     fireEvent.click(screen.getByRole("button", { name: "Choose local skill folder" }));
@@ -288,13 +301,21 @@ describe("SkillLibraryPanel", () => {
     expect(onIgnoreSkillGroup).toHaveBeenCalledWith("target-only-reviewer");
     fireEvent.click(screen.getByRole("button", { name: "Unignore group target-only-reviewer" }));
     expect(onUnignoreSkillGroup).toHaveBeenCalledWith("target-only-reviewer");
-    fireEvent.click(screen.getByRole("button", { name: "Manage legacy-reviewer" }));
-    expect(onManageTargetSkill).toHaveBeenCalledWith({
-      targetId: "opencode",
-      targetName: "legacy-reviewer",
-      libraryId: "legacy-reviewer"
+    fireEvent.click(
+      within(screen.getByRole("group", { name: "Cleanup group legacy-reviewer" })).getByRole(
+        "button",
+        { name: "Review cleanup legacy-reviewer" }
+      )
+    );
+    const cleanupDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
+    fireEvent.click(within(cleanupDialog).getByRole("button", { name: "Back up and clean up" }));
+    expect(onConsolidateSkillGroup).toHaveBeenCalledWith({
+      skillKey: "legacy-reviewer",
+      libraryId: "legacy-reviewer",
+      canonicalPath: "/tmp/opencode/skills/legacy-reviewer",
+      locations: [
+        { targetId: "opencode", path: "/tmp/opencode/skills/legacy-reviewer" }
+      ]
     });
-    fireEvent.click(screen.getByRole("button", { name: "Import target-only-reviewer" }));
-    expect(onImportUnmanaged).toHaveBeenCalledWith("/tmp/opencode/skills/target-only-reviewer");
   });
 });

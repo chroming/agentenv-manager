@@ -31,6 +31,7 @@ import {
 } from "./targets/registry";
 import type {
   ActivationPreview,
+  ApplyProfileOptions,
   ApplyResult,
   BackupManifest,
   ManagedResourceKind,
@@ -56,7 +57,11 @@ export interface ActivationServiceOptions {
 export interface ActivationService {
   listTargetStates(): Promise<TargetManagementState[]>;
   previewProfile(profileId: string): Promise<ActivationPreview>;
-  applyProfile(profileId: string, previewId: string): Promise<ApplyResult>;
+  applyProfile(
+    profileId: string,
+    previewId: string,
+    options?: ApplyProfileOptions
+  ): Promise<ApplyResult>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
   rollback(backupId: string): Promise<RollbackResult>;
 }
@@ -210,6 +215,8 @@ const restoreBackupEntries = async (backup: BackupManifest) => {
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+
+const MANAGED_DRIFT_PREFIX = "External changes detected in AgentEnv-managed";
 
 const validateProfileStructure = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>) => {
   const errors: string[] = [];
@@ -483,14 +490,18 @@ export const createActivationService = ({
 
   const applyProfile = async (
     profileId: string,
-    previewId: string
+    previewId: string,
+    options: ApplyProfileOptions = {}
   ): Promise<ApplyResult> => {
     const preview = previews.get(previewId);
     if (!preview || preview.profileId !== profileId) {
       return { ok: false, errors: ["Preview not found for profile"] };
     }
-    if (preview.errors.length > 0) {
-      return { ok: false, errors: preview.errors };
+    const blockingErrors = options.allowManagedDrift
+      ? preview.errors.filter((error) => !error.startsWith(MANAGED_DRIFT_PREFIX))
+      : preview.errors;
+    if (blockingErrors.length > 0) {
+      return { ok: false, errors: blockingErrors };
     }
 
     const profile = await profileStore.readProfile(profileId);

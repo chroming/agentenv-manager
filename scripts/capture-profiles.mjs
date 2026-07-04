@@ -235,6 +235,7 @@ try {
     args: ["--disable-gpu", join(projectRoot, "out", "main", "main.js")],
     env: {
       ...process.env,
+      AGENTENV_AUTOMATION: "1",
       AGENTENV_DATA_ROOT: appDataRoot,
       AGENTENV_FAKE_HOME: join(fixtureRoot, "fake-home"),
       AGENTENV_HOME: homeDir,
@@ -245,11 +246,17 @@ try {
   const page = await app.firstWindow();
   const windowHandle = await app.browserWindow(page);
   await page.waitForLoadState("domcontentloaded");
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
+  await captureWindow(windowHandle, join(outputDir, "skills-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await captureWindow(windowHandle, join(outputDir, "skills-920x620.png"));
+
   await setWindowSize(page, windowHandle, 1536, 1024);
   await page.getByRole("button", { name: "Profiles" }).click();
   await page.getByRole("button", { name: /Daily Coding/ }).click();
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
-  await page.getByRole("button", { name: "Select apply target" }).click();
+  await page.getByRole("button", { name: "Select target workspace" }).click();
   await page.waitForTimeout(250);
   await captureWindow(windowHandle, join(outputDir, "implementation-1536x1024.png"));
 

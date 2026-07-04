@@ -221,18 +221,18 @@ describe("SkillsEditor", () => {
         mixedPolicy.skillRefs[0],
         {
           libraryId: "github-reviewer",
-          targetName: "agentenv-github-reviewer"
+          targetName: "github-reviewer"
         }
       ]
     });
 
-    fireEvent.click(within(ownedSkill).getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(ownedSkill).getByRole("button", { name: "Remove profile skill" }));
     expect(onChange).toHaveBeenLastCalledWith({
       ...mixedPolicy,
       ownedDirs: [mixedPolicy.ownedDirs[1]]
     });
 
-    fireEvent.click(within(librarySkill).getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(librarySkill).getByRole("button", { name: "Remove from profile" }));
     expect(onChange).toHaveBeenLastCalledWith({
       ...mixedPolicy,
       skillRefs: []
@@ -282,7 +282,7 @@ describe("SkillsEditor", () => {
       ]
     });
 
-    fireEvent.click(within(contextRows[0]).getByRole("button", { name: "Remove" }));
+    fireEvent.click(within(contextRows[0]).getByRole("button", { name: "Remove from profile" }));
     expect(onChange).toHaveBeenLastCalledWith({
       ...mixedPolicy,
       mcpRefs: []

@@ -29,6 +29,7 @@ import { createPortal } from "react-dom";
 import type {
   GitHubSkillImportInput,
   ManageTargetSkillInput,
+  SkillCleanupRequest,
   SkillInventoryEntry,
   SkillLibraryEntry,
   SkillSourceType,
@@ -52,6 +53,7 @@ interface SkillLibraryPanelProps {
   skillUpdates: SkillUpdateInfo[];
   skillInventory: SkillInventoryEntry[];
   selectedUpdatePlan?: SkillUpdatePlan;
+  bulkUpdatePlans?: SkillUpdatePlan[];
   skillUsage: Record<string, string[]>;
   activeTool?: "import" | "discoveries";
   onCloseTool?(): void;
@@ -59,11 +61,16 @@ interface SkillLibraryPanelProps {
   onImportUnmanaged(sourcePath: string): void;
   onImportGitHubSkill(input: GitHubSkillImportInput): void;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
+  onConsolidateSkillGroup(input: SkillCleanupRequest): void;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
   onPreviewLibrarySkillUpdate(id: string): void;
   onUpdateLibrarySkill(id: string): void;
   onUpdateAllLibrarySkills(ids: string[]): void;
+  onPreviewAllLibrarySkillUpdates(ids: string[]): void;
+  onCloseBulkUpdatePreview(): void;
+  onSyncSkillInstalls(id: string): void;
   onRemoveLibrarySkill(id: string): void;
+  onReviewSkillUsage(id: string): void;
   onCheckUpdates(): void;
   onIgnoreSkillGroup(skillKey: string): void;
   onUnignoreSkillGroup(skillKey: string): void;
@@ -201,6 +208,7 @@ export const SkillLibraryPanel = ({
   skillUpdates,
   skillInventory,
   selectedUpdatePlan,
+  bulkUpdatePlans,
   skillUsage,
   activeTool,
   onCloseTool,
@@ -208,11 +216,16 @@ export const SkillLibraryPanel = ({
   onImportUnmanaged,
   onImportGitHubSkill,
   onManageTargetSkill,
+  onConsolidateSkillGroup,
   onSetUpdateSource,
   onPreviewLibrarySkillUpdate,
   onUpdateLibrarySkill,
   onUpdateAllLibrarySkills,
+  onPreviewAllLibrarySkillUpdates,
+  onCloseBulkUpdatePreview,
+  onSyncSkillInstalls,
   onRemoveLibrarySkill,
+  onReviewSkillUsage,
   onCheckUpdates,
   onIgnoreSkillGroup,
   onUnignoreSkillGroup,
@@ -231,6 +244,12 @@ export const SkillLibraryPanel = ({
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
+  const [cleanupDraft, setCleanupDraft] = useState<{
+    skillKey: string;
+    libraryId: string;
+    canonicalPath: string;
+    selectedPaths: string[];
+  }>();
   const [sourceDrafts, setSourceDrafts] = useState<
     Record<string, { sourceType: SkillSourceType; source: string }>
   >({});
@@ -280,6 +299,10 @@ export const SkillLibraryPanel = ({
         setDeleteCandidate(undefined);
         return;
       }
+      if (cleanupDraft) {
+        setCleanupDraft(undefined);
+        return;
+      }
       if (activeTool) {
         onCloseTool?.();
       }
@@ -287,7 +310,7 @@ export const SkillLibraryPanel = ({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, deleteCandidate, onCloseTool, openActionId]);
+  }, [activeTool, cleanupDraft, deleteCandidate, onCloseTool, openActionId]);
 
   useEffect(() => {
     if (!openActionId && !activeTool) {
@@ -406,6 +429,22 @@ export const SkillLibraryPanel = ({
       })
       .sort((a, b) => (a.primary?.name ?? a.skillKey).localeCompare(b.primary?.name ?? b.skillKey));
   }, [skillInventory]);
+  const cleanupCandidate = cleanupDraft
+    ? cleanupGroups.find((group) => group.skillKey === cleanupDraft.skillKey)
+    : undefined;
+
+  const openCleanupReview = (group: (typeof cleanupGroups)[number]) => {
+    const canonical = group.items.find((item) => item.status === "library") ?? group.items[0];
+    const libraryId = group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey;
+    setCleanupDraft({
+      skillKey: group.skillKey,
+      libraryId,
+      canonicalPath: canonical.path,
+      selectedPaths: group.items
+        .filter((item) => item.status !== "managed" && item.status !== "ignored")
+        .map((item) => item.path)
+    });
+  };
 
   const importGitHubSkill = () => {
     const url = githubUrl.trim();
@@ -543,7 +582,7 @@ export const SkillLibraryPanel = ({
             aria-label="Update all skills"
             title="Update all skills"
             disabled={updateableSkillIds.length === 0}
-            onClick={() => onUpdateAllLibrarySkills(updateableSkillIds)}
+            onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
           >
             <Sparkles size={15} strokeWidth={2.2} />
             <span>Update all</span>
@@ -570,7 +609,10 @@ export const SkillLibraryPanel = ({
           ) : null}
           {filteredSkills.map((skill) => {
             const updateInfo = updatesById.get(skill.id);
-            const installs = installsFor(skill.id);
+                const installs = installsFor(skill.id);
+                const staleCopies = installs.filter(
+                  (install) => install.installMethod === "copied" && install.contentMatchesLibrary === false
+                );
             const sourceDraft = sourceDrafts[skill.id] ?? {
               sourceType: skill.sourceType,
               source: skill.source ?? ""
@@ -584,9 +626,17 @@ export const SkillLibraryPanel = ({
                   ? "Up to date"
                   : hasUpdateSource
                     ? "Not checked"
-                    : "No update source";
+                    : "Snapshot";
             const hasUpdate = Boolean(updateInfo?.updateAvailable);
             const hasError = Boolean(updateInfo?.error);
+            const usageCount = (skillUsage[skill.id] ?? []).length;
+            const revisionLabel = shortRevision(skill);
+            const versionLabel = skill.remoteRef ?? revisionLabel;
+            const versionDetail = skill.remoteRef
+              ? revisionLabel
+              : hasUpdateSource
+                ? "Tracked source"
+                : "Library revision";
             return (
               <div
                 aria-label={`Library item ${skill.id}`}
@@ -615,8 +665,8 @@ export const SkillLibraryPanel = ({
                   <small title={sourceLabel(skill)}>{sourceName(skill)}</small>
                 </div>
                 <div className="library-version-cell">
-                  <strong>{skill.remoteRef ?? "v1.0.0"}</strong>
-                  <small>{shortRevision(skill)}</small>
+                  <strong>{versionLabel}</strong>
+                  <small>{versionDetail}</small>
                 </div>
                 <div className="library-update-cell">
                   <strong
@@ -628,6 +678,8 @@ export const SkillLibraryPanel = ({
                       <TriangleAlert size={13} strokeWidth={2.2} />
                     ) : hasUpdate ? (
                       <Sparkles size={13} strokeWidth={2.2} />
+                    ) : !hasUpdateSource ? (
+                      <Folder size={13} strokeWidth={2.2} />
                     ) : (
                       <CheckCircle2 size={13} strokeWidth={2.2} />
                     )}
@@ -642,7 +694,7 @@ export const SkillLibraryPanel = ({
                 <div className="library-usage-cell">
                   <strong className="usage-summary">
                     <Users size={13} strokeWidth={2.2} />
-                    {(skillUsage[skill.id] ?? []).length || 0} profiles
+                    {usageCount} {usageCount === 1 ? "profile" : "profiles"}
                   </strong>
                   <small>
                     {(skillUsage[skill.id] ?? []).length > 0
@@ -652,13 +704,17 @@ export const SkillLibraryPanel = ({
                 </div>
                 <div className="library-installs-cell">
                   {installs.length === 0 ? <small>Not installed</small> : null}
-                  {installs.slice(0, 3).map((install) => (
+                  {installs.slice(0, 1).map((install) => (
                     <span key={install.path}>
                       {install.foundIn.join(", ")}
                       <strong className={`resource-chip resource-chip--${install.status}`}>
                         <SlidersHorizontal size={13} strokeWidth={2.2} />
                         {install.status === "managed"
-                          ? "Managed"
+                          ? install.contentMatchesLibrary === false
+                            ? "Copy out of date"
+                            : install.installMethod === "linked"
+                              ? "Linked"
+                              : "Managed copy"
                           : install.status === "library"
                             ? "Imported"
                             : install.status === "ignored"
@@ -667,46 +723,40 @@ export const SkillLibraryPanel = ({
                       </strong>
                     </span>
                   ))}
+                  {installs.length > 1 ? <small>+{installs.length - 1} more installs</small> : null}
+                  {staleCopies.length > 0 ? (
+                    <button className="library-inline-action" type="button" onClick={() => onSyncSkillInstalls(skill.id)}>
+                      Sync {staleCopies.length === 1 ? "copy" : `${staleCopies.length} copies`}
+                    </button>
+                  ) : null}
                 </div>
                 <div className="library-actions-cell">
-                  <button
-                    className={`icon-action library-row-update-action${
-                      hasUpdate ? " is-update" : hasError ? " is-error" : ""
-                    }`}
-                    type="button"
-                    aria-label={
-                      !hasUpdateSource
-                        ? `Set update source ${skill.id}`
-                        : hasUpdate
-                        ? `Update ${skill.id}`
-                        : hasError
-                          ? `Retry update check ${skill.id}`
-                          : `Check update ${skill.id}`
-                    }
-                    disabled={updateCheckStatus?.state === "checking"}
-                    onClick={(event) => {
-                      if (!hasUpdateSource) {
-                        toggleActionMenu(skill.id, event.currentTarget);
-                        return;
+                  {hasUpdateSource ? (
+                    <button
+                      className={`icon-action library-row-update-action${
+                        hasUpdate ? " is-update" : hasError ? " is-error" : ""
+                      }`}
+                      type="button"
+                      aria-label={
+                        hasUpdate
+                          ? `Review update ${skill.id}`
+                          : hasError
+                            ? `Retry update check ${skill.id}`
+                            : `Check update ${skill.id}`
                       }
-                      if (hasUpdate) {
-                        onUpdateLibrarySkill(skill.id);
-                      } else {
-                        onPreviewLibrarySkillUpdate(skill.id);
-                      }
-                    }}
-                  >
-                    {hasUpdate ? (
-                      <Sparkles size={15} strokeWidth={2.2} />
-                    ) : hasError ? (
-                      <TriangleAlert size={15} strokeWidth={2.2} />
-                    ) : (
-                      <RefreshCw size={15} strokeWidth={2.2} />
-                    )}
-                    <span>
-                      {!hasUpdateSource ? "Set source" : hasUpdate ? "Update" : hasError ? "Retry" : "Check"}
-                    </span>
-                  </button>
+                      disabled={updateCheckStatus?.state === "checking"}
+                      onClick={() => onPreviewLibrarySkillUpdate(skill.id)}
+                    >
+                      {hasUpdate ? (
+                        <Sparkles size={15} strokeWidth={2.2} />
+                      ) : hasError ? (
+                        <TriangleAlert size={15} strokeWidth={2.2} />
+                      ) : (
+                        <RefreshCw size={15} strokeWidth={2.2} />
+                      )}
+                      <span>{hasUpdate ? "Review" : hasError ? "Retry" : "Check"}</span>
+                    </button>
+                  ) : null}
                   <div className="row-action-menu">
                     <button
                       className="icon-action"
@@ -727,34 +777,27 @@ export const SkillLibraryPanel = ({
                           aria-label={`Actions for ${skill.id}`}
                           style={{ left: openAction.left, top: openAction.top }}
                         >
-                          <button
-                            className="row-action-item"
-                            type="button"
-                            role="menuitem"
-                            disabled={!hasUpdateSource}
-                            onClick={() => {
-                              onPreviewLibrarySkillUpdate(skill.id);
-                              setOpenAction(undefined);
-                            }}
-                          >
-                            <RefreshCw size={14} strokeWidth={2.2} />
-                            <span>
-                              <strong>
-                                {!hasUpdateSource
-                                  ? "No update source"
-                                  : hasUpdate
-                                    ? "Preview update"
-                                    : "Check update"}
-                              </strong>
-                              <small>
-                                {!hasUpdateSource
-                                  ? "Set a source below to enable checks."
-                                  : hasUpdate
-                                  ? "Review changes before updating."
-                                  : "Preview changes from the tracked source."}
-                              </small>
-                            </span>
-                          </button>
+                          {hasUpdateSource ? (
+                            <button
+                              className="row-action-item"
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                onPreviewLibrarySkillUpdate(skill.id);
+                                setOpenAction(undefined);
+                              }}
+                            >
+                              <RefreshCw size={14} strokeWidth={2.2} />
+                              <span>
+                                <strong>{hasUpdate ? "Preview update" : "Check update"}</strong>
+                                <small>
+                                  {hasUpdate
+                                    ? "Review changes before updating."
+                                    : "Preview changes from the tracked source."}
+                                </small>
+                              </span>
+                            </button>
+                          ) : null}
                           <div className="row-action-source">
                             <div className="row-action-source-title">
                               <Settings2 size={14} strokeWidth={2.2} />
@@ -824,7 +867,7 @@ export const SkillLibraryPanel = ({
                           >
                             <Trash2 size={14} strokeWidth={2.2} />
                             <span>
-                              <strong>Delete from library</strong>
+                              <strong>Remove from library</strong>
                               <small>Remove the shared library copy only.</small>
                             </span>
                           </button>
@@ -902,9 +945,11 @@ export const SkillLibraryPanel = ({
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">Delete library skill</div>
+                <div className="section-title">Remove from library</div>
                 <p className="muted">
-                  Delete {deleteCandidate.name} from the shared library? Installed target copies are not removed.
+                  {(skillUsage[deleteCandidate.id] ?? []).length > 0
+                    ? `${deleteCandidate.name} is used by ${(skillUsage[deleteCandidate.id] ?? []).join(", ")}. Remove it from those profiles first.`
+                    : `Remove ${deleteCandidate.name} from the shared library? Installed target copies are not removed.`}
                 </p>
               </div>
             </header>
@@ -916,15 +961,148 @@ export const SkillLibraryPanel = ({
               >
                 Cancel
               </button>
+              {(skillUsage[deleteCandidate.id] ?? []).length > 0 ? (
+                <button
+                  className="primary-action"
+                  type="button"
+                  onClick={() => {
+                    onReviewSkillUsage(deleteCandidate.id);
+                    setDeleteCandidate(undefined);
+                  }}
+                >
+                  Review profiles
+                </button>
+              ) : (
+                <button
+                  className="danger-action"
+                  type="button"
+                  onClick={() => {
+                    onRemoveLibrarySkill(deleteCandidate.id);
+                    setDeleteCandidate(undefined);
+                  }}
+                >
+                  Remove skill
+                </button>
+              )}
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {bulkUpdatePlans ? (
+        <div className="preview-modal-backdrop" onClick={onCloseBulkUpdatePreview}>
+          <section
+            className="profile-form-dialog bulk-update-dialog"
+            role="dialog"
+            aria-label="Review all skill updates"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">Review all skill updates</div>
+                <p className="muted">Review every tracked change before updating the shared library.</p>
+              </div>
+            </header>
+            <div className="bulk-update-list">
+              {bulkUpdatePlans.map((plan) => (
+                <details key={plan.id} open={plan.errors.length > 0}>
+                  <summary>
+                    <strong>{plan.name}</strong>
+                    <span>{plan.errors.length > 0 ? "Blocked" : `${plan.changes.length} file changes`}</span>
+                  </summary>
+                  {plan.errors.map((error) => <p className="error" key={error}>{error}</p>)}
+                  {plan.changes.map((change) => <code key={change.path}>{change.path}</code>)}
+                </details>
+              ))}
+            </div>
+            <footer className="preview-actions">
+              <button className="secondary-action" type="button" onClick={onCloseBulkUpdatePreview}>Cancel</button>
               <button
-                className="danger-action"
+                className="primary-action"
                 type="button"
+                disabled={bulkUpdatePlans.some((plan) => plan.errors.length > 0) || bulkUpdatePlans.every((plan) => plan.changes.length === 0)}
+                onClick={() => onUpdateAllLibrarySkills(bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).map((plan) => plan.id))}
+              >
+                Apply {bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).length} updates
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {cleanupDraft && cleanupCandidate ? (
+        <div className="preview-modal-backdrop" onClick={() => setCleanupDraft(undefined)}>
+          <section
+            className="profile-form-dialog cleanup-review-dialog"
+            role="dialog"
+            aria-label="Review skill cleanup"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">Review {cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</div>
+                <p className="muted">Choose the canonical copy, then select each location AgentEnv should replace with the managed library version.</p>
+              </div>
+            </header>
+            <div className="cleanup-review-content">
+              <fieldset className="cleanup-review-group">
+                <legend>Canonical copy</legend>
+                {cleanupCandidate.items.map((item) => (
+                  <label className="cleanup-review-option" key={`canonical-${item.path}`}>
+                    <input
+                      type="radio"
+                      name="canonical-skill-copy"
+                      checked={cleanupDraft.canonicalPath === item.path}
+                      onChange={() => setCleanupDraft({ ...cleanupDraft, canonicalPath: item.path })}
+                    />
+                    <span><strong>{item.foundIn.join(", ")}</strong><small>{item.path}</small></span>
+                    <code>{item.contentHash.slice(0, 7)}</code>
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset className="cleanup-review-group">
+                <legend>Locations to manage</legend>
+                {cleanupCandidate.items.map((item) => (
+                  <label className="cleanup-review-option" key={`location-${item.path}`}>
+                    <input
+                      type="checkbox"
+                      checked={cleanupDraft.selectedPaths.includes(item.path)}
+                      disabled={item.status === "managed"}
+                      onChange={() => setCleanupDraft({
+                        ...cleanupDraft,
+                        selectedPaths: cleanupDraft.selectedPaths.includes(item.path)
+                          ? cleanupDraft.selectedPaths.filter((path) => path !== item.path)
+                          : cleanupDraft.selectedPaths.concat(item.path)
+                      })}
+                    />
+                    <span><strong>{item.foundIn.join(", ")}</strong><small>{item.path}</small></span>
+                    <em>{item.status === "managed" ? "Already managed" : "Replace"}</em>
+                  </label>
+                ))}
+              </fieldset>
+              <p className="cleanup-safety-note">A backup is created before any selected location is changed. You can undo the cleanup from the result message.</p>
+            </div>
+            <footer className="preview-actions">
+              <button className="secondary-action" type="button" onClick={() => setCleanupDraft(undefined)}>Cancel</button>
+              <button
+                className="primary-action"
+                type="button"
+                disabled={cleanupDraft.selectedPaths.length === 0}
                 onClick={() => {
-                  onRemoveLibrarySkill(deleteCandidate.id);
-                  setDeleteCandidate(undefined);
+                  onConsolidateSkillGroup({
+                    skillKey: cleanupDraft.skillKey,
+                    libraryId: cleanupDraft.libraryId,
+                    canonicalPath: cleanupDraft.canonicalPath,
+                    locations: cleanupCandidate.items
+                      .filter((item) => cleanupDraft.selectedPaths.includes(item.path))
+                      .map((item) => ({ targetId: item.foundIn[0] ?? "", path: item.path }))
+                  });
+                  setCleanupDraft(undefined);
                 }}
               >
-                Delete skill
+                Back up and clean up
               </button>
             </footer>
           </section>
@@ -955,8 +1133,6 @@ export const SkillLibraryPanel = ({
                 </p>
               ) : null}
               {cleanupGroups.map((group) => {
-                const firstLibrarySkill = group.items.find((skill) => skill.status === "library" && skill.libraryId);
-                const firstUnmanagedSkill = group.items.find((skill) => skill.status === "unmanaged");
                 const isIgnored = group.items.some((skill) => skill.status === "ignored");
                 const canIgnore = isIgnored || group.items.some((skill) => skill.status !== "managed");
                 const chipLabel =
@@ -995,28 +1171,14 @@ export const SkillLibraryPanel = ({
                       </small>
                     </div>
                     <div className="cleanup-group-actions">
-                      {firstLibrarySkill?.libraryId ? (
+                      {group.state !== "managed" && group.state !== "ignored" ? (
                         <button
                           className="secondary-action"
                           type="button"
-                          onClick={() =>
-                            onManageTargetSkill({
-                              targetId: firstLibrarySkill.foundIn[0] ?? "",
-                              targetName: firstLibrarySkill.id,
-                              libraryId: firstLibrarySkill.libraryId ?? firstLibrarySkill.id
-                            })
-                          }
+                          aria-label={`Review cleanup ${group.skillKey}`}
+                          onClick={() => openCleanupReview(group)}
                         >
-                          Manage {firstLibrarySkill.id}
-                        </button>
-                      ) : null}
-                      {firstUnmanagedSkill ? (
-                        <button
-                          className="secondary-action"
-                          type="button"
-                          onClick={() => onImportUnmanaged(firstUnmanagedSkill.path)}
-                        >
-                          Import {firstUnmanagedSkill.id}
+                          Review cleanup
                         </button>
                       ) : null}
                       {canIgnore ? (

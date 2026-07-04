@@ -1,4 +1,4 @@
-import { app, BrowserWindow, safeStorage } from "electron";
+import { app, BrowserWindow, ipcMain, safeStorage } from "electron";
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -77,6 +77,17 @@ const createGitHubFixtureFetch = (fixtureRoot: string) => {
   };
 };
 
+const approvedWindowCloses = new WeakSet<BrowserWindow>();
+
+ipcMain.on("window:confirm-close", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) {
+    return;
+  }
+  approvedWindowCloses.add(win);
+  win.close();
+});
+
 const createWindow = () => {
   const win = new BrowserWindow({
     width: 1180,
@@ -90,6 +101,17 @@ const createWindow = () => {
       nodeIntegration: false,
       sandbox: true
     }
+  });
+
+  win.on("close", (event) => {
+    if (
+      approvedWindowCloses.has(win) ||
+      process.env.AGENTENV_AUTOMATION === "1"
+    ) {
+      return;
+    }
+    event.preventDefault();
+    win.webContents.send("window:close-requested");
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {

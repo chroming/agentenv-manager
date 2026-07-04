@@ -170,6 +170,34 @@ describe("activation service", () => {
     );
   });
 
+  it("backs up and replaces managed drift only after explicit approval", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Old agents\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+
+    const firstPreview = await service.previewProfile("daily-coding");
+    expect((await service.applyProfile("daily-coding", firstPreview.id)).ok).toBe(true);
+
+    await writeFile(paths.globalAgentsPath, "# Changed outside AgentEnv\n");
+    const driftPreview = await service.previewProfile("daily-coding");
+    expect((await service.applyProfile("daily-coding", driftPreview.id)).ok).toBe(false);
+
+    const result = await service.applyProfile("daily-coding", driftPreview.id, {
+      allowManagedDrift: true
+    });
+    expect(result.ok).toBe(true);
+    await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe("# New agents\n");
+    if (result.ok) {
+      const backup = await createBackupStore(paths).readBackup(result.backupId);
+      const instructionsEntry = backup.entries.find(
+        (entry) => entry.sourcePath === paths.globalAgentsPath
+      );
+      await expect(readFile(instructionsEntry?.backupPath ?? "", "utf8")).resolves.toBe(
+        "# Changed outside AgentEnv\n"
+      );
+    }
+  });
+
   it("keeps newly added unmanaged skills visible as warnings without blocking preview", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");

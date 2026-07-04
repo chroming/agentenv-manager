@@ -70,4 +70,21 @@ describe("backup store", () => {
 
     expect(mode).toBe(0o700);
   });
+
+  it("ignores non-activation backup namespaces", async () => {
+    const paths = await makePaths();
+    const store = createBackupStore(paths, {
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+    await store.createBackup([]);
+    await mkdir(join(paths.backupsDir, "skill-cleanup", "cleanup-1"), { recursive: true });
+
+    await expect(store.listBackups()).resolves.toEqual([
+      {
+        id: "2026-06-30T00-00-00-000Z",
+        createdAt: "2026-06-30T00:00:00.000Z",
+        fileCount: 0
+      }
+    ]);
+  });
 });

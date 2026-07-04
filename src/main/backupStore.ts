@@ -129,7 +129,20 @@ export const createBackupStore = (
       throw error;
     }
 
-    const manifests = await Promise.all(entries.map((entry) => readBackup(entry)));
+    const manifests = (
+      await Promise.all(
+        entries.map(async (entry) => {
+          try {
+            return await readBackup(entry);
+          } catch (error) {
+            if (isMissingFileError(error)) {
+              return undefined;
+            }
+            throw error;
+          }
+        })
+      )
+    ).filter((manifest): manifest is BackupManifest => Boolean(manifest));
     return manifests
       .map((manifest) => ({
         id: manifest.id,

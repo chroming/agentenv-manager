@@ -113,13 +113,17 @@ export const deriveProfileReadiness = ({
 };
 
 export const deriveApplyActionLabel = (input: ProfileReadinessInput): string => {
-  const { target, localValidationErrors = [], preview, targetState } = input;
+  const { target, localValidationErrors = [], preview, targetState, isDirty } = input;
   if (!target) {
     return "Apply profile";
   }
 
   if (!target.health.canWrite || localValidationErrors.length > 0) {
     return `Review ${target.name} issues`;
+  }
+
+  if (isDirty) {
+    return "Save profile first";
   }
 
   if (preview && hasManagedTargetDrift(preview.errors)) {

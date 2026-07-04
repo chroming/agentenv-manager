@@ -10,6 +10,9 @@ interface PreviewDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   errorMessage?: string;
+  managedDriftAcknowledged?: boolean;
+  onManagedDriftAcknowledgedChange?(acknowledged: boolean): void;
+  onOpenRecovery?(): void;
   onCancel?(): void;
   onConfirm?(): void;
 }
@@ -87,6 +90,9 @@ export const PreviewDialog = ({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   errorMessage,
+  managedDriftAcknowledged = false,
+  onManagedDriftAcknowledgedChange,
+  onOpenRecovery,
   onCancel,
   onConfirm
 }: PreviewDialogProps) => {
@@ -174,6 +180,9 @@ export const PreviewDialog = ({
 
   const targetName = "targetId" in preview ? targetLabel(preview.targetId) : "Target";
   const blockedItems = preview.errors.map((error) => prettifyIssue(error, targetName));
+  const managedDriftErrors = preview.errors.filter((error) =>
+    error.startsWith("External changes detected in AgentEnv-managed")
+  );
   const keepItems = preview.warnings.map((warning) => prettifyIssue(warning, targetName));
   const installChanges = "targetId" in preview ? preview.changes.filter(isInstallChange) : [];
   const replaceChanges = "targetId" in preview ? preview.changes.filter(isReplaceChange) : preview.changes;
@@ -225,6 +234,30 @@ export const PreviewDialog = ({
           <span>{installChanges.length > 0 ? plural(installChanges.length, "resource") : "No new resources"}</span>
         </section>
       </section>
+      {managedDriftErrors.length > 0 && onManagedDriftAcknowledgedChange ? (
+        <section className="preview-drift-recovery" aria-label="External change recovery">
+          <div>
+            <strong>Choose how to handle external changes</strong>
+            <p>
+              Review the diff above. Replacing creates a backup of the current target before
+              applying this profile.
+            </p>
+          </div>
+          <label>
+            <input
+              type="checkbox"
+              checked={managedDriftAcknowledged}
+              onChange={(event) => onManagedDriftAcknowledgedChange(event.currentTarget.checked)}
+            />
+            Back up and replace external changes
+          </label>
+          {onOpenRecovery ? (
+            <button className="secondary-action" type="button" onClick={onOpenRecovery}>
+              Open recovery history
+            </button>
+          ) : null}
+        </section>
+      ) : null}
       <div className="diff-list">
         {preview.changes.map((change) => (
           <details key={change.path} open>

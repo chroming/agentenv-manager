@@ -240,6 +240,8 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    onWindowCloseRequested: vi.fn().mockReturnValue(() => undefined),
+    confirmWindowClose: vi.fn(),
     copyText: vi.fn().mockResolvedValue(undefined),
     selectSkillFolder: vi.fn().mockResolvedValue(undefined),
     listTargets: vi.fn().mockResolvedValue([target]),
@@ -283,6 +285,12 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     removeSkillFromLibrary: vi.fn().mockResolvedValue(undefined),
     checkSkillLibraryUpdates: vi.fn().mockResolvedValue([]),
     manageTargetSkill: vi.fn().mockResolvedValue(undefined),
+    consolidateSkillGroup: vi.fn().mockResolvedValue({
+      backupId: "cleanup-backup",
+      libraryId: "skill",
+      managedLocations: ["/tmp/skill"]
+    }),
+    rollbackSkillCleanup: vi.fn().mockResolvedValue(undefined),
     setSkillUpdateSource: vi.fn().mockImplementation(async (input) => ({
       id: input.id,
       name: input.id,
@@ -470,7 +478,7 @@ describe("App", () => {
     );
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeInTheDocument();
-    expect(screen.getByText("Compatible with OpenCode")).toBeInTheDocument();
+    expect(screen.getByText("OpenCode profile")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "MCP Servers" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Advanced" })).toBeInTheDocument();
@@ -921,10 +929,10 @@ describe("App", () => {
 
     const edit = screen.getByRole("button", { name: "Edit profile" });
     const more = screen.getByRole("button", { name: "More profile actions" });
-    const targetMenu = screen.getByRole("button", { name: "Select apply target" });
+    const targetMenu = screen.getByRole("button", { name: "Select target workspace" });
     expect(edit).toHaveAttribute("title", "Edit profile");
     expect(more).toHaveAttribute("title", "More profile actions");
-    expect(targetMenu).toHaveAttribute("title", "Select apply target");
+    expect(targetMenu).toHaveAttribute("title", "Select target workspace");
   });
 
   it("focuses Save when apply is invoked with unsaved changes", async () => {
@@ -938,7 +946,7 @@ describe("App", () => {
     });
 
     const saveButton = screen.getByRole("button", { name: "Save" });
-    const applyButton = screen.getByRole("button", { name: "Take over OpenCode" });
+    const applyButton = screen.getByRole("button", { name: "Save profile first" });
     expect(applyButton).toBeEnabled();
     fireEvent.click(applyButton);
 
@@ -1040,10 +1048,10 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    let menuButton = screen.getByRole("button", { name: "Select apply target" });
+    let menuButton = screen.getByRole("button", { name: "Select target workspace" });
     menuButton.focus();
     fireEvent.click(menuButton);
-    let menu = screen.getByRole("menu", { name: "Profile targets" });
+    let menu = screen.getByRole("menu", { name: "Target workspaces" });
     const openCodeTarget = within(menu).getByRole("menuitemradio", { name: "OpenCode" });
     const codexTargetItem = within(menu).getByRole("menuitemradio", { name: "Codex" });
     expect(openCodeTarget).toHaveAttribute(
@@ -1059,16 +1067,16 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Take over OpenCode" }).querySelector("img"))
       .toHaveClass("profile-target-logo--opencode");
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("menu", { name: "Profile targets" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Target workspaces" })).not.toBeInTheDocument();
     expect(menuButton).toHaveFocus();
 
     fireEvent.click(menuButton);
     fireEvent.mouseDown(document.body);
-    expect(screen.queryByRole("menu", { name: "Profile targets" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Target workspaces" })).not.toBeInTheDocument();
     expect(menuButton).toHaveFocus();
 
     fireEvent.click(menuButton);
-    menu = screen.getByRole("menu", { name: "Profile targets" });
+    menu = screen.getByRole("menu", { name: "Target workspaces" });
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Codex" }));
     expect(screen.getByText("No profile selected")).toBeInTheDocument();
     const profileList = screen.getByRole("complementary", { name: "Profile list" });
@@ -1078,10 +1086,10 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Codex Review" })).toBeInTheDocument();
     expect(api.readProfile).toHaveBeenCalledWith("codex-review");
-    menuButton = screen.getByRole("button", { name: "Select apply target" });
+    menuButton = screen.getByRole("button", { name: "Select target workspace" });
     fireEvent.click(menuButton);
     expect(
-      within(screen.getByRole("menu", { name: "Profile targets" })).getByRole(
+      within(screen.getByRole("menu", { name: "Target workspaces" })).getByRole(
         "menuitemradio",
         { name: "Codex" }
       )
@@ -1097,14 +1105,14 @@ describe("App", () => {
     const instructions = screen.getByLabelText("AGENTS.md");
     fireEvent.change(instructions, { target: { value: "# Unsaved target-safe draft\n" } });
 
-    const targetButton = screen.getByRole("button", { name: "Select apply target" });
+    const targetButton = screen.getByRole("button", { name: "Select target workspace" });
     targetButton.focus();
     fireEvent.click(targetButton);
     const checkedTarget = screen.getByRole("menuitemradio", { name: "OpenCode" });
     expect(checkedTarget).toHaveAttribute("aria-checked", "true");
     fireEvent.click(checkedTarget);
 
-    expect(screen.queryByRole("menu", { name: "Profile targets" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Target workspaces" })).not.toBeInTheDocument();
     expect(targetButton).toHaveFocus();
     expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     expect(instructions).toHaveValue("# Unsaved target-safe draft\n");
@@ -1275,18 +1283,18 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    const targetButton = screen.getByRole("button", { name: "Select apply target" });
+    const targetButton = screen.getByRole("button", { name: "Select target workspace" });
     const moreButton = screen.getByRole("button", { name: "More profile actions" });
 
     fireEvent.click(targetButton);
-    expect(screen.getByRole("menu", { name: "Profile targets" })).toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Target workspaces" })).toBeInTheDocument();
     fireEvent.click(moreButton);
-    expect(screen.queryByRole("menu", { name: "Profile targets" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Target workspaces" })).not.toBeInTheDocument();
     expect(screen.getByRole("menu", { name: "Profile actions" })).toBeInTheDocument();
 
     fireEvent.click(targetButton);
     expect(screen.queryByRole("menu", { name: "Profile actions" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menu", { name: "Profile targets" })).toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Target workspaces" })).toBeInTheDocument();
 
     fireEvent.click(moreButton);
     moreButton.focus();
@@ -1326,7 +1334,7 @@ describe("App", () => {
     fireEvent.click(action);
     await waitFor(() => expect(readyApi.previewApply).toHaveBeenCalledWith("daily-coding"));
     let dialog = screen.getByRole("dialog", { name: "Preview" });
-    expect(within(dialog).getByRole("button", { name: "Confirm" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeEnabled();
     expect(readyApi.applyProfile).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
@@ -1378,7 +1386,7 @@ describe("App", () => {
     await waitFor(() => expect(unavailableApi.previewApply).toHaveBeenCalledWith("daily-coding"));
     dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(dialog).toHaveTextContent("opencode CLI not found");
-    expect(within(dialog).getByRole("button", { name: "Confirm" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeDisabled();
 
     cleanup();
     const invalidProfile = {
@@ -1400,7 +1408,7 @@ describe("App", () => {
     await waitFor(() => expect(invalidApi.previewApply).toHaveBeenCalledWith("daily-coding"));
     dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(dialog).toHaveTextContent("Instructions are empty");
-    expect(within(dialog).getByRole("button", { name: "Confirm" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeDisabled();
 
     cleanup();
     const driftError =
@@ -1418,11 +1426,35 @@ describe("App", () => {
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("Preview found blocking issues");
     expect(within(readiness).getByRole("button", { name: "Review preview" })).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("dialog", { name: "Preview" })).getByRole("button", {
-        name: "Confirm"
+    dialog = screen.getByRole("dialog", { name: "Preview" });
+    const driftConfirm = within(dialog).getByRole("button", { name: "Apply profile" });
+    expect(driftConfirm).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Open recovery history" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByLabelText("Back up and replace external changes"));
+    const replaceButton = within(dialog).getByRole("button", { name: "Back up and replace" });
+    expect(replaceButton).toBeEnabled();
+    fireEvent.click(replaceButton);
+    await waitFor(() =>
+      expect(driftApi.applyProfile).toHaveBeenCalledWith("daily-coding", "preview-1", {
+        allowManagedDrift: true
       })
-    ).toBeDisabled();
+    );
+  });
+
+  it("prevents removing a profile that is active on a target", async () => {
+    const api = installApi({
+      listTargetStates: vi.fn().mockResolvedValue([managedState()])
+    });
+    render(<App />);
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "More profile actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete profile" }));
+
+    const deleteDialog = screen.getByRole("dialog", { name: "Delete profile" });
+    expect(deleteDialog).toHaveTextContent("Apply another profile before removing it");
+    expect(within(deleteDialog).queryByRole("button", { name: "Remove profile" })).toBeNull();
+    expect(api.deleteProfile).not.toHaveBeenCalled();
   });
 
   it("shows target management status on the Targets page", async () => {
@@ -1465,7 +1497,7 @@ describe("App", () => {
     fireEvent.change(within(editDialog).getByLabelText("Description"), {
       target: { value: "Review and quality checks" }
     });
-    fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
+    fireEvent.click(within(editDialog).getByRole("button", { name: "Done" }));
     expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
     expect(api.saveProfile).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -1507,9 +1539,90 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "More profile actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete profile" }));
     const deleteDialog = screen.getByRole("dialog", { name: "Delete profile" });
-    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete" }));
+    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Remove profile" }));
 
     await waitFor(() => expect(api.deleteProfile).toHaveBeenCalledWith("opencode-created"));
+  });
+
+  it("guards dirty profile drafts before context-changing actions", async () => {
+    installApi();
+    render(<App />);
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
+      target: { value: "# Unsaved guard\n" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+
+    const guard = screen.getByRole("dialog", { name: "Unsaved profile changes" });
+    expect(guard).toHaveTextContent("create a new profile");
+    fireEvent.click(within(guard).getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("textbox", { name: "AGENTS.md" })).toHaveValue(
+      "# Unsaved guard\n"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Unsaved profile changes" })).getByRole(
+        "button",
+        { name: "Discard changes" }
+      )
+    );
+    expect(await screen.findByRole("dialog", { name: "New profile" })).toBeInTheDocument();
+  });
+
+  it("preserves a dirty draft when save-and-continue fails", async () => {
+    installApi({ saveProfile: vi.fn().mockRejectedValue(new Error("Save failed")) });
+    render(<App />);
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
+      target: { value: "# Keep this draft\n" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Unsaved profile changes" })).getByRole(
+        "button",
+        { name: "Save and continue" }
+      )
+    );
+
+    await screen.findByRole("alert");
+    expect(screen.getByRole("dialog", { name: "Unsaved profile changes" })).toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Unsaved profile changes" })).getByRole(
+        "button",
+        { name: "Cancel" }
+      )
+    );
+    expect(screen.getByRole("textbox", { name: "AGENTS.md" })).toHaveValue(
+      "# Keep this draft\n"
+    );
+  });
+
+  it("uses the profile dirty guard when the Electron window requests close", async () => {
+    let requestClose = () => undefined;
+    const api = installApi({
+      onWindowCloseRequested: vi.fn().mockImplementation((callback) => {
+        requestClose = callback;
+        return () => undefined;
+      })
+    });
+    render(<App />);
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
+      target: { value: "# Unsaved before close\n" }
+    });
+    act(() => requestClose());
+
+    const guard = await screen.findByRole("dialog", { name: "Unsaved profile changes" });
+    expect(guard).toHaveTextContent("close AgentEnv Manager");
+    fireEvent.click(within(guard).getByRole("button", { name: "Discard changes" }));
+    expect(api.confirmWindowClose).toHaveBeenCalledOnce();
   });
 
   it("previews and restores a backup from history", async () => {

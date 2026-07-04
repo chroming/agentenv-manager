@@ -380,6 +380,7 @@ const launchApp = async (
     args: [join(process.cwd(), "out", "main", "main.js")],
     env: {
       ...process.env,
+      AGENTENV_AUTOMATION: "1",
       AGENTENV_DATA_ROOT: appDataRoot,
       AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
       AGENTENV_FAKE_HOME: fakeHomeRoot,
@@ -411,8 +412,8 @@ const selectProfile = async (page: Page, name: string) => {
 };
 
 const selectTarget = async (page: Page, name: string) => {
-  await page.getByRole("button", { name: "Select apply target" }).click();
-  const targetMenu = page.getByRole("menu", { name: "Profile targets" });
+  await page.getByRole("button", { name: "Select target workspace" }).click();
+  const targetMenu = page.getByRole("menu", { name: "Target workspaces" });
   await page.getByRole("menuitemradio", { name }).click();
   await targetMenu.waitFor({ state: "hidden" });
 };
@@ -466,7 +467,7 @@ const expectTopmost = async (locator: Locator) => {
 
 const applyActionButton = (page: Page, targetName: "OpenCode" | "Codex") =>
   page
-    .getByRole("button", { name: `Apply to ${targetName}` })
+    .getByRole("button", { name: `Preview & apply to ${targetName}` })
     .or(page.getByRole("button", { name: `Take over ${targetName}` }))
     .first();
 
@@ -474,7 +475,7 @@ const previewAndApply = async (page: Page, targetName: "OpenCode" | "Codex") => 
   await applyActionButton(page, targetName).click();
   const previewDialog = page.getByRole("dialog", { name: "Preview" });
   await previewDialog.waitFor({ state: "visible" });
-  await previewDialog.getByRole("button", { name: "Confirm" }).click();
+  await previewDialog.getByRole("button", { name: "Apply profile" }).click();
   await previewDialog.waitFor({ state: "hidden" });
 };
 
@@ -753,7 +754,7 @@ describe("Electron UI profile switching e2e", () => {
     const skillSearch = page.getByRole("textbox", { name: "Search skills" });
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
-    await page.getByRole("menuitem", { name: /Delete from library/ }).click();
+    await page.getByRole("menuitem", { name: /Remove from library/ }).click();
     const skillDelete = page.getByRole("dialog", { name: "Delete library skill" });
     await skillDelete.getByRole("button", { name: "Cancel" }).focus();
     await page.keyboard.press("Meta+f");
@@ -870,7 +871,8 @@ describe("Electron UI profile switching e2e", () => {
         exact: true
       });
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
-      await changingRow.getByRole("button", { name: "Update layout-skill-1" }).click();
+      await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
+      await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
       await changingRow
         .getByRole("button", { name: "Check update layout-skill-1" })
         .waitFor({ state: "visible" });
@@ -994,7 +996,7 @@ describe("Electron UI profile switching e2e", () => {
     await editDialog.waitFor({ state: "visible", timeout: 5_000 });
     await editDialog.getByLabel("Profile name").fill("Docs Writing v2");
     await editDialog.getByLabel("Description").fill("Updated writing workspace");
-    await editDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await editDialog.getByRole("button", { name: "Done", exact: true }).click();
     await saveProfile(page);
     await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({
       state: "visible",
@@ -1018,12 +1020,36 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("menuitem", { name: "Delete profile" }).click({ timeout: 5_000 });
     const deleteDialog = page.getByRole("dialog", { name: "Delete profile" });
     await deleteDialog.waitFor({ state: "visible", timeout: 5_000 });
-    await deleteDialog.getByRole("button", { name: "Delete" }).click();
+    await deleteDialog.getByRole("button", { name: "Remove profile" }).click();
     await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({
       state: "visible",
       timeout: 10_000
     });
     expect(await findProfileByName(appDataRoot, "Docs Writing v2 Copy")).toBeUndefined();
+  }, 30_000);
+
+  it("protects the active target profile from removal in the UI and IPC", async () => {
+    const { page } = await launchApp();
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+
+    await page.getByRole("button", { name: "More profile actions" }).click();
+    await page.getByRole("menuitem", { name: "Delete profile" }).click();
+    const deleteDialog = page.getByRole("dialog", { name: "Delete profile" });
+    await expect.poll(() => deleteDialog.textContent()).toContain(
+      "Apply another profile before removing it"
+    );
+    expect(await deleteDialog.getByRole("button", { name: "Remove profile" }).count()).toBe(0);
+
+    const ipcResult = await page.evaluate(async () => {
+      try {
+        await window.agentEnv.deleteProfile("ui-opencode-alpha");
+        return "removed";
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    });
+    expect(ipcResult).toContain("Apply another profile before removing this active profile");
   }, 30_000);
 
   it("dismisses modal tools with Escape and outside clicks in the rendered app", async () => {
@@ -1049,8 +1075,8 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Escape");
     await previewDialog.waitFor({ state: "hidden", timeout: 5_000 });
 
-    await page.getByRole("button", { name: "Select apply target" }).click({ timeout: 5_000 });
-    const targetMenu = page.getByRole("menu", { name: "Profile targets" });
+    await page.getByRole("button", { name: "Select target workspace" }).click({ timeout: 5_000 });
+    const targetMenu = page.getByRole("menu", { name: "Target workspaces" });
     await targetMenu.waitFor({ state: "visible", timeout: 5_000 });
     await page.mouse.click(240, 120);
     await targetMenu.waitFor({ state: "hidden", timeout: 5_000 });
@@ -1063,7 +1089,7 @@ describe("Electron UI profile switching e2e", () => {
     await importDrawer.waitFor({ state: "hidden", timeout: 5_000 });
   }, 30_000);
 
-  it("imports an existing target skill into the shared library", async () => {
+  it("consolidates an existing target skill into the shared library", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
     await writeUnmanagedTargetSkill(
       opencodeDir,
@@ -1076,34 +1102,28 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Scan local Skills" }).click();
     await page
       .getByRole("group", { name: "Cleanup group target-only-reviewer" })
-      .waitFor({ state: "visible" });
+      .waitFor({ state: "visible", timeout: 5_000 });
     await page
       .getByRole("group", { name: "Cleanup group late-target-reviewer" })
-      .waitFor({ state: "visible" });
+      .waitFor({ state: "visible", timeout: 5_000 });
 
-    await page.getByRole("button", { name: "Import target-only-reviewer" }).click();
+    await page.getByRole("button", { name: "Review cleanup target-only-reviewer" }).click();
+    const cleanupDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
+    await cleanupDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await cleanupDialog.getByRole("button", { name: "Back up and clean up" }).click();
+    await expect
+      .poll(() => page.locator(".app-feedback").textContent(), { timeout: 5_000 })
+      .toContain("Cleaned up target-only-reviewer");
     await page
       .getByRole("group", { name: "Library item target-only-reviewer" })
-      .waitFor({ state: "visible" });
+      .waitFor({ state: "visible", timeout: 5_000 });
 
     expect(await page.getByText("Existing target skill ready to migrate.").count()).toBeGreaterThan(
       0
     );
-    expect(
-      await page
-        .getByRole("group", { name: "Cleanup group target-only-reviewer" })
-        .textContent()
-    ).toContain("Imported");
     await expect(
       readFile(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"), "utf8")
     ).resolves.toContain("Migrate me into the shared library.");
-
-    await page.getByRole("button", { name: "Manage target-only-reviewer" }).click();
-    await expect
-      .poll(async () =>
-        page.getByRole("group", { name: "Cleanup group target-only-reviewer" }).textContent()
-      )
-      .toContain("Managed");
     await expect(
       readFile(
         join(opencodeDir, "skills", "target-only-reviewer", ".agentenv-owner.json"),
@@ -1135,11 +1155,11 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => previewDialog.textContent())
       .toContain("Cannot install ui-alpha-skill because an ignored unmanaged skill already exists");
     await expect
-      .poll(() => previewDialog.getByRole("button", { name: "Confirm" }).isDisabled())
+      .poll(() => previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled())
       .toBe(true);
   }, 30_000);
 
-  it("blocks profile apply when the managed OpenCode environment drifted outside AgentEnv", async () => {
+  it("backs up and replaces managed OpenCode drift after explicit confirmation", async () => {
     const { opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
@@ -1153,8 +1173,12 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => previewDialog.textContent())
       .toContain("OpenCode instructions changed outside AgentEnv");
     await expect
-      .poll(() => previewDialog.getByRole("button", { name: "Confirm" }).isDisabled())
+      .poll(() => previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled())
       .toBe(true);
+    await previewDialog.getByLabel("Back up and replace external changes").check();
+    await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+    await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain("UI ALPHA");
   }, 30_000);
 
   it("shows polished skill row actions and update check feedback in the rendered app", async () => {
@@ -1188,23 +1212,23 @@ describe("Electron UI profile switching e2e", () => {
       .toMatch(/up to date|update.*available|failed/i);
   }, 30_000);
 
-  it("deletes a skill from the shared library through the rendered app", async () => {
+  it("removes a skill from the shared library through the rendered app", async () => {
     const { appDataRoot, page } = await launchApp();
 
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
-    await page.getByRole("menuitem", { name: /Delete from library/ }).click();
+    await page.getByRole("menuitem", { name: /Remove from library/ }).click();
 
     const deleteDialog = page.getByRole("dialog", { name: "Delete library skill" });
     await deleteDialog.waitFor({ state: "visible" });
     await expect.poll(() => deleteDialog.textContent()).toContain("Installed target copies are not removed");
-    await deleteDialog.getByRole("button", { name: "Delete skill" }).click();
+    await deleteDialog.getByRole("button", { name: "Remove skill" }).click();
 
     await sharedRow.waitFor({ state: "hidden" });
     await expect
       .poll(() => page.getByRole("status").textContent())
-      .toContain("Deleted shared-reviewer from library");
+      .toContain("Removed shared-reviewer from library");
     await expect(fileExists(join(appDataRoot, "skills-library", "shared-reviewer"))).resolves.toBe(false);
   }, 30_000);
 
@@ -1229,8 +1253,8 @@ describe("Electron UI profile switching e2e", () => {
     await headerTip.waitFor({ state: "hidden" });
 
     await page.getByRole("button", { name: "Profiles" }).click();
-    await page.getByRole("button", { name: "Select apply target" }).click();
-    const targetMenu = page.getByRole("menu", { name: "Profile targets" });
+    await page.getByRole("button", { name: "Select target workspace" }).click();
+    const targetMenu = page.getByRole("menu", { name: "Target workspaces" });
     await targetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, targetMenu);
     await page.mouse.click(240, 120);
@@ -1312,8 +1336,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(metrics.clientHeight).toBeGreaterThan(0);
     }
 
-    await page.getByRole("button", { name: "Select apply target" }).click();
-    const defaultViewportTargetMenu = page.getByRole("menu", { name: "Profile targets" });
+    await page.getByRole("button", { name: "Select target workspace" }).click();
+    const defaultViewportTargetMenu = page.getByRole("menu", { name: "Target workspaces" });
     await defaultViewportTargetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, defaultViewportTargetMenu);
     await expectTopmost(defaultViewportTargetMenu);
@@ -1716,7 +1740,7 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page);
     await page
-      .getByRole("group", { name: "Library skill agentenv-shared-reviewer" })
+      .getByRole("group", { name: "Library skill shared-reviewer" })
       .waitFor({ state: "visible" });
     await saveProfile(page);
     await previewAndApply(page, "OpenCode");
@@ -1724,7 +1748,7 @@ describe("Electron UI profile switching e2e", () => {
     const installedSkillMd = join(
       opencodeDir,
       "skills",
-      "agentenv-shared-reviewer",
+      "shared-reviewer",
       "SKILL.md"
     );
     await expect(readFile(installedSkillMd, "utf8")).resolves.toContain(
@@ -1736,7 +1760,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     await expect(
       readFile(
-        join(opencodeDir, "skills", "agentenv-shared-reviewer", ".agentenv-owner.json"),
+        join(opencodeDir, "skills", "shared-reviewer", ".agentenv-owner.json"),
         "utf8"
       )
     ).resolves.toContain('"source": "skills-library/shared-reviewer"');
@@ -1751,7 +1775,7 @@ describe("Electron UI profile switching e2e", () => {
     await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
-    const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
+    const installedSkillMd = join(opencodeDir, "skills", "shared-reviewer", "SKILL.md");
     await expect(readFile(installedSkillMd, "utf8")).resolves.toContain(
       "Review code changes before applying them."
     );
@@ -1767,7 +1791,11 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByText("Update available")
       .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Update shared-reviewer" }).click();
+    await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
+    await page
+      .getByRole("region", { name: "Update preview for shared-reviewer" })
+      .waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated shared-reviewer");
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
@@ -1805,6 +1833,9 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: "Update all skills" }).click();
+    const bulkUpdateDialog = page.getByRole("dialog", { name: "Review all skill updates" });
+    await bulkUpdateDialog.waitFor({ state: "visible" });
+    await bulkUpdateDialog.getByRole("button", { name: "Apply 2 updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByText("Batch shared v2.")
@@ -1837,7 +1868,7 @@ describe("Electron UI profile switching e2e", () => {
     await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
-    const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
+    const installedSkillMd = join(opencodeDir, "skills", "shared-reviewer", "SKILL.md");
     await expect(readFile(installedSkillMd, "utf8")).resolves.toContain(
       "Review code changes before applying them."
     );
@@ -1861,7 +1892,7 @@ describe("Electron UI profile switching e2e", () => {
     await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
-    const installedSkillMd = join(opencodeDir, "skills", "agentenv-shared-reviewer", "SKILL.md");
+    const installedSkillMd = join(opencodeDir, "skills", "shared-reviewer", "SKILL.md");
     await expect(readlink(installedSkillMd)).resolves.toBe(movedSkillMd);
   }, 30_000);
 
@@ -1975,7 +2006,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("button", { name: "Add skill" }).count()).toBe(0);
     await page
       .getByRole("group", { name: "Skill ui-alpha-skill" })
-      .getByRole("button", { name: "Remove" })
+      .getByRole("button", { name: "Remove profile skill" })
       .click();
     await saveProfile(page);
     await previewAndApply(page, "OpenCode");
@@ -2001,7 +2032,7 @@ describe("Electron UI profile switching e2e", () => {
         "target-only-reviewer"
       )}`)
       .waitFor({ state: "visible" });
-    expect(await previewDialog.getByRole("button", { name: "Confirm" }).isDisabled()).toBe(true);
+    expect(await previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled()).toBe(true);
   }, 30_000);
 
   it("imports and updates a GitHub-backed skill through the rendered app", async () => {
@@ -2037,7 +2068,11 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item github-reviewer" })
       .getByText("Update available")
       .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Update github-reviewer" }).click();
+    await page.getByRole("button", { name: "Review update github-reviewer" }).click();
+    await page
+      .getByRole("region", { name: "Update preview for github-reviewer" })
+      .waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Apply update github-reviewer" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated github-reviewer");
     await page
       .getByRole("group", { name: "Library item github-reviewer" })
@@ -2127,7 +2162,11 @@ describe("Electron UI profile switching e2e", () => {
       .getByText(newSourceDir)
       .waitFor({ state: "visible" });
 
-    await page.getByRole("button", { name: "Update shared-reviewer" }).click();
+    await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
+    await page
+      .getByRole("region", { name: "Update preview for shared-reviewer" })
+      .waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated shared-reviewer");
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })

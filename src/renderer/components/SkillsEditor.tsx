@@ -335,7 +335,7 @@ export const SkillsEditor = ({
       .filter((libraryId) => !attachedSkillIds.has(libraryId))
       .map((libraryId) => ({
         libraryId,
-        targetName: `agentenv-${libraryId}`
+        targetName: libraryId
       }));
     if (additions.length === 0) {
       return;
@@ -567,7 +567,7 @@ export const SkillsEditor = ({
                         />
                       </label>
                       <button type="button" onClick={() => removeOwnedDir(index)}>
-                        Remove
+                        Remove profile skill
                       </button>
                     </div>
                   </fieldset>
@@ -619,7 +619,7 @@ export const SkillsEditor = ({
                           type="button"
                           onClick={() => removeSkillRef(index)}
                         >
-                          Remove
+                          Remove from profile
                         </button>
                       </div>
                     </div>
@@ -658,7 +658,7 @@ export const SkillsEditor = ({
                           type="button"
                           onClick={() => removeMcpRef(index)}
                         >
-                          Remove
+                          Remove from profile
                         </button>
                       </div>
                     </div>

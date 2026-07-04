@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPaths } from "../../src/main/paths";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
@@ -499,6 +499,59 @@ describe("skill library store", () => {
         libraryId: "legacy"
       }
     ]);
+  });
+
+  it("backs up, consolidates, and rolls back a duplicate skill group transactionally", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const openCodeSkills = join(root, "home", ".config", "opencode", "skills");
+    const codexSkills = join(root, "home", ".agents", "skills");
+    const openCodeCopy = join(openCodeSkills, "reviewer");
+    const codexCopy = join(codexSkills, "reviewer");
+    await mkdir(openCodeCopy, { recursive: true });
+    await mkdir(codexCopy, { recursive: true });
+    await writeFile(join(openCodeCopy, "SKILL.md"), "# Canonical\n", "utf8");
+    await writeFile(join(codexCopy, "SKILL.md"), "# Older copy\n", "utf8");
+    const store = createSkillLibraryStore(paths);
+
+    const result = await store.consolidateSkillGroup({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      canonicalPath: openCodeCopy,
+      locations: [
+        {
+          targetPaths: {
+            targetId: "opencode",
+            configDir: dirname(openCodeSkills),
+            instructionsPath: "",
+            configPath: "",
+            skillsDir: openCodeSkills
+          },
+          targetDir: openCodeCopy
+        },
+        {
+          targetPaths: {
+            targetId: "codex",
+            configDir: join(root, "home", ".codex"),
+            instructionsPath: "",
+            configPath: "",
+            skillsDir: codexSkills
+          },
+          targetDir: codexCopy
+        }
+      ]
+    });
+
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).resolves.toBe("# Canonical\n");
+    await expect(readFile(join(openCodeCopy, "SKILL.md"), "utf8")).resolves.toBe("# Canonical\n");
+    await expect(readFile(join(codexCopy, "SKILL.md"), "utf8")).resolves.toBe("# Canonical\n");
+    expect(result.managedLocations).toEqual([openCodeCopy, codexCopy]);
+
+    await store.rollbackSkillCleanup(result.backupId);
+
+    await expect(readFile(join(openCodeCopy, "SKILL.md"), "utf8")).resolves.toBe("# Canonical\n");
+    await expect(readFile(join(codexCopy, "SKILL.md"), "utf8")).resolves.toBe("# Older copy\n");
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("saves an update source for an existing library skill", async () => {

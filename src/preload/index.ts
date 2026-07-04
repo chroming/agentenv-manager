@@ -2,6 +2,12 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { AgentEnvApi } from "../shared/types";
 
 const api: AgentEnvApi = {
+  onWindowCloseRequested: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("window:close-requested", listener);
+    return () => ipcRenderer.off("window:close-requested", listener);
+  },
+  confirmWindowClose: () => ipcRenderer.send("window:confirm-close"),
   copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),
   listTargets: () => ipcRenderer.invoke("targets:list"),
@@ -18,6 +24,8 @@ const api: AgentEnvApi = {
   importGitHubSkillToLibrary: (input) => ipcRenderer.invoke("skills:import-github", input),
   removeSkillFromLibrary: (id) => ipcRenderer.invoke("skills:remove-library", id),
   manageTargetSkill: (input) => ipcRenderer.invoke("skills:manage-target", input),
+  consolidateSkillGroup: (input) => ipcRenderer.invoke("skills:consolidate-group", input),
+  rollbackSkillCleanup: (backupId) => ipcRenderer.invoke("skills:rollback-cleanup", backupId),
   checkSkillLibraryUpdates: () => ipcRenderer.invoke("skills:check-updates"),
   setSkillUpdateSource: (input) => ipcRenderer.invoke("skills:set-update-source", input),
   previewLibrarySkillUpdate: (id) => ipcRenderer.invoke("skills:preview-update", id),
@@ -36,8 +44,8 @@ const api: AgentEnvApi = {
   duplicateProfile: (id) => ipcRenderer.invoke("profiles:duplicate", id),
   deleteProfile: (id) => ipcRenderer.invoke("profiles:delete", id),
   previewApply: (profileId) => ipcRenderer.invoke("activation:preview", profileId),
-  applyProfile: (profileId, previewId) =>
-    ipcRenderer.invoke("activation:apply", profileId, previewId),
+  applyProfile: (profileId, previewId, options) =>
+    ipcRenderer.invoke("activation:apply", profileId, previewId, options),
   listBackups: () => ipcRenderer.invoke("backups:list"),
   previewRollback: (backupId) => ipcRenderer.invoke("rollback:preview", backupId),
   rollback: (backupId) => ipcRenderer.invoke("rollback:apply", backupId)
