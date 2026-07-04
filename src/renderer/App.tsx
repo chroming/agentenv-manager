@@ -18,6 +18,7 @@ import {
   ScanLine,
   Search,
   Settings2,
+  ShieldCheck,
   TriangleAlert,
   Trash2
 } from "lucide-react";
@@ -370,7 +371,7 @@ export const App = () => {
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [profileSearch, setProfileSearch] = useState("");
   const [activeComposerSection, setActiveComposerSection] =
-    useState<ComposerSection>("skills");
+    useState<ComposerSection>();
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
   const [isProfileActionsOpen, setIsProfileActionsOpen] = useState(false);
   const [profileDialogMode, setProfileDialogMode] = useState<ProfileDialogMode>();
@@ -499,7 +500,7 @@ export const App = () => {
           profileItems[0];
         setSelectedTargetId(initialProfile.targetId);
         setSelectedProfileId(initialProfile.id);
-        setActiveComposerSection("skills");
+        setActiveComposerSection(undefined);
         const requestId = ++profileFlowRequestRef.current;
         const profile = await window.agentEnv.readProfile(initialProfile.id);
         if (isMounted && requestId === profileFlowRequestRef.current) {
@@ -554,7 +555,7 @@ export const App = () => {
       setIsProfileDirty(false);
       setProfileSaveStatus("");
     }
-    setActiveComposerSection("skills");
+    setActiveComposerSection(undefined);
     setActiveWorkspace("profiles");
     setSelectedProfileId(profileId);
     if (profileSummary) {
@@ -679,7 +680,7 @@ export const App = () => {
         };
         updateDraftProfile(updatedProfile);
       }
-      setActiveComposerSection("skills");
+      setActiveComposerSection(undefined);
       setActiveWorkspace("profiles");
       setProfileDialogMode(undefined);
       setPreview(undefined);
@@ -705,7 +706,7 @@ export const App = () => {
       setSelectedTargetId(saved.manifest.targetId);
       setSelectedProfileId(saved.id);
       setDraftProfile(saved);
-      setActiveComposerSection("skills");
+      setActiveComposerSection(undefined);
       setPreview(undefined);
       setRollbackPreview(undefined);
     } catch (unknownError) {
@@ -769,7 +770,7 @@ export const App = () => {
     setProfileSaveStatus("");
     setPreview(undefined);
     setRollbackPreview(undefined);
-    setActiveComposerSection("skills");
+    setActiveComposerSection(undefined);
   };
 
   useEffect(() => {
@@ -837,13 +838,19 @@ export const App = () => {
     (profile) => !selectedTargetId || profile.targetId === selectedTargetId
   );
   const normalizedProfileSearch = profileSearch.trim().toLowerCase();
-  const visibleProfiles = targetProfiles.filter((profile) => {
-    if (normalizedProfileSearch.length === 0) {
-      return true;
-    }
+  const visibleProfiles = targetProfiles
+    .filter((profile) => {
+      if (normalizedProfileSearch.length === 0) {
+        return true;
+      }
 
-    return `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedProfileSearch);
-  });
+      return `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedProfileSearch);
+    })
+    .sort((left, right) => {
+      if (left.id === selectedProfileId) return -1;
+      if (right.id === selectedProfileId) return 1;
+      return left.name.localeCompare(right.name);
+    });
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
@@ -871,7 +878,7 @@ export const App = () => {
   const readiness = deriveProfileReadiness(readinessInput);
   const applyActionLabel = deriveApplyActionLabel(readinessInput);
   const applyContextLabel = applyActionLabel.startsWith("Take over")
-    ? "Take over"
+    ? "Apply to"
     : applyActionLabel.startsWith("Review")
       ? "Review"
       : applyActionLabel.startsWith("Resolve")
@@ -884,7 +891,23 @@ export const App = () => {
         ? RefreshCw
         : TriangleAlert;
   const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
-  const managedResourceCount = selectedTargetState?.managedResourceCount ?? 0;
+  const libraryResourceCount = librarySkills.length + mcpServers.length;
+  const readinessAttentionLabel = readiness.remediationLabel
+    ?? (readiness.status === "no-profile"
+      ? "Profile required"
+      : readiness.status === "unmanaged"
+        ? "Take over required"
+        : "No action needed");
+  const readinessAttentionMessage = readiness.remediationLabel
+    ? readiness.message
+    : readiness.status === "no-profile"
+      ? "Create a profile to continue"
+      : readiness.status === "unmanaged"
+        ? "Preview the first managed apply"
+        : "Workspace is ready";
+  const selectedProfileApplication = draftProfile
+    ? findRecentProfileApplication(draftProfile.id, targetStates, targets)
+    : undefined;
   const applyDisabled = !draftProfile || !selectedTarget || busy;
   const applyDescription = !draftProfile
     ? "Select a profile before previewing changes"
@@ -970,6 +993,10 @@ export const App = () => {
         )
         ?.focus();
     }
+  };
+
+  const toggleComposerSection = (section: ComposerSection) => {
+    setActiveComposerSection((current) => current === section ? undefined : section);
   };
 
   const applySelectedProfile = async () => {
@@ -1609,11 +1636,9 @@ export const App = () => {
         ) : activeWorkspace === "profiles" ? (
           <>
             <header className="page-header profile-page-header">
-              <div>
-                <h2 aria-label="Profiles">
-                  Profiles
-                  <InfoTip label="Profiles combine instructions, skills, and MCP servers. Applying a profile previews changes before writing to a local target." />
-                </h2>
+              <div className="profile-page-heading">
+                <h2 aria-label="Profiles">Profiles</h2>
+                <p>Compose reusable environments and apply them safely to local agent targets.</p>
               </div>
               <div className="profile-page-actions" ref={profilePageActionsRef}>
                 <button
@@ -1766,8 +1791,8 @@ export const App = () => {
                   <Database size={17} strokeWidth={2.25} />
                 </span>
                 <span>
-                  <strong>{managedResourceCount}</strong>
-                  <small>{` managed resource${managedResourceCount === 1 ? "" : "s"}`}</small>
+                  <strong>{libraryResourceCount}</strong>
+                  <small> Library resources</small>
                 </span>
               </div>
               <div className="profile-readiness-strip__metric">
@@ -1779,11 +1804,20 @@ export const App = () => {
                   <small>{` ready target${readyTargetCount === 1 ? "" : "s"}`}</small>
                 </span>
               </div>
-              {readiness.remediationLabel ? (
-                <button type="button" disabled={busy} onClick={runReadinessRemediation}>
-                  {readiness.remediationLabel}
-                </button>
-              ) : null}
+              <div className="profile-readiness-strip__attention">
+                <span className="profile-readiness-strip__attention-icon" aria-hidden="true">
+                  <TriangleAlert size={18} strokeWidth={2.25} />
+                </span>
+                <span className="profile-readiness-strip__copy">
+                  <strong>{readinessAttentionLabel}</strong>
+                  <span>{readinessAttentionMessage}</span>
+                </span>
+                {readiness.remediationLabel ? (
+                  <button type="button" disabled={busy} onClick={runReadinessRemediation}>
+                    {readiness.remediationLabel}
+                  </button>
+                ) : null}
+              </div>
             </section>
             <section className="profile-workbench" aria-label="Profiles">
               <aside className="profile-index" aria-label="Profile list">
@@ -1829,7 +1863,7 @@ export const App = () => {
                       key={profile.id}
                       onClick={() => selectProfile(profile.id)}
                     >
-                      <span className={`profile-row__icon profile-row__icon--${index % 5}`} aria-hidden="true">
+                      <span className={`profile-row__icon profile-row__icon--${isSelected ? "selected" : index % 5}`} aria-hidden="true">
                         <Rocket size={18} strokeWidth={2.2} />
                       </span>
                       <span className="profile-row__content">
@@ -1888,16 +1922,27 @@ export const App = () => {
                           <span className="success-pill">
                             Compatible with {selectedTarget?.name ?? draftProfile.manifest.targetId}
                           </span>
-                          <span>Target-specific profile</span>
+                          <span className="profile-hero__recent">
+                            <Monitor size={14} strokeWidth={2.2} aria-hidden="true" />
+                            {selectedProfileApplication?.state.lastAppliedAt
+                              ? `Last applied ${formatShortDate(selectedProfileApplication.state.lastAppliedAt)}`
+                              : "Not applied yet"}
+                          </span>
                         </div>
                       </div>
                     </header>
             <section className="profile-composer" aria-label="Profile composer">
+              <header className="profile-composer__header">
+                <div>
+                  <h3>Profile Composer</h3>
+                  <p>Combine instructions, reusable skills, and MCP servers.</p>
+                </div>
+              </header>
               <ProfileComposerSection
                 id="instructions"
                 icon={<BookOpenText size={18} strokeWidth={2.2} />}
                 title="Instructions"
-                description="Target-specific instructions"
+                description="Agent instructions and rule files"
                 count={resourceSummary?.instructions.count ?? 0}
                 chipNames={
                   resourceSummary?.instructions.count
@@ -1905,7 +1950,7 @@ export const App = () => {
                     : []
                 }
                 expanded={activeComposerSection === "instructions"}
-                onToggle={() => setActiveComposerSection("instructions")}
+                onToggle={() => toggleComposerSection("instructions")}
               >
                 <AgentsEditor
                   label={selectedTarget?.instructionsLabel ?? "Instructions"}
@@ -1919,11 +1964,11 @@ export const App = () => {
                 id="skills"
                 icon={<Database size={18} strokeWidth={2.2} />}
                 title="Skills"
-                description="Profile and Library skills"
+                description="Reusable skills and workflows"
                 count={resourceSummary?.skills.count ?? 0}
                 chipNames={resourceSummary?.skills.names ?? []}
                 expanded={activeComposerSection === "skills"}
-                onToggle={() => setActiveComposerSection("skills")}
+                onToggle={() => toggleComposerSection("skills")}
               >
                 <SkillsEditor
                   mode="skills"
@@ -1942,11 +1987,11 @@ export const App = () => {
                 id="mcp"
                 icon={<Network size={18} strokeWidth={2.2} />}
                 title="MCP Servers"
-                description="Library and raw-config servers"
+                description="External tools and service connections"
                 count={resourceSummary?.mcp.count ?? 0}
                 chipNames={resourceSummary?.mcp.names ?? []}
                 expanded={activeComposerSection === "mcp"}
-                onToggle={() => setActiveComposerSection("mcp")}
+                onToggle={() => toggleComposerSection("mcp")}
               >
                 <SkillsEditor
                   mode="mcp"
@@ -1965,11 +2010,11 @@ export const App = () => {
                 id="advanced"
                 icon={<Settings2 size={18} strokeWidth={2.2} />}
                 title="Advanced"
-                description="Raw config, disabled skills, validation, and history"
+                description="Raw config, overrides, validation, and history"
                 count={draftProfile.assetPolicy.disabledSkillPaths.length}
                 chipNames={draftProfile.assetPolicy.disabledSkillPaths}
                 expanded={activeComposerSection === "advanced"}
-                onToggle={() => setActiveComposerSection("advanced")}
+                onToggle={() => toggleComposerSection("advanced")}
               >
                 <McpEditor
                   label={selectedTarget?.configLabel ?? "Config"}
@@ -2022,6 +2067,16 @@ export const App = () => {
                   onRestoreRollback={restoreSelectedRollback}
                 />
               </ProfileComposerSection>
+            </section>
+            <section className="profile-safety-strip" role="status" aria-label="Safe apply">
+              <span className="profile-safety-strip__icon" aria-hidden="true">
+                <ShieldCheck size={19} strokeWidth={2.25} />
+              </span>
+              <span>
+                <strong>Safe apply</strong>
+                <small>Preview, backup, and conflict checks are enabled.</small>
+              </span>
+              <CheckCircle2 size={22} strokeWidth={2.2} aria-hidden="true" />
             </section>
             {rollbackPreview ? (
               <PreviewDialog

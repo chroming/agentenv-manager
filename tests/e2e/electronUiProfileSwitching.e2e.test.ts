@@ -892,9 +892,17 @@ describe("Electron UI profile switching e2e", () => {
       expect(metrics.clientHeight).toBeGreaterThan(0);
     }
 
+    await page.getByRole("button", { name: "Select apply target" }).click();
+    const defaultViewportTargetMenu = page.getByRole("menu", { name: "Profile targets" });
+    await defaultViewportTargetMenu.waitFor({ state: "visible" });
+    await expectInViewport(page, defaultViewportTargetMenu);
+    await expectTopmost(defaultViewportTargetMenu);
+    await page.keyboard.press("Escape");
+    await defaultViewportTargetMenu.waitFor({ state: "hidden" });
+
     const skillsTrigger = composer.getByRole("button", { name: "Skills", exact: true });
     const advancedTrigger = composer.getByRole("button", { name: "Advanced", exact: true });
-    expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("true");
+    expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("false");
 
     await expandComposerSection(page, "Advanced");
     expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("false");
@@ -983,6 +991,26 @@ describe("Electron UI profile switching e2e", () => {
     expect(["auto", "scroll"]).toContain(panelMetrics.overflowY);
     expect(panelMetrics.scrollHeight).toBeGreaterThan(panelMetrics.clientHeight);
     expect(expandedMetrics.documentHeight).toBe(expandedMetrics.viewportHeight);
+  }, 30_000);
+
+  it("edits and persists Instructions from the default-collapsed Composer", async () => {
+    const { appDataRoot, page } = await launchApp();
+    await page.setViewportSize({ width: 1180, height: 728 });
+    await selectProfile(page, "UI OpenCode alpha");
+
+    const instructionsTrigger = page
+      .getByRole("region", { name: "Profile composer" })
+      .getByRole("button", { name: "Instructions", exact: true });
+    expect(await instructionsTrigger.getAttribute("aria-expanded")).toBe("false");
+    await expandComposerSection(page, "Instructions");
+    await page
+      .getByRole("textbox", { name: "AGENTS.md" })
+      .fill("# Updated through collapsed Composer\n");
+    await saveProfile(page);
+
+    await expect(
+      readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "AGENTS.md"), "utf8")
+    ).resolves.toBe("# Updated through collapsed Composer\n");
   }, 30_000);
 
   it("imports a local skill folder from the Import Skill drawer", async () => {

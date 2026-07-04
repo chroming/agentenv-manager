@@ -232,7 +232,7 @@ try {
   const { appDataRoot, binDir, homeDir } = await prepareFixture(fixtureRoot);
   app = await electron.launch({
     executablePath: electronPath,
-    args: [join(projectRoot, "out", "main", "main.js")],
+    args: ["--disable-gpu", join(projectRoot, "out", "main", "main.js")],
     env: {
       ...process.env,
       AGENTENV_DATA_ROOT: appDataRoot,
@@ -249,16 +249,11 @@ try {
   await page.getByRole("button", { name: "Profiles" }).click();
   await page.getByRole("button", { name: /Daily Coding/ }).click();
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
-  const composerSkills = page
-    .getByRole("region", { name: "Profile composer" })
-    .getByRole("button", { name: "Skills", exact: true });
-  await composerSkills.click();
   await page.getByRole("button", { name: "Select apply target" }).click();
   await page.waitForTimeout(250);
   await captureWindow(windowHandle, join(outputDir, "implementation-1536x1024.png"));
 
   await page.keyboard.press("Escape");
-  await composerSkills.click();
   await setWindowSize(page, windowHandle, 1180, 728);
   await captureWindow(windowHandle, join(outputDir, "implementation-1180x728.png"));
 

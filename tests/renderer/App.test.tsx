@@ -430,9 +430,12 @@ describe("App", () => {
     expect(brandIcon).toBeInTheDocument();
     expect(brandIcon?.getAttribute("src")).toContain("app-icon");
     const composer = await screen.findByRole("region", { name: "Profile composer" });
+    expect(within(composer).getByRole("heading", { name: "Profile Composer" })).toBeInTheDocument();
+    expect(screen.getByText("Compose reusable environments and apply them safely to local agent targets.")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Safe apply" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Skills" })).toHaveAttribute(
       "aria-expanded",
-      "true"
+      "false"
     );
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeInTheDocument();
@@ -733,7 +736,7 @@ describe("App", () => {
     );
   });
 
-  it("keeps one composer section open", async () => {
+  it("opens at most one composer section and allows all sections to collapse", async () => {
     installApi({
       readProfile: vi.fn().mockResolvedValue(richProfile)
     });
@@ -754,7 +757,7 @@ describe("App", () => {
       /4.*library-docs.*shared-mcp.*raw-search.*\+1/
     );
     expect(advanced).toHaveAccessibleDescription(/1.*legacy-skill/);
-    expect(skills).toHaveAttribute("aria-expanded", "true");
+    expect(skills).toHaveAttribute("aria-expanded", "false");
     expect(instructions).toHaveAttribute("aria-expanded", "false");
 
     fireEvent.click(mcp);
@@ -766,6 +769,10 @@ describe("App", () => {
     expect(mcp).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByLabelText("opencode.jsonc")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "History" })).toBeInTheDocument();
+
+    fireEvent.click(advanced);
+    expect(advanced).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("opencode.jsonc")).not.toBeInTheDocument();
   });
 
   it("shows rich profile row metadata", async () => {
@@ -795,6 +802,7 @@ describe("App", () => {
       "2026-07-10T08:00:00.000Z"
     );
     expect(row).not.toHaveTextContent("OpenCode");
+    expect(document.querySelector(".profile-hero")).toHaveTextContent("Last applied Jul 10");
 
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
     fireEvent.change(screen.getByLabelText("AGENTS.md"), {
@@ -1157,7 +1165,7 @@ describe("App", () => {
     await openProfiles();
     let readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("OpenCode is ready to take over");
-    expect(readiness).toHaveTextContent("0 managed resources");
+    expect(readiness).toHaveTextContent("0 Library resources");
     expect(readiness).toHaveTextContent("1 ready target");
     let action = screen.getByRole("button", { name: "Take over OpenCode" });
     expect(action).toHaveAttribute("title", "Take over OpenCode");
@@ -1174,7 +1182,7 @@ describe("App", () => {
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("OpenCode is ready to preview and apply");
-    expect(readiness).toHaveTextContent("7 managed resources");
+    expect(readiness).toHaveTextContent("0 Library resources");
     action = screen.getByRole("button", { name: "Preview & apply to OpenCode" });
     expect(action).toHaveAttribute("title", "Preview & apply to OpenCode");
 
@@ -1184,6 +1192,8 @@ describe("App", () => {
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("Create a profile to continue");
+    expect(readiness).toHaveTextContent("Profile required");
+    expect(readiness).not.toHaveTextContent("No action needed");
     expect(within(readiness).queryByRole("button", { name: "New Profile" })).not.toBeInTheDocument();
     action = screen.getByRole("button", { name: "Take over OpenCode" });
     expect(action).toBeDisabled();
