@@ -20,7 +20,8 @@ import {
   Settings2,
   ShieldCheck,
   TriangleAlert,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
 import {
   parse as parseJsonc,
@@ -159,7 +160,13 @@ interface AppFeedbackMessage {
   message?: string;
 }
 
-const AppFeedback = ({ feedback }: { feedback?: AppFeedbackMessage }) => {
+const AppFeedback = ({
+  feedback,
+  onDismiss
+}: {
+  feedback?: AppFeedbackMessage;
+  onDismiss(): void;
+}) => {
   if (!feedback) {
     return null;
   }
@@ -183,6 +190,9 @@ const AppFeedback = ({ feedback }: { feedback?: AppFeedbackMessage }) => {
         <strong>{feedback.title}</strong>
         {feedback.message ? <span>{feedback.message}</span> : null}
       </div>
+      <button type="button" aria-label="Dismiss message" onClick={onDismiss}>
+        <X size={14} strokeWidth={2.2} aria-hidden="true" />
+      </button>
     </div>
   );
 };
@@ -378,6 +388,7 @@ export const App = () => {
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
+  const [targetRefreshStatus, setTargetRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [profileSearch, setProfileSearch] = useState("");
   const [activeComposerSection, setActiveComposerSection] =
     useState<ComposerSection>();
@@ -394,6 +405,7 @@ export const App = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const profilePageActionsRef = useRef<HTMLDivElement>(null);
+  const profileApplyControlRef = useRef<HTMLDivElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const targetMenuButtonRef = useRef<HTMLButtonElement>(null);
   const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
@@ -446,6 +458,30 @@ export const App = () => {
     const timeout = window.setTimeout(() => setSettingsSaveStatus(""), 2400);
     return () => window.clearTimeout(timeout);
   }, [settingsSaveStatus]);
+
+  useEffect(() => {
+    if (profileSaveStatus !== "Profile saved") {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => setProfileSaveStatus(""), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [profileSaveStatus]);
+
+  useEffect(() => {
+    if (targetRefreshStatus !== "refreshed") {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => setTargetRefreshStatus(undefined), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [targetRefreshStatus]);
+
+  useEffect(() => {
+    if (!skillUpdateCheckStatus || !["success", "info"].includes(skillUpdateCheckStatus.state)) {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => setSkillUpdateCheckStatus(undefined), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [skillUpdateCheckStatus]);
 
   const invalidateProfileFlow = () => {
     profileFlowRequestRef.current += 1;
@@ -872,7 +908,10 @@ export const App = () => {
       if (!(target instanceof Node)) {
         return;
       }
-      if (profilePageActionsRef.current?.contains(target)) {
+      if (
+        profilePageActionsRef.current?.contains(target) ||
+        profileApplyControlRef.current?.contains(target)
+      ) {
         return;
       }
       setIsTargetMenuOpen(false);
@@ -941,9 +980,9 @@ export const App = () => {
   const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
   const applySafetyTitle =
     readiness.status === "unmanaged"
-      ? "Preview required"
+      ? "Review before apply"
       : readiness.status === "ready"
-        ? "Protected apply"
+        ? "Ready to review"
         : readiness.status === "no-profile"
           ? "Profile required"
           : readiness.status === "no-target"
@@ -953,8 +992,12 @@ export const App = () => {
               : "Review required";
   const applySafetyMessage =
     readiness.status === "unmanaged" || readiness.status === "ready"
-      ? "Automatic backup and conflict checks are enabled."
+      ? "Preview shows every replacement before a backup is created."
       : readiness.message;
+  const readinessTitle =
+    readiness.status === "ready" || readiness.status === "unmanaged"
+      ? `${selectedTarget?.name ?? "Target"} ready`
+      : readiness.label;
   const selectedProfileApplication = draftProfile
     ? findRecentProfileApplication(draftProfile.id, targetStates, targets)
     : undefined;
@@ -1388,6 +1431,21 @@ export const App = () => {
     }
   };
 
+  const refreshTargets = async () => {
+    setBusy(true);
+    setError(undefined);
+    setTargetRefreshStatus("refreshing");
+    try {
+      await refreshProfiles();
+      setTargetRefreshStatus("refreshed");
+    } catch (unknownError) {
+      setTargetRefreshStatus(undefined);
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const startGitHubLogin = async () => {
     setBusy(true);
     setError(undefined);
@@ -1487,11 +1545,22 @@ export const App = () => {
     }
   };
 
-  const githubSkillCount = librarySkills.filter((skill) => skill.sourceType === "github").length;
-  const localSkillCount = librarySkills.filter((skill) => skill.sourceType === "local").length;
   const needsManagementCount = skillInventory.filter((skill) => skill.status !== "managed").length;
+  const dismissAppFeedback = () => {
+    setError(undefined);
+    setSkillUpdateCheckStatus(undefined);
+    setProfileSaveStatus("");
+    setSettingsSaveStatus("");
+    setTargetRefreshStatus(undefined);
+    setGithubLoginMessage("");
+  };
   const appFeedback: AppFeedbackMessage | undefined = error
     ? { kind: "error", title: "Action failed", message: error }
+    : targetRefreshStatus
+      ? {
+          kind: targetRefreshStatus === "refreshing" ? "loading" : "success",
+          title: targetRefreshStatus === "refreshing" ? "Refreshing targets" : "Targets refreshed"
+        }
     : skillUpdateCheckStatus
       ? {
           kind:
@@ -1524,8 +1593,83 @@ export const App = () => {
                 kind: "error",
                 title: "GitHub connection needs attention",
                 message: githubAuthStatus.error
-              }
+            }
         : undefined;
+  const profileApplyControl = (
+    <div className="profile-apply-control" ref={profileApplyControlRef}>
+      <span className="profile-apply-split">
+        <button
+          className="profile-apply-button"
+          type="button"
+          aria-label={applyActionLabel}
+          aria-describedby="profile-apply-description"
+          title={applyActionLabel}
+          disabled={applyDisabled}
+          onClick={previewSelectedProfile}
+        >
+          {selectedTargetIcon?.assetUrl ? (
+            <img
+              className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`}
+              src={selectedTargetIcon.assetUrl}
+              alt=""
+            />
+          ) : (
+            <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
+          )}
+          <strong>{applyActionLabel}</strong>
+        </button>
+        <button
+          ref={targetMenuButtonRef}
+          className="profile-target-menu-button"
+          type="button"
+          aria-expanded={isTargetMenuOpen}
+          aria-haspopup="menu"
+          aria-label="Select apply target"
+          title="Select apply target"
+          onClick={() => {
+            setIsProfileActionsOpen(false);
+            setIsTargetMenuOpen((current) => !current);
+          }}
+        >
+          <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
+        </button>
+      </span>
+      {isTargetMenuOpen ? (
+        <div className="profile-target-menu" role="menu" aria-label="Profile targets">
+          {targets.map((target) => {
+            const targetIcon = targetIconFor(target);
+            return (
+              <button
+                className={target.id === selectedTargetId ? "is-selected" : ""}
+                type="button"
+                role="menuitemradio"
+                aria-checked={target.id === selectedTargetId}
+                key={target.id}
+                onClick={() => selectTarget(target.id)}
+              >
+                {targetIcon.assetUrl ? (
+                  <img
+                    className={`profile-target-logo profile-target-logo--${targetIcon.flavor}`}
+                    src={targetIcon.assetUrl}
+                    alt=""
+                  />
+                ) : (
+                  <Monitor size={16} strokeWidth={2.2} aria-hidden="true" />
+                )}
+                <span>{target.name}</span>
+                {target.id === selectedTargetId ? (
+                  <CheckCircle2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <span id="profile-apply-description" hidden>
+        {applyDescription}
+      </span>
+    </div>
+  );
 
   return (
     <main
@@ -1560,7 +1704,7 @@ export const App = () => {
               : `${activeWorkspace} workspace`
         }
       >
-        <AppFeedback feedback={appFeedback} />
+        <AppFeedback feedback={appFeedback} onDismiss={dismissAppFeedback} />
         {activeWorkspace === "library" ? (
           <>
             <header className="page-header library-page-header">
@@ -1597,21 +1741,22 @@ export const App = () => {
                 ) : null}
               </div>
             </header>
-            <section className="metric-strip metric-strip--compact" aria-label="Library summary">
-              <div className="metric-tile">
-                <span className="metric-icon metric-icon--purple" aria-hidden="true">
-                  {activeLibraryTab === "skills" ? (
-                    <BookOpenText size={21} strokeWidth={2.2} />
-                  ) : (
+            <section
+              className={`metric-strip metric-strip--compact metric-strip--${activeLibraryTab}`}
+              aria-label="Library summary"
+            >
+              {activeLibraryTab === "mcp" ? (
+                <div className="metric-tile">
+                  <span className="metric-icon metric-icon--purple" aria-hidden="true">
                     <Network size={21} strokeWidth={2.2} />
-                  )}
-                </span>
-                <div>
-                  <strong>{activeLibraryTab === "skills" ? librarySkills.length : mcpServers.length}</strong>
-                  <small>{activeLibraryTab === "skills" ? "Total Skills" : "MCP Servers"}</small>
-                  <span>{activeLibraryTab === "skills" ? `${localSkillCount} local · ${githubSkillCount} GitHub` : "Shared across profiles"}</span>
+                  </span>
+                  <div>
+                    <strong>{mcpServers.length}</strong>
+                    <small>MCP Servers</small>
+                    <span>Shared across profiles</span>
+                  </div>
                 </div>
-              </div>
+              ) : null}
               {activeLibraryTab === "skills" ? (
                 <>
                   <div className="metric-tile">
@@ -1717,79 +1862,6 @@ export const App = () => {
                     Save
                   </button>
                 </div>
-                <div className="profile-apply-control">
-                  <span className="profile-apply-split">
-                    <button
-                      className="profile-apply-button"
-                      type="button"
-                      aria-label={applyActionLabel}
-                      aria-describedby="profile-apply-description"
-                      title={applyActionLabel}
-                      disabled={applyDisabled}
-                      onClick={previewSelectedProfile}
-                    >
-                      {selectedTargetIcon?.assetUrl ? (
-                        <img
-                          className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`}
-                          src={selectedTargetIcon.assetUrl}
-                          alt=""
-                        />
-                      ) : (
-                        <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
-                      )}
-                      <strong>{applyActionLabel}</strong>
-                    </button>
-                    <button
-                      ref={targetMenuButtonRef}
-                      className="profile-target-menu-button"
-                      type="button"
-                      aria-expanded={isTargetMenuOpen}
-                      aria-haspopup="menu"
-                      aria-label="Select apply target"
-                      title="Select apply target"
-                      onClick={() => {
-                        setIsProfileActionsOpen(false);
-                        setIsTargetMenuOpen((current) => !current);
-                      }}
-                    >
-                      <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
-                    </button>
-                  </span>
-                  {isTargetMenuOpen ? (
-                    <div className="profile-target-menu" role="menu" aria-label="Profile targets">
-                      {targets.map((target) => {
-                        const targetIcon = targetIconFor(target);
-                        return (
-                          <button
-                            className={target.id === selectedTargetId ? "is-selected" : ""}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={target.id === selectedTargetId}
-                            key={target.id}
-                            onClick={() => selectTarget(target.id)}
-                          >
-                            {targetIcon.assetUrl ? (
-                              <img
-                                className={`profile-target-logo profile-target-logo--${targetIcon.flavor}`}
-                                src={targetIcon.assetUrl}
-                                alt=""
-                              />
-                            ) : (
-                              <Monitor size={16} strokeWidth={2.2} aria-hidden="true" />
-                            )}
-                            <span>{target.name}</span>
-                            {target.id === selectedTargetId ? (
-                              <CheckCircle2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                  <span id="profile-apply-description" hidden>
-                    {applyDescription}
-                  </span>
-                </div>
                 <button
                   ref={profileActionsButtonRef}
                   className="icon-action"
@@ -1838,7 +1910,7 @@ export const App = () => {
                   <ReadinessIcon size={18} strokeWidth={2.3} />
                 </span>
                 <span className="profile-readiness-strip__copy">
-                  <strong>{readiness.label}</strong>
+                  <strong>{readinessTitle}</strong>
                   <span>{readiness.message}</span>
                 </span>
               </div>
@@ -1969,6 +2041,7 @@ export const App = () => {
                           </span>
                         </div>
                       </div>
+                      {profileApplyControl}
                     </header>
             <section className="profile-composer" aria-label="Profile composer">
               <header className="profile-composer__header">
@@ -2107,16 +2180,6 @@ export const App = () => {
                 />
               </ProfileComposerSection>
             </section>
-            <section className="profile-safety-strip" role="status" aria-label="Safe apply">
-              <span className="profile-safety-strip__icon" aria-hidden="true">
-                <ShieldCheck size={19} strokeWidth={2.25} />
-              </span>
-              <span>
-                <strong>Safe apply</strong>
-                <small>Preview, backup, and conflict checks are enabled.</small>
-              </span>
-              <CheckCircle2 size={22} strokeWidth={2.2} aria-hidden="true" />
-            </section>
             {rollbackPreview ? (
               <PreviewDialog
                 preview={rollbackPreview}
@@ -2145,9 +2208,12 @@ export const App = () => {
             ) : null}
                   </>
                 ) : (
-                  <div className="empty-state">
-                    <h2>No profile selected</h2>
-                    <p className="muted">Choose a profile or create one.</p>
+                  <div className="profile-empty-surface">
+                    <div className="empty-state">
+                      <h2>No profile selected</h2>
+                      <p className="muted">Choose a profile or create one.</p>
+                    </div>
+                    {profileApplyControl}
                   </div>
                 )}
               </div>
@@ -2267,7 +2333,7 @@ export const App = () => {
             rollbackPreview={rollbackPreview}
             rollbackError={rollbackError}
             busy={busy}
-            onRefresh={() => { void refreshProfiles(); }}
+            onRefresh={refreshTargets}
             onManageTarget={(targetId) => {
               selectTarget(targetId);
               setActiveWorkspace("profiles");
@@ -2325,21 +2391,27 @@ export const App = () => {
                     <option value="agents">~/.agents/skills</option>
                   </select>
                 </label>
-                <label>
+                <div className="settings-toggle-field">
                   <span>Auto-check</span>
-                  <select
+                  <button
+                    className={`settings-switch${skillSettings.skillAutoCheckEnabled ? " is-on" : ""}`}
+                    type="button"
+                    role="switch"
+                    aria-checked={skillSettings.skillAutoCheckEnabled}
                     aria-label="Skill auto update check"
-                    value={skillSettings.skillAutoCheckEnabled ? "enabled" : "disabled"}
-                    onChange={(event) =>
+                    disabled={busy}
+                    onClick={() =>
                       updateSkillSettings({
-                        skillAutoCheckEnabled: event.currentTarget.value === "enabled"
+                        skillAutoCheckEnabled: !skillSettings.skillAutoCheckEnabled
                       })
                     }
                   >
-                    <option value="enabled">Enabled</option>
-                    <option value="disabled">Disabled</option>
-                  </select>
-                </label>
+                    <span className="settings-switch__track" aria-hidden="true">
+                      <span />
+                    </span>
+                    <strong>{skillSettings.skillAutoCheckEnabled ? "Enabled" : "Disabled"}</strong>
+                  </button>
+                </div>
                 <label>
                   <span>Check interval</span>
                   <input
@@ -2348,6 +2420,7 @@ export const App = () => {
                     max={1440}
                     step={5}
                     type="number"
+                    disabled={!skillSettings.skillAutoCheckEnabled || busy}
                     value={skillSettings.skillAutoCheckIntervalMinutes}
                     onChange={(event) =>
                       updateSkillSettings({
@@ -2391,6 +2464,9 @@ export const App = () => {
                   >
                     Sign in with GitHub
                   </button>
+                  {!githubClientIdDraft.trim() ? (
+                    <InfoTip label="GitHub sign-in needs the production OAuth Client ID or a local developer override." />
+                  ) : null}
                   {githubAuthStatus.state === "signed-in" ? (
                     <button disabled={busy} onClick={signOutGitHub} type="button">
                       Sign out

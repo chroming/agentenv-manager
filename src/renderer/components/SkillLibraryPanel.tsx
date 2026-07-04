@@ -527,23 +527,26 @@ export const SkillLibraryPanel = ({
             <option value="not-installed">Not installed</option>
           </select>
           <button
-            className="secondary-action"
+            className="secondary-action library-toolbar-action"
             type="button"
+            aria-label="Check updates"
+            title="Check skill updates"
             disabled={updateCheckStatus?.state === "checking"}
             onClick={onCheckUpdates}
           >
             <RefreshCw size={15} strokeWidth={2.2} />
-            {updateCheckStatus?.state === "checking" ? "Checking..." : "Check updates"}
+            <span>{updateCheckStatus?.state === "checking" ? "Checking..." : "Check updates"}</span>
           </button>
           <button
-            className="secondary-action"
+            className="secondary-action library-toolbar-action"
             type="button"
             aria-label="Update all skills"
+            title="Update all skills"
             disabled={updateableSkillIds.length === 0}
             onClick={() => onUpdateAllLibrarySkills(updateableSkillIds)}
           >
             <Sparkles size={15} strokeWidth={2.2} />
-            Update all
+            <span>Update all</span>
           </button>
         </div>
       </div>

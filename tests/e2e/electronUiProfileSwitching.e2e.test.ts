@@ -412,7 +412,9 @@ const selectProfile = async (page: Page, name: string) => {
 
 const selectTarget = async (page: Page, name: string) => {
   await page.getByRole("button", { name: "Select apply target" }).click();
+  const targetMenu = page.getByRole("menu", { name: "Profile targets" });
   await page.getByRole("menuitemradio", { name }).click();
+  await targetMenu.waitFor({ state: "hidden" });
 };
 
 type ComposerSectionName = "Instructions" | "Skills" | "MCP Servers" | "Advanced";
@@ -945,6 +947,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => codexCard.textContent()).toContain("Ready");
     await codexCard.getByRole("button", { name: "Show Codex diagnostics" }).click();
     await expect.poll(() => codexCard.textContent()).toContain(join(homeDir, ".codex"));
+
+    await page.getByRole("button", { name: "Refresh targets" }).click();
+    await expect.poll(() => page.getByRole("status").textContent()).toContain("Targets refreshed");
+    await page.getByRole("button", { name: "Dismiss message" }).click();
+    await page.getByText("Targets refreshed").waitFor({ state: "hidden" });
   }, 30_000);
 
   it("updates target cards after taking over OpenCode", async () => {
@@ -1407,6 +1414,57 @@ describe("Electron UI profile switching e2e", () => {
     expect(expandedMetrics.documentHeight).toBe(expandedMetrics.viewportHeight);
   }, 30_000);
 
+  it("keeps core management actions usable at the minimum supported viewport", async () => {
+    const { page } = await launchApp();
+    await page.setViewportSize({ width: 920, height: 620 });
+    await selectProfile(page, "UI OpenCode alpha");
+
+    const profileTitle = page.locator(".profile-hero__title");
+    const applyControl = page.locator(".profile-apply-control");
+    for (const locator of [
+      page.locator(".profile-page-header"),
+      page.locator(".profile-readiness-strip"),
+      page.locator(".profile-workbench"),
+      profileTitle,
+      applyControl
+    ]) {
+      await expectInViewport(page, locator);
+    }
+
+    const [titleBox, applyBox] = await Promise.all([
+      profileTitle.boundingBox(),
+      applyControl.boundingBox()
+    ]);
+    expect(titleBox).not.toBeNull();
+    expect(applyBox).not.toBeNull();
+    const titleOverlapsApply = !(
+      titleBox!.x + titleBox!.width <= applyBox!.x ||
+      applyBox!.x + applyBox!.width <= titleBox!.x ||
+      titleBox!.y + titleBox!.height <= applyBox!.y ||
+      applyBox!.y + applyBox!.height <= titleBox!.y
+    );
+    expect(titleOverlapsApply).toBe(false);
+
+    await selectTarget(page, "Codex");
+    const profileList = page.getByRole("complementary", { name: "Profile list" });
+    await profileList.getByRole("button", { name: /UI Codex alpha/ }).waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: "Targets" }).click();
+    for (const targetName of ["OpenCode", "Claude Code", "Codex"]) {
+      await expectInViewport(page, page.getByRole("article", { name: `Target ${targetName}` }));
+    }
+    await expectInViewport(page, page.getByRole("region", { name: "Recovery" }));
+
+    const dimensions = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      documentHeight: document.documentElement.scrollHeight,
+      viewportHeight: document.documentElement.clientHeight
+    }));
+    expect(dimensions.documentWidth).toBe(dimensions.viewportWidth);
+    expect(dimensions.documentHeight).toBe(dimensions.viewportHeight);
+  }, 30_000);
+
   it("keeps navigation order and workspace width stable across primary pages", async () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
@@ -1812,12 +1870,16 @@ describe("Electron UI profile switching e2e", () => {
     const { appDataRoot, page } = await launchApp();
 
     await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByLabel("Skill auto update check").selectOption("disabled");
-    await expect
-      .poll(() => page.getByLabel("Skill auto update check").inputValue())
-      .toBe("disabled");
-    await page.getByLabel("Skill auto update check").selectOption("enabled");
-    await page.getByLabel("Skill auto check interval minutes").fill("15");
+    const autoCheck = page.getByRole("switch", { name: "Skill auto update check" });
+    const interval = page.getByLabel("Skill auto check interval minutes");
+    await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("true");
+    await autoCheck.click();
+    await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("false");
+    await expect.poll(() => interval.isDisabled()).toBe(true);
+    await autoCheck.click();
+    await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("true");
+    await expect.poll(() => interval.isEnabled()).toBe(true);
+    await interval.fill("15");
     await expect
       .poll(async () =>
         JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8"))

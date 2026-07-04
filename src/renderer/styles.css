@@ -4484,6 +4484,28 @@ button svg,
   max-width: 34ch;
 }
 
+.profile-empty-surface {
+  align-items: start;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 132px;
+  padding: 18px;
+}
+
+.profile-empty-surface .empty-state {
+  align-content: center;
+  border: 0;
+  box-shadow: none;
+  justify-items: start;
+  min-height: 92px;
+  padding: 0;
+  text-align: left;
+}
+
 /* Profiles P0 composer */
 .app-shell--profiles .editor-panel {
   display: grid;
@@ -5255,9 +5277,9 @@ button svg,
 }
 
 .app-shell--profiles .profile-apply-control {
-  position: absolute;
-  right: 32px;
-  top: 278px;
+  align-self: start;
+  justify-self: end;
+  position: relative;
   z-index: var(--z-dropdown);
 }
 
@@ -5266,7 +5288,7 @@ button svg,
 }
 
 .profile-readiness-strip {
-  grid-template-columns: minmax(300px, 1.35fr) minmax(190px, 0.72fr) minmax(170px, 0.62fr) minmax(250px, 1fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(300px, 1fr);
   min-height: 104px;
 }
 
@@ -5398,20 +5420,20 @@ button svg,
 
 .profile-editor-surface {
   gap: 14px;
-  grid-template-rows: 204px minmax(0, 1fr) 84px;
+  grid-template-rows: 156px minmax(0, 1fr);
 }
 
 .profile-hero {
   align-content: center;
   gap: 20px;
-  grid-template-columns: 68px minmax(0, 1fr);
-  min-height: 204px;
-  padding: 24px 250px 24px 26px;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  min-height: 156px;
+  padding: 20px;
 }
 
 .profile-hero__icon {
-  height: 68px;
-  width: 68px;
+  height: 58px;
+  width: 58px;
 }
 
 .profile-hero__title h2 {
@@ -5503,48 +5525,6 @@ button svg,
   max-width: 150px;
 }
 
-.profile-safety-strip {
-  align-items: center;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  display: grid;
-  gap: 14px;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
-  height: 100%;
-  min-width: 0;
-  padding: 12px 18px;
-}
-
-.profile-safety-strip__icon {
-  align-items: center;
-  background: #f1f5f9;
-  border-radius: 8px;
-  color: #56657a;
-  display: inline-flex;
-  height: 38px;
-  justify-content: center;
-  width: 38px;
-}
-
-.profile-safety-strip > span:nth-child(2) {
-  display: grid;
-  gap: 4px;
-}
-
-.profile-safety-strip strong {
-  font-size: 13px;
-}
-
-.profile-safety-strip small {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.profile-safety-strip > svg {
-  color: var(--success);
-}
-
 .profile-composer:has(.profile-composer-section.is-expanded) .profile-composer__header {
   flex-basis: 52px;
 }
@@ -5568,13 +5548,8 @@ button svg,
 
   .app-shell--profiles .editor-panel {
     gap: 10px;
-    grid-template-rows: 48px 72px minmax(0, 1fr);
+    grid-template-rows: 48px 64px minmax(0, 1fr);
     padding: 14px 18px 18px;
-  }
-
-  .app-shell--profiles .profile-apply-control {
-    right: 34px;
-    top: 168px;
   }
 
   .profile-page-header {
@@ -5598,8 +5573,8 @@ button svg,
   }
 
   .profile-readiness-strip {
-    grid-template-columns: minmax(230px, 1.2fr) minmax(130px, 0.7fr) minmax(120px, 0.6fr) minmax(170px, 0.9fr);
-    min-height: 72px;
+    grid-template-columns: minmax(210px, 1fr) minmax(250px, 1fr);
+    min-height: 64px;
   }
 
   .profile-readiness-strip__state,
@@ -5623,7 +5598,7 @@ button svg,
 
   .profile-workbench {
     gap: 12px;
-    grid-template-columns: 292px minmax(0, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr);
   }
 
   .profile-index {
@@ -5653,14 +5628,14 @@ button svg,
 
   .profile-editor-surface {
     gap: 10px;
-    grid-template-rows: 112px minmax(0, 1fr) 56px;
+    grid-template-rows: 116px minmax(0, 1fr);
   }
 
   .profile-hero {
-    gap: 14px;
-    grid-template-columns: 48px minmax(0, 1fr);
-    min-height: 112px;
-    padding: 14px 210px 14px 16px;
+    gap: 12px;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    min-height: 116px;
+    padding: 12px 14px;
   }
 
   .profile-hero__icon {
@@ -5706,13 +5681,121 @@ button svg,
     display: none;
   }
 
-  .profile-safety-strip {
-    grid-template-columns: 34px minmax(0, 1fr) auto;
-    padding: 8px 12px;
+}
+
+@media (max-width: 1050px) {
+  .app-shell--profiles {
+    grid-template-columns: 196px minmax(0, 1fr);
   }
 
-  .profile-safety-strip__icon {
+  .app-shell--profiles .editor-panel {
+    padding: 12px 14px 14px;
+  }
+
+  .profile-page-heading p {
+    display: none;
+  }
+
+  .profile-page-actions {
+    gap: 6px;
+  }
+
+  .profile-page-actions .profile-new-button {
+    min-width: 116px;
+  }
+
+  .profile-readiness-strip__state,
+  .profile-readiness-strip__attention {
+    padding: 8px 10px;
+  }
+
+  .profile-readiness-strip__attention-icon {
+    display: none;
+  }
+
+  .profile-workbench {
+    gap: 10px;
+    grid-template-columns: 226px minmax(0, 1fr);
+  }
+
+  .profile-index {
+    padding: 8px;
+  }
+
+  .profile-row {
+    grid-template-columns: 34px minmax(0, 1fr);
+    min-height: 94px;
+    padding: 10px 8px;
+  }
+
+  .profile-row__icon {
     height: 32px;
     width: 32px;
+  }
+
+  .profile-row__content > small,
+  .profile-row__recent {
+    display: none;
+  }
+
+  .profile-row__stats {
+    font-size: 10px;
+    gap: 4px;
+  }
+
+  .profile-hero {
+    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    min-height: 140px;
+    padding: 11px 12px;
+  }
+
+  .profile-hero__icon {
+    height: 38px;
+    width: 38px;
+  }
+
+  .profile-hero .profile-description,
+  .profile-hero__meta {
+    display: none;
+  }
+
+  .profile-hero__title h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .profile-apply-control {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .profile-apply-split {
+    display: flex;
+    width: 100%;
+  }
+
+  .profile-apply-button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .profile-composer-section__summary,
+  .profile-composer-section__description {
+    display: none;
+  }
+
+  .profile-composer-section__trigger {
+    grid-template-columns: 38px minmax(0, 1fr) auto 18px;
+  }
+
+  .library-toolbar-action {
+    min-width: 38px;
+    padding: 0 10px;
+  }
+
+  .library-toolbar-action > span {
+    display: none;
   }
 }

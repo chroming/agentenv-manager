@@ -4,11 +4,8 @@ import {
   ChevronUp,
   Clock3,
   Monitor,
-  MonitorCheck,
   RefreshCw,
-  ShieldCheck,
-  TerminalSquare,
-  TriangleAlert
+  TerminalSquare
 } from "lucide-react";
 import { useState } from "react";
 import type {
@@ -29,7 +26,7 @@ interface TargetWorkspaceProps {
   rollbackPreview?: RollbackPreview;
   rollbackError?: string;
   busy: boolean;
-  onRefresh(): void;
+  onRefresh(): Promise<void>;
   onManageTarget(targetId: string): void;
   onPreviewRollback(backupId: string): void;
   onCancelRollback(): void;
@@ -68,15 +65,6 @@ export const TargetWorkspace = ({
 }: TargetWorkspaceProps) => {
   const [expandedTargetId, setExpandedTargetId] = useState<string>();
   const statesByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
-  const readyCount = targets.filter((target) => target.health.status === "ready").length;
-  const managedCount = targetStates.filter((state) => state.status === "managed").length;
-  const attentionCount = targets.filter((target) => {
-    const state = statesByTarget.get(target.id);
-    return (
-      target.health.status !== "ready" ||
-      Boolean(state && (state.warningCount > 0 || state.errorCount > 0))
-    );
-  }).length;
 
   return (
     <section className="target-page" aria-label="Targets">
@@ -88,19 +76,16 @@ export const TargetWorkspace = ({
           </h2>
           <p>Inspect local agent runtimes, management state, and recovery points.</p>
         </div>
-        <button className="secondary-action" type="button" disabled={busy} onClick={onRefresh}>
+        <button
+          className="secondary-action"
+          type="button"
+          disabled={busy}
+          onClick={() => { void onRefresh(); }}
+        >
           <RefreshCw size={15} strokeWidth={2.2} />
-          Refresh targets
+          {busy ? "Refreshing..." : "Refresh targets"}
         </button>
       </header>
-
-      <section className="target-summary" aria-label="Target summary">
-        <span><MonitorCheck size={17} /><strong>{readyCount}</strong> ready</span>
-        <span><ShieldCheck size={17} /><strong>{managedCount}</strong> managed</span>
-        <span className={attentionCount > 0 ? "is-warning" : ""}>
-          <TriangleAlert size={17} /><strong>{attentionCount}</strong> need attention
-        </span>
-      </section>
 
       <div className="target-list">
         {targets.length === 0 ? (

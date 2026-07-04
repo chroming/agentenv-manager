@@ -432,7 +432,10 @@ describe("App", () => {
     const composer = await screen.findByRole("region", { name: "Profile composer" });
     expect(within(composer).getByRole("heading", { name: "Profile Composer" })).toBeInTheDocument();
     expect(screen.getByText("Compose reusable environments and apply them safely to local agent targets.")).toBeInTheDocument();
-    expect(screen.getByRole("status", { name: "Safe apply" })).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "Safe apply" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
+      "Review before apply"
+    );
     expect(within(composer).getByRole("button", { name: "Skills" })).toHaveAttribute(
       "aria-expanded",
       "false"
@@ -761,6 +764,9 @@ describe("App", () => {
     await waitFor(() =>
       expect(screen.getByRole("article", { name: "Target OpenCode" })).toHaveTextContent("Missing")
     );
+    expect(await screen.findByRole("status")).toHaveTextContent("Targets refreshed");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss message" }));
+    expect(screen.queryByText("Targets refreshed")).not.toBeInTheDocument();
   });
 
   it("opens at most one composer section and allows all sections to collapse", async () => {
@@ -968,7 +974,7 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    const menuButton = screen.getByRole("button", { name: "Select apply target" });
+    let menuButton = screen.getByRole("button", { name: "Select apply target" });
     menuButton.focus();
     fireEvent.click(menuButton);
     let menu = screen.getByRole("menu", { name: "Profile targets" });
@@ -1006,6 +1012,7 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Codex Review" })).toBeInTheDocument();
     expect(api.readProfile).toHaveBeenCalledWith("codex-review");
+    menuButton = screen.getByRole("button", { name: "Select apply target" });
     fireEvent.click(menuButton);
     expect(
       within(screen.getByRole("menu", { name: "Profile targets" })).getByRole(
@@ -1246,8 +1253,8 @@ describe("App", () => {
     await openProfiles();
     let readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("OpenCode is ready to take over");
-    expect(readiness).toHaveTextContent("Preview required");
-    expect(readiness).toHaveTextContent("Automatic backup and conflict checks are enabled");
+    expect(readiness).toHaveTextContent("Review before apply");
+    expect(readiness).toHaveTextContent("Preview shows every replacement before a backup is created");
     let action = screen.getByRole("button", { name: "Take over OpenCode" });
     expect(action).toHaveAttribute("title", "Take over OpenCode");
     fireEvent.click(action);
@@ -1263,7 +1270,7 @@ describe("App", () => {
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("OpenCode is ready to preview and apply");
-    expect(readiness).toHaveTextContent("Protected apply");
+    expect(readiness).toHaveTextContent("Ready to review");
     action = screen.getByRole("button", { name: "Preview & apply to OpenCode" });
     expect(action).toHaveAttribute("title", "Preview & apply to OpenCode");
 
