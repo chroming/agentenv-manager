@@ -25,6 +25,16 @@ export default defineConfig({
     }
   },
   renderer: {
+    define: {
+      global: "globalThis"
+    },
+    optimizeDeps: {
+      esbuildOptions: {
+        define: {
+          global: "globalThis"
+        }
+      }
+    },
     plugins: [react()],
     build: {
       rollupOptions: {
