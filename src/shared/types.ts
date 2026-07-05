@@ -34,6 +34,7 @@ export interface AgentEnvApi {
   rollbackSkillCleanup(backupId: string): Promise<void>;
   checkSkillLibraryUpdates(): Promise<SkillUpdateInfo[]>;
   setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
+  setSkillUpdateCheckEnabled(input: SkillUpdateCheckPolicyInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
   updateLibrarySkill(id: string): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
@@ -80,6 +81,7 @@ export interface SkillLibraryEntry {
   path: string;
   sourceType: SkillSourceType;
   source?: string;
+  updateCheckEnabled?: boolean;
   remoteRef?: string;
   remoteRevision?: string;
   contentHash: string;
@@ -105,6 +107,11 @@ export interface SkillUpdateSourceInput {
   id: string;
   sourceType: SkillSourceType;
   source: string;
+}
+
+export interface SkillUpdateCheckPolicyInput {
+  id: string;
+  enabled: boolean;
 }
 
 export interface ManageTargetSkillInput {

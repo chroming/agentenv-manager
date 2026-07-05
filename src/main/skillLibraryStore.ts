@@ -14,6 +14,7 @@ import type {
   SkillLibraryEntry,
   SkillSourceType,
   SkillUpdateInfo,
+  SkillUpdateCheckPolicyInput,
   SkillUpdatePlan,
   SkillUpdateSourceInput,
   TargetPaths,
@@ -31,6 +32,7 @@ interface SkillMetadataFile {
   remoteRef?: string;
   remotePath?: string;
   remoteRevision?: string;
+  updateCheckEnabled?: boolean;
   contentHash?: string;
   updatedAt?: string;
 }
@@ -81,6 +83,7 @@ export interface SkillLibraryStore {
   rollbackSkillCleanup(backupId: string): Promise<void>;
   checkUpdates(): Promise<SkillUpdateInfo[]>;
   setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
+  setUpdateCheckEnabled(input: SkillUpdateCheckPolicyInput): Promise<SkillLibraryEntry>;
   previewUpdate(id: string): Promise<SkillUpdatePlan>;
   updateSkill(id: string): Promise<SkillLibraryEntry>;
 }
@@ -510,6 +513,8 @@ export const createSkillLibraryStore = (
       path: skillDir,
       sourceType: metadata.sourceType ?? "local",
       source: metadata.source,
+      updateCheckEnabled:
+        metadata.updateCheckEnabled ?? metadata.sourceType === "github",
       remoteRef: metadata.remoteRef,
       remoteRevision: metadata.remoteRevision,
       contentHash: metadata.contentHash ?? contentHash,
@@ -524,19 +529,30 @@ export const createSkillLibraryStore = (
     skillDir: string,
     metadata: Pick<
       SkillMetadataFile,
-      "sourceType" | "source" | "remoteRef" | "remotePath" | "remoteRevision"
+      | "sourceType"
+      | "source"
+      | "remoteRef"
+      | "remotePath"
+      | "remoteRevision"
+      | "updateCheckEnabled"
     >
   ) => {
+    const current = await readLibraryMetadata(skillDir);
+    const sourceType = metadata.sourceType ?? "local";
     const contentHash = await computeContentHash(skillDir);
     await writeFile(
       join(skillDir, ".agentenv-skill.json"),
       `${JSON.stringify(
         {
-          sourceType: metadata.sourceType ?? "local",
+          sourceType,
           source: metadata.source,
           remoteRef: metadata.remoteRef,
           remotePath: metadata.remotePath,
           remoteRevision: metadata.remoteRevision,
+          updateCheckEnabled:
+            metadata.updateCheckEnabled ??
+            current.updateCheckEnabled ??
+            sourceType === "github",
           contentHash,
           updatedAt: new Date().toISOString()
         },
@@ -722,10 +738,11 @@ export const createSkillLibraryStore = (
       throw new Error(`Library skill already exists: ${safeId}`);
     }
     await removeAndCopy(sourcePath, targetDir);
-    await writeMetadata(
-      targetDir,
-      sourceType === "local" ? { sourceType: "local" } : { sourceType, source: sourcePath }
-    );
+    await writeMetadata(targetDir, {
+      sourceType,
+      source: sourcePath,
+      updateCheckEnabled: false
+    });
     return entryFor(safeId, targetDir);
   };
 
@@ -884,7 +901,8 @@ export const createSkillLibraryStore = (
         source: source.sourceUrl,
         remoteRef: source.ref,
         remotePath: source.remotePath,
-        remoteRevision: revision
+        remoteRevision: revision,
+        updateCheckEnabled: true
       });
       return entryFor(safeId, targetDir);
     } finally {
@@ -1061,7 +1079,9 @@ export const createSkillLibraryStore = (
   const checkUpdates = async (): Promise<SkillUpdateInfo[]> => {
     const skills = await listSkills();
     const updates: SkillUpdateInfo[] = [];
-    for (const skill of skills.filter((item) => Boolean(item.source))) {
+    for (const skill of skills.filter(
+      (item) => item.updateCheckEnabled === true && Boolean(item.source)
+    )) {
       const metadata = await readLibraryMetadata(skill.path);
       if (!metadata.source) {
         updates.push({
@@ -1127,11 +1147,14 @@ export const createSkillLibraryStore = (
     }
     if (sourceType === "github") {
       const githubSource = parseGitHubSkillUrl(source);
+      const metadata = await readLibraryMetadata(targetDir);
       await writeMetadata(targetDir, {
         sourceType: "github",
         source: githubSource.sourceUrl,
         remoteRef: githubSource.ref,
-        remotePath: githubSource.remotePath
+        remotePath: githubSource.remotePath,
+        updateCheckEnabled:
+          metadata.updateCheckEnabled ?? metadata.sourceType === "github"
       });
       return entryFor(safeId, targetDir);
     }
@@ -1141,7 +1164,45 @@ export const createSkillLibraryStore = (
     if (!(await pathExists(join(source, "SKILL.md")))) {
       throw new Error(`Skill source is missing SKILL.md: ${source}`);
     }
-    await writeMetadata(targetDir, { sourceType: "local", source });
+    const metadata = await readLibraryMetadata(targetDir);
+    await writeMetadata(targetDir, {
+      sourceType: "local",
+      source,
+      updateCheckEnabled: metadata.updateCheckEnabled ?? metadata.sourceType === "github"
+    });
+    return entryFor(safeId, targetDir);
+  };
+
+  const setUpdateCheckEnabled = async ({
+    id,
+    enabled
+  }: SkillUpdateCheckPolicyInput): Promise<SkillLibraryEntry> => {
+    const safeId = SafeIdSchema.parse(id);
+    const targetDir = join(await libraryDir(), safeId);
+    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
+      throw new Error(`Library skill does not exist: ${safeId}`);
+    }
+    const metadata = await readLibraryMetadata(targetDir);
+    const sourceType = metadata.sourceType ?? "local";
+    if (enabled) {
+      if (!metadata.source) {
+        throw new Error(`Add an update source before enabling checks for ${safeId}`);
+      }
+      if (sourceType === "local" && !(await pathExists(join(metadata.source, "SKILL.md")))) {
+        throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
+      }
+      if (sourceType === "github") {
+        parseGitHubSkillUrl(metadata.source);
+      }
+    }
+    await writeMetadata(targetDir, {
+      sourceType,
+      source: metadata.source,
+      remoteRef: metadata.remoteRef,
+      remotePath: metadata.remotePath,
+      remoteRevision: metadata.remoteRevision,
+      updateCheckEnabled: enabled
+    });
     return entryFor(safeId, targetDir);
   };
 
@@ -1153,6 +1214,18 @@ export const createSkillLibraryStore = (
     }
     const skill = await entryFor(safeId, targetDir);
     const metadata = await readLibraryMetadata(targetDir);
+    if (!skill.updateCheckEnabled) {
+      return {
+        id: skill.id,
+        name: skill.name,
+        sourceType: skill.sourceType,
+        source: metadata.source,
+        currentRevision: metadata.remoteRevision ?? metadata.contentHash,
+        updateAvailable: false,
+        changes: [],
+        errors: ["Update checks are disabled for this skill"]
+      };
+    }
     if (!metadata.source) {
       return {
         id: skill.id,
@@ -1225,6 +1298,9 @@ export const createSkillLibraryStore = (
     const safeId = SafeIdSchema.parse(id);
     const targetDir = join(await libraryDir(), safeId);
     const metadata = await readLibraryMetadata(targetDir);
+    if (!(metadata.updateCheckEnabled ?? metadata.sourceType === "github")) {
+      throw new Error(`Update checks are disabled for ${safeId}`);
+    }
     if (metadata.sourceType === "github" && metadata.source) {
       const source = parseGitHubSkillUrl(metadata.source);
       const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-"));
@@ -1239,7 +1315,8 @@ export const createSkillLibraryStore = (
           source: metadata.source,
           remoteRef: source.ref,
           remotePath: source.remotePath,
-          remoteRevision: revision
+          remoteRevision: revision,
+          updateCheckEnabled: true
         });
         return entryFor(safeId, targetDir);
       } finally {
@@ -1253,7 +1330,11 @@ export const createSkillLibraryStore = (
       throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
     }
     await removeAndCopy(metadata.source, targetDir);
-    await writeMetadata(targetDir, { sourceType: "local", source: metadata.source });
+    await writeMetadata(targetDir, {
+      sourceType: "local",
+      source: metadata.source,
+      updateCheckEnabled: true
+    });
     return entryFor(safeId, targetDir);
   };
 
@@ -1273,6 +1354,7 @@ export const createSkillLibraryStore = (
     rollbackSkillCleanup,
     checkUpdates,
     setUpdateSource,
+    setUpdateCheckEnabled,
     previewUpdate,
     updateSkill
   };

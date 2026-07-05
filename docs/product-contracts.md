@@ -405,9 +405,13 @@ Status: Apply and cleanup rollback plus stale rollback conflict handling are `Im
 
 - Import from a local folder copies canonical content into the Library.
 - Normal use MUST continue if the original folder is later deleted.
-- The original local path is provenance, not an automatic update source.
+- The original local path is retained as provenance, but local imports default to update checks off.
 - A user MAY explicitly track a stable local folder as an update source.
 - GitHub import MUST store repository, ref, directory, and resolved revision.
+- GitHub imports default to update checks on.
+- Every Skill has an independent update-check policy. Disabling it excludes that Skill from manual, startup, and scheduled checks without reading its local source or contacting GitHub.
+- The global auto-check setting controls scheduling only; it never overrides a disabled per-Skill policy.
+- Legacy metadata without an explicit policy defaults to off for local sources and on for GitHub sources.
 - Import validates `SKILL.md` and rejects unsafe or ambiguous directory layouts.
 
 ### 16.2 Scan And Cleanup
@@ -603,6 +607,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 
 - Local import survives deletion of original folder.
 - GitHub import, rate limit, sign-in remediation, update check, Preview, and update.
+- Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
 - Update marks affected deployments pending without deploying.
 - Duplicate, conflict, ignored, linked, copied, and stale-copy states.
 - Referenced resource deletion is blocked.
@@ -647,12 +652,13 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-14 against the current `main` tree at the time of this snapshot.
 
-- `278` automated tests passed across `38` test files; the `62`-test E2E suite covers native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `279` automated tests passed across `38` test files; the `62`-test E2E suite covers native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
 - Library deletion isolates the selected Skill from invalid neighboring content, and global feedback provides a non-blocking copy action.
+- Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
 - Production dependency audit reported zero known vulnerabilities.
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
 - Signed and notarized distribution verification remains outstanding; the local packaged primary-workflow smoke uses an unsigned `.app`.

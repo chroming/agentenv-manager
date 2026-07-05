@@ -55,6 +55,7 @@ import type {
   SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillLibraryEntry,
+  SkillUpdateCheckPolicyInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdateSourceInput,
@@ -135,7 +136,7 @@ const summarizeSkillUpdateChecks = (skillUpdateItems: SkillUpdateInfo[]): SkillU
   if (skillUpdateItems.length === 0) {
     return {
       state: "info",
-      message: "No tracked update sources"
+      message: "No skills have update checks enabled"
     };
   }
 
@@ -1854,6 +1855,24 @@ export const App = () => {
     }
   };
 
+  const setSkillUpdateCheckEnabled = async (input: SkillUpdateCheckPolicyInput) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.setSkillUpdateCheckEnabled(input);
+      setSelectedSkillUpdatePlan(undefined);
+      await refreshProfiles();
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: `Update checks ${input.enabled ? "enabled" : "disabled"} for ${input.id}`
+      });
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const previewLibrarySkillUpdate = async (id: string) => {
     setBusy(true);
     setError(undefined);
@@ -2197,7 +2216,9 @@ export const App = () => {
               : `Cleaned up ${skillCleanupResult.libraryId}`,
           message:
             skillCleanupResult.operation === "remove"
-              ? `${plural(skillCleanupResult.managedLocations.length, "managed install")} removed with the library skill.`
+              ? skillCleanupResult.managedLocations.length === 0
+                ? "Removed from the Library. No Target installs were affected."
+                : `Removed from the Library and ${plural(skillCleanupResult.managedLocations.length, "managed Target install")}.`
               : `${plural(skillCleanupResult.managedLocations.length, "location")} now use the managed library copy.`,
           action: {
             label: skillCleanupResult.operation === "remove" ? "Undo removal" : "Undo cleanup",
@@ -2454,6 +2475,7 @@ export const App = () => {
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={(input) => void consolidateSkillGroup(input)}
                 onSetUpdateSource={setSkillUpdateSource}
+                onSetUpdateCheckEnabled={(input) => void setSkillUpdateCheckEnabled(input)}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onCloseUpdatePreview={() => setSelectedSkillUpdatePlan(undefined)}
                 onUpdateLibrarySkill={updateLibrarySkill}
@@ -3198,6 +3220,9 @@ export const App = () => {
                     </span>
                     <strong>{skillSettings.skillAutoCheckEnabled ? "Enabled" : "Disabled"}</strong>
                   </button>
+                  <small className="settings-field-note">
+                    Checks only skills that have per-skill update checks enabled.
+                  </small>
                 </div>
                 <label>
                   <span>Check interval</span>

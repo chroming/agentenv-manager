@@ -333,6 +333,17 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       contentHash: "hash",
       updatedAt: "2026-07-02T00:00:00.000Z"
     })),
+    setSkillUpdateCheckEnabled: vi.fn().mockImplementation(async (input) => ({
+      id: input.id,
+      name: input.id,
+      description: "",
+      path: "/tmp/skill",
+      sourceType: "local",
+      source: "/tmp/skill",
+      updateCheckEnabled: input.enabled,
+      contentHash: "hash",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    })),
     previewLibrarySkillUpdate: vi.fn().mockResolvedValue({
       id: "skill",
       name: "skill",
@@ -633,6 +644,7 @@ describe("App", () => {
           path: "/tmp/skills-library/local-reviewer",
           sourceType: "local",
           source: "/tmp/source/local-reviewer",
+          updateCheckEnabled: true,
           contentHash: "hash",
           updatedAt: "2026-07-02T00:00:00.000Z"
         }

@@ -24,6 +24,7 @@ describe("SkillLibraryPanel", () => {
     const onCheckUpdates = vi.fn();
     const onOpenSource = vi.fn();
     const onSetUpdateSource = vi.fn();
+    const onSetUpdateCheckEnabled = vi.fn();
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn();
     const onIgnoreSkillGroup = vi.fn();
@@ -54,6 +55,7 @@ describe("SkillLibraryPanel", () => {
             path: "/tmp/skills-library/shared-reviewer",
             sourceType: "local",
             source: "/tmp/source/shared-reviewer",
+            updateCheckEnabled: true,
             contentHash: "abc123",
             updatedAt: "2026-07-02T00:00:00.000Z"
           },
@@ -64,6 +66,7 @@ describe("SkillLibraryPanel", () => {
             path: "/tmp/skills-library/github-reviewer",
             sourceType: "github",
             source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+            updateCheckEnabled: true,
             remoteRef: "main",
             remoteRevision: "revision-1",
             contentHash: "def456",
@@ -75,6 +78,7 @@ describe("SkillLibraryPanel", () => {
             description: "Copied into the library",
             path: "/tmp/skills-library/copied-local",
             sourceType: "local",
+            updateCheckEnabled: false,
             contentHash: "ghi789",
             updatedAt: "2026-07-02T00:00:00.000Z"
           }
@@ -210,6 +214,7 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={onCheckUpdates}
         onOpenSource={onOpenSource}
         onSetUpdateSource={onSetUpdateSource}
+        onSetUpdateCheckEnabled={onSetUpdateCheckEnabled}
         onManageTargetSkill={onManageTargetSkill}
         onConsolidateSkillGroup={onConsolidateSkillGroup}
         onIgnoreSkillGroup={onIgnoreSkillGroup}
@@ -269,7 +274,7 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("/tmp/source/shared-reviewer");
     fireEvent.blur(localSource);
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
-    expect(copiedLocalRow).toHaveTextContent("Library only");
+    expect(copiedLocalRow).toHaveTextContent("Checks off");
     expect(copiedLocalRow).toHaveTextContent("Needs sync");
     expect(within(copiedLocalRow).queryByRole("button", { name: /Check update/ })).toBeNull();
     fireEvent.click(
@@ -308,6 +313,17 @@ describe("SkillLibraryPanel", () => {
       id: "shared-reviewer",
       sourceType: "local",
       source: "/tmp/source/shared-reviewer"
+    });
+
+    fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
+    const updateCheckSwitch = screen.getByRole("switch", {
+      name: "Update checks for shared-reviewer"
+    });
+    expect(updateCheckSwitch).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(updateCheckSwitch);
+    expect(onSetUpdateCheckEnabled).toHaveBeenCalledWith({
+      id: "shared-reviewer",
+      enabled: false
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Review update shared-reviewer" }));

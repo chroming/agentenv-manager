@@ -199,6 +199,7 @@ const writeLibrarySkill = async (appDataRoot: string) => {
   await writeJson(join(libraryDir, ".agentenv-skill.json"), {
     sourceType: "local",
     source: sourceDir,
+    updateCheckEnabled: true,
     contentHash: "seed",
     updatedAt: "2026-07-02T00:00:00.000Z"
   });
@@ -227,6 +228,7 @@ const addOpenCodeAlphaLibrarySkills = async (appDataRoot: string, count: number)
     await writeJson(join(skillDir, ".agentenv-skill.json"), {
       sourceType: "local",
       source: sourceDir,
+      updateCheckEnabled: true,
       contentHash: "seed",
       updatedAt: "2026-07-02T00:00:00.000Z"
     });
@@ -268,6 +270,7 @@ const writeTrackedLibrarySkill = async (
   await writeJson(join(libraryDir, ".agentenv-skill.json"), {
     sourceType: "local",
     source: sourceDir,
+    updateCheckEnabled: true,
     contentHash: "seed",
     updatedAt: "2026-07-02T00:00:00.000Z"
   });
@@ -555,6 +558,11 @@ describe("Electron UI profile switching e2e", () => {
     const editorPanel = page.getByRole("region", { name: "Library workspace" });
 
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+    await expect
+      .poll(() =>
+        editorPanel.evaluate((element) => element.scrollHeight - element.clientHeight)
+      )
+      .toBeGreaterThan(100);
     await editorPanel.evaluate((element) => {
       element.scrollTop = Math.min(220, element.scrollHeight - element.clientHeight);
     });
@@ -568,6 +576,11 @@ describe("Electron UI profile switching e2e", () => {
       .selectOption("not-installed");
     await page.getByRole("tab", { name: /Updates/ }).click();
     await expect.poll(() => editorPanel.evaluate((element) => element.scrollTop)).toBe(0);
+    await expect
+      .poll(() =>
+        editorPanel.evaluate((element) => element.scrollHeight - element.clientHeight)
+      )
+      .toBeGreaterThan(100);
     await editorPanel.evaluate((element) => {
       element.scrollTop = Math.min(280, element.scrollHeight - element.clientHeight);
     });
@@ -1420,6 +1433,9 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByRole("status").textContent())
       .toContain("Removed shared-reviewer");
+    await expect
+      .poll(() => page.getByRole("status").textContent())
+      .toContain("No Target installs were affected");
     await expect(fileExists(join(appDataRoot, "skills-library", "shared-reviewer"))).resolves.toBe(false);
     await expect(fileExists(join(cyclicSkill, "SKILL.md"))).resolves.toBe(true);
   }, 30_000);
@@ -2146,6 +2162,21 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(appDataRoot, "skills-library", "path-reviewer", "SKILL.md"), "utf8")
     ).resolves.toContain("Use the selected folder import flow.");
+    const importedMetadata = await readJson<{
+      source?: string;
+      updateCheckEnabled?: boolean;
+    }>(join(appDataRoot, "skills-library", "path-reviewer", ".agentenv-skill.json"));
+    expect(importedMetadata).toMatchObject({
+      source: localSkillDir,
+      updateCheckEnabled: false
+    });
+    await rm(localSkillDir, { recursive: true, force: true });
+    const importedRow = page.getByRole("group", { name: "Library item path-reviewer" });
+    await expect.poll(() => importedRow.textContent()).toContain("Checks off");
+    await page.getByRole("button", { name: "Close library tool" }).click();
+    await page.getByRole("region", { name: "GitHub skill import" }).waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "Check updates" }).click();
+    await expect.poll(() => importedRow.textContent()).not.toContain("Check failed");
   }, 30_000);
 
   it("adds and removes reusable MCP servers through the rendered MCP library", async () => {
@@ -2738,7 +2769,33 @@ describe("Electron UI profile switching e2e", () => {
       )
     ).resolves.toBe("# Guide v1\n");
 
+    await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
+    const updateCheckSwitch = page.getByRole("switch", {
+      name: "Update checks for github-reviewer"
+    });
+    await expect.poll(() => updateCheckSwitch.getAttribute("aria-checked")).toBe("true");
+    await updateCheckSwitch.click();
+    await expect.poll(() => githubRow.textContent()).toContain("Checks off");
+    await expect
+      .poll(async () =>
+        (await readJson<{ updateCheckEnabled?: boolean }>(
+          join(appDataRoot, "skills-library", "github-reviewer", ".agentenv-skill.json")
+        )).updateCheckEnabled
+      )
+      .toBe(false);
+
     await writeGitHubFixtureSkill(githubFixtureRoot, "v2");
+    await page.getByRole("button", { name: "Check updates" }).click();
+    await expect.poll(() => githubRow.textContent()).not.toContain("Update available");
+    await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
+    await page.getByRole("switch", { name: "Update checks for github-reviewer" }).click();
+    await expect
+      .poll(async () =>
+        (await readJson<{ updateCheckEnabled?: boolean }>(
+          join(appDataRoot, "skills-library", "github-reviewer", ".agentenv-skill.json")
+        )).updateCheckEnabled
+      )
+      .toBe(true);
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item github-reviewer" })

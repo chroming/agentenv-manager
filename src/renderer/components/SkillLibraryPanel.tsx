@@ -12,6 +12,7 @@ import {
 import {
   BookOpenText,
   CheckCircle2,
+  CirclePause,
   ExternalLink,
   Folder,
   GitBranch,
@@ -38,6 +39,7 @@ import type {
   SkillInventoryEntry,
   SkillLibraryEntry,
   SkillSourceType,
+  SkillUpdateCheckPolicyInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdateSourceInput
@@ -70,6 +72,7 @@ interface SkillLibraryPanelProps {
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): void;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
+  onSetUpdateCheckEnabled(input: SkillUpdateCheckPolicyInput): void;
   onPreviewLibrarySkillUpdate(id: string): void;
   onCloseUpdatePreview(): void;
   onUpdateLibrarySkill(id: string): void;
@@ -254,6 +257,7 @@ export const SkillLibraryPanel = ({
   onManageTargetSkill,
   onConsolidateSkillGroup,
   onSetUpdateSource,
+  onSetUpdateCheckEnabled,
   onPreviewLibrarySkillUpdate,
   onCloseUpdatePreview,
   onUpdateLibrarySkill,
@@ -683,17 +687,21 @@ export const SkillLibraryPanel = ({
               source: skill.source ?? ""
             };
             const hasUpdateSource = Boolean(skill.source);
-            const updateLabel = updateInfo?.error
-              ? "Check failed"
-              : updateInfo?.updateAvailable
-                ? "Update available"
-                : updateInfo
-                  ? "Source current"
-                  : hasUpdateSource
-                    ? "Not checked"
-                    : "Library only";
-            const hasUpdate = Boolean(updateInfo?.updateAvailable);
-            const hasError = Boolean(updateInfo?.error);
+            const updateCheckEnabled =
+              skill.updateCheckEnabled ?? skill.sourceType === "github";
+            const updateLabel = !updateCheckEnabled
+              ? "Checks off"
+              : updateInfo?.error
+                ? "Check failed"
+                : updateInfo?.updateAvailable
+                  ? "Update available"
+                  : updateInfo
+                    ? "Source current"
+                    : hasUpdateSource
+                      ? "Not checked"
+                      : "Library only";
+            const hasUpdate = updateCheckEnabled && Boolean(updateInfo?.updateAvailable);
+            const hasError = updateCheckEnabled && Boolean(updateInfo?.error);
             const rowAction = hasUpdate
               ? "update"
               : staleCopies.length > 0
@@ -761,7 +769,9 @@ export const SkillLibraryPanel = ({
                       hasError ? " is-error" : ""
                     }`}
                   >
-                    {hasError ? (
+                    {!updateCheckEnabled ? (
+                      <CirclePause size={13} strokeWidth={2.2} />
+                    ) : hasError ? (
                       <TriangleAlert size={13} strokeWidth={2.2} />
                     ) : hasUpdate ? (
                       <Sparkles size={13} strokeWidth={2.2} />
@@ -878,7 +888,7 @@ export const SkillLibraryPanel = ({
                           aria-label={`Actions for ${skill.id}`}
                           style={{ left: openAction.left, top: openAction.top }}
                         >
-                          {hasUpdateSource ? (
+                          {hasUpdateSource && updateCheckEnabled ? (
                             <button
                               className="row-action-item"
                               type="button"
@@ -907,6 +917,36 @@ export const SkillLibraryPanel = ({
                               <Settings2 size={14} strokeWidth={2.2} />
                               Update source
                               <InfoTip label="Use a local skill folder or a GitHub tree directory. The library stores the source path, not duplicated skill copies per profile." />
+                            </div>
+                            <div className="row-action-update-policy">
+                              <span>
+                                <strong>Check for updates</strong>
+                                <small>
+                                  {hasUpdateSource
+                                    ? "Include this skill in manual and automatic checks."
+                                    : "Add an update source before enabling checks."}
+                                </small>
+                              </span>
+                              <button
+                                aria-checked={updateCheckEnabled}
+                                aria-label={`Update checks for ${skill.id}`}
+                                className={`settings-switch${updateCheckEnabled ? " is-on" : ""}`}
+                                disabled={!hasUpdateSource}
+                                role="switch"
+                                type="button"
+                                onClick={() => {
+                                  onSetUpdateCheckEnabled({
+                                    id: skill.id,
+                                    enabled: !updateCheckEnabled
+                                  });
+                                  setOpenAction(undefined);
+                                }}
+                              >
+                                <span className="settings-switch__track" aria-hidden="true">
+                                  <span />
+                                </span>
+                                <strong>{updateCheckEnabled ? "On" : "Off"}</strong>
+                              </button>
                             </div>
                             <div className="library-source-editor row-action-source-editor">
                               <select

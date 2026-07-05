@@ -4216,6 +4216,38 @@ button svg,
   padding-top: 10px;
 }
 
+.row-action-update-policy {
+  align-items: center;
+  border-top: 1px solid #eef2f7;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 8px;
+  padding-top: 10px;
+}
+
+.row-action-update-policy > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.row-action-update-policy > span strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.row-action-update-policy > span small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.row-action-update-policy .settings-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .row-action-source-editor .secondary-action {
   grid-column: 1 / -1;
   justify-self: stretch;

@@ -29,6 +29,8 @@ const api: AgentEnvApi = {
   rollbackSkillCleanup: (backupId) => ipcRenderer.invoke("skills:rollback-cleanup", backupId),
   checkSkillLibraryUpdates: () => ipcRenderer.invoke("skills:check-updates"),
   setSkillUpdateSource: (input) => ipcRenderer.invoke("skills:set-update-source", input),
+  setSkillUpdateCheckEnabled: (input) =>
+    ipcRenderer.invoke("skills:set-update-check-enabled", input),
   previewLibrarySkillUpdate: (id) => ipcRenderer.invoke("skills:preview-update", id),
   updateLibrarySkill: (id) => ipcRenderer.invoke("skills:update-library", id),
   readSettings: () => ipcRenderer.invoke("settings:read"),
