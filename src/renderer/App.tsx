@@ -1675,11 +1675,9 @@ export const App = () => {
     try {
       const { skillUpdateItems } = await refreshProfiles();
       setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(skillUpdateItems));
-      const rateLimitError = skillUpdateItems.find(
-        (item) => item.error && isGitHubRateLimitError(item.error)
-      )?.error;
-      if (rateLimitError && githubAuthStatus.state !== "signed-in") {
-        setError(rateLimitError);
+      const checkError = skillUpdateItems.find((item) => item.error)?.error;
+      if (checkError) {
+        setError(checkError);
       }
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
@@ -2154,7 +2152,11 @@ export const App = () => {
   const appFeedback: AppFeedbackMessage | undefined = error
     ? {
         kind: "error",
-        title: showGitHubRecovery ? "GitHub request limited" : "Action failed",
+        title: showGitHubRecovery
+          ? "GitHub request limited"
+          : skillUpdateCheckStatus?.state === "error"
+            ? skillUpdateCheckStatus.message
+            : "Action failed",
         message: showGitHubRecovery
           ? "Anonymous GitHub requests are limited. Connect your account and try again."
           : error,

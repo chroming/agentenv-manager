@@ -8,6 +8,7 @@ import {
   readFile,
   readdir,
   rm,
+  stat,
   writeFile
 } from "node:fs/promises";
 import { delimiter, join } from "node:path";
@@ -404,7 +405,10 @@ const launchApp = async (
 };
 
 const selectProfile = async (page: Page, name: string) => {
-  await page.getByRole("button", { name: "Profiles" }).click();
+  await page
+    .getByRole("complementary", { name: "Global navigation" })
+    .getByRole("button", { name: "Profiles", exact: true })
+    .click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: new RegExp(name) }).click();
   await page.getByRole("heading", { name }).waitFor({ state: "visible" });
@@ -990,6 +994,41 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByText("Targets refreshed").waitFor({ state: "hidden", timeout: 7000 });
   }, 30_000);
 
+  it("shows a missing Target after its command is no longer detected", async () => {
+    const { app: electronApp, opencodeDir, page } = await launchApp();
+    const originalInstructions = await readFile(join(opencodeDir, "AGENTS.md"), "utf8");
+    const targets = await page.evaluate(() => window.agentEnv.listTargets());
+    await electronApp.evaluate(({ ipcMain }, currentTargets) => {
+      ipcMain.removeHandler("targets:list");
+      ipcMain.handle("targets:list", () =>
+        currentTargets.map((target) =>
+          target.id === "opencode"
+            ? {
+                ...target,
+                health: {
+                  ...target.health,
+                  status: "missing",
+                  executableFound: false,
+                  executablePath: undefined,
+                  canWrite: false,
+                  summary: "opencode command was not found"
+                }
+              }
+            : target
+        )
+      );
+    }, targets);
+
+    await page.getByRole("button", { name: "Targets", exact: true }).click();
+    await page.getByRole("button", { name: "Refresh targets" }).click();
+    const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
+    await expect.poll(() => openCodeCard.textContent()).toContain("Missing");
+    await expect.poll(() => openCodeCard.textContent()).toContain("CommandMissing");
+    await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toBe(
+      originalInstructions
+    );
+  }, 30_000);
+
   it("updates target cards after taking over OpenCode", async () => {
     const { page } = await launchApp();
 
@@ -1001,6 +1040,50 @@ describe("Electron UI profile switching e2e", () => {
     await openCodeCard.waitFor({ state: "visible" });
     await expect.poll(() => openCodeCard.textContent()).toContain("ManagementApplied");
     await expect.poll(() => openCodeCard.textContent()).toContain("Active profileUI OpenCode alpha");
+  }, 30_000);
+
+  it("blocks profile apply when the target paths are no longer writable", async () => {
+    const { opencodeDir, page } = await launchApp();
+    const instructionsPath = join(opencodeDir, "AGENTS.md");
+    const configPath = join(opencodeDir, "opencode.jsonc");
+    const originalInstructions = await readFile(instructionsPath, "utf8");
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await chmod(instructionsPath, 0o444);
+    await chmod(configPath, 0o444);
+    await chmod(opencodeDir, 0o555);
+    try {
+      await page.getByRole("button", { name: "Targets" }).click();
+      await page.getByRole("button", { name: "Refresh targets" }).click();
+      const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
+      await expect.poll(() => openCodeCard.textContent()).toContain("Needs setup");
+      await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
+      await expect.poll(() => openCodeCard.textContent()).toContain("Read-only");
+      await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
+    } finally {
+      await chmod(opencodeDir, 0o755);
+      await chmod(instructionsPath, 0o644);
+      await chmod(configPath, 0o644);
+    }
+  }, 30_000);
+
+  it("shows a missing Profile resource in preview without writing the Target", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
+    const instructionsPath = join(opencodeDir, "AGENTS.md");
+    const originalInstructions = await readFile(instructionsPath, "utf8");
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await rm(join(appDataRoot, "profiles", "ui-opencode-alpha", "skills", "alpha-skill"), {
+      recursive: true,
+      force: true
+    });
+    await applyActionButton(page, "OpenCode").click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await expect.poll(() => previewDialog.textContent()).toContain("Owned skill source does not exist");
+    await expect.poll(() => previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled())
+      .toBe(true);
+    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
   }, 30_000);
 
   it("creates, edits, duplicates, and deletes profiles through the rendered app", async () => {
@@ -1852,6 +1935,37 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => openCodeCard.textContent()).toContain("None");
   }, 30_000);
 
+  it("stops managing OpenCode by restoring the environment from before takeover", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
+    const instructionsPath = join(opencodeDir, "AGENTS.md");
+    const configPath = join(opencodeDir, "opencode.jsonc");
+    const originalInstructions = await readFile(instructionsPath, "utf8");
+    const originalConfig = await readFile(configPath, "utf8");
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    await expect(readFile(instructionsPath, "utf8")).resolves.not.toBe(originalInstructions);
+
+    await page.getByRole("button", { name: "Targets", exact: true }).click();
+    const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
+    await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
+    await openCodeCard.getByRole("button", { name: "Stop managing OpenCode" }).click();
+
+    const choiceDialog = page.getByRole("dialog", { name: "Stop managing Target" });
+    await choiceDialog.getByText("Restore environment before takeover", { exact: true }).click();
+    await choiceDialog.getByRole("button", { name: "Review changes" }).click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.getByRole("button", { name: "Restore and detach" }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+
+    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
+    await expect(readFile(configPath, "utf8")).resolves.toBe(originalConfig);
+    await expect(
+      fileExists(join(appDataRoot, "target-states", "opencode.json"))
+    ).resolves.toBe(false);
+    await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
+  }, 30_000);
+
   it("opens MCP creation from a clear page action", async () => {
     const { page } = await launchApp();
     await page.getByRole("button", { name: "MCP Servers", exact: true }).click();
@@ -2217,6 +2331,97 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, 30_000);
 
+  it("keeps successful skill updates when another bulk update source disappears", async () => {
+    const { appDataRoot, librarySkill, page } = await launchApp();
+    const missingSourceSkill = await writeTrackedLibrarySkill(
+      appDataRoot,
+      "missing-source-helper",
+      "Missing source helper v1.",
+      "Missing source helper v2."
+    );
+
+    await writeFile(
+      join(librarySkill.sourceDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Partial bulk v2.\n---\n\n# Shared Reviewer\n\nSuccessful partial update.\n",
+      "utf8"
+    );
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Check updates" }).click();
+    await page.getByRole("button", { name: "Update all skills" }).click();
+    const bulkUpdateDialog = page.getByRole("dialog", { name: "Review all skill updates" });
+    await bulkUpdateDialog.waitFor({ state: "visible" });
+
+    await rm(missingSourceSkill.sourceDir, { recursive: true, force: true });
+    await bulkUpdateDialog.getByRole("button", { name: "Apply 2 updates" }).click();
+
+    const feedback = page.getByRole("alert");
+    await expect.poll(() => feedback.textContent()).toContain("1 update failed");
+    await expect.poll(() => feedback.textContent()).toContain("source");
+    await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "Successful partial update."
+    );
+    await expect(
+      readFile(join(missingSourceSkill.libraryDir, "SKILL.md"), "utf8")
+    ).resolves.toContain("Missing source helper v1.");
+  }, 30_000);
+
+  it("backs up and restores AgentEnv data through system directory pickers", async () => {
+    const { appDataRoot, page } = await launchApp();
+    const backupRoot = join(root, "exported-backups");
+    const instructionsPath = join(appDataRoot, "profiles", "ui-opencode-alpha", "AGENTS.md");
+    const originalInstructions = await readFile(instructionsPath, "utf8");
+    await mkdir(backupRoot, { recursive: true });
+
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      backupRoot
+    );
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("button", { name: "Create backup" }).click();
+    await expect.poll(() => page.getByRole("status").textContent()).toContain(
+      "Data backup created"
+    );
+
+    const backupEntries = await readdir(backupRoot);
+    expect(backupEntries).toHaveLength(1);
+    const backupPath = join(backupRoot, backupEntries[0] ?? "");
+    expect((await stat(backupPath)).mode & 0o777).toBe(0o700);
+    await expect(fileExists(join(backupPath, "agentenv-backup.json"))).resolves.toBe(true);
+
+    await writeFile(instructionsPath, "# Changed after backup\n", "utf8");
+    await writeFile(join(appDataRoot, "restore-me-away.json"), "{}\n", "utf8");
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      backupPath
+    );
+    await page.getByRole("button", { name: "Restore backup" }).click();
+    const restoreDialog = page.getByRole("dialog", { name: "Restore AgentEnv data" });
+    await restoreDialog.waitFor({ state: "visible" });
+    await expect.poll(() => restoreDialog.textContent()).toContain("Version 1");
+    await restoreDialog.getByRole("button", { name: "Restore data" }).click();
+    await restoreDialog.waitFor({ state: "hidden" });
+
+    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
+    await expect(fileExists(join(appDataRoot, "restore-me-away.json"))).resolves.toBe(false);
+    await expect.poll(() => page.getByRole("status").textContent()).toContain(
+      "AgentEnv data restored"
+    );
+    const safetyRoot = join(root, "agentenv-import-safety");
+    expect((await readdir(safetyRoot)).length).toBeGreaterThan(0);
+  }, 30_000);
+
   it("installs library skills using copy mode from Settings", async () => {
     const { opencodeDir, page } = await launchApp();
 
@@ -2284,6 +2489,64 @@ describe("Electron UI profile switching e2e", () => {
         skillAutoCheckEnabled: true,
         skillAutoCheckIntervalMinutes: 15
       });
+  }, 30_000);
+
+  it("routes a rate-limited GitHub update check to account connection", async () => {
+    const { app: electronApp, page } = await launchApp();
+    await electronApp.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("skills:check-updates");
+      ipcMain.handle("skills:check-updates", () => [
+        {
+          id: "shared-reviewer",
+          name: "Shared Reviewer",
+          sourceType: "github",
+          currentRevision: "seed",
+          updateAvailable: false,
+          error: "GitHub API rate limit reached (403 Forbidden)"
+        }
+      ]);
+    });
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Check updates" }).click();
+    const feedback = page.getByRole("alert");
+    await expect.poll(() => feedback.textContent()).toContain("GitHub request limited");
+    await expect.poll(() => feedback.textContent()).toContain("Connect your account");
+    await feedback.getByRole("button", { name: "Connect GitHub" }).click();
+
+    const githubSettings = page.getByRole("region", { name: "GitHub OAuth settings" });
+    await githubSettings.waitFor({ state: "visible" });
+    await expect.poll(() => githubSettings.evaluate((element) => document.activeElement === element))
+      .toBe(true);
+    await githubSettings.getByRole("button", { name: "Sign in with GitHub" }).waitFor({
+      state: "visible"
+    });
+  }, 30_000);
+
+  it("reports an offline GitHub update check without offering sign-in as the fix", async () => {
+    const { app: electronApp, page } = await launchApp();
+    await electronApp.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("skills:check-updates");
+      ipcMain.handle("skills:check-updates", () => [
+        {
+          id: "shared-reviewer",
+          name: "Shared Reviewer",
+          sourceType: "github",
+          currentRevision: "seed",
+          updateAvailable: false,
+          error: "GitHub request failed: network offline"
+        }
+      ]);
+    });
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Check updates" }).click();
+    const feedback = page.getByRole("alert");
+    await expect.poll(() => feedback.textContent()).toContain("1 check failed");
+    await expect.poll(() => feedback.textContent()).toContain("network offline");
+    expect(await feedback.getByRole("button", { name: "Connect GitHub" }).count()).toBe(0);
+    await feedback.getByRole("button", { name: "Dismiss message" }).click();
+    await feedback.waitFor({ state: "hidden" });
   }, 30_000);
 
   it("copies the GitHub device code and refreshes connection state after authorization", async () => {

@@ -104,6 +104,9 @@ describe("package metadata", () => {
     expect(packageJson.scripts?.["dist:mac"]).toBe(
       "npm run build && electron-builder --mac"
     );
+    expect(packageJson.scripts?.["test:e2e:packaged"]).toBe(
+      "npm run pack && node scripts/test-packaged-app.mjs"
+    );
     expect(packageJson.build).toMatchObject({
       appId: "com.agentenv.manager",
       productName: "AgentEnv Manager",

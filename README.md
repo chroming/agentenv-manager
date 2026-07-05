@@ -153,6 +153,14 @@ release/
 
 当前 macOS 目标包含 `.dmg` 和 `.zip`，并使用项目内的应用图标。正式对外分发前仍需使用 Apple Developer ID 签名并完成 notarization；本地自用可以先直接运行 `.app`。
 
+验证实际打包后的 `.app` 能启动并完成一次 OpenCode Profile 接管：
+
+```bash
+npm run test:e2e:packaged
+```
+
+该测试使用隔离的临时 HOME、数据目录和假 OpenCode 命令，不会修改真实 Agent 环境。
+
 ## 运行数据
 
 默认情况下，应用会把 profile、library、backup、target state 等数据放在 `~/.config/agentenv-manager`。

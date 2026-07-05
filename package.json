@@ -15,6 +15,7 @@
     "capture:profiles": "npm run build && node scripts/capture-profiles.mjs",
     "test": "vitest run",
     "test:e2e": "npm run build && vitest run tests/e2e",
+    "test:e2e:packaged": "npm run pack && node scripts/test-packaged-app.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
