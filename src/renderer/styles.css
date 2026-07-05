@@ -3038,6 +3038,15 @@ summary {
   min-width: 0;
 }
 
+.profile-commit-actions {
+  align-items: center;
+  align-self: center;
+  display: flex;
+  gap: 8px;
+  justify-self: end;
+  min-width: 0;
+}
+
 .profile-apply-control {
   align-items: center;
   background: transparent;
@@ -4674,7 +4683,8 @@ button svg,
   border-color: var(--accent-strong);
 }
 
-.profile-save-control .save-button {
+.profile-commit-actions .save-button {
+  min-height: 40px;
   min-width: 64px;
 }
 
@@ -5430,14 +5440,19 @@ button svg,
 }
 
 .app-shell--profiles .profile-apply-control {
-  align-self: start;
+  align-self: center;
   justify-self: end;
   position: relative;
   z-index: var(--z-dropdown);
 }
 
-.profile-save-control .save-button {
+.profile-commit-actions .save-button {
+  min-height: 48px;
   min-width: 76px;
+}
+
+.profile-commit-actions .profile-apply-button {
+  min-height: 48px;
 }
 
 .profile-readiness-strip {
@@ -5791,6 +5806,11 @@ button svg,
     padding: 12px 14px;
   }
 
+  .profile-commit-actions .save-button,
+  .profile-commit-actions .profile-apply-button {
+    min-height: 38px;
+  }
+
   .profile-hero__icon {
     height: 46px;
     width: 46px;
@@ -5919,9 +5939,13 @@ button svg,
     white-space: nowrap;
   }
 
-  .profile-apply-control {
+  .profile-commit-actions {
     grid-column: 1 / -1;
     justify-self: stretch;
+  }
+
+  .profile-commit-actions .profile-apply-control {
+    flex: 1 1 auto;
   }
 
   .profile-apply-split {
@@ -5932,6 +5956,7 @@ button svg,
   .profile-apply-button {
     flex: 1 1 auto;
     min-width: 0;
+    width: 100%;
   }
 
   .profile-composer-section__summary,

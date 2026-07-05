@@ -1542,34 +1542,49 @@ describe("Electron UI profile switching e2e", () => {
 
   it("keeps core management actions usable at the minimum supported viewport", async () => {
     const { page } = await launchApp();
-    await page.setViewportSize({ width: 920, height: 620 });
+    await page.setViewportSize({ width: 1180, height: 728 });
     await selectProfile(page, "UI OpenCode alpha");
 
     const profileTitle = page.locator(".profile-hero__title");
+    const commitActions = page.getByRole("group", { name: "Profile save and apply" });
+    const saveButton = commitActions.getByRole("button", { name: "Save" });
     const applyControl = page.locator(".profile-apply-control");
+    const expectCommitActionsToFit = async () => {
+      for (const locator of [profileTitle, commitActions, saveButton, applyControl]) {
+        await expectInViewport(page, locator);
+      }
+
+      const [titleBox, applyBox, saveBox, applyButtonBox] = await Promise.all([
+        profileTitle.boundingBox(),
+        applyControl.boundingBox(),
+        saveButton.boundingBox(),
+        commitActions.locator(".profile-apply-button").boundingBox()
+      ]);
+      expect(titleBox).not.toBeNull();
+      expect(applyBox).not.toBeNull();
+      expect(saveBox).not.toBeNull();
+      expect(applyButtonBox).not.toBeNull();
+      const titleOverlapsApply = !(
+        titleBox!.x + titleBox!.width <= applyBox!.x ||
+        applyBox!.x + applyBox!.width <= titleBox!.x ||
+        titleBox!.y + titleBox!.height <= applyBox!.y ||
+        applyBox!.y + applyBox!.height <= titleBox!.y
+      );
+      expect(titleOverlapsApply).toBe(false);
+      expect(applyButtonBox!.x - (saveBox!.x + saveBox!.width)).toBeLessThanOrEqual(10);
+      expect(Math.abs(saveBox!.y - applyButtonBox!.y)).toBeLessThanOrEqual(1);
+    };
+
+    await expectCommitActionsToFit();
+    await page.setViewportSize({ width: 920, height: 620 });
     for (const locator of [
       page.locator(".profile-page-header"),
       page.locator(".profile-readiness-strip"),
-      page.locator(".profile-workbench"),
-      profileTitle,
-      applyControl
+      page.locator(".profile-workbench")
     ]) {
       await expectInViewport(page, locator);
     }
-
-    const [titleBox, applyBox] = await Promise.all([
-      profileTitle.boundingBox(),
-      applyControl.boundingBox()
-    ]);
-    expect(titleBox).not.toBeNull();
-    expect(applyBox).not.toBeNull();
-    const titleOverlapsApply = !(
-      titleBox!.x + titleBox!.width <= applyBox!.x ||
-      applyBox!.x + applyBox!.width <= titleBox!.x ||
-      titleBox!.y + titleBox!.height <= applyBox!.y ||
-      applyBox!.y + applyBox!.height <= titleBox!.y
-    );
-    expect(titleOverlapsApply).toBe(false);
+    await expectCommitActionsToFit();
 
     await selectTarget(page, "Codex");
     const profileList = page.getByRole("complementary", { name: "Profile list" });

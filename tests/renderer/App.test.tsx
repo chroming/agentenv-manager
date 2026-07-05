@@ -998,6 +998,23 @@ describe("App", () => {
     expect(targetMenu).toHaveAttribute("title", "Select apply target");
   });
 
+  it("keeps whole-profile Save beside Apply in their workflow order", async () => {
+    installApi();
+    render(<App />);
+
+    await openProfiles();
+    const hero = document.querySelector(".profile-hero");
+    expect(hero).not.toBeNull();
+    const actions = within(hero as HTMLElement).getByRole("group", {
+      name: "Profile save and apply"
+    });
+    const buttons = within(actions).getAllByRole("button");
+
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual(["Save", "Apply"]);
+    expect(within(actions).getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(document.querySelector(".profile-page-header .save-button")).toBeNull();
+  });
+
   it("focuses Save when apply is invoked with unsaved changes", async () => {
     const api = installApi();
     render(<App />);

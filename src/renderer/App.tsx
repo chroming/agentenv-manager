@@ -2472,17 +2472,6 @@ export const App = () => {
                   <Plus size={15} strokeWidth={2.3} aria-hidden="true" />
                   New Profile
                 </button>
-                <div className="profile-save-control">
-                  <button
-                    ref={saveButtonRef}
-                    className="save-button"
-                    type="button"
-                    disabled={busy || !isProfileDirty}
-                    onClick={saveSelectedProfile}
-                  >
-                    Save
-                  </button>
-                </div>
                 <button
                   ref={profileActionsButtonRef}
                   className="icon-action"
@@ -2690,7 +2679,24 @@ export const App = () => {
                           </span>
                         </div>
                       </div>
-                      {profileApplyControl}
+                      <div
+                        className="profile-commit-actions"
+                        role="group"
+                        aria-label="Profile save and apply"
+                      >
+                        <div className="profile-save-control">
+                          <button
+                            ref={saveButtonRef}
+                            className="save-button"
+                            type="button"
+                            disabled={busy || !isProfileDirty}
+                            onClick={saveSelectedProfile}
+                          >
+                            Save
+                          </button>
+                        </div>
+                        {profileApplyControl}
+                      </div>
                     </header>
             <section className="profile-composer" aria-label="Profile composer">
               <header className="profile-composer__header">

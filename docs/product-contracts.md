@@ -183,6 +183,7 @@ The Profile editor MUST distinguish these states:
 Rules:
 
 - Save MUST persist the complete Profile, not an individual accordion section.
+- Save and Apply MUST appear as one ordered action group in the selected Profile context: Save first, then Apply. Page creation and Target selection controls MUST NOT separate these two lifecycle commands.
 - Unsaved changes MUST block Preview and Apply.
 - Switching Profile, Target, workspace, or closing the window with a dirty draft MUST offer Save, Discard, or Cancel.
 - Failed validation or Save MUST preserve all draft input.
@@ -642,7 +643,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-12 against the current `main` tree at the time of this snapshot.
 
-- `263` automated tests passed across `38` test files, including native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `264` automated tests passed across `38` test files, including native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings were visually inspected at `1180 x 728` and `920 x 620` without document overflow.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
 - Production dependency audit reported zero known vulnerabilities.
