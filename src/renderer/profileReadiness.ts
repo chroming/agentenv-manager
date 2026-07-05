@@ -32,6 +32,7 @@ export interface ProfileReadinessInput {
   isDirty: boolean;
   localValidationErrors?: readonly string[];
   preview?: Pick<ActivationPreview, "errors">;
+  dependenciesCurrent?: boolean;
 }
 
 export const hasManagedTargetDrift = (errors: readonly string[]): boolean =>
@@ -43,7 +44,8 @@ export const deriveProfileReadiness = ({
   targetState,
   isDirty,
   localValidationErrors = [],
-  preview
+  preview,
+  dependenciesCurrent
 }: ProfileReadinessInput): ProfileReadiness => {
   if (!profile) {
     return {
@@ -108,13 +110,17 @@ export const deriveProfileReadiness = ({
 
   if (
     targetState.activeProfileId === profile.id &&
-    (!targetState.appliedProfileHash || targetState.appliedProfileHash !== profile.contentHash)
+    (dependenciesCurrent === false ||
+      !targetState.appliedProfileHash ||
+      targetState.appliedProfileHash !== profile.contentHash)
   ) {
     return {
       status: "apply-pending",
       label: "Apply pending",
-      message: targetState.appliedProfileHash
-        ? `Saved changes have not been applied to ${target.name}`
+      message: dependenciesCurrent === false
+        ? `Library resources changed after this profile was applied to ${target.name}`
+        : targetState.appliedProfileHash
+          ? `Saved changes have not been applied to ${target.name}`
         : `${target.name} applied version is unknown; preview before continuing`
     };
   }

@@ -44,6 +44,7 @@ const preview = {
   id: "preview-1",
   profileId: "daily-coding",
   profileContentHash: "profile-hash",
+  libraryVersions: { skills: {}, mcp: {} },
   targetId: "opencode",
   createdAt: "2026-06-30T00:00:00.000Z",
   warnings: [
@@ -241,6 +242,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
   activeProfileId: "daily-coding",
   activeProfileName: "Daily Coding",
   appliedProfileHash: "profile-hash",
+  appliedLibraryVersions: { skills: {}, mcp: {} },
   status: "managed",
   lastAppliedAt: "2026-07-09T00:00:00.000Z",
   managedResourceCount: 3,
@@ -904,10 +906,20 @@ describe("App", () => {
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
       readProfile: vi.fn().mockResolvedValue(richProfile),
       listTargetStates: vi.fn().mockResolvedValue([
-        managedState({ lastAppliedAt: "2026-07-09T08:00:00.000Z" }),
+        managedState({
+          lastAppliedAt: "2026-07-09T08:00:00.000Z",
+          appliedLibraryVersions: {
+            skills: { docs: "missing", testing: "missing" },
+            mcp: { docs: "missing", shared: "missing" }
+          }
+        }),
         managedState({
           targetId: "codex",
-          lastAppliedAt: "2026-07-10T08:00:00.000Z"
+          lastAppliedAt: "2026-07-10T08:00:00.000Z",
+          appliedLibraryVersions: {
+            skills: { docs: "missing", testing: "missing" },
+            mcp: { docs: "missing", shared: "missing" }
+          }
         })
       ])
     });

@@ -141,6 +141,9 @@ describe("activation service", () => {
     const state = (await service.listTargetStates())[0];
     expect(state?.activeProfileId).toBe("daily-coding");
     expect(state?.appliedProfileHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(state?.appliedLibraryVersions?.mcp["shared-docs"]).toContain(
+      "https://example.com/shared-docs/mcp"
+    );
 
     const backups = await createBackupStore(paths).listBackups();
     expect(backups).toHaveLength(1);
@@ -188,6 +191,27 @@ describe("activation service", () => {
     await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
       ok: false,
       errors: [`Resource source changed after preview: ${dirname(sourceSkill)}`]
+    });
+  });
+
+  it("blocks apply when a referenced library resource changes after preview", async () => {
+    const { paths, service } = await makeEnv();
+    const preview = await service.previewProfile("daily-coding");
+    await writeFile(
+      join(paths.appDataRoot, "mcp-library.json"),
+      JSON.stringify([
+        {
+          id: "shared-docs",
+          name: "Shared Docs",
+          transport: "http",
+          url: "https://example.com/changed/mcp"
+        }
+      ])
+    );
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
+      ok: false,
+      errors: ["Library resources changed after preview; review the latest versions"]
     });
   });
 

@@ -130,6 +130,22 @@ describe("profile readiness", () => {
     ).toBe("Preview & apply to Codex");
   });
 
+  it("marks referenced library changes as pending apply", () => {
+    expect(
+      deriveProfileReadiness({
+        profile,
+        target,
+        targetState: managedState,
+        isDirty: false,
+        dependenciesCurrent: false
+      })
+    ).toEqual({
+      status: "apply-pending",
+      label: "Apply pending",
+      message: "Library resources changed after this profile was applied to Codex"
+    });
+  });
+
   it("uses the complete readiness precedence and exact remediations", () => {
     const unavailableTarget = {
       ...target,

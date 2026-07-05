@@ -42,6 +42,7 @@ import type {
   GitHubAuthStatus,
   GitHubDeviceLogin,
   GitHubDeviceLoginResult,
+  LibraryResourceVersions,
   ManageTargetSkillInput,
   McpLibraryEntry,
   SaveMcpServerInput,
@@ -56,6 +57,10 @@ import type {
   TargetInfo,
   TargetManagementState
 } from "../shared/types";
+import {
+  collectLibraryResourceVersions,
+  libraryResourceVersionsEqual
+} from "../shared/libraryVersions";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { HistoryView } from "./components/HistoryView";
 import { InfoTip } from "./components/InfoTip";
@@ -395,6 +400,9 @@ export const App = () => {
   const [profileResourceCounts, setProfileResourceCounts] = useState<
     Record<string, ProfileResourceSummary>
   >({});
+  const [profileLibraryVersions, setProfileLibraryVersions] = useState<
+    Record<string, LibraryResourceVersions>
+  >({});
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
     skillSyncMethod: "symlink",
     skillStorageLocation: "appData",
@@ -583,7 +591,13 @@ export const App = () => {
     const usage: Record<string, string[]> = {};
     const nextMcpUsage: Record<string, string[]> = {};
     const nextProfileResourceCounts: Record<string, ProfileResourceSummary> = {};
+    const nextProfileLibraryVersions: Record<string, LibraryResourceVersions> = {};
     for (const profile of profileDetails) {
+      nextProfileLibraryVersions[profile.id] = collectLibraryResourceVersions(
+        profile,
+        skillItems,
+        mcpItems
+      );
       const profileTarget = targetItems.find(
         (targetItem) => targetItem.id === profile.manifest.targetId
       );
@@ -622,6 +636,7 @@ export const App = () => {
     setSkillUsage(usage);
     setMcpUsage(nextMcpUsage);
     setProfileResourceCounts(nextProfileResourceCounts);
+    setProfileLibraryVersions(nextProfileLibraryVersions);
     setSelectedTargetId((current) => current ?? targetItems[0]?.id);
     return { targetItems, profileItems, backupItems, skillUpdateItems };
   };
@@ -1123,6 +1138,15 @@ export const App = () => {
     profile: draftProfile,
     target: selectedTarget,
     targetState: selectedTargetState,
+    dependenciesCurrent:
+      selectedTargetState?.activeProfileId === draftProfile?.id
+        ? libraryResourceVersionsEqual(
+            selectedTargetState?.appliedLibraryVersions,
+            draftProfile
+              ? collectLibraryResourceVersions(draftProfile, librarySkills, mcpServers)
+              : undefined
+          )
+        : undefined,
     isDirty: isProfileDirty,
     localValidationErrors,
     preview
@@ -2361,7 +2385,11 @@ export const App = () => {
                     const isSelected = profile.id === selectedProfileId;
                     const isAppliedVersionCurrent = Boolean(
                       recentApplication?.state.appliedProfileHash &&
-                        recentApplication.state.appliedProfileHash === profile.contentHash
+                        recentApplication.state.appliedProfileHash === profile.contentHash &&
+                        libraryResourceVersionsEqual(
+                          recentApplication.state.appliedLibraryVersions,
+                          profileLibraryVersions[profile.id]
+                        )
                     );
                     return (
                     <button
@@ -2434,7 +2462,15 @@ export const App = () => {
                             <Monitor size={14} strokeWidth={2.2} aria-hidden="true" />
                             {selectedProfileApplication?.state.lastAppliedAt
                               ? selectedProfileApplication.state.appliedProfileHash &&
-                                selectedProfileApplication.state.appliedProfileHash === draftProfile.contentHash
+                                selectedProfileApplication.state.appliedProfileHash === draftProfile.contentHash &&
+                                libraryResourceVersionsEqual(
+                                  selectedProfileApplication.state.appliedLibraryVersions,
+                                  collectLibraryResourceVersions(
+                                    draftProfile,
+                                    librarySkills,
+                                    mcpServers
+                                  )
+                                )
                                 ? `Applied ${formatShortDate(selectedProfileApplication.state.lastAppliedAt)}`
                                 : "Saved changes pending apply"
                               : "Not applied yet"}

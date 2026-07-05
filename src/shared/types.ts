@@ -273,6 +273,7 @@ export interface TargetState {
   managedMcpNames: string[];
   activeProfileId?: string;
   appliedProfileHash?: string;
+  appliedLibraryVersions?: LibraryResourceVersions;
   lastAppliedAt?: string;
   managedResources?: ManagedResourceSnapshot[];
 }
@@ -284,6 +285,7 @@ export interface TargetManagementState {
   activeProfileId?: string;
   activeProfileName?: string;
   appliedProfileHash?: string;
+  appliedLibraryVersions?: LibraryResourceVersions;
   status: TargetManagementStatus;
   lastAppliedAt?: string;
   managedResourceCount: number;
@@ -384,6 +386,7 @@ export interface ActivationPreview {
   id: string;
   profileId: string;
   profileContentHash: string;
+  libraryVersions: LibraryResourceVersions;
   createdAt: string;
   warnings: string[];
   errors: string[];
@@ -394,6 +397,11 @@ export interface ActivationPreview {
   sourceFingerprints: Record<string, string>;
   targetId: string;
   targetState: TargetState;
+}
+
+export interface LibraryResourceVersions {
+  skills: Record<string, string>;
+  mcp: Record<string, string>;
 }
 
 export interface BackupEntry {

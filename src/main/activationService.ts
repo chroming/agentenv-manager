@@ -45,6 +45,10 @@ import type {
   TargetState
 } from "../shared/types";
 import { createProfileContentHash } from "./profileFingerprint";
+import {
+  collectLibraryResourceVersions,
+  libraryResourceVersionsEqual
+} from "../shared/libraryVersions";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -167,6 +171,12 @@ const normalizeTargetState = (value: unknown): TargetState => {
     activeProfileId: typeof record.activeProfileId === "string" ? record.activeProfileId : undefined,
     appliedProfileHash:
       typeof record.appliedProfileHash === "string" ? record.appliedProfileHash : undefined,
+    appliedLibraryVersions:
+      record.appliedLibraryVersions &&
+      typeof record.appliedLibraryVersions === "object" &&
+      !Array.isArray(record.appliedLibraryVersions)
+        ? record.appliedLibraryVersions
+        : undefined,
     lastAppliedAt: typeof record.lastAppliedAt === "string" ? record.lastAppliedAt : undefined,
     managedResources
   };
@@ -290,6 +300,7 @@ export const createActivationService = ({
             targetId,
             activeProfileId: state.activeProfileId,
             appliedProfileHash: state.appliedProfileHash,
+            appliedLibraryVersions: state.appliedLibraryVersions,
             status: state.activeProfileId ? "managed" : "unmanaged",
             lastAppliedAt: state.lastAppliedAt,
             managedResourceCount: state.managedResources?.length ?? 0,
@@ -543,6 +554,7 @@ export const createActivationService = ({
   const previewProfile = async (profileId: string): Promise<ActivationPreview> => {
     const profile = await profileStore.readProfile(profileId);
     const mcpLibrary = await mcpLibraryStore.listServers();
+    const skillLibrary = await skillLibraryStore.listSkills();
     const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
     const adapter = targetRegistry.get(profile.manifest.targetId);
     const targetPaths = adapter.createTargetPaths({
@@ -585,6 +597,7 @@ export const createActivationService = ({
       id: randomUUID(),
       profileId: profile.id,
       profileContentHash: profile.contentHash ?? createProfileContentHash(profile),
+      libraryVersions: collectLibraryResourceVersions(profile, skillLibrary, mcpLibrary),
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
       warnings: targetPreview.warnings.concat(drift.warnings, unmanagedWarnings),
@@ -625,6 +638,15 @@ export const createActivationService = ({
       return { ok: false, errors: ["Profile changed after preview; review the latest version"] };
     }
     const mcpLibrary = await mcpLibraryStore.listServers();
+    const skillLibrary = await skillLibraryStore.listSkills();
+    const currentLibraryVersions = collectLibraryResourceVersions(
+      profile,
+      skillLibrary,
+      mcpLibrary
+    );
+    if (!libraryResourceVersionsEqual(currentLibraryVersions, preview.libraryVersions)) {
+      return { ok: false, errors: ["Library resources changed after preview; review the latest versions"] };
+    }
     const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
     const adapter = targetRegistry.get(preview.targetId);
     const targetPaths = adapter.createTargetPaths({
@@ -713,6 +735,7 @@ export const createActivationService = ({
         ...preview.targetState,
         activeProfileId: profile.id,
         appliedProfileHash: profile.contentHash ?? createProfileContentHash(profile),
+        appliedLibraryVersions: currentLibraryVersions,
         lastAppliedAt: new Date().toISOString(),
         managedResources
       });
