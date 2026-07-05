@@ -149,6 +149,59 @@ describe("activation service", () => {
     expect(backups).toHaveLength(1);
   });
 
+  it("reports no changes after the same profile is fully applied", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Old agents\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+
+    const firstPreview = await service.previewProfile("daily-coding");
+    expect((await service.applyProfile("daily-coding", firstPreview.id)).ok).toBe(true);
+
+    const secondPreview = await service.previewProfile("daily-coding");
+    expect(secondPreview.errors).toEqual([]);
+    expect(secondPreview.changes).toEqual([]);
+    expect(secondPreview.resourceChanges).toEqual([]);
+    await expect(service.applyProfile("daily-coding", secondPreview.id)).resolves.toEqual({
+      ok: false,
+      errors: ["No changes to apply"]
+    });
+
+    const state = (await service.listTargetStates()).find(({ targetId }) => targetId === "codex");
+    expect(state?.errorCount).toBe(0);
+  });
+
+  it("adapts portable profile resources when applying to another target", async () => {
+    const { paths, service } = await makeEnv();
+    const openCodeDir = join(paths.homeDir, ".config", "opencode");
+    const openCodeInstructions = join(openCodeDir, "AGENTS.md");
+    const openCodeConfig = join(openCodeDir, "opencode.jsonc");
+    const openCodeSkill = join(
+      openCodeDir,
+      "skills",
+      "agentenv-daily-coding-example-skill"
+    );
+    await mkdir(openCodeDir, { recursive: true });
+    await writeFile(openCodeInstructions, "# Old OpenCode agents\n");
+    await writeFile(openCodeConfig, "{}\n");
+
+    const preview = await service.previewProfile("daily-coding", "opencode");
+    expect(preview.targetId).toBe("opencode");
+    expect(preview.warnings).toContain(
+      "codex Advanced config is target-specific and is not applied to OpenCode"
+    );
+    expect(preview.changes.map(({ path }) => path)).toContain(openCodeInstructions);
+    expect(preview.resourceChanges).toContainEqual(
+      expect.objectContaining({ path: openCodeSkill, action: "install" })
+    );
+
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    await expect(readFile(openCodeInstructions, "utf8")).resolves.toBe("# New agents\n");
+    await expect(readFile(openCodeConfig, "utf8")).resolves.toContain("shared_docs");
+    await expect(readFile(join(openCodeSkill, "SKILL.md"), "utf8")).resolves.toContain(
+      "name: example"
+    );
+  });
+
   it("blocks apply when a resource changes after preview", async () => {
     const { paths, service } = await makeEnv();
     const targetSkill = join(paths.userSkillsDir, "agentenv-daily-coding-example-skill");
@@ -242,6 +295,10 @@ describe("activation service", () => {
     expect(firstApply.ok).toBe(true);
 
     await writeFile(paths.globalAgentsPath, "# Changed outside AgentEnv\n");
+    const changedState = (await service.listTargetStates()).find(
+      ({ targetId }) => targetId === "codex"
+    );
+    expect(changedState?.errorCount).toBe(1);
     const secondPreview = await service.previewProfile("daily-coding");
 
     expect(secondPreview.errors).toContain(
@@ -463,7 +520,9 @@ describe("activation service", () => {
         targetState: { managedConfigKeys: [], managedMcpNames: [] }
       }),
       validateAssets: async () => [],
-      getAssetBackupPaths: async () => [],
+      getAssetBackupPaths: async () => [
+        join(paths.userSkillsDir, "agentenv-daily-coding-example-skill")
+      ],
       applyAssets: async () => {
         throw new Error("asset copy exploded");
       }

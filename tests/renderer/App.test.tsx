@@ -37,7 +37,12 @@ const profile: ProfileDetail = {
     mcpRefs: [],
     disabledSkillPaths: []
   },
-  contentHash: "profile-hash"
+  contentHash: "profile-hash",
+  targetContentHashes: {
+    opencode: "profile-hash",
+    codex: "codex-profile-hash",
+    "claude-code": "claude-profile-hash"
+  }
 };
 
 const preview = {
@@ -224,7 +229,8 @@ const summaryOf = (detail: ProfileDetail) => ({
   targetId: detail.manifest.targetId,
   name: detail.manifest.name,
   description: detail.manifest.description,
-  contentHash: detail.contentHash
+  contentHash: detail.contentHash,
+  targetContentHashes: detail.targetContentHashes
 });
 
 const deferred = <T,>() => {
@@ -497,7 +503,7 @@ describe("App", () => {
     );
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeInTheDocument();
-    expect(screen.getByText("OpenCode profile")).toBeInTheDocument();
+    expect(screen.getByText("OpenCode source")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "MCP Servers" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Advanced" })).toBeInTheDocument();
@@ -938,7 +944,7 @@ describe("App", () => {
       "2026-07-10T08:00:00.000Z"
     );
     expect(row).not.toHaveTextContent("OpenCode");
-    expect(document.querySelector(".profile-hero")).toHaveTextContent("Applied Jul 10");
+    expect(document.querySelector(".profile-hero")).toHaveTextContent("Applied Jul 9");
 
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
     fireEvent.change(screen.getByLabelText("AGENTS.md"), {
@@ -958,10 +964,10 @@ describe("App", () => {
 
     const edit = screen.getByRole("button", { name: "Edit profile" });
     const more = screen.getByRole("button", { name: "More profile actions" });
-    const targetMenu = screen.getByRole("button", { name: "Select target workspace" });
+    const targetMenu = screen.getByRole("button", { name: "Select apply target" });
     expect(edit).toHaveAttribute("title", "Edit profile");
     expect(more).toHaveAttribute("title", "More profile actions");
-    expect(targetMenu).toHaveAttribute("title", "Select target workspace");
+    expect(targetMenu).toHaveAttribute("title", "Select apply target");
   });
 
   it("focuses Save when apply is invoked with unsaved changes", async () => {
@@ -1066,7 +1072,7 @@ describe("App", () => {
     );
   });
 
-  it("filters incompatible profiles after target selection", async () => {
+  it("keeps profiles available when selecting another apply target", async () => {
     const api = installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
       listProfiles: vi.fn().mockResolvedValue([summaryOf(profile), summaryOf(codexProfile)]),
@@ -1077,10 +1083,10 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    let menuButton = screen.getByRole("button", { name: "Select target workspace" });
+    let menuButton = screen.getByRole("button", { name: "Select apply target" });
     menuButton.focus();
     fireEvent.click(menuButton);
-    let menu = screen.getByRole("menu", { name: "Target workspaces" });
+    let menu = screen.getByRole("menu", { name: "Apply targets" });
     const openCodeTarget = within(menu).getByRole("menuitemradio", { name: "OpenCode" });
     const codexTargetItem = within(menu).getByRole("menuitemradio", { name: "Codex" });
     expect(openCodeTarget).toHaveAttribute(
@@ -1096,29 +1102,30 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Take over OpenCode" }).querySelector("img"))
       .toHaveClass("profile-target-logo--opencode");
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("menu", { name: "Target workspaces" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Apply targets" })).not.toBeInTheDocument();
     expect(menuButton).toHaveFocus();
 
     fireEvent.click(menuButton);
     fireEvent.mouseDown(document.body);
-    expect(screen.queryByRole("menu", { name: "Target workspaces" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Apply targets" })).not.toBeInTheDocument();
     expect(menuButton).toHaveFocus();
 
     fireEvent.click(menuButton);
-    menu = screen.getByRole("menu", { name: "Target workspaces" });
+    menu = screen.getByRole("menu", { name: "Apply targets" });
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Codex" }));
-    expect(screen.getByText("No profile selected")).toBeInTheDocument();
     const profileList = screen.getByRole("complementary", { name: "Profile list" });
-    expect(within(profileList).queryByText("Daily Coding")).not.toBeInTheDocument();
+    expect(within(profileList).getByText("Daily Coding")).toBeInTheDocument();
     const compatibleRow = within(profileList).getByRole("button", { name: /Codex Review/ });
-    fireEvent.click(compatibleRow);
+    expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Take over Codex" })).toBeEnabled();
 
+    fireEvent.click(compatibleRow);
     expect(await screen.findByRole("heading", { name: "Codex Review" })).toBeInTheDocument();
     expect(api.readProfile).toHaveBeenCalledWith("codex-review");
-    menuButton = screen.getByRole("button", { name: "Select target workspace" });
+    menuButton = screen.getByRole("button", { name: "Select apply target" });
     fireEvent.click(menuButton);
     expect(
-      within(screen.getByRole("menu", { name: "Target workspaces" })).getByRole(
+      within(screen.getByRole("menu", { name: "Apply targets" })).getByRole(
         "menuitemradio",
         { name: "Codex" }
       )
@@ -1134,14 +1141,14 @@ describe("App", () => {
     const instructions = screen.getByLabelText("AGENTS.md");
     fireEvent.change(instructions, { target: { value: "# Unsaved target-safe draft\n" } });
 
-    const targetButton = screen.getByRole("button", { name: "Select target workspace" });
+    const targetButton = screen.getByRole("button", { name: "Select apply target" });
     targetButton.focus();
     fireEvent.click(targetButton);
     const checkedTarget = screen.getByRole("menuitemradio", { name: "OpenCode" });
     expect(checkedTarget).toHaveAttribute("aria-checked", "true");
     fireEvent.click(checkedTarget);
 
-    expect(screen.queryByRole("menu", { name: "Target workspaces" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Apply targets" })).not.toBeInTheDocument();
     expect(targetButton).toHaveFocus();
     expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     expect(instructions).toHaveValue("# Unsaved target-safe draft\n");
@@ -1286,7 +1293,7 @@ describe("App", () => {
     await openProfiles();
     await screen.findByRole("heading", { name: "Profile B" });
     fireEvent.click(screen.getByRole("button", { name: "Take over OpenCode" }));
-    await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("profile-b"));
+    await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("profile-b", "opencode"));
 
     deferProfileC = true;
     const profileList = screen.getByRole("complementary", { name: "Profile list" });
@@ -1312,18 +1319,18 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    const targetButton = screen.getByRole("button", { name: "Select target workspace" });
+    const targetButton = screen.getByRole("button", { name: "Select apply target" });
     const moreButton = screen.getByRole("button", { name: "More profile actions" });
 
     fireEvent.click(targetButton);
-    expect(screen.getByRole("menu", { name: "Target workspaces" })).toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Apply targets" })).toBeInTheDocument();
     fireEvent.click(moreButton);
-    expect(screen.queryByRole("menu", { name: "Target workspaces" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Apply targets" })).not.toBeInTheDocument();
     expect(screen.getByRole("menu", { name: "Profile actions" })).toBeInTheDocument();
 
     fireEvent.click(targetButton);
     expect(screen.queryByRole("menu", { name: "Profile actions" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menu", { name: "Target workspaces" })).toBeInTheDocument();
+    expect(screen.getByRole("menu", { name: "Apply targets" })).toBeInTheDocument();
 
     fireEvent.click(moreButton);
     moreButton.focus();
@@ -1361,14 +1368,18 @@ describe("App", () => {
     let action = screen.getByRole("button", { name: "Take over OpenCode" });
     expect(action).toHaveAttribute("title", "Take over OpenCode");
     fireEvent.click(action);
-    await waitFor(() => expect(readyApi.previewApply).toHaveBeenCalledWith("daily-coding"));
+    await waitFor(() => expect(readyApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     let dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeEnabled();
     expect(readyApi.applyProfile).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
     cleanup();
-    installApi({ listTargetStates: vi.fn().mockResolvedValue([managedState({ managedResourceCount: 7 })]) });
+    installApi({
+      listTargetStates: vi.fn().mockResolvedValue([
+        managedState({ activeProfileId: "another-profile", managedResourceCount: 7 })
+      ])
+    });
     render(<App />);
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
@@ -1412,7 +1423,7 @@ describe("App", () => {
     action = screen.getByRole("button", { name: "Review OpenCode issues" });
     expect(action).toHaveAttribute("title", "Review OpenCode issues");
     fireEvent.click(action);
-    await waitFor(() => expect(unavailableApi.previewApply).toHaveBeenCalledWith("daily-coding"));
+    await waitFor(() => expect(unavailableApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(dialog).toHaveTextContent("opencode CLI not found");
     expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeDisabled();
@@ -1434,7 +1445,7 @@ describe("App", () => {
     expect(within(readiness).getByRole("button", { name: "Review Advanced" })).toBeInTheDocument();
     action = screen.getByRole("button", { name: "Review OpenCode issues" });
     fireEvent.click(action);
-    await waitFor(() => expect(invalidApi.previewApply).toHaveBeenCalledWith("daily-coding"));
+    await waitFor(() => expect(invalidApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(dialog).toHaveTextContent("Instructions are empty");
     expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeDisabled();
@@ -1443,13 +1454,15 @@ describe("App", () => {
     const driftError =
       "External changes detected in AgentEnv-managed instructions instructions: /tmp/home/.config/opencode/AGENTS.md";
     const driftApi = installApi({
-      listTargetStates: vi.fn().mockResolvedValue([managedState()]),
+      listTargetStates: vi.fn().mockResolvedValue([
+        managedState({ activeProfileId: "another-profile" })
+      ]),
       previewApply: vi.fn().mockResolvedValue({ ...preview, warnings: [], errors: [driftError] })
     });
     render(<App />);
     await openProfiles();
     fireEvent.click(screen.getByRole("button", { name: "Preview & apply to OpenCode" }));
-    await waitFor(() => expect(driftApi.previewApply).toHaveBeenCalledWith("daily-coding"));
+    await waitFor(() => expect(driftApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     action = screen.getByRole("button", { name: "Resolve OpenCode drift" });
     expect(action).toHaveAttribute("title", "Resolve OpenCode drift");
     readiness = screen.getByRole("status", { name: "Profile readiness" });
@@ -1470,6 +1483,23 @@ describe("App", () => {
         allowManagedDrift: true
       })
     );
+  });
+
+  it("disables apply when the selected target already matches the profile", async () => {
+    const api = installApi({
+      listTargetStates: vi.fn().mockResolvedValue([managedState()])
+    });
+    render(<App />);
+
+    await openProfiles();
+    expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
+      "OpenCode matches this profile"
+    );
+    const action = screen.getByRole("button", { name: "Applied to OpenCode" });
+    expect(action).toBeDisabled();
+    expect(action).toHaveTextContent("Applied");
+    fireEvent.click(action);
+    expect(api.previewApply).not.toHaveBeenCalled();
   });
 
   it("prevents removing a profile that is active on a target", async () => {

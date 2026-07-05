@@ -304,10 +304,11 @@ const validateConfig = (
 const createValidationRows = (
   profile: ProfileDetail,
   target?: TargetInfo,
-  preview?: ActivationPreview
+  preview?: ActivationPreview,
+  profileTarget: TargetInfo | undefined = target
 ): ValidationRow[] => {
   const configValidation = profile.manifest.managed.config
-    ? validateConfig(profile.configText, target?.configLanguage)
+    ? validateConfig(profile.configText, profileTarget?.configLanguage)
     : { value: "Disabled", level: "pending" as const };
   const targetLevel: ValidationLevel =
     target?.health.status === "ready"
@@ -335,7 +336,7 @@ const createValidationRows = (
       level: targetLevel
     },
     {
-      label: target?.instructionsLabel ?? "Instructions",
+      label: profileTarget?.instructionsLabel ?? "Instructions",
       value: profile.manifest.managed.instructions
         ? profile.instructions.trim().length > 0
           ? "OK"
@@ -351,7 +352,7 @@ const createValidationRows = (
           : "ok"
     },
     {
-      label: target?.configLabel ?? "Config",
+      label: profileTarget?.configLabel ?? "Config",
       ...configValidation
     },
     {
@@ -704,7 +705,6 @@ export const App = () => {
     const requestId = ++profileFlowRequestRef.current;
     activeProfileFlowRequestRef.current = requestId;
     const isDifferentProfile = profileId !== selectedProfileId;
-    const profileSummary = profiles.find((profile) => profile.id === profileId);
     setBusy(true);
     setError(undefined);
     setPreview(undefined);
@@ -717,15 +717,12 @@ export const App = () => {
     setActiveComposerSection(composerSection);
     setActiveWorkspace("profiles");
     setSelectedProfileId(profileId);
-    if (profileSummary) {
-      setSelectedTargetId(profileSummary.targetId);
-    }
     try {
       const profile = await window.agentEnv.readProfile(profileId);
       if (requestId !== profileFlowRequestRef.current) {
         return;
       }
-      setSelectedTargetId(profile.manifest.targetId);
+      setSelectedTargetId((current) => current ?? profile.manifest.targetId);
       setDraftProfile(profile);
       setIsProfileDirty(false);
       setProfileSaveStatus("");
@@ -977,15 +974,9 @@ export const App = () => {
       return;
     }
 
-    invalidateProfileFlow();
     setSelectedTargetId(targetId);
-    setSelectedProfileId(undefined);
-    setDraftProfile(undefined);
-    setIsProfileDirty(false);
-    setProfileSaveStatus("");
     setPreview(undefined);
     setRollbackPreview(undefined);
-    setActiveComposerSection(undefined);
   };
 
   const selectTarget = (targetId: string) => {
@@ -994,7 +985,7 @@ export const App = () => {
       return;
     }
     const targetName = targets.find((target) => target.id === targetId)?.name ?? "target";
-    guardProfileAction(`switch to the ${targetName} workspace`, () => selectTargetNow(targetId));
+    guardProfileAction(`apply to ${targetName}`, () => selectTargetNow(targetId));
   };
 
   const continuePendingProfileAction = async (saveFirst: boolean) => {
@@ -1102,11 +1093,11 @@ export const App = () => {
   }, [isProfileActionsOpen, isTargetMenuOpen]);
 
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
-  const targetProfiles = profiles.filter(
-    (profile) => !selectedTargetId || profile.targetId === selectedTargetId
+  const profileTarget = targets.find(
+    (target) => target.id === draftProfile?.manifest.targetId
   );
   const normalizedProfileSearch = profileSearch.trim().toLowerCase();
-  const visibleProfiles = targetProfiles
+  const visibleProfiles = profiles
     .filter((profile) => {
       if (normalizedProfileSearch.length === 0) {
         return true;
@@ -1122,7 +1113,7 @@ export const App = () => {
     selectedProfileId && targetStates.some((state) => state.activeProfileId === selectedProfileId)
   );
   const validationRows = draftProfile
-    ? createValidationRows(draftProfile, selectedTarget, preview)
+    ? createValidationRows(draftProfile, selectedTarget, preview, profileTarget)
     : [];
   const localValidationErrors = validationRows
     .filter(
@@ -1131,11 +1122,18 @@ export const App = () => {
     )
     .map((row) => row.detail ?? `${row.label} is invalid`);
   const resourceSummary =
-    draftProfile && selectedTarget
-      ? summarizeProfile(draftProfile, selectedTarget)
+    draftProfile && profileTarget
+      ? summarizeProfile(draftProfile, profileTarget)
+      : undefined;
+  const selectedTargetProfileHash =
+    selectedTarget && draftProfile
+      ? draftProfile.targetContentHashes?.[selectedTarget.id] ??
+        (selectedTarget.id === draftProfile.manifest.targetId ? draftProfile.contentHash : undefined)
       : undefined;
   const readinessInput = {
-    profile: draftProfile,
+    profile: draftProfile
+      ? { id: draftProfile.id, contentHash: selectedTargetProfileHash }
+      : undefined,
     target: selectedTarget,
     targetState: selectedTargetState,
     dependenciesCurrent:
@@ -1154,14 +1152,16 @@ export const App = () => {
   const readiness = deriveProfileReadiness(readinessInput);
   const applyActionLabel = deriveApplyActionLabel(readinessInput);
   const ReadinessIcon =
-    readiness.status === "ready" || readiness.status === "unmanaged"
+    readiness.status === "ready" || readiness.status === "unmanaged" || readiness.status === "applied"
       ? CheckCircle2
       : readiness.status === "dirty" || readiness.status === "apply-pending"
         ? RefreshCw
         : TriangleAlert;
   const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
   const applySafetyTitle =
-    readiness.status === "unmanaged"
+    readiness.status === "applied"
+      ? "No changes"
+      : readiness.status === "unmanaged"
       ? "Review before apply"
       : readiness.status === "ready"
         ? "Ready to review"
@@ -1175,17 +1175,23 @@ export const App = () => {
               ? "Save required"
               : "Review required";
   const applySafetyMessage =
-    readiness.status === "unmanaged" || readiness.status === "ready" || readiness.status === "apply-pending"
+    readiness.status === "applied"
+      ? "The saved profile and managed target resources are in sync."
+      : readiness.status === "unmanaged" || readiness.status === "ready" || readiness.status === "apply-pending"
       ? "Preview shows every replacement before a backup is created."
       : readiness.message;
   const readinessTitle =
-    readiness.status === "ready" || readiness.status === "unmanaged"
+    readiness.status === "applied"
+      ? `${selectedTarget?.name ?? "Target"} applied`
+      : readiness.status === "ready" || readiness.status === "unmanaged"
       ? `${selectedTarget?.name ?? "Target"} ready`
       : readiness.label;
-  const selectedProfileApplication = draftProfile
-    ? findRecentProfileApplication(draftProfile.id, targetStates, targets)
-    : undefined;
-  const applyDisabled = !draftProfile || !selectedTarget || busy;
+  const selectedProfileApplication =
+    draftProfile && selectedTargetState?.activeProfileId === draftProfile.id
+      ? { state: selectedTargetState, target: selectedTarget }
+      : undefined;
+  const applyDisabled =
+    !draftProfile || !selectedTarget || busy || readiness.status === "applied";
   const applyDescription = !draftProfile
     ? "Select a profile before previewing changes"
     : !selectedTarget
@@ -1202,6 +1208,7 @@ export const App = () => {
   );
   const canApply = Boolean(
     preview &&
+      (preview.changes.length > 0 || preview.resourceChanges.length > 0) &&
       (preview.errors.length === 0 || (previewHasOnlyManagedDrift && replaceManagedDrift)) &&
       localValidationErrors.length === 0 &&
       !rollbackPreview &&
@@ -1230,7 +1237,10 @@ export const App = () => {
     activeProfileFlowRequestRef.current = requestId;
     setBusy(true);
     try {
-      const nextPreview = await window.agentEnv.previewApply(draftProfile.id);
+      const nextPreview = await window.agentEnv.previewApply(
+        draftProfile.id,
+        selectedTarget?.id
+      );
       if (requestId !== profileFlowRequestRef.current) {
         return;
       }
@@ -2018,7 +2028,17 @@ export const App = () => {
         ) : (
           <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
         )}
-        <strong>{applyActionLabel}</strong>
+        <strong>
+          {readiness.status === "applied"
+            ? "Applied"
+            : readiness.status === "dirty"
+              ? "Save first"
+              : readiness.status === "validation-error" ||
+                  readiness.status === "target-unavailable" ||
+                  readiness.status === "preview-error"
+                ? "Review"
+                : "Apply"}
+        </strong>
       </button>
       <span id="profile-apply-description" hidden>{applyDescription}</span>
     </div>
@@ -2031,19 +2051,19 @@ export const App = () => {
         type="button"
         aria-expanded={isTargetMenuOpen}
         aria-haspopup="menu"
-        aria-label="Select target workspace"
-        title="Select target workspace"
+        aria-label="Select apply target"
+        title="Select apply target"
         onClick={() => {
           setIsProfileActionsOpen(false);
           setIsTargetMenuOpen((current) => !current);
         }}
       >
         {selectedTargetIcon?.assetUrl ? <img className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`} src={selectedTargetIcon.assetUrl} alt="" /> : <Monitor size={16} aria-hidden="true" />}
-        <span>{selectedTarget?.name ?? "Target"} profiles</span>
+        <span>Apply to {selectedTarget?.name ?? "Target"}</span>
         <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
       </button>
       {isTargetMenuOpen ? (
-        <div className="profile-target-menu" role="menu" aria-label="Target workspaces">
+        <div className="profile-target-menu" role="menu" aria-label="Apply targets">
           {targets.map((target) => {
             const targetIcon = targetIconFor(target);
             return (
@@ -2385,7 +2405,9 @@ export const App = () => {
                     const isSelected = profile.id === selectedProfileId;
                     const isAppliedVersionCurrent = Boolean(
                       recentApplication?.state.appliedProfileHash &&
-                        recentApplication.state.appliedProfileHash === profile.contentHash &&
+                        recentApplication.state.appliedProfileHash ===
+                          (profile.targetContentHashes?.[recentApplication.state.targetId] ??
+                            profile.contentHash) &&
                         libraryResourceVersionsEqual(
                           recentApplication.state.appliedLibraryVersions,
                           profileLibraryVersions[profile.id]
@@ -2456,13 +2478,14 @@ export const App = () => {
                         </p>
                         <div className="profile-hero__meta">
                           <span className="success-pill">
-                            {selectedTarget?.name ?? draftProfile.manifest.targetId} profile
+                            {profileTarget?.name ?? draftProfile.manifest.targetId} source
                           </span>
                           <span className="profile-hero__recent">
                             <Monitor size={14} strokeWidth={2.2} aria-hidden="true" />
                             {selectedProfileApplication?.state.lastAppliedAt
                               ? selectedProfileApplication.state.appliedProfileHash &&
-                                selectedProfileApplication.state.appliedProfileHash === draftProfile.contentHash &&
+                                selectedProfileApplication.state.appliedProfileHash ===
+                                  selectedTargetProfileHash &&
                                 libraryResourceVersionsEqual(
                                   selectedProfileApplication.state.appliedLibraryVersions,
                                   collectLibraryResourceVersions(
@@ -2494,14 +2517,14 @@ export const App = () => {
                 count={resourceSummary?.instructions.count ?? 0}
                 chipNames={
                   resourceSummary?.instructions.count
-                    ? [selectedTarget?.instructionsLabel ?? "Instructions"]
+                    ? [profileTarget?.instructionsLabel ?? "Instructions"]
                     : []
                 }
                 expanded={activeComposerSection === "instructions"}
                 onToggle={() => toggleComposerSection("instructions")}
               >
                 <AgentsEditor
-                  label={selectedTarget?.instructionsLabel ?? "Instructions"}
+                  label={profileTarget?.instructionsLabel ?? "Instructions"}
                   value={draftProfile.instructions}
                   onChange={(instructions) => {
                     updateDraftProfile({ ...draftProfile, instructions });
@@ -2522,7 +2545,7 @@ export const App = () => {
                   mode="skills"
                   value={draftProfile.assetPolicy ?? emptyAssetPolicy}
                   configText={draftProfile.configText}
-                  configLanguage={selectedTarget?.configLanguage}
+                  configLanguage={profileTarget?.configLanguage}
                   preview={preview}
                   librarySkills={librarySkills}
                   mcpServers={mcpServers}
@@ -2545,7 +2568,7 @@ export const App = () => {
                   mode="mcp"
                   value={draftProfile.assetPolicy ?? emptyAssetPolicy}
                   configText={draftProfile.configText}
-                  configLanguage={selectedTarget?.configLanguage}
+                  configLanguage={profileTarget?.configLanguage}
                   preview={preview}
                   librarySkills={librarySkills}
                   mcpServers={mcpServers}
@@ -2565,7 +2588,7 @@ export const App = () => {
                 onToggle={() => toggleComposerSection("advanced")}
               >
                 <McpEditor
-                  label={selectedTarget?.configLabel ?? "Config"}
+                  label={profileTarget?.configLabel ?? "Config"}
                   value={draftProfile.configText}
                   onChange={(configText) => {
                     updateDraftProfile({ ...draftProfile, configText });
@@ -2575,7 +2598,7 @@ export const App = () => {
                   mode="advanced"
                   value={draftProfile.assetPolicy ?? emptyAssetPolicy}
                   configText={draftProfile.configText}
-                  configLanguage={selectedTarget?.configLanguage}
+                  configLanguage={profileTarget?.configLanguage}
                   preview={preview}
                   librarySkills={librarySkills}
                   mcpServers={mcpServers}
@@ -2611,7 +2634,7 @@ export const App = () => {
                   backups={backups.filter(
                     (backup) =>
                       backup.profileId === draftProfile.id &&
-                      backup.targetId === draftProfile.manifest.targetId
+                      backup.targetId === selectedTarget?.id
                   )}
                   busy={busy}
                   rollbackPreview={undefined}

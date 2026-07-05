@@ -15,12 +15,13 @@ export type ProfileReadinessStatus =
   | "validation-error"
   | "preview-error"
   | "apply-pending"
+  | "applied"
   | "unmanaged"
   | "ready";
 
 export interface ProfileReadiness {
   status: ProfileReadinessStatus;
-  label: "No profile" | "No target" | "Unsaved" | "Target unavailable" | "Needs review" | "Apply pending" | "Ready";
+  label: "No profile" | "No target" | "Unsaved" | "Target unavailable" | "Needs review" | "Apply pending" | "Applied" | "Ready";
   message: string;
   remediationLabel?: "Open Targets" | "Save now" | "Review Advanced" | "Review preview";
 }
@@ -28,7 +29,7 @@ export interface ProfileReadiness {
 export interface ProfileReadinessInput {
   profile?: Pick<ProfileDetail, "id" | "contentHash">;
   target?: Pick<TargetInfo, "id" | "name" | "health">;
-  targetState?: Pick<TargetManagementState, "status" | "activeProfileId" | "appliedProfileHash">;
+  targetState?: Pick<TargetManagementState, "status" | "activeProfileId" | "appliedProfileHash" | "errorCount">;
   isDirty: boolean;
   localValidationErrors?: readonly string[];
   preview?: Pick<ActivationPreview, "errors">;
@@ -108,6 +109,15 @@ export const deriveProfileReadiness = ({
     };
   }
 
+  if (targetState.errorCount > 0) {
+    return {
+      status: "preview-error",
+      label: "Needs review",
+      message: `${target.name} changed outside AgentEnv`,
+      remediationLabel: "Review preview"
+    };
+  }
+
   if (
     targetState.activeProfileId === profile.id &&
     (dependenciesCurrent === false ||
@@ -122,6 +132,19 @@ export const deriveProfileReadiness = ({
         : targetState.appliedProfileHash
           ? `Saved changes have not been applied to ${target.name}`
         : `${target.name} applied version is unknown; preview before continuing`
+    };
+  }
+
+  if (
+    targetState.activeProfileId === profile.id &&
+    Boolean(profile.contentHash) &&
+    targetState.appliedProfileHash === profile.contentHash &&
+    dependenciesCurrent !== false
+  ) {
+    return {
+      status: "applied",
+      label: "Applied",
+      message: `${target.name} matches this profile`
     };
   }
 
@@ -148,6 +171,14 @@ export const deriveApplyActionLabel = (input: ProfileReadinessInput): string => 
 
   if (preview && hasManagedTargetDrift(preview.errors)) {
     return `Resolve ${target.name} drift`;
+  }
+
+  const readiness = deriveProfileReadiness(input);
+  if (readiness.status === "applied") {
+    return `Applied to ${target.name}`;
+  }
+  if (readiness.status === "preview-error" && (targetState?.errorCount ?? 0) > 0) {
+    return `Review ${target.name} issues`;
   }
 
   return targetState?.status === "managed"

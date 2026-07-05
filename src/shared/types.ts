@@ -4,6 +4,7 @@ export interface ProfileSummary {
   name: string;
   description: string;
   contentHash?: string;
+  targetContentHashes?: Record<string, string>;
 }
 
 export type { AssetPolicy, ProfileManifest } from "./schemas";
@@ -48,7 +49,7 @@ export interface AgentEnvApi {
   createProfile(input: CreateProfileInput): Promise<ProfileDetail>;
   duplicateProfile(id: string): Promise<ProfileDetail>;
   deleteProfile(id: string): Promise<void>;
-  previewApply(profileId: string): Promise<ActivationPreview>;
+  previewApply(profileId: string, targetId?: string): Promise<ActivationPreview>;
   applyProfile(
     profileId: string,
     previewId: string,
@@ -358,6 +359,7 @@ export interface ProfileDetail {
   configText: string;
   assetPolicy: AssetPolicy;
   contentHash?: string;
+  targetContentHashes?: Record<string, string>;
 }
 
 export interface SaveProfileInput {

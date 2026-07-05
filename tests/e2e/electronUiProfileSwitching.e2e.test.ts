@@ -412,8 +412,8 @@ const selectProfile = async (page: Page, name: string) => {
 };
 
 const selectTarget = async (page: Page, name: string) => {
-  await page.getByRole("button", { name: "Select target workspace" }).click();
-  const targetMenu = page.getByRole("menu", { name: "Target workspaces" });
+  await page.getByRole("button", { name: "Select apply target" }).click();
+  const targetMenu = page.getByRole("menu", { name: "Apply targets" });
   await page.getByRole("menuitemradio", { name }).click();
   await targetMenu.waitFor({ state: "hidden" });
 };
@@ -1075,8 +1075,8 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Escape");
     await previewDialog.waitFor({ state: "hidden", timeout: 5_000 });
 
-    await page.getByRole("button", { name: "Select target workspace" }).click({ timeout: 5_000 });
-    const targetMenu = page.getByRole("menu", { name: "Target workspaces" });
+    await page.getByRole("button", { name: "Select apply target" }).click({ timeout: 5_000 });
+    const targetMenu = page.getByRole("menu", { name: "Apply targets" });
     await targetMenu.waitFor({ state: "visible", timeout: 5_000 });
     await page.mouse.click(240, 120);
     await targetMenu.waitFor({ state: "hidden", timeout: 5_000 });
@@ -1213,7 +1213,17 @@ describe("Electron UI profile switching e2e", () => {
     await previewAndApply(page, "OpenCode");
     await writeFile(join(opencodeDir, "AGENTS.md"), "# Changed outside AgentEnv\n", "utf8");
 
-    await applyActionButton(page, "OpenCode").click();
+    await page.getByRole("button", { name: "Targets", exact: true }).click();
+    await page.getByRole("button", { name: "Refresh targets" }).click();
+    await page.getByText("Targets refreshed", { exact: true }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Profiles", exact: true }).click();
+    await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible" });
+    await expect
+      .poll(() => page.locator(".profile-apply-button").getAttribute("aria-label"), {
+        timeout: 5_000
+      })
+      .toBe("Review OpenCode issues");
+    await page.getByRole("button", { name: "Review OpenCode issues" }).click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
     await expect
@@ -1302,8 +1312,8 @@ describe("Electron UI profile switching e2e", () => {
     await headerTip.waitFor({ state: "hidden" });
 
     await page.getByRole("button", { name: "Profiles" }).click();
-    await page.getByRole("button", { name: "Select target workspace" }).click();
-    const targetMenu = page.getByRole("menu", { name: "Target workspaces" });
+    await page.getByRole("button", { name: "Select apply target" }).click();
+    const targetMenu = page.getByRole("menu", { name: "Apply targets" });
     await targetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, targetMenu);
     await page.mouse.click(240, 120);
@@ -1385,8 +1395,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(metrics.clientHeight).toBeGreaterThan(0);
     }
 
-    await page.getByRole("button", { name: "Select target workspace" }).click();
-    const defaultViewportTargetMenu = page.getByRole("menu", { name: "Target workspaces" });
+    await page.getByRole("button", { name: "Select apply target" }).click();
+    const defaultViewportTargetMenu = page.getByRole("menu", { name: "Apply targets" });
     await defaultViewportTargetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, defaultViewportTargetMenu);
     await expectTopmost(defaultViewportTargetMenu);
@@ -1609,7 +1619,8 @@ describe("Electron UI profile switching e2e", () => {
     const codexCard = page.getByRole("article", { name: "Target Codex" });
     await codexCard.getByRole("button", { name: "Open Codex in Profiles" }).click();
     await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-    await page.getByText("No profile selected", { exact: true }).waitFor({ state: "visible" });
+    await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Take over Codex" }).waitFor({ state: "visible" });
   }, 30_000);
 
   it("opens MCP creation from a clear page action", async () => {
@@ -2332,6 +2343,33 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(join(opencodeDir, "agents", "ui-beta-agent"))).resolves.toBe(
       false
     );
+  }, 30_000);
+
+  it("applies an OpenCode profile's portable resources to Codex and then reports it applied", async () => {
+    const { codexDir, homeDir, page } = await launchApp();
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await selectTarget(page, "Codex");
+    await applyActionButton(page, "Codex").click();
+
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await expect
+      .poll(() => previewDialog.textContent())
+      .toContain("opencode Advanced config is target-specific and is not applied to Codex");
+    await previewDialog.getByRole("button", { name: "Apply profile" }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+
+    await expect(readFile(join(codexDir, "AGENTS.md"), "utf8")).resolves.toContain(
+      "Active UI profile: alpha"
+    );
+    await expect(
+      readFile(join(homeDir, ".agents", "skills", "ui-alpha-skill", "SKILL.md"), "utf8")
+    ).resolves.toContain("alpha skill prompt");
+    await expect(fileExists(join(codexDir, "agents", "ui-alpha-agent"))).resolves.toBe(false);
+    await expect
+      .poll(() => page.getByRole("button", { name: "Applied to Codex", exact: true }).isDisabled())
+      .toBe(true);
   }, 30_000);
 
   it("switches Codex profiles through the rendered app without touching auth", async () => {

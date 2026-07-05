@@ -12,6 +12,7 @@ import type {
 } from "../shared/types";
 import { createPaths, type PathOverrides } from "./paths";
 import { createProfileContentHash } from "./profileFingerprint";
+import { targetProfile } from "./profileTargeting";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
 
 export interface ProfileStore {
@@ -57,7 +58,17 @@ export const createProfileStore = (
     const profile = await targetRegistry
       .get(manifest.targetId)
       .readProfileFiles(profileDir, manifest);
-    return { ...profile, contentHash: createProfileContentHash(profile) };
+    const targetContentHashes = Object.fromEntries(
+      targetRegistry.listAdapters().map((adapter) => {
+        const targeted = targetProfile(profile, adapter).profile;
+        return [adapter.descriptor.id, createProfileContentHash(targeted)];
+      })
+    );
+    return {
+      ...profile,
+      contentHash: targetContentHashes[manifest.targetId],
+      targetContentHashes
+    };
   };
 
   const listProfiles = async (): Promise<ProfileSummary[]> => {
@@ -79,7 +90,8 @@ export const createProfileStore = (
           targetId: profile.manifest.targetId,
           name: profile.manifest.name,
           description: profile.manifest.description,
-          contentHash: profile.contentHash
+          contentHash: profile.contentHash,
+          targetContentHashes: profile.targetContentHashes
         };
       })
     );

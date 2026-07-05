@@ -51,7 +51,12 @@ describe("profile store", () => {
         targetId: "codex",
         name: "Daily Coding",
         description: "Default",
-        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/)
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        targetContentHashes: {
+          opencode: expect.stringMatching(/^[a-f0-9]{64}$/),
+          "claude-code": expect.stringMatching(/^[a-f0-9]{64}$/),
+          codex: expect.stringMatching(/^[a-f0-9]{64}$/)
+        }
       }
     ]);
   });

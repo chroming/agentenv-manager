@@ -233,8 +233,11 @@ export const registerIpcHandlers = ({
     }
     await profileStore.deleteProfile(profileId);
   });
-  ipcMain.handle("activation:preview", (_event, profileId: unknown) =>
-    activationService.previewProfile(parseId(profileId, "profile id"))
+  ipcMain.handle("activation:preview", (_event, profileId: unknown, targetId?: unknown) =>
+    activationService.previewProfile(
+      parseId(profileId, "profile id"),
+      targetId === undefined ? undefined : parseId(targetId, "target id")
+    )
   );
   ipcMain.handle(
     "activation:apply",

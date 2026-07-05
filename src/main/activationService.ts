@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rm } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
@@ -45,10 +45,16 @@ import type {
   TargetState
 } from "../shared/types";
 import { createProfileContentHash } from "./profileFingerprint";
+import { targetProfile } from "./profileTargeting";
 import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
 } from "../shared/libraryVersions";
+import {
+  createOwnerMarkerContent,
+  markerPathFor,
+  markerPathForFile
+} from "./ownershipMarkers";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -62,7 +68,7 @@ export interface ActivationServiceOptions {
 
 export interface ActivationService {
   listTargetStates(): Promise<TargetManagementState[]>;
-  previewProfile(profileId: string): Promise<ActivationPreview>;
+  previewProfile(profileId: string, targetId?: string): Promise<ActivationPreview>;
   applyProfile(
     profileId: string,
     previewId: string,
@@ -107,6 +113,33 @@ const hashPath = async (path: string): Promise<string | undefined> => {
   };
 
   await walk(path);
+  return hash.digest("hex");
+};
+
+const hashComparablePath = async (path: string): Promise<string | undefined> => {
+  if (!(await pathExists(path))) {
+    return undefined;
+  }
+
+  const hash = createHash("sha256");
+  const walk = async (currentPath: string, relativePath: string) => {
+    const stats = await stat(currentPath);
+    if (stats.isDirectory()) {
+      hash.update(`directory:${relativePath}`);
+      const entries = await readdir(currentPath, { withFileTypes: true });
+      for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+        if (entry.name === ".agentenv-owner.json" || entry.name === ".agentenv-skill.json") {
+          continue;
+        }
+        await walk(join(currentPath, entry.name), join(relativePath, entry.name));
+      }
+      return;
+    }
+    hash.update(`file:${relativePath}`);
+    hash.update(await readFile(currentPath));
+  };
+
+  await walk(path, ".");
   return hash.digest("hex");
 };
 
@@ -296,6 +329,12 @@ export const createActivationService = ({
           if (!state.activeProfileId && (state.managedResources ?? []).length === 0) {
             return undefined;
           }
+          const driftChecks = await Promise.all(
+            (state.managedResources ?? []).map(async (resource) => {
+              const currentHash = await hashPath(resource.path);
+              return currentHash !== resource.contentHash;
+            })
+          );
           return {
             targetId,
             activeProfileId: state.activeProfileId,
@@ -305,7 +344,7 @@ export const createActivationService = ({
             lastAppliedAt: state.lastAppliedAt,
             managedResourceCount: state.managedResources?.length ?? 0,
             warningCount: 0,
-            errorCount: 0
+            errorCount: driftChecks.filter(Boolean).length
           };
         })
     );
@@ -444,6 +483,7 @@ export const createActivationService = ({
       {
         resource: Omit<PlannedResourceChange, "action" | "path">;
         sourcePath: string;
+        markerSource: string;
       }
     >();
     const rootFor = (kind: "agent" | "skill") =>
@@ -458,7 +498,8 @@ export const createActivationService = ({
             name: asset.targetName,
             source: asset.source
           },
-          sourcePath: join(profile.profileDir ?? "", asset.source)
+          sourcePath: join(profile.profileDir ?? "", asset.source),
+          markerSource: asset.source
         });
       }
     }
@@ -470,7 +511,8 @@ export const createActivationService = ({
             name: skillRef.targetName,
             source: `Library / ${skillRef.libraryId}`
           },
-          sourcePath: join(skillLibraryDir, skillRef.libraryId)
+          sourcePath: join(skillLibraryDir, skillRef.libraryId),
+          markerSource: `skills-library/${skillRef.libraryId}`
         });
       }
     }
@@ -496,10 +538,27 @@ export const createActivationService = ({
       resourceFingerprints[path] = (await hashPath(path)) ?? "";
       const resource = desired.get(path);
       if (resource) {
+        const exists = await pathExists(path);
+        const stats = exists ? await stat(path) : undefined;
+        const markerPath = stats?.isDirectory() ? markerPathFor(path) : markerPathForFile(path);
+        const expectedMarker = createOwnerMarkerContent({
+          profileId: profile.id,
+          targetId: targetPaths.targetId,
+          kind: resource.resource.kind === "agent" ? "agent" : "skill",
+          source: resource.markerSource
+        });
+        const contentMatches =
+          exists &&
+          (await hashComparablePath(resource.sourcePath)) ===
+            (await hashComparablePath(path));
+        const markerMatches = exists && (await readTextIfExists(markerPath)) === expectedMarker;
+        if (contentMatches && markerMatches) {
+          continue;
+        }
         resourceChanges.push({
           ...resource.resource,
           path,
-          action: (await pathExists(path)) ? "replace" : "install"
+          action: exists ? "replace" : "install"
         });
         continue;
       }
@@ -551,12 +610,17 @@ export const createActivationService = ({
       );
   };
 
-  const previewProfile = async (profileId: string): Promise<ActivationPreview> => {
-    const profile = await profileStore.readProfile(profileId);
+  const previewProfile = async (
+    profileId: string,
+    requestedTargetId?: string
+  ): Promise<ActivationPreview> => {
+    const sourceProfile = await profileStore.readProfile(profileId);
     const mcpLibrary = await mcpLibraryStore.listServers();
     const skillLibrary = await skillLibraryStore.listSkills();
+    const adapter = targetRegistry.get(requestedTargetId ?? sourceProfile.manifest.targetId);
+    const targeted = targetProfile(sourceProfile, adapter);
+    const profile = targeted.profile;
     const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
-    const adapter = targetRegistry.get(profile.manifest.targetId);
     const targetPaths = adapter.createTargetPaths({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
@@ -596,11 +660,17 @@ export const createActivationService = ({
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
-      profileContentHash: profile.contentHash ?? createProfileContentHash(profile),
+      profileContentHash:
+        sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
+        createProfileContentHash(profile),
       libraryVersions: collectLibraryResourceVersions(profile, skillLibrary, mcpLibrary),
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
-      warnings: targetPreview.warnings.concat(drift.warnings, unmanagedWarnings),
+      warnings: targeted.warnings.concat(
+        targetPreview.warnings,
+        drift.warnings,
+        unmanagedWarnings
+      ),
       errors: targetPreview.errors.concat(profileErrors, assetErrors, drift.errors, ignoredErrors),
       changes: targetPreview.changes,
       resourceChanges: assetPlan.resourceChanges,
@@ -631,9 +701,15 @@ export const createActivationService = ({
     if (blockingErrors.length > 0) {
       return { ok: false, errors: blockingErrors };
     }
+    if (preview.changes.length === 0 && preview.resourceChanges.length === 0) {
+      return { ok: false, errors: ["No changes to apply"] };
+    }
 
-    const profile = await profileStore.readProfile(profileId);
-    const currentProfileHash = profile.contentHash ?? createProfileContentHash(profile);
+    const sourceProfile = await profileStore.readProfile(profileId);
+    const adapter = targetRegistry.get(preview.targetId);
+    const profile = targetProfile(sourceProfile, adapter).profile;
+    const currentProfileHash =
+      sourceProfile.targetContentHashes?.[preview.targetId] ?? createProfileContentHash(profile);
     if (currentProfileHash !== preview.profileContentHash) {
       return { ok: false, errors: ["Profile changed after preview; review the latest version"] };
     }
@@ -648,7 +724,6 @@ export const createActivationService = ({
       return { ok: false, errors: ["Library resources changed after preview; review the latest versions"] };
     }
     const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
-    const adapter = targetRegistry.get(preview.targetId);
     const targetPaths = adapter.createTargetPaths({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
@@ -721,12 +796,14 @@ export const createActivationService = ({
         await writeAtomic(change.path, change.after);
       }
 
-      await adapter.applyAssets({
-        profile: materializedProfile,
-        targetPaths,
-        skillLibraryDir,
-        skillSyncMethod: settings.skillSyncMethod
-      });
+      if (preview.resourceChanges.length > 0) {
+        await adapter.applyAssets({
+          profile: materializedProfile,
+          targetPaths,
+          skillLibraryDir,
+          skillSyncMethod: settings.skillSyncMethod
+        });
+      }
       const managedResources = await snapshotManagedResources(
         [...preview.changes.map((change) => change.path), ...assetBackupPaths],
         targetPaths
@@ -734,7 +811,7 @@ export const createActivationService = ({
       await writeTargetState(preview.targetId, {
         ...preview.targetState,
         activeProfileId: profile.id,
-        appliedProfileHash: profile.contentHash ?? createProfileContentHash(profile),
+        appliedProfileHash: currentProfileHash,
         appliedLibraryVersions: currentLibraryVersions,
         lastAppliedAt: new Date().toISOString(),
         managedResources

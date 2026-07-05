@@ -86,11 +86,18 @@ describe("profile readiness", () => {
     expect(deriveApplyActionLabel(unmanagedInput)).toBe("Take over Codex");
 
     expect(deriveProfileReadiness(managedInput)).toEqual({
-      status: "ready",
-      label: "Ready",
-      message: "Codex is ready to preview and apply"
+      status: "applied",
+      label: "Applied",
+      message: "Codex matches this profile"
     });
-    expect(deriveApplyActionLabel(managedInput)).toBe("Preview & apply to Codex");
+    expect(deriveApplyActionLabel(managedInput)).toBe("Applied to Codex");
+
+    const otherProfileInput = {
+      ...managedInput,
+      targetState: { ...managedState, activeProfileId: "other-profile" }
+    };
+    expect(deriveProfileReadiness(otherProfileInput).status).toBe("ready");
+    expect(deriveApplyActionLabel(otherProfileInput)).toBe("Preview & apply to Codex");
   });
 
   it("classifies managed drift from preview errors", () => {
@@ -197,7 +204,7 @@ describe("profile readiness", () => {
       },
       {
         input: { profile, target, targetState: managedState, isDirty: false },
-        expected: ["ready", "Codex is ready to preview and apply", undefined]
+        expected: ["applied", "Codex matches this profile", undefined]
       }
     ] as const;
 
@@ -205,6 +212,22 @@ describe("profile readiness", () => {
       const readiness = deriveProfileReadiness(input);
       expect([readiness.status, readiness.message, readiness.remediationLabel]).toEqual(expected);
     }
+  });
+
+  it("requires review when a managed target changed outside AgentEnv", () => {
+    const driftedState = { ...managedState, errorCount: 1 };
+
+    expect(
+      deriveProfileReadiness({ profile, target, targetState: driftedState, isDirty: false })
+    ).toEqual({
+      status: "preview-error",
+      label: "Needs review",
+      message: "Codex changed outside AgentEnv",
+      remediationLabel: "Review preview"
+    });
+    expect(
+      deriveApplyActionLabel({ profile, target, targetState: driftedState, isDirty: false })
+    ).toBe("Review Codex issues");
   });
 
   it("reviews unavailable and locally invalid targets before lifecycle labels", () => {
