@@ -791,6 +791,29 @@ export const App = () => {
     setPendingProfileAction({ label });
   };
 
+  const selectWorkspace = (workspace: AppWorkspace) => {
+    if (workspace === activeWorkspace) {
+      return;
+    }
+    const label = workspace === "profiles" ? "open Profiles" : `open ${workspace}`;
+    guardProfileAction(label, () => {
+      libraryScroll.captureScroll();
+      setActiveWorkspace(workspace);
+    });
+  };
+
+  const selectLibraryTab = (tab: LibraryTab) => {
+    if (activeWorkspace === "library" && activeLibraryTab === tab) {
+      return;
+    }
+    const label = tab === "skills" ? "open Skills" : "open MCP Servers";
+    guardProfileAction(label, () => {
+      libraryScroll.captureScroll();
+      setActiveLibraryTab(tab);
+      setActiveWorkspace("library");
+    });
+  };
+
   const selectProfile = (
     profileId: string,
     composerSection?: "instructions" | "skills" | "mcp" | "advanced"
@@ -2288,14 +2311,8 @@ export const App = () => {
         isLoading={isLoading}
         activeWorkspace={activeWorkspace}
         activeLibraryTab={activeLibraryTab}
-        onWorkspaceSelect={(workspace) => {
-          libraryScroll.captureScroll();
-          setActiveWorkspace(workspace);
-        }}
-        onLibraryTabSelect={(tab) => {
-          libraryScroll.captureScroll();
-          setActiveLibraryTab(tab);
-        }}
+        onWorkspaceSelect={selectWorkspace}
+        onLibraryTabSelect={selectLibraryTab}
       />
 
       <section

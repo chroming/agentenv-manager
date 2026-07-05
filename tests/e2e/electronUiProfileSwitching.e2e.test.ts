@@ -1620,7 +1620,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(dimensions.documentHeight).toBe(dimensions.viewportHeight);
   }, 30_000);
 
-  it("keeps global chrome and page control scale stable between Skills and Profiles", async () => {
+  it("keeps global chrome and page control scale stable across primary workspaces", async () => {
     const { page } = await launchApp();
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
     const skillsButton = navigation.getByRole("button", { name: "Skills", exact: true });
@@ -1687,34 +1687,41 @@ describe("Electron UI profile switching e2e", () => {
       await skillsButton.click();
       const skillsGeometry = await readGeometry("Library/Skills", "Import Skill");
 
-      await profilesButton.click();
-      const profilesGeometry = await readGeometry("Profiles", "New Profile");
+      const workspaces = [
+        { button: "MCP Servers", heading: "Library/MCP Servers", action: "Add MCP server" },
+        { button: "Profiles", heading: "Profiles", action: "New Profile" },
+        { button: "Targets", heading: "Targets", action: "Refresh targets" },
+        { button: "Settings", heading: "Settings", action: "Sign in with GitHub" }
+      ];
+      for (const workspace of workspaces) {
+        await navigation.getByRole("button", { name: workspace.button, exact: true }).click();
+        const workspaceGeometry = await readGeometry(workspace.heading, workspace.action);
 
-      expect(profilesGeometry.brand).toEqual(skillsGeometry.brand);
-      expect(profilesGeometry.navigation).toHaveLength(skillsGeometry.navigation.length);
-      profilesGeometry.navigation.forEach((profileRow, index) => {
+        expect(workspaceGeometry.brand).toEqual(skillsGeometry.brand);
+        expect(workspaceGeometry.navigation).toHaveLength(skillsGeometry.navigation.length);
+        workspaceGeometry.navigation.forEach((workspaceRow, index) => {
         const skillRow = skillsGeometry.navigation[index];
-        expect(profileRow?.height).toBe(skillRow?.height);
-        expect(profileRow?.width).toBe(skillRow?.width);
-        expect(Math.abs((profileRow?.x ?? 0) - (skillRow?.x ?? 0))).toBeLessThanOrEqual(1);
-        expect(Math.abs((profileRow?.y ?? 0) - (skillRow?.y ?? 0))).toBeLessThanOrEqual(1);
-      });
-      expect(profilesGeometry.sidebar).toEqual(skillsGeometry.sidebar);
-      expect(profilesGeometry.status).toEqual(skillsGeometry.status);
-      expect(profilesGeometry.editorPadding).toEqual(skillsGeometry.editorPadding);
-      expect({
-        fontSize: profilesGeometry.heading.fontSize,
-        height: profilesGeometry.heading.height,
-        lineHeight: profilesGeometry.heading.lineHeight,
-        x: profilesGeometry.heading.x
-      }).toEqual({
-        fontSize: skillsGeometry.heading.fontSize,
-        height: skillsGeometry.heading.height,
-        lineHeight: skillsGeometry.heading.lineHeight,
-        x: skillsGeometry.heading.x
-      });
-      expect(profilesGeometry.action?.height).toBe(skillsGeometry.action?.height);
-      expect(profilesGeometry.action?.y).toBe(skillsGeometry.action?.y);
+          expect(workspaceRow?.height).toBe(skillRow?.height);
+          expect(workspaceRow?.width).toBe(skillRow?.width);
+          expect(Math.abs((workspaceRow?.x ?? 0) - (skillRow?.x ?? 0))).toBeLessThanOrEqual(1);
+          expect(Math.abs((workspaceRow?.y ?? 0) - (skillRow?.y ?? 0))).toBeLessThanOrEqual(1);
+        });
+        expect(workspaceGeometry.sidebar).toEqual(skillsGeometry.sidebar);
+        expect(workspaceGeometry.status).toEqual(skillsGeometry.status);
+        expect(workspaceGeometry.editorPadding).toEqual(skillsGeometry.editorPadding);
+        expect({
+          fontSize: workspaceGeometry.heading.fontSize,
+          height: workspaceGeometry.heading.height,
+          lineHeight: workspaceGeometry.heading.lineHeight,
+          x: workspaceGeometry.heading.x
+        }).toEqual({
+          fontSize: skillsGeometry.heading.fontSize,
+          height: skillsGeometry.heading.height,
+          lineHeight: skillsGeometry.heading.lineHeight,
+          x: skillsGeometry.heading.x
+        });
+        expect(workspaceGeometry.action?.height).toBe(skillsGeometry.action?.height);
+      }
     }
 
     const profilePositions = await Promise.all([skillsButton.boundingBox(), profilesButton.boundingBox()]);
@@ -1812,6 +1819,39 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Take over Codex" }).waitFor({ state: "visible" });
   }, 30_000);
 
+  it("stops managing OpenCode while keeping deployed files and clearing ownership", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    const deployedInstructions = await readFile(join(opencodeDir, "AGENTS.md"), "utf8");
+
+    await page.getByRole("button", { name: "Targets", exact: true }).click();
+    const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
+    await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
+    await openCodeCard.getByRole("button", { name: "Stop managing OpenCode" }).click();
+
+    const choiceDialog = page.getByRole("dialog", { name: "Stop managing Target" });
+    await choiceDialog.getByText("Keep current environment", { exact: true }).waitFor({
+      state: "visible"
+    });
+    await choiceDialog.getByRole("button", { name: "Review changes" }).click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.getByText("Stop managing OpenCode", { exact: true }).waitFor({
+      state: "visible"
+    });
+    await previewDialog.getByRole("button", { name: "Keep files and detach" }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+
+    await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toBe(
+      deployedInstructions
+    );
+    await expect(
+      fileExists(join(appDataRoot, "target-states", "opencode.json"))
+    ).resolves.toBe(false);
+    await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
+    await expect.poll(() => openCodeCard.textContent()).toContain("None");
+  }, 30_000);
+
   it("opens MCP creation from a clear page action", async () => {
     const { page } = await launchApp();
     await page.getByRole("button", { name: "MCP Servers", exact: true }).click();
@@ -1858,6 +1898,68 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "AGENTS.md"), "utf8")
     ).resolves.toBe("# Updated through collapsed Composer\n");
+  }, 30_000);
+
+  it("cancels or saves a dirty Profile before leaving its workspace", async () => {
+    const { appDataRoot, page } = await launchApp();
+    const instructionsPath = join(
+      appDataRoot,
+      "profiles",
+      "ui-opencode-alpha",
+      "AGENTS.md"
+    );
+    const savedDraft = "# Saved before navigation\n";
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Instructions");
+    const instructions = page.getByRole("textbox", { name: "AGENTS.md" });
+    await instructions.fill(savedDraft);
+    await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+
+    let guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
+    await guard.waitFor({ state: "visible", timeout: 5_000 });
+    await guard.getByRole("button", { name: "Cancel" }).click();
+    await guard.waitFor({ state: "hidden", timeout: 5_000 });
+    await expect.poll(() => instructions.inputValue()).toBe(savedDraft);
+    await expect(readFile(instructionsPath, "utf8")).resolves.not.toBe(savedDraft);
+
+    await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+    guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
+    await guard.waitFor({ state: "visible", timeout: 5_000 });
+    await guard.getByRole("button", { name: "Save and continue" }).click();
+    await page.getByRole("heading", { name: "Library/Skills" }).waitFor({
+      state: "visible",
+      timeout: 5_000
+    });
+    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(savedDraft);
+  }, 30_000);
+
+  it("discards a dirty Profile without changing its saved file", async () => {
+    const { appDataRoot, page } = await launchApp();
+    const instructionsPath = join(
+      appDataRoot,
+      "profiles",
+      "ui-opencode-alpha",
+      "AGENTS.md"
+    );
+    const originalInstructions = await readFile(instructionsPath, "utf8");
+    const discardedDraft = "# Discard this navigation draft\n";
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Instructions");
+    const reloadedInstructions = page.getByRole("textbox", { name: "AGENTS.md" });
+    await reloadedInstructions.fill(discardedDraft);
+    await navigation.getByRole("button", { name: "Targets", exact: true }).click();
+    const guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
+    await guard.waitFor({ state: "visible", timeout: 5_000 });
+    await guard.getByRole("button", { name: "Discard changes" }).click();
+    await page.getByRole("heading", { name: "Targets" }).waitFor({
+      state: "visible",
+      timeout: 5_000
+    });
+    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
   }, 30_000);
 
   it("imports a local skill folder from the Import Skill drawer", async () => {

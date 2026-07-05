@@ -132,10 +132,7 @@ export const ProfileSidebar = ({
               }`}
               type="button"
               key={item.id}
-              onClick={() => {
-                onWorkspaceSelect("library");
-                onLibraryTabSelect(item.id);
-              }}
+              onClick={() => onLibraryTabSelect(item.id)}
             >
               <span className="workspace-button__icon" aria-hidden="true">
                 <Icon size={16} strokeWidth={2.2} />

@@ -647,8 +647,9 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-12 against the current `main` tree at the time of this snapshot.
 
-- `266` automated tests passed across `38` test files, including native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
-- Skills, MCP Servers, Profiles, Targets, and Settings were visually inspected at `1180 x 728` and `920 x 620` without document overflow.
+- `269` automated tests passed across `38` test files; the `54`-test E2E suite covers native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
+- Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
 - Production dependency audit reported zero known vulnerabilities.
 - The packaged arm64 macOS application launched successfully with a `1180 x 728` content viewport and no document overflow.

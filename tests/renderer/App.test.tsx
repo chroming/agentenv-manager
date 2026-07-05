@@ -1736,6 +1736,17 @@ describe("App", () => {
       "# Unsaved guard\n"
     );
 
+    fireEvent.click(
+      within(screen.getByRole("complementary", { name: "Global navigation" })).getByRole(
+        "button",
+        { name: "Skills" }
+      )
+    );
+    const navigationGuard = screen.getByRole("dialog", { name: "Unsaved profile changes" });
+    expect(navigationGuard).toHaveTextContent("open Skills");
+    fireEvent.click(within(navigationGuard).getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("heading", { name: "Profiles" })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
     fireEvent.click(
       within(screen.getByRole("dialog", { name: "Unsaved profile changes" })).getByRole(
