@@ -50,7 +50,16 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("activation:apply", profileId, previewId, options),
   listBackups: () => ipcRenderer.invoke("backups:list"),
   previewRollback: (backupId) => ipcRenderer.invoke("rollback:preview", backupId),
-  rollback: (backupId) => ipcRenderer.invoke("rollback:apply", backupId)
+  rollback: (backupId) => ipcRenderer.invoke("rollback:apply", backupId),
+  previewStopManaging: (targetId, mode) =>
+    ipcRenderer.invoke("targets:preview-stop-managing", targetId, mode),
+  stopManaging: (previewId) => ipcRenderer.invoke("targets:stop-managing", previewId),
+  createDataBackup: () => ipcRenderer.invoke("data:create-backup"),
+  openDataFolder: () => ipcRenderer.invoke("data:open-folder"),
+  selectDataRestore: () => ipcRenderer.invoke("data:select-restore"),
+  restoreDataBackup: (path) => ipcRenderer.invoke("data:restore", path),
+  adoptTargetInstructions: (profileId, targetId) =>
+    ipcRenderer.invoke("targets:adopt-instructions", profileId, targetId)
 };
 
 contextBridge.exposeInMainWorld("agentEnv", api);

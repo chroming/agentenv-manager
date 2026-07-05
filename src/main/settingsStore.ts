@@ -5,14 +5,14 @@ import type { AgentEnvSettings } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
 
 const SettingsSchema = z.object({
-  skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("symlink"),
+  skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("copy"),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
   skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60)
 });
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
-  skillSyncMethod: "symlink",
+  skillSyncMethod: "copy",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60

@@ -177,6 +177,7 @@ const createServices = async () => {
   await seedDefaultProfiles(paths, targetRegistry);
 
   return {
+    paths,
     profileStore,
     backupStore,
     githubAuthService,

@@ -362,7 +362,14 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     configLabel: "config.toml managed fragment",
     configLanguage: "toml",
     realWritesEnabled: true,
-    executableName: "codex"
+    executableName: "codex",
+    capabilities: {
+      instructions: true,
+      skills: true,
+      mcpTransports: ["stdio", "http", "sse"],
+      agentFormat: "codex",
+      disabledSkillPaths: true
+    }
   },
   createTargetPaths: ({ homeDir }) => {
     const codexHome = join(homeDir, ".codex");

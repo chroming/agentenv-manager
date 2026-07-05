@@ -1,5 +1,12 @@
 import type { BackupSummary, RollbackPreview } from "../../shared/types";
 
+const targetName = (targetId?: string) => {
+  if (targetId === "opencode") return "OpenCode";
+  if (targetId === "codex") return "Codex";
+  if (targetId === "claude-code") return "Claude Code";
+  return "Local files";
+};
+
 interface HistoryViewProps {
   backups: BackupSummary[];
   busy: boolean;
@@ -24,9 +31,9 @@ export const HistoryView = ({
         key={backup.id}
       >
         <div className="history-row__main">
-          <span>{backup.profileName ? `${backup.profileName} → ${backup.targetId}` : backup.id}</span>
+          <span>{backup.profileName ? `${backup.profileName} → ${targetName(backup.targetId)}` : `System backup · ${targetName(backup.targetId)}`}</span>
           <small>
-            {backup.operation === "apply" ? "Profile apply" : "Backup"} · {backup.fileCount} files ·{" "}
+            {backup.operation === "apply" ? "Before Profile apply" : "Filesystem snapshot"} · {backup.fileCount} files ·{" "}
             {new Date(backup.createdAt).toLocaleString()}
           </small>
         </div>
@@ -38,7 +45,7 @@ export const HistoryView = ({
             aria-label={`Preview restore ${backup.profileName ?? backup.id}`}
             onClick={() => onPreviewRollback(backup.id)}
           >
-            Preview restore
+            Preview
           </button>
           {rollbackPreview?.backupId === backup.id ? (
             <button

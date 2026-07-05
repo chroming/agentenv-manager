@@ -55,7 +55,8 @@ describe("profile target adaptation", () => {
 
     expect(targetProfile(nativeSource, createCodexTargetAdapter())).toEqual({
       profile: nativeSource,
-      warnings: []
+      warnings: [],
+      omissions: []
     });
   });
 });

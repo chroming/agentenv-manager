@@ -58,10 +58,18 @@ export interface AgentEnvApi {
   listBackups(): Promise<BackupSummary[]>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
   rollback(backupId: string): Promise<RollbackResult>;
+  previewStopManaging(targetId: string, mode: StopManagingMode): Promise<StopManagingPreview>;
+  stopManaging(previewId: string): Promise<StopManagingResult>;
+  createDataBackup(): Promise<DataBackupResult | undefined>;
+  openDataFolder(): Promise<void>;
+  selectDataRestore(): Promise<DataRestorePreview | undefined>;
+  restoreDataBackup(path: string): Promise<{ safetyBackupPath: string }>;
+  adoptTargetInstructions(profileId: string, targetId: string): Promise<ProfileDetail>;
 }
 
 export interface ApplyProfileOptions {
   allowManagedDrift?: boolean;
+  allowOmissions?: boolean;
 }
 
 export interface SkillLibraryEntry {
@@ -255,6 +263,15 @@ export interface TargetDescriptor {
   configLanguage: "jsonc" | "toml" | "text";
   realWritesEnabled: boolean;
   executableName?: string;
+  capabilities: TargetCapabilities;
+}
+
+export interface TargetCapabilities {
+  instructions: boolean;
+  skills: boolean;
+  mcpTransports: McpTransport[];
+  agentFormat?: "opencode" | "claude-code" | "codex";
+  disabledSkillPaths: boolean;
 }
 
 export interface TargetPaths {
@@ -277,9 +294,23 @@ export interface TargetState {
   appliedLibraryVersions?: LibraryResourceVersions;
   lastAppliedAt?: string;
   managedResources?: ManagedResourceSnapshot[];
+  recoveryRequired?: TargetRecoveryState;
 }
 
 export type TargetManagementStatus = "unmanaged" | "managed";
+export type TargetLifecycleStatus =
+  | "unmanaged"
+  | "applied"
+  | "pending"
+  | "drifted"
+  | "recovery-required";
+
+export interface TargetRecoveryState {
+  operation: "apply" | "rollback";
+  error: string;
+  backupId?: string;
+  occurredAt: string;
+}
 
 export interface TargetManagementState {
   targetId: string;
@@ -288,6 +319,8 @@ export interface TargetManagementState {
   appliedProfileHash?: string;
   appliedLibraryVersions?: LibraryResourceVersions;
   status: TargetManagementStatus;
+  lifecycleStatus: TargetLifecycleStatus;
+  lifecycleReason?: string;
   lastAppliedAt?: string;
   managedResourceCount: number;
   warningCount: number;
@@ -399,6 +432,24 @@ export interface ActivationPreview {
   sourceFingerprints: Record<string, string>;
   targetId: string;
   targetState: TargetState;
+  effectivePayload?: EffectiveProfilePayload;
+  omissions?: PlannedOmission[];
+  requiresOmissionAcknowledgement?: boolean;
+}
+
+export interface EffectiveProfilePayload {
+  instructions: number;
+  skills: number;
+  mcpServers: number;
+  agents: number;
+  nativeConfig: number;
+  total: number;
+}
+
+export interface PlannedOmission {
+  kind: "config" | "agent" | "setting";
+  name: string;
+  reason: string;
 }
 
 export interface LibraryResourceVersions {
@@ -417,7 +468,7 @@ export interface BackupEntry {
 export interface BackupManifest {
   id: string;
   createdAt: string;
-  operation?: "apply";
+  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift";
   targetId?: string;
   profileId?: string;
   profileName?: string;
@@ -428,7 +479,7 @@ export interface BackupSummary {
   id: string;
   createdAt: string;
   fileCount: number;
-  operation?: "apply";
+  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift";
   targetId?: string;
   profileId?: string;
   profileName?: string;
@@ -448,3 +499,30 @@ export interface RollbackPreview {
 }
 
 export type RollbackResult = { ok: true } | { ok: false; errors: string[] };
+
+export type StopManagingMode = "keep-current" | "restore-pre-takeover";
+
+export interface StopManagingPreview extends RollbackPreview {
+  targetId: string;
+  targetName: string;
+  mode: StopManagingMode;
+  takeoverBackupId?: string;
+  managedResourceCount: number;
+  stateFingerprint: string;
+}
+
+export type StopManagingResult =
+  | { ok: true; backupId: string }
+  | { ok: false; errors: string[] };
+
+export interface DataBackupResult {
+  path: string;
+  createdAt: string;
+}
+
+export interface DataRestorePreview {
+  path: string;
+  createdAt: string;
+  formatVersion: number;
+  topLevelItemCount: number;
+}

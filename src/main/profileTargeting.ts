@@ -1,9 +1,10 @@
-import type { ProfileDetail } from "../shared/types";
+import type { PlannedOmission, ProfileDetail } from "../shared/types";
 import type { AgentTargetAdapter } from "./targets/types";
 
 export interface TargetedProfile {
   profile: ProfileDetail;
   warnings: string[];
+  omissions: PlannedOmission[];
 }
 
 export const targetProfile = (
@@ -11,7 +12,7 @@ export const targetProfile = (
   adapter: AgentTargetAdapter
 ): TargetedProfile => {
   if (source.manifest.targetId === adapter.descriptor.id) {
-    return { profile: source, warnings: [] };
+    return { profile: source, warnings: [], omissions: [] };
   }
 
   const defaults = adapter.createDefaultProfile(source.id);
@@ -22,21 +23,22 @@ export const targetProfile = (
   const hasNativeConfig = compactNativeConfig.length > 0 && compactNativeConfig !== "{}";
   const hasDisabledSkills = source.assetPolicy.disabledSkillPaths.length > 0;
   const warnings: string[] = [];
+  const omissions: PlannedOmission[] = [];
 
   if (hasNativeConfig) {
-    warnings.push(
-      `${source.manifest.targetId} Advanced config is target-specific and is not applied to ${adapter.descriptor.name}`
-    );
+    const reason = `${source.manifest.targetId} Advanced config is target-specific and is not applied to ${adapter.descriptor.name}`;
+    warnings.push(reason);
+    omissions.push({ kind: "config", name: "Advanced config", reason });
   }
   if (omittedAgents > 0) {
-    warnings.push(
-      `${omittedAgents} target-specific agent ${omittedAgents === 1 ? "asset is" : "assets are"} not applied to ${adapter.descriptor.name}`
-    );
+    const reason = `${omittedAgents} target-specific agent ${omittedAgents === 1 ? "asset is" : "assets are"} not applied to ${adapter.descriptor.name}`;
+    warnings.push(reason);
+    omissions.push({ kind: "agent", name: `${omittedAgents} agent ${omittedAgents === 1 ? "asset" : "assets"}`, reason });
   }
   if (hasDisabledSkills) {
-    warnings.push(
-      `Disabled skill paths are target-specific and are not applied to ${adapter.descriptor.name}`
-    );
+    const reason = `Disabled skill paths are target-specific and are not applied to ${adapter.descriptor.name}`;
+    warnings.push(reason);
+    omissions.push({ kind: "setting", name: "Disabled skill paths", reason });
   }
 
   return {
@@ -61,6 +63,7 @@ export const targetProfile = (
       contentHash: undefined,
       targetContentHashes: undefined
     },
-    warnings
+    warnings,
+    omissions
   };
 };

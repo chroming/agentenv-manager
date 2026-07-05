@@ -19,6 +19,8 @@ import type {
   SkillUpdateSourceInput
 } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
+import type { AgentEnvPaths } from "./paths";
+import { createDataBackup, inspectDataBackup, restoreDataBackup } from "./dataBackupService";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -30,6 +32,7 @@ export interface IpcServices {
   mcpLibraryStore: McpLibraryStore;
   targetRegistry: TargetRegistry;
   targetDiscoveryService: TargetDiscoveryService;
+  paths: AgentEnvPaths;
 }
 
 const parseId = (value: unknown, label: string): string => {
@@ -49,7 +52,8 @@ export const registerIpcHandlers = ({
   skillLibraryStore,
   mcpLibraryStore,
   targetRegistry,
-  targetDiscoveryService
+  targetDiscoveryService,
+  paths
 }: IpcServices) => {
   ipcMain.handle("clipboard:write-text", (_event, text: unknown) => {
     clipboard.writeText(String(text));
@@ -245,8 +249,13 @@ export const registerIpcHandlers = ({
       activationService.applyProfile(
         parseId(profileId, "profile id"),
         String(previewId),
-        options && typeof options === "object" && "allowManagedDrift" in options
-          ? { allowManagedDrift: (options as { allowManagedDrift?: unknown }).allowManagedDrift === true }
+        options && typeof options === "object"
+          ? {
+              allowManagedDrift:
+                (options as { allowManagedDrift?: unknown }).allowManagedDrift === true,
+              allowOmissions:
+                (options as { allowOmissions?: unknown }).allowOmissions === true
+            }
           : undefined
       )
   );
@@ -256,5 +265,52 @@ export const registerIpcHandlers = ({
   );
   ipcMain.handle("rollback:apply", (_event, backupId: unknown) =>
     activationService.rollback(String(backupId))
+  );
+  ipcMain.handle("targets:preview-stop-managing", (_event, targetId: unknown, mode: unknown) =>
+    activationService.previewStopManaging(
+      parseId(targetId, "target id"),
+      mode === "restore-pre-takeover" ? "restore-pre-takeover" : "keep-current"
+    )
+  );
+  ipcMain.handle("targets:stop-managing", (_event, previewId: unknown) =>
+    activationService.stopManaging(String(previewId))
+  );
+  ipcMain.handle("data:create-backup", async () => {
+    const owner = BrowserWindow.getFocusedWindow();
+    const options = {
+      title: "Choose AgentEnv backup location",
+      buttonLabel: "Create backup here",
+      properties: ["openDirectory", "createDirectory"] as Array<"openDirectory" | "createDirectory">
+    };
+    const result = owner
+      ? await dialog.showOpenDialog(owner, options)
+      : await dialog.showOpenDialog(options);
+    const destination = result.filePaths[0];
+    return result.canceled || !destination
+      ? undefined
+      : createDataBackup(paths, destination);
+  });
+  ipcMain.handle("data:open-folder", () => shell.openPath(paths.appDataRoot));
+  ipcMain.handle("data:select-restore", async () => {
+    const owner = BrowserWindow.getFocusedWindow();
+    const options = {
+      title: "Select AgentEnv backup",
+      buttonLabel: "Review backup",
+      properties: ["openDirectory"] as Array<"openDirectory">
+    };
+    const result = owner
+      ? await dialog.showOpenDialog(owner, options)
+      : await dialog.showOpenDialog(options);
+    const selected = result.filePaths[0];
+    return result.canceled || !selected ? undefined : inspectDataBackup(selected);
+  });
+  ipcMain.handle("data:restore", (_event, path: unknown) =>
+    restoreDataBackup(paths, String(path))
+  );
+  ipcMain.handle("targets:adopt-instructions", (_event, profileId: unknown, targetId: unknown) =>
+    activationService.adoptTargetInstructions(
+      parseId(profileId, "profile id"),
+      parseId(targetId, "target id")
+    )
   );
 };

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rename, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
@@ -34,14 +34,19 @@ import type {
   ApplyProfileOptions,
   ApplyResult,
   BackupManifest,
+  EffectiveProfilePayload,
   ManagedResourceKind,
   ManagedResourceSnapshot,
   PlannedFileChange,
   PlannedResourceChange,
   RollbackPreview,
   RollbackResult,
+  StopManagingMode,
+  StopManagingPreview,
+  StopManagingResult,
   TargetManagementState,
   TargetPaths,
+  TargetRecoveryState,
   TargetState
 } from "../shared/types";
 import { createProfileContentHash } from "./profileFingerprint";
@@ -76,6 +81,9 @@ export interface ActivationService {
   ): Promise<ApplyResult>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
   rollback(backupId: string): Promise<RollbackResult>;
+  previewStopManaging(targetId: string, mode: StopManagingMode): Promise<StopManagingPreview>;
+  stopManaging(previewId: string): Promise<StopManagingResult>;
+  adoptTargetInstructions(profileId: string, targetId: string): Promise<Awaited<ReturnType<ProfileStore["readProfile"]>>>;
 }
 
 const DEFAULT_TARGET_STATE: TargetState = {
@@ -194,6 +202,23 @@ const normalizeTargetState = (value: unknown): TargetState => {
           typeof item.contentHash === "string"
       )
     : [];
+  const recoveryRecord =
+    record.recoveryRequired && typeof record.recoveryRequired === "object"
+      ? (record.recoveryRequired as unknown as Record<string, unknown>)
+      : undefined;
+  const recoveryRequired: TargetRecoveryState | undefined =
+    recoveryRecord &&
+    (recoveryRecord.operation === "apply" || recoveryRecord.operation === "rollback") &&
+    typeof recoveryRecord.error === "string" &&
+    typeof recoveryRecord.occurredAt === "string"
+      ? {
+          operation: recoveryRecord.operation as "apply" | "rollback",
+          error: recoveryRecord.error,
+          backupId:
+            typeof recoveryRecord.backupId === "string" ? recoveryRecord.backupId : undefined,
+          occurredAt: recoveryRecord.occurredAt
+        }
+      : undefined;
   return {
     managedConfigKeys: Array.isArray(record.managedConfigKeys)
       ? record.managedConfigKeys.filter((item): item is string => typeof item === "string")
@@ -211,7 +236,8 @@ const normalizeTargetState = (value: unknown): TargetState => {
         ? record.appliedLibraryVersions
         : undefined,
     lastAppliedAt: typeof record.lastAppliedAt === "string" ? record.lastAppliedAt : undefined,
-    managedResources
+    managedResources,
+    recoveryRequired
   };
 };
 
@@ -278,6 +304,34 @@ const validateProfileStructure = (profile: Awaited<ReturnType<ProfileStore["read
   return errors;
 };
 
+const effectivePayloadFor = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>): EffectiveProfilePayload => {
+  const compactConfig = profile.configText.replace(/\s/g, "");
+  const instructions =
+    profile.manifest.managed.instructions && profile.instructions.trim().length > 0 ? 1 : 0;
+  const skills = profile.manifest.managed.assets
+    ? profile.assetPolicy.ownedDirs.filter((asset) => asset.kind === "skill").length +
+      profile.assetPolicy.ownedFiles.filter((asset) => asset.kind === "skill").length +
+      (profile.assetPolicy.skillRefs?.length ?? 0)
+    : 0;
+  const agents = profile.manifest.managed.assets
+    ? profile.assetPolicy.ownedDirs.filter((asset) => asset.kind === "agent").length +
+      profile.assetPolicy.ownedFiles.filter((asset) => asset.kind === "agent").length
+    : 0;
+  const mcpServers = profile.manifest.managed.config
+    ? profile.assetPolicy.mcpRefs?.length ?? 0
+    : 0;
+  const nativeConfig =
+    profile.manifest.managed.config && compactConfig.length > 0 && compactConfig !== "{}" ? 1 : 0;
+  return {
+    instructions,
+    skills,
+    mcpServers,
+    agents,
+    nativeConfig,
+    total: instructions + skills + mcpServers + agents + nativeConfig
+  };
+};
+
 export const createActivationService = ({
   paths,
   profileStore,
@@ -289,6 +343,8 @@ export const createActivationService = ({
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
   const previews = new Map<string, ActivationPreview>();
+  const stopManagingPreviews = new Map<string, StopManagingPreview>();
+  const activeTargetOperations = new Set<string>();
 
   const statePathFor = (targetId: string) =>
     join(paths.targetStatesDir, `${targetId}.json`);
@@ -320,13 +376,21 @@ export const createActivationService = ({
       return [];
     }
     const entries = await readdir(paths.targetStatesDir, { withFileTypes: true });
+    const [skillLibrary, mcpLibrary] = await Promise.all([
+      skillLibraryStore.listSkills(),
+      mcpLibraryStore.listServers()
+    ]);
     const states = await Promise.all(
       entries
         .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
         .map(async (entry): Promise<TargetManagementState | undefined> => {
           const targetId = entry.name.replace(/\.json$/, "");
           const { state } = await readTargetStateFile(targetId);
-          if (!state.activeProfileId && (state.managedResources ?? []).length === 0) {
+          if (
+            !state.activeProfileId &&
+            (state.managedResources ?? []).length === 0 &&
+            !state.recoveryRequired
+          ) {
             return undefined;
           }
           const driftChecks = await Promise.all(
@@ -335,16 +399,54 @@ export const createActivationService = ({
               return currentHash !== resource.contentHash;
             })
           );
+          const driftCount = driftChecks.filter(Boolean).length;
+          let lifecycleStatus: TargetManagementState["lifecycleStatus"] = "unmanaged";
+          let lifecycleReason: string | undefined;
+          let activeProfileName: string | undefined;
+          if (state.recoveryRequired) {
+            lifecycleStatus = "recovery-required";
+            lifecycleReason = state.recoveryRequired.error;
+          } else if (driftCount > 0) {
+            lifecycleStatus = "drifted";
+            lifecycleReason = `${driftCount} managed ${driftCount === 1 ? "resource differs" : "resources differ"} from the applied snapshot`;
+          } else if (state.activeProfileId) {
+            try {
+              const profile = await profileStore.readProfile(state.activeProfileId);
+              activeProfileName = profile.manifest.name;
+              const expectedHash =
+                profile.targetContentHashes?.[targetId] ??
+                (profile.manifest.targetId === targetId ? profile.contentHash : undefined);
+              const currentVersions = collectLibraryResourceVersions(
+                profile,
+                skillLibrary,
+                mcpLibrary
+              );
+              const isCurrent =
+                Boolean(expectedHash) &&
+                expectedHash === state.appliedProfileHash &&
+                libraryResourceVersionsEqual(currentVersions, state.appliedLibraryVersions);
+              lifecycleStatus = isCurrent ? "applied" : "pending";
+              if (!isCurrent) {
+                lifecycleReason = "Saved Profile or Library resources changed after the last Apply";
+              }
+            } catch {
+              lifecycleStatus = "pending";
+              lifecycleReason = "The active Profile is unavailable";
+            }
+          }
           return {
             targetId,
             activeProfileId: state.activeProfileId,
+            activeProfileName,
             appliedProfileHash: state.appliedProfileHash,
             appliedLibraryVersions: state.appliedLibraryVersions,
             status: state.activeProfileId ? "managed" : "unmanaged",
+            lifecycleStatus,
+            lifecycleReason,
             lastAppliedAt: state.lastAppliedAt,
             managedResourceCount: state.managedResources?.length ?? 0,
             warningCount: 0,
-            errorCount: driftChecks.filter(Boolean).length
+            errorCount: driftCount
           };
         })
     );
@@ -620,6 +722,7 @@ export const createActivationService = ({
     const adapter = targetRegistry.get(requestedTargetId ?? sourceProfile.manifest.targetId);
     const targeted = targetProfile(sourceProfile, adapter);
     const profile = targeted.profile;
+    const effectivePayload = effectivePayloadFor(profile);
     const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
     const targetPaths = adapter.createTargetPaths({
       homeDir: paths.homeDir,
@@ -636,6 +739,21 @@ export const createActivationService = ({
       state: stateFile.state
     });
     const profileErrors = validateProfileStructure(profile);
+    const recoveryErrors = stateFile.state.recoveryRequired
+      ? [
+          `${adapter.descriptor.name} requires recovery before another Apply: ${stateFile.state.recoveryRequired.error}`
+        ]
+      : [];
+    const portabilityErrors =
+      targeted.omissions.length > 0 && effectivePayload.total === 0
+        ? [`No portable Profile content can be applied to ${adapter.descriptor.name}`]
+        : [];
+    const unsupportedMcpErrors = (profile.assetPolicy.mcpRefs ?? []).flatMap((reference) => {
+      const server = mcpLibrary.find((entry) => entry.id === reference.libraryId);
+      return server && !adapter.descriptor.capabilities.mcpTransports.includes(server.transport)
+        ? [`${adapter.descriptor.name} does not support ${server.transport} MCP server ${server.name}`]
+        : [];
+    });
     const assetErrors = await adapter.validateAssets({
       profile: materializedProfile,
       targetPaths,
@@ -671,7 +789,15 @@ export const createActivationService = ({
         drift.warnings,
         unmanagedWarnings
       ),
-      errors: targetPreview.errors.concat(profileErrors, assetErrors, drift.errors, ignoredErrors),
+      errors: targetPreview.errors.concat(
+        recoveryErrors,
+        portabilityErrors,
+        unsupportedMcpErrors,
+        profileErrors,
+        assetErrors,
+        drift.errors,
+        ignoredErrors
+      ),
       changes: targetPreview.changes,
       resourceChanges: assetPlan.resourceChanges,
       liveFingerprints: {
@@ -680,7 +806,10 @@ export const createActivationService = ({
       },
       resourceFingerprints: assetPlan.resourceFingerprints,
       sourceFingerprints: assetPlan.sourceFingerprints,
-      targetState: targetPreview.targetState
+      targetState: targetPreview.targetState,
+      effectivePayload,
+      omissions: targeted.omissions,
+      requiresOmissionAcknowledgement: targeted.omissions.length > 0
     };
     previews.set(preview.id, preview);
     return preview;
@@ -704,7 +833,18 @@ export const createActivationService = ({
     if (preview.changes.length === 0 && preview.resourceChanges.length === 0) {
       return { ok: false, errors: ["No changes to apply"] };
     }
+    if (preview.requiresOmissionAcknowledgement && !options.allowOmissions) {
+      return {
+        ok: false,
+        errors: ["Cross-target omissions must be acknowledged before Apply"]
+      };
+    }
+    if (activeTargetOperations.has(preview.targetId)) {
+      return { ok: false, errors: [`Another operation is already running for ${preview.targetId}`] };
+    }
+    activeTargetOperations.add(preview.targetId);
 
+    try {
     const sourceProfile = await profileStore.readProfile(profileId);
     const adapter = targetRegistry.get(preview.targetId);
     const profile = targetProfile(sourceProfile, adapter).profile;
@@ -808,24 +948,43 @@ export const createActivationService = ({
         [...preview.changes.map((change) => change.path), ...assetBackupPaths],
         targetPaths
       );
+      for (const resource of managedResources) {
+        if ((await hashPath(resource.path)) !== resource.contentHash) {
+          throw new Error(`Post-apply verification failed for ${resource.path}`);
+        }
+      }
       await writeTargetState(preview.targetId, {
         ...preview.targetState,
         activeProfileId: profile.id,
         appliedProfileHash: currentProfileHash,
         appliedLibraryVersions: currentLibraryVersions,
         lastAppliedAt: new Date().toISOString(),
-        managedResources
+        managedResources,
+        recoveryRequired: undefined
       });
     } catch (error) {
       try {
         await restoreBackupEntries(backup);
       } catch (restoreError) {
+        const recoveryError = `Apply failed: ${errorMessage(error)}; automatic restore failed: ${errorMessage(restoreError)}`;
+        try {
+          const currentState = (await readTargetStateFile(preview.targetId)).state;
+          await writeTargetState(preview.targetId, {
+            ...currentState,
+            recoveryRequired: {
+              operation: "apply",
+              error: recoveryError,
+              backupId: backup.id,
+              occurredAt: new Date().toISOString()
+            }
+          });
+        } catch {
+          // The returned error still identifies the backup when state persistence also fails.
+        }
         return {
           ok: false,
           errors: [
-            `Failed to apply profile and failed to restore backup ${backup.id}: ${errorMessage(
-              error
-            )}; restore error: ${errorMessage(restoreError)}`
+            `Recovery required for backup ${backup.id}: ${recoveryError}`
           ]
         };
       }
@@ -845,6 +1004,9 @@ export const createActivationService = ({
     });
 
     return { ok: true, backupId: backup.id };
+    } finally {
+      activeTargetOperations.delete(preview.targetId);
+    }
   };
 
   const previewRollback = async (backupId: string): Promise<RollbackPreview> => {
@@ -862,15 +1024,219 @@ export const createActivationService = ({
 
   const rollback = async (backupId: string): Promise<RollbackResult> => {
     const backup = await backupStore.readBackup(backupId);
+    const operationTargetId = backup.targetId;
+    if (operationTargetId && activeTargetOperations.has(operationTargetId)) {
+      return { ok: false, errors: [`Another operation is already running for ${operationTargetId}`] };
+    }
+    if (operationTargetId) {
+      activeTargetOperations.add(operationTargetId);
+    }
 
-    await restoreBackupEntries(backup);
+    try {
+      await restoreBackupEntries(backup);
 
-    await appendHistory(paths, {
-      type: "rollback",
-      backupId
+      await appendHistory(paths, {
+        type: "rollback",
+        backupId
+      });
+
+      return { ok: true };
+    } catch (error) {
+      if (operationTargetId) {
+        try {
+          const currentState = (await readTargetStateFile(operationTargetId)).state;
+          await writeTargetState(operationTargetId, {
+            ...currentState,
+            recoveryRequired: {
+              operation: "rollback",
+              error: errorMessage(error),
+              backupId,
+              occurredAt: new Date().toISOString()
+            }
+          });
+        } catch {
+          // Return the rollback failure even if recovery state cannot be persisted.
+        }
+      }
+      return { ok: false, errors: [`Recovery required: ${errorMessage(error)}`] };
+    } finally {
+      if (operationTargetId) {
+        activeTargetOperations.delete(operationTargetId);
+      }
+    }
+  };
+
+  const materializeManagedResource = async (path: string) => {
+    if (!(await pathExists(path))) {
+      return;
+    }
+    const stats = await lstat(path);
+    if (stats.isDirectory()) {
+      const temporaryPath = `${path}.agentenv-detach-${randomUUID().slice(0, 8)}`;
+      await cp(path, temporaryPath, { recursive: true, dereference: true });
+      await rm(path, { recursive: true, force: true });
+      await rename(temporaryPath, path);
+      const removeMarkers = async (directory: string): Promise<void> => {
+        const entries = await readdir(directory, { withFileTypes: true });
+        for (const entry of entries) {
+          const entryPath = join(directory, entry.name);
+          if (entry.name === ".agentenv-owner.json" || entry.name === ".agentenv-skill.json") {
+            await rm(entryPath, { force: true });
+          } else if (entry.isDirectory()) {
+            await removeMarkers(entryPath);
+          }
+        }
+      };
+      await removeMarkers(path);
+      return;
+    }
+    if (stats.isSymbolicLink()) {
+      const temporaryPath = `${path}.agentenv-detach-${randomUUID().slice(0, 8)}`;
+      await cp(path, temporaryPath, { dereference: true });
+      await rm(path, { force: true });
+      await rename(temporaryPath, path);
+    }
+    await rm(markerPathForFile(path), { force: true });
+  };
+
+  const previewStopManaging = async (
+    targetId: string,
+    mode: StopManagingMode
+  ): Promise<StopManagingPreview> => {
+    const adapter = targetRegistry.get(targetId);
+    const stateFile = await readTargetStateFile(targetId);
+    const errors: string[] = [];
+    if (!stateFile.state.activeProfileId) {
+      errors.push(`${adapter.descriptor.name} is not managed by AgentEnv`);
+    }
+    let takeoverBackupId: string | undefined;
+    let changes: PlannedFileChange[] = [];
+    if (mode === "restore-pre-takeover") {
+      const candidates = (await backupStore.listBackups())
+        .filter((backup) => backup.targetId === targetId && backup.operation === "apply")
+        .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+      takeoverBackupId = candidates[0]?.id;
+      if (!takeoverBackupId) {
+        errors.push(`No pre-takeover backup is available for ${adapter.descriptor.name}`);
+      } else {
+        const takeoverBackup = await backupStore.readBackup(takeoverBackupId);
+        changes = await Promise.all(takeoverBackup.entries.map(createRollbackChange));
+      }
+    }
+    const preview: StopManagingPreview = {
+      id: randomUUID(),
+      backupId: takeoverBackupId ?? "",
+      targetId,
+      targetName: adapter.descriptor.name,
+      mode,
+      takeoverBackupId,
+      managedResourceCount: stateFile.state.managedResources?.length ?? 0,
+      stateFingerprint: hashText(stateFile.content),
+      createdAt: new Date().toISOString(),
+      warnings:
+        mode === "keep-current"
+          ? ["Current Target files will be kept and AgentEnv ownership will be removed"]
+          : ["Current Target files will be replaced with the environment captured before takeover"],
+      errors,
+      changes
+    };
+    stopManagingPreviews.set(preview.id, preview);
+    return preview;
+  };
+
+  const stopManaging = async (previewId: string): Promise<StopManagingResult> => {
+    const preview = stopManagingPreviews.get(previewId);
+    if (!preview) {
+      return { ok: false, errors: ["Stop managing preview not found"] };
+    }
+    if (preview.errors.length > 0) {
+      return { ok: false, errors: preview.errors };
+    }
+    if (activeTargetOperations.has(preview.targetId)) {
+      return { ok: false, errors: [`Another operation is already running for ${preview.targetId}`] };
+    }
+    activeTargetOperations.add(preview.targetId);
+    try {
+      const stateFile = await readTargetStateFile(preview.targetId);
+      if (hashText(stateFile.content) !== preview.stateFingerprint) {
+        return { ok: false, errors: ["Target management state changed after preview"] };
+      }
+      const managedPaths = (stateFile.state.managedResources ?? []).map((resource) => resource.path);
+      const safetyBackup = await backupStore.createBackup(
+        [...managedPaths, stateFile.path],
+        {
+          operation: "stop-managing",
+          targetId: preview.targetId,
+          profileId: stateFile.state.activeProfileId
+        }
+      );
+      try {
+        if (preview.mode === "restore-pre-takeover" && preview.takeoverBackupId) {
+          await restoreBackupEntries(await backupStore.readBackup(preview.takeoverBackupId));
+        } else {
+          for (const path of managedPaths) {
+            await materializeManagedResource(path);
+          }
+          await rm(stateFile.path, { force: true });
+        }
+      } catch (error) {
+        try {
+          await restoreBackupEntries(safetyBackup);
+        } catch (restoreError) {
+          const recoveryError = `Stop managing failed: ${errorMessage(error)}; restore failed: ${errorMessage(restoreError)}`;
+          await writeTargetState(preview.targetId, {
+            ...stateFile.state,
+            recoveryRequired: {
+              operation: "rollback",
+              error: recoveryError,
+              backupId: safetyBackup.id,
+              occurredAt: new Date().toISOString()
+            }
+          });
+          return { ok: false, errors: [`Recovery required: ${recoveryError}`] };
+        }
+        return { ok: false, errors: [`Stop managing failed; restored backup: ${errorMessage(error)}`] };
+      }
+      await appendHistory(paths, {
+        type: "stop-managing",
+        targetId: preview.targetId,
+        mode: preview.mode,
+        backupId: safetyBackup.id
+      });
+      return { ok: true, backupId: safetyBackup.id };
+    } finally {
+      activeTargetOperations.delete(preview.targetId);
+    }
+  };
+
+  const adoptTargetInstructions = async (profileId: string, targetId: string) => {
+    const profile = await profileStore.readProfile(profileId);
+    if (profile.manifest.targetId !== targetId) {
+      throw new Error("Live instructions can only be adopted into a Profile with the same native Target format");
+    }
+    const adapter = targetRegistry.get(targetId);
+    const targetPaths = adapter.createTargetPaths({
+      homeDir: paths.homeDir,
+      fakeHomeRoot: paths.fakeHomeRoot
     });
-
-    return { ok: true };
+    const liveInstructions = await readTextIfExists(targetPaths.instructionsPath);
+    if (liveInstructions.trim().length === 0) {
+      throw new Error(`${adapter.descriptor.name} live instructions are empty`);
+    }
+    if (profile.profileDir) {
+      await backupStore.createBackup([profile.profileDir], {
+        operation: "adopt-drift",
+        targetId,
+        profileId,
+        profileName: profile.manifest.name
+      });
+    }
+    return profileStore.saveProfile({
+      manifest: profile.manifest,
+      instructions: liveInstructions,
+      configText: profile.configText,
+      assetPolicy: profile.assetPolicy
+    });
   };
 
   return {
@@ -878,6 +1244,9 @@ export const createActivationService = ({
     previewProfile,
     applyProfile,
     previewRollback,
-    rollback
+    rollback,
+    previewStopManaging,
+    stopManaging,
+    adoptTargetInstructions
   };
 };

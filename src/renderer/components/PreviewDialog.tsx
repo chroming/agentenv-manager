@@ -1,9 +1,13 @@
 import { useEffect, useRef } from "react";
-import type { ActivationPreview, RollbackPreview } from "../../shared/types";
+import type {
+  ActivationPreview,
+  RollbackPreview,
+  StopManagingPreview
+} from "../../shared/types";
 import { DiffViewer } from "./DiffViewer";
 
 interface PreviewDialogProps {
-  preview?: ActivationPreview | RollbackPreview;
+  preview?: ActivationPreview | RollbackPreview | StopManagingPreview;
   title?: string;
   confirmDisabled?: boolean;
   cancelDisabled?: boolean;
@@ -12,7 +16,10 @@ interface PreviewDialogProps {
   errorMessage?: string;
   managedDriftAcknowledged?: boolean;
   onManagedDriftAcknowledgedChange?(acknowledged: boolean): void;
+  omissionsAcknowledged?: boolean;
+  onOmissionsAcknowledgedChange?(acknowledged: boolean): void;
   onOpenRecovery?(): void;
+  onAdoptInstructions?(): void;
   onCancel?(): void;
   onConfirm?(): void;
 }
@@ -86,7 +93,10 @@ export const PreviewDialog = ({
   errorMessage,
   managedDriftAcknowledged = false,
   onManagedDriftAcknowledgedChange,
+  omissionsAcknowledged = false,
+  onOmissionsAcknowledgedChange,
   onOpenRecovery,
+  onAdoptInstructions,
   onCancel,
   onConfirm
 }: PreviewDialogProps) => {
@@ -172,18 +182,48 @@ export const PreviewDialog = ({
     return null;
   }
 
-  const targetName = "targetId" in preview ? targetLabel(preview.targetId) : "Target";
+  const targetName =
+    "targetName" in preview
+      ? preview.targetName
+      : "targetId" in preview
+        ? targetLabel(preview.targetId)
+        : "Target";
+  const isActivationPreview = "profileId" in preview;
   const blockedItems = preview.errors.map((error) => prettifyIssue(error, targetName));
   const managedDriftErrors = preview.errors.filter((error) =>
     error.startsWith("External changes detected in AgentEnv-managed")
   );
-  const keepItems = preview.warnings.map((warning) => prettifyIssue(warning, targetName));
-  const resourceChanges = "targetId" in preview ? preview.resourceChanges : [];
+  const omissionReasons = new Set(
+    isActivationPreview ? (preview.omissions ?? []).map((omission) => omission.reason) : []
+  );
+  const keepItems = preview.warnings
+    .filter((warning) => !omissionReasons.has(warning))
+    .map((warning) => prettifyIssue(warning, targetName));
+  const resourceChanges = "resourceChanges" in preview ? preview.resourceChanges : [];
   const installChanges = resourceChanges.filter((change) => change.action === "install");
   const replaceChanges = resourceChanges.filter((change) => change.action === "replace");
   const removeChanges = resourceChanges.filter((change) => change.action === "remove");
   const fileCountLabel = plural(preview.changes.length, "file");
   const resourceCountLabel = plural(resourceChanges.length, "resource");
+  const payload = isActivationPreview ? preview.effectivePayload : undefined;
+  const payloadParts = payload
+    ? [
+        payload.instructions > 0 ? plural(payload.instructions, "instruction file") : undefined,
+        payload.skills > 0 ? plural(payload.skills, "Skill") : undefined,
+        payload.mcpServers > 0 ? plural(payload.mcpServers, "MCP server") : undefined,
+        payload.agents > 0 ? plural(payload.agents, "Agent") : undefined,
+        payload.nativeConfig > 0 ? plural(payload.nativeConfig, "native config") : undefined
+      ].filter((item): item is string => Boolean(item))
+    : [];
+  const outcomeText = isActivationPreview
+    ? payloadParts.length > 0
+      ? `${targetName} will receive ${payloadParts.join(", ")}.`
+      : `${targetName} has no effective Profile payload.`
+    : "mode" in preview
+      ? preview.mode === "keep-current"
+        ? `${targetName} files will stay in place and AgentEnv ownership will be removed.`
+        : `${targetName} will be restored to its pre-takeover environment.`
+      : `${fileCountLabel} reviewed before restore.`;
 
   const content = (
     <section
@@ -197,45 +237,47 @@ export const PreviewDialog = ({
       <header className="preview-header">
         <div>
           <div className="section-title">{title}</div>
-          <p className="muted">
-            {fileCountLabel} and {resourceCountLabel} reviewed before apply
-          </p>
+          <p className="preview-outcome">{outcomeText}</p>
         </div>
         <time dateTime={preview.createdAt}>{new Date(preview.createdAt).toLocaleString()}</time>
       </header>
       <section className="preview-summary-grid" aria-label="Apply summary">
-        <section className={`preview-summary-card${blockedItems.length > 0 ? " is-blocked" : ""}`}>
-          <strong>Blocked</strong>
-          <span>{blockedItems.length > 0 ? plural(blockedItems.length, "issue") : "No blockers"}</span>
-          {blockedItems.map((item) => (
-            <p className="error" key={`${item.title}${item.detail ?? ""}`}>
-              {item.title}
-              {item.detail ? <small>{item.detail}</small> : null}
-            </p>
-          ))}
-        </section>
-        <section className="preview-summary-card">
-          <strong>Will keep</strong>
-          <span>{keepItems.length > 0 ? plural(keepItems.length, "item") : "Nothing unmanaged"}</span>
-          {keepItems.map((item) => (
-            <p className="warning" key={`${item.title}${item.detail ?? ""}`}>
-              {item.title}
-              {item.detail ? <small>{item.detail}</small> : null}
-            </p>
-          ))}
-        </section>
-        <section className="preview-summary-card">
-          <strong>Configuration</strong>
-          <span>{preview.changes.length > 0 ? `${fileCountLabel} changed` : "No file changes"}</span>
-        </section>
-        <section className="preview-summary-card">
-          <strong>Resources</strong>
-          <span>
-            {resourceChanges.length > 0
-              ? `${installChanges.length} install · ${replaceChanges.length} replace · ${removeChanges.length} remove`
-              : "No resource changes"}
-          </span>
-        </section>
+        {blockedItems.length > 0 ? (
+          <section className="preview-summary-card is-blocked">
+            <strong>Blocking issues</strong>
+            <span>{plural(blockedItems.length, "issue")}</span>
+            {blockedItems.map((item) => (
+              <p className="error" key={`${item.title}${item.detail ?? ""}`}>
+                {item.title}
+                {item.detail ? <small>{item.detail}</small> : null}
+              </p>
+            ))}
+          </section>
+        ) : null}
+        {keepItems.length > 0 ? (
+          <section className="preview-summary-card">
+            <strong>Will preserve</strong>
+            <span>{plural(keepItems.length, "unmanaged item")}</span>
+            {keepItems.map((item) => (
+              <p className="warning" key={`${item.title}${item.detail ?? ""}`}>
+                {item.title}
+                {item.detail ? <small>{item.detail}</small> : null}
+              </p>
+            ))}
+          </section>
+        ) : null}
+        {preview.changes.length > 0 ? (
+          <section className="preview-summary-card">
+            <strong>Configuration changes</strong>
+            <span>{`${fileCountLabel} changed`}</span>
+          </section>
+        ) : null}
+        {resourceChanges.length > 0 ? (
+          <section className="preview-summary-card">
+            <strong>Resource changes</strong>
+            <span>{`${installChanges.length} install · ${replaceChanges.length} replace · ${removeChanges.length} remove`}</span>
+          </section>
+        ) : null}
       </section>
       {managedDriftErrors.length > 0 && onManagedDriftAcknowledgedChange ? (
         <section className="preview-drift-recovery" aria-label="External change recovery">
@@ -255,9 +297,42 @@ export const PreviewDialog = ({
             I understand; back up and replace these changes
           </label>
           {onOpenRecovery ? (
-            <button className="secondary-action" type="button" onClick={onOpenRecovery}>
-              Open recovery history
-            </button>
+            <div className="preview-drift-actions">
+              {onAdoptInstructions ? (
+                <button className="secondary-action" type="button" onClick={onAdoptInstructions}>
+                  Adopt live instructions
+                </button>
+              ) : null}
+              <button className="secondary-action" type="button" onClick={onOpenRecovery}>
+                Open recovery history
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+      {preview && "omissions" in preview && (preview.omissions?.length ?? 0) > 0 ? (
+        <section className="preview-drift-recovery preview-omission-review" aria-label="Cross-target omissions">
+          <div>
+            <strong>Not included for {targetName}</strong>
+            <p>These native Profile resources are not compatible with the selected Target.</p>
+          </div>
+          <ul>
+            {preview.omissions?.map((omission) => (
+              <li key={`${omission.kind}:${omission.name}`}>
+                <strong>{omission.name}</strong>
+                <span>{omission.reason}</span>
+              </li>
+            ))}
+          </ul>
+          {onOmissionsAcknowledgedChange ? (
+            <label>
+              <input
+                type="checkbox"
+                checked={omissionsAcknowledged}
+                onChange={(event) => onOmissionsAcknowledgedChange(event.currentTarget.checked)}
+              />
+              I understand these resources will not be applied to {targetName}
+            </label>
           ) : null}
         </section>
       ) : null}

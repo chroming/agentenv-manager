@@ -21,7 +21,7 @@ describe("settings store", () => {
     const store = createSettingsStore(paths);
 
     expect(await store.readSettings()).toEqual({
-      skillSyncMethod: "symlink",
+      skillSyncMethod: "copy",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60

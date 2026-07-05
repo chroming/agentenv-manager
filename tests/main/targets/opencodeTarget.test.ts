@@ -249,7 +249,12 @@ describe("OpenCode target adapter", () => {
     await expect(
       adapter.validateAssets({ profile, targetPaths, skillLibraryDir })
     ).resolves.toEqual([]);
-    await adapter.applyAssets({ profile, targetPaths, skillLibraryDir });
+    await adapter.applyAssets({
+      profile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: "symlink"
+    });
 
     const targetDir = join(targetPaths.skillsDir ?? "", "agentenv-shared-reviewer");
     await expect(readFile(join(targetDir, "SKILL.md"), "utf8")).resolves.toBe(

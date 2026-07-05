@@ -524,6 +524,78 @@
   display: none;
 }
 
+.target-recovery .history-view {
+  display: grid;
+  gap: 0;
+}
+
+.target-recovery .history-row {
+  align-items: center;
+  border: 0;
+  border-radius: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0;
+  padding: 10px 0;
+}
+
+.target-recovery .history-row + .history-row {
+  border-top: 1px solid var(--border);
+}
+
+.target-recovery .history-actions {
+  display: flex;
+  grid-column: 2;
+}
+
+.target-recovery .history-action,
+.target-recovery .restore-action {
+  min-height: 30px;
+  width: auto;
+}
+
+.target-recovery .history-status {
+  grid-column: 1 / -1;
+}
+
+.target-diagnostics-actions {
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+}
+
+.stop-managing-options {
+  display: grid;
+  gap: 8px;
+  padding: 4px 16px 16px;
+}
+
+.stop-managing-options label {
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.stop-managing-options label:has(input:checked) {
+  background: #f6f9ff;
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+}
+
+.stop-managing-options span {
+  display: grid;
+  gap: 3px;
+}
+
+.stop-managing-options small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .settings-page {
   align-content: start;
   display: grid;
@@ -536,6 +608,48 @@
   color: var(--muted);
   font-size: 13px;
   margin-top: 5px;
+}
+
+.settings-data-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.data-restore-summary {
+  display: grid;
+  gap: 9px;
+  padding: 2px 16px 16px;
+}
+
+.data-restore-summary > span {
+  display: flex;
+  gap: 8px;
+}
+
+.data-restore-summary code {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  padding: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-restore-summary p {
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.settings-data-path {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  display: block;
+  margin-top: 12px;
+  padding: 9px 10px;
 }
 
 .settings-page > .resource-section {

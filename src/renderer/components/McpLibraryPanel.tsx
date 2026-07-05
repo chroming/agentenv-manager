@@ -287,8 +287,21 @@ export const McpLibraryPanel = ({
             </div>
           ))}
           {visibleServers.length === 0 ? (
-            <div className="inline-state inline-state--panel">
+            <div className="inline-state inline-state--panel library-empty-state">
               <span>{mcpServers.length === 0 ? "No MCP servers yet" : "No matching MCP servers"}</span>
+              {mcpServers.length === 0 ? (
+                <button
+                  className="primary-inline-action"
+                  type="button"
+                  onClick={(event) => {
+                    editorTriggerRef.current = event.currentTarget;
+                    createServer();
+                  }}
+                >
+                  <Plus size={15} strokeWidth={2.3} />
+                  Add first MCP server
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>

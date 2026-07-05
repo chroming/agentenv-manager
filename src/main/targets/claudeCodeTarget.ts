@@ -389,7 +389,14 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     configLabel: "settings + user MCP JSONC",
     configLanguage: "jsonc",
     realWritesEnabled: true,
-    executableName: "claude"
+    executableName: "claude",
+    capabilities: {
+      instructions: true,
+      skills: true,
+      mcpTransports: ["stdio", "http", "sse"],
+      agentFormat: "claude-code",
+      disabledSkillPaths: false
+    }
   },
   createTargetPaths: ({ homeDir }) => {
     const claudeDir = join(homeDir, ".claude");

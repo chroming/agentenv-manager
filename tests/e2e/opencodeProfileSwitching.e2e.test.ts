@@ -1,10 +1,8 @@
 import {
   chmod,
-  lstat,
   mkdir,
   mkdtemp,
   readFile,
-  readlink,
   rm,
   writeFile
 } from "node:fs/promises";
@@ -264,7 +262,7 @@ describe("OpenCode profile switching e2e", () => {
     ).resolves.toContain("name: agentenv-beta-skill");
   });
 
-  it("switches reusable library skill links without duplicating the library skill", async () => {
+  it("switches reusable library skill copies without duplicating the library skill", async () => {
     const { paths, profileStore, activationService } = await makeEnv();
     const targetDir = join(paths.homeDir, ".config", "opencode");
     const librarySkillDir = join(paths.skillsLibraryDir, "shared-reviewer");
@@ -317,8 +315,6 @@ describe("OpenCode profile switching e2e", () => {
     await expectApplyOk(activationService, alpha.id);
     const alphaSkillMd = join(targetDir, "skills", "agentenv-alpha-shared", "SKILL.md");
     await expect(readFile(alphaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
-    expect((await lstat(alphaSkillMd)).isSymbolicLink()).toBe(true);
-    await expect(readlink(alphaSkillMd)).resolves.toBe(join(librarySkillDir, "SKILL.md"));
 
     await expectApplyOk(activationService, beta.id);
     await expect(fileExists(join(targetDir, "skills", "agentenv-alpha-shared"))).resolves.toBe(
@@ -326,8 +322,6 @@ describe("OpenCode profile switching e2e", () => {
     );
     const betaSkillMd = join(targetDir, "skills", "agentenv-beta-shared", "SKILL.md");
     await expect(readFile(betaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
-    expect((await lstat(betaSkillMd)).isSymbolicLink()).toBe(true);
-    await expect(readlink(betaSkillMd)).resolves.toBe(join(librarySkillDir, "SKILL.md"));
     await expect(readFile(join(librarySkillDir, "SKILL.md"), "utf8")).resolves.toContain(
       "name: shared-reviewer"
     );

@@ -256,7 +256,7 @@ try {
   await page.getByRole("button", { name: "Profiles" }).click();
   await page.getByRole("button", { name: /Daily Coding/ }).click();
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
-  await page.getByRole("button", { name: "Select target workspace" }).click();
+  await page.getByRole("button", { name: "Select apply target" }).click();
   await page.waitForTimeout(250);
   await captureWindow(windowHandle, join(outputDir, "implementation-1536x1024.png"));
 

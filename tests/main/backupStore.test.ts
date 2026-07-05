@@ -71,6 +71,20 @@ describe("backup store", () => {
     expect(mode).toBe(0o700);
   });
 
+  it("keeps backups unique when multiple operations share the same timestamp", async () => {
+    const paths = await makePaths();
+    const store = createBackupStore(paths, {
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+
+    const first = await store.createBackup([]);
+    const second = await store.createBackup([]);
+
+    expect(first.id).toBe("2026-06-30T00-00-00-000Z");
+    expect(second.id).toBe("2026-06-30T00-00-00-000Z-1");
+    await expect(store.listBackups()).resolves.toHaveLength(2);
+  });
+
   it("ignores non-activation backup namespaces", async () => {
     const paths = await makePaths();
     const store = createBackupStore(paths, {

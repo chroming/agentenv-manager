@@ -2,21 +2,21 @@
   --text: #172033;
   --muted: #667085;
   --subtle: #8a95a6;
-  --border: #e2e7ef;
-  --border-strong: #ccd5e1;
-  --page: #eef2f7;
+  --border: #e7ebf2;
+  --border-strong: #d8dee9;
+  --page: #f6f8fc;
   --surface: #ffffff;
-  --surface-muted: #f7f9fc;
+  --surface-muted: #f8fafc;
   --surface-pressed: #f1f5f9;
-  --accent: #315fdc;
-  --accent-strong: #244bb7;
+  --accent: #1769f5;
+  --accent-strong: #0f56d9;
   --success: #18875a;
   --success-bg: #e8f6ef;
   --warning: #b7791f;
   --danger: #c9352b;
   --danger-bg: #fff0ee;
   --warning-bg: #fff6df;
-  --shadow-soft: 0 16px 38px rgba(29, 41, 57, 0.08);
+  --shadow-soft: 0 14px 34px rgba(15, 23, 42, 0.05);
   --motion-fast: 150ms ease;
   --motion-standard: 220ms ease;
   --z-dropdown: 80;
@@ -104,6 +104,74 @@ summary:focus-visible {
 button:disabled {
   color: #99a3b3;
   cursor: not-allowed;
+}
+
+.settings-field-note {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  line-height: 1.35;
+  margin-top: 6px;
+}
+
+.settings-field-note.is-warning {
+  color: var(--warning);
+}
+
+.profile-hero__destination {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  gap: 5px;
+}
+
+.native-config-notice {
+  align-items: flex-start;
+  background: var(--warning-bg);
+  border: 1px solid color-mix(in srgb, var(--warning) 24%, var(--border));
+  border-radius: 7px;
+  color: var(--warning);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 12px 16px 0;
+  padding: 10px 12px;
+}
+
+.native-config-notice span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preview-outcome {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 3px;
+}
+
+.preview-omission-review ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.preview-omission-review li {
+  display: grid;
+  gap: 2px;
+}
+
+.preview-omission-review li span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preview-drift-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 h1,
@@ -2224,17 +2292,6 @@ summary {
   gap: 10px;
   margin-top: 14px;
   padding-top: 12px;
-}
-
-/* Screenshot-inspired library console */
-:root {
-  --page: #f6f8fc;
-  --surface-muted: #f8fafc;
-  --accent: #1769f5;
-  --accent-strong: #0f56d9;
-  --border: #e7ebf2;
-  --border-strong: #d8dee9;
-  --shadow-soft: 0 14px 34px rgba(15, 23, 42, 0.05);
 }
 
 .app-shell {

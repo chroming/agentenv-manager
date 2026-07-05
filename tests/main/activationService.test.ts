@@ -170,6 +170,32 @@ describe("activation service", () => {
     expect(state?.errorCount).toBe(0);
   });
 
+  it("keeps a Target visible when recovery is required without an active Profile", async () => {
+    const { paths, service } = await makeEnv();
+    await mkdir(paths.targetStatesDir, { recursive: true });
+    await writeFile(
+      join(paths.targetStatesDir, "codex.json"),
+      JSON.stringify({
+        managedConfigKeys: [],
+        managedMcpNames: [],
+        managedResources: [],
+        recoveryRequired: {
+          operation: "rollback",
+          error: "Restore could not complete",
+          occurredAt: "2026-07-12T00:00:00.000Z"
+        }
+      })
+    );
+
+    await expect(service.listTargetStates()).resolves.toEqual([
+      expect.objectContaining({
+        targetId: "codex",
+        lifecycleStatus: "recovery-required",
+        lifecycleReason: "Restore could not complete"
+      })
+    ]);
+  });
+
   it("adapts portable profile resources when applying to another target", async () => {
     const { paths, service } = await makeEnv();
     const openCodeDir = join(paths.homeDir, ".config", "opencode");
@@ -189,12 +215,30 @@ describe("activation service", () => {
     expect(preview.warnings).toContain(
       "codex Advanced config is target-specific and is not applied to OpenCode"
     );
+    expect(preview.effectivePayload).toMatchObject({
+      instructions: 1,
+      skills: 1,
+      mcpServers: 1,
+      nativeConfig: 0
+    });
+    expect(preview.omissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "config" }),
+        expect.objectContaining({ kind: "setting" })
+      ])
+    );
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
+      ok: false,
+      errors: ["Cross-target omissions must be acknowledged before Apply"]
+    });
     expect(preview.changes.map(({ path }) => path)).toContain(openCodeInstructions);
     expect(preview.resourceChanges).toContainEqual(
       expect.objectContaining({ path: openCodeSkill, action: "install" })
     );
 
-    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    expect(
+      (await service.applyProfile("daily-coding", preview.id, { allowOmissions: true })).ok
+    ).toBe(true);
     await expect(readFile(openCodeInstructions, "utf8")).resolves.toBe("# New agents\n");
     await expect(readFile(openCodeConfig, "utf8")).resolves.toContain("shared_docs");
     await expect(readFile(join(openCodeSkill, "SKILL.md"), "utf8")).resolves.toContain(
@@ -455,6 +499,52 @@ describe("activation service", () => {
     );
   });
 
+  it("stops managing while keeping the currently applied Target environment", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Before takeover\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+    const applyPreview = await service.previewProfile("daily-coding");
+    expect((await service.applyProfile("daily-coding", applyPreview.id)).ok).toBe(true);
+
+    const stopPreview = await service.previewStopManaging("codex", "keep-current");
+    expect(stopPreview.errors).toEqual([]);
+    expect(stopPreview.managedResourceCount).toBeGreaterThan(0);
+    const result = await service.stopManaging(stopPreview.id);
+
+    expect(result.ok).toBe(true);
+    await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe("# New agents\n");
+    await expect(
+      readFile(
+        join(paths.userSkillsDir, "agentenv-daily-coding-example-skill", ".agentenv-owner.json"),
+        "utf8"
+      )
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(service.listTargetStates()).resolves.toEqual([]);
+  });
+
+  it("stops managing by restoring the Target environment captured before takeover", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Before takeover\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+    const applyPreview = await service.previewProfile("daily-coding");
+    expect((await service.applyProfile("daily-coding", applyPreview.id)).ok).toBe(true);
+
+    const stopPreview = await service.previewStopManaging("codex", "restore-pre-takeover");
+    expect(stopPreview.errors).toEqual([]);
+    expect(stopPreview.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: paths.globalAgentsPath, after: "# Before takeover\n" })
+      ])
+    );
+    const result = await service.stopManaging(stopPreview.id);
+
+    expect(result.ok).toBe(true);
+    await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe(
+      "# Before takeover\n"
+    );
+    await expect(service.listTargetStates()).resolves.toEqual([]);
+  });
+
   it("applies Codex profiles without modifying auth.json", async () => {
     const { paths, service } = await makeEnv();
     const authPath = join(paths.codexHome, "auth.json");
@@ -487,7 +577,14 @@ describe("activation service", () => {
         instructionsLabel: "AGENTS.md",
         configLabel: "config.toml",
         configLanguage: "toml",
-        realWritesEnabled: true
+        realWritesEnabled: true,
+        capabilities: {
+          instructions: true,
+          skills: true,
+          mcpTransports: ["stdio", "http", "sse"],
+          agentFormat: "codex",
+          disabledSkillPaths: true
+        }
       },
       createTargetPaths: () => ({
         targetId: "codex",

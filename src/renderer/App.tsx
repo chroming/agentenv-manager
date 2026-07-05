@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   Copy,
@@ -34,9 +35,12 @@ import type {
   ActivationPreview,
   AssetPolicy,
   BackupSummary,
+  DataRestorePreview,
   ProfileDetail,
   ProfileSummary,
   RollbackPreview,
+  StopManagingMode,
+  StopManagingPreview,
   SaveProfileInput,
   AgentEnvSettings,
   GitHubAuthStatus,
@@ -321,7 +325,7 @@ const createValidationRows = (
 
   return [
     {
-      label: "Target access",
+      label: `${target?.name ?? "Target"} access`,
       value:
         target?.health.status === "ready"
           ? "OK"
@@ -352,8 +356,35 @@ const createValidationRows = (
           : "ok"
     },
     {
-      label: profileTarget?.configLabel ?? "Config",
-      ...configValidation
+      ...configValidation,
+      label: `${profileTarget?.name ?? "Native"} native config`,
+      detail:
+        target && profileTarget && target.id !== profileTarget.id
+          ? `Only applied when the destination Target is ${profileTarget.name}`
+          : configValidation.detail
+    },
+    {
+      label: `${target?.name ?? "Target"} compatibility`,
+      value:
+        target && profileTarget && target.id !== profileTarget.id
+          ? preview
+            ? (preview.omissions?.length ?? 0) > 0
+              ? "Review"
+              : "Compatible"
+            : "Preview"
+          : "Native",
+      detail:
+        target && profileTarget && target.id !== profileTarget.id
+          ? preview
+            ? `${preview.effectivePayload?.total ?? 0} resources included; ${preview.omissions?.length ?? 0} native items omitted`
+            : "Preview calculates the portable payload and native-only omissions"
+          : "Native configuration is supported by this Target",
+      level:
+        preview && (preview.omissions?.length ?? 0) > 0
+          ? "warning"
+          : target && profileTarget && target.id !== profileTarget.id
+            ? "pending"
+            : "ok"
     },
     {
       label: "Skills",
@@ -405,7 +436,7 @@ export const App = () => {
     Record<string, LibraryResourceVersions>
   >({});
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
-    skillSyncMethod: "symlink",
+    skillSyncMethod: "copy",
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: true,
     skillAutoCheckIntervalMinutes: 60
@@ -429,7 +460,9 @@ export const App = () => {
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
   const [replaceManagedDrift, setReplaceManagedDrift] = useState(false);
+  const [acceptCrossTargetOmissions, setAcceptCrossTargetOmissions] = useState(false);
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
+  const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
   const [activeLibraryTab, setActiveLibraryTab] = useState<LibraryTab>("skills");
@@ -446,6 +479,8 @@ export const App = () => {
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
+  const [dataBackupStatus, setDataBackupStatus] = useState("");
+  const [dataRestorePreview, setDataRestorePreview] = useState<DataRestorePreview>();
   const [targetRefreshStatus, setTargetRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [profileSearch, setProfileSearch] = useState("");
   const [activeComposerSection, setActiveComposerSection] =
@@ -474,6 +509,7 @@ export const App = () => {
   const activeProfileFlowRequestRef = useRef<number | undefined>(undefined);
   const saveInFlightRef = useRef(false);
   const rollbackReturnFocusRef = useRef<HTMLElement | null>(null);
+  const dataRestoreReturnFocusRef = useRef<HTMLElement | null>(null);
   const activeLibraryView = activeWorkspace === "library" ? activeLibraryTab : undefined;
   const libraryScroll = useLibraryScrollRestoration({
     activeView: activeLibraryView,
@@ -508,6 +544,13 @@ export const App = () => {
     }
     rollbackReturnFocusRef.current = null;
   }, [busy, rollbackPreview]);
+
+  useEffect(() => {
+    if (dataRestorePreview || busy) return;
+    const returnFocus = dataRestoreReturnFocusRef.current;
+    if (returnFocus?.isConnected) returnFocus.focus();
+    dataRestoreReturnFocusRef.current = null;
+  }, [busy, dataRestorePreview]);
 
   useEffect(() => {
     if (settingsSaveStatus !== "Settings saved") {
@@ -1041,6 +1084,10 @@ export const App = () => {
         setSkillLibraryTool(undefined);
         return;
       }
+      if (dataRestorePreview && !busy) {
+        setDataRestorePreview(undefined);
+        return;
+      }
       if (isProfileActionsOpen) {
         setIsProfileActionsOpen(false);
         profileActionsButtonRef.current?.focus();
@@ -1056,6 +1103,8 @@ export const App = () => {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [
     deleteProfileDialogOpen,
+    dataRestorePreview,
+    busy,
     isProfileActionsOpen,
     isTargetMenuOpen,
     pendingProfileAction,
@@ -1210,6 +1259,7 @@ export const App = () => {
     preview &&
       (preview.changes.length > 0 || preview.resourceChanges.length > 0) &&
       (preview.errors.length === 0 || (previewHasOnlyManagedDrift && replaceManagedDrift)) &&
+      (!preview.requiresOmissionAcknowledgement || acceptCrossTargetOmissions) &&
       localValidationErrors.length === 0 &&
       !rollbackPreview &&
       (selectedTarget?.health.canWrite ?? false)
@@ -1251,6 +1301,7 @@ export const App = () => {
         ...localValidationErrors
       ];
       setReplaceManagedDrift(false);
+      setAcceptCrossTargetOmissions(false);
       setPreview({
         ...nextPreview,
         errors: [...new Set([...rendererBlockers, ...nextPreview.errors])]
@@ -1303,7 +1354,8 @@ export const App = () => {
     setProfileSaveStatus("");
     try {
       const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id, {
-        allowManagedDrift: replaceManagedDrift
+        allowManagedDrift: replaceManagedDrift,
+        allowOmissions: acceptCrossTargetOmissions
       });
       if (!result.ok) {
         setError(result.errors.join("\n"));
@@ -1311,6 +1363,27 @@ export const App = () => {
       }
       setPreview(undefined);
       setRollbackPreview(undefined);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const adoptLiveInstructions = async () => {
+    if (!draftProfile || !selectedTarget) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const saved = await window.agentEnv.adoptTargetInstructions(
+        draftProfile.id,
+        selectedTarget.id
+      );
+      setDraftProfile(saved);
+      setIsProfileDirty(false);
+      setPreview(undefined);
+      setProfileSaveStatus("Live instructions adopted into Profile");
       await refreshProfiles();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -1366,6 +1439,37 @@ export const App = () => {
         setRollbackPreview(undefined);
         setRollbackError(undefined);
       }
+    }
+  };
+
+  const previewStopManaging = async (targetId: string, mode: StopManagingMode) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      setStopManagingPreview(await window.agentEnv.previewStopManaging(targetId, mode));
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmStopManaging = async () => {
+    if (!stopManagingPreview) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const result = await window.agentEnv.stopManaging(stopManagingPreview.id);
+      if (!result.ok) {
+        setError(result.errors.join("\n"));
+        return;
+      }
+      setStopManagingPreview(undefined);
+      await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -1742,6 +1846,59 @@ export const App = () => {
     }
   };
 
+  const createAgentEnvDataBackup = async () => {
+    setBusy(true);
+    setError(undefined);
+    setDataBackupStatus("Creating data backup");
+    try {
+      const result = await window.agentEnv.createDataBackup();
+      setDataBackupStatus(result ? `Data backup created at ${result.path}` : "");
+    } catch (unknownError) {
+      setDataBackupStatus("");
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const selectAgentEnvDataRestore = async () => {
+    dataRestoreReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setBusy(true);
+    setError(undefined);
+    try {
+      setDataRestorePreview(await window.agentEnv.selectDataRestore());
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreAgentEnvData = async () => {
+    if (!dataRestorePreview) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const result = await window.agentEnv.restoreDataBackup(dataRestorePreview.path);
+      setDataRestorePreview(undefined);
+      setSelectedProfileId(undefined);
+      setDraftProfile(undefined);
+      const refreshed = await refreshProfiles();
+      const firstProfile = refreshed.profileItems[0];
+      if (firstProfile) {
+        setSelectedProfileId(firstProfile.id);
+        setSelectedTargetId(firstProfile.targetId);
+        setDraftProfile(await window.agentEnv.readProfile(firstProfile.id));
+      }
+      setDataBackupStatus(`AgentEnv data restored; safety backup created at ${result.safetyBackupPath}`);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const refreshTargets = async () => {
     setBusy(true);
     setError(undefined);
@@ -1761,6 +1918,7 @@ export const App = () => {
     setGithubLoginChecking(true);
     setError(undefined);
     setSettingsSaveStatus("");
+    setDataBackupStatus("");
     setGithubLoginMessage("Opening GitHub authorization...");
     setGithubCodeCopied(false);
     try {
@@ -2002,6 +2160,11 @@ export const App = () => {
             kind: profileSaveStatus === "Profile saved" ? "success" : "info",
             title: profileSaveStatus
           }
+        : dataBackupStatus
+          ? {
+              kind: dataBackupStatus === "Creating data backup" ? "loading" : "success",
+              title: dataBackupStatus
+            }
         : settingsSaveStatus
           ? {
               kind: settingsSaveStatus === "Settings saved" ? "success" : "loading",
@@ -2059,7 +2222,7 @@ export const App = () => {
         }}
       >
         {selectedTargetIcon?.assetUrl ? <img className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`} src={selectedTargetIcon.assetUrl} alt="" /> : <Monitor size={16} aria-hidden="true" />}
-        <span>Apply to {selectedTarget?.name ?? "Target"}</span>
+        <span>Target: {selectedTarget?.name ?? "Select"}</span>
         <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
       </button>
       {isTargetMenuOpen ? (
@@ -2478,8 +2641,14 @@ export const App = () => {
                         </p>
                         <div className="profile-hero__meta">
                           <span className="success-pill">
-                            {profileTarget?.name ?? draftProfile.manifest.targetId} source
+                            Native format: {profileTarget?.name ?? draftProfile.manifest.targetId}
                           </span>
+                          {selectedTarget && selectedTarget.id !== profileTarget?.id ? (
+                            <span className="profile-hero__destination">
+                              <ArrowRight size={13} strokeWidth={2.2} aria-hidden="true" />
+                              Deploying to {selectedTarget.name}
+                            </span>
+                          ) : null}
                           <span className="profile-hero__recent">
                             <Monitor size={14} strokeWidth={2.2} aria-hidden="true" />
                             {selectedProfileApplication?.state.lastAppliedAt
@@ -2587,8 +2756,14 @@ export const App = () => {
                 expanded={activeComposerSection === "advanced"}
                 onToggle={() => toggleComposerSection("advanced")}
               >
+                {selectedTarget && profileTarget && selectedTarget.id !== profileTarget.id ? (
+                  <div className="native-config-notice" role="note">
+                    <strong>{profileTarget.name}-only configuration</strong>
+                    <span>This section is saved with the Profile but omitted when applying to {selectedTarget.name}.</span>
+                  </div>
+                ) : null}
                 <McpEditor
-                  label={profileTarget?.configLabel ?? "Config"}
+                  label={`${profileTarget?.name ?? "Native"}-only ${profileTarget?.configLabel ?? "config"}`}
                   value={draftProfile.configText}
                   onChange={(configText) => {
                     updateDraftProfile({ ...draftProfile, configText });
@@ -2668,12 +2843,20 @@ export const App = () => {
                 confirmDisabled={!canApply || busy}
                 managedDriftAcknowledged={replaceManagedDrift}
                 onManagedDriftAcknowledgedChange={setReplaceManagedDrift}
+                omissionsAcknowledged={acceptCrossTargetOmissions}
+                onOmissionsAcknowledgedChange={setAcceptCrossTargetOmissions}
                 onOpenRecovery={() => {
                   setPreview(undefined);
                   setActiveComposerSection("advanced");
                 }}
+                onAdoptInstructions={
+                  draftProfile.manifest.targetId === selectedTarget?.id
+                    ? adoptLiveInstructions
+                    : undefined
+                }
                 onCancel={() => {
                   setReplaceManagedDrift(false);
+                  setAcceptCrossTargetOmissions(false);
                   setPreview(undefined);
                 }}
                 onConfirm={applySelectedProfile}
@@ -2840,6 +3023,7 @@ export const App = () => {
             backups={backups}
             rollbackPreview={rollbackPreview}
             rollbackError={rollbackError}
+            stopManagingPreview={stopManagingPreview}
             busy={busy}
             onRefresh={refreshTargets}
             onManageTarget={(targetId) => {
@@ -2852,6 +3036,9 @@ export const App = () => {
               setRollbackError(undefined);
             }}
             onRestoreRollback={restoreSelectedRollback}
+            onPreviewStopManaging={previewStopManaging}
+            onCancelStopManaging={() => setStopManagingPreview(undefined)}
+            onStopManaging={confirmStopManaging}
           />
         ) : activeWorkspace === "settings" ? (
           <section className="settings-page" aria-label="Settings">
@@ -2880,10 +3067,15 @@ export const App = () => {
                       })
                     }
                   >
-                    <option value="symlink">Symlink</option>
-                    <option value="copy">Copy</option>
-                    <option value="auto">Auto</option>
+                    <option value="copy">Copy (recommended)</option>
+                    <option value="symlink">Live link (instant updates)</option>
+                    <option value="auto">Auto (live link when possible)</option>
                   </select>
+                  <small className={skillSettings.skillSyncMethod === "copy" ? "settings-field-note" : "settings-field-note is-warning"}>
+                    {skillSettings.skillSyncMethod === "copy"
+                      ? "Library updates stay pending until installs are explicitly synchronized."
+                      : "Library updates immediately change linked Target skills without another Apply preview."}
+                  </small>
                 </label>
                 <label>
                   <span>Storage</span>
@@ -2896,7 +3088,7 @@ export const App = () => {
                       })
                     }
                   >
-                    <option value="appData">App data</option>
+                    <option value="appData">AgentEnv data</option>
                     <option value="agents">~/.agents/skills</option>
                   </select>
                 </label>
@@ -2939,6 +3131,30 @@ export const App = () => {
                   />
                 </label>
               </div>
+            </section>
+            <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">
+              <div className="settings-section-header">
+                <div>
+                  <div className="resource-heading" id="agentenv-data-heading">AgentEnv data</div>
+                  <p className="settings-muted">Profiles, Library resources, deployment state, and recovery backups.</p>
+                </div>
+                <div className="settings-data-actions">
+                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void window.agentEnv.openDataFolder()}>
+                    <FolderKanban size={15} strokeWidth={2.2} aria-hidden="true" />
+                    Open folder
+                  </button>
+                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void createAgentEnvDataBackup()}>
+                    <HardDrive size={15} strokeWidth={2.2} aria-hidden="true" />
+                    Create backup
+                  </button>
+                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void selectAgentEnvDataRestore()}>
+                    <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
+                    Restore backup
+                  </button>
+                </div>
+              </div>
+              <code className="settings-data-path">~/.config/agentenv-manager</code>
+              <p className="settings-field-note">Backups are private directory snapshots. GitHub credentials remain encrypted for this Mac.</p>
             </section>
             <section
               className="resource-section github-settings-section"
@@ -3033,6 +3249,31 @@ export const App = () => {
                 </div>
               ) : null}
             </section>
+            {dataRestorePreview ? (
+              <div className="preview-modal-backdrop" onClick={() => {
+                if (!busy) setDataRestorePreview(undefined);
+              }}>
+                <section className="profile-form-dialog profile-form-dialog--compact" role="dialog" aria-modal="true" aria-label="Restore AgentEnv data" onClick={(event) => event.stopPropagation()}>
+                  <header className="profile-dialog-header">
+                    <div>
+                      <div className="section-title">Restore AgentEnv data</div>
+                      <p className="muted">Replace current Profiles, Library resources, settings, deployment state, and recovery history.</p>
+                    </div>
+                  </header>
+                  <div className="data-restore-summary">
+                    <span><strong>Created</strong>{new Date(dataRestorePreview.createdAt).toLocaleString()}</span>
+                    <span><strong>Format</strong>Version {dataRestorePreview.formatVersion}</span>
+                    <span><strong>Contents</strong>{dataRestorePreview.topLevelItemCount} top-level items</span>
+                    <code title={dataRestorePreview.path}>{dataRestorePreview.path}</code>
+                    <p>A safety backup of the current data will be created before replacement.</p>
+                  </div>
+                  <footer className="preview-actions">
+                    <button autoFocus className="secondary-action" type="button" disabled={busy} onClick={() => setDataRestorePreview(undefined)}>Cancel</button>
+                    <button className="danger-action" type="button" disabled={busy} onClick={() => void restoreAgentEnvData()}>Restore data</button>
+                  </footer>
+                </section>
+              </div>
+            ) : null}
           </section>
         ) : rollbackPreview ? (
           <PreviewDialog preview={rollbackPreview} title="Rollback preview" />

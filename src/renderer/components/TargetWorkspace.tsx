@@ -7,10 +7,12 @@ import {
   RefreshCw,
   TerminalSquare
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   BackupSummary,
   RollbackPreview,
+  StopManagingMode,
+  StopManagingPreview,
   TargetInfo,
   TargetManagementState
 } from "../../shared/types";
@@ -25,12 +27,16 @@ interface TargetWorkspaceProps {
   backups: BackupSummary[];
   rollbackPreview?: RollbackPreview;
   rollbackError?: string;
+  stopManagingPreview?: StopManagingPreview;
   busy: boolean;
   onRefresh(): Promise<void>;
   onManageTarget(targetId: string): void;
   onPreviewRollback(backupId: string): void;
   onCancelRollback(): void;
   onRestoreRollback(): void;
+  onPreviewStopManaging(targetId: string, mode: StopManagingMode): void;
+  onCancelStopManaging(): void;
+  onStopManaging(): void;
 }
 
 const targetStatusLabel: Record<TargetInfo["health"]["status"], string> = {
@@ -50,21 +56,52 @@ const formatLastApplied = (value?: string) => {
   }).format(new Date(value));
 };
 
+const lifecycleLabel: Record<TargetManagementState["lifecycleStatus"], string> = {
+  unmanaged: "Not managed",
+  applied: "Applied",
+  pending: "Changes pending",
+  drifted: "Drift detected",
+  "recovery-required": "Recovery required"
+};
+
 export const TargetWorkspace = ({
   targets,
   targetStates,
   backups,
   rollbackPreview,
   rollbackError,
+  stopManagingPreview,
   busy,
   onRefresh,
   onManageTarget,
   onPreviewRollback,
   onCancelRollback,
-  onRestoreRollback
+  onRestoreRollback,
+  onPreviewStopManaging,
+  onCancelStopManaging,
+  onStopManaging
 }: TargetWorkspaceProps) => {
   const [expandedTargetId, setExpandedTargetId] = useState<string>();
+  const [stopManagingTargetId, setStopManagingTargetId] = useState<string>();
+  const [stopManagingMode, setStopManagingMode] = useState<StopManagingMode>("keep-current");
+  const stopManagingReturnFocusRef = useRef<HTMLElement | null>(null);
   const statesByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
+
+  useEffect(() => {
+    if (!stopManagingTargetId) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setStopManagingTargetId(undefined);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [stopManagingTargetId]);
+
+  useEffect(() => {
+    if (stopManagingTargetId) return;
+    const returnFocus = stopManagingReturnFocusRef.current;
+    if (returnFocus?.isConnected) returnFocus.focus();
+    stopManagingReturnFocusRef.current = null;
+  }, [stopManagingTargetId]);
 
   return (
     <section className="target-page" aria-label="Targets">
@@ -130,7 +167,7 @@ export const TargetWorkspace = ({
                 </span>
                 <span>
                   <small>Management</small>
-                  <strong>{isManaged ? "Managed by AgentEnv" : "Not managed"}</strong>
+                  <strong>{state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed"}</strong>
                 </span>
                 <span>
                   <small>Active profile</small>
@@ -166,6 +203,24 @@ export const TargetWorkspace = ({
                       </div>
                     ))}
                   </div>
+                  {isManaged ? (
+                    <footer className="target-diagnostics-actions">
+                      <button
+                        className="secondary-action"
+                        type="button"
+                        onClick={() => {
+                          stopManagingReturnFocusRef.current =
+                            document.activeElement instanceof HTMLElement
+                              ? document.activeElement
+                              : null;
+                          setStopManagingMode("keep-current");
+                          setStopManagingTargetId(target.id);
+                        }}
+                      >
+                        Stop managing {target.name}
+                      </button>
+                    </footer>
+                  ) : null}
                 </section>
               ) : null}
             </article>
@@ -196,6 +251,46 @@ export const TargetWorkspace = ({
           errorMessage={rollbackError}
           onCancel={busy ? undefined : onCancelRollback}
           onConfirm={onRestoreRollback}
+        />
+      ) : null}
+      {stopManagingTargetId ? (
+        <div className="preview-modal-backdrop" onClick={() => setStopManagingTargetId(undefined)}>
+          <section className="profile-form-dialog stop-managing-dialog" role="dialog" aria-modal="true" aria-label="Stop managing Target" onClick={(event) => event.stopPropagation()}>
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">Stop managing {targets.find((target) => target.id === stopManagingTargetId)?.name}</div>
+                <p className="muted">Choose what should happen to the current Target environment.</p>
+              </div>
+            </header>
+            <div className="stop-managing-options" role="radiogroup" aria-label="Stop managing behavior">
+              <label>
+                <input type="radio" name="stop-managing-mode" checked={stopManagingMode === "keep-current"} onChange={() => setStopManagingMode("keep-current")} />
+                <span><strong>Keep current environment</strong><small>Detach AgentEnv ownership and turn linked Skills into independent files.</small></span>
+              </label>
+              <label>
+                <input type="radio" name="stop-managing-mode" checked={stopManagingMode === "restore-pre-takeover"} onChange={() => setStopManagingMode("restore-pre-takeover")} />
+                <span><strong>Restore environment before takeover</strong><small>Replace current managed files with the earliest pre-takeover backup.</small></span>
+              </label>
+            </div>
+            <footer className="preview-actions">
+              <button autoFocus className="secondary-action" type="button" onClick={() => setStopManagingTargetId(undefined)}>Cancel</button>
+              <button className="danger-action" type="button" disabled={busy} onClick={() => {
+                onPreviewStopManaging(stopManagingTargetId, stopManagingMode);
+                setStopManagingTargetId(undefined);
+              }}>Review changes</button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+      {stopManagingPreview ? (
+        <PreviewDialog
+          preview={stopManagingPreview}
+          title={`Stop managing ${stopManagingPreview.targetName}`}
+          confirmLabel={stopManagingPreview.mode === "keep-current" ? "Keep files and detach" : "Restore and detach"}
+          confirmDisabled={busy || stopManagingPreview.errors.length > 0}
+          cancelDisabled={busy}
+          onCancel={onCancelStopManaging}
+          onConfirm={onStopManaging}
         />
       ) : null}
     </section>

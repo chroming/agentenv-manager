@@ -729,14 +729,19 @@ export const SkillLibraryPanel = ({
                     </span>
                   ))}
                   {installs.length > 1 ? <small>+{installs.length - 1} more installs</small> : null}
-                  {staleCopies.length > 0 ? (
-                    <button className="library-inline-action" type="button" onClick={() => onSyncSkillInstalls(skill.id)}>
-                      Sync {staleCopies.length === 1 ? "copy" : `${staleCopies.length} copies`}
-                    </button>
-                  ) : null}
                 </div>
                 <div className="library-actions-cell">
-                  {hasUpdateSource ? (
+                  {staleCopies.length > 0 ? (
+                    <button
+                      className="icon-action library-row-update-action is-update"
+                      type="button"
+                      aria-label={`Sync ${staleCopies.length === 1 ? "copy" : `${staleCopies.length} copies`} of ${skill.id}`}
+                      onClick={() => onSyncSkillInstalls(skill.id)}
+                    >
+                      <RefreshCw size={15} strokeWidth={2.2} />
+                      <span>Sync</span>
+                    </button>
+                  ) : hasUpdateSource ? (
                     <button
                       className={`icon-action library-row-update-action${
                         hasUpdate ? " is-update" : hasError ? " is-error" : ""

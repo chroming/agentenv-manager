@@ -69,10 +69,22 @@ export const createBackupStore = (
     await ensurePrivateDir(paths.backupsDir);
 
     const createdAt = now().toISOString();
-    const id = toBackupId(new Date(createdAt));
-    const backupDir = join(paths.backupsDir, id);
+    const baseId = toBackupId(new Date(createdAt));
+    let id = baseId;
+    let backupDir = join(paths.backupsDir, id);
+    for (let suffix = 1; ; suffix += 1) {
+      try {
+        await mkdir(backupDir, { mode: 0o700 });
+        break;
+      } catch (error) {
+        if (!error || typeof error !== "object" || !("code" in error) || error.code !== "EEXIST") {
+          throw error;
+        }
+        id = `${baseId}-${suffix}`;
+        backupDir = join(paths.backupsDir, id);
+      }
+    }
     const filesDir = join(backupDir, "files");
-    await ensurePrivateDir(backupDir);
     await ensurePrivateDir(filesDir);
 
     const entries: BackupEntry[] = [];

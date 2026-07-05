@@ -383,7 +383,14 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     configLabel: "opencode.jsonc",
     configLanguage: "jsonc",
     realWritesEnabled: true,
-    executableName: "opencode"
+    executableName: "opencode",
+    capabilities: {
+      instructions: true,
+      skills: true,
+      mcpTransports: ["stdio", "http", "sse"],
+      agentFormat: "opencode",
+      disabledSkillPaths: false
+    }
   },
   createTargetPaths: ({ homeDir }) => {
     const configDir = join(homeDir, ".config", "opencode");

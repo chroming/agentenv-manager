@@ -67,7 +67,8 @@ The Library is global to AgentEnv Manager and contains canonical reusable resour
 - MCP Library owns reusable MCP definitions.
 - Library content MUST NOT be duplicated into every Profile.
 - A Profile stores references to Library resources, not private copies of them.
-- Updating the Library MUST NOT silently deploy changes to a Target.
+- In Copy mode, updating the Library MUST NOT silently deploy changes to a Target.
+- Live link mode is an explicit advanced policy: Library updates immediately affect linked Target Skills and therefore do not provide an Apply-gated snapshot.
 
 Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data root.
 
@@ -155,7 +156,7 @@ It MUST include enough information to distinguish:
 | Update | Replace canonical Library content after preview. It marks affected deployments pending; it does not deploy. |
 | Add to Profile | Add a Library reference to the Profile draft. Save is still required. |
 | Preview | Compute a fresh, complete deployment plan against current Profile, Library, and Target state. It does not write. |
-| Apply | Atomically replace the AgentEnv-managed Target environment with the selected saved Profile after Preview. |
+| Apply | Transactionally replace the AgentEnv-managed Target environment with the selected saved Profile after Preview, using compensating rollback when a multi-path write fails. |
 | Take over | First Apply to an unmanaged Target. It establishes ownership after previewing existing content. |
 | Stop managing | End AgentEnv ownership through an explicit keep-current or restore-pre-takeover path. |
 | Remove from Profile | Remove a reference from the Profile draft. It does not delete Library content. |
@@ -187,7 +188,7 @@ Rules:
 - Failed validation or Save MUST preserve all draft input.
 - Applying a Profile MUST NOT change its native Target format.
 
-Status: whole-Profile Save, dirty protection, and per-Target applied hashes are `Implemented`. Adopt-drift behavior is `Required`.
+Status: whole-Profile Save, dirty protection, and per-Target applied hashes are `Implemented`. Adopting native live Instructions is `Implemented`; adoption of other compatible surfaces is `Partial`.
 
 ## 8. Target Lifecycle
 
@@ -231,7 +232,7 @@ Canonical states:
 | Apply failed | Apply failed and the automatic restore succeeded. |
 | Recovery required | Apply or rollback failed and AgentEnv cannot prove a consistent state. |
 
-Status: detection exists, but the complete explicit state model is `Partial`.
+Status: canonical persisted lifecycle derivation, operation locking, and `Recovery required` blocking are `Implemented`. Short-lived working and restored-failure feedback remains renderer state.
 
 ## 9. Cross-Target Compatibility
 
@@ -251,11 +252,12 @@ Every adapter MUST declare capabilities. Cross-Target behavior MUST follow this 
 Rules:
 
 - Unsupported portable content MUST either block Apply or be explicitly omitted with a warning. It MUST NOT be silently coerced.
+- Cross-Target Preview MUST calculate an effective payload. A zero-payload deployment is blocked, and material omissions require explicit acknowledgement.
 - Cross-Target Preview MUST show the final destination representation, not only the source Profile.
 - Adding a Target MUST require a single adapter plus contract tests for capabilities, paths, serialization, preview, Apply, drift, and rollback.
 - An adapter MUST NOT receive raw Advanced configuration from another Target.
 
-Status: safe cross-Target Instructions, Skills, and MCP deployment is `Implemented`; capability declaration remains `Required`.
+Status: adapter capability declaration, effective-payload review, omission acknowledgement, and safe cross-Target Instructions, Skills, and MCP deployment are `Implemented`.
 
 ## 10. Preview Contract
 
@@ -319,7 +321,7 @@ Status: transactional backup, replacement, unmanaged preservation, and automatic
 
 ## 12. Failure And Atomicity Contract
 
-Apply is a single user operation even when it writes multiple resource types.
+Apply is a single transactional user operation even when it writes multiple resource types. It is not a filesystem-atomic operation across paths.
 
 - If any write fails, AgentEnv MUST attempt to restore all affected paths and prior deployment state.
 - If restore succeeds, the result is `Apply failed`; the previous environment remains active.
@@ -327,8 +329,9 @@ Apply is a single user operation even when it writes multiple resource types.
 - Partial success MUST name what was written, what failed, and which recovery action remains.
 - Retrying MUST start from a fresh Preview.
 - Concurrent Apply operations to the same Target MUST be serialized.
+- Successful writes MUST be verified against the planned hashes before deployment state is committed.
 
-Status: automatic restore is `Implemented`; explicit `Recovery required` state and same-Target operation locking are `Required`.
+Status: automatic restore, post-write verification, explicit `Recovery required` state, and same-Target operation locking are `Implemented`.
 
 ## 13. Drift Contract
 
@@ -354,7 +357,7 @@ A drifted Target MUST NOT appear Applied. The user MUST be offered these explici
 
 Cross-Target deployments MUST NOT adopt native Advanced data into a Profile of another format automatically.
 
-Status: detection and explicit overwrite with Backup are `Implemented`; inspect/adopt/detach choices are `Required`.
+Status: detection, diff inspection, explicit overwrite with Backup, native Instructions adoption, and detach choices are `Implemented`. Selective adoption of other native resource types is `Partial`.
 
 ## 14. Stop Managing Contract
 
@@ -379,7 +382,7 @@ Two paths are required:
 
 Deleting an active Profile MUST require the user to apply another Profile or stop managing each affected Target. It MUST NOT silently detach or delete deployed files.
 
-Status: active Profile deletion is blocked; complete Stop Managing flows are `Required`.
+Status: active Profile deletion is blocked; both Stop Managing paths, safety backup, link materialization, and ownership removal are `Implemented`.
 
 ## 15. Rollback And Backup Contract
 
@@ -428,9 +431,9 @@ Ignore contract:
 - Check compares only against an explicit update source.
 - GitHub rate limiting MUST provide a GitHub sign-in remediation.
 - Update Preview MUST show changed files and validation errors.
-- Applying a Library update changes canonical content only.
-- Profiles referencing the Skill remain saved but their deployed Targets become `Changes pending`.
-- Managed copied installs MAY be synchronized explicitly; linked installs reflect canonical content and still require deployment state refresh.
+- Applying a Library update changes canonical content.
+- In the default Copy mode, Profiles remain saved and their deployed Targets become `Changes pending`; copied installs require explicit synchronization or Profile Apply.
+- In advanced Live link mode, linked Target content changes immediately. The UI MUST disclose this before enabling the mode and MUST NOT represent the linked deployment as an immutable applied snapshot.
 - Local imports without an explicit tracked source MUST NOT produce repeated update failures.
 
 ### 16.4 Delete
@@ -528,6 +531,30 @@ A new Target adapter MUST define:
 
 Registration MUST occur in the Target registry. Renderer components MUST NOT require Target-specific branches for ordinary lifecycle behavior.
 
+## 22.1 AgentEnv Data Lifecycle
+
+- AgentEnv data has an explicit format version and migration path.
+- Legacy storage migration MUST preserve Profiles, Library content, deployment state, Settings, and Backups.
+- The user can create a private directory backup from Settings.
+- Backups include a manifest with format version and creation time.
+- GitHub credentials remain encrypted for the originating Mac and MUST NOT be presented as portable plaintext.
+- Corrupt or unsupported future data MUST fail closed with recovery guidance rather than being partially loaded.
+- A restore/import flow MUST create a safety backup before replacing current canonical data, reject unsafe links or unsupported formats, and refresh all visible canonical state after success.
+
+## 22.2 First-Run Workflow
+
+The first useful journey is:
+
+1. Detect installed Targets.
+2. Scan existing local Skills.
+3. Consolidate, ignore, or leave discovered Skills unmanaged.
+4. Create or select a Profile.
+5. Choose a deployment Target.
+6. Review effective payload, omissions, conflicts, and takeover impact.
+7. Apply and verify the persisted Target result.
+
+The product MAY use contextual empty states for this journey; it MUST NOT require a marketing-style onboarding page.
+
 ## 23. Required Acceptance Matrix
 
 Every release that changes Profile, Library, Target, or Apply behavior MUST verify these scenarios:
@@ -541,11 +568,13 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Identical second Preview produces no changes and no Apply action.
 - Dirty Profile blocks Preview and preserves draft.
 - Missing executable and missing directory are distinguished.
+- Copy mode keeps Library updates pending; Live link mode visibly propagates them immediately.
 
 ### Cross-Target
 
 - Instructions, Library Skills, Profile-owned Skills, and MCP serialize correctly.
 - Native Advanced config, incompatible Agents, and disabled paths are omitted with named warnings.
+- Zero effective payload is blocked and material omissions require confirmation.
 - Unsupported portable resources block with remediation.
 - Source Target remains unchanged.
 
@@ -598,15 +627,12 @@ AgentEnv Manager is production-ready only when all of these are true:
 - Default and minimum desktop viewports pass containment and overlay checks.
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
 
-Current verdict: **Needs refinement**. Core Library, Profile, Preview, Apply, backup, rollback, no-op, and cross-Target workflows are functional. Stop Managing, adopt-drift, explicit recovery state, capability declarations, and complete secret handling remain release requirements.
+Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, rollback, no-op, cross-Target payload review, canonical Target lifecycle, data backup and restore, native Instructions adoption, and Stop Managing workflows are functional. Complete MCP secret handling, stale rollback protection, and broader drift adoption remain release requirements.
 
 ## 25. Current Priority Gaps
 
-1. Implement explicit Target lifecycle states instead of deriving them in the renderer.
-2. Implement Stop Managing with Keep Current and Restore Pre-takeover paths.
-3. Add drift inspection and Adopt into Profile.
-4. Add Recovery required state and same-Target operation locking.
-5. Add adapter capability declarations and generated compatibility validation.
-6. Complete MCP secret masking and backup permission guarantees.
-7. Add stale rollback conflict handling and Backup retention controls.
-
+1. Complete MCP secret masking and backup permission guarantees.
+2. Add stale rollback conflict handling and Backup retention controls.
+3. Extend Adopt into Profile beyond native Instructions where the adapter can map changes safely.
+4. Complete the affected-Target resolution flow when deleting an active Profile.
+5. Migrate persisted Profile terminology from `targetId` to `nativeTargetId` with backward compatibility.

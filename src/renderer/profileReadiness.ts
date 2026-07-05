@@ -29,7 +29,7 @@ export interface ProfileReadiness {
 export interface ProfileReadinessInput {
   profile?: Pick<ProfileDetail, "id" | "contentHash">;
   target?: Pick<TargetInfo, "id" | "name" | "health">;
-  targetState?: Pick<TargetManagementState, "status" | "activeProfileId" | "appliedProfileHash" | "errorCount">;
+  targetState?: Pick<TargetManagementState, "status" | "lifecycleStatus" | "lifecycleReason" | "activeProfileId" | "appliedProfileHash" | "errorCount">;
   isDirty: boolean;
   localValidationErrors?: readonly string[];
   preview?: Pick<ActivationPreview, "errors">;
@@ -109,7 +109,16 @@ export const deriveProfileReadiness = ({
     };
   }
 
-  if (targetState.errorCount > 0) {
+  if (targetState.lifecycleStatus === "recovery-required") {
+    return {
+      status: "preview-error",
+      label: "Needs review",
+      message: `${target.name} requires recovery`,
+      remediationLabel: "Review preview"
+    };
+  }
+
+  if (targetState.lifecycleStatus === "drifted" || targetState.errorCount > 0) {
     return {
       status: "preview-error",
       label: "Needs review",
@@ -120,7 +129,8 @@ export const deriveProfileReadiness = ({
 
   if (
     targetState.activeProfileId === profile.id &&
-    (dependenciesCurrent === false ||
+    (targetState.lifecycleStatus === "pending" ||
+      dependenciesCurrent === false ||
       !targetState.appliedProfileHash ||
       targetState.appliedProfileHash !== profile.contentHash)
   ) {
@@ -137,6 +147,7 @@ export const deriveProfileReadiness = ({
 
   if (
     targetState.activeProfileId === profile.id &&
+    (targetState.lifecycleStatus === "applied" || !targetState.lifecycleStatus) &&
     Boolean(profile.contentHash) &&
     targetState.appliedProfileHash === profile.contentHash &&
     dependenciesCurrent !== false

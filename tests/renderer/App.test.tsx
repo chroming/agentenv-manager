@@ -112,6 +112,13 @@ const target: TargetInfo = {
   configLanguage: "jsonc",
   realWritesEnabled: true,
   executableName: "opencode",
+  capabilities: {
+    instructions: true,
+    skills: true,
+    mcpTransports: ["stdio", "http", "sse"],
+    agentFormat: "opencode",
+    disabledSkillPaths: false
+  },
   paths: {
     targetId: "opencode",
     configDir: "/tmp/home/.config/opencode",
@@ -250,6 +257,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
   appliedProfileHash: "profile-hash",
   appliedLibraryVersions: { skills: {}, mcp: {} },
   status: "managed",
+  lifecycleStatus: "applied",
   lastAppliedAt: "2026-07-09T00:00:00.000Z",
   managedResourceCount: 3,
   warningCount: 0,
@@ -347,13 +355,13 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       updatedAt: "2026-07-02T00:00:00.000Z"
     }),
     readSettings: vi.fn().mockResolvedValue({
-      skillSyncMethod: "symlink",
+      skillSyncMethod: "copy",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60
     }),
     updateSettings: vi.fn().mockImplementation(async (input) => ({
-      skillSyncMethod: input.skillSyncMethod ?? "symlink",
+      skillSyncMethod: input.skillSyncMethod ?? "copy",
       skillStorageLocation: input.skillStorageLocation ?? "appData",
       skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
       skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60
@@ -430,6 +438,22 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     listBackups: vi.fn().mockResolvedValue([]),
     previewRollback: vi.fn().mockResolvedValue(rollbackPreview),
     rollback: vi.fn().mockResolvedValue({ ok: true }),
+    previewStopManaging: vi.fn().mockResolvedValue({
+      ...rollbackPreview,
+      id: "stop-managing-1",
+      backupId: "",
+      targetId: "opencode",
+      targetName: "OpenCode",
+      mode: "keep-current",
+      managedResourceCount: 3,
+      stateFingerprint: "state-hash"
+    }),
+    stopManaging: vi.fn().mockResolvedValue({ ok: true, backupId: "backup-1" }),
+    createDataBackup: vi.fn().mockResolvedValue(undefined),
+    openDataFolder: vi.fn().mockResolvedValue(undefined),
+    selectDataRestore: vi.fn().mockResolvedValue(undefined),
+    restoreDataBackup: vi.fn().mockResolvedValue({ safetyBackupPath: "/tmp/safety" }),
+    adoptTargetInstructions: vi.fn().mockResolvedValue(profile),
     ...overrides
   };
 
@@ -503,7 +527,7 @@ describe("App", () => {
     );
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeInTheDocument();
-    expect(screen.getByText("OpenCode source")).toBeInTheDocument();
+    expect(screen.getByText("Native format: OpenCode")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "MCP Servers" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Advanced" })).toBeInTheDocument();
@@ -514,7 +538,7 @@ describe("App", () => {
     fireEvent.click(within(composer).getByRole("button", { name: "Instructions" }));
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
     fireEvent.click(within(composer).getByRole("button", { name: "Advanced" }));
-    expect(screen.getByLabelText("opencode.jsonc")).toHaveValue('{\n  "mcp": {}\n}\n');
+    expect(screen.getByLabelText("OpenCode-only opencode.jsonc")).toHaveValue('{\n  "mcp": {}\n}\n');
   });
 
   it("opens libraries as an app-level workspace", async () => {
@@ -899,12 +923,12 @@ describe("App", () => {
     fireEvent.click(advanced);
     expect(advanced).toHaveAttribute("aria-expanded", "true");
     expect(mcp).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByLabelText("opencode.jsonc")).toBeInTheDocument();
+    expect(screen.getByLabelText("OpenCode-only opencode.jsonc")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "History" })).toBeInTheDocument();
 
     fireEvent.click(advanced);
     expect(advanced).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByLabelText("opencode.jsonc")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("OpenCode-only opencode.jsonc")).not.toBeInTheDocument();
   });
 
   it("shows rich profile row metadata", async () => {
@@ -1480,7 +1504,8 @@ describe("App", () => {
     fireEvent.click(replaceButton);
     await waitFor(() =>
       expect(driftApi.applyProfile).toHaveBeenCalledWith("daily-coding", "preview-1", {
-        allowManagedDrift: true
+        allowManagedDrift: true,
+        allowOmissions: false
       })
     );
   });
@@ -1526,6 +1551,7 @@ describe("App", () => {
           activeProfileId: "daily-coding",
           activeProfileName: "Daily Coding",
           status: "managed",
+          lifecycleStatus: "applied",
           lastAppliedAt: "2026-07-09T00:00:00.000Z",
           managedResourceCount: 3,
           warningCount: 0,
@@ -1539,9 +1565,65 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Targets" }));
 
     const openCodeCard = await screen.findByRole("article", { name: "Target OpenCode" });
-    expect(within(openCodeCard).getByText("Managed by AgentEnv")).toBeInTheDocument();
+    expect(within(openCodeCard).getByText("Applied")).toBeInTheDocument();
     expect(within(openCodeCard).getByText("Active profile")).toBeInTheDocument();
     expect(within(openCodeCard).getByText("Daily Coding")).toBeInTheDocument();
+  });
+
+  it("reviews and confirms Stop Managing from Target diagnostics", async () => {
+    const api = installApi({
+      listTargetStates: vi.fn().mockResolvedValue([managedState()])
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Targets" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show OpenCode diagnostics" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop managing OpenCode" }));
+
+    const choiceDialog = screen.getByRole("dialog", { name: "Stop managing Target" });
+    expect(within(choiceDialog).getByText("Keep current environment")).toBeInTheDocument();
+    fireEvent.click(within(choiceDialog).getByRole("button", { name: "Review changes" }));
+
+    expect(api.previewStopManaging).toHaveBeenCalledWith("opencode", "keep-current");
+    const previewDialog = await screen.findByRole("dialog", { name: "Preview" });
+    expect(within(previewDialog).getByText(/files will stay in place/)).toBeInTheDocument();
+    fireEvent.click(within(previewDialog).getByRole("button", { name: "Keep files and detach" }));
+
+    await waitFor(() => expect(api.stopManaging).toHaveBeenCalledWith("stop-managing-1"));
+  });
+
+  it("previews, cancels, and restores an AgentEnv data backup from Settings", async () => {
+    const api = installApi({
+      selectDataRestore: vi.fn().mockResolvedValue({
+        path: "/tmp/AgentEnv-Backup",
+        createdAt: "2026-07-12T00:00:00.000Z",
+        formatVersion: 1,
+        topLevelItemCount: 6
+      })
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    const restoreTrigger = screen.getByRole("button", { name: "Restore backup" });
+    restoreTrigger.focus();
+    fireEvent.click(restoreTrigger);
+    const dialog = await screen.findByRole("dialog", { name: "Restore AgentEnv data" });
+    expect(dialog).toHaveTextContent("6 top-level items");
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Restore AgentEnv data" })).not.toBeInTheDocument();
+    expect(restoreTrigger).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Restore backup" }));
+    const confirmDialog = await screen.findByRole("dialog", { name: "Restore AgentEnv data" });
+    fireEvent.click(within(confirmDialog).getByRole("button", { name: "Restore data" }));
+    await waitFor(() =>
+      expect(api.restoreDataBackup).toHaveBeenCalledWith("/tmp/AgentEnv-Backup")
+    );
+    expect(await screen.findByText(/AgentEnv data restored; safety backup created/)).toBeInTheDocument();
   });
 
   it("creates, edits, duplicates, and deletes profiles from the profile workspace", async () => {

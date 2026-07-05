@@ -76,6 +76,47 @@ describe("PreviewDialog", () => {
     expect(screen.getByText("1 install · 1 replace · 1 remove")).toBeInTheDocument();
   });
 
+  it("requires an explicit acknowledgement for resources omitted on another Target", () => {
+    const onAcknowledgedChange = vi.fn();
+    render(
+      <PreviewDialog
+        preview={{
+          ...preview,
+          targetId: "codex",
+          effectivePayload: {
+            instructions: 1,
+            skills: 2,
+            mcpServers: 1,
+            agents: 0,
+            nativeConfig: 0,
+            total: 4
+          },
+          omissions: [
+            {
+              kind: "config",
+              name: "OpenCode Advanced config",
+              reason: "OpenCode Advanced config is not applied to Codex"
+            }
+          ],
+          requiresOmissionAcknowledgement: true
+        }}
+        omissionsAcknowledged={false}
+        onOmissionsAcknowledgedChange={onAcknowledgedChange}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("OpenCode Advanced config")).toBeInTheDocument();
+    expect(screen.getByText("Codex will receive 1 instruction file, 2 Skills, 1 MCP server.")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I understand these resources will not be applied to Codex"
+      })
+    );
+    expect(onAcknowledgedChange).toHaveBeenCalledWith(true);
+  });
+
   it("dismisses modal previews with Escape and backdrop clicks", async () => {
     const onCancel = vi.fn();
     render(<PreviewDialog preview={preview} onCancel={onCancel} onConfirm={vi.fn()} />);
