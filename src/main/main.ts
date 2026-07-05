@@ -19,7 +19,7 @@ import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetRegistry } from "./targets/registry";
-import { preloadScriptName } from "./windowConfig";
+import { preloadScriptName, windowBackgroundColor } from "./windowConfig";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fileResponse = (content: string, init?: ResponseInit) =>
@@ -94,6 +94,7 @@ const createWindow = () => {
     height: 760,
     minWidth: 920,
     minHeight: 620,
+    backgroundColor: windowBackgroundColor,
     title: "AgentEnv Manager",
     webPreferences: {
       preload: join(__dirname, "../preload", preloadScriptName),

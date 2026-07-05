@@ -184,6 +184,7 @@ Rules:
 
 - Save MUST persist the complete Profile, not an individual accordion section.
 - Save and Apply MUST appear as one ordered action group in the selected Profile context: Save first, then Apply. Page creation and Target selection controls MUST NOT separate these two lifecycle commands.
+- Edit, Duplicate, Delete, Save, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation and Target context.
 - Unsaved changes MUST block Preview and Apply.
 - Switching Profile, Target, workspace, or closing the window with a dirty draft MUST offer Save, Discard, or Cancel.
 - Failed validation or Save MUST preserve all draft input.
@@ -497,6 +498,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Supported minimum content viewport is `920 x 620` at 100% scale.
 - Default content viewport is `1180 x 728`.
 - No supported viewport has page-level horizontal scrolling.
+- The Electron compositor, document root, and application shell MUST paint the complete content viewport with the page background; short pages and navigation transitions MUST NOT expose an unpainted window background.
 - Primary commands and lifecycle state remain visible.
 - Lists and expanded editors own intentional internal scrolling.
 - Buttons do not wrap at supported desktop widths.
@@ -643,7 +645,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-12 against the current `main` tree at the time of this snapshot.
 
-- `264` automated tests passed across `38` test files, including native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `266` automated tests passed across `38` test files, including native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings were visually inspected at `1180 x 728` and `920 x 620` without document overflow.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
 - Production dependency audit reported zero known vulnerabilities.

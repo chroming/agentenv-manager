@@ -995,6 +995,8 @@ describe("App", () => {
     const targetMenu = screen.getByRole("button", { name: "Select apply target" });
     expect(edit).toHaveAttribute("title", "Edit profile");
     expect(more).toHaveAttribute("title", "More profile actions");
+    expect(more.closest(".profile-hero")).not.toBeNull();
+    expect(more.closest(".profile-page-header")).toBeNull();
     expect(targetMenu).toHaveAttribute("title", "Select apply target");
   });
 
@@ -1006,13 +1008,14 @@ describe("App", () => {
     const hero = document.querySelector(".profile-hero");
     expect(hero).not.toBeNull();
     const actions = within(hero as HTMLElement).getByRole("group", {
-      name: "Profile save and apply"
+      name: "Selected profile actions"
     });
-    const buttons = within(actions).getAllByRole("button");
+    const buttons = within(actions).getAllByRole("button").slice(0, 2);
 
     expect(buttons.map((button) => button.textContent?.trim())).toEqual(["Save", "Apply"]);
     expect(within(actions).getByRole("button", { name: "Save" })).toBeDisabled();
     expect(document.querySelector(".profile-page-header .save-button")).toBeNull();
+    expect(document.querySelector(".profile-page-header [aria-label='More profile actions']")).toBeNull();
   });
 
   it("focuses Save when apply is invoked with unsaved changes", async () => {

@@ -1546,11 +1546,12 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI OpenCode alpha");
 
     const profileTitle = page.locator(".profile-hero__title");
-    const commitActions = page.getByRole("group", { name: "Profile save and apply" });
+    const commitActions = page.getByRole("group", { name: "Selected profile actions" });
     const saveButton = commitActions.getByRole("button", { name: "Save" });
+    const moreButton = commitActions.getByRole("button", { name: "More profile actions" });
     const applyControl = page.locator(".profile-apply-control");
     const expectCommitActionsToFit = async () => {
-      for (const locator of [profileTitle, commitActions, saveButton, applyControl]) {
+      for (const locator of [profileTitle, commitActions, saveButton, applyControl, moreButton]) {
         await expectInViewport(page, locator);
       }
 
@@ -1585,6 +1586,19 @@ describe("Electron UI profile switching e2e", () => {
       await expectInViewport(page, locator);
     }
     await expectCommitActionsToFit();
+    await moreButton.click();
+    const profileActionsMenu = page.getByRole("menu", { name: "Profile actions" });
+    await expectInViewport(page, profileActionsMenu);
+    expect(
+      await profileActionsMenu.evaluate((menu) => {
+        const box = menu.getBoundingClientRect();
+        const topmost = document.elementFromPoint(box.left + box.width / 2, box.top + 8);
+        return Boolean(topmost && menu.contains(topmost));
+      })
+    ).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect.poll(() => page.getByRole("menu", { name: "Profile actions" }).count()).toBe(0);
+    expect(await moreButton.evaluate((element) => document.activeElement === element)).toBe(true);
 
     await selectTarget(page, "Codex");
     const profileList = page.getByRole("complementary", { name: "Profile list" });
@@ -1632,6 +1646,38 @@ describe("Electron UI profile switching e2e", () => {
       viewportWidth: document.documentElement.clientWidth
     }));
     expect(metrics.documentWidth).toBe(metrics.viewportWidth);
+  }, 30_000);
+
+  it("paints the complete desktop surface on short and long workspaces", async () => {
+    const { page } = await launchApp();
+    await page.setViewportSize({ width: 920, height: 620 });
+
+    for (const workspace of ["Skills", "MCP Servers", "Profiles", "Targets", "Settings"]) {
+      await page.getByRole("button", { name: workspace, exact: true }).click();
+      const paint = await page.evaluate(() => {
+        const root = document.getElementById("root");
+        const shell = document.querySelector(".app-shell");
+        const rootRect = root?.getBoundingClientRect();
+        const shellRect = shell?.getBoundingClientRect();
+        return {
+          bodyBackground: getComputedStyle(document.body).backgroundColor,
+          rootBackground: root ? getComputedStyle(root).backgroundColor : "missing",
+          rootHeight: rootRect?.height ?? 0,
+          rootWidth: rootRect?.width ?? 0,
+          shellHeight: shellRect?.height ?? 0,
+          shellWidth: shellRect?.width ?? 0,
+          viewportHeight: window.innerHeight,
+          viewportWidth: window.innerWidth
+        };
+      });
+
+      expect(paint.bodyBackground).toBe("rgb(246, 248, 252)");
+      expect(paint.rootBackground).toBe("rgb(246, 248, 252)");
+      expect(paint.rootWidth).toBe(paint.viewportWidth);
+      expect(paint.rootHeight).toBe(paint.viewportHeight);
+      expect(paint.shellWidth).toBe(paint.viewportWidth);
+      expect(paint.shellHeight).toBe(paint.viewportHeight);
+    }
   }, 30_000);
 
   it("opens the apply preview at its summary instead of scrolling to the footer", async () => {

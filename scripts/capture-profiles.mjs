@@ -189,8 +189,13 @@ const prepareFixture = async (root) => {
   return { appDataRoot, binDir, githubFixtureRoot, homeDir };
 };
 
-const capturePage = async (page, path) => {
-  await page.screenshot({ path, type: "png" });
+const capturePage = async (windowHandle, path) => {
+  const dataUrl = await windowHandle.evaluate(async (browserWindow) => {
+    browserWindow.webContents.invalidate();
+    await new Promise((resolveInvalidate) => setTimeout(resolveInvalidate, 50));
+    return (await browserWindow.capturePage()).toDataURL();
+  });
+  await writeFile(path, Buffer.from(dataUrl.split(",", 2)[1], "base64"));
 };
 
 const setWindowSize = async (page, windowHandle, width, height) => {
@@ -202,7 +207,13 @@ const setWindowSize = async (page, windowHandle, width, height) => {
   }, { width, height });
   await page.setViewportSize({ width, height });
   await page.waitForTimeout(300);
-  await page.evaluate(() => document.body.getBoundingClientRect());
+  await page.evaluate(async () => {
+    document.body.style.visibility = "hidden";
+    await new Promise(requestAnimationFrame);
+    document.body.style.visibility = "visible";
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+  });
 };
 
 const writeComparisonPage = async () => {
@@ -248,7 +259,7 @@ const captureComparison = async (page, windowHandle, htmlPath, mode, fileName, h
     [...document.images].every((image) => image.complete && image.naturalWidth > 0)
   );
   await page.waitForTimeout(100);
-  await capturePage(page, join(outputDir, fileName));
+  await capturePage(windowHandle, join(outputDir, fileName));
 };
 
 await mkdir(outputDir, { recursive: true });
@@ -280,23 +291,26 @@ try {
   await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("group", { name: "Library item react-best-practices" }).waitFor({ state: "visible" });
-  await capturePage(page, join(outputDir, "skills-1180x728.png"));
+  await capturePage(windowHandle, join(outputDir, "skills-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(page, join(outputDir, "skills-920x620.png"));
+  await capturePage(windowHandle, join(outputDir, "skills-920x620.png"));
   const githubSource = page.getByLabel("Full source for react-best-practices");
   await githubSource.scrollIntoViewIfNeeded();
-  await githubSource.hover();
-  await page.getByRole("tooltip").waitFor({ state: "visible" });
-  await capturePage(page, join(outputDir, "skills-source-tooltip-920x620.png"));
-  await page.mouse.move(10, 10);
+  await githubSource.focus();
+  await page
+    .getByRole("tooltip")
+    .filter({ hasText: "agentenv-community/agent-skills" })
+    .waitFor({ state: "visible" });
+  await capturePage(windowHandle, join(outputDir, "skills-source-tooltip-920x620.png"));
+  await githubSource.evaluate((element) => element.blur());
 
   const captureWorkspace = async (buttonName, filePrefix, readyLocator) => {
     await page.getByRole("button", { name: buttonName, exact: true }).click();
     await readyLocator().waitFor({ state: "visible" });
     await setWindowSize(page, windowHandle, 1180, 728);
-    await capturePage(page, join(outputDir, `${filePrefix}-1180x728.png`));
+    await capturePage(windowHandle, join(outputDir, `${filePrefix}-1180x728.png`));
     await setWindowSize(page, windowHandle, 920, 620);
-    await capturePage(page, join(outputDir, `${filePrefix}-920x620.png`));
+    await capturePage(windowHandle, join(outputDir, `${filePrefix}-920x620.png`));
   };
 
   await captureWorkspace(
@@ -326,11 +340,11 @@ try {
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Select apply target" }).click();
   await page.waitForTimeout(250);
-  await capturePage(page, join(outputDir, "implementation-1536x1024.png"));
+  await capturePage(windowHandle, join(outputDir, "implementation-1536x1024.png"));
 
   await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(page, join(outputDir, "implementation-1180x728.png"));
+  await capturePage(windowHandle, join(outputDir, "implementation-1180x728.png"));
 
   const htmlPath = await writeComparisonPage();
   await captureComparison(page, windowHandle, htmlPath, "full", "comparison.png", 570);

@@ -40,7 +40,10 @@
 html,
 body,
 #root {
+  background: var(--page);
+  height: 100%;
   min-height: 100%;
+  width: 100%;
 }
 
 body {
@@ -195,6 +198,7 @@ h2 {
   gap: 12px;
   grid-template-columns: 300px minmax(500px, 1fr) 326px;
   height: 100vh;
+  min-height: 100%;
   overflow: hidden;
   padding: 12px;
 }
@@ -3045,6 +3049,8 @@ summary {
   gap: 8px;
   justify-self: end;
   min-width: 0;
+  position: relative;
+  z-index: var(--z-dropdown);
 }
 
 .profile-apply-control {
@@ -5455,6 +5461,11 @@ button svg,
   min-height: 48px;
 }
 
+.profile-commit-actions > .icon-action {
+  height: 48px;
+  width: 48px;
+}
+
 .profile-readiness-strip {
   grid-template-columns: minmax(260px, 1fr) minmax(300px, 1fr);
   min-height: 104px;
@@ -5809,6 +5820,11 @@ button svg,
   .profile-commit-actions .save-button,
   .profile-commit-actions .profile-apply-button {
     min-height: 38px;
+  }
+
+  .profile-commit-actions > .icon-action {
+    height: 38px;
+    width: 38px;
   }
 
   .profile-hero__icon {

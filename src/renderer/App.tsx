@@ -499,6 +499,7 @@ export const App = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const profilePageActionsRef = useRef<HTMLDivElement>(null);
+  const profileObjectActionsRef = useRef<HTMLDivElement>(null);
   const profileApplyControlRef = useRef<HTMLDivElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const targetMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -1128,6 +1129,7 @@ export const App = () => {
       }
       if (
         profilePageActionsRef.current?.contains(target) ||
+        profileObjectActionsRef.current?.contains(target) ||
         profileApplyControlRef.current?.contains(target)
       ) {
         return;
@@ -2472,42 +2474,6 @@ export const App = () => {
                   <Plus size={15} strokeWidth={2.3} aria-hidden="true" />
                   New Profile
                 </button>
-                <button
-                  ref={profileActionsButtonRef}
-                  className="icon-action"
-                  type="button"
-                  aria-expanded={isProfileActionsOpen}
-                  aria-haspopup="menu"
-                  aria-label="More profile actions"
-                  title="More profile actions"
-                  disabled={!selectedProfileId}
-                  onClick={() => {
-                    setIsTargetMenuOpen(false);
-                    setIsProfileActionsOpen((current) => !current);
-                  }}
-                >
-                  <MoreHorizontal size={16} strokeWidth={2.2} />
-                </button>
-                {isProfileActionsOpen ? (
-                  <div className="profile-actions-menu" role="menu" aria-label="Profile actions">
-                    <button type="button" role="menuitem" onClick={duplicateSelectedProfile}>
-                      <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
-                      <span>Duplicate profile</span>
-                    </button>
-                    <button
-                      className="is-danger"
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setIsProfileActionsOpen(false);
-                        openDeleteProfileDialog();
-                      }}
-                    >
-                      <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                      <span>Delete profile</span>
-                    </button>
-                  </div>
-                ) : null}
               </div>
             </header>
             <section
@@ -2681,8 +2647,9 @@ export const App = () => {
                       </div>
                       <div
                         className="profile-commit-actions"
+                        ref={profileObjectActionsRef}
                         role="group"
-                        aria-label="Profile save and apply"
+                        aria-label="Selected profile actions"
                       >
                         <div className="profile-save-control">
                           <button
@@ -2696,6 +2663,41 @@ export const App = () => {
                           </button>
                         </div>
                         {profileApplyControl}
+                        <button
+                          ref={profileActionsButtonRef}
+                          className="icon-action"
+                          type="button"
+                          aria-expanded={isProfileActionsOpen}
+                          aria-haspopup="menu"
+                          aria-label="More profile actions"
+                          title="More profile actions"
+                          onClick={() => {
+                            setIsTargetMenuOpen(false);
+                            setIsProfileActionsOpen((current) => !current);
+                          }}
+                        >
+                          <MoreHorizontal size={16} strokeWidth={2.2} />
+                        </button>
+                        {isProfileActionsOpen ? (
+                          <div className="profile-actions-menu" role="menu" aria-label="Profile actions">
+                            <button type="button" role="menuitem" onClick={duplicateSelectedProfile}>
+                              <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
+                              <span>Duplicate profile</span>
+                            </button>
+                            <button
+                              className="is-danger"
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setIsProfileActionsOpen(false);
+                                openDeleteProfileDialog();
+                              }}
+                            >
+                              <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                              <span>Delete profile</span>
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </header>
             <section className="profile-composer" aria-label="Profile composer">
