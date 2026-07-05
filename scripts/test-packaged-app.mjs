@@ -54,10 +54,7 @@ try {
     .getByRole("button", { name: "Profiles", exact: true })
     .click();
   await page.getByRole("button", { name: /OpenCode Daily Coding/ }).click();
-  const applyButton = page
-    .getByRole("button", { name: "Take over OpenCode" })
-    .or(page.getByRole("button", { name: "Preview & apply to OpenCode" }))
-    .first();
+  const applyButton = page.getByRole("button", { name: "Apply", exact: true });
   await applyButton.click();
   const preview = page.getByRole("dialog", { name: "Preview" });
   await preview.getByRole("button", { name: "Apply profile" }).click();
