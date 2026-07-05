@@ -390,6 +390,7 @@ Status: active Profile deletion is blocked; both Stop Managing paths, safety bac
 - Rollback MUST be previewed before it writes.
 - Rollback MUST restore files, directories, links, ownership markers, and deployment state consistently.
 - Rollback MUST detect live changes made after the Backup and require explicit confirmation before replacing them.
+- A Rollback Preview becomes stale when any affected live path changes after Preview. Rollback MUST reject the stale plan without writing and require a fresh Preview.
 - A successful rollback MUST refresh Target lifecycle and active Profile metadata.
 - Backups MUST be retained until explicitly removed by the user or a documented retention policy.
 - A failed rollback enters `Recovery required`.
@@ -485,6 +486,9 @@ Idle -> Pressed -> Working -> Success | Warning | Error | Partial failure
 - A newer warning or error replaces stale success feedback.
 - Completion updates visible persisted state, not only a message.
 - No visible command may appear to do nothing.
+- Global feedback MUST NOT block unrelated workspace controls. Only actions owned by the feedback surface, such as Dismiss or Connect GitHub, receive pointer input.
+
+Status: shared transient success, persistent error, background progress, GitHub remediation, and non-blocking global feedback are `Implemented`.
 
 ## 20. Desktop Interaction Contract
 
@@ -495,9 +499,12 @@ Idle -> Pressed -> Working -> Success | Warning | Error | Partial failure
 - Lists and expanded editors own intentional internal scrolling.
 - Buttons do not wrap at supported desktop widths.
 - Menus, tooltips, and dialogs remain above rows and inside the visible viewport.
-- Escape closes dismissible layers; safe outside click closes them; focus returns to the trigger.
+- Modal dialogs trap keyboard focus until they close.
+- Escape closes dismissible layers; safe outside click closes them; focus returns to the trigger or the next logical surviving control.
 - Primary workflows work with keyboard only.
 - Status is never communicated through color alone.
+
+Status: supported viewport containment, topmost overlays, modal focus trapping, Escape and outside-click dismissal, and focus restoration are `Implemented`.
 
 ## 21. Security And Privacy Contract
 
@@ -629,9 +636,21 @@ AgentEnv Manager is production-ready only when all of these are true:
 
 Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, rollback, stale rollback protection, no-op, cross-Target payload review, canonical Target lifecycle, data backup and restore, native Instructions adoption, active-Profile deletion recovery, and Stop Managing workflows are functional. Complete MCP secret handling and broader drift adoption remain release requirements.
 
+### 24.1 Verification Snapshot
+
+Last verified: 2026-07-12 against commit `b61e6d1`.
+
+- `261` automated tests passed across `37` test files, including native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- Skills, MCP Servers, Profiles, Targets, and Settings were visually inspected at `1180 x 728` and `920 x 620` without document overflow.
+- First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
+- Production dependency audit reported zero known vulnerabilities.
+- The packaged arm64 macOS application launched successfully with a `1180 x 728` content viewport and no document overflow.
+- A complete signed and notarized packaged primary-workflow smoke test remains outstanding; packaged startup alone does not satisfy that release gate.
+
 ## 25. Current Priority Gaps
 
 1. Complete MCP secret masking and backup permission guarantees.
 2. Add explicit Backup retention controls.
 3. Extend Adopt into Profile beyond native Instructions where the adapter can map changes safely.
 4. Migrate persisted Profile terminology from `targetId` to `nativeTargetId` with backward compatibility.
+5. Broaden Skill identity contract tests for same-ID conflicts and different-ID identical-content candidates.
