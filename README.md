@@ -15,7 +15,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 ### Profile 管理
 
 - 创建、编辑、复制、删除 profile。
-- 每个 profile 绑定一个目标 agent，例如 OpenCode、Claude Code 或 Codex。
+- 每个 profile 使用一种原生 Target 格式编辑高级配置，但可以应用到 OpenCode、Claude Code 或 Codex 等任意兼容 Target。
 - Profile 可以管理：
   - 指令文件，例如 `AGENTS.md`、`CLAUDE.md`
   - agent 配置文件，例如 JSONC / TOML 配置
@@ -27,6 +27,8 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 - 确认 preview 后才会写入目标 agent 目录。
 - 每次应用前会自动创建 backup。
 - 支持从 history 预览并回滚 backup。
+
+Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/product-contracts.md`](docs/product-contracts.md)。
 
 ### Skill Library
 
@@ -153,7 +155,7 @@ release/
 
 ## 运行数据
 
-默认情况下，应用会把 profile、library、backup、target state 等数据放在 Electron app data 目录下。
+默认情况下，应用会把 profile、library、backup、target state 等数据放在 `~/.config/agentenv-manager`。
 
 开发时可以指定一个固定数据目录：
 
