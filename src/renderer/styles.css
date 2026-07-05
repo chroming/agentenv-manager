@@ -5343,72 +5343,7 @@ button svg,
   }
 }
 
-/* Profiles reference-fidelity pass */
-.app-shell--profiles {
-  gap: 0;
-  grid-template-columns: 252px minmax(0, 1fr);
-  padding: 0;
-}
-
-.app-shell--profiles .global-sidebar {
-  background: #fbfcff;
-  border: 0;
-  border-radius: 0;
-  border-right: 1px solid #e5eaf1;
-  box-shadow: none;
-  padding: 16px 18px 18px;
-}
-
-.app-shell--profiles .global-sidebar .sidebar__header {
-  padding: 18px 8px 26px;
-}
-
-.app-shell--profiles .brand-lockup h1 {
-  font-size: 15px;
-}
-
-.app-shell--profiles .workspace-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.app-shell--profiles .workspace-nav .nav-section-label {
-  display: none;
-}
-
-.app-shell--profiles .workspace-nav > button {
-  border-radius: 8px;
-  flex: 0 0 auto;
-  min-height: 54px;
-  padding: 0 14px;
-}
-
-.app-shell--profiles .workspace-nav > button[aria-label="Profiles"] { order: 1; }
-.app-shell--profiles .workspace-nav > button[aria-label="Skills"] { order: 2; }
-.app-shell--profiles .workspace-nav > button[aria-label="MCP Servers"] { order: 3; }
-.app-shell--profiles .workspace-nav > button[aria-label="Targets"] { order: 4; }
-.app-shell--profiles .workspace-nav > button[aria-label="Activity"] { order: 5; }
-.app-shell--profiles .workspace-nav > button[aria-label="Settings"] { order: 6; }
-
-.app-shell--profiles .workspace-button > span:not(.workspace-button__icon) {
-  font-size: 14px;
-}
-
-.app-shell--profiles .system-status-card {
-  gap: 12px;
-  min-height: 166px;
-  padding: 16px;
-}
-
-.app-shell--profiles .system-status-card > div:first-child strong {
-  font-size: 13px;
-}
-
-.app-shell--profiles .system-status-card > small {
-  font-size: 12px;
-}
-
+/* Profiles workspace layout */
 .app-shell--profiles .editor-panel {
   gap: 20px;
   grid-template-rows: 76px 104px minmax(0, 1fr);

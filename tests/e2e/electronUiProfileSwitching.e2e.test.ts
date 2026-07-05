@@ -1620,19 +1620,103 @@ describe("Electron UI profile switching e2e", () => {
     expect(dimensions.documentHeight).toBe(dimensions.viewportHeight);
   }, 30_000);
 
-  it("keeps navigation order and workspace width stable across primary pages", async () => {
+  it("keeps global chrome and page control scale stable between Skills and Profiles", async () => {
     const { page } = await launchApp();
-    await page.setViewportSize({ width: 1180, height: 728 });
-
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
     const skillsButton = navigation.getByRole("button", { name: "Skills", exact: true });
     const profilesButton = navigation.getByRole("button", { name: "Profiles", exact: true });
-    const libraryPositions = await Promise.all([skillsButton.boundingBox(), profilesButton.boundingBox()]);
-    expect(libraryPositions[0]).not.toBeNull();
-    expect(libraryPositions[1]).not.toBeNull();
-    expect(libraryPositions[0]!.y).toBeLessThan(libraryPositions[1]!.y);
 
-    await profilesButton.click();
+    const readGeometry = async (headingName: string, actionName: string) => {
+      const heading = page.getByRole("heading", { name: headingName, exact: true });
+      const action = page.getByRole("button", { name: actionName, exact: true });
+      await heading.waitFor({ state: "visible" });
+      const headingElement = await heading.elementHandle();
+      const actionElement = await action.elementHandle();
+      if (!headingElement || !actionElement) {
+        throw new Error(`Unable to measure ${headingName}`);
+      }
+      return page.evaluate(
+        ({ headingElement, actionElement }) => {
+          const rect = (element: Element | null) => {
+            const box = element?.getBoundingClientRect();
+            return box
+              ? {
+                  height: Math.round(box.height),
+                  width: Math.round(box.width),
+                  x: Math.round(box.x),
+                  y: Math.round(box.y)
+                }
+              : undefined;
+          };
+          const editor = document.querySelector(".editor-panel");
+          const editorStyle = editor ? getComputedStyle(editor) : undefined;
+          const headingStyle = getComputedStyle(headingElement);
+          return {
+            action: rect(actionElement),
+            brand: rect(document.querySelector(".brand-lockup")),
+            editorPadding: editorStyle
+              ? [
+                  editorStyle.paddingTop,
+                  editorStyle.paddingRight,
+                  editorStyle.paddingBottom,
+                  editorStyle.paddingLeft
+                ]
+              : [],
+            heading: {
+              ...rect(headingElement),
+              fontSize: headingStyle.fontSize,
+              lineHeight: headingStyle.lineHeight
+            },
+            navigation: [...document.querySelectorAll(".workspace-button")].map(rect),
+            sidebar: rect(document.querySelector(".global-sidebar")),
+            status: rect(document.querySelector(".system-status-card"))
+          };
+        },
+        {
+          actionElement,
+          headingElement
+        }
+      );
+    };
+
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await page.setViewportSize(viewport);
+      await skillsButton.click();
+      const skillsGeometry = await readGeometry("Library/Skills", "Import Skill");
+
+      await profilesButton.click();
+      const profilesGeometry = await readGeometry("Profiles", "New Profile");
+
+      expect(profilesGeometry.brand).toEqual(skillsGeometry.brand);
+      expect(profilesGeometry.navigation).toHaveLength(skillsGeometry.navigation.length);
+      profilesGeometry.navigation.forEach((profileRow, index) => {
+        const skillRow = skillsGeometry.navigation[index];
+        expect(profileRow?.height).toBe(skillRow?.height);
+        expect(profileRow?.width).toBe(skillRow?.width);
+        expect(Math.abs((profileRow?.x ?? 0) - (skillRow?.x ?? 0))).toBeLessThanOrEqual(1);
+        expect(Math.abs((profileRow?.y ?? 0) - (skillRow?.y ?? 0))).toBeLessThanOrEqual(1);
+      });
+      expect(profilesGeometry.sidebar).toEqual(skillsGeometry.sidebar);
+      expect(profilesGeometry.status).toEqual(skillsGeometry.status);
+      expect(profilesGeometry.editorPadding).toEqual(skillsGeometry.editorPadding);
+      expect({
+        fontSize: profilesGeometry.heading.fontSize,
+        height: profilesGeometry.heading.height,
+        lineHeight: profilesGeometry.heading.lineHeight,
+        x: profilesGeometry.heading.x
+      }).toEqual({
+        fontSize: skillsGeometry.heading.fontSize,
+        height: skillsGeometry.heading.height,
+        lineHeight: skillsGeometry.heading.lineHeight,
+        x: skillsGeometry.heading.x
+      });
+      expect(profilesGeometry.action?.height).toBe(skillsGeometry.action?.height);
+      expect(profilesGeometry.action?.y).toBe(skillsGeometry.action?.y);
+    }
+
     const profilePositions = await Promise.all([skillsButton.boundingBox(), profilesButton.boundingBox()]);
     expect(profilePositions[0]!.y).toBeLessThan(profilePositions[1]!.y);
 

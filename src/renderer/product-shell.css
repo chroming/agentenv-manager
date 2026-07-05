@@ -24,8 +24,15 @@
   padding: 14px 6px 18px;
 }
 
+.brand-lockup h1,
 .app-shell--profiles .brand-lockup h1 {
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.brand-lockup .muted,
+.app-shell--profiles .brand-lockup .muted {
+  line-height: 1.2;
 }
 
 .workspace-nav,
@@ -39,10 +46,17 @@
   display: block;
 }
 
+.workspace-nav > button,
 .app-shell--profiles .workspace-nav > button {
-  min-height: 42px;
+  height: 40px;
+  min-height: 40px;
   order: initial !important;
-  padding: 8px 10px;
+  padding: 7px 10px;
+}
+
+.nav-section-label,
+.app-shell--profiles .workspace-nav .nav-section-label {
+  line-height: 13px;
 }
 
 .app-shell--profiles .workspace-button > span:not(.workspace-button__icon) {
@@ -51,6 +65,46 @@
 
 .workspace-button.is-active {
   box-shadow: none;
+}
+
+.system-status-card,
+.app-shell--profiles .system-status-card {
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+}
+
+.system-status-card > div:first-child strong,
+.app-shell--profiles .system-status-card > div:first-child strong {
+  font-size: 12px;
+}
+
+.page-header h2,
+.profile-page-header h2 {
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.profile-page-heading p {
+  font-size: 13px;
+}
+
+.profile-page-actions button {
+  min-height: 36px;
+}
+
+.editor-panel,
+.app-shell--library .editor-panel,
+.app-shell--profiles .editor-panel {
+  padding: 24px;
+}
+
+@media (max-width: 1300px) {
+  .editor-panel,
+  .app-shell--library .editor-panel,
+  .app-shell--profiles .editor-panel {
+    padding: 14px 18px 18px;
+  }
 }
 
 .editor-panel,
@@ -993,6 +1047,12 @@
   .app-shell--library,
   .app-shell--profiles {
     grid-template-columns: 196px minmax(0, 1fr);
+  }
+
+  .editor-panel,
+  .app-shell--library .editor-panel,
+  .app-shell--profiles .editor-panel {
+    padding: 12px 14px 14px;
   }
 
   .profile-apply-button {

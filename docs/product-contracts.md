@@ -500,6 +500,8 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - No supported viewport has page-level horizontal scrolling.
 - The Electron compositor, document root, and application shell MUST paint the complete content viewport with the page background; short pages and navigation transitions MUST NOT expose an unpainted window background.
 - Primary commands and lifecycle state remain visible.
+- Switching workspaces MUST NOT resize or reposition global chrome. Sidebar, brand lockup, navigation rows, status card, page gutter, first-level page titles, and page-header control height use shared geometry at a given viewport.
+- Workspace-specific content MAY use its own density only inside the stable page content region.
 - Lists and expanded editors own intentional internal scrolling.
 - Buttons do not wrap at supported desktop widths.
 - Menus, tooltips, and dialogs remain above rows and inside the visible viewport.
