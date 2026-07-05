@@ -499,6 +499,30 @@ describe("activation service", () => {
     );
   });
 
+  it("rejects a rollback when target files change after preview", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Old agents\n");
+
+    const preview = await service.previewProfile("daily-coding");
+    const applyResult = await service.applyProfile("daily-coding", preview.id);
+    expect(applyResult.ok).toBe(true);
+
+    const backups = await createBackupStore(paths).listBackups();
+    const backupId = backups[0]?.id ?? "";
+    await service.previewRollback(backupId);
+    await writeFile(paths.globalAgentsPath, "# External edit after preview\n");
+
+    const rollbackResult = await service.rollback(backupId);
+
+    expect(rollbackResult.ok).toBe(false);
+    if (!rollbackResult.ok) {
+      expect(rollbackResult.errors[0]).toContain("changed after the rollback preview");
+    }
+    await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe(
+      "# External edit after preview\n"
+    );
+  });
+
   it("stops managing while keeping the currently applied Target environment", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Before takeover\n");

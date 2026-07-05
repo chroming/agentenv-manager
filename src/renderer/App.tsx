@@ -94,6 +94,7 @@ import {
   updateLibraryScroll
 } from "./libraryViewState";
 import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration";
+import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
 import {
   findRecentProfileApplication,
@@ -510,6 +511,9 @@ export const App = () => {
   const saveInFlightRef = useRef(false);
   const rollbackReturnFocusRef = useRef<HTMLElement | null>(null);
   const dataRestoreReturnFocusRef = useRef<HTMLElement | null>(null);
+  const appModalDialogRef = useRef<HTMLElement>(null);
+  const appModalInitialFocusRef = useRef<HTMLButtonElement>(null);
+  const appModalFallbackFocusRef = useRef<HTMLElement>(null);
   const activeLibraryView = activeWorkspace === "library" ? activeLibraryTab : undefined;
   const libraryScroll = useLibraryScrollRestoration({
     activeView: activeLibraryView,
@@ -544,13 +548,6 @@ export const App = () => {
     }
     rollbackReturnFocusRef.current = null;
   }, [busy, rollbackPreview]);
-
-  useEffect(() => {
-    if (dataRestorePreview || busy) return;
-    const returnFocus = dataRestoreReturnFocusRef.current;
-    if (returnFocus?.isConnected) returnFocus.focus();
-    dataRestoreReturnFocusRef.current = null;
-  }, [busy, dataRestorePreview]);
 
   useEffect(() => {
     if (settingsSaveStatus !== "Settings saved") {
@@ -995,6 +992,7 @@ export const App = () => {
   };
 
   const openDeleteProfileDialog = () => {
+    appModalFallbackFocusRef.current = profileActionsButtonRef.current;
     guardProfileAction("delete this profile", () => setDeleteProfileDialogOpen(true));
   };
 
@@ -1009,6 +1007,29 @@ export const App = () => {
     setPreview(undefined);
     setRollbackPreview(undefined);
   };
+
+  const appModalOpen = Boolean(
+    pendingProfileAction || profileDialogMode || deleteProfileDialogOpen || dataRestorePreview
+  );
+  const dismissAppModal = () => {
+    if (dataRestorePreview) {
+      setDataRestorePreview(undefined);
+    } else if (pendingProfileAction) {
+      cancelPendingProfileAction();
+    } else {
+      closeProfileDialog();
+    }
+  };
+  useModalDialog({
+    open: appModalOpen,
+    dialogRef: appModalDialogRef,
+    initialFocusRef: appModalInitialFocusRef,
+    fallbackFocusRef: dataRestorePreview
+      ? dataRestoreReturnFocusRef
+      : appModalFallbackFocusRef,
+    onDismiss: dismissAppModal,
+    dismissDisabled: busy
+  });
 
   const selectTargetNow = (targetId: string) => {
     setIsTargetMenuOpen(false);
@@ -1072,20 +1093,8 @@ export const App = () => {
       if (event.key !== "Escape") {
         return;
       }
-      if (pendingProfileAction) {
-        cancelPendingProfileAction();
-        return;
-      }
-      if (profileDialogMode || deleteProfileDialogOpen) {
-        closeProfileDialog();
-        return;
-      }
       if (skillLibraryTool) {
         setSkillLibraryTool(undefined);
-        return;
-      }
-      if (dataRestorePreview && !busy) {
-        setDataRestorePreview(undefined);
         return;
       }
       if (isProfileActionsOpen) {
@@ -1102,13 +1111,8 @@ export const App = () => {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [
-    deleteProfileDialogOpen,
-    dataRestorePreview,
-    busy,
     isProfileActionsOpen,
     isTargetMenuOpen,
-    pendingProfileAction,
-    profileDialogMode,
     skillLibraryTool
   ]);
 
@@ -1161,6 +1165,14 @@ export const App = () => {
   const isSelectedProfileActive = Boolean(
     selectedProfileId && targetStates.some((state) => state.activeProfileId === selectedProfileId)
   );
+  const selectedProfileActiveTargets = selectedProfileId
+    ? targetStates
+        .filter((state) => state.activeProfileId === selectedProfileId)
+        .map(
+          (state) =>
+            targets.find((target) => target.id === state.targetId)?.name ?? state.targetId
+        )
+    : [];
   const validationRows = draftProfile
     ? createValidationRows(draftProfile, selectedTarget, preview, profileTarget)
     : [];
@@ -2878,8 +2890,9 @@ export const App = () => {
                 )}
               </div>
               {pendingProfileAction ? (
-                <div className="preview-modal-backdrop" onClick={cancelPendingProfileAction}>
+                <div className="preview-modal-backdrop" onClick={busy ? undefined : cancelPendingProfileAction}>
                   <section
+                    ref={appModalDialogRef}
                     className="profile-form-dialog profile-form-dialog--compact"
                     role="dialog"
                     aria-label="Unsaved profile changes"
@@ -2895,7 +2908,7 @@ export const App = () => {
                       </div>
                     </header>
                     <footer className="preview-actions profile-dirty-actions">
-                      <button className="secondary-action" type="button" disabled={busy} onClick={cancelPendingProfileAction}>
+                      <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={cancelPendingProfileAction}>
                         Cancel
                       </button>
                       <button className="secondary-action" type="button" disabled={busy} onClick={() => void continuePendingProfileAction(false)}>
@@ -2909,8 +2922,9 @@ export const App = () => {
                 </div>
               ) : null}
               {profileDialogMode ? (
-                <div className="preview-modal-backdrop" onClick={closeProfileDialog}>
+                <div className="preview-modal-backdrop" onClick={busy ? undefined : closeProfileDialog}>
                   <section
+                    ref={appModalDialogRef}
                     className="profile-form-dialog"
                     role="dialog"
                     aria-label={profileDialogMode === "create" ? "New profile" : "Edit profile"}
@@ -2924,7 +2938,7 @@ export const App = () => {
                         </div>
                         <p className="muted">
                           {profileDialogMode === "create"
-                            ? "Create a target-specific environment profile."
+                            ? "Create a reusable environment and choose its native format."
                             : "Update the profile name and description."}
                         </p>
                       </div>
@@ -2971,7 +2985,7 @@ export const App = () => {
                       </label>
                     </div>
                     <footer className="preview-actions">
-                      <button className="secondary-action" type="button" onClick={closeProfileDialog}>
+                      <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
                         Cancel
                       </button>
                       <button
@@ -2987,8 +3001,9 @@ export const App = () => {
                 </div>
               ) : null}
               {deleteProfileDialogOpen && draftProfile ? (
-                <div className="preview-modal-backdrop" onClick={closeProfileDialog}>
+                <div className="preview-modal-backdrop" onClick={busy ? undefined : closeProfileDialog}>
                   <section
+                    ref={appModalDialogRef}
                     className="profile-form-dialog profile-form-dialog--compact"
                     role="dialog"
                     aria-label="Delete profile"
@@ -3000,20 +3015,31 @@ export const App = () => {
                         <div className="section-title">Delete profile</div>
                         <p className="muted">
                           {isSelectedProfileActive
-                            ? `${draftProfile.manifest.name} is active on ${activeTargetName}. Apply another profile before removing it.`
+                            ? `${draftProfile.manifest.name} is active on ${selectedProfileActiveTargets.join(", ")}. Apply another profile or stop managing each Target before removing it.`
                             : `Remove ${draftProfile.manifest.name}? Applied target files and backups are not removed.`}
                         </p>
                       </div>
                     </header>
                     <footer className="preview-actions">
-                      <button className="secondary-action" type="button" onClick={closeProfileDialog}>
+                      <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
                         Cancel
                       </button>
                       {!isSelectedProfileActive ? (
                         <button className="danger-action" type="button" disabled={busy} onClick={deleteSelectedProfile}>
                           Remove profile
                         </button>
-                      ) : null}
+                      ) : (
+                        <button
+                          className="primary-action"
+                          type="button"
+                          onClick={() => {
+                            closeProfileDialog();
+                            setActiveWorkspace("targets");
+                          }}
+                        >
+                          Open Targets
+                        </button>
+                      )}
                     </footer>
                   </section>
                 </div>
@@ -3257,7 +3283,7 @@ export const App = () => {
               <div className="preview-modal-backdrop" onClick={() => {
                 if (!busy) setDataRestorePreview(undefined);
               }}>
-                <section className="profile-form-dialog profile-form-dialog--compact" role="dialog" aria-modal="true" aria-label="Restore AgentEnv data" onClick={(event) => event.stopPropagation()}>
+                <section ref={appModalDialogRef} className="profile-form-dialog profile-form-dialog--compact" role="dialog" aria-modal="true" aria-label="Restore AgentEnv data" onClick={(event) => event.stopPropagation()}>
                   <header className="profile-dialog-header">
                     <div>
                       <div className="section-title">Restore AgentEnv data</div>
@@ -3272,7 +3298,7 @@ export const App = () => {
                     <p>A safety backup of the current data will be created before replacement.</p>
                   </div>
                   <footer className="preview-actions">
-                    <button autoFocus className="secondary-action" type="button" disabled={busy} onClick={() => setDataRestorePreview(undefined)}>Cancel</button>
+                    <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setDataRestorePreview(undefined)}>Cancel</button>
                     <button className="danger-action" type="button" disabled={busy} onClick={() => void restoreAgentEnvData()}>Restore data</button>
                   </footer>
                 </section>

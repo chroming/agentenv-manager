@@ -394,7 +394,7 @@ Status: active Profile deletion is blocked; both Stop Managing paths, safety bac
 - Backups MUST be retained until explicitly removed by the user or a documented retention policy.
 - A failed rollback enters `Recovery required`.
 
-Status: Apply and cleanup rollback are `Implemented`; stale rollback conflict handling and retention controls are `Required`.
+Status: Apply and cleanup rollback plus stale rollback conflict handling are `Implemented`; retention controls are `Required`.
 
 ## 16. Skill Library Contract
 
@@ -467,7 +467,7 @@ Status: reusable references and deletion protection are `Implemented`; capabilit
 - The user MUST be able to navigate to each Target and choose Apply another Profile or Stop Managing.
 - Backups and history remain available after Profile deletion and retain the deleted display name as historical metadata.
 
-Status: deletion blocking is `Implemented`; affected-Target resolution flow is `Required`.
+Status: deletion blocking, complete affected-Target disclosure, and navigation to Target resolution are `Implemented`.
 
 ## 19. Feedback Contract
 
@@ -627,12 +627,11 @@ AgentEnv Manager is production-ready only when all of these are true:
 - Default and minimum desktop viewports pass containment and overlay checks.
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
 
-Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, rollback, no-op, cross-Target payload review, canonical Target lifecycle, data backup and restore, native Instructions adoption, and Stop Managing workflows are functional. Complete MCP secret handling, stale rollback protection, and broader drift adoption remain release requirements.
+Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, rollback, stale rollback protection, no-op, cross-Target payload review, canonical Target lifecycle, data backup and restore, native Instructions adoption, active-Profile deletion recovery, and Stop Managing workflows are functional. Complete MCP secret handling and broader drift adoption remain release requirements.
 
 ## 25. Current Priority Gaps
 
 1. Complete MCP secret masking and backup permission guarantees.
-2. Add stale rollback conflict handling and Backup retention controls.
+2. Add explicit Backup retention controls.
 3. Extend Adopt into Profile beyond native Instructions where the adapter can map changes safely.
-4. Complete the affected-Target resolution flow when deleting an active Profile.
-5. Migrate persisted Profile terminology from `targetId` to `nativeTargetId` with backward compatibility.
+4. Migrate persisted Profile terminology from `targetId` to `nativeTargetId` with backward compatibility.

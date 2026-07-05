@@ -7,7 +7,6 @@ import {
   mkdtemp,
   readFile,
   readdir,
-  readlink,
   rm,
   writeFile
 } from "node:fs/promises";
@@ -729,9 +728,31 @@ describe("Electron UI profile switching e2e", () => {
   it("keeps desktop shortcuts behind each real blocking modal category", async () => {
     const { page } = await launchApp();
     const expectFocusInside = async (dialog: Locator) =>
-      expect(
-        await dialog.evaluate((element) => element.contains(document.activeElement))
-      ).toBe(true);
+      expect
+        .poll(() => dialog.evaluate((element) => element.contains(document.activeElement)))
+        .toBe(true);
+    const expectFocusTrapped = async (dialog: Locator) => {
+      const controls = dialog.locator(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+      );
+      const first = controls.first();
+      const last = controls.last();
+      await first.focus();
+      await page.keyboard.press("Shift+Tab");
+      expect(await last.evaluate((element) => document.activeElement === element)).toBe(true);
+      await page.keyboard.press("Tab");
+      expect(await first.evaluate((element) => document.activeElement === element)).toBe(true);
+    };
+
+    await page.getByRole("button", { name: "Profiles", exact: true }).click();
+    const newProfileTrigger = page.getByRole("button", { name: "New Profile" });
+    await newProfileTrigger.click();
+    const newProfileDialog = page.getByRole("dialog", { name: "New profile" });
+    await expectFocusInside(newProfileDialog);
+    await expectFocusTrapped(newProfileDialog);
+    await page.keyboard.press("Escape");
+    await newProfileDialog.waitFor({ state: "hidden" });
+    expect(await newProfileTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
 
     await selectProfile(page, "UI OpenCode alpha");
     await applyActionButton(page, "OpenCode").click();
@@ -756,11 +777,16 @@ describe("Electron UI profile switching e2e", () => {
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
     await page.getByRole("menuitem", { name: /Remove from library/ }).click();
     const skillDelete = page.getByRole("dialog", { name: "Delete library skill" });
-    await skillDelete.getByRole("button", { name: "Cancel" }).focus();
+    await expectFocusInside(skillDelete);
+    await expectFocusTrapped(skillDelete);
     await page.keyboard.press("Meta+f");
     await expectFocusInside(skillDelete);
     expect(await skillSearch.evaluate((element) => document.activeElement === element)).toBe(false);
     await page.keyboard.press("Escape");
+    await skillDelete.waitFor({ state: "hidden" });
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label")))
+      .toBe("More actions for shared-reviewer");
 
     await page.getByRole("button", { name: "MCP Servers", exact: true }).click();
     const mcpSearch = page.getByRole("textbox", { name: "Search MCP servers" });
@@ -774,12 +800,20 @@ describe("Electron UI profile switching e2e", () => {
     const sharedMcp = page.getByRole("group", { name: "MCP library item shared-docs" });
     await sharedMcp.getByRole("button", { name: "Remove shared-docs" }).click();
     const mcpDelete = page.getByRole("dialog", { name: "Delete MCP server" });
-    await mcpDelete.getByRole("button", { name: "Cancel" }).focus();
+    await expectFocusInside(mcpDelete);
+    await expectFocusTrapped(mcpDelete);
     await page.keyboard.press("Meta+f");
     await expectFocusInside(mcpDelete);
     expect(await mcpSearch.evaluate((element) => document.activeElement === element)).toBe(false);
     await page.keyboard.press("Escape");
     await mcpDelete.waitFor({ state: "hidden" });
+    await expect
+      .poll(() =>
+        sharedMcp
+          .getByRole("button", { name: "Remove shared-docs" })
+          .evaluate((element) => document.activeElement === element)
+      )
+      .toBe(true);
   }, 30_000);
 
   it("keeps Library scale correct and responsive at supported viewports", async () => {
@@ -965,7 +999,7 @@ describe("Electron UI profile switching e2e", () => {
 
     const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
     await openCodeCard.waitFor({ state: "visible" });
-    await expect.poll(() => openCodeCard.textContent()).toContain("Managed by AgentEnv");
+    await expect.poll(() => openCodeCard.textContent()).toContain("ManagementApplied");
     await expect.poll(() => openCodeCard.textContent()).toContain("Active profileUI OpenCode alpha");
   }, 30_000);
 
@@ -1038,9 +1072,11 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("menuitem", { name: "Delete profile" }).click();
     const deleteDialog = page.getByRole("dialog", { name: "Delete profile" });
     await expect.poll(() => deleteDialog.textContent()).toContain(
-      "Apply another profile before removing it"
+      "Apply another profile or stop managing each Target"
     );
     expect(await deleteDialog.getByRole("button", { name: "Remove profile" }).count()).toBe(0);
+    await deleteDialog.getByRole("button", { name: "Open Targets" }).click();
+    await page.getByRole("heading", { name: "Targets" }).waitFor({ state: "visible" });
 
     const ipcResult = await page.evaluate(async () => {
       try {
@@ -1802,7 +1838,7 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("installs a shared library skill into an OpenCode profile from the rendered app", async () => {
-    const { librarySkill, opencodeDir, page } = await launchApp();
+    const { opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "Skills");
@@ -1822,10 +1858,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(installedSkillMd, "utf8")).resolves.toContain(
       "Review code changes before applying them."
     );
-    expect((await lstat(installedSkillMd)).isSymbolicLink()).toBe(true);
-    await expect(readlink(installedSkillMd)).resolves.toBe(
-      join(librarySkill.libraryDir, "SKILL.md")
-    );
+    expect((await lstat(installedSkillMd)).isSymbolicLink()).toBe(false);
     await expect(
       readFile(
         join(opencodeDir, "skills", "shared-reviewer", ".agentenv-owner.json"),
@@ -1977,7 +2010,9 @@ describe("Electron UI profile switching e2e", () => {
     await previewAndApply(page, "OpenCode");
 
     const installedSkillMd = join(opencodeDir, "skills", "shared-reviewer", "SKILL.md");
-    await expect(readlink(installedSkillMd)).resolves.toBe(movedSkillMd);
+    await expect(readFile(installedSkillMd, "utf8")).resolves.toBe(
+      await readFile(movedSkillMd, "utf8")
+    );
   }, 30_000);
 
   it("persists skill background update check settings from Settings", async () => {
@@ -2358,9 +2393,22 @@ describe("Electron UI profile switching e2e", () => {
 
     await expandComposerSection(page, "Advanced");
     await page.getByRole("button", { name: /Preview restore/ }).first().click();
-    await page.getByRole("button", { name: "Restore backup" }).waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Restore backup" }).click();
-    await page.getByRole("button", { name: "Restore backup" }).waitFor({ state: "hidden" });
+    const rollbackDialog = page.getByRole("dialog", { name: "Preview" });
+    await rollbackDialog.getByRole("button", { name: "Restore backup" }).waitFor({ state: "visible" });
+    await writeFile(join(opencodeDir, "AGENTS.md"), "# External edit after rollback preview\n");
+    await rollbackDialog.getByRole("button", { name: "Restore backup" }).click();
+    await expect.poll(() => rollbackDialog.textContent()).toContain(
+      "Target files changed after the rollback preview"
+    );
+    await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toBe(
+      "# External edit after rollback preview\n"
+    );
+    await rollbackDialog.getByRole("button", { name: "Cancel" }).click();
+
+    const restoreTriggers = page.getByRole("button", { name: /Preview restore/ });
+    await restoreTriggers.first().click({ timeout: 5_000 });
+    await rollbackDialog.getByRole("button", { name: "Restore backup" }).click();
+    await rollbackDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain(
       "Active UI profile: alpha"
     );
@@ -2381,6 +2429,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => previewDialog.textContent())
       .toContain("opencode Advanced config is target-specific and is not applied to Codex");
+    await previewDialog.getByRole("checkbox", { name: /will not be applied to Codex/i }).check();
     await previewDialog.getByRole("button", { name: "Apply profile" }).click();
     await previewDialog.waitFor({ state: "hidden" });
 

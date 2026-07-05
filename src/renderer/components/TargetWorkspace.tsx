@@ -7,7 +7,7 @@ import {
   RefreshCw,
   TerminalSquare
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type {
   BackupSummary,
   RollbackPreview,
@@ -20,6 +20,7 @@ import { HistoryView } from "./HistoryView";
 import { InfoTip } from "./InfoTip";
 import { PreviewDialog } from "./PreviewDialog";
 import { targetIconFor } from "./ProfileSidebar";
+import { useModalDialog } from "../hooks/useModalDialog";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
@@ -85,23 +86,18 @@ export const TargetWorkspace = ({
   const [stopManagingTargetId, setStopManagingTargetId] = useState<string>();
   const [stopManagingMode, setStopManagingMode] = useState<StopManagingMode>("keep-current");
   const stopManagingReturnFocusRef = useRef<HTMLElement | null>(null);
+  const stopManagingDialogRef = useRef<HTMLElement>(null);
+  const stopManagingCancelRef = useRef<HTMLButtonElement>(null);
   const statesByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
 
-  useEffect(() => {
-    if (!stopManagingTargetId) return undefined;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setStopManagingTargetId(undefined);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [stopManagingTargetId]);
-
-  useEffect(() => {
-    if (stopManagingTargetId) return;
-    const returnFocus = stopManagingReturnFocusRef.current;
-    if (returnFocus?.isConnected) returnFocus.focus();
-    stopManagingReturnFocusRef.current = null;
-  }, [stopManagingTargetId]);
+  useModalDialog({
+    open: Boolean(stopManagingTargetId),
+    dialogRef: stopManagingDialogRef,
+    initialFocusRef: stopManagingCancelRef,
+    fallbackFocusRef: stopManagingReturnFocusRef,
+    onDismiss: () => setStopManagingTargetId(undefined),
+    dismissDisabled: busy
+  });
 
   return (
     <section className="target-page" aria-label="Targets">
@@ -255,7 +251,7 @@ export const TargetWorkspace = ({
       ) : null}
       {stopManagingTargetId ? (
         <div className="preview-modal-backdrop" onClick={() => setStopManagingTargetId(undefined)}>
-          <section className="profile-form-dialog stop-managing-dialog" role="dialog" aria-modal="true" aria-label="Stop managing Target" onClick={(event) => event.stopPropagation()}>
+          <section ref={stopManagingDialogRef} className="profile-form-dialog stop-managing-dialog" role="dialog" aria-modal="true" aria-label="Stop managing Target" onClick={(event) => event.stopPropagation()}>
             <header className="profile-dialog-header">
               <div>
                 <div className="section-title">Stop managing {targets.find((target) => target.id === stopManagingTargetId)?.name}</div>
@@ -273,7 +269,7 @@ export const TargetWorkspace = ({
               </label>
             </div>
             <footer className="preview-actions">
-              <button autoFocus className="secondary-action" type="button" onClick={() => setStopManagingTargetId(undefined)}>Cancel</button>
+              <button ref={stopManagingCancelRef} className="secondary-action" type="button" onClick={() => setStopManagingTargetId(undefined)}>Cancel</button>
               <button className="danger-action" type="button" disabled={busy} onClick={() => {
                 onPreviewStopManaging(stopManagingTargetId, stopManagingMode);
                 setStopManagingTargetId(undefined);

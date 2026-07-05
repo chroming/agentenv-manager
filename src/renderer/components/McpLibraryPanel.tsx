@@ -5,6 +5,7 @@ import {
   type McpLibraryViewState,
   updateMcpLibraryControls
 } from "../libraryViewState";
+import { useModalDialog } from "../hooks/useModalDialog";
 
 interface McpLibraryPanelProps {
   mcpServers: McpLibraryEntry[];
@@ -82,6 +83,17 @@ export const McpLibraryPanel = ({
   const editorFirstFieldRef = useRef<HTMLInputElement>(null);
   const editorDialogRef = useRef<HTMLElement>(null);
   const wasEditorOpenRef = useRef(false);
+  const deleteDialogRef = useRef<HTMLElement>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteTriggerRef = useRef<HTMLElement>(null);
+
+  useModalDialog({
+    open: Boolean(deleteCandidate),
+    dialogRef: deleteDialogRef,
+    initialFocusRef: deleteCancelRef,
+    fallbackFocusRef: deleteTriggerRef,
+    onDismiss: () => setDeleteCandidate(undefined)
+  });
 
   useEffect(() => {
     if (isEditorOpen) {
@@ -96,7 +108,7 @@ export const McpLibraryPanel = ({
   }, [isEditorOpen]);
 
   useEffect(() => {
-    if (!deleteCandidate && !isEditorOpen) {
+    if (!isEditorOpen) {
       return undefined;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -104,7 +116,6 @@ export const McpLibraryPanel = ({
         if (isEditorOpen && isSaving) {
           return;
         }
-        setDeleteCandidate(undefined);
         setIsEditorOpen(false);
         return;
       }
@@ -129,7 +140,7 @@ export const McpLibraryPanel = ({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [deleteCandidate, isEditorOpen, isSaving]);
+  }, [isEditorOpen, isSaving]);
 
   const resetEditor = () => {
     setDraft(defaultDraft);
@@ -279,7 +290,10 @@ export const McpLibraryPanel = ({
                   className="icon-action danger-icon-action"
                   type="button"
                   aria-label={`Remove ${server.id}`}
-                  onClick={() => setDeleteCandidate(server)}
+                  onClick={(event) => {
+                    deleteTriggerRef.current = event.currentTarget;
+                    setDeleteCandidate(server);
+                  }}
                 >
                   <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
                 </button>
@@ -432,6 +446,7 @@ export const McpLibraryPanel = ({
       {deleteCandidate ? (
         <div className="preview-modal-backdrop" onClick={() => setDeleteCandidate(undefined)}>
           <section
+            ref={deleteDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
             aria-label="Delete MCP server"
@@ -450,6 +465,7 @@ export const McpLibraryPanel = ({
             </header>
             <footer className="preview-actions">
               <button
+                ref={deleteCancelRef}
                 className="secondary-action"
                 type="button"
                 onClick={() => setDeleteCandidate(undefined)}

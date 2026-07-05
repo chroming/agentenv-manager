@@ -344,6 +344,7 @@ export const createActivationService = ({
   const backupStore = createBackupStore(paths);
   const previews = new Map<string, ActivationPreview>();
   const stopManagingPreviews = new Map<string, StopManagingPreview>();
+  const rollbackPreviewFingerprints = new Map<string, Record<string, string | undefined>>();
   const activeTargetOperations = new Set<string>();
 
   const statePathFor = (targetId: string) =>
@@ -1012,6 +1013,14 @@ export const createActivationService = ({
   const previewRollback = async (backupId: string): Promise<RollbackPreview> => {
     const backup = await backupStore.readBackup(backupId);
     const changes = await Promise.all(backup.entries.map(createRollbackChange));
+    rollbackPreviewFingerprints.set(
+      backup.id,
+      Object.fromEntries(
+        await Promise.all(
+          backup.entries.map(async (entry) => [entry.sourcePath, await hashPath(entry.sourcePath)])
+        )
+      )
+    );
     return {
       id: backup.id,
       backupId: backup.id,
@@ -1024,6 +1033,19 @@ export const createActivationService = ({
 
   const rollback = async (backupId: string): Promise<RollbackResult> => {
     const backup = await backupStore.readBackup(backupId);
+    const previewFingerprints = rollbackPreviewFingerprints.get(backupId);
+    if (!previewFingerprints) {
+      return { ok: false, errors: ["Preview this rollback before restoring files"] };
+    }
+    for (const [path, previewFingerprint] of Object.entries(previewFingerprints)) {
+      if ((await hashPath(path)) !== previewFingerprint) {
+        rollbackPreviewFingerprints.delete(backupId);
+        return {
+          ok: false,
+          errors: ["Target files changed after the rollback preview. Review a fresh preview before restoring"]
+        };
+      }
+    }
     const operationTargetId = backup.targetId;
     if (operationTargetId && activeTargetOperations.has(operationTargetId)) {
       return { ok: false, errors: [`Another operation is already running for ${operationTargetId}`] };
@@ -1039,6 +1061,8 @@ export const createActivationService = ({
         type: "rollback",
         backupId
       });
+
+      rollbackPreviewFingerprints.delete(backupId);
 
       return { ok: true };
     } catch (error) {

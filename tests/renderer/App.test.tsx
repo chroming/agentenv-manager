@@ -1530,9 +1530,13 @@ describe("App", () => {
     expect(api.previewApply).not.toHaveBeenCalled();
   });
 
-  it("prevents removing a profile that is active on a target", async () => {
+  it("lists every active target and routes profile deletion recovery to Targets", async () => {
     const api = installApi({
-      listTargetStates: vi.fn().mockResolvedValue([managedState()])
+      listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
+      listTargetStates: vi.fn().mockResolvedValue([
+        managedState(),
+        managedState({ targetId: "codex" })
+      ])
     });
     render(<App />);
     await openProfiles();
@@ -1541,9 +1545,12 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete profile" }));
 
     const deleteDialog = screen.getByRole("dialog", { name: "Delete profile" });
-    expect(deleteDialog).toHaveTextContent("Apply another profile before removing it");
+    expect(deleteDialog).toHaveTextContent("OpenCode, Codex");
+    expect(deleteDialog).toHaveTextContent("Apply another profile or stop managing each Target");
     expect(within(deleteDialog).queryByRole("button", { name: "Remove profile" })).toBeNull();
     expect(api.deleteProfile).not.toHaveBeenCalled();
+    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Open Targets" }));
+    expect(await screen.findByRole("heading", { name: "Targets" })).toBeInTheDocument();
   });
 
   it("shows target management status on the Targets page", async () => {

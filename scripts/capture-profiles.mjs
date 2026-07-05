@@ -157,11 +157,8 @@ const prepareFixture = async (root) => {
   return { appDataRoot, binDir, homeDir };
 };
 
-const captureWindow = async (windowHandle, path) => {
-  const encoded = await windowHandle.evaluate(async (browserWindow) =>
-    (await browserWindow.capturePage()).toPNG().toString("base64")
-  );
-  await writeFile(path, Buffer.from(encoded, "base64"));
+const capturePage = async (page, path) => {
+  await page.screenshot({ path, type: "png" });
 };
 
 const setWindowSize = async (page, windowHandle, width, height) => {
@@ -172,7 +169,8 @@ const setWindowSize = async (page, windowHandle, width, height) => {
     browserWindow.focus();
   }, { width, height });
   await page.setViewportSize({ width, height });
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(300);
+  await page.evaluate(() => document.body.getBoundingClientRect());
 };
 
 const writeComparisonPage = async () => {
@@ -218,7 +216,7 @@ const captureComparison = async (page, windowHandle, htmlPath, mode, fileName, h
     [...document.images].every((image) => image.complete && image.naturalWidth > 0)
   );
   await page.waitForTimeout(100);
-  await captureWindow(windowHandle, join(outputDir, fileName));
+  await capturePage(page, join(outputDir, fileName));
 };
 
 await mkdir(outputDir, { recursive: true });
@@ -248,9 +246,39 @@ try {
   await page.waitForLoadState("domcontentloaded");
   await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
-  await captureWindow(windowHandle, join(outputDir, "skills-1180x728.png"));
+  await capturePage(page, join(outputDir, "skills-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await captureWindow(windowHandle, join(outputDir, "skills-920x620.png"));
+  await capturePage(page, join(outputDir, "skills-920x620.png"));
+
+  const captureWorkspace = async (buttonName, filePrefix, readyLocator) => {
+    await page.getByRole("button", { name: buttonName, exact: true }).click();
+    await readyLocator().waitFor({ state: "visible" });
+    await setWindowSize(page, windowHandle, 1180, 728);
+    await capturePage(page, join(outputDir, `${filePrefix}-1180x728.png`));
+    await setWindowSize(page, windowHandle, 920, 620);
+    await capturePage(page, join(outputDir, `${filePrefix}-920x620.png`));
+  };
+
+  await captureWorkspace(
+    "MCP Servers",
+    "mcp-servers",
+    () => page.getByRole("region", { name: "MCP library" })
+  );
+  await captureWorkspace(
+    "Profiles",
+    "profiles",
+    () => page.getByRole("region", { name: "Profiles", exact: true })
+  );
+  await captureWorkspace(
+    "Targets",
+    "targets",
+    () => page.getByRole("region", { name: "Targets", exact: true })
+  );
+  await captureWorkspace(
+    "Settings",
+    "settings",
+    () => page.getByRole("region", { name: "Settings", exact: true })
+  );
 
   await setWindowSize(page, windowHandle, 1536, 1024);
   await page.getByRole("button", { name: "Profiles" }).click();
@@ -258,11 +286,11 @@ try {
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Select apply target" }).click();
   await page.waitForTimeout(250);
-  await captureWindow(windowHandle, join(outputDir, "implementation-1536x1024.png"));
+  await capturePage(page, join(outputDir, "implementation-1536x1024.png"));
 
   await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 1180, 728);
-  await captureWindow(windowHandle, join(outputDir, "implementation-1180x728.png"));
+  await capturePage(page, join(outputDir, "implementation-1180x728.png"));
 
   const htmlPath = await writeComparisonPage();
   await captureComparison(page, windowHandle, htmlPath, "full", "comparison.png", 570);

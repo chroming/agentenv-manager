@@ -27,6 +27,7 @@ import {
   X
 } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useModalDialog } from "../hooks/useModalDialog";
 import type {
   GitHubSkillImportInput,
   ManageTargetSkillInput,
@@ -269,6 +270,9 @@ export const SkillLibraryPanel = ({
   const [sourceDrafts, setSourceDrafts] = useState<
     Record<string, { sourceType: SkillSourceType; source: string }>
   >({});
+  const modalDialogRef = useRef<HTMLElement>(null);
+  const modalInitialFocusRef = useRef<HTMLButtonElement>(null);
+  const modalFallbackFocusRef = useRef<HTMLElement>(null);
   const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
   const updateableSkillIds = skillUpdates
     .filter((update) => update.updateAvailable && !update.error)
@@ -311,18 +315,6 @@ export const SkillLibraryPanel = ({
         setOpenAction(undefined);
         return;
       }
-      if (deleteCandidate) {
-        setDeleteCandidate(undefined);
-        return;
-      }
-      if (cleanupDraft) {
-        setCleanupDraft(undefined);
-        return;
-      }
-      if (selectedUpdatePlan) {
-        onCloseUpdatePreview();
-        return;
-      }
       if (activeTool) {
         onCloseTool?.();
       }
@@ -330,15 +322,32 @@ export const SkillLibraryPanel = ({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [
-    activeTool,
-    cleanupDraft,
-    deleteCandidate,
-    onCloseTool,
-    onCloseUpdatePreview,
-    openActionId,
-    selectedUpdatePlan
-  ]);
+  }, [activeTool, onCloseTool, openActionId]);
+
+  const dismissModal = () => {
+    if (selectedUpdatePlan) {
+      onCloseUpdatePreview();
+    } else if (deleteCandidate) {
+      setDeleteCandidate(undefined);
+    } else if (bulkUpdatePlans) {
+      onCloseBulkUpdatePreview();
+    } else {
+      setCleanupDraft(undefined);
+    }
+  };
+  const modalOpen = Boolean(
+    (selectedUpdatePlan && selectedUpdatePlan.changes.length > 0) ||
+      deleteCandidate ||
+      bulkUpdatePlans ||
+      cleanupDraft
+  );
+  useModalDialog({
+    open: modalOpen,
+    dialogRef: modalDialogRef,
+    initialFocusRef: modalInitialFocusRef,
+    fallbackFocusRef: modalFallbackFocusRef,
+    onDismiss: dismissModal
+  });
 
   useEffect(() => {
     if (!openActionId && !activeTool) {
@@ -791,11 +800,16 @@ export const SkillLibraryPanel = ({
                             : `Retry update check ${skill.id}`
                       }
                       disabled={updateCheckStatus?.state === "checking"}
-                      onClick={() =>
-                        rowAction === "sync"
-                          ? onSyncSkillInstalls(skill.id)
-                          : onPreviewLibrarySkillUpdate(skill.id)
-                      }
+                      onClick={(event) => {
+                        if (rowAction !== "sync") {
+                          modalFallbackFocusRef.current = event.currentTarget;
+                        }
+                        if (rowAction === "sync") {
+                          onSyncSkillInstalls(skill.id);
+                        } else {
+                          onPreviewLibrarySkillUpdate(skill.id);
+                        }
+                      }}
                     >
                       {rowAction === "update" ? (
                         <Sparkles size={15} strokeWidth={2.2} />
@@ -833,6 +847,9 @@ export const SkillLibraryPanel = ({
                               type="button"
                               role="menuitem"
                               onClick={() => {
+                                modalFallbackFocusRef.current = document.querySelector(
+                                  `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
+                                );
                                 onPreviewLibrarySkillUpdate(skill.id);
                                 setOpenAction(undefined);
                               }}
@@ -911,6 +928,9 @@ export const SkillLibraryPanel = ({
                             type="button"
                             role="menuitem"
                             onClick={() => {
+                              modalFallbackFocusRef.current = document.querySelector(
+                                `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
+                              );
                               setDeleteCandidate(skill);
                               setOpenAction(undefined);
                             }}
@@ -935,6 +955,7 @@ export const SkillLibraryPanel = ({
       {selectedUpdatePlan && selectedUpdatePlan.changes.length > 0 ? (
         <div className="preview-modal-backdrop" onClick={onCloseUpdatePreview}>
           <section
+            ref={modalDialogRef}
             className="profile-form-dialog skill-update-dialog"
             role="dialog"
             aria-modal="true"
@@ -961,7 +982,7 @@ export const SkillLibraryPanel = ({
               ))}
             </div>
             <footer className="preview-actions">
-              <button autoFocus className="secondary-action" type="button" onClick={onCloseUpdatePreview}>
+              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={onCloseUpdatePreview}>
                 Cancel
               </button>
               <button
@@ -980,6 +1001,7 @@ export const SkillLibraryPanel = ({
       {deleteCandidate ? (
         <div className="preview-modal-backdrop" onClick={() => setDeleteCandidate(undefined)}>
           <section
+            ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
             aria-label="Delete library skill"
@@ -1005,6 +1027,7 @@ export const SkillLibraryPanel = ({
             </header>
             <footer className="preview-actions">
               <button
+                ref={modalInitialFocusRef}
                 className="secondary-action"
                 type="button"
                 onClick={() => setDeleteCandidate(undefined)}
@@ -1044,6 +1067,7 @@ export const SkillLibraryPanel = ({
       {bulkUpdatePlans ? (
         <div className="preview-modal-backdrop" onClick={onCloseBulkUpdatePreview}>
           <section
+            ref={modalDialogRef}
             className="profile-form-dialog bulk-update-dialog"
             role="dialog"
             aria-label="Review all skill updates"
@@ -1069,7 +1093,7 @@ export const SkillLibraryPanel = ({
               ))}
             </div>
             <footer className="preview-actions">
-              <button className="secondary-action" type="button" onClick={onCloseBulkUpdatePreview}>Cancel</button>
+              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={onCloseBulkUpdatePreview}>Cancel</button>
               <button
                 className="primary-action"
                 type="button"
@@ -1086,6 +1110,7 @@ export const SkillLibraryPanel = ({
       {cleanupDraft && cleanupCandidate ? (
         <div className="preview-modal-backdrop" onClick={() => setCleanupDraft(undefined)}>
           <section
+            ref={modalDialogRef}
             className="profile-form-dialog cleanup-review-dialog"
             role="dialog"
             aria-label="Review skill cleanup"
@@ -1137,7 +1162,7 @@ export const SkillLibraryPanel = ({
               <p className="cleanup-safety-note">A backup is created before any selected location is changed. It remains available in Cleanup history.</p>
             </div>
             <footer className="preview-actions">
-              <button className="secondary-action" type="button" onClick={() => setCleanupDraft(undefined)}>Cancel</button>
+              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={() => setCleanupDraft(undefined)}>Cancel</button>
               <button
                 className="primary-action"
                 type="button"

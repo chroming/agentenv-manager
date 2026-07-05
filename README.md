@@ -151,7 +151,7 @@ npm run dist:mac
 release/
 ```
 
-当前 macOS 目标包含 `.dmg` 和 `.zip`。正式分发前还需要补应用图标、签名和 notarization；本地自用可以先直接运行 `.app`。
+当前 macOS 目标包含 `.dmg` 和 `.zip`，并使用项目内的应用图标。正式对外分发前仍需使用 Apple Developer ID 签名并完成 notarization；本地自用可以先直接运行 `.app`。
 
 ## 运行数据
 
