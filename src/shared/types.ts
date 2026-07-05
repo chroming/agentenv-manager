@@ -27,7 +27,7 @@ export interface AgentEnvApi {
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   importSkillToLibrary(sourcePath: string): Promise<SkillLibraryEntry>;
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
-  removeSkillFromLibrary(id: string): Promise<void>;
+  removeSkillFromLibrary(id: string): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
   consolidateSkillGroup(input: SkillCleanupRequest): Promise<SkillCleanupResult>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
@@ -143,6 +143,7 @@ export interface SkillCleanupResult {
   backupId: string;
   libraryId: string;
   managedLocations: string[];
+  operation?: "cleanup" | "remove";
 }
 
 export interface SkillCleanupBackupSummary {
@@ -150,6 +151,7 @@ export interface SkillCleanupBackupSummary {
   libraryId: string;
   createdAt: string;
   locationCount: number;
+  operation?: "cleanup" | "remove";
 }
 
 export interface UnmanagedSkillEntry {

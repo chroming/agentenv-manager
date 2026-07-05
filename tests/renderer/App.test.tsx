@@ -288,7 +288,11 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       contentHash: "hash",
       updatedAt: "2026-07-02T00:00:00.000Z"
     }),
-    removeSkillFromLibrary: vi.fn().mockResolvedValue(undefined),
+    removeSkillFromLibrary: vi.fn().mockResolvedValue({
+      backupId: "remove-backup",
+      libraryId: "skill",
+      managedLocations: []
+    }),
     checkSkillLibraryUpdates: vi.fn().mockResolvedValue([]),
     manageTargetSkill: vi.fn().mockResolvedValue(undefined),
     consolidateSkillGroup: vi.fn().mockResolvedValue({
@@ -1437,7 +1441,9 @@ describe("App", () => {
     const driftConfirm = within(dialog).getByRole("button", { name: "Apply profile" });
     expect(driftConfirm).toBeDisabled();
     expect(within(dialog).getByRole("button", { name: "Open recovery history" })).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByLabelText("Back up and replace external changes"));
+    fireEvent.click(
+      within(dialog).getByLabelText("I understand; back up and replace these changes")
+    );
     const replaceButton = within(dialog).getByRole("button", { name: "Back up and replace" });
     expect(replaceButton).toBeEnabled();
     fireEvent.click(replaceButton);

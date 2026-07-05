@@ -79,6 +79,17 @@ describe("SkillLibraryPanel", () => {
             contentHash: "shared-hash"
           },
           {
+            id: "copied-local",
+            name: "Copied Local",
+            description: "Managed target install",
+            path: "/tmp/opencode/skills/copied-local",
+            foundIn: ["opencode"],
+            status: "managed",
+            libraryId: "copied-local",
+            skillKey: "copied-local",
+            contentHash: "copied-hash"
+          },
+          {
             id: "legacy-reviewer",
             name: "Legacy Reviewer",
             description: "Found on disk",
@@ -266,6 +277,16 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(within(deleteDialog).getByRole("button", { name: "Review profiles" }));
     expect(onReviewSkillUsage).toHaveBeenCalledWith("shared-reviewer");
     expect(onRemoveLibrarySkill).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(copiedLocalRow).getByRole("button", { name: "More actions for copied-local" })
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: /Remove from library/ }));
+    const installedDeleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });
+    expect(installedDeleteDialog).toHaveTextContent("1 managed target install");
+    fireEvent.click(
+      within(installedDeleteDialog).getByRole("button", { name: "Remove skill and installs" })
+    );
+    expect(onRemoveLibrarySkill).toHaveBeenCalledWith("copied-local");
     expect(screen.getByRole("region", { name: "Update preview for shared-reviewer" })).toHaveTextContent(
       "SKILL.md"
     );

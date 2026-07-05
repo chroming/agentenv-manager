@@ -129,7 +129,14 @@ export const registerIpcHandlers = ({
         `Library skill ${skillId} is used by ${references.join(", ")}. Remove it from those profiles first.`
       );
     }
-    return skillLibraryStore.removeSkill(skillId);
+    const targets = await targetDiscoveryService.listTargets();
+    const inventory = await skillLibraryStore.scanInventory(
+      targets.map((target) => target.paths)
+    );
+    const managedInstallPaths = inventory
+      .filter((item) => item.status === "managed" && item.libraryId === skillId)
+      .map((item) => item.path);
+    return skillLibraryStore.removeSkill(skillId, managedInstallPaths);
   });
   ipcMain.handle("skills:manage-target", async (_event, input: ManageTargetSkillInput) => {
     const targetId = parseId(input.targetId, "target id");

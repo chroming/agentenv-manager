@@ -954,7 +954,14 @@ export const SkillLibraryPanel = ({
                 <p className="muted">
                   {(skillUsage[deleteCandidate.id] ?? []).length > 0
                     ? `${deleteCandidate.name} is used by ${(skillUsage[deleteCandidate.id] ?? []).join(", ")}. Remove it from those profiles first.`
-                    : `Remove ${deleteCandidate.name} from the shared library? Installed target copies are not removed.`}
+                    : (() => {
+                        const installCount = installsFor(deleteCandidate.id).filter(
+                          (item) => item.status === "managed"
+                        ).length;
+                        return installCount > 0
+                          ? `Remove ${deleteCandidate.name} and ${installCount} managed target ${installCount === 1 ? "install" : "installs"}? Unmanaged copies are kept.`
+                          : `Remove ${deleteCandidate.name} from the shared library?`;
+                      })()}
                 </p>
               </div>
             </header>
@@ -986,7 +993,9 @@ export const SkillLibraryPanel = ({
                     setDeleteCandidate(undefined);
                   }}
                 >
-                  Remove skill
+                  {installsFor(deleteCandidate.id).some((item) => item.status === "managed")
+                    ? "Remove skill and installs"
+                    : "Remove skill"}
                 </button>
               )}
             </footer>
@@ -1223,7 +1232,7 @@ export const SkillLibraryPanel = ({
                     <span>
                       <strong>{backup.libraryId}</strong>
                       <small>
-                        {backup.locationCount} locations · {new Date(backup.createdAt).toLocaleString()}
+                        {backup.operation === "remove" ? "Removal" : "Cleanup"} · {backup.locationCount} locations · {new Date(backup.createdAt).toLocaleString()}
                       </small>
                     </span>
                     <button

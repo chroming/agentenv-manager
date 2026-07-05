@@ -39,7 +39,10 @@ interface SkillCleanupBackupManifest {
   id: string;
   libraryId: string;
   libraryCreated: boolean;
+  libraryRemoved?: boolean;
+  libraryBackupPath?: string;
   createdAt: string;
+  operation?: "cleanup" | "remove";
   entries: Array<{ sourcePath: string; backupPath: string }>;
 }
 
@@ -71,7 +74,7 @@ export interface SkillLibraryStore {
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   importSkill(input: ImportSkillInput): Promise<SkillLibraryEntry>;
   importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
-  removeSkill(id: string): Promise<void>;
+  removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   consolidateSkillGroup(input: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
@@ -679,11 +682,6 @@ export const createSkillLibraryStore = (
     return entryFor(safeId, targetDir);
   };
 
-  const removeSkill = async (id: string): Promise<void> => {
-    const safeId = SafeIdSchema.parse(id);
-    await rm(join(await libraryDir(), safeId), { recursive: true, force: true });
-  };
-
   const cleanupBackupRoot = () => join(paths.backupsDir, "skill-cleanup");
 
   const readCleanupBackup = async (backupId: string) => {
@@ -714,7 +712,8 @@ export const createSkillLibraryStore = (
             id: manifest.id,
             libraryId: manifest.libraryId,
             createdAt: manifest.createdAt,
-            locationCount: manifest.entries.length
+            locationCount: manifest.entries.length,
+            operation: manifest.operation
           };
         } catch (error) {
           if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
@@ -738,6 +737,80 @@ export const createSkillLibraryStore = (
     }
     if (manifest.libraryCreated) {
       await rm(join(await libraryDir(), manifest.libraryId), { recursive: true, force: true });
+    }
+    if (manifest.libraryRemoved && manifest.libraryBackupPath) {
+      const targetLibraryDir = join(await libraryDir(), manifest.libraryId);
+      await rm(targetLibraryDir, { recursive: true, force: true });
+      await mkdir(dirname(targetLibraryDir), { recursive: true });
+      await cp(manifest.libraryBackupPath, targetLibraryDir, {
+        recursive: true,
+        dereference: false
+      });
+    }
+  };
+
+  const removeSkill = async (
+    id: string,
+    managedInstallPaths: string[] = []
+  ): Promise<SkillCleanupResult> => {
+    const safeId = SafeIdSchema.parse(id);
+    const targetLibraryDir = join(await libraryDir(), safeId);
+    if (!(await pathExists(join(targetLibraryDir, "SKILL.md")))) {
+      throw new Error(`Library skill does not exist: ${safeId}`);
+    }
+
+    const backupId = `remove-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const backupDir = join(cleanupBackupRoot(), backupId);
+    const libraryBackupPath = join(backupDir, "library", safeId);
+    const uniqueInstallPaths = [...new Set(managedInstallPaths)];
+    const entries: SkillCleanupBackupManifest["entries"] = [];
+    await mkdir(dirname(libraryBackupPath), { recursive: true });
+    await cp(targetLibraryDir, libraryBackupPath, { recursive: true, dereference: false });
+
+    for (const [index, sourcePath] of uniqueInstallPaths.entries()) {
+      if (!(await pathExists(sourcePath))) {
+        continue;
+      }
+      const backupPath = join(backupDir, "locations", `${index}-${basename(sourcePath)}`);
+      await mkdir(dirname(backupPath), { recursive: true });
+      await cp(sourcePath, backupPath, { recursive: true, dereference: false });
+      entries.push({ sourcePath, backupPath });
+    }
+
+    const manifest: SkillCleanupBackupManifest = {
+      id: backupId,
+      libraryId: safeId,
+      libraryCreated: false,
+      libraryRemoved: true,
+      libraryBackupPath,
+      operation: "remove",
+      createdAt: new Date().toISOString(),
+      entries
+    };
+    await writeFile(
+      join(backupDir, "manifest.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      "utf8"
+    );
+
+    try {
+      for (const sourcePath of uniqueInstallPaths) {
+        await rm(sourcePath, { recursive: true, force: true });
+      }
+      await rm(targetLibraryDir, { recursive: true, force: true });
+      return {
+        backupId,
+        libraryId: safeId,
+        managedLocations: uniqueInstallPaths,
+        operation: "remove"
+      };
+    } catch (error) {
+      await restoreCleanupBackup(manifest);
+      throw new Error(
+        `Removing ${safeId} failed and was rolled back: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   };
 
@@ -899,6 +972,7 @@ export const createSkillLibraryStore = (
       libraryId: safeLibraryId,
       libraryCreated,
       createdAt: new Date().toISOString(),
+      operation: "cleanup",
       entries
     };
     await writeFile(join(backupDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
@@ -918,7 +992,8 @@ export const createSkillLibraryStore = (
       return {
         backupId,
         libraryId: safeLibraryId,
-        managedLocations: uniqueLocations.map((location) => location.targetDir)
+        managedLocations: uniqueLocations.map((location) => location.targetDir),
+        operation: "cleanup"
       };
     } catch (error) {
       await restoreCleanupBackup(manifest);

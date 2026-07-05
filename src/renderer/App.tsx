@@ -682,7 +682,10 @@ export const App = () => {
     return () => window.clearInterval(timer);
   }, [isLoading, skillSettings.skillAutoCheckEnabled, skillSettings.skillAutoCheckIntervalMinutes]);
 
-  const selectProfileNow = async (profileId: string) => {
+  const selectProfileNow = async (
+    profileId: string,
+    composerSection?: "instructions" | "skills" | "mcp" | "advanced"
+  ) => {
     const requestId = ++profileFlowRequestRef.current;
     activeProfileFlowRequestRef.current = requestId;
     const isDifferentProfile = profileId !== selectedProfileId;
@@ -696,7 +699,7 @@ export const App = () => {
       setIsProfileDirty(false);
       setProfileSaveStatus("");
     }
-    setActiveComposerSection(undefined);
+    setActiveComposerSection(composerSection);
     setActiveWorkspace("profiles");
     setSelectedProfileId(profileId);
     if (profileSummary) {
@@ -735,12 +738,19 @@ export const App = () => {
     setPendingProfileAction({ label });
   };
 
-  const selectProfile = (profileId: string) => {
+  const selectProfile = (
+    profileId: string,
+    composerSection?: "instructions" | "skills" | "mcp" | "advanced"
+  ) => {
     if (profileId === selectedProfileId) {
+      setActiveWorkspace("profiles");
+      setActiveComposerSection(composerSection);
       return;
     }
     const profileName = profiles.find((profile) => profile.id === profileId)?.name ?? "profile";
-    guardProfileAction(`switch to ${profileName}`, () => selectProfileNow(profileId));
+    guardProfileAction(`switch to ${profileName}`, () =>
+      selectProfileNow(profileId, composerSection)
+    );
   };
 
   const updateDraftProfile = (profile: ProfileDetail) => {
@@ -1359,12 +1369,9 @@ export const App = () => {
     setError(undefined);
     setSelectedSkillUpdatePlan(undefined);
     try {
-      await window.agentEnv.removeSkillFromLibrary(id);
+      const result = await window.agentEnv.removeSkillFromLibrary(id);
+      setSkillCleanupResult(result);
       await refreshProfiles();
-      setSkillUpdateCheckStatus({
-        state: "success",
-        message: `Removed ${id} from library`
-      });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setSkillUpdateCheckStatus({
@@ -1381,7 +1388,7 @@ export const App = () => {
     const profile = profiles.find((item) => item.name === firstProfileName);
     setSkillLibraryTool(undefined);
     if (profile) {
-      selectProfile(profile.id);
+      selectProfile(profile.id, "skills");
     } else {
       setActiveWorkspace("profiles");
     }
@@ -1391,7 +1398,7 @@ export const App = () => {
     const firstProfileName = mcpUsage[id]?.[0];
     const profile = profiles.find((item) => item.name === firstProfileName);
     if (profile) {
-      selectProfile(profile.id);
+      selectProfile(profile.id, "mcp");
     } else {
       setActiveWorkspace("profiles");
     }
@@ -1619,11 +1626,16 @@ export const App = () => {
     }
     setBusy(true);
     setError(undefined);
+    const restoringRemoval =
+      skillCleanupResult?.backupId === backupId && skillCleanupResult.operation === "remove";
     try {
       await window.agentEnv.rollbackSkillCleanup(backupId);
       setSkillCleanupResult(undefined);
       await refreshProfiles();
-      setSkillUpdateCheckStatus({ state: "success", message: "Skill cleanup undone" });
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: restoringRemoval ? "Skill removal undone" : "Skill cleanup undone"
+      });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -1921,9 +1933,18 @@ export const App = () => {
     : skillCleanupResult
       ? {
           kind: "success",
-          title: `Cleaned up ${skillCleanupResult.libraryId}`,
-          message: `${plural(skillCleanupResult.managedLocations.length, "location")} now use the managed library copy.`,
-          action: { label: "Undo cleanup", onClick: () => void undoSkillCleanup() }
+          title:
+            skillCleanupResult.operation === "remove"
+              ? `Removed ${skillCleanupResult.libraryId}`
+              : `Cleaned up ${skillCleanupResult.libraryId}`,
+          message:
+            skillCleanupResult.operation === "remove"
+              ? `${plural(skillCleanupResult.managedLocations.length, "managed install")} removed with the library skill.`
+              : `${plural(skillCleanupResult.managedLocations.length, "location")} now use the managed library copy.`,
+          action: {
+            label: skillCleanupResult.operation === "remove" ? "Undo removal" : "Undo cleanup",
+            onClick: () => void undoSkillCleanup()
+          }
         }
     : targetRefreshStatus
       ? {
@@ -2101,6 +2122,7 @@ export const App = () => {
                 ) : null}
               </div>
             </header>
+            {activeLibraryTab === "mcp" || updateCount > 0 || needsManagementCount > 0 ? (
             <section
               className={`metric-strip metric-strip--compact metric-strip--${activeLibraryTab}`}
               aria-label="Library summary"
@@ -2147,6 +2169,7 @@ export const App = () => {
                 </>
               )}
             </section>
+            ) : null}
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
                 librarySkills={librarySkills}

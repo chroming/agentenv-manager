@@ -1131,6 +1131,34 @@ describe("Electron UI profile switching e2e", () => {
       )
     ).resolves.toContain('"source": "skills-library/target-only-reviewer"');
 
+    const managedRow = page.getByRole("group", { name: "Library item target-only-reviewer" });
+    await managedRow
+      .getByRole("button", { name: "More actions for target-only-reviewer" })
+      .click();
+    await page.getByRole("menuitem", { name: /Remove from library/ }).click();
+    const removeDialog = page.getByRole("dialog", { name: "Delete library skill" });
+    await expect.poll(() => removeDialog.textContent()).toContain("1 managed target install");
+    await removeDialog.getByRole("button", { name: "Remove skill and installs" }).click();
+    await expect
+      .poll(() => page.getByRole("status").textContent(), { timeout: 5_000 })
+      .toContain("Removed target-only-reviewer");
+    await expect(
+      fileExists(join(opencodeDir, "skills", "target-only-reviewer"))
+    ).resolves.toBe(false);
+    await expect(
+      fileExists(join(appDataRoot, "skills-library", "target-only-reviewer"))
+    ).resolves.toBe(false);
+    await page.getByRole("button", { name: "Undo removal" }).click();
+    await expect
+      .poll(() => page.getByRole("status").textContent(), { timeout: 5_000 })
+      .toContain("Skill removal undone");
+    await expect(
+      fileExists(join(opencodeDir, "skills", "target-only-reviewer", ".agentenv-owner.json"))
+    ).resolves.toBe(true);
+    await expect(
+      fileExists(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"))
+    ).resolves.toBe(true);
+
     await page.getByRole("button", { name: "Scan local Skills" }).click();
     const cleanupHistory = page.getByRole("region", { name: "Cleanup history" });
     await cleanupHistory.waitFor({ state: "visible", timeout: 5_000 });
@@ -1194,7 +1222,9 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled())
       .toBe(true);
-    await previewDialog.getByLabel("Back up and replace external changes").check();
+    await previewDialog
+      .getByLabel("I understand; back up and replace these changes")
+      .check();
     await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain("UI ALPHA");
@@ -1241,13 +1271,13 @@ describe("Electron UI profile switching e2e", () => {
 
     const deleteDialog = page.getByRole("dialog", { name: "Delete library skill" });
     await deleteDialog.waitFor({ state: "visible" });
-    await expect.poll(() => deleteDialog.textContent()).toContain("Installed target copies are not removed");
+    await expect.poll(() => deleteDialog.textContent()).toContain("Remove Shared Reviewer from the shared library?");
     await deleteDialog.getByRole("button", { name: "Remove skill" }).click();
 
     await sharedRow.waitFor({ state: "hidden" });
     await expect
       .poll(() => page.getByRole("status").textContent())
-      .toContain("Removed shared-reviewer from library");
+      .toContain("Removed shared-reviewer");
     await expect(fileExists(join(appDataRoot, "skills-library", "shared-reviewer"))).resolves.toBe(false);
   }, 30_000);
 

@@ -240,10 +240,10 @@ export const PreviewDialog = ({
       {managedDriftErrors.length > 0 && onManagedDriftAcknowledgedChange ? (
         <section className="preview-drift-recovery" aria-label="External change recovery">
           <div>
-            <strong>Choose how to handle external changes</strong>
+            <strong>External changes are protected</strong>
             <p>
-              Review the diff above. Replacing creates a backup of the current target before
-              applying this profile.
+              Cancel keeps the target unchanged. Continuing creates a backup, then replaces the
+              managed resources shown above.
             </p>
           </div>
           <label>
@@ -252,7 +252,7 @@ export const PreviewDialog = ({
               checked={managedDriftAcknowledged}
               onChange={(event) => onManagedDriftAcknowledgedChange(event.currentTarget.checked)}
             />
-            Back up and replace external changes
+            I understand; back up and replace these changes
           </label>
           {onOpenRecovery ? (
             <button className="secondary-action" type="button" onClick={onOpenRecovery}>

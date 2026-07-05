@@ -105,7 +105,7 @@ describe("skill library store", () => {
     await expect(store.checkUpdates()).resolves.toEqual([]);
   });
 
-  it("removes a skill from the central library without mutating its source directory", async () => {
+  it("removes managed installs with a library skill and restores both from history", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const sourceDir = join(root, "source", "reviewer");
@@ -122,14 +122,28 @@ describe("skill library store", () => {
       id: "shared-reviewer",
       sourceType: "local"
     });
+    const managedInstall = join(root, "home", ".config", "opencode", "skills", "shared-reviewer");
+    await mkdir(managedInstall, { recursive: true });
+    await writeFile(join(managedInstall, "SKILL.md"), "# Managed install\n", "utf8");
 
-    await store.removeSkill("shared-reviewer");
+    const result = await store.removeSkill("shared-reviewer", [managedInstall]);
 
     await expect(store.listSkills()).resolves.toEqual([]);
     await expect(readFile(join(sourceDir, "SKILL.md"), "utf8")).resolves.toContain("# Reviewer");
     await expect(
       readFile(join(paths.skillsLibraryDir, "shared-reviewer", "SKILL.md"), "utf8")
     ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(managedInstall, "SKILL.md"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+
+    await store.rollbackSkillCleanup(result.backupId);
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "shared-reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("# Reviewer");
+    await expect(readFile(join(managedInstall, "SKILL.md"), "utf8")).resolves.toBe(
+      "# Managed install\n"
+    );
   });
 
   it("uses the configured GitHub access token when importing a GitHub skill", async () => {
@@ -547,7 +561,8 @@ describe("skill library store", () => {
         id: result.backupId,
         libraryId: "reviewer",
         createdAt: expect.any(String),
-        locationCount: 2
+        locationCount: 2,
+        operation: "cleanup"
       }
     ]);
 
