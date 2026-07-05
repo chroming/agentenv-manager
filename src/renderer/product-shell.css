@@ -815,6 +815,34 @@
   white-space: nowrap;
 }
 
+.skill-update-dialog {
+  max-height: min(760px, calc(100vh - 48px));
+  max-width: min(900px, calc(100vw - 48px));
+  overflow: auto;
+  width: 100%;
+}
+
+.skill-update-dialog .update-change-list {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+}
+
+.skill-update-dialog .update-change-list details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.skill-update-dialog .update-change-list summary {
+  background: #f8fafc;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 760;
+  padding: 10px 12px;
+}
+
 @media (max-width: 1100px) {
   .skill-library-panel .library-table__head {
     display: none;

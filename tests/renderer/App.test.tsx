@@ -656,8 +656,9 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /Check update/ }));
 
     await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("local-reviewer is up to date")
+      expect(screen.getByRole("status")).toHaveTextContent("local-reviewer source is current")
     );
+    expect(screen.queryByRole("dialog", { name: "Update preview for local-reviewer" })).toBeNull();
     expect(api.previewLibrarySkillUpdate).toHaveBeenCalledWith("local-reviewer");
   });
 

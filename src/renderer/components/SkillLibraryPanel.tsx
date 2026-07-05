@@ -40,6 +40,7 @@ import type {
   SkillUpdateSourceInput
 } from "../../shared/types";
 import { InfoTip } from "./InfoTip";
+import { DiffViewer } from "./DiffViewer";
 import {
   type SkillLibraryViewState,
   updateSkillLibraryControls
@@ -67,6 +68,7 @@ interface SkillLibraryPanelProps {
   onConsolidateSkillGroup(input: SkillCleanupRequest): void;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
   onPreviewLibrarySkillUpdate(id: string): void;
+  onCloseUpdatePreview(): void;
   onUpdateLibrarySkill(id: string): void;
   onUpdateAllLibrarySkills(ids: string[]): void;
   onPreviewAllLibrarySkillUpdates(ids: string[]): void;
@@ -231,6 +233,7 @@ export const SkillLibraryPanel = ({
   onConsolidateSkillGroup,
   onSetUpdateSource,
   onPreviewLibrarySkillUpdate,
+  onCloseUpdatePreview,
   onUpdateLibrarySkill,
   onUpdateAllLibrarySkills,
   onPreviewAllLibrarySkillUpdates,
@@ -316,6 +319,10 @@ export const SkillLibraryPanel = ({
         setCleanupDraft(undefined);
         return;
       }
+      if (selectedUpdatePlan) {
+        onCloseUpdatePreview();
+        return;
+      }
       if (activeTool) {
         onCloseTool?.();
       }
@@ -323,7 +330,15 @@ export const SkillLibraryPanel = ({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, cleanupDraft, deleteCandidate, onCloseTool, openActionId]);
+  }, [
+    activeTool,
+    cleanupDraft,
+    deleteCandidate,
+    onCloseTool,
+    onCloseUpdatePreview,
+    openActionId,
+    selectedUpdatePlan
+  ]);
 
   useEffect(() => {
     if (!openActionId && !activeTool) {
@@ -911,63 +926,56 @@ export const SkillLibraryPanel = ({
                       )
                     : null}
                 </div>
-                {selectedUpdatePlan?.id === skill.id ? (
-                  <section
-                    className="library-update-preview"
-                    aria-label={`Update preview for ${skill.id}`}
-                  >
-                    <div>
-                      <strong>
-                        {selectedUpdatePlan.errors.length > 0
-                          ? "Update source needs attention"
-                          : selectedUpdatePlan.updateAvailable
-                            ? `${selectedUpdatePlan.changes.length} file change${
-                                selectedUpdatePlan.changes.length === 1 ? "" : "s"
-                              }`
-                            : "No file changes"}
-                      </strong>
-                      <small>
-                        {selectedUpdatePlan.latestRevision
-                          ? `${selectedUpdatePlan.currentRevision ?? "current"} -> ${
-                              selectedUpdatePlan.latestRevision
-                            }`
-                          : selectedUpdatePlan.source ?? "No source"}
-                      </small>
-                    </div>
-                    {selectedUpdatePlan.errors.map((item) => (
-                      <p className="error" key={item}>
-                        {item}
-                      </p>
-                    ))}
-                    {selectedUpdatePlan.changes.length > 0 ? (
-                      <div className="update-change-list">
-                        {selectedUpdatePlan.changes.map((change) => (
-                          <details key={change.path}>
-                            <summary>{change.path}</summary>
-                            <pre>{change.diff}</pre>
-                          </details>
-                        ))}
-                      </div>
-                    ) : null}
-                    <button
-                      className="primary-action"
-                      type="button"
-                      aria-label={`Apply update ${skill.id}`}
-                      disabled={
-                        selectedUpdatePlan.errors.length > 0 ||
-                        selectedUpdatePlan.changes.length === 0
-                      }
-                      onClick={() => onUpdateLibrarySkill(skill.id)}
-                    >
-                      Apply update
-                    </button>
-                  </section>
-                ) : null}
               </div>
             );
           })}
         </div>
       </section>
+
+      {selectedUpdatePlan && selectedUpdatePlan.changes.length > 0 ? (
+        <div className="preview-modal-backdrop" onClick={onCloseUpdatePreview}>
+          <section
+            className="profile-form-dialog skill-update-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Update preview for ${selectedUpdatePlan.id}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">Update {selectedUpdatePlan.name}</div>
+                <p className="muted">
+                  {selectedUpdatePlan.changes.length} file {selectedUpdatePlan.changes.length === 1 ? "change" : "changes"}
+                  {selectedUpdatePlan.latestRevision
+                    ? ` · ${(selectedUpdatePlan.currentRevision ?? "current").slice(0, 7)} → ${selectedUpdatePlan.latestRevision.slice(0, 7)}`
+                    : ""}
+                </p>
+              </div>
+            </header>
+            <div className="update-change-list">
+              {selectedUpdatePlan.changes.map((change) => (
+                <details key={change.path} open>
+                  <summary>{change.path}</summary>
+                  <DiffViewer path={change.path} diff={change.diff} />
+                </details>
+              ))}
+            </div>
+            <footer className="preview-actions">
+              <button autoFocus className="secondary-action" type="button" onClick={onCloseUpdatePreview}>
+                Cancel
+              </button>
+              <button
+                className="primary-action"
+                type="button"
+                aria-label={`Apply update ${selectedUpdatePlan.id}`}
+                onClick={() => onUpdateLibrarySkill(selectedUpdatePlan.id)}
+              >
+                Update skill
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       {deleteCandidate ? (
         <div className="preview-modal-backdrop" onClick={() => setDeleteCandidate(undefined)}>

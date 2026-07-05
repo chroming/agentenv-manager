@@ -13,6 +13,7 @@ describe("SkillLibraryPanel", () => {
     const onImportUnmanaged = vi.fn();
     const onImportGitHubSkill = vi.fn();
     const onPreviewLibrarySkillUpdate = vi.fn();
+    const onCloseUpdatePreview = vi.fn();
     const onUpdateLibrarySkill = vi.fn();
     const onUpdateAllLibrarySkills = vi.fn();
     const onPreviewAllLibrarySkillUpdates = vi.fn();
@@ -40,7 +41,8 @@ describe("SkillLibraryPanel", () => {
         updateAvailable: boolean;
         changes: Array<{ path: string; before: string; after: string; diff: string }>;
         errors: string[];
-      }>
+      }>,
+      showSelectedUpdatePlan = false
     ) => (
       <SkillLibraryPanel
         librarySkills={[
@@ -170,7 +172,7 @@ describe("SkillLibraryPanel", () => {
             error: "Network failed"
           }
         ]}
-        selectedUpdatePlan={{
+        selectedUpdatePlan={showSelectedUpdatePlan ? {
           id: "shared-reviewer",
           name: "Shared Reviewer",
           sourceType: "local",
@@ -187,7 +189,7 @@ describe("SkillLibraryPanel", () => {
             }
           ],
           errors: []
-        }}
+        } : undefined}
         bulkUpdatePlans={bulkUpdatePlans}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         activeTool={activeTool}
@@ -196,6 +198,7 @@ describe("SkillLibraryPanel", () => {
         onImportUnmanaged={onImportUnmanaged}
         onImportGitHubSkill={onImportGitHubSkill}
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
+        onCloseUpdatePreview={onCloseUpdatePreview}
         onUpdateLibrarySkill={onUpdateLibrarySkill}
         onUpdateAllLibrarySkills={onUpdateAllLibrarySkills}
         onPreviewAllLibrarySkillUpdates={onPreviewAllLibrarySkillUpdates}
@@ -308,7 +311,8 @@ describe("SkillLibraryPanel", () => {
       within(installedDeleteDialog).getByRole("button", { name: "Remove skill and installs" })
     );
     expect(onRemoveLibrarySkill).toHaveBeenCalledWith("copied-local");
-    expect(screen.getByRole("region", { name: "Update preview for shared-reviewer" })).toHaveTextContent(
+    rerender(renderPanel(undefined, undefined, true));
+    expect(screen.getByRole("dialog", { name: "Update preview for shared-reviewer" })).toHaveTextContent(
       "SKILL.md"
     );
     fireEvent.click(screen.getByRole("button", { name: "Apply update shared-reviewer" }));

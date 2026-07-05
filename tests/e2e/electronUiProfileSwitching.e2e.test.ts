@@ -1249,9 +1249,10 @@ describe("Electron UI profile switching e2e", () => {
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
     const popover = page.getByRole("menu", { name: "Actions for shared-reviewer" });
     await popover.waitFor({ state: "visible" });
-    await popover
-      .getByRole("menuitem", { name: /Check update|Preview update/ })
-      .waitFor({ state: "visible" });
+    const checkUpdateItem = popover.getByRole("menuitem", {
+      name: /Check update|Preview update/
+    });
+    await checkUpdateItem.waitFor({ state: "visible" });
 
     const popoverBox = await popover.boundingBox();
     const viewport = page.viewportSize();
@@ -1264,8 +1265,14 @@ describe("Electron UI profile switching e2e", () => {
     expect(popoverBox!.height).toBeGreaterThan(120);
     await expectTopmost(popover);
 
-    await page.mouse.click(240, 120);
+    await checkUpdateItem.click();
     await popover.waitFor({ state: "hidden" });
+    await expect.poll(() => page.getByRole("status").textContent()).toContain(
+      "shared-reviewer source is current"
+    );
+    expect(
+      await page.getByRole("dialog", { name: "Update preview for shared-reviewer" }).count()
+    ).toBe(0);
     await page.getByRole("button", { name: "Check updates" }).click();
     await expect
       .poll(() => page.getByRole("status").textContent())
@@ -1856,7 +1863,7 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
     await page
-      .getByRole("region", { name: "Update preview for shared-reviewer" })
+      .getByRole("dialog", { name: "Update preview for shared-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated shared-reviewer");
@@ -2147,7 +2154,7 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Review update github-reviewer" }).click();
     await page
-      .getByRole("region", { name: "Update preview for github-reviewer" })
+      .getByRole("dialog", { name: "Update preview for github-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update github-reviewer" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated github-reviewer");
@@ -2201,7 +2208,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("menuitem", { name: /Check update|Preview update/ })
       .click();
     await page
-      .getByRole("region", { name: "Update preview for shared-reviewer" })
+      .getByRole("dialog", { name: "Update preview for shared-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
     await page
@@ -2241,7 +2248,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
     await page
-      .getByRole("region", { name: "Update preview for shared-reviewer" })
+      .getByRole("dialog", { name: "Update preview for shared-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated shared-reviewer");

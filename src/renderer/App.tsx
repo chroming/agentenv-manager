@@ -1799,10 +1799,10 @@ export const App = () => {
     setBusy(true);
     setError(undefined);
     setProfileSaveStatus("");
+    setSelectedSkillUpdatePlan(undefined);
     setSkillUpdateCheckStatus({ state: "checking", message: `Checking ${id}...` });
     try {
       const updatePlan = await window.agentEnv.previewLibrarySkillUpdate(id);
-      setSelectedSkillUpdatePlan(updatePlan);
       if (updatePlan.errors.length > 0) {
         setSkillUpdateCheckStatus({
           state: "error",
@@ -1813,11 +1813,14 @@ export const App = () => {
           setError(rateLimitError);
         }
       } else {
+        setSelectedSkillUpdatePlan(
+          updatePlan.updateAvailable && updatePlan.changes.length > 0 ? updatePlan : undefined
+        );
         setSkillUpdateCheckStatus({
           state: "success",
           message: updatePlan.updateAvailable
             ? `1 update available for ${id}`
-            : `${id} is up to date`
+            : `${id} source is current`
         });
       }
     } catch (unknownError) {
@@ -2395,6 +2398,7 @@ export const App = () => {
                 onConsolidateSkillGroup={(input) => void consolidateSkillGroup(input)}
                 onSetUpdateSource={setSkillUpdateSource}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
+                onCloseUpdatePreview={() => setSelectedSkillUpdatePlan(undefined)}
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onUpdateAllLibrarySkills={updateAllLibrarySkills}
                 onPreviewAllLibrarySkillUpdates={(ids) => void previewAllLibrarySkillUpdates(ids)}
