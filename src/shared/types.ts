@@ -3,6 +3,7 @@ export interface ProfileSummary {
   targetId: string;
   name: string;
   description: string;
+  contentHash?: string;
 }
 
 export type { AssetPolicy, ProfileManifest } from "./schemas";
@@ -261,6 +262,7 @@ export interface TargetState {
   managedConfigKeys: string[];
   managedMcpNames: string[];
   activeProfileId?: string;
+  appliedProfileHash?: string;
   lastAppliedAt?: string;
   managedResources?: ManagedResourceSnapshot[];
 }
@@ -271,6 +273,7 @@ export interface TargetManagementState {
   targetId: string;
   activeProfileId?: string;
   activeProfileName?: string;
+  appliedProfileHash?: string;
   status: TargetManagementStatus;
   lastAppliedAt?: string;
   managedResourceCount: number;
@@ -342,6 +345,7 @@ export interface ProfileDetail {
   instructions: string;
   configText: string;
   assetPolicy: AssetPolicy;
+  contentHash?: string;
 }
 
 export interface SaveProfileInput {
@@ -358,6 +362,14 @@ export interface PlannedFileChange {
   diff: string;
 }
 
+export interface PlannedResourceChange {
+  kind: "skill" | "agent" | "file" | "directory";
+  action: "install" | "replace" | "remove";
+  name: string;
+  path: string;
+  source?: string;
+}
+
 export interface ActivationPreview {
   id: string;
   profileId: string;
@@ -365,7 +377,9 @@ export interface ActivationPreview {
   warnings: string[];
   errors: string[];
   changes: PlannedFileChange[];
+  resourceChanges: PlannedResourceChange[];
   liveFingerprints: Record<string, string>;
+  resourceFingerprints: Record<string, string>;
   targetId: string;
   targetState: TargetState;
 }

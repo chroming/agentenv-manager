@@ -37,12 +37,14 @@ import type {
   ManagedResourceKind,
   ManagedResourceSnapshot,
   PlannedFileChange,
+  PlannedResourceChange,
   RollbackPreview,
   RollbackResult,
   TargetManagementState,
   TargetPaths,
   TargetState
 } from "../shared/types";
+import { createProfileContentHash } from "./profileFingerprint";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -163,6 +165,8 @@ const normalizeTargetState = (value: unknown): TargetState => {
       ? record.managedMcpNames.filter((item): item is string => typeof item === "string")
       : [],
     activeProfileId: typeof record.activeProfileId === "string" ? record.activeProfileId : undefined,
+    appliedProfileHash:
+      typeof record.appliedProfileHash === "string" ? record.appliedProfileHash : undefined,
     lastAppliedAt: typeof record.lastAppliedAt === "string" ? record.lastAppliedAt : undefined,
     managedResources
   };
@@ -285,6 +289,7 @@ export const createActivationService = ({
           return {
             targetId,
             activeProfileId: state.activeProfileId,
+            appliedProfileHash: state.appliedProfileHash,
             status: state.activeProfileId ? "managed" : "unmanaged",
             lastAppliedAt: state.lastAppliedAt,
             managedResourceCount: state.managedResources?.length ?? 0,
@@ -418,6 +423,80 @@ export const createActivationService = ({
     return snapshots.sort((a, b) => a.path.localeCompare(b.path));
   };
 
+  const desiredAssetResources = (
+    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+    targetPaths: TargetPaths
+  ) => {
+    const desired = new Map<string, Omit<PlannedResourceChange, "action" | "path">>();
+    const rootFor = (kind: "agent" | "skill") =>
+      kind === "agent" ? targetPaths.agentsDir : targetPaths.skillsDir;
+
+    for (const asset of [...profile.assetPolicy.ownedDirs, ...profile.assetPolicy.ownedFiles]) {
+      const root = rootFor(asset.kind);
+      if (root) {
+        desired.set(join(root, asset.targetName), {
+          kind: asset.kind,
+          name: asset.targetName,
+          source: asset.source
+        });
+      }
+    }
+    for (const skillRef of profile.assetPolicy.skillRefs ?? []) {
+      if (targetPaths.skillsDir) {
+        desired.set(join(targetPaths.skillsDir, skillRef.targetName), {
+          kind: "skill",
+          name: skillRef.targetName,
+          source: `Library / ${skillRef.libraryId}`
+        });
+      }
+    }
+    return desired;
+  };
+
+  const planAssetResources = async (
+    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+    targetPaths: TargetPaths,
+    assetPaths: string[]
+  ) => {
+    const desired = desiredAssetResources(profile, targetPaths);
+    const resourceChanges: PlannedResourceChange[] = [];
+    const resourceFingerprints: Record<string, string> = {};
+
+    for (const path of [...new Set(assetPaths)]) {
+      resourceFingerprints[path] = (await hashPath(path)) ?? "";
+      const resource = desired.get(path);
+      if (resource) {
+        resourceChanges.push({
+          ...resource,
+          path,
+          action: (await pathExists(path)) ? "replace" : "install"
+        });
+        continue;
+      }
+      if (path.endsWith(".agentenv-owner.json")) {
+        continue;
+      }
+      const stats = (await pathExists(path)) ? await lstat(path) : undefined;
+      const identity = resourceKindForPath(path, targetPaths);
+      resourceChanges.push({
+        kind:
+          identity.kind === "skill" || identity.kind === "agent"
+            ? identity.kind
+            : stats?.isDirectory()
+              ? "directory"
+              : "file",
+        action: "remove",
+        name: identity.id,
+        path
+      });
+    }
+
+    return {
+      resourceChanges: resourceChanges.sort((left, right) => left.path.localeCompare(right.path)),
+      resourceFingerprints
+    };
+  };
+
   const ignoredSkillConflicts = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
     targetPaths: TargetPaths
@@ -470,6 +549,13 @@ export const createActivationService = ({
     const drift = await findManagedDrift(stateFile.state, materializedProfile, targetPaths);
     const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, targetPaths);
     const ignoredErrors = await ignoredSkillConflicts(materializedProfile, targetPaths);
+    const assetBackupPaths = await adapter.getAssetBackupPaths({
+      profile: materializedProfile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: settings.skillSyncMethod
+    });
+    const assetPlan = await planAssetResources(materializedProfile, targetPaths, assetBackupPaths);
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
@@ -478,10 +564,12 @@ export const createActivationService = ({
       warnings: targetPreview.warnings.concat(drift.warnings, unmanagedWarnings),
       errors: targetPreview.errors.concat(profileErrors, assetErrors, drift.errors, ignoredErrors),
       changes: targetPreview.changes,
+      resourceChanges: assetPlan.resourceChanges,
       liveFingerprints: {
         ...targetPreview.liveFingerprints,
         [stateFile.path]: hashText(stateFile.content)
       },
+      resourceFingerprints: assetPlan.resourceFingerprints,
       targetState: targetPreview.targetState
     };
     previews.set(preview.id, preview);
@@ -531,6 +619,12 @@ export const createActivationService = ({
         return { ok: false, errors: [`Live file changed after preview: ${path}`] };
       }
     }
+    for (const [path, fingerprint] of Object.entries(preview.resourceFingerprints)) {
+      const current = (await hashPath(path)) ?? "";
+      if (current !== fingerprint) {
+        return { ok: false, errors: [`Live resource changed after preview: ${path}`] };
+      }
+    }
 
     const assetErrors = await adapter.validateAssets({
       profile: materializedProfile,
@@ -573,6 +667,7 @@ export const createActivationService = ({
       await writeTargetState(preview.targetId, {
         ...preview.targetState,
         activeProfileId: profile.id,
+        appliedProfileHash: profile.contentHash ?? createProfileContentHash(profile),
         lastAppliedAt: new Date().toISOString(),
         managedResources
       });

@@ -20,7 +20,9 @@ const preview: ActivationPreview = {
       diff: "--- opencode.jsonc\n+++ opencode.jsonc\n@@\n-{}\n+{\"mcp\":{}}\n"
     }
   ],
+  resourceChanges: [],
   liveFingerprints: {},
+  resourceFingerprints: {},
   targetState: { managedConfigKeys: [], managedMcpNames: [] }
 };
 
@@ -47,6 +49,28 @@ describe("PreviewDialog", () => {
     expect(diff.querySelector(".diff-row--deletion")).toBeTruthy();
     expect(diff.querySelector(".diff-row--addition")).toBeTruthy();
     expect(diff.querySelector(".syntax-token")).toBeTruthy();
+  });
+
+  it("shows install, replace, and remove resource operations explicitly", () => {
+    render(
+      <PreviewDialog
+        preview={{
+          ...preview,
+          resourceChanges: [
+            { kind: "skill", action: "install", name: "new-skill", path: "/skills/new-skill" },
+            { kind: "skill", action: "replace", name: "shared", path: "/skills/shared" },
+            { kind: "agent", action: "remove", name: "old.md", path: "/agents/old.md" }
+          ]
+        }}
+      />
+    );
+
+    const plan = screen.getByRole("region", { name: "Resource changes" });
+    expect(plan).toHaveTextContent("3 resources");
+    expect(plan).toHaveTextContent("new-skill");
+    expect(plan).toHaveTextContent("shared");
+    expect(plan).toHaveTextContent("old.md");
+    expect(screen.getByText("1 install · 1 replace · 1 remove")).toBeInTheDocument();
   });
 
   it("dismisses modal previews with Escape and backdrop clicks", async () => {

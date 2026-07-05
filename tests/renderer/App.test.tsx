@@ -36,7 +36,8 @@ const profile: ProfileDetail = {
     skillRefs: [],
     mcpRefs: [],
     disabledSkillPaths: []
-  }
+  },
+  contentHash: "profile-hash"
 };
 
 const preview = {
@@ -62,7 +63,9 @@ const preview = {
       diff: "--- opencode.jsonc\n+++ opencode.jsonc\n@@\n-{}\n+{\"mcp\":{}}\n"
     }
   ],
+  resourceChanges: [],
   liveFingerprints: {},
+  resourceFingerprints: {},
   targetState: { managedConfigKeys: [], managedMcpNames: [] }
 };
 
@@ -213,7 +216,8 @@ const summaryOf = (detail: ProfileDetail) => ({
   id: detail.id,
   targetId: detail.manifest.targetId,
   name: detail.manifest.name,
-  description: detail.manifest.description
+  description: detail.manifest.description,
+  contentHash: detail.contentHash
 });
 
 const deferred = <T,>() => {
@@ -230,6 +234,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
   targetId: "opencode",
   activeProfileId: "daily-coding",
   activeProfileName: "Daily Coding",
+  appliedProfileHash: "profile-hash",
   status: "managed",
   lastAppliedAt: "2026-07-09T00:00:00.000Z",
   managedResourceCount: 3,
@@ -370,7 +375,8 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
           id: "daily-coding",
           targetId: "opencode",
           name: "Daily Coding",
-          description: "Default"
+          description: "Default",
+          contentHash: "profile-hash"
         }
       ]),
     readProfile: vi.fn().mockResolvedValue(profile),
@@ -903,13 +909,13 @@ describe("App", () => {
     expect(row).toHaveTextContent("4 Skills");
     expect(row).toHaveTextContent("4 MCP");
     expect(row).toHaveTextContent("1 Instruction");
-    expect(row).toHaveTextContent("Last applied to Codex");
+    expect(row).toHaveTextContent("Applied to Codex");
     expect(within(row).getByText("Jul 10")).toHaveAttribute(
       "datetime",
       "2026-07-10T08:00:00.000Z"
     );
     expect(row).not.toHaveTextContent("OpenCode");
-    expect(document.querySelector(".profile-hero")).toHaveTextContent("Last applied Jul 10");
+    expect(document.querySelector(".profile-hero")).toHaveTextContent("Applied Jul 10");
 
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
     fireEvent.change(screen.getByLabelText("AGENTS.md"), {

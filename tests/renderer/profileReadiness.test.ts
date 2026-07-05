@@ -11,7 +11,7 @@ import {
   hasManagedTargetDrift
 } from "../../src/renderer/profileReadiness";
 
-const profile = { id: "daily-coding" } as ProfileDetail;
+const profile = { id: "daily-coding", contentHash: "saved-hash" } as ProfileDetail;
 
 const target = {
   id: "codex",
@@ -23,7 +23,9 @@ const target = {
 
 const managedState = {
   targetId: "codex",
-  status: "managed"
+  status: "managed",
+  activeProfileId: "daily-coding",
+  appliedProfileHash: "saved-hash"
 } as TargetManagementState;
 
 const unmanagedState = {
@@ -108,6 +110,24 @@ describe("profile readiness", () => {
         preview: previewWith(driftError)
       })
     ).toBe("Resolve Codex drift");
+  });
+
+  it("distinguishes saved changes from the version applied to the target", () => {
+    const pending = {
+      ...managedState,
+      appliedProfileHash: "older-hash"
+    };
+
+    expect(
+      deriveProfileReadiness({ profile, target, targetState: pending, isDirty: false })
+    ).toEqual({
+      status: "apply-pending",
+      label: "Apply pending",
+      message: "Saved changes have not been applied to Codex"
+    });
+    expect(
+      deriveApplyActionLabel({ profile, target, targetState: pending, isDirty: false })
+    ).toBe("Preview & apply to Codex");
   });
 
   it("uses the complete readiness precedence and exact remediations", () => {

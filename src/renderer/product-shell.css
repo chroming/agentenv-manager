@@ -134,6 +134,7 @@
 
 .preview-dialog--modal .preview-header,
 .preview-dialog--modal .preview-summary-grid,
+.preview-dialog--modal .preview-resource-plan,
 .preview-dialog--modal .preview-action-error,
 .preview-dialog--modal .preview-actions {
   flex: 0 0 auto;
@@ -283,6 +284,17 @@
 }
 
 .preview-dialog--modal .diff-list {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.preview-dialog--modal .preview-resource-plan {
+  flex: 0 1 auto;
+  max-height: min(210px, 28vh);
+}
+
+.preview-dialog--modal .preview-resource-plan > div {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;

@@ -1084,11 +1084,7 @@ export const App = () => {
 
       return `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedProfileSearch);
     })
-    .sort((left, right) => {
-      if (left.id === selectedProfileId) return -1;
-      if (right.id === selectedProfileId) return 1;
-      return left.name.localeCompare(right.name);
-    });
+    .sort((left, right) => left.name.localeCompare(right.name));
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
@@ -1121,7 +1117,7 @@ export const App = () => {
   const ReadinessIcon =
     readiness.status === "ready" || readiness.status === "unmanaged"
       ? CheckCircle2
-      : readiness.status === "dirty"
+      : readiness.status === "dirty" || readiness.status === "apply-pending"
         ? RefreshCw
         : TriangleAlert;
   const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
@@ -1130,6 +1126,8 @@ export const App = () => {
       ? "Review before apply"
       : readiness.status === "ready"
         ? "Ready to review"
+        : readiness.status === "apply-pending"
+          ? "Saved version pending"
         : readiness.status === "no-profile"
           ? "Profile required"
           : readiness.status === "no-target"
@@ -1138,7 +1136,7 @@ export const App = () => {
               ? "Save required"
               : "Review required";
   const applySafetyMessage =
-    readiness.status === "unmanaged" || readiness.status === "ready"
+    readiness.status === "unmanaged" || readiness.status === "ready" || readiness.status === "apply-pending"
       ? "Preview shows every replacement before a backup is created."
       : readiness.message;
   const readinessTitle =
@@ -2320,6 +2318,10 @@ export const App = () => {
                       targets
                     );
                     const isSelected = profile.id === selectedProfileId;
+                    const isAppliedVersionCurrent = Boolean(
+                      recentApplication?.state.appliedProfileHash &&
+                        recentApplication.state.appliedProfileHash === profile.contentHash
+                    );
                     return (
                     <button
                       className={`profile-row${isSelected ? " is-active" : ""}`}
@@ -2347,7 +2349,7 @@ export const App = () => {
                         {recentApplication?.state.lastAppliedAt ? (
                           <span className="profile-row__recent">
                             <span>
-                              Last applied to {recentApplication.target?.name ?? recentApplication.state.targetId}
+                              {isAppliedVersionCurrent ? "Applied to" : "Apply pending on"} {recentApplication.target?.name ?? recentApplication.state.targetId}
                             </span>
                             <time dateTime={recentApplication.state.lastAppliedAt}>
                               {formatShortDate(recentApplication.state.lastAppliedAt)}
@@ -2390,7 +2392,10 @@ export const App = () => {
                           <span className="profile-hero__recent">
                             <Monitor size={14} strokeWidth={2.2} aria-hidden="true" />
                             {selectedProfileApplication?.state.lastAppliedAt
-                              ? `Last applied ${formatShortDate(selectedProfileApplication.state.lastAppliedAt)}`
+                              ? selectedProfileApplication.state.appliedProfileHash &&
+                                selectedProfileApplication.state.appliedProfileHash === draftProfile.contentHash
+                                ? `Applied ${formatShortDate(selectedProfileApplication.state.lastAppliedAt)}`
+                                : "Saved changes pending apply"
                               : "Not applied yet"}
                           </span>
                         </div>

@@ -123,7 +123,9 @@ const preview: ActivationPreview = {
   warnings: [],
   errors: [],
   changes: [],
+  resourceChanges: [],
   liveFingerprints: {},
+  resourceFingerprints: {},
   targetState: {
     managedConfigKeys: [],
     managedMcpNames: ["context7", "filesystem"]

@@ -50,7 +50,8 @@ describe("profile store", () => {
         id: "daily-coding",
         targetId: "codex",
         name: "Daily Coding",
-        description: "Default"
+        description: "Default",
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/)
       }
     ]);
   });

@@ -59,12 +59,6 @@ const prettifyIssue = (message: string, targetName: string) => {
   return { title: message };
 };
 
-const isInstallChange = (change: ActivationPreview["changes"][number]) =>
-  change.before.trim().length === 0 || /\/skills?\//.test(change.path);
-
-const isReplaceChange = (change: ActivationPreview["changes"][number]) =>
-  !isInstallChange(change);
-
 const lineCount = (text: string) => {
   if (text.length === 0) {
     return 0;
@@ -184,9 +178,12 @@ export const PreviewDialog = ({
     error.startsWith("External changes detected in AgentEnv-managed")
   );
   const keepItems = preview.warnings.map((warning) => prettifyIssue(warning, targetName));
-  const installChanges = "targetId" in preview ? preview.changes.filter(isInstallChange) : [];
-  const replaceChanges = "targetId" in preview ? preview.changes.filter(isReplaceChange) : preview.changes;
+  const resourceChanges = "targetId" in preview ? preview.resourceChanges : [];
+  const installChanges = resourceChanges.filter((change) => change.action === "install");
+  const replaceChanges = resourceChanges.filter((change) => change.action === "replace");
+  const removeChanges = resourceChanges.filter((change) => change.action === "remove");
   const fileCountLabel = plural(preview.changes.length, "file");
+  const resourceCountLabel = plural(resourceChanges.length, "resource");
 
   const content = (
     <section
@@ -200,7 +197,9 @@ export const PreviewDialog = ({
       <header className="preview-header">
         <div>
           <div className="section-title">{title}</div>
-          <p className="muted">{fileCountLabel} in this diff</p>
+          <p className="muted">
+            {fileCountLabel} and {resourceCountLabel} reviewed before apply
+          </p>
         </div>
         <time dateTime={preview.createdAt}>{new Date(preview.createdAt).toLocaleString()}</time>
       </header>
@@ -226,12 +225,16 @@ export const PreviewDialog = ({
           ))}
         </section>
         <section className="preview-summary-card">
-          <strong>Will replace</strong>
-          <span>{replaceChanges.length > 0 ? plural(replaceChanges.length, "file") : "No existing files"}</span>
+          <strong>Configuration</strong>
+          <span>{preview.changes.length > 0 ? `${fileCountLabel} changed` : "No file changes"}</span>
         </section>
         <section className="preview-summary-card">
-          <strong>Will install</strong>
-          <span>{installChanges.length > 0 ? plural(installChanges.length, "resource") : "No new resources"}</span>
+          <strong>Resources</strong>
+          <span>
+            {resourceChanges.length > 0
+              ? `${installChanges.length} install · ${replaceChanges.length} replace · ${removeChanges.length} remove`
+              : "No resource changes"}
+          </span>
         </section>
       </section>
       {managedDriftErrors.length > 0 && onManagedDriftAcknowledgedChange ? (
@@ -256,6 +259,28 @@ export const PreviewDialog = ({
               Open recovery history
             </button>
           ) : null}
+        </section>
+      ) : null}
+      {resourceChanges.length > 0 ? (
+        <section className="preview-resource-plan" aria-label="Resource changes">
+          <header>
+            <strong>Resource changes</strong>
+            <span>{resourceCountLabel}</span>
+          </header>
+          <div>
+            {resourceChanges.map((change) => (
+              <article key={`${change.action}:${change.path}`}>
+                <span className={`change-kind change-kind--${change.action}`}>
+                  {change.action}
+                </span>
+                <span className="preview-resource-plan__identity">
+                  <strong>{change.name}</strong>
+                  <small title={change.path}>{change.path}</small>
+                </span>
+                <span className="preview-resource-plan__kind">{change.kind}</span>
+              </article>
+            ))}
+          </div>
         </section>
       ) : null}
       <div className="diff-list">

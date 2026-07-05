@@ -14,20 +14,21 @@ export type ProfileReadinessStatus =
   | "target-unavailable"
   | "validation-error"
   | "preview-error"
+  | "apply-pending"
   | "unmanaged"
   | "ready";
 
 export interface ProfileReadiness {
   status: ProfileReadinessStatus;
-  label: "No profile" | "No target" | "Unsaved" | "Target unavailable" | "Needs review" | "Ready";
+  label: "No profile" | "No target" | "Unsaved" | "Target unavailable" | "Needs review" | "Apply pending" | "Ready";
   message: string;
   remediationLabel?: "Open Targets" | "Save now" | "Review Advanced" | "Review preview";
 }
 
 export interface ProfileReadinessInput {
-  profile?: Pick<ProfileDetail, "id">;
+  profile?: Pick<ProfileDetail, "id" | "contentHash">;
   target?: Pick<TargetInfo, "id" | "name" | "health">;
-  targetState?: Pick<TargetManagementState, "status">;
+  targetState?: Pick<TargetManagementState, "status" | "activeProfileId" | "appliedProfileHash">;
   isDirty: boolean;
   localValidationErrors?: readonly string[];
   preview?: Pick<ActivationPreview, "errors">;
@@ -102,6 +103,19 @@ export const deriveProfileReadiness = ({
       status: "unmanaged",
       label: "Ready",
       message: `${target.name} is ready to take over`
+    };
+  }
+
+  if (
+    targetState.activeProfileId === profile.id &&
+    (!targetState.appliedProfileHash || targetState.appliedProfileHash !== profile.contentHash)
+  ) {
+    return {
+      status: "apply-pending",
+      label: "Apply pending",
+      message: targetState.appliedProfileHash
+        ? `Saved changes have not been applied to ${target.name}`
+        : `${target.name} applied version is unknown; preview before continuing`
     };
   }
 

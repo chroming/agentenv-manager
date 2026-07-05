@@ -11,6 +11,7 @@ import type {
   SaveProfileInput
 } from "../shared/types";
 import { createPaths, type PathOverrides } from "./paths";
+import { createProfileContentHash } from "./profileFingerprint";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
 
 export interface ProfileStore {
@@ -53,7 +54,10 @@ export const createProfileStore = (
     const manifest = ProfileManifestSchema.parse(
       await readJson(join(profileDir, "profile.json"))
     );
-    return targetRegistry.get(manifest.targetId).readProfileFiles(profileDir, manifest);
+    const profile = await targetRegistry
+      .get(manifest.targetId)
+      .readProfileFiles(profileDir, manifest);
+    return { ...profile, contentHash: createProfileContentHash(profile) };
   };
 
   const listProfiles = async (): Promise<ProfileSummary[]> => {
@@ -74,7 +78,8 @@ export const createProfileStore = (
           id: profile.manifest.id,
           targetId: profile.manifest.targetId,
           name: profile.manifest.name,
-          description: profile.manifest.description
+          description: profile.manifest.description,
+          contentHash: profile.contentHash
         };
       })
     );

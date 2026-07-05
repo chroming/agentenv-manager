@@ -103,6 +103,13 @@ describe("activation service", () => {
     await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n# keep me\n');
 
     const preview = await service.previewProfile("daily-coding");
+    expect(preview.resourceChanges).toContainEqual({
+      kind: "skill",
+      action: "install",
+      name: "agentenv-daily-coding-example-skill",
+      path: join(paths.userSkillsDir, "agentenv-daily-coding-example-skill"),
+      source: "skills/example-skill"
+    });
     const result = await service.applyProfile("daily-coding", preview.id);
 
     expect(result.ok).toBe(true);
@@ -131,9 +138,28 @@ describe("activation service", () => {
         "utf8"
       )
     ).resolves.toContain("name: example");
+    const state = (await service.listTargetStates())[0];
+    expect(state?.activeProfileId).toBe("daily-coding");
+    expect(state?.appliedProfileHash).toMatch(/^[a-f0-9]{64}$/);
 
     const backups = await createBackupStore(paths).listBackups();
     expect(backups).toHaveLength(1);
+  });
+
+  it("blocks apply when a resource changes after preview", async () => {
+    const { paths, service } = await makeEnv();
+    const targetSkill = join(paths.userSkillsDir, "agentenv-daily-coding-example-skill");
+    const preview = await service.previewProfile("daily-coding");
+
+    await mkdir(targetSkill, { recursive: true });
+    await writeFile(join(targetSkill, "SKILL.md"), "# Added outside AgentEnv\n");
+
+    const result = await service.applyProfile("daily-coding", preview.id);
+
+    expect(result).toEqual({
+      ok: false,
+      errors: [`Live resource changed after preview: ${targetSkill}`]
+    });
   });
 
   it("refuses stale previews without writing", async () => {
