@@ -638,7 +638,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 ### 24.1 Verification Snapshot
 
-Last verified: 2026-07-12 against commit `b61e6d1`.
+Last verified: 2026-07-12 against commit `9a7e8f5`.
 
 - `261` automated tests passed across `37` test files, including native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings were visually inspected at `1180 x 728` and `920 x 620` without document overflow.
