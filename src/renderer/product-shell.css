@@ -131,21 +131,28 @@
 
 .editor-panel > .app-feedback {
   align-items: center;
-  grid-template-columns: 16px minmax(0, 1fr);
-}
-
-.editor-panel > .app-feedback--dismissible {
   grid-template-columns: 16px minmax(0, 1fr) 28px;
 }
 
-.editor-panel > .app-feedback > button {
+.editor-panel > .app-feedback--dismissible {
+  grid-template-columns: 16px minmax(0, 1fr) 60px;
+}
+
+.app-feedback__controls {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.editor-panel > .app-feedback .app-feedback__controls button {
   background: transparent;
   border: 0;
   color: currentColor;
   min-height: 28px;
   min-width: 28px;
   padding: 0;
-  pointer-events: auto;
+  user-select: none;
 }
 
 .app-feedback__action {

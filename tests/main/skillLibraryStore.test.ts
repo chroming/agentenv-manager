@@ -146,6 +146,42 @@ describe("skill library store", () => {
     );
   });
 
+  it("finds managed installs without traversing unrelated cyclic skill content", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const skillsDir = join(root, "home", ".agents", "skills");
+    const managedInstall = join(skillsDir, "api-test");
+    const cyclicSkill = join(skillsDir, "web-testing");
+    await mkdir(managedInstall, { recursive: true });
+    await writeFile(join(managedInstall, "SKILL.md"), "# API test\n", "utf8");
+    await writeFile(
+      join(managedInstall, ".agentenv-owner.json"),
+      `${JSON.stringify({
+        owner: "agentenv-manager",
+        targetId: "codex",
+        kind: "skill",
+        source: "skills-library/api-test"
+      })}\n`,
+      "utf8"
+    );
+    await mkdir(cyclicSkill, { recursive: true });
+    await writeFile(join(cyclicSkill, "SKILL.md"), "# Web testing\n", "utf8");
+    await symlink(cyclicSkill, join(cyclicSkill, "web-testing"), "dir");
+
+    const store = createSkillLibraryStore(paths);
+    await expect(
+      store.findManagedInstallPaths("api-test", [
+        {
+          targetId: "opencode",
+          configDir: join(root, "home", ".config", "opencode"),
+          instructionsPath: "",
+          configPath: "",
+          skillsDir
+        }
+      ])
+    ).resolves.toEqual([managedInstall]);
+  });
+
   it("uses the configured GitHub access token when importing a GitHub skill", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

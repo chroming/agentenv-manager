@@ -9,6 +9,7 @@ import {
   readdir,
   rm,
   stat,
+  symlink,
   writeFile
 } from "node:fs/promises";
 import { delimiter, join } from "node:path";
@@ -1399,7 +1400,11 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("removes a skill from the shared library through the rendered app", async () => {
-    const { appDataRoot, page } = await launchApp();
+    const { appDataRoot, opencodeDir, page } = await launchApp();
+    const cyclicSkill = join(opencodeDir, "skills", "web-testing");
+    await mkdir(cyclicSkill, { recursive: true });
+    await writeFile(join(cyclicSkill, "SKILL.md"), "# Unrelated cyclic skill\n", "utf8");
+    await symlink(cyclicSkill, join(cyclicSkill, "web-testing"), "dir");
 
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
@@ -1416,6 +1421,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => page.getByRole("status").textContent())
       .toContain("Removed shared-reviewer");
     await expect(fileExists(join(appDataRoot, "skills-library", "shared-reviewer"))).resolves.toBe(false);
+    await expect(fileExists(join(cyclicSkill, "SKILL.md"))).resolves.toBe(true);
   }, 30_000);
 
   it("keeps menus, dialogs, and info tips inside the visible app window", async () => {
@@ -2526,7 +2532,10 @@ describe("Electron UI profile switching e2e", () => {
   it("reports an offline GitHub update check without offering sign-in as the fix", async () => {
     const { app: electronApp, page } = await launchApp();
     await electronApp.evaluate(({ ipcMain }) => {
+      const state = globalThis as typeof globalThis & { __agentEnvCopiedMessage?: string };
+      state.__agentEnvCopiedMessage = undefined;
       ipcMain.removeHandler("skills:check-updates");
+      ipcMain.removeHandler("clipboard:write-text");
       ipcMain.handle("skills:check-updates", () => [
         {
           id: "shared-reviewer",
@@ -2537,6 +2546,9 @@ describe("Electron UI profile switching e2e", () => {
           error: "GitHub request failed: network offline"
         }
       ]);
+      ipcMain.handle("clipboard:write-text", (_event, text) => {
+        state.__agentEnvCopiedMessage = String(text);
+      });
     });
 
     await openSkillLibrary(page);
@@ -2544,6 +2556,17 @@ describe("Electron UI profile switching e2e", () => {
     const feedback = page.getByRole("alert");
     await expect.poll(() => feedback.textContent()).toContain("1 check failed");
     await expect.poll(() => feedback.textContent()).toContain("network offline");
+    await feedback.getByRole("button", { name: "Copy message" }).click();
+    await expect
+      .poll(() =>
+        electronApp.evaluate(
+          () =>
+            (globalThis as typeof globalThis & { __agentEnvCopiedMessage?: string })
+              .__agentEnvCopiedMessage
+        )
+      )
+      .toBe("1 check failed\nGitHub request failed: network offline");
+    await feedback.getByRole("button", { name: "Message copied" }).waitFor();
     expect(await feedback.getByRole("button", { name: "Connect GitHub" }).count()).toBe(0);
     await feedback.getByRole("button", { name: "Dismiss message" }).click();
     await feedback.waitFor({ state: "hidden" });

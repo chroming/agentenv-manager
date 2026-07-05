@@ -135,12 +135,10 @@ export const registerIpcHandlers = ({
       );
     }
     const targets = await targetDiscoveryService.listTargets();
-    const inventory = await skillLibraryStore.scanInventory(
+    const managedInstallPaths = await skillLibraryStore.findManagedInstallPaths(
+      skillId,
       targets.map((target) => target.paths)
     );
-    const managedInstallPaths = inventory
-      .filter((item) => item.status === "managed" && item.libraryId === skillId)
-      .map((item) => item.path);
     return skillLibraryStore.removeSkill(skillId, managedInstallPaths);
   });
   ipcMain.handle("skills:manage-target", async (_event, input: ManageTargetSkillInput) => {

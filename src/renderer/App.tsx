@@ -192,6 +192,7 @@ export const AppFeedback = ({
   onDismiss(): void;
 }) => {
   const onDismissRef = useRef(onDismiss);
+  const [copied, setCopied] = useState(false);
   onDismissRef.current = onDismiss;
   const feedbackKey = feedback
     ? `${feedback.kind}\u0000${feedback.title}\u0000${feedback.message ?? ""}`
@@ -205,6 +206,10 @@ export const AppFeedback = ({
     return () => window.clearTimeout(timeoutId);
   }, [feedbackKey, feedback?.kind]);
 
+  useEffect(() => {
+    setCopied(false);
+  }, [feedbackKey]);
+
   if (!feedback) {
     return null;
   }
@@ -217,6 +222,11 @@ export const AppFeedback = ({
         : feedback.kind === "success"
           ? CheckCircle2
           : Settings2;
+  const copyFeedback = async () => {
+    const text = [feedback.title, feedback.message].filter(Boolean).join("\n");
+    await window.agentEnv.copyText(text);
+    setCopied(true);
+  };
 
   return (
     <div
@@ -235,11 +245,25 @@ export const AppFeedback = ({
           </button>
         ) : null}
       </div>
-      {feedback.kind === "error" ? (
-        <button type="button" aria-label="Dismiss message" onClick={onDismiss}>
-          <X size={14} strokeWidth={2.2} aria-hidden="true" />
+      <div className="app-feedback__controls">
+        <button
+          type="button"
+          aria-label={copied ? "Message copied" : "Copy message"}
+          title={copied ? "Copied" : "Copy message"}
+          onClick={() => void copyFeedback()}
+        >
+          {copied ? (
+            <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden="true" />
+          ) : (
+            <Copy size={14} strokeWidth={2.2} aria-hidden="true" />
+          )}
         </button>
-      ) : null}
+        {feedback.kind === "error" ? (
+          <button type="button" aria-label="Dismiss message" onClick={onDismiss}>
+            <X size={14} strokeWidth={2.2} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 };

@@ -68,6 +68,7 @@ export interface ConsolidateSkillGroupStoreInput {
 export interface SkillLibraryStore {
   listSkills(): Promise<SkillLibraryEntry[]>;
   scanInventory(targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]>;
+  findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
   listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
@@ -579,11 +580,10 @@ export const createSkillLibraryStore = (
       .sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  const markerLibraryId = async (skillDir: string, target: TargetPaths) => {
+  const ownedLibraryId = async (skillDir: string) => {
     const marker = await readJsonIfExists<Record<string, unknown>>(markerPathFor(skillDir));
     if (
       marker?.owner === "agentenv-manager" &&
-      marker.targetId === target.targetId &&
       marker.kind === "skill" &&
       typeof marker.source === "string" &&
       marker.source.startsWith("skills-library/")
@@ -591,6 +591,14 @@ export const createSkillLibraryStore = (
       return marker.source.slice("skills-library/".length);
     }
     return undefined;
+  };
+
+  const markerLibraryId = async (skillDir: string, target: TargetPaths) => {
+    const marker = await readJsonIfExists<Record<string, unknown>>(markerPathFor(skillDir));
+    if (marker?.targetId !== target.targetId) {
+      return undefined;
+    }
+    return ownedLibraryId(skillDir);
   };
 
   const scanInventory = async (targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]> => {
@@ -656,6 +664,35 @@ export const createSkillLibraryStore = (
       }
     }
     return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const findManagedInstallPaths = async (
+    libraryId: string,
+    targetPaths: TargetPaths[]
+  ): Promise<string[]> => {
+    const safeId = SafeIdSchema.parse(libraryId);
+    const matches = new Set<string>();
+    for (const target of targetPaths) {
+      const scanRoots = [
+        ...new Set([target.skillsDir, ...(target.skillScanDirs ?? [])].filter(Boolean))
+      ];
+      for (const scanRoot of scanRoots) {
+        if (!scanRoot || !(await pathExists(scanRoot))) {
+          continue;
+        }
+        const entries = await readdir(scanRoot, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory() || entry.name.startsWith(".")) {
+            continue;
+          }
+          const skillDir = join(scanRoot, entry.name);
+          if ((await ownedLibraryId(skillDir)) === safeId) {
+            matches.add(skillDir);
+          }
+        }
+      }
+    }
+    return [...matches].sort();
   };
 
   const scanUnmanaged = async (targetPaths: TargetPaths[]) => {
@@ -1223,6 +1260,7 @@ export const createSkillLibraryStore = (
   return {
     listSkills,
     scanInventory,
+    findManagedInstallPaths,
     listCleanupBackups,
     ignoreSkillGroup,
     unignoreSkillGroup,
