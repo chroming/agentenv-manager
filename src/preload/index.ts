@@ -14,6 +14,7 @@ const api: AgentEnvApi = {
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),
   scanSkillInventory: () => ipcRenderer.invoke("skills:scan-inventory"),
+  listSkillCleanupBackups: () => ipcRenderer.invoke("skills:list-cleanup-backups"),
   ignoreSkillGroup: (skillKey) => ipcRenderer.invoke("skills:ignore-group", skillKey),
   unignoreSkillGroup: (skillKey) => ipcRenderer.invoke("skills:unignore-group", skillKey),
   listMcpLibrary: () => ipcRenderer.invoke("mcp:list-library"),

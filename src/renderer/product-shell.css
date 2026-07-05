@@ -1150,6 +1150,46 @@
   padding: 9px 10px;
 }
 
+.cleanup-history-section {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+}
+
+.cleanup-history-list {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cleanup-history-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 54px;
+  padding: 8px 10px;
+}
+
+.cleanup-history-row + .cleanup-history-row {
+  border-top: 1px solid var(--border);
+}
+
+.cleanup-history-row > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cleanup-history-row strong {
+  font-size: 12px;
+}
+
+.cleanup-history-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .library-inline-action {
   background: transparent;
   border: 0;

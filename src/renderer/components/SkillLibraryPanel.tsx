@@ -29,6 +29,7 @@ import { createPortal } from "react-dom";
 import type {
   GitHubSkillImportInput,
   ManageTargetSkillInput,
+  SkillCleanupBackupSummary,
   SkillCleanupRequest,
   SkillInventoryEntry,
   SkillLibraryEntry,
@@ -52,6 +53,7 @@ interface SkillLibraryPanelProps {
   librarySkills: SkillLibraryEntry[];
   skillUpdates: SkillUpdateInfo[];
   skillInventory: SkillInventoryEntry[];
+  cleanupBackups: SkillCleanupBackupSummary[];
   selectedUpdatePlan?: SkillUpdatePlan;
   bulkUpdatePlans?: SkillUpdatePlan[];
   skillUsage: Record<string, string[]>;
@@ -74,6 +76,7 @@ interface SkillLibraryPanelProps {
   onCheckUpdates(): void;
   onIgnoreSkillGroup(skillKey: string): void;
   onUnignoreSkillGroup(skillKey: string): void;
+  onRestoreCleanup(backupId: string): void;
   updateCheckStatus?: SkillUpdateCheckStatus;
   viewState: SkillLibraryViewState;
   onViewStateChange(next: SkillLibraryViewState): void;
@@ -207,6 +210,7 @@ export const SkillLibraryPanel = ({
   librarySkills,
   skillUpdates,
   skillInventory,
+  cleanupBackups,
   selectedUpdatePlan,
   bulkUpdatePlans,
   skillUsage,
@@ -229,6 +233,7 @@ export const SkillLibraryPanel = ({
   onCheckUpdates,
   onIgnoreSkillGroup,
   onUnignoreSkillGroup,
+  onRestoreCleanup,
   updateCheckStatus,
   viewState,
   onViewStateChange,
@@ -1021,7 +1026,7 @@ export const SkillLibraryPanel = ({
               <button
                 className="primary-action"
                 type="button"
-                disabled={bulkUpdatePlans.some((plan) => plan.errors.length > 0) || bulkUpdatePlans.every((plan) => plan.changes.length === 0)}
+                disabled={bulkUpdatePlans.every((plan) => plan.errors.length > 0 || plan.changes.length === 0)}
                 onClick={() => onUpdateAllLibrarySkills(bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).map((plan) => plan.id))}
               >
                 Apply {bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).length} updates
@@ -1082,7 +1087,7 @@ export const SkillLibraryPanel = ({
                   </label>
                 ))}
               </fieldset>
-              <p className="cleanup-safety-note">A backup is created before any selected location is changed. You can undo the cleanup from the result message.</p>
+              <p className="cleanup-safety-note">A backup is created before any selected location is changed. It remains available in Cleanup history.</p>
             </div>
             <footer className="preview-actions">
               <button className="secondary-action" type="button" onClick={() => setCleanupDraft(undefined)}>Cancel</button>
@@ -1206,6 +1211,34 @@ export const SkillLibraryPanel = ({
                 );
               })}
             </div>
+          </section>
+          <section className="resource-section cleanup-history-section" aria-label="Cleanup history">
+            <div className="resource-heading">Cleanup history</div>
+            {cleanupBackups.length === 0 ? (
+              <p className="muted library-empty">No cleanup backups yet.</p>
+            ) : (
+              <div className="cleanup-history-list">
+                {cleanupBackups.map((backup) => (
+                  <div className="cleanup-history-row" key={backup.id}>
+                    <span>
+                      <strong>{backup.libraryId}</strong>
+                      <small>
+                        {backup.locationCount} locations · {new Date(backup.createdAt).toLocaleString()}
+                      </small>
+                    </span>
+                    <button
+                      className="secondary-action"
+                      type="button"
+                      aria-label={`Restore cleanup ${backup.libraryId}`}
+                      onClick={() => onRestoreCleanup(backup.id)}
+                    >
+                      <RotateCcw size={14} aria-hidden="true" />
+                      Restore
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </section>
       ) : null}

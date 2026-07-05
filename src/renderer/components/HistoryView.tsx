@@ -24,18 +24,21 @@ export const HistoryView = ({
         key={backup.id}
       >
         <div className="history-row__main">
-          <span>{backup.id}</span>
-          <small>{backup.fileCount} files</small>
+          <span>{backup.profileName ? `${backup.profileName} → ${backup.targetId}` : backup.id}</span>
+          <small>
+            {backup.operation === "apply" ? "Profile apply" : "Backup"} · {backup.fileCount} files ·{" "}
+            {new Date(backup.createdAt).toLocaleString()}
+          </small>
         </div>
         <div className="history-actions">
           <button
             className="history-action"
             type="button"
             disabled={busy}
-            aria-label={`Preview rollback ${backup.id}`}
+            aria-label={`Preview restore ${backup.profileName ?? backup.id}`}
             onClick={() => onPreviewRollback(backup.id)}
           >
-            Preview rollback
+            Preview restore
           </button>
           {rollbackPreview?.backupId === backup.id ? (
             <button

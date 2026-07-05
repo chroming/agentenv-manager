@@ -18,6 +18,7 @@ describe("McpLibraryPanel", () => {
         onViewStateChange={onViewStateChange}
         onSave={vi.fn()}
         onRemove={vi.fn()}
+        onReviewUsage={vi.fn()}
       />
     );
 

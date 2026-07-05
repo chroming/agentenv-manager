@@ -542,12 +542,22 @@ describe("skill library store", () => {
       ]
     });
 
+    await expect(store.listCleanupBackups()).resolves.toEqual([
+      {
+        id: result.backupId,
+        libraryId: "reviewer",
+        createdAt: expect.any(String),
+        locationCount: 2
+      }
+    ]);
+
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).resolves.toBe("# Canonical\n");
     await expect(readFile(join(openCodeCopy, "SKILL.md"), "utf8")).resolves.toBe("# Canonical\n");
     await expect(readFile(join(codexCopy, "SKILL.md"), "utf8")).resolves.toBe("# Canonical\n");
     expect(result.managedLocations).toEqual([openCodeCopy, codexCopy]);
 
     await store.rollbackSkillCleanup(result.backupId);
+    await expect(store.listCleanupBackups()).resolves.toEqual([]);
 
     await expect(readFile(join(openCodeCopy, "SKILL.md"), "utf8")).resolves.toBe("# Canonical\n");
     await expect(readFile(join(codexCopy, "SKILL.md"), "utf8")).resolves.toBe("# Older copy\n");

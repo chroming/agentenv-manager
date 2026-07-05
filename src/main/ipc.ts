@@ -74,6 +74,9 @@ export const registerIpcHandlers = ({
       .listTargets()
       .then((targets) => skillLibraryStore.scanInventory(targets.map((target) => target.paths)))
   );
+  ipcMain.handle("skills:list-cleanup-backups", () =>
+    skillLibraryStore.listCleanupBackups()
+  );
   ipcMain.handle("skills:ignore-group", (_event, skillKey: unknown) =>
     skillLibraryStore.ignoreSkillGroup(String(skillKey))
   );
@@ -84,9 +87,22 @@ export const registerIpcHandlers = ({
   ipcMain.handle("mcp:save-library", (_event, input: SaveMcpServerInput) =>
     mcpLibraryStore.saveServer(input)
   );
-  ipcMain.handle("mcp:remove-library", (_event, id: unknown) =>
-    mcpLibraryStore.removeServer(parseId(id, "MCP server id"))
-  );
+  ipcMain.handle("mcp:remove-library", async (_event, id: unknown) => {
+    const serverId = parseId(id, "MCP server id");
+    const references: string[] = [];
+    for (const profile of await profileStore.listProfiles()) {
+      const detail = await profileStore.readProfile(profile.id);
+      if (detail.assetPolicy.mcpRefs?.some((reference) => reference.libraryId === serverId)) {
+        references.push(detail.manifest.name);
+      }
+    }
+    if (references.length > 0) {
+      throw new Error(
+        `MCP server ${serverId} is used by ${references.join(", ")}. Remove it from those profiles first.`
+      );
+    }
+    return mcpLibraryStore.removeServer(serverId);
+  });
   ipcMain.handle("skills:scan-unmanaged", () =>
     targetDiscoveryService
       .listTargets()

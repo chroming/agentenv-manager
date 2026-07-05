@@ -14,6 +14,7 @@ interface McpLibraryPanelProps {
   searchInputRef?: RefObject<HTMLInputElement | null>;
   onSave(input: SaveMcpServerInput): Promise<void>;
   onRemove(id: string): void;
+  onReviewUsage(id: string): void;
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -67,7 +68,8 @@ export const McpLibraryPanel = ({
   onViewStateChange,
   searchInputRef,
   onSave,
-  onRemove
+  onRemove,
+  onReviewUsage
 }: McpLibraryPanelProps) => {
   const [draft, setDraft] = useState<SaveMcpServerInput>(defaultDraft);
   const [argsText, setArgsText] = useState("");
@@ -427,7 +429,9 @@ export const McpLibraryPanel = ({
               <div>
                 <div className="section-title">Delete MCP server</div>
                 <p className="muted">
-                  Delete {deleteCandidate.name} from the shared MCP library? Profile references are not changed.
+                  {(mcpUsage[deleteCandidate.id] ?? []).length > 0
+                    ? `${deleteCandidate.name} is used by ${(mcpUsage[deleteCandidate.id] ?? []).join(", ")}. Remove it from those profiles first.`
+                    : `Delete ${deleteCandidate.name} from the shared MCP library?`}
                 </p>
               </div>
             </header>
@@ -439,16 +443,29 @@ export const McpLibraryPanel = ({
               >
                 Cancel
               </button>
-              <button
-                className="danger-action"
-                type="button"
-                onClick={() => {
-                  onRemove(deleteCandidate.id);
-                  setDeleteCandidate(undefined);
-                }}
-              >
-                Delete server
-              </button>
+              {(mcpUsage[deleteCandidate.id] ?? []).length > 0 ? (
+                <button
+                  className="primary-action"
+                  type="button"
+                  onClick={() => {
+                    onReviewUsage(deleteCandidate.id);
+                    setDeleteCandidate(undefined);
+                  }}
+                >
+                  Review profiles
+                </button>
+              ) : (
+                <button
+                  className="danger-action"
+                  type="button"
+                  onClick={() => {
+                    onRemove(deleteCandidate.id);
+                    setDeleteCandidate(undefined);
+                  }}
+                >
+                  Delete server
+                </button>
+              )}
             </footer>
           </section>
         </div>

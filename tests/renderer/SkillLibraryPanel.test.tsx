@@ -26,6 +26,7 @@ describe("SkillLibraryPanel", () => {
     const onConsolidateSkillGroup = vi.fn();
     const onIgnoreSkillGroup = vi.fn();
     const onUnignoreSkillGroup = vi.fn();
+    const onRestoreCleanup = vi.fn();
     const onCloseTool = vi.fn();
     const onViewStateChange = vi.fn();
     const onSelectLocalSkillFolder = vi.fn().mockResolvedValue("/tmp/local-skills/path-reviewer");
@@ -111,6 +112,14 @@ describe("SkillLibraryPanel", () => {
             ignoreRuleId: "ignore-target-only-reviewer"
           }
         ]}
+        cleanupBackups={[
+          {
+            id: "cleanup-1",
+            libraryId: "shared-reviewer",
+            createdAt: "2026-07-10T08:00:00.000Z",
+            locationCount: 2
+          }
+        ]}
         skillUpdates={[
           {
             id: "github-reviewer",
@@ -174,6 +183,7 @@ describe("SkillLibraryPanel", () => {
         onConsolidateSkillGroup={onConsolidateSkillGroup}
         onIgnoreSkillGroup={onIgnoreSkillGroup}
         onUnignoreSkillGroup={onUnignoreSkillGroup}
+        onRestoreCleanup={onRestoreCleanup}
         updateCheckStatus={{ state: "success", message: "2 updates available" }}
         viewState={{ ...defaultSkillLibraryViewState, scrollTop: 180 }}
         onViewStateChange={onViewStateChange}
@@ -294,6 +304,11 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Imported");
     expect(discoveries).toHaveTextContent("Ignored");
+    expect(screen.getByRole("region", { name: "Cleanup history" })).toHaveTextContent(
+      "shared-reviewer"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Restore cleanup shared-reviewer" }));
+    expect(onRestoreCleanup).toHaveBeenCalledWith("cleanup-1");
     expect(screen.getByRole("group", { name: "Cleanup group target-only-reviewer" })).toHaveTextContent(
       "2 locations"
     );

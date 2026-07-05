@@ -18,6 +18,7 @@ export interface AgentEnvApi {
   listTargetStates(): Promise<TargetManagementState[]>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   scanSkillInventory(): Promise<SkillInventoryEntry[]>;
+  listSkillCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
   listMcpLibrary(): Promise<McpLibraryEntry[]>;
@@ -142,6 +143,13 @@ export interface SkillCleanupResult {
   backupId: string;
   libraryId: string;
   managedLocations: string[];
+}
+
+export interface SkillCleanupBackupSummary {
+  id: string;
+  libraryId: string;
+  createdAt: string;
+  locationCount: number;
 }
 
 export interface UnmanagedSkillEntry {
@@ -395,6 +403,10 @@ export interface BackupEntry {
 export interface BackupManifest {
   id: string;
   createdAt: string;
+  operation?: "apply";
+  targetId?: string;
+  profileId?: string;
+  profileName?: string;
   entries: BackupEntry[];
 }
 
@@ -402,6 +414,10 @@ export interface BackupSummary {
   id: string;
   createdAt: string;
   fileCount: number;
+  operation?: "apply";
+  targetId?: string;
+  profileId?: string;
+  profileName?: string;
 }
 
 export type ApplyResult =

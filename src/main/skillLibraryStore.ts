@@ -8,6 +8,7 @@ import type {
   GitHubSkillImportInput,
   PlannedFileChange,
   SkillCleanupIgnoreRule,
+  SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillInventoryEntry,
   SkillLibraryEntry,
@@ -64,6 +65,7 @@ export interface ConsolidateSkillGroupStoreInput {
 export interface SkillLibraryStore {
   listSkills(): Promise<SkillLibraryEntry[]>;
   scanInventory(targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]>;
+  listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
@@ -693,6 +695,41 @@ export const createSkillLibraryStore = (
     return { backupDir, manifest };
   };
 
+  const listCleanupBackups = async (): Promise<SkillCleanupBackupSummary[]> => {
+    let entries: string[];
+    try {
+      entries = await readdir(cleanupBackupRoot());
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    }
+
+    const summaries = await Promise.all(
+      entries.map(async (entry): Promise<SkillCleanupBackupSummary | undefined> => {
+        try {
+          const { manifest } = await readCleanupBackup(entry);
+          return {
+            id: manifest.id,
+            libraryId: manifest.libraryId,
+            createdAt: manifest.createdAt,
+            locationCount: manifest.entries.length
+          };
+        } catch (error) {
+          if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+            return undefined;
+          }
+          throw error;
+        }
+      })
+    );
+
+    return summaries
+      .filter((item): item is SkillCleanupBackupSummary => Boolean(item))
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  };
+
   const restoreCleanupBackup = async (manifest: SkillCleanupBackupManifest) => {
     for (const entry of manifest.entries) {
       await rm(entry.sourcePath, { recursive: true, force: true });
@@ -1101,6 +1138,7 @@ export const createSkillLibraryStore = (
   return {
     listSkills,
     scanInventory,
+    listCleanupBackups,
     ignoreSkillGroup,
     unignoreSkillGroup,
     scanUnmanaged,

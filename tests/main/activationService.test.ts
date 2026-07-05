@@ -215,6 +215,12 @@ describe("activation service", () => {
     await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe("# New agents\n");
     if (result.ok) {
       const backup = await createBackupStore(paths).readBackup(result.backupId);
+      expect(backup).toMatchObject({
+        operation: "apply",
+        targetId: "codex",
+        profileId: "daily-coding",
+        profileName: "Daily Coding"
+      });
       const instructionsEntry = backup.entries.find(
         (entry) => entry.sourcePath === paths.globalAgentsPath
       );

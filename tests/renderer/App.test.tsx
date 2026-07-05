@@ -253,6 +253,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     listTargetStates: vi.fn().mockResolvedValue([]),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
     scanSkillInventory: vi.fn().mockResolvedValue([]),
+    listSkillCleanupBackups: vi.fn().mockResolvedValue([]),
     ignoreSkillGroup: vi.fn().mockResolvedValue({
       id: "ignore-skill",
       scope: "group",
@@ -1641,7 +1642,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     const history = await screen.findByRole("region", { name: "History" });
     const previewRollbackButton = within(history).getByRole("button", {
-      name: `Preview rollback ${backup.id}`
+      name: `Preview restore ${backup.id}`
     });
     previewRollbackButton.focus();
     fireEvent.click(previewRollbackButton);
@@ -1669,7 +1670,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Targets" }));
     const history = await screen.findByRole("region", { name: "History" });
     fireEvent.click(
-      within(history).getByRole("button", { name: `Preview rollback ${backup.id}` })
+      within(history).getByRole("button", { name: `Preview restore ${backup.id}` })
     );
 
     await waitFor(() => expect(api.previewRollback).toHaveBeenCalledWith(backup.id));
@@ -1691,7 +1692,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     const history = await screen.findByRole("region", { name: "History" });
     fireEvent.click(
-      within(history).getByRole("button", { name: `Preview rollback ${backup.id}` })
+      within(history).getByRole("button", { name: `Preview restore ${backup.id}` })
     );
 
     const rollbackDialog = await screen.findByRole("dialog", { name: "Preview" });
@@ -1714,7 +1715,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     const history = await screen.findByRole("region", { name: "History" });
     fireEvent.click(
-      within(history).getByRole("button", { name: `Preview rollback ${backup.id}` })
+      within(history).getByRole("button", { name: `Preview restore ${backup.id}` })
     );
 
     const rollbackDialog = await screen.findByRole("dialog", { name: "Preview" });

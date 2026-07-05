@@ -22,7 +22,10 @@ export interface BackupStoreOptions {
 }
 
 export interface BackupStore {
-  createBackup(sourcePaths: string[]): Promise<BackupManifest>;
+  createBackup(
+    sourcePaths: string[],
+    context?: Pick<BackupManifest, "operation" | "targetId" | "profileId" | "profileName">
+  ): Promise<BackupManifest>;
   listBackups(): Promise<BackupSummary[]>;
   readBackup(id: string): Promise<BackupManifest>;
 }
@@ -59,7 +62,10 @@ export const createBackupStore = (
     return JSON.parse(content) as BackupManifest;
   };
 
-  const createBackup = async (sourcePaths: string[]): Promise<BackupManifest> => {
+  const createBackup = async (
+    sourcePaths: string[],
+    context: Pick<BackupManifest, "operation" | "targetId" | "profileId" | "profileName"> = {}
+  ): Promise<BackupManifest> => {
     await ensurePrivateDir(paths.backupsDir);
 
     const createdAt = now().toISOString();
@@ -107,6 +113,7 @@ export const createBackupStore = (
     const manifest: BackupManifest = {
       id,
       createdAt,
+      ...context,
       entries
     };
 
@@ -147,7 +154,11 @@ export const createBackupStore = (
       .map((manifest) => ({
         id: manifest.id,
         createdAt: manifest.createdAt,
-        fileCount: manifest.entries.length
+        fileCount: manifest.entries.length,
+        operation: manifest.operation,
+        targetId: manifest.targetId,
+        profileId: manifest.profileId,
+        profileName: manifest.profileName
       }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   };

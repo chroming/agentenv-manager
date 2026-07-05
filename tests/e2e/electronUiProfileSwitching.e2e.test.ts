@@ -1130,6 +1130,25 @@ describe("Electron UI profile switching e2e", () => {
         "utf8"
       )
     ).resolves.toContain('"source": "skills-library/target-only-reviewer"');
+
+    await page.getByRole("button", { name: "Scan local Skills" }).click();
+    const cleanupHistory = page.getByRole("region", { name: "Cleanup history" });
+    await cleanupHistory.waitFor({ state: "visible", timeout: 5_000 });
+    await cleanupHistory
+      .getByRole("button", { name: "Restore cleanup target-only-reviewer" })
+      .click();
+    await expect
+      .poll(() => page.locator(".app-feedback").textContent(), { timeout: 5_000 })
+      .toContain("Skill cleanup undone");
+    await expect(
+      readFile(join(opencodeDir, "skills", "target-only-reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("Migrate me into the shared library.");
+    await expect(
+      fileExists(join(opencodeDir, "skills", "target-only-reviewer", ".agentenv-owner.json"))
+    ).resolves.toBe(false);
+    await expect(
+      fileExists(join(appDataRoot, "skills-library", "target-only-reviewer"))
+    ).resolves.toBe(false);
   }, 30_000);
 
   it("keeps ignored local skill groups visible and blocks conflicting profile apply", async () => {
@@ -2273,7 +2292,7 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await expandComposerSection(page, "Advanced");
-    await page.getByRole("button", { name: /Preview rollback/ }).first().click();
+    await page.getByRole("button", { name: /Preview restore/ }).first().click();
     await page.getByRole("button", { name: "Restore backup" }).waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Restore backup" }).click();
     await page.getByRole("button", { name: "Restore backup" }).waitFor({ state: "hidden" });

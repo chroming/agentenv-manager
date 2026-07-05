@@ -47,6 +47,7 @@ import type {
   SaveMcpServerInput,
   SkillInventoryEntry,
   SkillCleanupRequest,
+  SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillLibraryEntry,
   SkillUpdateInfo,
@@ -387,6 +388,7 @@ export const App = () => {
   const [mcpServers, setMcpServers] = useState<McpLibraryEntry[]>([]);
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
+  const [skillCleanupBackups, setSkillCleanupBackups] = useState<SkillCleanupBackupSummary[]>([]);
   const [skillCleanupResult, setSkillCleanupResult] = useState<SkillCleanupResult>();
   const [selectedSkillUpdatePlan, setSelectedSkillUpdatePlan] = useState<SkillUpdatePlan>();
   const [bulkSkillUpdatePlans, setBulkSkillUpdatePlans] = useState<SkillUpdatePlan[]>();
@@ -545,6 +547,7 @@ export const App = () => {
       profileItems,
       backupItems,
       skillItems,
+      cleanupBackupItems,
       mcpItems,
       settings
     ] = await Promise.all([
@@ -553,6 +556,7 @@ export const App = () => {
       window.agentEnv.listProfiles(),
       window.agentEnv.listBackups(),
       window.agentEnv.listSkillLibrary(),
+      window.agentEnv.listSkillCleanupBackups(),
       window.agentEnv.listMcpLibrary(),
       window.agentEnv.readSettings()
     ]);
@@ -609,6 +613,7 @@ export const App = () => {
     setProfiles(profileItems);
     setBackups(backupItems);
     setLibrarySkills(skillItems);
+    setSkillCleanupBackups(cleanupBackupItems);
     setMcpServers(mcpItems);
     setSkillUpdates(skillUpdateItems);
     setSkillInventory(skillInventoryItems);
@@ -1382,6 +1387,16 @@ export const App = () => {
     }
   };
 
+  const reviewMcpUsage = (id: string) => {
+    const firstProfileName = mcpUsage[id]?.[0];
+    const profile = profiles.find((item) => item.name === firstProfileName);
+    if (profile) {
+      selectProfile(profile.id);
+    } else {
+      setActiveWorkspace("profiles");
+    }
+  };
+
   const updateAllLibrarySkills = async (ids: string[]) => {
     if (ids.length === 0) {
       return;
@@ -1598,14 +1613,14 @@ export const App = () => {
     }
   };
 
-  const undoSkillCleanup = async () => {
-    if (!skillCleanupResult) {
+  const undoSkillCleanup = async (backupId = skillCleanupResult?.backupId) => {
+    if (!backupId) {
       return;
     }
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.rollbackSkillCleanup(skillCleanupResult.backupId);
+      await window.agentEnv.rollbackSkillCleanup(backupId);
       setSkillCleanupResult(undefined);
       await refreshProfiles();
       setSkillUpdateCheckStatus({ state: "success", message: "Skill cleanup undone" });
@@ -2137,6 +2152,7 @@ export const App = () => {
                 librarySkills={librarySkills}
                 skillUpdates={skillUpdates}
                 skillInventory={skillInventory}
+                cleanupBackups={skillCleanupBackups}
                 selectedUpdatePlan={selectedSkillUpdatePlan}
                 bulkUpdatePlans={bulkSkillUpdatePlans}
                 skillUsage={skillUsage}
@@ -2163,6 +2179,7 @@ export const App = () => {
                 onUnignoreSkillGroup={(skillKey) => {
                   void unignoreSkillGroup(skillKey);
                 }}
+                onRestoreCleanup={(backupId) => void undoSkillCleanup(backupId)}
                 updateCheckStatus={skillUpdateCheckStatus}
                 viewState={skillLibraryViewState}
                 onViewStateChange={(next) => {
@@ -2183,6 +2200,7 @@ export const App = () => {
                 searchInputRef={mcpSearchInputRef}
                 onSave={saveMcpServer}
                 onRemove={removeMcpServer}
+                onReviewUsage={reviewMcpUsage}
               />
             )}
           </>

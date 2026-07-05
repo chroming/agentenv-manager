@@ -643,11 +643,19 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod
     });
-    const backup = await backupStore.createBackup([
-      ...preview.changes.map((change) => change.path),
-      ...assetBackupPaths,
-      statePath
-    ]);
+    const backup = await backupStore.createBackup(
+      [
+        ...preview.changes.map((change) => change.path),
+        ...assetBackupPaths,
+        statePath
+      ],
+      {
+        operation: "apply",
+        targetId: preview.targetId,
+        profileId: profile.id,
+        profileName: profile.manifest.name
+      }
+    );
 
     try {
       for (const change of preview.changes) {
