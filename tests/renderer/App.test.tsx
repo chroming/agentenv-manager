@@ -538,7 +538,7 @@ describe("App", () => {
       "false"
     );
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
-    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
     expect(screen.getByText("Native format: OpenCode")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "MCP Servers" })).toBeInTheDocument();
@@ -1025,12 +1025,16 @@ describe("App", () => {
     const buttons = within(actions).getAllByRole("button").slice(0, 2);
 
     expect(buttons.map((button) => button.textContent?.trim())).toEqual(["Save", "Apply"]);
-    expect(within(actions).getByRole("button", { name: "Save" })).toBeDisabled();
+    const saveButton = within(actions).getByRole("button", { name: "Save" });
+    const applyButton = within(actions).getByRole("button", { name: "Apply" });
+    expect(saveButton).toBeDisabled();
+    expect(saveButton).not.toHaveClass("is-primary");
+    expect(applyButton).toBeEnabled();
     expect(document.querySelector(".profile-page-header .save-button")).toBeNull();
     expect(document.querySelector(".profile-page-header [aria-label='More profile actions']")).toBeNull();
   });
 
-  it("focuses Save when apply is invoked with unsaved changes", async () => {
+  it("makes Save primary and disables Apply until profile changes are saved", async () => {
     const api = installApi();
     render(<App />);
 
@@ -1041,18 +1045,18 @@ describe("App", () => {
     });
 
     const saveButton = screen.getByRole("button", { name: "Save" });
-    const applyButton = screen.getByRole("button", { name: "Save profile first" });
-    expect(applyButton).toBeEnabled();
+    const applyButton = screen.getByRole("button", { name: "Apply" });
+    expect(saveButton).toBeEnabled();
+    expect(saveButton).toHaveClass("is-primary");
+    expect(applyButton).toBeDisabled();
     fireEvent.click(applyButton);
 
     expect(api.previewApply).not.toHaveBeenCalled();
-    expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
-      "Save this profile before previewing changes"
-    );
-    expect(
-      screen.getAllByText("Save this profile before previewing changes").length
-    ).toBeGreaterThan(0);
-    expect(saveButton).toHaveFocus();
+    fireEvent.click(saveButton);
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(saveButton).toBeDisabled());
+    expect(saveButton).not.toHaveClass("is-primary");
+    expect(applyButton).toBeEnabled();
   });
 
   it("prevents duplicate saves from the readiness remediation", async () => {
@@ -1159,7 +1163,7 @@ describe("App", () => {
     );
     expect(openCodeTarget.querySelector("img")).toHaveClass("profile-target-logo--opencode");
     expect(codexTargetItem.querySelector("img")).toHaveClass("profile-target-logo--codex");
-    expect(screen.getByRole("button", { name: "Take over OpenCode" }).querySelector("img"))
+    expect(screen.getByRole("button", { name: "Apply" }).querySelector("img"))
       .toHaveClass("profile-target-logo--opencode");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menu", { name: "Apply targets" })).not.toBeInTheDocument();
@@ -1177,7 +1181,7 @@ describe("App", () => {
     expect(within(profileList).getByText("Daily Coding")).toBeInTheDocument();
     const compatibleRow = within(profileList).getByRole("button", { name: /Codex Review/ });
     expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Take over Codex" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
 
     fireEvent.click(compatibleRow);
     expect(await screen.findByRole("heading", { name: "Codex Review" })).toBeInTheDocument();
@@ -1294,7 +1298,7 @@ describe("App", () => {
     ).toHaveAttribute("aria-current", "page");
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Profile C\n");
-    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
   });
 
   it("keeps busy state owned by the newest profile read", async () => {
@@ -1324,14 +1328,14 @@ describe("App", () => {
       profileBRead.resolve(profileB);
       await profileBRead.promise;
     });
-    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
 
     await act(async () => {
       profileCRead.resolve(profileC);
       await profileCRead.promise;
     });
     expect(await screen.findByRole("heading", { name: "Profile C" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
   });
 
   it("ignores a stale preview after selecting another profile", async () => {
@@ -1352,7 +1356,7 @@ describe("App", () => {
 
     await openProfiles();
     await screen.findByRole("heading", { name: "Profile B" });
-    fireEvent.click(screen.getByRole("button", { name: "Take over OpenCode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("profile-b", "opencode"));
 
     deferProfileC = true;
@@ -1364,14 +1368,14 @@ describe("App", () => {
     });
 
     expect(screen.queryByRole("dialog", { name: "Preview" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
 
     await act(async () => {
       profileCRead.resolve(profileC);
       await profileCRead.promise;
     });
     expect(await screen.findByRole("heading", { name: "Profile C" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Take over OpenCode" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
   });
 
   it("keeps header menus exclusive and restores trigger focus", async () => {
@@ -1425,7 +1429,7 @@ describe("App", () => {
     expect(readiness).toHaveTextContent("OpenCode is ready to take over");
     expect(readiness).toHaveTextContent("Review before apply");
     expect(readiness).toHaveTextContent("Preview shows every replacement before a backup is created");
-    let action = screen.getByRole("button", { name: "Take over OpenCode" });
+    let action = screen.getByRole("button", { name: "Apply" });
     expect(action).toHaveAttribute("title", "Take over OpenCode");
     fireEvent.click(action);
     await waitFor(() => expect(readyApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
@@ -1445,7 +1449,7 @@ describe("App", () => {
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("OpenCode is ready to preview and apply");
     expect(readiness).toHaveTextContent("Ready to review");
-    action = screen.getByRole("button", { name: "Preview & apply to OpenCode" });
+    action = screen.getByRole("button", { name: "Apply" });
     expect(action).toHaveAttribute("title", "Preview & apply to OpenCode");
 
     cleanup();
@@ -1457,7 +1461,7 @@ describe("App", () => {
     expect(readiness).toHaveTextContent("Profile required");
     expect(readiness).not.toHaveTextContent("No action needed");
     expect(within(readiness).queryByRole("button", { name: "New Profile" })).not.toBeInTheDocument();
-    action = screen.getByRole("button", { name: "Take over OpenCode" });
+    action = screen.getByRole("button", { name: "Apply" });
     expect(action).toBeDisabled();
     expect(action).toHaveAccessibleDescription("Select a profile before previewing changes");
 
@@ -1468,7 +1472,7 @@ describe("App", () => {
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("Select a target to continue");
     expect(within(readiness).getByRole("button", { name: "Open Targets" })).toBeInTheDocument();
-    action = screen.getByRole("button", { name: "Apply profile" });
+    action = screen.getByRole("button", { name: "Apply" });
     expect(action).toBeDisabled();
     expect(action).toHaveAccessibleDescription("Select a target before previewing changes");
 
@@ -1480,7 +1484,7 @@ describe("App", () => {
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("OpenCode is unavailable");
-    action = screen.getByRole("button", { name: "Review OpenCode issues" });
+    action = screen.getByRole("button", { name: "Apply" });
     expect(action).toHaveAttribute("title", "Review OpenCode issues");
     fireEvent.click(action);
     await waitFor(() => expect(unavailableApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
@@ -1503,7 +1507,7 @@ describe("App", () => {
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("This profile has validation issues");
     expect(within(readiness).getByRole("button", { name: "Review Advanced" })).toBeInTheDocument();
-    action = screen.getByRole("button", { name: "Review OpenCode issues" });
+    action = screen.getByRole("button", { name: "Apply" });
     fireEvent.click(action);
     await waitFor(() => expect(invalidApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     dialog = screen.getByRole("dialog", { name: "Preview" });
@@ -1521,9 +1525,9 @@ describe("App", () => {
     });
     render(<App />);
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Preview & apply to OpenCode" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(driftApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
-    action = screen.getByRole("button", { name: "Resolve OpenCode drift" });
+    action = screen.getByRole("button", { name: "Apply" });
     expect(action).toHaveAttribute("title", "Resolve OpenCode drift");
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("Preview found blocking issues");
@@ -1556,9 +1560,9 @@ describe("App", () => {
     expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
       "OpenCode matches this profile"
     );
-    const action = screen.getByRole("button", { name: "Applied to OpenCode" });
+    const action = screen.getByRole("button", { name: "Apply" });
     expect(action).toBeDisabled();
-    expect(action).toHaveTextContent("Applied");
+    expect(action).toHaveTextContent("Apply");
     fireEvent.click(action);
     expect(api.previewApply).not.toHaveBeenCalled();
   });

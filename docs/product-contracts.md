@@ -184,6 +184,7 @@ Rules:
 
 - Save MUST persist the complete Profile, not an individual accordion section.
 - Save and Apply MUST appear as one ordered action group in the selected Profile context: Save first, then Apply. Page creation and Target selection controls MUST NOT separate these two lifecycle commands.
+- Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
 - Edit, Duplicate, Delete, Save, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation and Target context.
 - Unsaved changes MUST block Preview and Apply.
 - Switching Profile, Target, workspace, or closing the window with a dirty draft MUST offer Save, Discard, or Cancel.

@@ -472,11 +472,8 @@ const expectTopmost = async (locator: Locator) => {
   expect(isTopmost).toBe(true);
 };
 
-const applyActionButton = (page: Page, targetName: "OpenCode" | "Codex") =>
-  page
-    .getByRole("button", { name: `Preview & apply to ${targetName}` })
-    .or(page.getByRole("button", { name: `Take over ${targetName}` }))
-    .first();
+const applyActionButton = (page: Page, _targetName: "OpenCode" | "Codex") =>
+  page.getByRole("button", { name: "Apply", exact: true }).first();
 
 const previewAndApply = async (page: Page, targetName: "OpenCode" | "Codex") => {
   await applyActionButton(page, targetName).click();
@@ -1353,11 +1350,11 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Profiles", exact: true }).click();
     await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible" });
     await expect
-      .poll(() => page.locator(".profile-apply-button").getAttribute("aria-label"), {
+      .poll(() => page.locator(".profile-apply-button").getAttribute("title"), {
         timeout: 5_000
       })
       .toBe("Review OpenCode issues");
-    await page.getByRole("button", { name: "Review OpenCode issues" }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
     await expect
@@ -1888,6 +1885,14 @@ describe("Electron UI profile switching e2e", () => {
     expect(await previewDialog.evaluate((element) => element.scrollTop)).toBe(0);
     await expectInViewport(page, previewDialog.locator(".preview-header"));
     await expectInViewport(page, previewDialog.locator(".preview-actions"));
+    const summaryGrid = previewDialog.locator(".preview-summary-grid");
+    await expect.poll(() => summaryGrid.evaluate((element) => getComputedStyle(element).alignItems))
+      .toBe("start");
+    const summaryCardAlignment = await previewDialog
+      .locator(".preview-summary-card")
+      .evaluateAll((cards) => cards.map((card) => getComputedStyle(card).alignSelf));
+    expect(summaryCardAlignment.length).toBeGreaterThan(0);
+    expect(summaryCardAlignment.every((alignment) => alignment === "start")).toBe(true);
   }, 30_000);
 
   it("makes Targets a sequential management workflow with on-demand diagnostics", async () => {
@@ -1921,7 +1926,7 @@ describe("Electron UI profile switching e2e", () => {
     await codexCard.getByRole("button", { name: "Open Codex in Profiles" }).click();
     await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
     await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Take over Codex" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Apply", exact: true }).waitFor({ state: "visible" });
   }, 30_000);
 
   it("stops managing OpenCode while keeping deployed files and clearing ownership", async () => {
@@ -2029,7 +2034,27 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("textbox", { name: "AGENTS.md" })
       .fill("# Updated through collapsed Composer\n");
+
+    const saveButton = page.getByRole("button", { name: "Save", exact: true });
+    const applyButton = page.getByRole("button", { name: "Apply", exact: true });
+    expect(await saveButton.isEnabled()).toBe(true);
+    expect(await saveButton.getAttribute("class")).toContain("is-primary");
+    await expect
+      .poll(() =>
+        saveButton.evaluate((element) => getComputedStyle(element).backgroundColor)
+      )
+      .toBe("rgb(23, 105, 245)");
+    expect(await applyButton.isDisabled()).toBe(true);
+    expect(await applyButton.textContent()).toContain("Apply");
+
     await saveProfile(page);
+    expect(await saveButton.isDisabled()).toBe(true);
+    await expect.poll(() => applyButton.isEnabled()).toBe(true);
+    await expect
+      .poll(() =>
+        applyButton.evaluate((element) => getComputedStyle(element).backgroundColor)
+      )
+      .toBe("rgb(23, 105, 245)");
 
     await expect(
       readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "AGENTS.md"), "utf8")
@@ -2055,6 +2080,21 @@ describe("Electron UI profile switching e2e", () => {
 
     let guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
     await guard.waitFor({ state: "visible", timeout: 5_000 });
+    const actionClearance = await guard.evaluate((dialog) => {
+      const saveAndContinue = dialog.querySelector<HTMLButtonElement>(
+        ".profile-dirty-actions .primary-action"
+      );
+      if (!saveAndContinue) return null;
+      const dialogBox = dialog.getBoundingClientRect();
+      const buttonBox = saveAndContinue.getBoundingClientRect();
+      return {
+        bottom: dialogBox.bottom - buttonBox.bottom,
+        right: dialogBox.right - buttonBox.right
+      };
+    });
+    expect(actionClearance).not.toBeNull();
+    expect(actionClearance!.right).toBeGreaterThanOrEqual(16);
+    expect(actionClearance!.bottom).toBeGreaterThanOrEqual(16);
     await guard.getByRole("button", { name: "Cancel" }).click();
     await guard.waitFor({ state: "hidden", timeout: 5_000 });
     await expect.poll(() => instructions.inputValue()).toBe(savedDraft);
@@ -3055,7 +3095,7 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toContain("alpha skill prompt");
     await expect(fileExists(join(codexDir, "agents", "ui-alpha-agent"))).resolves.toBe(false);
     await expect
-      .poll(() => page.getByRole("button", { name: "Applied to Codex", exact: true }).isDisabled())
+      .poll(() => page.getByRole("button", { name: "Apply", exact: true }).isDisabled())
       .toBe(true);
   }, 30_000);
 

@@ -1302,7 +1302,7 @@ export const App = () => {
       ? { state: selectedTargetState, target: selectedTarget }
       : undefined;
   const applyDisabled =
-    !draftProfile || !selectedTarget || busy || readiness.status === "applied";
+    !draftProfile || !selectedTarget || busy || isProfileDirty || readiness.status === "applied";
   const applyDescription = !draftProfile
     ? "Select a profile before previewing changes"
     : !selectedTarget
@@ -2263,7 +2263,6 @@ export const App = () => {
       <button
         className="profile-apply-button"
         type="button"
-        aria-label={applyActionLabel}
         aria-describedby="profile-apply-description"
         title={applyActionLabel}
         disabled={applyDisabled}
@@ -2279,15 +2278,7 @@ export const App = () => {
           <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
         )}
         <strong>
-          {readiness.status === "applied"
-            ? "Applied"
-            : readiness.status === "dirty"
-              ? "Save first"
-              : readiness.status === "validation-error" ||
-                  readiness.status === "target-unavailable" ||
-                  readiness.status === "preview-error"
-                ? "Review"
-                : "Apply"}
+          Apply
         </strong>
       </button>
       <span id="profile-apply-description" hidden>{applyDescription}</span>
@@ -2719,7 +2710,7 @@ export const App = () => {
                         <div className="profile-save-control">
                           <button
                             ref={saveButtonRef}
-                            className="save-button"
+                            className={`save-button${isProfileDirty ? " is-primary" : ""}`}
                             type="button"
                             disabled={busy || !isProfileDirty}
                             onClick={saveSelectedProfile}

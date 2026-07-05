@@ -347,6 +347,17 @@
   color: #8b98aa;
 }
 
+.profile-commit-actions .save-button.is-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.profile-commit-actions .save-button.is-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
 .preview-dialog--modal .diff-list {
   min-height: 0;
   overflow: auto;
