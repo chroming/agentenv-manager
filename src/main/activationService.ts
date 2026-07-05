@@ -425,9 +425,16 @@ export const createActivationService = ({
 
   const desiredAssetResources = (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    targetPaths: TargetPaths
+    targetPaths: TargetPaths,
+    skillLibraryDir: string
   ) => {
-    const desired = new Map<string, Omit<PlannedResourceChange, "action" | "path">>();
+    const desired = new Map<
+      string,
+      {
+        resource: Omit<PlannedResourceChange, "action" | "path">;
+        sourcePath: string;
+      }
+    >();
     const rootFor = (kind: "agent" | "skill") =>
       kind === "agent" ? targetPaths.agentsDir : targetPaths.skillsDir;
 
@@ -435,18 +442,24 @@ export const createActivationService = ({
       const root = rootFor(asset.kind);
       if (root) {
         desired.set(join(root, asset.targetName), {
-          kind: asset.kind,
-          name: asset.targetName,
-          source: asset.source
+          resource: {
+            kind: asset.kind,
+            name: asset.targetName,
+            source: asset.source
+          },
+          sourcePath: join(profile.profileDir ?? "", asset.source)
         });
       }
     }
     for (const skillRef of profile.assetPolicy.skillRefs ?? []) {
       if (targetPaths.skillsDir) {
         desired.set(join(targetPaths.skillsDir, skillRef.targetName), {
-          kind: "skill",
-          name: skillRef.targetName,
-          source: `Library / ${skillRef.libraryId}`
+          resource: {
+            kind: "skill",
+            name: skillRef.targetName,
+            source: `Library / ${skillRef.libraryId}`
+          },
+          sourcePath: join(skillLibraryDir, skillRef.libraryId)
         });
       }
     }
@@ -456,18 +469,24 @@ export const createActivationService = ({
   const planAssetResources = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
     targetPaths: TargetPaths,
-    assetPaths: string[]
+    assetPaths: string[],
+    skillLibraryDir: string
   ) => {
-    const desired = desiredAssetResources(profile, targetPaths);
+    const desired = desiredAssetResources(profile, targetPaths, skillLibraryDir);
     const resourceChanges: PlannedResourceChange[] = [];
     const resourceFingerprints: Record<string, string> = {};
+    const sourceFingerprints: Record<string, string> = {};
+
+    for (const { sourcePath } of desired.values()) {
+      sourceFingerprints[sourcePath] = (await hashPath(sourcePath)) ?? "";
+    }
 
     for (const path of [...new Set(assetPaths)]) {
       resourceFingerprints[path] = (await hashPath(path)) ?? "";
       const resource = desired.get(path);
       if (resource) {
         resourceChanges.push({
-          ...resource,
+          ...resource.resource,
           path,
           action: (await pathExists(path)) ? "replace" : "install"
         });
@@ -493,7 +512,8 @@ export const createActivationService = ({
 
     return {
       resourceChanges: resourceChanges.sort((left, right) => left.path.localeCompare(right.path)),
-      resourceFingerprints
+      resourceFingerprints,
+      sourceFingerprints
     };
   };
 
@@ -555,10 +575,16 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod
     });
-    const assetPlan = await planAssetResources(materializedProfile, targetPaths, assetBackupPaths);
+    const assetPlan = await planAssetResources(
+      materializedProfile,
+      targetPaths,
+      assetBackupPaths,
+      skillLibraryDir
+    );
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
+      profileContentHash: profile.contentHash ?? createProfileContentHash(profile),
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
       warnings: targetPreview.warnings.concat(drift.warnings, unmanagedWarnings),
@@ -570,6 +596,7 @@ export const createActivationService = ({
         [stateFile.path]: hashText(stateFile.content)
       },
       resourceFingerprints: assetPlan.resourceFingerprints,
+      sourceFingerprints: assetPlan.sourceFingerprints,
       targetState: targetPreview.targetState
     };
     previews.set(preview.id, preview);
@@ -593,6 +620,10 @@ export const createActivationService = ({
     }
 
     const profile = await profileStore.readProfile(profileId);
+    const currentProfileHash = profile.contentHash ?? createProfileContentHash(profile);
+    if (currentProfileHash !== preview.profileContentHash) {
+      return { ok: false, errors: ["Profile changed after preview; review the latest version"] };
+    }
     const mcpLibrary = await mcpLibraryStore.listServers();
     const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
     const adapter = targetRegistry.get(preview.targetId);
@@ -623,6 +654,12 @@ export const createActivationService = ({
       const current = (await hashPath(path)) ?? "";
       if (current !== fingerprint) {
         return { ok: false, errors: [`Live resource changed after preview: ${path}`] };
+      }
+    }
+    for (const [path, fingerprint] of Object.entries(preview.sourceFingerprints)) {
+      const current = (await hashPath(path)) ?? "";
+      if (current !== fingerprint) {
+        return { ok: false, errors: [`Resource source changed after preview: ${path}`] };
       }
     }
 

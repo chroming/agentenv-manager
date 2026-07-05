@@ -2572,7 +2572,11 @@ export const App = () => {
                   ))}
                 </section>
                 <HistoryView
-                  backups={backups}
+                  backups={backups.filter(
+                    (backup) =>
+                      backup.profileId === draftProfile.id &&
+                      backup.targetId === draftProfile.manifest.targetId
+                  )}
                   busy={busy}
                   rollbackPreview={undefined}
                   onPreviewRollback={previewSelectedRollback}

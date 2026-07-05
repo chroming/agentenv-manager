@@ -118,6 +118,7 @@ url = "https://mcp.figma.com/mcp"
 const preview: ActivationPreview = {
   id: "preview-1",
   profileId: "daily-coding",
+  profileContentHash: "profile-hash",
   targetId: "opencode",
   createdAt: "2026-06-30T00:00:00.000Z",
   warnings: [],
@@ -126,6 +127,7 @@ const preview: ActivationPreview = {
   resourceChanges: [],
   liveFingerprints: {},
   resourceFingerprints: {},
+  sourceFingerprints: {},
   targetState: {
     managedConfigKeys: [],
     managedMcpNames: ["context7", "filesystem"]

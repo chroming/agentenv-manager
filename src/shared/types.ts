@@ -383,6 +383,7 @@ export interface PlannedResourceChange {
 export interface ActivationPreview {
   id: string;
   profileId: string;
+  profileContentHash: string;
   createdAt: string;
   warnings: string[];
   errors: string[];
@@ -390,6 +391,7 @@ export interface ActivationPreview {
   resourceChanges: PlannedResourceChange[];
   liveFingerprints: Record<string, string>;
   resourceFingerprints: Record<string, string>;
+  sourceFingerprints: Record<string, string>;
   targetId: string;
   targetState: TargetState;
 }

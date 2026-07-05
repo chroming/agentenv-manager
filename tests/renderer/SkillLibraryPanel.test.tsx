@@ -31,7 +31,17 @@ describe("SkillLibraryPanel", () => {
     const onViewStateChange = vi.fn();
     const onSelectLocalSkillFolder = vi.fn().mockResolvedValue("/tmp/local-skills/path-reviewer");
 
-    const renderPanel = (activeTool?: "import" | "discoveries") => (
+    const renderPanel = (
+      activeTool?: "import" | "discoveries",
+      bulkUpdatePlans?: Array<{
+        id: string;
+        name: string;
+        sourceType: "local";
+        updateAvailable: boolean;
+        changes: Array<{ path: string; before: string; after: string; diff: string }>;
+        errors: string[];
+      }>
+    ) => (
       <SkillLibraryPanel
         librarySkills={[
           {
@@ -174,6 +184,7 @@ describe("SkillLibraryPanel", () => {
           ],
           errors: []
         }}
+        bulkUpdatePlans={bulkUpdatePlans}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         activeTool={activeTool}
         onCloseTool={onCloseTool}
@@ -353,5 +364,31 @@ describe("SkillLibraryPanel", () => {
         { targetId: "opencode", path: "/tmp/opencode/skills/legacy-reviewer" }
       ]
     });
+
+    rerender(
+      renderPanel(undefined, [
+        {
+          id: "shared-reviewer",
+          name: "Shared Reviewer",
+          sourceType: "local",
+          updateAvailable: true,
+          changes: [{ path: "SKILL.md", before: "old", after: "new", diff: "diff" }],
+          errors: []
+        },
+        {
+          id: "broken-reviewer",
+          name: "Broken Reviewer",
+          sourceType: "local",
+          updateAvailable: false,
+          changes: [],
+          errors: ["Source unavailable"]
+        }
+      ])
+    );
+    const bulkDialog = screen.getByRole("dialog", { name: "Review all skill updates" });
+    const partialApply = within(bulkDialog).getByRole("button", { name: "Apply 1 updates" });
+    expect(partialApply).toBeEnabled();
+    fireEvent.click(partialApply);
+    expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith(["shared-reviewer"]);
   });
 });

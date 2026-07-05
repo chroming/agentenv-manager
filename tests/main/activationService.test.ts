@@ -6,7 +6,7 @@ import {
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createActivationService } from "../../src/main/activationService";
 import { createBackupStore } from "../../src/main/backupStore";
@@ -159,6 +159,35 @@ describe("activation service", () => {
     expect(result).toEqual({
       ok: false,
       errors: [`Live resource changed after preview: ${targetSkill}`]
+    });
+  });
+
+  it("blocks apply when the profile changes after preview", async () => {
+    const { paths, service } = await makeEnv();
+    const preview = await service.previewProfile("daily-coding");
+    await writeFile(join(paths.profilesDir, "daily-coding", "AGENTS.md"), "# Changed profile\n");
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
+      ok: false,
+      errors: ["Profile changed after preview; review the latest version"]
+    });
+  });
+
+  it("blocks apply when a profile resource source changes after preview", async () => {
+    const { paths, service } = await makeEnv();
+    const sourceSkill = join(
+      paths.profilesDir,
+      "daily-coding",
+      "skills",
+      "example-skill",
+      "SKILL.md"
+    );
+    const preview = await service.previewProfile("daily-coding");
+    await writeFile(sourceSkill, "# Changed resource source\n");
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
+      ok: false,
+      errors: [`Resource source changed after preview: ${dirname(sourceSkill)}`]
     });
   });
 

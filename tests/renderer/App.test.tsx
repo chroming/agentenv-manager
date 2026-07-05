@@ -43,6 +43,7 @@ const profile: ProfileDetail = {
 const preview = {
   id: "preview-1",
   profileId: "daily-coding",
+  profileContentHash: "profile-hash",
   targetId: "opencode",
   createdAt: "2026-06-30T00:00:00.000Z",
   warnings: [
@@ -66,13 +67,18 @@ const preview = {
   resourceChanges: [],
   liveFingerprints: {},
   resourceFingerprints: {},
+  sourceFingerprints: {},
   targetState: { managedConfigKeys: [], managedMcpNames: [] }
 };
 
 const backup = {
   id: "2026-06-30T09-19-41-374Z",
   createdAt: "2026-06-30T09:19:41.374Z",
-  fileCount: 2
+  fileCount: 2,
+  operation: "apply" as const,
+  targetId: "opencode",
+  profileId: "daily-coding",
+  profileName: "Daily Coding"
 };
 
 const rollbackPreview = {
@@ -1648,7 +1654,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     const history = await screen.findByRole("region", { name: "History" });
     const previewRollbackButton = within(history).getByRole("button", {
-      name: `Preview restore ${backup.id}`
+      name: "Preview restore Daily Coding"
     });
     previewRollbackButton.focus();
     fireEvent.click(previewRollbackButton);
@@ -1676,7 +1682,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Targets" }));
     const history = await screen.findByRole("region", { name: "History" });
     fireEvent.click(
-      within(history).getByRole("button", { name: `Preview restore ${backup.id}` })
+      within(history).getByRole("button", { name: "Preview restore Daily Coding" })
     );
 
     await waitFor(() => expect(api.previewRollback).toHaveBeenCalledWith(backup.id));
@@ -1698,7 +1704,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     const history = await screen.findByRole("region", { name: "History" });
     fireEvent.click(
-      within(history).getByRole("button", { name: `Preview restore ${backup.id}` })
+      within(history).getByRole("button", { name: "Preview restore Daily Coding" })
     );
 
     const rollbackDialog = await screen.findByRole("dialog", { name: "Preview" });
@@ -1721,7 +1727,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
     const history = await screen.findByRole("region", { name: "History" });
     fireEvent.click(
-      within(history).getByRole("button", { name: `Preview restore ${backup.id}` })
+      within(history).getByRole("button", { name: "Preview restore Daily Coding" })
     );
 
     const rollbackDialog = await screen.findByRole("dialog", { name: "Preview" });
