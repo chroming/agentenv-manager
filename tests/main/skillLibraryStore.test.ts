@@ -327,7 +327,9 @@ describe("skill library store", () => {
         foundIn: ["opencode"],
         status: "managed",
         libraryId: "shared-reviewer",
-        skillKey: "reviewer"
+        skillKey: "reviewer",
+        installMethod: "linked",
+        contentMatchesLibrary: true
       }
     ]);
     expect(inventory.every((skill) => skill.contentHash.length === 64)).toBe(true);

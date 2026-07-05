@@ -86,7 +86,9 @@ describe("SkillLibraryPanel", () => {
             status: "managed",
             libraryId: "shared-reviewer",
             skillKey: "shared-reviewer",
-            contentHash: "shared-hash"
+            contentHash: "shared-hash",
+            installMethod: "linked",
+            contentMatchesLibrary: true
           },
           {
             id: "copied-local",
@@ -97,7 +99,9 @@ describe("SkillLibraryPanel", () => {
             status: "managed",
             libraryId: "copied-local",
             skillKey: "copied-local",
-            contentHash: "copied-hash"
+            contentHash: "copied-hash",
+            installMethod: "copied",
+            contentMatchesLibrary: false
           },
           {
             id: "legacy-reviewer",
@@ -240,8 +244,13 @@ describe("SkillLibraryPanel", () => {
       "Update available"
     );
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
-    expect(copiedLocalRow).toHaveTextContent("Snapshot");
+    expect(copiedLocalRow).toHaveTextContent("Library only");
+    expect(copiedLocalRow).toHaveTextContent("Needs sync");
     expect(within(copiedLocalRow).queryByRole("button", { name: /Check update/ })).toBeNull();
+    fireEvent.click(
+      within(copiedLocalRow).getByRole("button", { name: "Sync install of copied-local" })
+    );
+    expect(onSyncSkillInstalls).toHaveBeenCalledWith("copied-local");
     fireEvent.click(
       within(copiedLocalRow).getByRole("button", { name: "More actions for copied-local" })
     );
@@ -258,6 +267,7 @@ describe("SkillLibraryPanel", () => {
     ]);
 
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
+    expect(sharedRow).toHaveTextContent("Live link");
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.mouseDown(document.body);
     expect(screen.queryByLabelText("Update source for shared-reviewer")).not.toBeInTheDocument();

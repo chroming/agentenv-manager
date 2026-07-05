@@ -873,9 +873,10 @@ describe("Electron UI profile switching e2e", () => {
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
       await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
-      await changingRow
-        .getByRole("button", { name: "Check update layout-skill-1" })
-        .waitFor({ state: "visible" });
+      await changingRow.getByText("Source current").waitFor({ state: "visible" });
+      await expect
+        .poll(() => changingRow.getByRole("button", { name: "Check update layout-skill-1" }).count())
+        .toBe(0);
       const afterUpdateHeight = (await changingRow.boundingBox())?.height;
       expect(afterUpdateHeight).toBe(beforeUpdateHeight);
 
@@ -1829,6 +1830,8 @@ describe("Electron UI profile switching e2e", () => {
   it("detects and applies updates after a library skill is installed on OpenCode", async () => {
     const { librarySkill, opencodeDir, page } = await launchApp();
 
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByLabel("Global skill sync method").selectOption("copy");
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page);
@@ -1862,6 +1865,20 @@ describe("Electron UI profile switching e2e", () => {
       .getByText("Installed update guidance.")
       .waitFor({ state: "visible" });
 
+    await expect(readFile(installedSkillMd, "utf8")).resolves.not.toContain(
+      "Use the installed update path."
+    );
+    await page.setViewportSize({ width: 920, height: 620 });
+    const updatedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
+    await updatedRow.getByText("Needs sync").waitFor({ state: "visible" });
+    const installActionGap = await updatedRow.evaluate((element) => {
+      const installs = element.querySelector(".library-installs-cell")?.getBoundingClientRect();
+      const actions = element.querySelector(".library-actions-cell")?.getBoundingClientRect();
+      return installs && actions ? actions.left - installs.right : -1;
+    });
+    expect(installActionGap).toBeGreaterThanOrEqual(0);
+    await updatedRow.getByRole("button", { name: "Sync install of shared-reviewer" }).click();
+    await updatedRow.getByText("Synced").waitFor({ state: "visible" });
     await expect(readFile(installedSkillMd, "utf8")).resolves.toContain(
       "Use the installed update path."
     );

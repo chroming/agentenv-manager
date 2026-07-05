@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Folder,
   GitBranch,
+  Link2,
   MoreHorizontal,
   RefreshCw,
   RotateCcw,
@@ -105,6 +106,13 @@ const sourceName = (skill: SkillLibraryEntry) => {
     return source.replace("https://github.com/", "").replace("/tree/", "/");
   }
   return source;
+};
+
+const targetName = (targetId: string) => {
+  if (targetId === "opencode") return "OpenCode";
+  if (targetId === "codex") return "Codex";
+  if (targetId === "claude-code") return "Claude Code";
+  return targetId;
 };
 
 interface DescriptionTooltipPosition {
@@ -600,9 +608,15 @@ export const SkillLibraryPanel = ({
           <span>Skill</span>
           <span>Source</span>
           <span>Version</span>
-          <span>Update status</span>
+          <span className="library-column-label">
+            Source status
+            <InfoTip label="Compares the Library copy with its tracked local or GitHub source." />
+          </span>
           <span>Usage</span>
-          <span>Installs</span>
+          <span className="library-column-label">
+            Installs
+            <InfoTip label="Shows whether each Target install matches the Library copy. This is separate from source updates." />
+          </span>
           <span>Actions</span>
         </div>
         <div className="library-table__body">
@@ -628,12 +642,19 @@ export const SkillLibraryPanel = ({
               : updateInfo?.updateAvailable
                 ? "Update available"
                 : updateInfo
-                  ? "Up to date"
+                  ? "Source current"
                   : hasUpdateSource
                     ? "Not checked"
-                    : "Snapshot";
+                    : "Library only";
             const hasUpdate = Boolean(updateInfo?.updateAvailable);
             const hasError = Boolean(updateInfo?.error);
+            const rowAction = hasUpdate
+              ? "update"
+              : staleCopies.length > 0
+                ? "sync"
+                : hasError
+                  ? "retry"
+                  : undefined;
             const usageCount = (skillUsage[skill.id] ?? []).length;
             const revisionLabel = shortRevision(skill);
             const versionLabel = skill.remoteRef ?? revisionLabel;
@@ -710,16 +731,26 @@ export const SkillLibraryPanel = ({
                 <div className="library-installs-cell">
                   {installs.length === 0 ? <small>Not installed</small> : null}
                   {installs.slice(0, 1).map((install) => (
-                    <span key={install.path}>
-                      {install.foundIn.join(", ")}
+                    <span className="library-install-entry" key={install.path}>
+                      <span title={install.foundIn.map(targetName).join(", ")}>
+                        {install.foundIn.map(targetName).join(", ")}
+                      </span>
                       <strong className={`resource-chip resource-chip--${install.status}`}>
-                        <SlidersHorizontal size={13} strokeWidth={2.2} />
+                        {install.status === "managed" && install.installMethod === "linked" ? (
+                          <Link2 size={13} strokeWidth={2.2} />
+                        ) : install.status === "managed" && install.contentMatchesLibrary === false ? (
+                          <RefreshCw size={13} strokeWidth={2.2} />
+                        ) : install.status === "managed" ? (
+                          <CheckCircle2 size={13} strokeWidth={2.2} />
+                        ) : (
+                          <SlidersHorizontal size={13} strokeWidth={2.2} />
+                        )}
                         {install.status === "managed"
-                          ? install.contentMatchesLibrary === false
-                            ? "Copy out of date"
-                            : install.installMethod === "linked"
-                              ? "Linked"
-                              : "Managed copy"
+                          ? install.installMethod === "linked"
+                            ? "Live link"
+                            : install.contentMatchesLibrary === false
+                              ? "Needs sync"
+                              : "Synced"
                           : install.status === "library"
                             ? "Imported"
                             : install.status === "ignored"
@@ -731,40 +762,34 @@ export const SkillLibraryPanel = ({
                   {installs.length > 1 ? <small>+{installs.length - 1} more installs</small> : null}
                 </div>
                 <div className="library-actions-cell">
-                  {staleCopies.length > 0 ? (
-                    <button
-                      className="icon-action library-row-update-action is-update"
-                      type="button"
-                      aria-label={`Sync ${staleCopies.length === 1 ? "copy" : `${staleCopies.length} copies`} of ${skill.id}`}
-                      onClick={() => onSyncSkillInstalls(skill.id)}
-                    >
-                      <RefreshCw size={15} strokeWidth={2.2} />
-                      <span>Sync</span>
-                    </button>
-                  ) : hasUpdateSource ? (
+                  {rowAction ? (
                     <button
                       className={`icon-action library-row-update-action${
-                        hasUpdate ? " is-update" : hasError ? " is-error" : ""
+                        rowAction === "update" || rowAction === "sync" ? " is-update" : " is-error"
                       }`}
                       type="button"
                       aria-label={
-                        hasUpdate
+                        rowAction === "update"
                           ? `Review update ${skill.id}`
-                          : hasError
-                            ? `Retry update check ${skill.id}`
-                            : `Check update ${skill.id}`
+                          : rowAction === "sync"
+                            ? `Sync ${staleCopies.length === 1 ? "install" : `${staleCopies.length} installs`} of ${skill.id}`
+                            : `Retry update check ${skill.id}`
                       }
                       disabled={updateCheckStatus?.state === "checking"}
-                      onClick={() => onPreviewLibrarySkillUpdate(skill.id)}
+                      onClick={() =>
+                        rowAction === "sync"
+                          ? onSyncSkillInstalls(skill.id)
+                          : onPreviewLibrarySkillUpdate(skill.id)
+                      }
                     >
-                      {hasUpdate ? (
+                      {rowAction === "update" ? (
                         <Sparkles size={15} strokeWidth={2.2} />
-                      ) : hasError ? (
+                      ) : rowAction === "retry" ? (
                         <TriangleAlert size={15} strokeWidth={2.2} />
                       ) : (
                         <RefreshCw size={15} strokeWidth={2.2} />
                       )}
-                      <span>{hasUpdate ? "Review" : hasError ? "Retry" : "Check"}</span>
+                      <span>{rowAction === "update" ? "Update" : rowAction === "sync" ? "Sync" : "Retry"}</span>
                     </button>
                   ) : null}
                   <div className="row-action-menu">

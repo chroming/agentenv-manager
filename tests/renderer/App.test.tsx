@@ -650,8 +650,10 @@ describe("App", () => {
     });
     render(<App />);
 
-    expect(await screen.findByRole("group", { name: "Library item local-reviewer" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Check update local-reviewer" }));
+    const localRow = await screen.findByRole("group", { name: "Library item local-reviewer" });
+    expect(within(localRow).queryByRole("button", { name: "Check update local-reviewer" })).toBeNull();
+    fireEvent.click(within(localRow).getByRole("button", { name: "More actions for local-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Check update/ }));
 
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("local-reviewer is up to date")

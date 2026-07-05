@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { cp, lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { SafeIdSchema } from "../shared/schemas";
@@ -159,7 +159,16 @@ const readJsonIfExists = async <T>(path: string): Promise<T | undefined> => {
   }
 };
 
-const hashPath = async (path: string, hash = createHash("sha256")) => {
+const hashPath = async (
+  path: string,
+  hash = createHash("sha256"),
+  ancestorPaths = new Set<string>()
+) => {
+  const canonicalPath = await realpath(path);
+  if (ancestorPaths.has(canonicalPath)) {
+    throw new Error(`Skill contains a symbolic link cycle: ${path}`);
+  }
+  const nextAncestors = new Set(ancestorPaths).add(canonicalPath);
   const entries = await readdir(path, { withFileTypes: true });
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (entry.name === ".agentenv-skill.json" || entry.name === ".agentenv-owner.json") {
@@ -167,9 +176,10 @@ const hashPath = async (path: string, hash = createHash("sha256")) => {
     }
     const child = join(path, entry.name);
     hash.update(entry.name);
-    if (entry.isDirectory()) {
-      await hashPath(child, hash);
-    } else if (entry.isFile()) {
+    const childStats = entry.isSymbolicLink() ? await stat(child) : undefined;
+    if (entry.isDirectory() || childStats?.isDirectory()) {
+      await hashPath(child, hash, nextAncestors);
+    } else if (entry.isFile() || childStats?.isFile()) {
       hash.update(await readFile(child));
     }
   }
