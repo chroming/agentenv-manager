@@ -38,6 +38,7 @@ const api: AgentEnvApi = {
   pollGitHubDeviceLogin: (id) => ipcRenderer.invoke("github:poll-device-login", id),
   signOutGitHub: () => ipcRenderer.invoke("github:sign-out"),
   openGitHubDevicePage: (url) => ipcRenderer.invoke("github:open-device-page", url),
+  openExternalUrl: (url) => ipcRenderer.invoke("external:open-url", url),
   listProfiles: () => ipcRenderer.invoke("profiles:list"),
   readProfile: (id) => ipcRenderer.invoke("profiles:read", id),
   saveProfile: (input) => ipcRenderer.invoke("profiles:save", input),

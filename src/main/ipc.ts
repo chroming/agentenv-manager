@@ -21,6 +21,7 @@ import type {
 import type { TargetRegistry } from "./targets/registry";
 import type { AgentEnvPaths } from "./paths";
 import { createDataBackup, inspectDataBackup, restoreDataBackup } from "./dataBackupService";
+import { parseExternalUrl } from "./externalUrl";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -210,7 +211,10 @@ export const registerIpcHandlers = ({
   );
   ipcMain.handle("github:sign-out", () => githubAuthService.signOut());
   ipcMain.handle("github:open-device-page", (_event, url: unknown) =>
-    shell.openExternal(String(url))
+    shell.openExternal(parseExternalUrl(url))
+  );
+  ipcMain.handle("external:open-url", (_event, url: unknown) =>
+    shell.openExternal(parseExternalUrl(url))
   );
   ipcMain.handle("profiles:list", () => profileStore.listProfiles());
   ipcMain.handle("profiles:read", (_event, id: unknown) =>

@@ -5172,6 +5172,41 @@ button svg,
   white-space: nowrap;
 }
 
+.library-source-address {
+  color: #56657a;
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-source-open {
+  border: 0;
+  cursor: pointer;
+  gap: 4px;
+  min-height: 24px;
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+.library-source-open:hover:not(:disabled) {
+  background: #e1ebff;
+  border-color: transparent;
+}
+
+.library-source-open:active:not(:disabled) {
+  transform: none;
+}
+
+.library-source-tooltip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  overflow-wrap: anywhere;
+}
+
 .library-version-cell {
   align-content: center;
   align-items: center;

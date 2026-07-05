@@ -430,6 +430,7 @@ Ignore contract:
 ### 16.3 Update
 
 - Check compares only against an explicit update source.
+- A tracked online source MUST expose its complete address on hover and keyboard focus and provide a clearly identified command that opens the address in the system browser.
 - GitHub rate limiting MUST provide a GitHub sign-in remediation.
 - Update Preview MUST show changed files and validation errors.
 - Applying a Library update changes canonical content.
@@ -509,6 +510,7 @@ Status: supported viewport containment, topmost overlays, modal focus trapping, 
 ## 21. Security And Privacy Contract
 
 - All data remains local unless the user explicitly accesses GitHub or opens an external URL.
+- Renderer-requested external links MUST be validated by the main process and limited to `http` and `https` URLs.
 - GitHub OAuth tokens are stored using the operating system's secure credential facility when available.
 - Secrets MUST NOT appear in renderer logs, main-process logs, Preview diff, screenshots, or global feedback.
 - File writes use validated IDs and paths and MUST prevent path traversal.
@@ -638,9 +640,9 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 ### 24.1 Verification Snapshot
 
-Last verified: 2026-07-12 against commit `9a7e8f5`.
+Last verified: 2026-07-12 against the current `main` tree at the time of this snapshot.
 
-- `261` automated tests passed across `37` test files, including native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `263` automated tests passed across `38` test files, including native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings were visually inspected at `1180 x 728` and `920 x 620` without document overflow.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
 - Production dependency audit reported zero known vulnerabilities.

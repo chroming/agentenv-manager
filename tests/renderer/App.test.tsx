@@ -395,6 +395,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       clientId: "client-123"
     }),
     openGitHubDevicePage: vi.fn().mockResolvedValue(undefined),
+    openExternalUrl: vi.fn().mockResolvedValue(undefined),
     listProfiles: vi
       .fn()
       .mockResolvedValue([

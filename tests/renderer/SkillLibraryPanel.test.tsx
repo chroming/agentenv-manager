@@ -22,6 +22,7 @@ describe("SkillLibraryPanel", () => {
     const onRemoveLibrarySkill = vi.fn();
     const onReviewSkillUsage = vi.fn();
     const onCheckUpdates = vi.fn();
+    const onOpenSource = vi.fn();
     const onSetUpdateSource = vi.fn();
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn();
@@ -207,6 +208,7 @@ describe("SkillLibraryPanel", () => {
         onRemoveLibrarySkill={onRemoveLibrarySkill}
         onReviewSkillUsage={onReviewSkillUsage}
         onCheckUpdates={onCheckUpdates}
+        onOpenSource={onOpenSource}
         onSetUpdateSource={onSetUpdateSource}
         onManageTargetSkill={onManageTargetSkill}
         onConsolidateSkillGroup={onConsolidateSkillGroup}
@@ -246,6 +248,26 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent(
       "Update available"
     );
+    const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
+    const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
+    expect(githubSource).not.toHaveAttribute("title");
+    fireEvent.mouseEnter(githubSource);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
+    );
+    fireEvent.mouseLeave(githubSource);
+    fireEvent.click(
+      within(githubRow).getByRole("button", { name: "Open GitHub source for github-reviewer" })
+    );
+    expect(onOpenSource).toHaveBeenCalledWith(
+      "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
+    );
+    const localSource = within(
+      screen.getByRole("group", { name: "Library item shared-reviewer" })
+    ).getByLabelText("Full source for shared-reviewer");
+    fireEvent.focus(localSource);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("/tmp/source/shared-reviewer");
+    fireEvent.blur(localSource);
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
     expect(copiedLocalRow).toHaveTextContent("Library only");
     expect(copiedLocalRow).toHaveTextContent("Needs sync");

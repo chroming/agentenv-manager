@@ -2155,7 +2155,7 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("imports and updates a GitHub-backed skill through the rendered app", async () => {
-    const { appDataRoot, githubFixtureRoot, page } = await launchApp();
+    const { app: electronApp, appDataRoot, githubFixtureRoot, page } = await launchApp();
     const sourceUrl = "https://github.com/acme/agent-skills/tree/main/skills/reviewer";
 
     await page.getByRole("button", { name: "Import Skill" }).click();
@@ -2172,6 +2172,30 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("region", { name: "GitHub skill import" })
       .waitFor({ state: "hidden" });
+
+    await electronApp.evaluate(({ ipcMain }) => {
+      const state = globalThis as typeof globalThis & { __agentEnvOpenedSource?: string };
+      ipcMain.removeHandler("external:open-url");
+      ipcMain.handle("external:open-url", (_event, url) => {
+        state.__agentEnvOpenedSource = String(url);
+      });
+    });
+    const githubRow = page.getByRole("group", { name: "Library item github-reviewer" });
+    const sourcePreview = githubRow.getByLabel("Full source for github-reviewer");
+    await sourcePreview.hover();
+    const sourceTooltip = page.getByRole("tooltip").filter({ hasText: sourceUrl });
+    await sourceTooltip.waitFor({ state: "visible" });
+    await expectInViewport(page, sourceTooltip);
+    await page.mouse.move(10, 10);
+    await githubRow.getByRole("button", { name: "Open GitHub source for github-reviewer" }).click();
+    await expect
+      .poll(() =>
+        electronApp.evaluate(() =>
+          (globalThis as typeof globalThis & { __agentEnvOpenedSource?: string })
+            .__agentEnvOpenedSource
+        )
+      )
+      .toBe(sourceUrl);
 
     await expect(readFile(librarySkillMd, "utf8")).resolves.toContain("v1 guidance from GitHub.");
     await expect(

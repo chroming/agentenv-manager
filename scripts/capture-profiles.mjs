@@ -120,6 +120,16 @@ const writeLibrary = async (appDataRoot) => {
       `---\nname: ${id}\ndescription: Shared ${id} workflow.\n---\n\n# ${id}\n`,
       "utf8"
     );
+    if (id === "react-best-practices") {
+      await writeJson(join(skillDir, ".agentenv-skill.json"), {
+        sourceType: "github",
+        source: "https://github.com/agentenv-community/agent-skills/tree/main/skills/react-best-practices",
+        remoteRef: "main",
+        remoteRevision: "7ce3f08",
+        contentHash: "7ce3f08",
+        updatedAt: "2026-07-12T00:00:00.000Z"
+      });
+    }
   }
 
   await writeJson(
@@ -139,7 +149,9 @@ const prepareFixture = async (root) => {
   const appDataRoot = join(root, "app-data");
   const homeDir = join(root, "home");
   const binDir = join(root, "bin");
+  const githubFixtureRoot = join(root, "github-fixtures");
   const opencodeDir = join(homeDir, ".config", "opencode");
+  await mkdir(appDataRoot, { recursive: true });
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
 
@@ -151,10 +163,30 @@ const prepareFixture = async (root) => {
 
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Existing OpenCode environment\n", "utf8");
   await writeJson(join(opencodeDir, "opencode.jsonc"), { shell: "/bin/zsh" });
+  await writeJson(join(appDataRoot, "settings.json"), {
+    skillSyncMethod: "copy",
+    skillStorageLocation: "appData",
+    skillAutoCheckEnabled: false,
+    skillAutoCheckIntervalMinutes: 60
+  });
   await Promise.all(profileFixtures.map((profile) => writeProfile(appDataRoot, profile)));
   await writeLibrary(appDataRoot);
+  const githubSkillDir = join(
+    githubFixtureRoot,
+    "agentenv-community",
+    "agent-skills",
+    "main",
+    "skills",
+    "react-best-practices"
+  );
+  await mkdir(githubSkillDir, { recursive: true });
+  await writeFile(
+    join(githubSkillDir, "SKILL.md"),
+    "---\nname: react-best-practices\ndescription: Shared react-best-practices workflow.\n---\n\n# react-best-practices\n",
+    "utf8"
+  );
 
-  return { appDataRoot, binDir, homeDir };
+  return { appDataRoot, binDir, githubFixtureRoot, homeDir };
 };
 
 const capturePage = async (page, path) => {
@@ -227,7 +259,7 @@ if (suppliedReference && suppliedReference !== referencePath) {
 const fixtureRoot = await mkdtemp(join(tmpdir(), "agentenv-profiles-capture-"));
 let app;
 try {
-  const { appDataRoot, binDir, homeDir } = await prepareFixture(fixtureRoot);
+  const { appDataRoot, binDir, githubFixtureRoot, homeDir } = await prepareFixture(fixtureRoot);
   app = await electron.launch({
     executablePath: electronPath,
     args: ["--disable-gpu", join(projectRoot, "out", "main", "main.js")],
@@ -236,6 +268,7 @@ try {
       AGENTENV_AUTOMATION: "1",
       AGENTENV_DATA_ROOT: appDataRoot,
       AGENTENV_FAKE_HOME: join(fixtureRoot, "fake-home"),
+      AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
       AGENTENV_HOME: homeDir,
       PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`
     }
@@ -246,9 +279,16 @@ try {
   await page.waitForLoadState("domcontentloaded");
   await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
+  await page.getByRole("group", { name: "Library item react-best-practices" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-920x620.png"));
+  const githubSource = page.getByLabel("Full source for react-best-practices");
+  await githubSource.scrollIntoViewIfNeeded();
+  await githubSource.hover();
+  await page.getByRole("tooltip").waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-source-tooltip-920x620.png"));
+  await page.mouse.move(10, 10);
 
   const captureWorkspace = async (buttonName, filePrefix, readyLocator) => {
     await page.getByRole("button", { name: buttonName, exact: true }).click();

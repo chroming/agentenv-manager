@@ -3,6 +3,7 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -11,6 +12,7 @@ import {
 import {
   BookOpenText,
   CheckCircle2,
+  ExternalLink,
   Folder,
   GitBranch,
   Link2,
@@ -78,6 +80,7 @@ interface SkillLibraryPanelProps {
   onRemoveLibrarySkill(id: string): void;
   onReviewSkillUsage(id: string): void;
   onCheckUpdates(): void;
+  onOpenSource(url: string): void;
   onIgnoreSkillGroup(skillKey: string): void;
   onUnignoreSkillGroup(skillKey: string): void;
   onRestoreCleanup(backupId: string): void;
@@ -128,10 +131,25 @@ interface DescriptionTooltipPosition {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
-const SkillDescription = ({ text }: { text: string }) => {
+interface PreviewTextProps {
+  ariaLabel?: string;
+  className: string;
+  displayText?: string;
+  text: string;
+  tooltipClassName?: string;
+}
+
+const PreviewText = ({
+  ariaLabel,
+  className,
+  displayText,
+  text,
+  tooltipClassName = ""
+}: PreviewTextProps) => {
+  const tooltipId = useId();
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<DescriptionTooltipPosition>();
-  const triggerRef = useRef<HTMLParagraphElement>(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   const updatePosition = useCallback(() => {
@@ -189,8 +207,10 @@ const SkillDescription = ({ text }: { text: string }) => {
 
   return (
     <>
-      <p
-        className="skill-description"
+      <span
+        aria-label={ariaLabel}
+        aria-describedby={isOpen ? tooltipId : undefined}
+        className={className}
         ref={triggerRef}
         tabIndex={0}
         onBlur={() => setIsOpen(false)}
@@ -198,12 +218,13 @@ const SkillDescription = ({ text }: { text: string }) => {
         onMouseEnter={() => setIsOpen(true)}
         onMouseLeave={() => setIsOpen(false)}
       >
-        {text}
-      </p>
+        {displayText ?? text}
+      </span>
       {isOpen
         ? createPortal(
             <div
-              className={`skill-description-tooltip skill-description-tooltip--${position?.placement ?? "bottom"}`}
+              className={`skill-description-tooltip skill-description-tooltip--${position?.placement ?? "bottom"}${tooltipClassName ? ` ${tooltipClassName}` : ""}`}
+              id={tooltipId}
               ref={tooltipRef}
               role="tooltip"
               style={tooltipStyle}
@@ -243,6 +264,7 @@ export const SkillLibraryPanel = ({
   onRemoveLibrarySkill,
   onReviewSkillUsage,
   onCheckUpdates,
+  onOpenSource,
   onIgnoreSkillGroup,
   onUnignoreSkillGroup,
   onRestoreCleanup,
@@ -700,19 +722,34 @@ export const SkillLibraryPanel = ({
                   </span>
                   <div className="skill-title-stack">
                     <strong className="skill-title">{skill.name}</strong>
-                    <SkillDescription text={skill.description || skill.id} />
+                    <PreviewText className="skill-description" text={skill.description || skill.id} />
                   </div>
                 </div>
                 <div className="library-source-cell">
-                  <span className={`resource-chip resource-chip--${skill.sourceType}`}>
-                    {skill.sourceType === "github" ? (
+                  {skill.sourceType === "github" && /^https?:\/\//i.test(skill.source ?? "") ? (
+                    <button
+                      className="resource-chip resource-chip--github library-source-open"
+                      type="button"
+                      aria-label={`Open GitHub source for ${skill.id}`}
+                      onClick={() => onOpenSource(skill.source!)}
+                    >
                       <GitBranch size={13} strokeWidth={2.2} />
-                    ) : (
+                      <span>GitHub</span>
+                      <ExternalLink size={11} strokeWidth={2.2} />
+                    </button>
+                  ) : (
+                    <span className={`resource-chip resource-chip--${skill.sourceType}`}>
                       <Folder size={13} strokeWidth={2.2} />
-                    )}
-                    {skill.sourceType === "github" ? "GitHub" : "Local"}
-                  </span>
-                  <small title={sourceLabel(skill)}>{sourceName(skill)}</small>
+                      {skill.sourceType === "github" ? "GitHub" : "Local"}
+                    </span>
+                  )}
+                  <PreviewText
+                    ariaLabel={`Full source for ${skill.id}`}
+                    className="library-source-address"
+                    displayText={sourceName(skill)}
+                    text={sourceLabel(skill)}
+                    tooltipClassName="library-source-tooltip"
+                  />
                 </div>
                 <div className="library-version-cell">
                   <strong>{versionLabel}</strong>

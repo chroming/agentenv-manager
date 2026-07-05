@@ -43,6 +43,7 @@ export interface AgentEnvApi {
   pollGitHubDeviceLogin(id: string): Promise<GitHubDeviceLoginResult>;
   signOutGitHub(): Promise<GitHubAuthStatus>;
   openGitHubDevicePage(url: string): Promise<void>;
+  openExternalUrl(url: string): Promise<void>;
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;

@@ -2419,6 +2419,11 @@ export const App = () => {
                 onRemoveLibrarySkill={removeLibrarySkill}
                 onReviewSkillUsage={reviewSkillUsage}
                 onCheckUpdates={checkSkillUpdates}
+                onOpenSource={(url) => {
+                  void window.agentEnv.openExternalUrl(url).catch((unknownError) => {
+                    setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+                  });
+                }}
                 onIgnoreSkillGroup={(skillKey) => {
                   void ignoreSkillGroup(skillKey);
                 }}
