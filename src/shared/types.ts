@@ -206,6 +206,7 @@ export interface McpLibraryEntry {
 }
 
 export interface SaveMcpServerInput {
+  existingId?: string;
   id: string;
   name: string;
   transport: McpTransport;

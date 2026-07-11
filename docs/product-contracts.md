@@ -136,6 +136,8 @@ It MUST include enough information to distinguish:
 ### 5.3 MCP Identity
 
 - MCP Library ID is the canonical identity used by Profile references.
+- MCP Library ID is immutable after creation. Renaming changes the display name, not the ID.
+- Creating an MCP definition with an existing ID MUST fail visibly and MUST NOT overwrite it.
 - A Profile MAY map a Library MCP ID to a Target-specific name.
 - Two MCP resources resolving to the same Target name MUST block Apply unless they are semantically identical and explicitly deduplicated.
 
@@ -437,6 +439,8 @@ Cleanup review contract:
 Ignore contract:
 
 - Ignored Skills remain visible in cleanup results.
+- A group with both ignored and active locations is classified by its active locations; it MUST NOT appear wholly ignored.
+- Mixed groups offer restoration of ignored locations without showing contradictory ignore and unignore controls together.
 - Ignore does not grant ownership to AgentEnv.
 - Apply preserves ignored Skills that do not conflict.
 - An ignored Skill occupying a desired managed destination blocks Apply.
@@ -467,14 +471,18 @@ Status: import, scan, cleanup, ignore, GitHub update, reference blocking, manage
 
 - MCP definitions are global reusable resources.
 - A Profile stores references and optional Target names.
+- Creation and editing are distinct modes. Editing MUST keep the referenced MCP ID fixed.
 - Target adapters serialize supported transports and fields.
+- Remote MCP URLs MUST use `http` or `https`.
+- Stdio credentials are represented only as validated environment variable names, never values. OpenCode receives environment substitutions, Claude Code receives variable expansion references, and Codex receives parent-environment forwarding.
+- Remote credentials are not stored as generic environment fields. Authentication unsupported by the Library model remains configured in the destination Target.
 - Unsupported transport or fields block Apply unless omission is explicitly accepted.
 - Updating an MCP definition marks affected deployments `Changes pending` but does not deploy.
 - An MCP used by any Profile MUST NOT be deleted.
 - Environment values that appear secret MUST be masked in UI, Preview, logs, and diagnostics.
 - Backups containing secrets MUST remain local and use restrictive filesystem permissions.
 
-Status: reusable references and deletion protection are `Implemented`; capability validation and secret handling are `Partial`.
+Status: reusable references, immutable identity, deletion protection, portable stdio environment references, and remote URL validation are `Implemented`; richer remote authentication and broad secret masking are `Partial`.
 
 ## 18. Profile Deletion Contract
 
@@ -608,6 +616,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Native Advanced config, incompatible Agents, and disabled paths are omitted with named warnings.
 - Zero effective payload is blocked and material omissions require confirmation.
 - Unsupported portable resources block with remediation.
+- MCP duplicate IDs, immutable edit identity, remote URL validation, and Target-specific environment-reference serialization.
 - Source Target remains unchanged.
 
 ### Drift and stale data
@@ -660,26 +669,28 @@ AgentEnv Manager is production-ready only when all of these are true:
 - Default and minimum desktop viewports pass containment and overlay checks.
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
 
-Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, rollback, stale rollback protection, no-op, cross-Target payload review, canonical Target lifecycle, data backup and restore, native Instructions adoption, active-Profile deletion recovery, and Stop Managing workflows are functional. Complete MCP secret handling and broader drift adoption remain release requirements.
+Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, rollback, stale rollback protection, no-op, cross-Target payload review, canonical Target lifecycle, data backup and restore, native Instructions adoption, active-Profile deletion recovery, Stop Managing workflows, and portable MCP environment references are functional. Richer remote MCP authentication, complete secret handling, and broader drift adoption remain release requirements.
 
 ### 24.1 Verification Snapshot
 
 Last verified: 2026-07-14 against the current `main` tree at the time of this snapshot.
 
-- `279` automated tests passed across `38` test files; the `62`-test E2E suite covers native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `288` automated tests passed across `39` test files; the `62`-test E2E suite covers native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
 - Library deletion isolates the selected Skill from invalid neighboring content, and global feedback provides a non-blocking copy action.
 - Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
+- MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
+- Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards.
 - Production dependency audit reported zero known vulnerabilities.
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
 - Signed and notarized distribution verification remains outstanding; the local packaged primary-workflow smoke uses an unsigned `.app`.
 
 ## 25. Current Priority Gaps
 
-1. Complete MCP secret masking and backup permission guarantees.
+1. Add richer remote MCP authentication, complete secret masking, and backup permission guarantees.
 2. Add explicit Backup retention controls.
 3. Extend Adopt into Profile beyond native Instructions where the adapter can map changes safely.
 4. Migrate persisted Profile terminology from `targetId` to `nativeTargetId` with backward compatibility.

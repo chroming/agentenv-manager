@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { McpLibraryPanel } from "../../src/renderer/components/McpLibraryPanel";
 import { defaultMcpLibraryViewState } from "../../src/renderer/libraryViewState";
@@ -58,5 +58,102 @@ describe("McpLibraryPanel", () => {
 
     expect(onReviewUsage).toHaveBeenCalledWith("context7");
     expect(onRemove).not.toHaveBeenCalled();
+  });
+
+  it("protects MCP identity and validates portable environment references", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <McpLibraryPanel
+        mcpServers={[
+          {
+            id: "context7",
+            name: "Context7 with a deliberately long display name",
+            transport: "stdio",
+            command: "npx",
+            args: ["-y", "@upstash/context7-mcp"]
+          }
+        ]}
+        mcpUsage={{ context7: ["Daily Coding", "Code Review"] }}
+        viewState={defaultMcpLibraryViewState}
+        onViewStateChange={vi.fn()}
+        onSave={onSave}
+        onRemove={vi.fn()}
+        onReviewUsage={vi.fn()}
+      />
+    );
+
+    const endpoint = screen.getByLabelText("Full MCP endpoint context7");
+    fireEvent.focus(endpoint);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("@upstash/context7-mcp");
+    fireEvent.blur(endpoint);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add MCP server" }));
+    expect(screen.getByText("Add MCP server", { selector: "strong" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("MCP library id"), {
+      target: { value: "context7" }
+    });
+    expect(screen.getByText("This ID already exists. Choose a unique ID.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save MCP server" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("MCP library id"), {
+      target: { value: "local-search" }
+    });
+    fireEvent.change(screen.getByLabelText("MCP library name"), {
+      target: { value: "Local Search" }
+    });
+    fireEvent.change(screen.getByLabelText("MCP command"), {
+      target: { value: "node" }
+    });
+    fireEvent.change(screen.getByLabelText("MCP env"), {
+      target: { value: "SEARCH_TOKEN\nCACHE_DIR=AGENTENV_CACHE_DIR" }
+    });
+    expect(screen.getByText(/Environment aliases are not portable/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save MCP server" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("MCP env"), {
+      target: { value: "SEARCH_TOKEN\nAGENTENV_CACHE_DIR" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith({
+        id: "local-search",
+        name: "Local Search",
+        transport: "stdio",
+        command: "node",
+        url: undefined,
+        args: [],
+        env: {
+          AGENTENV_CACHE_DIR: "AGENTENV_CACHE_DIR",
+          SEARCH_TOKEN: "SEARCH_TOKEN"
+        }
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit context7" }));
+    expect(screen.getByLabelText("MCP library id")).toBeDisabled();
+    expect(screen.getByText("ID is fixed because Profiles reference it.")).toBeInTheDocument();
+    expect(screen.getByLabelText("MCP library name")).toHaveFocus();
+  });
+
+  it("rejects malformed remote server URLs before saving", () => {
+    render(
+      <McpLibraryPanel
+        mcpServers={[]}
+        mcpUsage={{}}
+        viewState={defaultMcpLibraryViewState}
+        onViewStateChange={vi.fn()}
+        onSave={vi.fn()}
+        onRemove={vi.fn()}
+        onReviewUsage={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add MCP server" }));
+    fireEvent.change(screen.getByLabelText("MCP library id"), { target: { value: "remote-docs" } });
+    fireEvent.change(screen.getByLabelText("MCP library name"), { target: { value: "Remote Docs" } });
+    fireEvent.change(screen.getByLabelText("MCP transport"), { target: { value: "http" } });
+    fireEvent.change(screen.getByLabelText("MCP URL"), { target: { value: "file:///tmp/mcp" } });
+
+    expect(screen.getByText("Use an http or https URL.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save MCP server" })).toBeDisabled();
   });
 });

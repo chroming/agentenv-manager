@@ -6,6 +6,7 @@ import {
   updateMcpLibraryControls
 } from "../libraryViewState";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { OverflowTooltip } from "./OverflowTooltip";
 
 interface McpLibraryPanelProps {
   mcpServers: McpLibraryEntry[];
@@ -44,23 +45,35 @@ const commandLabel = (server: McpLibraryEntry) => {
   return server.url ?? "";
 };
 
-const parseEnvText = (value: string) =>
-  Object.fromEntries(
-    value
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const equalsIndex = line.indexOf("=");
-        if (equalsIndex < 0) {
-          return [line, line];
-        }
-        const key = line.slice(0, equalsIndex).trim();
-        const envName = line.slice(equalsIndex + 1).trim();
-        return [key, envName || key];
-      })
-      .filter(([key]) => key.length > 0)
-  );
+const SAFE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
+const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+const parseEnvText = (value: string) => {
+  const names = value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return {
+    aliasName: names.find((name) => name.includes("=")),
+    duplicateName: names.find((name, index) => names.indexOf(name) !== index),
+    env: Object.fromEntries(names.map((name) => [name, name])),
+    invalidName: names.find((name) => !ENV_NAME_PATTERN.test(name))
+  };
+};
+
+const remoteUrlError = (value: string) => {
+  if (!value.trim()) {
+    return undefined;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? undefined
+      : "Use an http or https URL.";
+  } catch {
+    return "Enter a valid MCP server URL.";
+  }
+};
 
 export const McpLibraryPanel = ({
   mcpServers,
@@ -73,6 +86,7 @@ export const McpLibraryPanel = ({
   onReviewUsage
 }: McpLibraryPanelProps) => {
   const [draft, setDraft] = useState<SaveMcpServerInput>(defaultDraft);
+  const [editingId, setEditingId] = useState<string>();
   const [argsText, setArgsText] = useState("");
   const [envText, setEnvText] = useState("");
   const [deleteCandidate, setDeleteCandidate] = useState<McpLibraryEntry>();
@@ -80,7 +94,8 @@ export const McpLibraryPanel = ({
   const [isSaving, setIsSaving] = useState(false);
   const { search } = viewState;
   const editorTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const editorFirstFieldRef = useRef<HTMLInputElement>(null);
+  const editorIdFieldRef = useRef<HTMLInputElement>(null);
+  const editorNameFieldRef = useRef<HTMLInputElement>(null);
   const editorDialogRef = useRef<HTMLElement>(null);
   const wasEditorOpenRef = useRef(false);
   const deleteDialogRef = useRef<HTMLElement>(null);
@@ -98,14 +113,14 @@ export const McpLibraryPanel = ({
   useEffect(() => {
     if (isEditorOpen) {
       wasEditorOpenRef.current = true;
-      editorFirstFieldRef.current?.focus();
+      (editingId ? editorNameFieldRef.current : editorIdFieldRef.current)?.focus();
       return;
     }
     if (wasEditorOpenRef.current) {
       wasEditorOpenRef.current = false;
       editorTriggerRef.current?.focus();
     }
-  }, [isEditorOpen]);
+  }, [editingId, isEditorOpen]);
 
   useEffect(() => {
     if (!isEditorOpen) {
@@ -144,6 +159,7 @@ export const McpLibraryPanel = ({
 
   const resetEditor = () => {
     setDraft(defaultDraft);
+    setEditingId(undefined);
     setArgsText("");
     setEnvText("");
   };
@@ -154,6 +170,7 @@ export const McpLibraryPanel = ({
   };
 
   const editServer = (server: McpLibraryEntry) => {
+    setEditingId(server.id);
     setDraft({
       id: server.id,
       name: server.name,
@@ -166,7 +183,7 @@ export const McpLibraryPanel = ({
     setArgsText((server.args ?? []).join("\n"));
     setEnvText(
       Object.entries(server.env ?? {})
-        .map(([key, value]) => (key === value ? key : `${key}=${value}`))
+        .map(([key, sourceName]) => (key === sourceName ? key : `${key}=${sourceName}`))
         .join("\n")
     );
     setIsEditorOpen(true);
@@ -180,6 +197,7 @@ export const McpLibraryPanel = ({
     try {
       await onSave({
         ...draft,
+        ...(editingId ? { existingId: editingId } : {}),
         id: draft.id.trim(),
         name: draft.name.trim(),
         command: draft.transport === "stdio" ? draft.command?.trim() || undefined : undefined,
@@ -191,7 +209,7 @@ export const McpLibraryPanel = ({
                 .map((line) => line.trim())
                 .filter(Boolean)
             : [],
-        env: parseEnvText(envText)
+        env: draft.transport === "stdio" ? parsedEnv.env : {}
       });
       resetEditor();
       setIsEditorOpen(false);
@@ -205,9 +223,29 @@ export const McpLibraryPanel = ({
   const visibleServers = mcpServers.filter((server) =>
     `${server.name} ${server.id} ${server.transport}`.toLowerCase().includes(search.toLowerCase())
   );
+  const parsedEnv = parseEnvText(envText);
+  const normalizedId = draft.id.trim();
+  const idError = !normalizedId
+    ? undefined
+    : !SAFE_ID_PATTERN.test(normalizedId)
+      ? "Use letters, numbers, hyphens, or underscores; start with a letter or number."
+      : !editingId && mcpServers.some((server) => server.id === normalizedId)
+        ? "This ID already exists. Choose a unique ID."
+        : undefined;
+  const envError = parsedEnv.aliasName
+    ? "Environment aliases are not portable. Use one matching variable name per line."
+    : parsedEnv.invalidName
+      ? `${parsedEnv.invalidName} is not a valid environment variable name.`
+    : parsedEnv.duplicateName
+      ? `${parsedEnv.duplicateName} is listed more than once.`
+      : undefined;
+  const urlError = draft.transport === "stdio" ? undefined : remoteUrlError(draft.url ?? "");
   const isDraftComplete = Boolean(
     draft.id.trim() &&
       draft.name.trim() &&
+      !idError &&
+      !envError &&
+      !urlError &&
       (draft.transport === "stdio" ? draft.command?.trim() : draft.url?.trim())
   );
 
@@ -257,21 +295,36 @@ export const McpLibraryPanel = ({
             >
               <span className="resource-chip">MCP</span>
               <div className="resource-row__main">
-                <span>{server.name}</span>
-                <small className="mcp-row-endpoint">{server.transport} · {commandLabel(server)}</small>
+                <OverflowTooltip
+                  ariaLabel={`Full MCP name ${server.id}`}
+                  className="mcp-row-name"
+                  text={server.name}
+                />
+                <small>
+                  <OverflowTooltip
+                    ariaLabel={`Full MCP endpoint ${server.id}`}
+                    className="mcp-row-endpoint"
+                    text={`${server.transport} · ${commandLabel(server)}`}
+                    tooltipClassName="library-source-tooltip"
+                  />
+                </small>
                 <small className="mcp-row-meta">
-                  <span>
-                    {Object.keys(server.env ?? {}).length > 0
+                  <OverflowTooltip
+                    ariaLabel={`Environment summary for ${server.id}`}
+                    className="mcp-row-meta-item"
+                    text={Object.keys(server.env ?? {}).length > 0
                       ? `${Object.keys(server.env ?? {}).length} env variable${
                           Object.keys(server.env ?? {}).length === 1 ? "" : "s"
                         }`
                       : "No env variables"}
-                  </span>
-                  <span>
-                    {(mcpUsage[server.id] ?? []).length > 0
+                  />
+                  <OverflowTooltip
+                    ariaLabel={`Full MCP usage ${server.id}`}
+                    className="mcp-row-meta-item"
+                    text={(mcpUsage[server.id] ?? []).length > 0
                       ? `Used by ${(mcpUsage[server.id] ?? []).join(", ")}`
                       : "Not used by any profile"}
-                  </span>
+                  />
                 </small>
               </div>
               <div className="resource-row__actions">
@@ -338,9 +391,11 @@ export const McpLibraryPanel = ({
           >
             <header className="library-drawer__header">
               <div>
-                <strong>{draft.id ? `Edit ${draft.name || draft.id}` : "Add MCP server"}</strong>
+                <strong>{editingId ? `Edit ${draft.name || editingId}` : "Add MCP server"}</strong>
                 <p className="muted">
-                  Use environment variable names only. Secret values stay outside the library.
+                  {draft.transport === "stdio"
+                    ? "Reference environment variables without storing secret values."
+                    : "Remote credentials are configured in the Target after Apply."}
                 </p>
               </div>
               <button
@@ -357,16 +412,28 @@ export const McpLibraryPanel = ({
               <label>
                 <span>ID</span>
                 <input
-                  ref={editorFirstFieldRef}
+                  ref={editorIdFieldRef}
                   aria-label="MCP library id"
                   placeholder="context7"
                   value={draft.id}
+                  disabled={Boolean(editingId)}
+                  aria-describedby={idError ? "mcp-id-error" : editingId ? "mcp-id-help" : undefined}
                   onChange={(event) => setDraft({ ...draft, id: event.currentTarget.value })}
                 />
+                {editingId ? (
+                  <small className="field-help" id="mcp-id-help">
+                    ID is fixed because Profiles reference it.
+                  </small>
+                ) : idError ? (
+                  <small className="field-error" id="mcp-id-error" role="alert">
+                    {idError}
+                  </small>
+                ) : null}
               </label>
               <label>
                 <span>Name</span>
                 <input
+                  ref={editorNameFieldRef}
                   aria-label="MCP library name"
                   placeholder="Context7"
                   value={draft.name}
@@ -415,21 +482,39 @@ export const McpLibraryPanel = ({
                   <span>URL</span>
                   <input
                     aria-label="MCP URL"
+                    aria-describedby={urlError ? "mcp-url-error" : undefined}
                     placeholder="https://example.com/mcp"
                     value={draft.url ?? ""}
                     onChange={(event) => setDraft({ ...draft, url: event.currentTarget.value })}
                   />
+                  {urlError ? (
+                    <small className="field-error" id="mcp-url-error" role="alert">
+                      {urlError}
+                    </small>
+                  ) : null}
                 </label>
               )}
-              <label className="mcp-server-form__wide">
-                <span>Environment variables</span>
-                <textarea
-                  aria-label="MCP env"
-                  placeholder="GITHUB_TOKEN&#10;DOCS_TOKEN=DOCS_RUNTIME_TOKEN"
-                  value={envText}
-                  onChange={(event) => setEnvText(event.currentTarget.value)}
-                />
-              </label>
+              {draft.transport === "stdio" ? (
+                <label className="mcp-server-form__wide">
+                  <span>Environment variable references</span>
+                  <textarea
+                    aria-label="MCP env"
+                    aria-describedby={envError ? "mcp-env-error" : "mcp-env-help"}
+                    placeholder="GITHUB_TOKEN&#10;DOCS_TOKEN"
+                    value={envText}
+                    onChange={(event) => setEnvText(event.currentTarget.value)}
+                  />
+                  {envError ? (
+                    <small className="field-error" id="mcp-env-error" role="alert">
+                      {envError}
+                    </small>
+                  ) : (
+                    <small className="field-help" id="mcp-env-help">
+                      One variable name per line. Values stay in your shell environment.
+                    </small>
+                  )}
+                </label>
+              ) : null}
               <button
                 className="primary-action library-import-action"
                 type="button"

@@ -30,9 +30,24 @@ const McpServerSchema = z
         path: ["url"]
       });
     }
+    if ((value.transport === "http" || value.transport === "sse") && value.url) {
+      try {
+        const url = new URL(value.url);
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+          throw new Error("unsupported protocol");
+        }
+      } catch {
+        context.addIssue({
+          code: "custom",
+          message: "remote MCP servers require an http or https URL",
+          path: ["url"]
+        });
+      }
+    }
   });
 
 const McpLibraryFileSchema = z.array(McpServerSchema).default([]);
+const EnvironmentNameSchema = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
 
 export interface McpLibraryStore {
   listServers(): Promise<McpLibraryEntry[]>;
@@ -68,8 +83,31 @@ export const createMcpLibraryStore = (paths: AgentEnvPaths): McpLibraryStore => 
   const listServers = async () => readServers(paths.mcpLibraryPath);
 
   const saveServer = async (input: SaveMcpServerInput): Promise<McpLibraryEntry> => {
-    const server = McpServerSchema.parse(input);
+    const existingId = input.existingId ? SafeIdSchema.parse(input.existingId) : undefined;
+    const { existingId: _existingId, ...definition } = input;
+    const server = McpServerSchema.parse(definition);
+    const envEntries = Object.entries(server.env ?? {});
+    if (server.transport !== "stdio" && envEntries.length > 0) {
+      throw new Error("Remote MCP credentials must be configured in the Target");
+    }
+    for (const [name, sourceName] of envEntries) {
+      EnvironmentNameSchema.parse(name);
+      EnvironmentNameSchema.parse(sourceName);
+      if (name !== sourceName) {
+        throw new Error("MCP environment references must use the same variable name");
+      }
+    }
     const servers = await listServers();
+    const existingServer = servers.find((item) => item.id === server.id);
+    if (existingId && existingId !== server.id) {
+      throw new Error("MCP server ID cannot be changed after creation");
+    }
+    if (existingId && !existingServer) {
+      throw new Error(`MCP server no longer exists: ${existingId}`);
+    }
+    if (!existingId && existingServer) {
+      throw new Error(`MCP server ID already exists: ${server.id}`);
+    }
     const nextServers = servers
       .filter((item) => item.id !== server.id)
       .concat(server);

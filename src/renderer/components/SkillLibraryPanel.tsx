@@ -1,9 +1,6 @@
 import {
-  type CSSProperties,
   type RefObject,
-  useCallback,
   useEffect,
-  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -46,6 +43,7 @@ import type {
 } from "../../shared/types";
 import { InfoTip } from "./InfoTip";
 import { DiffViewer } from "./DiffViewer";
+import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import {
   type SkillLibraryViewState,
   updateSkillLibraryControls
@@ -124,122 +122,8 @@ const targetName = (targetId: string) => {
   return targetId;
 };
 
-interface DescriptionTooltipPosition {
-  left: number;
-  maxWidth: number;
-  placement: "top" | "bottom";
-  top: number;
-}
-
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
-
-interface PreviewTextProps {
-  ariaLabel?: string;
-  className: string;
-  displayText?: string;
-  text: string;
-  tooltipClassName?: string;
-}
-
-const PreviewText = ({
-  ariaLabel,
-  className,
-  displayText,
-  text,
-  tooltipClassName = ""
-}: PreviewTextProps) => {
-  const tooltipId = useId();
-  const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<DescriptionTooltipPosition>();
-  const triggerRef = useRef<HTMLSpanElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
-
-  const updatePosition = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) {
-      return;
-    }
-
-    const triggerRect = trigger.getBoundingClientRect();
-    const maxWidth = Math.max(220, Math.min(420, window.innerWidth - 24));
-    const measured = tooltipRef.current?.getBoundingClientRect();
-    const width = Math.min(measured?.width ?? maxWidth, maxWidth);
-    const height = measured?.height ?? 52;
-    const gap = 8;
-    const margin = 12;
-    const preferredTop = triggerRect.bottom + gap;
-    const placement =
-      preferredTop + height <= window.innerHeight - margin ? "bottom" : "top";
-    const unclampedTop =
-      placement === "bottom" ? preferredTop : triggerRect.top - height - gap;
-    const maxTop = Math.max(margin, window.innerHeight - height - margin);
-
-    setPosition({
-      left: clamp(triggerRect.left, margin, Math.max(margin, window.innerWidth - width - margin)),
-      maxWidth,
-      placement,
-      top: clamp(unclampedTop, margin, maxTop)
-    });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (isOpen) {
-      updatePosition();
-    }
-  }, [isOpen, text, updatePosition]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return undefined;
-    }
-
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-    };
-  }, [isOpen, updatePosition]);
-
-  const tooltipStyle = {
-    left: position?.left ?? -9999,
-    maxWidth: position?.maxWidth ?? 420,
-    top: position?.top ?? -9999
-  } as CSSProperties;
-
-  return (
-    <>
-      <span
-        aria-label={ariaLabel}
-        aria-describedby={isOpen ? tooltipId : undefined}
-        className={className}
-        ref={triggerRef}
-        tabIndex={0}
-        onBlur={() => setIsOpen(false)}
-        onFocus={() => setIsOpen(true)}
-        onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
-      >
-        {displayText ?? text}
-      </span>
-      {isOpen
-        ? createPortal(
-            <div
-              className={`skill-description-tooltip skill-description-tooltip--${position?.placement ?? "bottom"}${tooltipClassName ? ` ${tooltipClassName}` : ""}`}
-              id={tooltipId}
-              ref={tooltipRef}
-              role="tooltip"
-              style={tooltipStyle}
-            >
-              {text}
-            </div>,
-            document.body
-          )
-        : null}
-    </>
-  );
-};
 
 export const SkillLibraryPanel = ({
   librarySkills,
@@ -472,13 +356,18 @@ export const SkillLibraryPanel = ({
 
     return [...byKey.entries()]
       .map(([skillKey, items]) => {
-        const hashes = new Set(items.map((item) => item.contentHash).filter(Boolean));
-        const statuses = new Set(items.map((item) => item.status));
-        const state = statuses.has("ignored")
+        const activeItems = items.filter((item) => item.status !== "ignored");
+        const hashes = new Set(activeItems.map((item) => item.contentHash).filter(Boolean));
+        const statuses = new Set(activeItems.map((item) => item.status));
+        const allIgnored = activeItems.length === 0;
+        const allManaged = activeItems.length > 0 && activeItems.every((item) => item.status === "managed");
+        const state = allIgnored
           ? "ignored"
-          : hashes.size > 1
+          : allManaged
+            ? "managed"
+            : hashes.size > 1
             ? "conflict"
-            : items.length > 1
+            : activeItems.length > 1
               ? "duplicate"
               : statuses.has("unmanaged")
                 ? "unmanaged"
@@ -488,8 +377,9 @@ export const SkillLibraryPanel = ({
         return {
           skillKey,
           items,
+          activeItems,
           state,
-          primary: items[0]
+          primary: activeItems[0] ?? items[0]
         };
       })
       .sort((a, b) => (a.primary?.name ?? a.skillKey).localeCompare(b.primary?.name ?? b.skillKey));
@@ -504,9 +394,7 @@ export const SkillLibraryPanel = ({
 
   const openCleanupReview = (group: (typeof cleanupGroups)[number]) => {
     const libraryId = group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey;
-    const manageableItems = group.items.filter(
-      (item) => item.status !== "managed" && item.status !== "ignored"
-    );
+    const manageableItems = group.activeItems.filter((item) => item.status !== "managed");
     const canonical =
       manageableItems.find((item) => item.status === "library") ?? manageableItems[0];
     if (!canonical) {
@@ -1369,8 +1257,9 @@ export const SkillLibraryPanel = ({
                 </p>
               ) : null}
               {cleanupGroups.map((group) => {
-                const isIgnored = group.items.some((skill) => skill.status === "ignored");
-                const canIgnore = isIgnored || group.items.some((skill) => skill.status !== "managed");
+                const hasIgnored = group.items.some((skill) => skill.status === "ignored");
+                const allIgnored = group.activeItems.length === 0;
+                const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
                 const chipLabel =
                   group.state === "ignored"
                     ? "Ignored"
@@ -1437,7 +1326,7 @@ export const SkillLibraryPanel = ({
                           {actionLabel}
                         </button>
                       ) : null}
-                      {canIgnore ? (
+                      {canIgnore && !hasIgnored ? (
                         <button
                           className="secondary-action"
                           type="button"
@@ -1447,14 +1336,14 @@ export const SkillLibraryPanel = ({
                           Ignore
                         </button>
                       ) : null}
-                      {isIgnored ? (
+                      {hasIgnored ? (
                         <button
                           className="secondary-action"
                           type="button"
                           aria-label={`Unignore group ${group.skillKey}`}
                           onClick={() => onUnignoreSkillGroup(group.skillKey)}
                         >
-                          Unignore
+                          {allIgnored ? "Unignore" : "Restore ignored"}
                         </button>
                       ) : null}
                     </div>

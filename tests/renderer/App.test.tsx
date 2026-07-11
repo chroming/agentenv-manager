@@ -805,10 +805,7 @@ describe("App", () => {
     expect(screen.getByLabelText("MCP library name")).toHaveValue("Context7");
     expect(screen.getByLabelText("MCP command")).toHaveValue("npx");
     expect(screen.getByLabelText("MCP args")).toHaveValue("-y\n@upstash/context7-mcp");
-
-    fireEvent.change(screen.getByLabelText("MCP library id"), {
-      target: { value: "shared-docs" }
-    });
+    expect(screen.getByLabelText("MCP library id")).toBeDisabled();
     fireEvent.change(screen.getByLabelText("MCP library name"), {
       target: { value: "Shared Docs" }
     });
@@ -818,23 +815,19 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("MCP URL"), {
       target: { value: "https://example.com/shared-docs/mcp" }
     });
-    fireEvent.change(screen.getByLabelText("MCP env"), {
-      target: { value: "DOCS_TOKEN\nCACHE_DIR=AGENTENV_CACHE_DIR" }
-    });
+    expect(screen.queryByLabelText("MCP env")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
 
     await waitFor(() =>
       expect(api.saveMcpServer).toHaveBeenCalledWith({
-        id: "shared-docs",
+        existingId: "context7",
+        id: "context7",
         name: "Shared Docs",
         transport: "http",
         command: undefined,
         url: "https://example.com/shared-docs/mcp",
         args: [],
-        env: {
-          CACHE_DIR: "AGENTENV_CACHE_DIR",
-          DOCS_TOKEN: "DOCS_TOKEN"
-        }
+        env: {}
       })
     );
 

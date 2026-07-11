@@ -1000,6 +1000,20 @@
   padding: 16px;
 }
 
+.mcp-server-form .field-help,
+.mcp-server-form .field-error {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.mcp-server-form .field-help {
+  color: var(--muted);
+}
+
+.mcp-server-form .field-error {
+  color: var(--danger);
+}
+
 .library-drawer-backdrop {
   background: rgba(15, 23, 42, 0.14);
   inset: 0;
@@ -1033,7 +1047,10 @@
   gap: 4px;
 }
 
+.mcp-row-name,
 .mcp-row-endpoint {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1048,7 +1065,8 @@
   min-width: 0;
 }
 
-.mcp-row-meta > span {
+.mcp-row-meta-item {
+  display: block;
   font-size: inherit;
   font-weight: inherit;
   line-height: inherit;
@@ -1058,7 +1076,7 @@
   white-space: nowrap;
 }
 
-.mcp-row-meta > span + span::before {
+.mcp-row-meta-item + .mcp-row-meta-item::before {
   color: #c1c9d6;
   content: "·";
   margin-right: 8px;
@@ -1991,7 +2009,14 @@
 
 .preview-summary-card .warning,
 .preview-summary-card .error {
+  min-width: 0;
+  overflow: hidden;
   padding: 8px 9px;
+}
+
+.preview-summary-card small {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .preview-resource-plan > header {

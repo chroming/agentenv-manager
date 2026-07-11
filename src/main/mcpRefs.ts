@@ -47,26 +47,37 @@ const quoteToml = (value: string) => JSON.stringify(value);
 const quoteTomlKey = (value: string) =>
   /^[A-Za-z0-9_-]+$/.test(value) ? value : JSON.stringify(value);
 
-const envForTarget = (server: McpLibraryEntry) =>
-  server.env && Object.keys(server.env).length > 0 ? server.env : undefined;
+const envForTarget = (
+  server: McpLibraryEntry,
+  targetId: "opencode" | "claude-code"
+) => {
+  if (server.transport !== "stdio" || !server.env || Object.keys(server.env).length === 0) {
+    return undefined;
+  }
+  return Object.fromEntries(
+    Object.entries(server.env).map(([key, sourceName]) => [
+      key,
+      targetId === "opencode" ? `{env:${sourceName}}` : `\${${sourceName}}`
+    ])
+  );
+};
 
 const serverForJsonTarget = (
   server: McpLibraryEntry,
   targetId: "opencode" | "claude-code"
 ) => {
-  const env = envForTarget(server);
+  const env = envForTarget(server, targetId);
   if (targetId === "opencode") {
     if (server.transport === "stdio") {
       return {
         type: "local",
         command: [server.command, ...(server.args ?? [])].filter(Boolean),
-        ...(env ? { env } : {})
+        ...(env ? { environment: env } : {})
       };
     }
     return {
       type: "remote",
-      url: server.url,
-      ...(env ? { env } : {})
+      url: server.url
     };
   }
 
@@ -81,8 +92,7 @@ const serverForJsonTarget = (
 
   return {
     type: server.transport,
-    url: server.url,
-    ...(env ? { env } : {})
+    url: server.url
   };
 };
 
@@ -96,11 +106,15 @@ const serverForCodexToml = (name: string, server: McpLibraryEntry) => {
   } else if (server.url) {
     lines.push(`url = ${quoteToml(server.url)}`);
   }
-  if (server.env && Object.keys(server.env).length > 0) {
-    const envEntries = Object.entries(server.env)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => `${quoteTomlKey(key)} = ${quoteToml(value)}`);
-    lines.push(`env = { ${envEntries.join(", ")} }`);
+  if (server.transport === "stdio" && server.env && Object.keys(server.env).length > 0) {
+    const envEntries = Object.entries(server.env).sort(([a], [b]) => a.localeCompare(b));
+    const alias = envEntries.find(([key, sourceName]) => key !== sourceName);
+    if (alias) {
+      throw new Error(
+        `Codex MCP environment reference ${alias[0]} must use the same source variable name`
+      );
+    }
+    lines.push(`env_vars = ${JSON.stringify(envEntries.map(([name]) => name))}`);
   }
   return `${lines.join("\n")}\n`;
 };

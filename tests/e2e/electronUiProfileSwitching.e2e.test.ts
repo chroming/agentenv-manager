@@ -2065,10 +2065,18 @@ describe("Electron UI profile switching e2e", () => {
           summaryCardsFit: [...dialog.querySelectorAll<HTMLElement>(".preview-summary-card")].every(
             (card) => {
               const box = card.getBoundingClientRect();
-              return [...card.children].every((child) => {
-                const childBox = child.getBoundingClientRect();
-                return childBox.top >= box.top && childBox.bottom <= box.bottom;
-              });
+              return (
+                card.scrollWidth <= card.clientWidth + 1 &&
+                [...card.children].every((child) => {
+                  const childBox = child.getBoundingClientRect();
+                  return (
+                    childBox.left >= box.left &&
+                    childBox.right <= box.right &&
+                    childBox.top >= box.top &&
+                    childBox.bottom <= box.bottom
+                  );
+                })
+              );
             }
           )
         };
@@ -2420,7 +2428,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByLabel("MCP library name").fill("Local Search");
     await page.getByLabel("MCP command").fill("node");
     await page.getByLabel("MCP args").fill("server.js\n--stdio");
-    await page.getByLabel("MCP env").fill("SEARCH_TOKEN\nCACHE_DIR=AGENTENV_CACHE_DIR");
+    await page.getByLabel("MCP env").fill("SEARCH_TOKEN\nAGENTENV_CACHE_DIR");
     await page.getByRole("button", { name: "Save MCP server" }).click();
 
     const localSearch = page.getByRole("group", { name: "MCP library item local-search" });
@@ -2439,7 +2447,7 @@ describe("Electron UI profile switching e2e", () => {
           command: "node",
           args: ["server.js", "--stdio"],
           env: {
-            CACHE_DIR: "AGENTENV_CACHE_DIR",
+            AGENTENV_CACHE_DIR: "AGENTENV_CACHE_DIR",
             SEARCH_TOKEN: "SEARCH_TOKEN"
           }
         })
@@ -2447,8 +2455,17 @@ describe("Electron UI profile switching e2e", () => {
 
     await localSearch.getByRole("button", { name: "Edit local-search" }).click();
     await expect.poll(() => page.getByLabel("MCP library id").inputValue()).toBe("local-search");
+    expect(await page.getByLabel("MCP library id").isDisabled()).toBe(true);
     await expect.poll(() => page.getByLabel("MCP args").inputValue()).toBe("server.js\n--stdio");
     await page.getByRole("button", { name: "Close MCP server editor" }).click();
+
+    await page.getByRole("button", { name: "Add MCP server" }).click();
+    await page.getByLabel("MCP library id").fill("local-search");
+    await expect
+      .poll(() => page.getByRole("dialog", { name: "MCP server editor" }).textContent())
+      .toContain("This ID already exists");
+    expect(await page.getByRole("button", { name: "Save MCP server" }).isDisabled()).toBe(true);
+    await page.keyboard.press("Escape");
 
     await localSearch.getByRole("button", { name: "Remove local-search" }).click();
     const deleteDialog = page.getByRole("dialog", { name: "Delete MCP server" });
@@ -3200,7 +3217,10 @@ describe("Electron UI profile switching e2e", () => {
       "server.js"
     );
     await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
-      '"SEARCH_TOKEN": "SEARCH_TOKEN"'
+      '"SEARCH_TOKEN": "{env:SEARCH_TOKEN}"'
+    );
+    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
+      '"environment"'
     );
   }, 30_000);
 

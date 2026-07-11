@@ -407,7 +407,7 @@ describe("SkillLibraryPanel", () => {
     expect(onCloseTool).toHaveBeenCalledTimes(2);
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Imported");
-    expect(discoveries).toHaveTextContent("Ignored");
+    expect(discoveries).toHaveTextContent("Restore ignored");
     expect(screen.getByRole("region", { name: "Cleanup history" })).toHaveTextContent(
       "shared-reviewer"
     );
@@ -419,8 +419,15 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("group", { name: "Cleanup group target-only-reviewer" })).toHaveTextContent(
       "2 locations"
     );
-    fireEvent.click(screen.getByRole("button", { name: "Ignore group target-only-reviewer" }));
-    expect(onIgnoreSkillGroup).toHaveBeenCalledWith("target-only-reviewer");
+    const mixedGroup = screen.getByRole("group", { name: "Cleanup group target-only-reviewer" });
+    expect(mixedGroup).toHaveTextContent("Unmanaged");
+    expect(within(mixedGroup).queryByText("Ignored", { exact: true })).not.toBeInTheDocument();
+    expect(
+      within(mixedGroup).getByRole("button", { name: "Add to Library target-only-reviewer" })
+    ).toBeInTheDocument();
+    expect(
+      within(mixedGroup).queryByRole("button", { name: "Ignore group target-only-reviewer" })
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Unignore group target-only-reviewer" }));
     expect(onUnignoreSkillGroup).toHaveBeenCalledWith("target-only-reviewer");
     fireEvent.click(
@@ -444,6 +451,10 @@ describe("SkillLibraryPanel", () => {
 
     const conflictGroup = screen.getByRole("group", { name: "Cleanup group conflict-reviewer" });
     expect(conflictGroup).toHaveTextContent("Conflict");
+    fireEvent.click(
+      within(conflictGroup).getByRole("button", { name: "Ignore group conflict-reviewer" })
+    );
+    expect(onIgnoreSkillGroup).toHaveBeenCalledWith("conflict-reviewer");
     fireEvent.focus(
       within(conflictGroup).getByLabelText("Full cleanup locations conflict-reviewer")
     );
