@@ -641,6 +641,9 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Escape closes dismissible layers; safe outside click closes them; focus returns to the trigger or the next logical surviving control.
 - Primary workflows work with keyboard only.
 - Status is never communicated through color alone.
+- Renderer styling follows one ordered cascade contract: accessibility, tokens, base, frozen legacy, primitives, shell, pages, and overlays.
+- New page behavior MUST be owned by its page stylesheet or a shared primitive; the frozen legacy stylesheet MUST NOT grow and the retired product-level override file MUST NOT return.
+- Skills and Profiles respond to their actual content containers, not only the outer window width.
 
 Status: supported viewport containment, topmost overlays, modal focus trapping, Escape and outside-click dismissal, and focus restoration are `Implemented`.
 
@@ -791,9 +794,11 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 ### 25.1 Verification Snapshot
 
-Last verified: 2026-07-14 against the current `main` tree at the time of this snapshot.
+Last verified: 2026-07-15 against the current `main` tree at the time of this snapshot.
 
-- `332` automated tests passed across `45` test files; the `65`-test Electron E2E suite covers native Target, cross-Target, Create from Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `343` automated tests passed across `47` test files; the `67`-test Electron E2E suite covers native Target, cross-Target, Create from Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
+- All `37` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
