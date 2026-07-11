@@ -1528,6 +1528,8 @@
   border-top: 1px solid var(--border);
   display: grid;
   gap: 10px;
+  margin-top: 4px;
+  padding-top: 14px;
 }
 
 .cleanup-history-list {

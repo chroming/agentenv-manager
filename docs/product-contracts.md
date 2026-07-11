@@ -435,6 +435,7 @@ Cleanup review contract:
 - If the Skill already exists in Library, cleanup MUST state that the existing Library version remains authoritative and MUST NOT ask for a meaningless local canonical choice.
 - Every truncated Skill name, description, path, and history detail in the cleanup workflow exposes its full value on pointer hover and keyboard focus.
 - Cleanup groups and Cleanup history use the same row hierarchy, control scale, overflow behavior, and restore vocabulary.
+- Cleanup history is a secondary group inside the Local Skill Cleanup surface, not a separate framed panel.
 
 Ignore contract:
 

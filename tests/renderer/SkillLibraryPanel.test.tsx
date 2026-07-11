@@ -408,9 +408,10 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Imported");
     expect(discoveries).toHaveTextContent("Restore ignored");
-    expect(screen.getByRole("region", { name: "Cleanup history" })).toHaveTextContent(
-      "shared-reviewer"
-    );
+    const cleanupHistory = screen.getByRole("region", { name: "Cleanup history" });
+    expect(cleanupHistory).toHaveTextContent("shared-reviewer");
+    expect(cleanupHistory).not.toHaveClass("resource-section");
+    expect(discoveries.querySelector(".target-discovery-section")).toContainElement(cleanupHistory);
     expect(
       screen.getByRole("region", { name: "Cleanup history" }).querySelector(".cleanup-history-row")
     ).toHaveClass("resource-row");

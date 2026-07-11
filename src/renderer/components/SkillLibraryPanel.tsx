@@ -1351,47 +1351,47 @@ export const SkillLibraryPanel = ({
                 );
               })}
             </div>
-          </section>
-          <section className="resource-section cleanup-history-section" aria-label="Cleanup history">
-            <div className="resource-heading">
-              Cleanup history
-              <InfoTip label="Every cleanup creates a restorable backup. Restoring returns the affected local copies to their state before cleanup." />
-            </div>
-            {cleanupBackups.length === 0 ? (
-              <p className="muted library-empty">No cleanup backups yet.</p>
-            ) : (
-              <div className="resource-list resource-list--unmanaged cleanup-history-list">
-                {cleanupBackups.map((backup) => (
-                  <div className="resource-row cleanup-history-row" key={backup.id}>
-                    <span className="resource-chip resource-chip--managed">Backup</span>
-                    <div className="resource-row__main">
-                      <PreviewText
-                        ariaLabel={`Full cleanup history name ${backup.libraryId}`}
-                        className="cleanup-history-name"
-                        text={backup.libraryId}
-                      />
-                      <PreviewText
-                        ariaLabel={`Full cleanup history details ${backup.libraryId}`}
-                        className="cleanup-history-details"
-                        displayText={`${backup.operation === "remove" ? "Removal" : "Cleanup"} · ${backup.locationCount} ${backup.locationCount === 1 ? "location" : "locations"} · ${new Date(backup.createdAt).toLocaleString()}`}
-                        text={`${backup.operation === "remove" ? "Removal" : "Cleanup"} · ${backup.locationCount} ${backup.locationCount === 1 ? "location" : "locations"} · ${new Date(backup.createdAt).toLocaleString()}`}
-                      />
-                    </div>
-                    <div className="cleanup-group-actions">
-                      <button
-                        className="secondary-action"
-                        type="button"
-                        aria-label={`Restore cleanup ${backup.libraryId}`}
-                        onClick={() => onRestoreCleanup(backup.id)}
-                      >
-                        <RotateCcw size={14} aria-hidden="true" />
-                        Restore
-                      </button>
-                    </div>
-                  </div>
-                ))}
+            <section className="cleanup-history-section" aria-label="Cleanup history">
+              <div className="resource-heading">
+                Cleanup history
+                <InfoTip label="Every cleanup creates a restorable backup. Restoring returns the affected local copies to their state before cleanup." />
               </div>
-            )}
+              {cleanupBackups.length === 0 ? (
+                <p className="muted library-empty">No cleanup backups yet.</p>
+              ) : (
+                <div className="resource-list resource-list--unmanaged cleanup-history-list">
+                  {cleanupBackups.map((backup) => (
+                    <div className="resource-row cleanup-history-row" key={backup.id}>
+                      <span className="resource-chip resource-chip--managed">Backup</span>
+                      <div className="resource-row__main">
+                        <PreviewText
+                          ariaLabel={`Full cleanup history name ${backup.libraryId}`}
+                          className="cleanup-history-name"
+                          text={backup.libraryId}
+                        />
+                        <PreviewText
+                          ariaLabel={`Full cleanup history details ${backup.libraryId}`}
+                          className="cleanup-history-details"
+                          displayText={`${backup.operation === "remove" ? "Removal" : "Cleanup"} · ${backup.locationCount} ${backup.locationCount === 1 ? "location" : "locations"} · ${new Date(backup.createdAt).toLocaleString()}`}
+                          text={`${backup.operation === "remove" ? "Removal" : "Cleanup"} · ${backup.locationCount} ${backup.locationCount === 1 ? "location" : "locations"} · ${new Date(backup.createdAt).toLocaleString()}`}
+                        />
+                      </div>
+                      <div className="cleanup-group-actions">
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          aria-label={`Restore cleanup ${backup.libraryId}`}
+                          onClick={() => onRestoreCleanup(backup.id)}
+                        >
+                          <RotateCcw size={14} aria-hidden="true" />
+                          Restore
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </section>
         </section>
       ) : null}

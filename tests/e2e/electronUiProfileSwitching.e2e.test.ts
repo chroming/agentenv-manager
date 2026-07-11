@@ -1250,6 +1250,15 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Cleanup group late-target-reviewer" })
       .waitFor({ state: "visible", timeout: 5_000 });
 
+    const cleanupHistoryRegion = page.getByRole("region", { name: "Cleanup history" });
+    expect(
+      await cleanupHistoryRegion.evaluate(
+        (element) =>
+          !element.classList.contains("resource-section") &&
+          element.parentElement?.classList.contains("target-discovery-section") === true
+      )
+    ).toBe(true);
+
     const cleanupGroup = page.getByRole("group", { name: "Cleanup group target-only-reviewer" });
     const locationsPreview = cleanupGroup.getByLabel("Full cleanup locations target-only-reviewer");
     await locationsPreview.focus();
