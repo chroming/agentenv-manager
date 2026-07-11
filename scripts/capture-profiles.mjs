@@ -1,4 +1,15 @@
-import { access, chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  access,
+  chmod,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -229,13 +240,21 @@ const prepareFixture = async (root) => {
   return { appDataRoot, binDir, githubFixtureRoot, homeDir };
 };
 
-const capturePage = async (windowHandle, path) => {
-  const dataUrl = await windowHandle.evaluate(async (browserWindow) => {
-    browserWindow.webContents.invalidate();
-    await new Promise((resolveInvalidate) => setTimeout(resolveInvalidate, 50));
-    return (await browserWindow.capturePage()).toDataURL();
+const capturePage = async (page, path, { preserveFocus = false } = {}) => {
+  await page.evaluate(async (shouldPreserveFocus) => {
+    await document.fonts?.ready;
+    if (!shouldPreserveFocus && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  }, preserveFocus);
+  await page.mouse.move(2, 2);
+  await page.waitForTimeout(50);
+  await page.screenshot({
+    path,
+    animations: "disabled",
+    caret: "hide",
+    scale: "css"
   });
-  await writeFile(path, Buffer.from(dataUrl.split(",", 2)[1], "base64"));
 };
 
 const fileExists = async (path) => {
@@ -308,7 +327,28 @@ const captureComparison = async (page, windowHandle, htmlPath, mode, fileName, h
     [...document.images].every((image) => image.complete && image.naturalWidth > 0)
   );
   await page.waitForTimeout(100);
-  await capturePage(windowHandle, join(outputDir, fileName));
+  await capturePage(page, join(outputDir, fileName));
+};
+
+const writeCaptureManifest = async () => {
+  const entries = await readdir(outputDir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".png")) {
+      continue;
+    }
+    const content = await readFile(join(outputDir, entry.name));
+    files.push({
+      file: entry.name,
+      bytes: content.byteLength,
+      sha256: createHash("sha256").update(content).digest("hex")
+    });
+  }
+  await writeJson(join(outputDir, "capture-manifest.json"), {
+    generatedAt: new Date().toISOString(),
+    viewports: ["1180x728", "920x620"],
+    files
+  });
 };
 
 await mkdir(outputDir, { recursive: true });
@@ -340,16 +380,16 @@ try {
   await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("group", { name: "Library item react-best-practices" }).waitFor({ state: "visible" });
-  await capturePage(windowHandle, join(outputDir, "skills-1180x728.png"));
+  await capturePage(page, join(outputDir, "skills-1180x728.png"));
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
     .getByRole("button", { name: "Change icon for react-best-practices" })
     .click();
   await page.getByRole("menu", { name: "Icons for react-best-practices" }).waitFor({ state: "visible" });
-  await capturePage(windowHandle, join(outputDir, "skills-icon-picker-1180x728.png"));
+  await capturePage(page, join(outputDir, "skills-icon-picker-1180x728.png"));
   await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(windowHandle, join(outputDir, "skills-920x620.png"));
+  await capturePage(page, join(outputDir, "skills-920x620.png"));
   const githubSource = page.getByLabel("Full source for react-best-practices");
   await githubSource.scrollIntoViewIfNeeded();
   await githubSource.focus();
@@ -357,16 +397,20 @@ try {
     .getByRole("tooltip")
     .filter({ hasText: "agentenv-community/agent-skills" })
     .waitFor({ state: "visible" });
-  await capturePage(windowHandle, join(outputDir, "skills-source-tooltip-920x620.png"));
+  await capturePage(
+    page,
+    join(outputDir, "skills-source-tooltip-920x620.png"),
+    { preserveFocus: true }
+  );
   await githubSource.evaluate((element) => element.blur());
 
   await page.getByRole("button", { name: "Import skills" }).click();
   const importDialog = page.getByRole("dialog", { name: "Import skills" });
   await importDialog.waitFor({ state: "visible" });
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(windowHandle, join(outputDir, "skills-import-1180x728.png"));
+  await capturePage(page, join(outputDir, "skills-import-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(windowHandle, join(outputDir, "skills-import-920x620.png"));
+  await capturePage(page, join(outputDir, "skills-import-920x620.png"));
   await importDialog.getByRole("button", { name: "Close import" }).click();
   await importDialog.waitFor({ state: "hidden" });
 
@@ -377,7 +421,7 @@ try {
   await page.getByRole("menu", { name: "Actions for react-best-practices" }).waitFor({
     state: "visible"
   });
-  await capturePage(windowHandle, join(outputDir, "skills-actions-920x620.png"));
+  await capturePage(page, join(outputDir, "skills-actions-920x620.png"));
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Scan local" }).click();
@@ -386,15 +430,19 @@ try {
   });
   await cleanupGroup.waitFor({ state: "visible", timeout: 5_000 });
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(windowHandle, join(outputDir, "skills-cleanup-1180x728.png"));
+  await capturePage(page, join(outputDir, "skills-cleanup-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(windowHandle, join(outputDir, "skills-cleanup-920x620.png"));
+  await capturePage(page, join(outputDir, "skills-cleanup-920x620.png"));
   const cleanupLocations = cleanupGroup.getByLabel(
     "Full cleanup locations cross-agent-review-workflow-with-a-long-name"
   );
   await cleanupLocations.focus();
   await page.getByRole("tooltip").waitFor({ state: "visible", timeout: 5_000 });
-  await capturePage(windowHandle, join(outputDir, "skills-cleanup-tooltip-920x620.png"));
+  await capturePage(
+    page,
+    join(outputDir, "skills-cleanup-tooltip-920x620.png"),
+    { preserveFocus: true }
+  );
   await cleanupLocations.evaluate((element) => element.blur());
   await cleanupGroup
     .getByRole("button", {
@@ -403,9 +451,9 @@ try {
     .click();
   const cleanupDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
   await cleanupDialog.waitFor({ state: "visible", timeout: 5_000 });
-  await capturePage(windowHandle, join(outputDir, "skills-cleanup-review-920x620.png"));
+  await capturePage(page, join(outputDir, "skills-cleanup-review-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(windowHandle, join(outputDir, "skills-cleanup-review-1180x728.png"));
+  await capturePage(page, join(outputDir, "skills-cleanup-review-1180x728.png"));
   await page.keyboard.press("Escape");
   await cleanupDialog.waitFor({ state: "hidden", timeout: 5_000 });
   await page
@@ -417,9 +465,9 @@ try {
     await page.getByRole("button", { name: buttonName, exact: true }).click();
     await readyLocator().waitFor({ state: "visible" });
     await setWindowSize(page, windowHandle, 1180, 728);
-    await capturePage(windowHandle, join(outputDir, `${filePrefix}-1180x728.png`));
+    await capturePage(page, join(outputDir, `${filePrefix}-1180x728.png`));
     await setWindowSize(page, windowHandle, 920, 620);
-    await capturePage(windowHandle, join(outputDir, `${filePrefix}-920x620.png`));
+    await capturePage(page, join(outputDir, `${filePrefix}-920x620.png`));
   };
 
   await captureWorkspace(
@@ -430,9 +478,9 @@ try {
   await page.getByRole("button", { name: "Add MCP server" }).click();
   const mcpEditor = page.getByRole("dialog", { name: "MCP server editor" });
   await mcpEditor.waitFor({ state: "visible" });
-  await capturePage(windowHandle, join(outputDir, "mcp-editor-920x620.png"));
+  await capturePage(page, join(outputDir, "mcp-editor-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(windowHandle, join(outputDir, "mcp-editor-1180x728.png"));
+  await capturePage(page, join(outputDir, "mcp-editor-1180x728.png"));
   await page.keyboard.press("Escape");
   await mcpEditor.waitFor({ state: "hidden" });
   await captureWorkspace(
@@ -445,7 +493,7 @@ try {
     .getByRole("button", { name: "Change icon for profile code-review" })
     .click();
   await page.getByRole("menu", { name: "Icons for Code Review" }).waitFor({ state: "visible" });
-  await capturePage(windowHandle, join(outputDir, "profile-icon-picker-920x620.png"));
+  await capturePage(page, join(outputDir, "profile-icon-picker-920x620.png"));
   await page.keyboard.press("Escape");
   for (const sectionName of ["Instructions", "Skills", "MCP Servers", "Advanced"]) {
     await page
@@ -456,7 +504,7 @@ try {
       .locator(`[data-profile-composer-id="${sectionName === "MCP Servers" ? "mcp" : sectionName.toLowerCase()}"] .profile-composer-section__panel`)
       .waitFor({ state: "visible" });
     await capturePage(
-      windowHandle,
+      page,
       join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`)
     );
   }
@@ -464,15 +512,15 @@ try {
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   const previewDialog = page.getByRole("dialog", { name: "Preview" });
   await previewDialog.waitFor({ state: "visible" });
-  await capturePage(windowHandle, join(outputDir, "apply-preview-1180x728.png"));
+  await capturePage(page, join(outputDir, "apply-preview-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(windowHandle, join(outputDir, "apply-preview-920x620.png"));
+  await capturePage(page, join(outputDir, "apply-preview-920x620.png"));
   await previewDialog.getByRole("button", { name: "Apply profile" }).click();
   await previewDialog.waitFor({ state: "hidden" });
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(windowHandle, join(outputDir, "profiles-applied-1180x728.png"));
+  await capturePage(page, join(outputDir, "profiles-applied-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(windowHandle, join(outputDir, "profiles-applied-920x620.png"));
+  await capturePage(page, join(outputDir, "profiles-applied-920x620.png"));
   await captureWorkspace(
     "Targets",
     "targets",
@@ -484,15 +532,15 @@ try {
     .click();
   const targetCaptureDialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
   await targetCaptureDialog.waitFor({ state: "visible" });
-  await capturePage(windowHandle, join(outputDir, "target-capture-setup-920x620.png"));
+  await capturePage(page, join(outputDir, "target-capture-setup-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(windowHandle, join(outputDir, "target-capture-setup-1180x728.png"));
+  await capturePage(page, join(outputDir, "target-capture-setup-1180x728.png"));
   await targetCaptureDialog.getByRole("button", { name: "Review" }).click();
   const targetCaptureReview = page.getByRole("dialog", { name: "Review OpenCode takeover" });
   await targetCaptureReview.waitFor({ state: "visible" });
-  await capturePage(windowHandle, join(outputDir, "target-capture-review-1180x728.png"));
+  await capturePage(page, join(outputDir, "target-capture-review-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
-  await capturePage(windowHandle, join(outputDir, "target-capture-review-920x620.png"));
+  await capturePage(page, join(outputDir, "target-capture-review-920x620.png"));
   await page.keyboard.press("Escape");
   await targetCaptureReview.waitFor({ state: "hidden" });
   await captureWorkspace(
@@ -507,11 +555,11 @@ try {
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Select apply target" }).click();
   await page.waitForTimeout(250);
-  await capturePage(windowHandle, join(outputDir, "implementation-1536x1024.png"));
+  await capturePage(page, join(outputDir, "implementation-1536x1024.png"));
 
   await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(windowHandle, join(outputDir, "implementation-1180x728.png"));
+  await capturePage(page, join(outputDir, "implementation-1180x728.png"));
 
   if (await fileExists(referencePath)) {
     const htmlPath = await writeComparisonPage();
@@ -519,6 +567,7 @@ try {
     await captureComparison(page, windowHandle, htmlPath, "header", "header-comparison.png", 250);
     await captureComparison(page, windowHandle, htmlPath, "composer", "composer-comparison.png", 420);
   }
+  await writeCaptureManifest();
 } finally {
   await app?.close();
   await rm(fixtureRoot, { recursive: true, force: true });
