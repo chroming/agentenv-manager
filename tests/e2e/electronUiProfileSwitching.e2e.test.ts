@@ -1574,6 +1574,16 @@ describe("Electron UI profile switching e2e", () => {
 
     const initialWorkbenchBox = await workbench.boundingBox();
     expect(initialWorkbenchBox).not.toBeNull();
+    const defaultContainerMetrics = await page.locator(".app-shell--profiles .editor-panel").evaluate(
+      (element) => ({
+        containerName: getComputedStyle(element).containerName,
+        workbenchColumns: getComputedStyle(
+          element.querySelector<HTMLElement>(".profile-workbench")!
+        ).gridTemplateColumns
+      })
+    );
+    expect(defaultContainerMetrics.containerName).toBe("profile-workspace");
+    expect(defaultContainerMetrics.workbenchColumns.startsWith("260px ")).toBe(true);
 
     const initialOverflow = await Promise.all(
       [profileIndex, profileList, editor].map((locator) =>
@@ -1716,6 +1726,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(
       await skillList.evaluate((element) => element.scrollHeight > element.clientHeight)
     ).toBe(true);
+    expect(await workbench.evaluate((element) => getComputedStyle(element).gridTemplateColumns))
+      .toMatch(/^220px /);
   }, 30_000);
 
   it("keeps core management actions usable at the minimum supported viewport", async () => {

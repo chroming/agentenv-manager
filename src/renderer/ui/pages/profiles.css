@@ -1,0 +1,731 @@
+/* Profiles owns one control and density contract across its supported window sizes. */
+.app-shell--profiles {
+  --profile-control-height: 40px;
+  --profile-icon-slot: 30px;
+}
+
+.app-shell--profiles .editor-panel {
+  container-name: profile-workspace;
+  container-type: inline-size;
+  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 14px 18px 18px;
+}
+
+.profile-page-header {
+  align-items: center;
+  min-height: 44px;
+}
+
+.profile-page-heading {
+  gap: 4px;
+}
+
+.profile-page-header h2 {
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.profile-page-heading p {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.profile-page-actions,
+.profile-commit-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+.profile-page-actions button,
+.profile-target-workspace-button,
+.profile-commit-actions .save-button,
+.profile-commit-actions .profile-apply-button {
+  height: var(--profile-control-height);
+  min-height: var(--profile-control-height);
+}
+
+.profile-page-actions .profile-new-button {
+  min-width: 116px;
+}
+
+.profile-readiness-strip {
+  grid-template-columns: minmax(230px, 1fr) minmax(280px, 1fr);
+  height: 64px;
+  min-height: 64px;
+}
+
+.primary-inline-action,
+.workspace-page-header > .secondary-action,
+.github-settings-section .primary-button {
+  height: var(--profile-control-height, 40px);
+  min-height: var(--profile-control-height, 40px);
+}
+
+.profile-readiness-strip__state,
+.profile-readiness-strip__attention {
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.profile-readiness-strip__copy {
+  gap: 2px;
+}
+
+.profile-readiness-strip strong {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.profile-readiness-strip__copy > span,
+.profile-readiness-strip small {
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.profile-workbench {
+  gap: 12px;
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.profile-index {
+  gap: 8px;
+  grid-template-rows: var(--profile-control-height) minmax(0, 1fr);
+  overflow: hidden;
+  padding: 10px;
+}
+
+.profile-list-toolbar,
+.profile-search {
+  min-height: var(--profile-control-height);
+}
+
+.profile-list {
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.profile-row {
+  align-items: start;
+  border: 1px solid transparent;
+  border-bottom-color: #e8edf4;
+  border-radius: 0;
+  gap: 9px;
+  grid-template-columns: var(--profile-icon-slot) minmax(0, 1fr);
+  min-height: 112px;
+  padding: 11px 9px;
+}
+
+.profile-row:first-child {
+  border-top-color: #e8edf4;
+}
+
+.profile-row.is-active {
+  background: #f3f7ff;
+  border-color: #9fc2ff;
+  border-left: 3px solid var(--accent);
+  border-radius: 7px;
+  box-shadow: none;
+  margin: 0;
+}
+
+.profile-row__icon,
+.profile-row__icon--0,
+.profile-row__icon--1,
+.profile-row__icon--2,
+.profile-row__icon--3,
+.profile-row__icon--4,
+.profile-row__icon--selected {
+  background: #eef4ff;
+  color: var(--accent);
+  height: var(--profile-icon-slot);
+  margin-top: 0;
+  width: var(--profile-icon-slot);
+}
+
+.profile-row__content {
+  gap: 2px;
+}
+
+.profile-row__title {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  gap: 6px;
+  line-height: 18px;
+  min-width: 0;
+}
+
+.profile-row__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-row__title strong {
+  font-size: 9px;
+  line-height: 16px;
+  padding: 0 5px;
+}
+
+.profile-row__title .profile-row__current {
+  background: #e9f8f0;
+  color: #168455;
+}
+
+.profile-row__content > small {
+  display: block;
+  font-size: 11px;
+  line-height: 16px;
+  min-height: 16px;
+}
+
+.profile-row__stats {
+  flex-wrap: nowrap;
+  font-size: 11px;
+  gap: 0;
+  line-height: 16px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.profile-row__stats > span {
+  flex: 0 0 auto;
+}
+
+.profile-row__stats > span + span::before {
+  color: #b2bdcc;
+  content: "·";
+  margin: 0 6px;
+}
+
+.profile-row__deployments {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 10px;
+  gap: 4px;
+  line-height: 16px;
+  max-height: 40px;
+  min-height: 18px;
+  overflow: hidden;
+}
+
+.profile-row__deployments--empty {
+  color: #94a3b8;
+  padding-left: 2px;
+}
+
+.profile-target-chip {
+  align-items: center;
+  background: #f5f7fb;
+  border: 1px solid #e3e9f1;
+  border-radius: 999px;
+  color: #53627a;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 720;
+  gap: 3px;
+  height: 18px;
+  min-width: 0;
+  padding: 0 5px 0 4px;
+}
+
+.profile-target-chip > span {
+  max-width: 62px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-target-chip .profile-target-logo {
+  height: 11px;
+  width: 11px;
+}
+
+.profile-target-chip--current {
+  background: #edf9f3;
+  border-color: #ccecdf;
+  color: #177a52;
+}
+
+.profile-target-chip--pending {
+  background: #fff7e8;
+  border-color: #f3dfb8;
+  color: #9a6518;
+}
+
+.profile-target-chip--attention {
+  background: #fff1ef;
+  border-color: #f5d1cc;
+  color: #b83a31;
+}
+
+.profile-editor-surface {
+  gap: 10px;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+.profile-composer:has(.profile-composer-section.is-expanded) {
+  min-height: 0;
+}
+
+.profile-composer:has(.profile-composer-section.is-expanded) .profile-composer__header {
+  display: none;
+}
+
+.profile-composer:has(.profile-composer-section.is-expanded)
+  .profile-composer-section:not(.is-expanded)
+  .profile-composer-section__trigger {
+  grid-template-columns: 26px minmax(0, 1fr) auto 18px;
+  height: 36px;
+  min-height: 36px;
+  padding-block: 3px;
+}
+
+.profile-composer:has(.profile-composer-section.is-expanded)
+  .profile-composer-section:not(.is-expanded)
+  .profile-composer-section__icon {
+  height: 26px;
+  width: 26px;
+}
+
+.profile-composer:has(.profile-composer-section.is-expanded)
+  .profile-composer-section:not(.is-expanded)
+  .profile-composer-section__description,
+.profile-composer:has(.profile-composer-section.is-expanded)
+  .profile-composer-section:not(.is-expanded)
+  .profile-composer-section__summary {
+  display: none;
+}
+
+.profile-hero {
+  align-items: start;
+  gap: 12px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  min-height: 118px;
+  padding: 14px;
+}
+
+.profile-hero__icon {
+  background: #eef4ff;
+  color: var(--accent);
+  height: 36px;
+  width: 36px;
+}
+
+.profile-hero__body {
+  gap: 5px;
+}
+
+.profile-hero__title {
+  min-height: 32px;
+}
+
+.profile-hero__title h2 {
+  font-size: 20px;
+  line-height: 26px;
+}
+
+.profile-hero .profile-description {
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 18px;
+  max-width: 54ch;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.profile-hero__meta {
+  display: flex;
+  font-size: 11px;
+  gap: 8px 12px;
+  line-height: 18px;
+}
+
+.profile-hero__meta .success-pill {
+  min-height: 24px;
+  padding: 3px 7px;
+}
+
+.profile-commit-actions {
+  align-self: start;
+  justify-self: end;
+}
+
+.profile-action-stack {
+  align-self: start;
+  display: grid;
+  gap: 7px;
+  justify-items: end;
+  min-width: 0;
+}
+
+.profile-commit-actions .save-button,
+.profile-commit-actions .profile-apply-button {
+  flex: 0 0 104px;
+  min-width: 104px;
+  padding-inline: 12px;
+  width: 104px;
+}
+
+.profile-commit-actions .profile-apply-control {
+  flex: 0 0 auto;
+}
+
+.profile-commit-actions > .icon-action {
+  height: var(--profile-control-height);
+  width: var(--profile-control-height);
+}
+
+.profile-action-status {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #64748b;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 5px;
+  justify-content: flex-end;
+  line-height: 16px;
+  margin: 0;
+  max-width: 100%;
+  min-height: 18px;
+  padding: 0 2px;
+}
+
+.profile-action-status__copy {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  min-width: 0;
+}
+
+.profile-action-status__copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-action-status__action {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  margin: 0;
+  min-height: 18px;
+  padding: 0;
+  width: 18px;
+}
+
+.profile-action-status__action:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
+.profile-action-status--applied {
+  color: #168455;
+}
+
+.profile-action-status--dirty,
+.profile-action-status--apply-pending,
+.profile-action-status--target-unavailable,
+.profile-action-status--validation-error,
+.profile-action-status--preview-error {
+  color: #a86b14;
+}
+
+.profile-composer__header {
+  flex-basis: 52px;
+  min-height: 52px;
+  padding: 9px 14px;
+}
+
+.profile-composer__header h3 {
+  line-height: 20px;
+}
+
+.profile-composer__header p {
+  line-height: 17px;
+}
+
+.profile-composer-section__trigger,
+.profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
+  gap: 10px;
+  grid-template-columns: 34px minmax(140px, 1fr) auto minmax(0, 1fr) 18px;
+  min-height: 64px;
+  padding: 8px 12px;
+}
+
+.profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
+  height: 100%;
+}
+
+.profile-composer-section__icon {
+  height: 34px;
+  width: 34px;
+}
+
+.profile-composer-section__title {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.profile-composer-section__description {
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.profile-composer-section__count {
+  line-height: 24px;
+  min-width: 24px;
+}
+
+/* Apply preview keeps readable rows and one stable footer while content scrolls. */
+.preview-modal-backdrop {
+  padding: 24px;
+}
+
+.preview-dialog--modal {
+  gap: 14px;
+  max-height: calc(100vh - 48px);
+  max-width: 880px;
+  padding: 20px;
+  width: min(880px, calc(100vw - 48px));
+}
+
+.preview-dialog--modal .preview-header {
+  min-height: 44px;
+}
+
+.preview-header .section-title {
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.preview-outcome {
+  font-size: 13px;
+  line-height: 19px;
+  margin: 3px 0 0;
+}
+
+.preview-header time {
+  line-height: 18px;
+}
+
+.preview-dialog--modal .preview-summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: min(240px, 34vh);
+}
+
+.preview-summary-card {
+  gap: 5px;
+  min-height: 72px;
+  padding: 11px 12px;
+}
+
+.preview-summary-card > strong {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.preview-summary-card > span,
+.preview-summary-card .warning,
+.preview-summary-card .error,
+.preview-summary-card small {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.preview-summary-card .warning,
+.preview-summary-card .error {
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px 9px;
+}
+
+.preview-summary-card small {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.preview-resource-plan > header {
+  min-height: 42px;
+  padding: 9px 12px;
+}
+
+.preview-resource-plan > header strong,
+.preview-resource-plan > header span {
+  line-height: 18px;
+}
+
+.preview-resource-plan article {
+  min-height: 52px;
+  padding: 8px 12px;
+}
+
+.preview-resource-plan__identity strong,
+.preview-resource-plan__identity small,
+.preview-resource-plan__kind,
+.change-kind {
+  line-height: 18px;
+}
+
+.preview-dialog--modal .diff-list {
+  flex: 1 1 auto;
+  min-height: 96px;
+}
+
+.preview-dialog--modal .diff-list details {
+  padding: 0;
+}
+
+.preview-dialog--modal .diff-list summary {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 8px 10px;
+}
+
+.preview-dialog--modal .diff-file-meta {
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.preview-dialog--modal .preview-actions {
+  flex: 0 0 66px;
+  margin: 0 -20px -20px;
+  min-height: 66px;
+  padding: 12px 20px 14px;
+}
+
+.preview-dialog--modal .preview-actions button {
+  height: 40px;
+  min-height: 40px;
+  min-width: 112px;
+  padding-inline: 14px;
+}
+
+@container profile-workspace (max-width: 760px) {
+  .profile-workbench {
+    --profile-icon-slot: 28px;
+    gap: 10px;
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .profile-index {
+    padding: 8px;
+  }
+
+  .profile-row {
+    gap: 8px;
+    min-height: 112px;
+    padding: 10px 8px;
+  }
+
+  .profile-row__content > small {
+    display: block;
+  }
+
+  .profile-row__deployments {
+    display: flex;
+  }
+
+  .profile-row__stats {
+    font-size: 10px;
+  }
+
+  .profile-hero {
+    grid-template-columns: 32px minmax(120px, 1fr) auto;
+    min-height: 118px;
+    padding: 12px;
+  }
+
+  .profile-hero__icon {
+    height: 32px;
+    width: 32px;
+  }
+
+  .profile-hero__title h2 {
+    font-size: 17px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .profile-hero__title .icon-action {
+    display: none;
+  }
+
+  .profile-hero .profile-description {
+    display: -webkit-box;
+  }
+
+  .profile-hero__meta {
+    display: flex;
+  }
+
+  .profile-action-stack {
+    grid-column: 3;
+    justify-items: end;
+    justify-self: end;
+  }
+
+  .profile-commit-actions .profile-apply-control {
+    flex: 0 0 auto;
+  }
+
+  .profile-commit-actions .profile-apply-button {
+    flex: 0 0 92px;
+    min-width: 92px;
+    width: 92px;
+  }
+
+  .profile-commit-actions .save-button {
+    flex-basis: 92px;
+    min-width: 92px;
+    width: 92px;
+  }
+
+  .profile-composer-section__trigger,
+  .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
+    grid-template-columns: 32px minmax(0, 1fr) auto 18px;
+    min-height: 52px;
+    padding-block: 6px;
+  }
+
+  .profile-composer-section__icon {
+    height: 30px;
+    width: 30px;
+  }
+
+  .profile-composer-section__description {
+    display: block;
+    line-height: 14px;
+  }
+
+  .profile-composer-section__summary {
+    display: none;
+  }
+
+  .profile-composer__header {
+    flex-basis: 46px;
+    min-height: 46px;
+    padding-block: 7px;
+  }
+}

@@ -7,3 +7,4 @@
 @import "./primitives.css" layer(primitives);
 @import "./shell.css" layer(shell);
 @import "./pages/skills.css" layer(pages);
+@import "./pages/profiles.css" layer(pages);
