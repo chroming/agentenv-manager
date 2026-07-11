@@ -410,14 +410,26 @@ Status: Apply and cleanup rollback plus stale rollback conflict handling are `Im
 
 - Import from a local folder copies canonical content into the Library.
 - Normal use MUST continue if the original folder is later deleted.
-- The original local path is retained as provenance, but local imports default to update checks off.
+- The original local path is retained as provenance, but local imports default to the `Untracked` update policy.
 - A user MAY explicitly track a stable local folder as an update source.
 - GitHub import MUST store repository, ref, directory, and resolved revision.
-- GitHub imports default to update checks on.
-- Every Skill has an independent update-check policy. Disabling it excludes that Skill from manual, startup, and scheduled checks without reading its local source or contacting GitHub.
-- The global auto-check setting controls scheduling only; it never overrides a disabled per-Skill policy.
-- Legacy metadata without an explicit policy defaults to off for local sources and on for GitHub sources.
+- GitHub imports default to the `Tracked` update policy.
+- A GitHub URL MAY identify a Skill directory, a containing directory, or a repository. Containing-directory and repository imports MUST scan recursively for valid top-level Skill roots before any Library write.
+- Scan results MUST appear in a confirmation dialog, select all importable candidates by default, allow individual candidates to be excluded, and identify already-imported or duplicate candidates without selecting them.
+- A batch import MUST preserve successful candidates when another candidate fails and MUST report each failure against its source.
+- Every Skill has an independent `Tracked` or `Untracked` update policy. `Untracked` excludes that Skill from manual, startup, and scheduled checks without reading its local source or contacting GitHub.
+- The UI status for this durable policy is `Not tracked`; temporary wording such as `Checks off` and source-type wording such as `Fixed copy` MUST NOT substitute for the policy.
+- The global auto-check setting controls scheduling only; it never overrides a per-Skill `Untracked` policy.
+- Legacy metadata without an explicit policy defaults to `Untracked` for local sources and `Tracked` for GitHub sources.
 - Import validates `SKILL.md` and rejects unsafe or ambiguous directory layouts.
+- The Library Skill icon defaults to its source type and MAY be replaced by a built-in icon. The selected icon is presentation metadata and MUST survive content updates.
+
+### 16.1.1 Refresh
+
+- `Refresh` rescans canonical Library content and local install state; it does not contact tracked update sources.
+- `Check updates` is the separate command that contacts tracked sources.
+- `Cmd/Ctrl+R` in Library/Skills invokes the same in-place Refresh command and MUST NOT reload the renderer.
+- Refresh MUST preserve the current search, filters, scroll context, and rendered Skill list until replacement data is ready. It MUST NOT flash a temporary empty state.
 
 ### 16.2 Scan And Cleanup
 
@@ -468,7 +480,7 @@ Ignore contract:
 - Unmanaged copies are never deleted.
 - Deletion with managed installs creates an undoable Backup.
 
-Status: import, scan, cleanup, ignore, GitHub update, reference blocking, managed-install removal, and undo are `Implemented`; identity edge cases need broader contract tests.
+Status: local and recursive GitHub import, in-place Refresh, per-Skill update policy, scan, cleanup, ignore, GitHub update, icon metadata, reference blocking, managed-install removal, and undo are `Implemented`; identity edge cases need broader contract tests.
 
 ## 17. MCP Library Contract
 
@@ -532,6 +544,8 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - A related command group MAY move below its heading at narrower supported widths, but its individual controls MUST remain together rather than orphan-wrapping one control onto another line.
 - Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.
 - Profile list icons use one consistent compact slot and icon family. Decorative per-row icon colors MUST NOT imply unsupported categories or state.
+- Profile icons MAY use the shared built-in icon set. Changing a Profile icon modifies the Profile draft, follows dirty-navigation protection, and is persisted only by whole-Profile Save.
+- Icon pickers MUST use one shared component, expose the selected state without color alone, remain topmost inside the viewport, and close on selection, Escape, or safe outside click.
 - Lists and expanded editors own intentional internal scrolling.
 - Expanding a Profile Composer section MUST expose a practically editable panel at the minimum viewport; presence of a clipped panel alone does not satisfy the interaction contract.
 - Profile Save and Apply remain visible while the selected Profile's Composer owns internal scrolling.
@@ -637,8 +651,10 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 ### Library
 
 - Local import survives deletion of original folder.
-- GitHub import, rate limit, sign-in remediation, update check, Preview, and update.
+- GitHub direct-Skill, containing-directory, and repository scan; candidate selection; partial import; rate limit; sign-in remediation; update check; Preview; and update.
 - Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
+- In-place toolbar and `Cmd/Ctrl+R` Refresh preserve current Skill view state and do not contact update sources.
+- Skill source-default and custom icons persist across refresh and content update; Profile icon changes remain dirty until whole-Profile Save.
 - Update marks affected deployments pending without deploying.
 - Duplicate, conflict, ignored, linked, copied, and stale-copy states.
 - Referenced resource deletion is blocked.
@@ -683,13 +699,14 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-14 against the current `main` tree at the time of this snapshot.
 
-- `288` automated tests passed across `39` test files; the `62`-test E2E suite covers native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `297` automated tests passed across `39` test files; the `65`-test E2E suite covers native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
 - Library deletion isolates the selected Skill from invalid neighboring content, and global feedback provides a non-blocking copy action.
 - Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
+- In-place Skill Refresh, GitHub directory candidate selection, partial batch import behavior, source-default Skill icons, custom Skill icon persistence, and draft-gated Profile icons passed Store, renderer, and Electron E2E coverage.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards.
 - Production dependency audit reported zero known vulnerabilities.

@@ -33,10 +33,12 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 ### Skill Library
 
 - 将本地已有 skill 导入统一 skill library。
-- 从 GitHub 仓库目录导入 skill。
-- 为 library skill 配置更新来源。
+- 从 GitHub 单个 Skill、任意目录或整个仓库扫描并批量选择导入。
+- 为 library skill 配置独立的 Tracked / Untracked 更新策略。
 - 检查 skill 更新。
 - 单个更新或批量更新。
+- 原地刷新 Library，不清空当前搜索、筛选和列表上下文。
+- Skill 与 Profile 可以从内置图标中选择并持久化显示图标。
 - Profile 应用时可以用 copy / symlink / auto 模式把 library skill 安装到目标 agent。
 
 ### MCP Library
