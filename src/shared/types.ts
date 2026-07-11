@@ -27,7 +27,7 @@ export interface AgentEnvApi {
   saveMcpServer(input: SaveMcpServerInput): Promise<McpLibraryEntry>;
   removeMcpServer(id: string): Promise<void>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
-  importSkillToLibrary(sourcePath: string): Promise<SkillLibraryEntry>;
+  importSkillToLibrary(input: SkillImportInput): Promise<SkillLibraryEntry>;
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   importGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
@@ -93,6 +93,39 @@ export interface SkillLibraryEntry {
   remoteRevision?: string;
   contentHash: string;
   updatedAt: string;
+  upstream?: SkillUpstream;
+  provenance?: SkillProvenance;
+}
+
+export interface SkillUpstream {
+  kind: "github" | "gitlab" | "git" | "local" | "well-known";
+  locator: string;
+  ref?: string;
+  subpath?: string;
+  revision?: string;
+}
+
+export interface SkillProvenance {
+  importedVia: "agentenv" | "local-scan";
+  externalManager?: "skills-cli";
+  externalLockPath?: string;
+}
+
+export interface SkillExternalOwnership {
+  manager: "skills-cli";
+  lockPath: string;
+  lockVersion: number;
+  canonicalPath: string;
+  confidence: "confirmed" | "inferred";
+  state: "healthy" | "broken-link" | "unknown";
+  upstream?: SkillUpstream;
+}
+
+export interface SkillImportInput {
+  sourcePath: string;
+  id?: string;
+  provenance?: SkillProvenance;
+  upstream?: SkillUpstream;
 }
 
 export interface GitHubSkillImportInput {
@@ -180,7 +213,7 @@ export interface SkillUpdatePlan {
   errors: string[];
 }
 
-export type SkillInventoryStatus = "managed" | "library" | "unmanaged" | "ignored";
+export type SkillInventoryStatus = "managed" | "library" | "external" | "unmanaged" | "ignored";
 
 export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   status: SkillInventoryStatus;
@@ -190,6 +223,7 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   ignoreRuleId?: string;
   installMethod?: "linked" | "copied";
   contentMatchesLibrary?: boolean;
+  externalOwnership?: SkillExternalOwnership;
 }
 
 export interface SkillCleanupLocationInput {

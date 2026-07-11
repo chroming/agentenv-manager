@@ -532,11 +532,16 @@ export const createActivationService = ({
     return inventory
       .filter(
         (skill) =>
-          (skill.status === "unmanaged" || skill.status === "ignored") && !desired.has(skill.id)
+          (skill.status === "unmanaged" ||
+            skill.status === "ignored" ||
+            skill.status === "external") &&
+          !desired.has(skill.id)
       )
       .map((skill) =>
         skill.status === "ignored"
           ? `Ignored local skill kept: ${skill.path}`
+          : skill.status === "external"
+            ? `Skills CLI-managed skill kept: ${skill.path}`
           : `Unmanaged local skill kept: ${skill.path}`
       );
   };
@@ -721,6 +726,26 @@ export const createActivationService = ({
       );
   };
 
+  const externalSkillConflicts = async (
+    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+    targetPaths: TargetPaths
+  ) => {
+    const desired = desiredSkillTargets(profile);
+    if (desired.size === 0) {
+      return { errors: [] as string[], paths: new Set<string>() };
+    }
+    const conflicts = (await skillLibraryStore.scanInventory([targetPaths])).filter(
+      (skill) => skill.status === "external" && desired.has(skill.id)
+    );
+    return {
+      errors: conflicts.map(
+        (skill) =>
+          `Cannot install ${skill.id} because Skills CLI manages the existing Skill at ${skill.path}. Remove it from Skills CLI, then rescan before applying this Profile.`
+      ),
+      paths: new Set(conflicts.map((skill) => skill.path))
+    };
+  };
+
   const previewProfile = async (
     profileId: string,
     requestedTargetId?: string
@@ -778,6 +803,14 @@ export const createActivationService = ({
     const drift = await findManagedDrift(stateFile.state, materializedProfile, targetPaths);
     const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, targetPaths);
     const ignoredErrors = await ignoredSkillConflicts(materializedProfile, targetPaths);
+    const externalConflicts = await externalSkillConflicts(materializedProfile, targetPaths);
+    const withoutGenericExternalConflicts = (errors: string[]) =>
+      errors.filter(
+        (error) =>
+          ![...externalConflicts.paths].some(
+            (path) => error.includes(path) && error.includes("not AgentEnv-owned")
+          )
+      );
     const assetBackupPaths = await adapter.getAssetBackupPaths({
       profile: materializedProfile,
       targetPaths,
@@ -806,14 +839,15 @@ export const createActivationService = ({
         drift.warnings,
         unmanagedWarnings
       ),
-      errors: targetPreview.errors.concat(
+      errors: withoutGenericExternalConflicts(targetPreview.errors).concat(
         recoveryErrors,
         portabilityErrors,
         unsupportedMcpErrors,
         profileErrors,
-        assetErrors,
+        withoutGenericExternalConflicts(assetErrors),
         drift.errors,
-        ignoredErrors
+        ignoredErrors,
+        externalConflicts.errors
       ),
       changes: targetPreview.changes,
       resourceChanges: assetPlan.resourceChanges,

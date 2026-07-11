@@ -14,10 +14,13 @@ import type {
   SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillInventoryEntry,
+  SkillImportInput,
   SkillIconInput,
   SkillLibraryEntry,
+  SkillProvenance,
   ResourceIconKey,
   SkillSourceType,
+  SkillUpstream,
   SkillUpdateInfo,
   SkillUpdatePolicy,
   SkillUpdatePolicyInput,
@@ -31,6 +34,8 @@ import { pathExists } from "./fileUtils";
 import { createOwnerMarkerContent, markerPathFor } from "./ownershipMarkers";
 import type { AgentEnvPaths } from "./paths";
 import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
+import { parseSkillFrontmatter } from "./skillFrontmatter";
+import { inspectSkillsCliLocks } from "./skillsCliInspector";
 
 interface SkillMetadataFile {
   sourceType?: SkillSourceType;
@@ -43,6 +48,8 @@ interface SkillMetadataFile {
   iconKey?: ResourceIconKey;
   contentHash?: string;
   updatedAt?: string;
+  upstream?: SkillUpstream;
+  provenance?: SkillProvenance;
 }
 
 interface SkillCleanupBackupManifest {
@@ -56,9 +63,7 @@ interface SkillCleanupBackupManifest {
   entries: Array<{ sourcePath: string; backupPath: string }>;
 }
 
-export interface ImportSkillInput {
-  sourcePath: string;
-  id?: string;
+export interface ImportSkillStoreInput extends SkillImportInput {
   sourceType?: SkillSourceType;
 }
 
@@ -83,7 +88,7 @@ export interface SkillLibraryStore {
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
-  importSkill(input: ImportSkillInput): Promise<SkillLibraryEntry>;
+  importSkill(input: ImportSkillStoreInput): Promise<SkillLibraryEntry>;
   importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   importGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
@@ -111,6 +116,7 @@ type FetchLike = (url: string, init?: RequestInit) => Promise<{
 interface SkillLibraryStoreOptions {
   authTokenProvider?: () => Promise<string | undefined>;
   fetch?: FetchLike;
+  skillsCliLockPaths?: string[];
 }
 
 interface ParsedGitHubSkillSource {
@@ -185,11 +191,6 @@ const isMissingFileError = (error: unknown) =>
       error.code === "ENOENT"
   );
 
-const metadataValue = (content: string, key: "name" | "description") => {
-  const match = content.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
-  return match?.[1]?.trim().replace(/^["']|["']$/g, "") ?? "";
-};
-
 export const normalizeSkillKey = (value: string) =>
   value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
 
@@ -232,6 +233,14 @@ const hashPath = async (
 };
 
 const computeContentHash = async (path: string) => (await hashPath(path)).digest("hex");
+
+const validateSkillFrontmatter = async (skillDir: string) => {
+  const frontmatter = parseSkillFrontmatter(await readFile(join(skillDir, "SKILL.md"), "utf8"));
+  if (frontmatter.errors.length > 0) {
+    throw new Error(`Skill frontmatter is invalid: ${frontmatter.errors.join("; ")}`);
+  }
+  return frontmatter;
+};
 
 const readSkillFiles = async (root: string) => {
   const files = new Map<string, string>();
@@ -635,14 +644,15 @@ export const createSkillLibraryStore = (
 
   const entryFor = async (id: string, skillDir: string): Promise<SkillLibraryEntry> => {
     const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
+    const frontmatter = parseSkillFrontmatter(content);
     const metadata =
       (await readJsonIfExists<SkillMetadataFile>(join(skillDir, ".agentenv-skill.json"))) ?? {};
     const contentHash = await computeContentHash(skillDir);
     const stats = await stat(join(skillDir, "SKILL.md"));
     return {
       id,
-      name: metadataValue(content, "name") || id,
-      description: metadataValue(content, "description"),
+      name: frontmatter.name || id,
+      description: frontmatter.description,
       iconKey: metadata.iconKey,
       path: skillDir,
       sourceType: metadata.sourceType ?? "local",
@@ -651,7 +661,9 @@ export const createSkillLibraryStore = (
       remoteRef: metadata.remoteRef,
       remoteRevision: metadata.remoteRevision,
       contentHash: metadata.contentHash ?? contentHash,
-      updatedAt: metadata.updatedAt ?? stats.mtime.toISOString()
+      updatedAt: metadata.updatedAt ?? stats.mtime.toISOString(),
+      upstream: metadata.upstream,
+      provenance: metadata.provenance
     };
   };
 
@@ -669,6 +681,8 @@ export const createSkillLibraryStore = (
       | "remoteRevision"
       | "updatePolicy"
       | "updateCheckEnabled"
+      | "upstream"
+      | "provenance"
     > & { iconKey?: ResourceIconKey }
   ) => {
     const current = await readLibraryMetadata(skillDir);
@@ -683,6 +697,8 @@ export const createSkillLibraryStore = (
           remoteRef: metadata.remoteRef,
           remotePath: metadata.remotePath,
           remoteRevision: metadata.remoteRevision,
+          upstream: metadata.upstream ?? current.upstream,
+          provenance: metadata.provenance ?? current.provenance,
           iconKey: metadata.iconKey ?? current.iconKey,
           updatePolicy:
             metadata.updatePolicy ??
@@ -833,10 +849,11 @@ export const createSkillLibraryStore = (
       if (!existingSource && !duplicate) {
         reservedIds.add(id);
       }
+      const frontmatter = parseSkillFrontmatter(content);
       candidates.push({
         id,
-        name: metadataValue(content, "name") || pathName,
-        description: metadataValue(content, "description"),
+        name: frontmatter.name || pathName,
+        description: frontmatter.description,
         remotePath,
         sourceUrl,
         ref: source.ref,
@@ -882,6 +899,9 @@ export const createSkillLibraryStore = (
     const libraryIds = new Set(librarySkills.map((skill) => skill.id));
     const libraryById = new Map(librarySkills.map((skill) => [skill.id, skill]));
     const ignoreRules = await readIgnoreRules();
+    const skillsCliEvidence = (
+      await inspectSkillsCliLocks(paths.homeDir, options.skillsCliLockPaths)
+    ).evidenceBySkillKey;
     const byKey = new Map<string, SkillInventoryEntry>();
     for (const target of targetPaths) {
       const scanRoots = [...new Set([target.skillsDir, ...(target.skillScanDirs ?? [])].filter(Boolean))];
@@ -891,25 +911,72 @@ export const createSkillLibraryStore = (
         }
         const entries = await readdir(scanRoot, { withFileTypes: true });
         for (const entry of entries) {
-          if (!entry.isDirectory() || entry.name.startsWith(".")) {
+          if ((!entry.isDirectory() && !entry.isSymbolicLink()) || entry.name.startsWith(".")) {
             continue;
           }
           const skillDir = join(scanRoot, entry.name);
-          if (!(await pathExists(join(skillDir, "SKILL.md")))) {
+          const skillKey = normalizeSkillKey(entry.name);
+          const evidence = skillsCliEvidence.get(skillKey);
+          let directoryStats;
+          try {
+            directoryStats = await stat(skillDir);
+          } catch (error) {
+            if (entry.isSymbolicLink() && evidence && isMissingFileError(error)) {
+              const ignoreRule = findIgnoreRule(ignoreRules, { skillKey, path: skillDir });
+              const externalOwnership = {
+                ...evidence,
+                confidence: "confirmed" as const,
+                state: "broken-link" as const
+              };
+              byKey.set(`external:${entry.name}:${skillDir}`, {
+                id: entry.name,
+                name: entry.name,
+                description: "External Skill link target is missing.",
+                path: skillDir,
+                foundIn: [target.targetId],
+                status: ignoreRule ? "ignored" : "external",
+                libraryId: libraryIds.has(entry.name) ? entry.name : undefined,
+                skillKey,
+                contentHash: "",
+                ignoreRuleId: ignoreRule?.id,
+                externalOwnership
+              });
+              continue;
+            }
+            throw error;
+          }
+          if (!directoryStats.isDirectory() || !(await pathExists(join(skillDir, "SKILL.md")))) {
             continue;
           }
           const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
+          const frontmatter = parseSkillFrontmatter(content);
           const markerId = await markerLibraryId(skillDir, target);
-          const skillKey = normalizeSkillKey(entry.name);
           const ignoreRule = findIgnoreRule(ignoreRules, { skillKey, path: skillDir });
+          let externalOwnership = evidence;
+          if (externalOwnership) {
+            let confidence = externalOwnership.confidence;
+            try {
+              if (
+                skillDir === externalOwnership.canonicalPath ||
+                (await realpath(skillDir)) === (await realpath(externalOwnership.canonicalPath))
+              ) {
+                confidence = "confirmed";
+              }
+            } catch {
+              // The lock is still useful evidence when its canonical copy is unavailable.
+            }
+            externalOwnership = { ...externalOwnership, confidence, state: "healthy" };
+          }
           const status = markerId
             ? "managed"
             : ignoreRule
               ? "ignored"
-              : libraryIds.has(entry.name)
-                ? "library"
-                : "unmanaged";
-          const libraryId = markerId ?? (status === "library" ? entry.name : undefined);
+              : externalOwnership
+                ? "external"
+                : libraryIds.has(entry.name)
+                  ? "library"
+                  : "unmanaged";
+          const libraryId = markerId ?? (libraryIds.has(entry.name) ? entry.name : undefined);
           const key = `${status}:${libraryId ?? entry.name}:${skillDir}`;
           const existing = byKey.get(key);
           if (existing) {
@@ -922,8 +989,8 @@ export const createSkillLibraryStore = (
           const skillFileStats = await lstat(join(skillDir, "SKILL.md"));
           byKey.set(key, {
             id: entry.name,
-            name: metadataValue(content, "name") || entry.name,
-            description: metadataValue(content, "description"),
+            name: frontmatter.name || entry.name,
+            description: frontmatter.description,
             path: skillDir,
             foundIn: [target.targetId],
             status,
@@ -934,7 +1001,10 @@ export const createSkillLibraryStore = (
             installMethod: markerId ? (skillFileStats.isSymbolicLink() ? "linked" : "copied") : undefined,
             contentMatchesLibrary: markerId
               ? libraryById.get(markerId)?.contentHash === contentHash
-              : undefined
+              : libraryId
+                ? libraryById.get(libraryId)?.contentHash === contentHash
+                : undefined,
+            externalOwnership
           });
         }
       }
@@ -987,21 +1057,38 @@ export const createSkillLibraryStore = (
   const importSkill = async ({
     sourcePath,
     id,
-    sourceType = "local"
-  }: ImportSkillInput): Promise<SkillLibraryEntry> => {
+    sourceType = "local",
+    provenance,
+    upstream
+  }: ImportSkillStoreInput): Promise<SkillLibraryEntry> => {
     if (!(await pathExists(join(sourcePath, "SKILL.md")))) {
       throw new Error(`Skill source is missing SKILL.md: ${sourcePath}`);
     }
+    await validateSkillFrontmatter(sourcePath);
     const safeId = SafeIdSchema.parse(id ?? basename(sourcePath));
     const targetDir = join(await libraryDir(), safeId);
     if (await pathExists(targetDir)) {
       throw new Error(`Library skill already exists: ${safeId}`);
     }
     await removeAndCopy(sourcePath, targetDir);
+    const githubSource = upstream?.kind === "github"
+      ? parseGitHubSkillUrl(upstream.locator, {
+          ref: upstream.ref,
+          remotePath: upstream.subpath
+        })
+      : undefined;
     await writeMetadata(targetDir, {
-      sourceType,
-      source: sourcePath,
-      updatePolicy: "untracked"
+      sourceType: githubSource ? "github" : sourceType,
+      source: githubSource?.sourceUrl ?? sourcePath,
+      remoteRef: githubSource?.ref,
+      remotePath: githubSource?.remotePath,
+      remoteRevision: githubSource ? upstream?.revision : undefined,
+      updatePolicy: githubSource ? "tracked" : "untracked",
+      upstream: upstream ?? {
+        kind: "local",
+        locator: sourcePath
+      },
+      provenance: provenance ?? { importedVia: "agentenv" }
     });
     return entryFor(safeId, targetDir);
   };
@@ -1157,6 +1244,7 @@ export const createSkillLibraryStore = (
       if (!hasSkillMd) {
         throw new Error(`GitHub skill source is missing SKILL.md: ${url}`);
       }
+      await validateSkillFrontmatter(tempDir);
       await removeAndCopy(tempDir, targetDir);
       await writeMetadata(targetDir, {
         sourceType: "github",
@@ -1164,7 +1252,15 @@ export const createSkillLibraryStore = (
         remoteRef: source.ref,
         remotePath: source.remotePath,
         remoteRevision: revision,
-        updatePolicy: "tracked"
+        updatePolicy: "tracked",
+        upstream: {
+          kind: "github",
+          locator: source.sourceUrl,
+          ref: source.ref,
+          subpath: source.remotePath,
+          revision
+        },
+        provenance: { importedVia: "agentenv" }
       });
       return entryFor(safeId, targetDir);
     } finally {
@@ -1296,6 +1392,9 @@ export const createSkillLibraryStore = (
     if (libraryCreated && !(await pathExists(join(canonicalPath, "SKILL.md")))) {
       throw new Error(`Source skill is missing SKILL.md: ${canonicalPath}`);
     }
+    if (libraryCreated) {
+      await validateSkillFrontmatter(canonicalPath);
+    }
 
     const uniqueLocations = [...new Map(locations.map((item) => [item.targetDir, item])).values()];
     const backupId = `cleanup-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -1326,7 +1425,11 @@ export const createSkillLibraryStore = (
     try {
       if (libraryCreated) {
         await removeAndCopy(canonicalPath, targetLibraryDir);
-        await writeMetadata(targetLibraryDir, { sourceType: "local" });
+        await writeMetadata(targetLibraryDir, {
+          sourceType: "local",
+          upstream: { kind: "local", locator: canonicalPath },
+          provenance: { importedVia: "local-scan" }
+        });
       }
       for (const location of uniqueLocations) {
         await replaceTargetSkill({
@@ -1436,7 +1539,13 @@ export const createSkillLibraryStore = (
         source: githubSource.sourceUrl,
         remoteRef: githubSource.ref,
         remotePath: githubSource.remotePath,
-        updatePolicy: "tracked"
+        updatePolicy: "tracked",
+        upstream: {
+          kind: "github",
+          locator: githubSource.sourceUrl,
+          ref: githubSource.ref,
+          subpath: githubSource.remotePath
+        }
       });
       return entryFor(safeId, targetDir);
     }
@@ -1449,7 +1558,8 @@ export const createSkillLibraryStore = (
     await writeMetadata(targetDir, {
       sourceType: "local",
       source,
-      updatePolicy: "tracked"
+      updatePolicy: "tracked",
+      upstream: { kind: "local", locator: source }
     });
     return entryFor(safeId, targetDir);
   };
@@ -1626,7 +1736,15 @@ export const createSkillLibraryStore = (
           remotePath: source.remotePath,
           remoteRevision: revision,
           updatePolicy: "tracked",
-          iconKey: metadata.iconKey
+          iconKey: metadata.iconKey,
+          upstream: {
+            kind: "github",
+            locator: metadata.source,
+            ref: source.ref,
+            subpath: source.remotePath,
+            revision
+          },
+          provenance: metadata.provenance
         });
         return entryFor(safeId, targetDir);
       } finally {
@@ -1644,7 +1762,9 @@ export const createSkillLibraryStore = (
       sourceType: "local",
       source: metadata.source,
       updatePolicy: "tracked",
-      iconKey: metadata.iconKey
+      iconKey: metadata.iconKey,
+      upstream: metadata.upstream ?? { kind: "local", locator: metadata.source },
+      provenance: metadata.provenance
     });
     return entryFor(safeId, targetDir);
   };

@@ -471,6 +471,35 @@ describe("activation service", () => {
     );
   });
 
+  it("identifies Skills CLI ownership when it blocks a Profile skill", async () => {
+    const { paths, service } = await makeEnv();
+    const targetDir = join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill");
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(join(targetDir, "SKILL.md"), "---\nname: External copy\n---\n");
+    await writeFile(
+      join(paths.homeDir, ".agents", ".skill-lock.json"),
+      JSON.stringify({
+        version: 3,
+        skills: {
+          "agentenv-daily-coding-example-skill": {
+            sourceType: "github",
+            sourceUrl: "https://github.com/acme/skills",
+            ref: "main",
+            skillPath: "skills/example/SKILL.md",
+            skillFolderHash: "tree-sha"
+          }
+        }
+      })
+    );
+
+    const preview = await service.previewProfile("daily-coding");
+
+    expect(preview.errors).toContain(
+      `Cannot install agentenv-daily-coding-example-skill because Skills CLI manages the existing Skill at ${targetDir}. Remove it from Skills CLI, then rescan before applying this Profile.`
+    );
+    expect(preview.errors.some((error) => error.includes("not AgentEnv-owned"))).toBe(false);
+  });
+
   it("reports ignored unmanaged skill conflicts during profile preview", async () => {
     const { paths, service } = await makeEnv();
     await mkdir(join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill"), {

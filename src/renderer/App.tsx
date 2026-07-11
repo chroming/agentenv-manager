@@ -1647,9 +1647,36 @@ export const App = () => {
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.importSkillToLibrary(sourcePath);
+      await window.agentEnv.importSkillToLibrary({ sourcePath });
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importExternalSkill = async (skill: SkillInventoryEntry) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.importSkillToLibrary({
+        sourcePath: skill.path,
+        id: skill.skillKey,
+        upstream: skill.externalOwnership?.upstream,
+        provenance: {
+          importedVia: "local-scan",
+          externalManager: "skills-cli",
+          externalLockPath: skill.externalOwnership?.lockPath
+        }
+      });
+      setSelectedSkillUpdatePlan(undefined);
+      await refreshProfiles();
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: `Imported ${skill.name} to Library`
+      });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2640,6 +2667,7 @@ export const App = () => {
                 onCloseTool={() => setSkillLibraryTool(undefined)}
                 onSelectLocalSkillFolder={() => window.agentEnv.selectSkillFolder()}
                 onImportUnmanaged={importUnmanagedSkill}
+                onImportExternal={importExternalSkill}
                 onScanGitHubSkills={scanGitHubSkills}
                 onImportGitHubSkills={importGitHubSkills}
                 onManageTargetSkill={manageTargetSkill}

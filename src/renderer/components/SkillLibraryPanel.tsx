@@ -71,6 +71,7 @@ interface SkillLibraryPanelProps {
   onCloseTool?(): void;
   onSelectLocalSkillFolder(): Promise<string | undefined>;
   onImportUnmanaged(sourcePath: string): void;
+  onImportExternal(skill: SkillInventoryEntry): void;
   onScanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   onImportGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
@@ -145,6 +146,7 @@ export const SkillLibraryPanel = ({
   onCloseTool,
   onSelectLocalSkillFolder,
   onImportUnmanaged,
+  onImportExternal,
   onScanGitHubSkills,
   onImportGitHubSkills,
   onManageTargetSkill,
@@ -192,6 +194,10 @@ export const SkillLibraryPanel = ({
     canonicalPath: string;
     selectedPaths: string[];
   }>();
+  const [externalImport, setExternalImport] = useState<{
+    skillKey: string;
+    sourcePath: string;
+  }>();
   const [sourceDrafts, setSourceDrafts] = useState<
     Record<string, { sourceType: SkillSourceType; source: string }>
   >({});
@@ -212,6 +218,8 @@ export const SkillLibraryPanel = ({
       setDeleteCandidate(undefined);
     } else if (bulkUpdatePlans) {
       onCloseBulkUpdatePreview();
+    } else if (externalImport) {
+      setExternalImport(undefined);
     } else {
       setCleanupDraft(undefined);
     }
@@ -220,6 +228,7 @@ export const SkillLibraryPanel = ({
     (selectedUpdatePlan && selectedUpdatePlan.changes.length > 0) ||
       deleteCandidate ||
       bulkUpdatePlans ||
+      externalImport ||
       cleanupDraft
   );
   useLayoutEffect(() => {
@@ -400,19 +409,22 @@ export const SkillLibraryPanel = ({
         const statuses = new Set(activeItems.map((item) => item.status));
         const allIgnored = activeItems.length === 0;
         const allManaged = activeItems.length > 0 && activeItems.every((item) => item.status === "managed");
+        const hasExternal = statuses.has("external");
         const state = allIgnored
           ? "ignored"
           : allManaged
             ? "managed"
-            : hashes.size > 1
-            ? "conflict"
-            : activeItems.length > 1
-              ? "duplicate"
-              : statuses.has("unmanaged")
-                ? "unmanaged"
-                : statuses.has("library")
-                  ? "library"
-                  : "managed";
+            : hasExternal
+              ? "external"
+              : hashes.size > 1
+                ? "conflict"
+                : activeItems.length > 1
+                  ? "duplicate"
+                  : statuses.has("unmanaged")
+                    ? "unmanaged"
+                    : statuses.has("library")
+                      ? "library"
+                      : "managed";
         return {
           skillKey,
           items,
@@ -426,6 +438,13 @@ export const SkillLibraryPanel = ({
   const cleanupCandidate = cleanupDraft
     ? cleanupGroups.find((group) => group.skillKey === cleanupDraft.skillKey)
     : undefined;
+  const externalImportGroup = externalImport
+    ? cleanupGroups.find((group) => group.skillKey === externalImport.skillKey)
+    : undefined;
+  const externalImportItems =
+    externalImportGroup?.activeItems.filter(
+      (item) => item.status === "external" && item.externalOwnership
+    ) ?? [];
   const cleanupUsesExistingLibrary = Boolean(
     cleanupCandidate?.items.some((item) => item.status === "library" || item.status === "managed") ||
       (cleanupDraft && librarySkills.some((skill) => skill.id === cleanupDraft.libraryId))
@@ -1185,6 +1204,93 @@ export const SkillLibraryPanel = ({
         </div>
       ) : null}
 
+      {externalImport && externalImportGroup ? (
+        <div className="preview-modal-backdrop" onClick={() => setExternalImport(undefined)}>
+          <section
+            ref={modalDialogRef}
+            className="profile-form-dialog profile-form-dialog--compact external-skill-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Import external skill"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">
+                  Import {externalImportGroup.primary?.name ?? externalImport.skillKey}
+                </div>
+                <p className="muted">
+                  Create an independent Library copy. Skills CLI files and lock data stay unchanged.
+                </p>
+              </div>
+            </header>
+            <fieldset className="cleanup-review-group external-source-group">
+              <legend>Source copy</legend>
+              {externalImportItems.map((item) => (
+                <label className="cleanup-review-option" key={`external-${item.path}`}>
+                  <input
+                    type="radio"
+                    name="external-skill-source"
+                    checked={externalImport.sourcePath === item.path}
+                    disabled={item.externalOwnership?.state === "broken-link"}
+                    onChange={() =>
+                      setExternalImport({
+                        skillKey: externalImport.skillKey,
+                        sourcePath: item.path
+                      })
+                    }
+                  />
+                  <span>
+                    <strong>{item.foundIn.map(targetName).join(", ")}</strong>
+                    <PreviewText
+                      ariaLabel={`Full external source path ${item.path}`}
+                      className="cleanup-option-path"
+                      text={item.path}
+                      tooltipClassName="library-source-tooltip"
+                    />
+                  </span>
+                  <em>
+                    {item.externalOwnership?.state === "broken-link"
+                      ? "Missing"
+                      : `Content ${item.contentHash.slice(0, 7)}`}
+                  </em>
+                </label>
+              ))}
+            </fieldset>
+            <footer className="preview-actions">
+              <button
+                ref={modalInitialFocusRef}
+                className="secondary-action"
+                type="button"
+                onClick={() => setExternalImport(undefined)}
+              >
+                Cancel
+              </button>
+              <button
+                className="primary-action"
+                type="button"
+                disabled={!externalImportItems.some(
+                  (item) =>
+                    item.path === externalImport.sourcePath &&
+                    item.externalOwnership?.state !== "broken-link"
+                )}
+                onClick={() => {
+                  const selected = externalImportItems.find(
+                    (item) => item.path === externalImport.sourcePath
+                  );
+                  if (selected) {
+                    onImportExternal(selected);
+                    setExternalImport(undefined);
+                  }
+                }}
+              >
+                Import copy
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
       {cleanupDraft && cleanupCandidate ? (
         <div className="preview-modal-backdrop" onClick={() => setCleanupDraft(undefined)}>
           <section
@@ -1369,19 +1475,23 @@ export const SkillLibraryPanel = ({
                       ? "Conflict"
                       : group.state === "duplicate"
                         ? "Duplicate"
-                        : group.state === "library"
-                          ? "Imported"
-                          : group.state === "managed"
-                          ? "Managed"
-                          : "Unmanaged";
+                        : group.state === "external"
+                          ? "External"
+                          : group.state === "library"
+                            ? "Imported"
+                            : group.state === "managed"
+                              ? "Managed"
+                              : "Unmanaged";
                 const actionLabel =
                   group.state === "conflict"
                     ? "Resolve conflict"
                     : group.state === "duplicate"
                       ? "Consolidate copies"
-                      : group.state === "library"
-                        ? "Use Library version"
-                        : "Add to Library";
+                      : group.state === "external"
+                        ? "Import copy"
+                        : group.state === "library"
+                          ? "Use Library version"
+                          : "Add to Library";
 
                 return (
                   <div
@@ -1416,9 +1526,42 @@ export const SkillLibraryPanel = ({
                           .join("\n")}
                         tooltipClassName="library-source-tooltip"
                       />
+                      {group.state === "external" ? (
+                        <span className="cleanup-group-owner">
+                          Managed externally by Skills CLI
+                        </span>
+                      ) : null}
                     </div>
                     <div className="cleanup-group-actions">
-                      {group.state !== "managed" && group.state !== "ignored" ? (
+                      {group.state === "external" && !group.items.some((item) => item.libraryId) ? (
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          aria-label={`Import copy ${group.skillKey}`}
+                          disabled={!group.activeItems.some(
+                            (item) =>
+                              item.status === "external" &&
+                              item.externalOwnership?.state !== "broken-link"
+                          )}
+                          onClick={() => {
+                            const source = group.activeItems.find(
+                              (item) =>
+                                item.status === "external" &&
+                                item.externalOwnership?.state !== "broken-link"
+                            );
+                            if (source) {
+                              setExternalImport({
+                                skillKey: group.skillKey,
+                                sourcePath: source.path
+                              });
+                            }
+                          }}
+                        >
+                          Import copy
+                        </button>
+                      ) : group.state !== "managed" &&
+                        group.state !== "ignored" &&
+                        group.state !== "external" ? (
                         <button
                           className="secondary-action"
                           type="button"

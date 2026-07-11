@@ -2480,6 +2480,90 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => importedRow.textContent()).not.toContain("Check failed");
   }, 30_000);
 
+  it("imports a Skills CLI installation without changing the external copy or lock", async () => {
+    const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
+    const canonicalDir = join(homeDir, ".agents", "skills", "skills-cli-reviewer");
+    const targetSkillsDir = join(opencodeDir, "skills");
+    const targetDir = join(targetSkillsDir, "skills-cli-reviewer");
+    const lockPath = join(homeDir, ".agents", ".skill-lock.json");
+    const lockContent = JSON.stringify({
+      version: 3,
+      skills: {
+        "skills-cli-reviewer": {
+          source: "acme/skills",
+          sourceType: "github",
+          sourceUrl: "https://github.com/acme/skills",
+          ref: "main",
+          skillPath: "skills/skills-cli-reviewer/SKILL.md",
+          skillFolderHash: "tree-sha"
+        }
+      }
+    });
+    await mkdir(canonicalDir, { recursive: true });
+    await mkdir(targetSkillsDir, { recursive: true });
+    await writeFile(
+      join(canonicalDir, "SKILL.md"),
+      "---\nname: Skills CLI Reviewer\ndescription: Imported without takeover.\n---\n"
+    );
+    await symlink(canonicalDir, targetDir, "dir");
+    await writeFile(lockPath, lockContent);
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const group = page.getByRole("group", { name: "Cleanup group skills-cli-reviewer" });
+    await group.waitFor({ state: "visible", timeout: 5_000 });
+    await expect.poll(() => group.textContent()).toContain("Managed externally by Skills CLI");
+    await group.getByRole("button", { name: "Import copy skills-cli-reviewer" }).click();
+    const dialog = page.getByRole("dialog", { name: "Import external skill" });
+    await dialog.waitFor({ state: "visible", timeout: 5_000 });
+    await expect.poll(() => dialog.textContent()).toContain("lock data stay unchanged");
+    await resizeAppWindow(page, 920, 620);
+    const dialogGeometry = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const actions = element.querySelector<HTMLElement>(".preview-actions")?.getBoundingClientRect();
+      const buttons = [...element.querySelectorAll<HTMLButtonElement>(".preview-actions button")];
+      return {
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        actionsBottom: actions?.bottom ?? 0,
+        buttonsFit: buttons.every((button) => button.scrollWidth <= button.clientWidth),
+        buttonHeights: buttons.map((button) => button.getBoundingClientRect().height)
+      };
+    });
+    expect(dialogGeometry.left).toBeGreaterThanOrEqual(0);
+    expect(dialogGeometry.right).toBeLessThanOrEqual(920);
+    expect(dialogGeometry.top).toBeGreaterThanOrEqual(0);
+    expect(dialogGeometry.bottom).toBeLessThanOrEqual(620);
+    expect(dialogGeometry.actionsBottom).toBeLessThanOrEqual(dialogGeometry.bottom);
+    expect(dialogGeometry.buttonsFit).toBe(true);
+    expect(new Set(dialogGeometry.buttonHeights).size).toBe(1);
+    await dialog.getByRole("button", { name: "Import copy" }).click();
+
+    await page
+      .getByRole("group", { name: "Library item skills-cli-reviewer" })
+      .waitFor({ state: "visible", timeout: 5_000 });
+    await expect(readFile(lockPath, "utf8")).resolves.toBe(lockContent);
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
+    await expect(
+      readFile(join(appDataRoot, "skills-library", "skills-cli-reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("Imported without takeover");
+    const metadata = await readJson<{
+      sourceType?: string;
+      updatePolicy?: string;
+      provenance?: { externalManager?: string; externalLockPath?: string };
+    }>(join(appDataRoot, "skills-library", "skills-cli-reviewer", ".agentenv-skill.json"));
+    expect(metadata).toMatchObject({
+      sourceType: "github",
+      updatePolicy: "tracked",
+      provenance: {
+        externalManager: "skills-cli",
+        externalLockPath: lockPath
+      }
+    });
+  }, 30_000);
+
   it("refreshes Skills in place without clearing the current view", async () => {
     const { appDataRoot, page } = await launchApp();
     const search = page.getByRole("textbox", { name: "Search skills" });

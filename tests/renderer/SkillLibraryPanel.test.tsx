@@ -43,6 +43,7 @@ describe("SkillLibraryPanel", () => {
     const onCheckUpdates = vi.fn();
     const onOpenSource = vi.fn();
     const onSetUpdateSource = vi.fn();
+    const onImportExternal = vi.fn();
     const onSetUpdatePolicy = vi.fn();
     const onSetIcon = vi.fn();
     const onManageTargetSkill = vi.fn();
@@ -182,6 +183,40 @@ describe("SkillLibraryPanel", () => {
             status: "unmanaged",
             skillKey: "conflict-reviewer",
             contentHash: "codex-conflict-hash"
+          },
+          {
+            id: "external-reviewer",
+            name: "External Reviewer",
+            description: "Installed with Skills CLI",
+            path: "/tmp/opencode/skills/external-reviewer",
+            foundIn: ["opencode"],
+            status: "external",
+            skillKey: "external-reviewer",
+            contentHash: "external-hash",
+            externalOwnership: {
+              manager: "skills-cli",
+              lockPath: "/tmp/home/.agents/.skill-lock.json",
+              lockVersion: 3,
+              canonicalPath: "/tmp/home/.agents/skills/external-reviewer",
+              confidence: "confirmed",
+              state: "healthy",
+              upstream: {
+                kind: "github",
+                locator: "https://github.com/acme/skills",
+                ref: "main",
+                subpath: "skills/external-reviewer"
+              }
+            }
+          },
+          {
+            id: "external-reviewer",
+            name: "External Reviewer Local Copy",
+            description: "Same identity without external ownership",
+            path: "/tmp/codex/skills/external-reviewer",
+            foundIn: ["codex"],
+            status: "unmanaged",
+            skillKey: "external-reviewer",
+            contentHash: "local-copy-hash"
           }
         ]}
         cleanupBackups={[
@@ -241,6 +276,7 @@ describe("SkillLibraryPanel", () => {
         onCloseTool={onCloseTool}
         onSelectLocalSkillFolder={onSelectLocalSkillFolder}
         onImportUnmanaged={onImportUnmanaged}
+        onImportExternal={onImportExternal}
         onScanGitHubSkills={onScanGitHubSkills}
         onImportGitHubSkills={onImportGitHubSkills}
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
@@ -446,6 +482,28 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Imported");
     expect(discoveries).toHaveTextContent("Restore ignored");
+    const externalGroup = screen.getByRole("group", {
+      name: "Cleanup group external-reviewer"
+    });
+    expect(externalGroup).toHaveTextContent("External");
+    expect(externalGroup).toHaveTextContent("Managed externally by Skills CLI");
+    fireEvent.click(
+      within(externalGroup).getByRole("button", { name: "Import copy external-reviewer" })
+    );
+    let externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
+    expect(externalDialog).toHaveTextContent("Skills CLI files and lock data stay unchanged");
+    expect(externalDialog).toHaveTextContent("/tmp/opencode/skills/external-reviewer");
+    expect(externalDialog).not.toHaveTextContent("/tmp/codex/skills/external-reviewer");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Import external skill" })).not.toBeInTheDocument();
+    fireEvent.click(
+      within(externalGroup).getByRole("button", { name: "Import copy external-reviewer" })
+    );
+    externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
+    fireEvent.click(within(externalDialog).getByRole("button", { name: "Import copy" }));
+    expect(onImportExternal).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "external-reviewer", status: "external" })
+    );
     const cleanupHistory = screen.getByRole("region", { name: "Cleanup history" });
     expect(cleanupHistory).toHaveTextContent("shared-reviewer");
     expect(cleanupHistory).not.toHaveClass("resource-section");

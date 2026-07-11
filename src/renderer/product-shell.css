@@ -1712,6 +1712,31 @@
   font-size: 11px;
 }
 
+.cleanup-group-owner {
+  color: #52617a;
+  display: block;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.external-skill-dialog {
+  max-width: 620px;
+}
+
+.external-skill-dialog .preview-actions button {
+  height: 40px;
+  min-height: 40px;
+  width: auto;
+}
+
+.external-source-group {
+  margin: 0;
+}
+
 .library-inline-action {
   background: transparent;
   border: 0;

@@ -82,6 +82,8 @@ Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data ro
 - Compatibility copies MAY be captured into a Profile, but MUST remain in place while any installed consumer lacks an equivalent managed Target-specific copy.
 - Once every installed consumer has an equivalent managed copy, the compatibility copy MAY be removed automatically after Preview, backup, and successful Apply.
 - A compatibility copy with conflicting content blocks automatic consolidation.
+- External manager metadata, including Skills CLI lock files, is read-only evidence. AgentEnv MUST NOT silently edit or delete another manager's lock data.
+- Importing an externally managed Skill creates an independent Library copy and MUST NOT imply that AgentEnv has taken ownership of the external installation.
 
 ### 4.3 Profile
 
@@ -435,6 +437,7 @@ Status: Apply and cleanup rollback plus stale rollback conflict handling are `Im
 - Legacy metadata without an explicit policy defaults to `Untracked` for local sources and `Tracked` for GitHub sources.
 - Import validates `SKILL.md` and rejects unsafe or ambiguous directory layouts.
 - The Library Skill icon defaults to its source type and MAY be replaced by a built-in icon. The selected icon is presentation metadata and MUST survive content updates.
+- `SKILL.md` frontmatter MUST be parsed as YAML rather than with line-oriented string matching. Folded, quoted, and multiline values remain valid.
 
 ### 16.1.1 Refresh
 
@@ -446,6 +449,8 @@ Status: Apply and cleanup rollback plus stale rollback conflict handling are `Im
 ### 16.2 Scan And Cleanup
 
 Scan MUST inspect every adapter-declared Skill location and group results by canonical Skill identity and content.
+
+Scan MAY read supported versions of `$XDG_STATE_HOME/skills/.skill-lock.json` and `~/.agents/.skill-lock.json` to identify Skills CLI ownership and recover upstream provenance. Unsupported or corrupt lock data MUST degrade to ordinary filesystem scanning and MUST NOT block unrelated Skills.
 
 Each group can be:
 
@@ -473,6 +478,14 @@ Ignore contract:
 - An ignored Skill occupying a desired managed destination blocks Apply.
 - Ignore rules can be removed without rescanning data loss.
 
+External ownership contract:
+
+- Skills tracked by a supported Skills CLI lock are classified as `External`, not `Unmanaged`.
+- Directory symlinks and broken tracked symlinks remain visible in Scan results.
+- `Import copy` copies a selected healthy external installation into Library, preserves verified upstream metadata, and leaves the external files and lock unchanged.
+- External installations MUST NOT enter the ordinary cleanup transaction that replaces selected locations with AgentEnv-managed copies.
+- A desired Profile Skill occupying an externally managed Target path blocks Apply with the manager, path, and required recovery action identified.
+
 ### 16.3 Update
 
 - Check compares only against an explicit update source.
@@ -492,7 +505,7 @@ Ignore contract:
 - Unmanaged copies are never deleted.
 - Deletion with managed installs creates an undoable Backup.
 
-Status: local and recursive GitHub import, in-place Refresh, per-Skill update policy, scan, cleanup, ignore, GitHub update, icon metadata, reference blocking, managed-install removal, and undo are `Implemented`; identity edge cases need broader contract tests.
+Status: local and recursive GitHub import, in-place Refresh, per-Skill update policy, YAML frontmatter, read-only Skills CLI detection, external copy import, scan, cleanup, ignore, GitHub update, icon metadata, reference blocking, managed-install removal, and undo are `Implemented`; external-manager takeover and identity edge cases need broader contract tests.
 
 ## 17. MCP Library Contract
 
@@ -692,6 +705,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
 - In-place toolbar and `Cmd/Ctrl+R` Refresh preserve current Skill view state and do not contact update sources.
 - Skill source-default and custom icons persist across refresh and content update; Profile icon changes remain dirty until whole-Profile Save.
+- Skills CLI v3 lock detection, corrupt and unsupported lock fallback, directory and broken symlink discovery, independent external import, lock preservation, and external Apply conflicts.
 - Update marks affected deployments pending without deploying.
 - Duplicate, conflict, ignored, linked, copied, and stale-copy states.
 - Referenced resource deletion is blocked.

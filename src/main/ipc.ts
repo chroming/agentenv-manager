@@ -16,6 +16,7 @@ import type {
   GitHubSkillImportInput,
   ManageTargetSkillInput,
   SkillCleanupRequest,
+  SkillImportInput,
   SkillIconInput,
   SaveMcpServerInput,
   SaveProfileInput,
@@ -119,9 +120,12 @@ export const registerIpcHandlers = ({
       .listTargets()
       .then((targets) => skillLibraryStore.scanUnmanaged(targets.map((target) => target.paths)))
   );
-  ipcMain.handle("skills:import-library", (_event, sourcePath: unknown) =>
-    skillLibraryStore.importSkill({ sourcePath: String(sourcePath) })
-  );
+  ipcMain.handle("skills:import-library", (_event, input: SkillImportInput) => {
+    if (!input || typeof input !== "object" || typeof input.sourcePath !== "string") {
+      throw new Error("Skill import requires a source path");
+    }
+    return skillLibraryStore.importSkill(input);
+  });
   ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>
     skillLibraryStore.importGitHubSkill(input)
   );

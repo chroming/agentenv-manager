@@ -15,6 +15,153 @@ afterEach(async () => {
 });
 
 describe("skill library store", () => {
+  it("rejects malformed YAML frontmatter before copying a local skill", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data") });
+    const sourceDir = join(root, "broken-skill");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: [broken\n---\n# Broken\n");
+    const store = createSkillLibraryStore(paths);
+
+    await expect(store.importSkill({ sourcePath: sourceDir })).rejects.toThrow(
+      "Skill frontmatter is invalid"
+    );
+    await expect(readFile(join(paths.skillsLibraryDir, "broken-skill", "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("detects Skills CLI directory links and imports an independent tracked copy", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const canonicalDir = join(paths.homeDir, ".agents", "skills", "reviewer");
+    const targetSkillsDir = join(paths.homeDir, ".config", "opencode", "skills");
+    const targetDir = join(targetSkillsDir, "reviewer");
+    const lockPath = join(paths.homeDir, ".agents", ".skill-lock.json");
+    await mkdir(canonicalDir, { recursive: true });
+    await mkdir(targetSkillsDir, { recursive: true });
+    await writeFile(
+      join(canonicalDir, "SKILL.md"),
+      `---
+name: Reviewer
+description: >
+  Review code from a shared
+  Skills CLI installation.
+---
+`
+    );
+    await symlink(canonicalDir, targetDir, "dir");
+    await writeFile(
+      lockPath,
+      JSON.stringify({
+        version: 3,
+        skills: {
+          reviewer: {
+            source: "acme/skills",
+            sourceType: "github",
+            sourceUrl: "https://github.com/acme/skills",
+            ref: "main",
+            skillPath: "skills/reviewer/SKILL.md",
+            skillFolderHash: "tree-sha"
+          }
+        }
+      })
+    );
+    const store = createSkillLibraryStore(paths, undefined, { skillsCliLockPaths: [lockPath] });
+
+    const inventory = await store.scanInventory([
+      {
+        targetId: "opencode",
+        configDir: dirname(targetSkillsDir),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: targetSkillsDir
+      }
+    ]);
+
+    expect(inventory).toHaveLength(1);
+    expect(inventory[0]).toMatchObject({
+      id: "reviewer",
+      name: "Reviewer",
+      description: "Review code from a shared Skills CLI installation.",
+      status: "external",
+      externalOwnership: {
+        manager: "skills-cli",
+        confidence: "confirmed",
+        state: "healthy"
+      }
+    });
+
+    const imported = await store.importSkill({
+      sourcePath: inventory[0].path,
+      id: inventory[0].skillKey,
+      upstream: inventory[0].externalOwnership?.upstream,
+      provenance: {
+        importedVia: "local-scan",
+        externalManager: "skills-cli",
+        externalLockPath: lockPath
+      }
+    });
+
+    expect(imported).toMatchObject({
+      id: "reviewer",
+      sourceType: "github",
+      updatePolicy: "tracked",
+      remoteRef: "main",
+      provenance: {
+        importedVia: "local-scan",
+        externalManager: "skills-cli",
+        externalLockPath: lockPath
+      }
+    });
+    await rm(canonicalDir, { recursive: true, force: true });
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("Skills CLI installation");
+  });
+
+  it("keeps a broken Skills CLI link visible during scanning", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const targetSkillsDir = join(paths.homeDir, ".config", "opencode", "skills");
+    const targetDir = join(targetSkillsDir, "missing-reviewer");
+    const lockPath = join(paths.homeDir, ".agents", ".skill-lock.json");
+    await mkdir(targetSkillsDir, { recursive: true });
+    await mkdir(dirname(lockPath), { recursive: true });
+    await symlink(join(paths.homeDir, ".agents", "skills", "missing-reviewer"), targetDir, "dir");
+    await writeFile(
+      lockPath,
+      JSON.stringify({
+        version: 3,
+        skills: {
+          "missing-reviewer": {
+            sourceType: "github",
+            sourceUrl: "https://github.com/acme/skills",
+            ref: "main",
+            skillPath: "skills/missing-reviewer/SKILL.md",
+            skillFolderHash: "missing"
+          }
+        }
+      })
+    );
+    const store = createSkillLibraryStore(paths, undefined, { skillsCliLockPaths: [lockPath] });
+
+    const inventory = await store.scanInventory([
+      {
+        targetId: "opencode",
+        configDir: dirname(targetSkillsDir),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: targetSkillsDir
+      }
+    ]);
+
+    expect(inventory[0]).toMatchObject({
+      id: "missing-reviewer",
+      status: "external",
+      contentHash: "",
+      externalOwnership: { state: "broken-link" }
+    });
+  });
   it("lists reusable skills from the central library directory", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: root });
