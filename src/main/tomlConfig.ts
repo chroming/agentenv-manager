@@ -33,11 +33,26 @@ export const extractMcpServerNames = (content: string): string[] => {
 
 export const findUnmanagedMcpConflicts = (
   liveConfig: string,
-  profileMcpToml: string
+  profileMcpToml: string,
+  allowMatching = false
 ): string[] => {
   const unmanagedLiveConfig = stripManagedSection(liveConfig, "mcp");
-  const liveNames = new Set(extractMcpServerNames(unmanagedLiveConfig));
-  const profileNames = extractMcpServerNames(profileMcpToml);
+  const liveParsed = parseToml(unmanagedLiveConfig);
+  const profileParsed = parseToml(profileMcpToml);
+  const liveServers =
+    liveParsed.mcp_servers && typeof liveParsed.mcp_servers === "object"
+      ? (liveParsed.mcp_servers as Record<string, unknown>)
+      : {};
+  const profileServers =
+    profileParsed.mcp_servers && typeof profileParsed.mcp_servers === "object"
+      ? (profileParsed.mcp_servers as Record<string, unknown>)
+      : {};
+  const liveNames = new Set(Object.keys(liveServers));
+  const profileNames = Object.keys(profileServers).sort((a, b) => a.localeCompare(b));
 
-  return profileNames.filter((name) => liveNames.has(name));
+  return profileNames.filter(
+    (name) =>
+      liveNames.has(name) &&
+      !(allowMatching && JSON.stringify(liveServers[name]) === JSON.stringify(profileServers[name]))
+  );
 };

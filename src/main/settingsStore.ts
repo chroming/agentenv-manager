@@ -1,8 +1,9 @@
-import { cp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import type { AgentEnvSettings } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
+import { hashComparableResource } from "./resourceHash";
 
 const SettingsSchema = z.object({
   skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("copy"),
@@ -58,6 +59,9 @@ const migrateSkillStorage = async (
   if (current.skillStorageLocation === next.skillStorageLocation) {
     return;
   }
+  if (next.skillStorageLocation === "agents") {
+    throw new Error("~/.agents/skills is a shared runtime location and cannot store Library originals");
+  }
   const oldDir = resolveSkillsLibraryDir(paths, current);
   const newDir = resolveSkillsLibraryDir(paths, next);
   let entries;
@@ -78,21 +82,28 @@ const migrateSkillStorage = async (
     const source = join(oldDir, entry.name);
     const target = join(newDir, entry.name);
     if (await pathExists(target)) {
-      continue;
+      if (await hashComparableResource(source) === await hashComparableResource(target)) {
+        continue;
+      }
+      let conflictPath = join(newDir, `${entry.name}-pre-shared-migration`);
+      for (let index = 2; await pathExists(conflictPath); index += 1) {
+        conflictPath = join(newDir, `${entry.name}-pre-shared-migration-${index}`);
+      }
+      await rename(target, conflictPath);
     }
-    try {
-      await rename(source, target);
-    } catch {
-      await cp(source, target, { recursive: true, dereference: true });
-      await rm(source, { recursive: true, force: true });
-    }
+    await cp(source, target, { recursive: true, dereference: true });
   }
 };
 
 export const createSettingsStore = (paths: AgentEnvPaths): SettingsStore => {
   const readSettings = async (): Promise<AgentEnvSettings> => {
     try {
-      return SettingsSchema.parse(JSON.parse(await readFile(settingsPathFor(paths), "utf8")));
+      const current = SettingsSchema.parse(JSON.parse(await readFile(settingsPathFor(paths), "utf8")));
+      if (current.skillStorageLocation !== "agents") return current;
+      const next = { ...current, skillStorageLocation: "appData" as const };
+      await migrateSkillStorage(paths, current, next);
+      await writeFile(settingsPathFor(paths), `${JSON.stringify(next, null, 2)}\n`, "utf8");
+      return next;
     } catch (error) {
       if (isMissingFileError(error)) {
         return DEFAULT_SETTINGS;
@@ -105,7 +116,10 @@ export const createSettingsStore = (paths: AgentEnvPaths): SettingsStore => {
     input: Partial<AgentEnvSettings>
   ): Promise<AgentEnvSettings> => {
     const current = await readSettings();
-    const next = SettingsSchema.parse({ ...current, ...input });
+    if (input.skillStorageLocation === "agents") {
+      throw new Error("~/.agents/skills is reserved for shared runtime installs");
+    }
+    const next = SettingsSchema.parse({ ...current, ...input, skillStorageLocation: "appData" });
     await migrateSkillStorage(paths, current, next);
     const settingsPath = settingsPathFor(paths);
     await mkdir(dirname(settingsPath), { recursive: true });

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import * as TOML from "@iarna/toml";
 import {
   AssetPolicySchema,
   LegacySkillsPolicySchema
@@ -14,6 +15,7 @@ import type {
 } from "../../shared/types";
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
+import { hashComparableResource } from "../resourceHash";
 import { replaceManagedSection } from "../managedSections";
 import {
   createOwnerMarkerContent,
@@ -66,6 +68,8 @@ const buildSkillsConfigToml = (profile: ProfileDetail): string => {
 };
 
 const invalidMessage = (label: string, message: string) => `${label}: ${message}`;
+const isOwnedSkillDir = async (targetDir: string, targetPaths: TargetPaths) =>
+  isAgentEnvOwnedDir(targetDir, { targetId: targetPaths.targetId, kind: "skill" });
 
 const validateAssets = async (input: TargetAssetInput) => {
   const { profile, targetPaths } = input;
@@ -92,10 +96,7 @@ const validateAssets = async (input: TargetAssetInput) => {
     }
     if (
       (await pathExists(targetDir)) &&
-      !(await isAgentEnvOwnedDir(targetDir, {
-        targetId: targetPaths.targetId,
-        kind: "skill"
-      }))
+      !(await isOwnedSkillDir(targetDir, targetPaths))
     ) {
       errors.push(`Skill target already exists and is not AgentEnv-owned: ${targetDir}`);
     }
@@ -116,13 +117,15 @@ const validateAssets = async (input: TargetAssetInput) => {
     if (!(await pathExists(sourceFile))) {
       errors.push(`Owned agent source does not exist: ${sourceFile}`);
     }
-    if (
-      (await pathExists(targetFile)) &&
-      !(await isAgentEnvOwnedFile(targetFile, {
-        targetId: targetPaths.targetId,
-        kind: "agent"
-      }))
-    ) {
+    const targetExists = await pathExists(targetFile);
+    const owned = targetExists && await isAgentEnvOwnedFile(targetFile, {
+      targetId: targetPaths.targetId,
+      kind: "agent"
+    });
+    const matching =
+      targetExists && (await pathExists(sourceFile)) && input.allowMatchingUnmanagedAssets &&
+      (await hashComparableResource(sourceFile)) === (await hashComparableResource(targetFile));
+    if (targetExists && !owned && !matching) {
       errors.push(`Agent target already exists and is not AgentEnv-owned: ${targetFile}`);
     }
   }
@@ -155,14 +158,24 @@ const removeStaleOwnedSkills = async (input: TargetAssetInput) => {
 
     const targetDir = join(targetPaths.skillsDir, entry.name);
     if (
-      await isAgentEnvOwnedDir(targetDir, {
-        targetId: targetPaths.targetId,
-        kind: "skill"
-      })
+      await isOwnedSkillDir(targetDir, targetPaths)
     ) {
       await rm(targetDir, { recursive: true, force: true });
     }
   }
+};
+
+const legacyOwnedSkillDirs = async (targetPaths: TargetPaths) => {
+  const matches: string[] = [];
+  for (const location of targetPaths.skillLocations ?? []) {
+    if (location.role !== "compatibility-runtime" || !(await pathExists(location.path))) continue;
+    for (const entry of await readdir(location.path, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const targetDir = join(location.path, entry.name);
+      if (await isOwnedSkillDir(targetDir, targetPaths)) matches.push(targetDir);
+    }
+  }
+  return matches;
 };
 
 const removeStaleOwnedAgentFiles = async ({ profile, targetPaths }: TargetAssetInput) => {
@@ -183,12 +196,10 @@ const removeStaleOwnedAgentFiles = async ({ profile, targetPaths }: TargetAssetI
     }
 
     const targetFile = join(targetPaths.agentsDir, entry.name);
-    if (
-      await isAgentEnvOwnedFile(targetFile, {
-        targetId: targetPaths.targetId,
-        kind: "agent"
-      })
-    ) {
+    if (await isAgentEnvOwnedFile(targetFile, {
+      targetId: targetPaths.targetId,
+      kind: "agent"
+    })) {
       await rm(targetFile, { force: true });
       await rm(markerPathForFile(targetFile), { force: true });
     }
@@ -212,6 +223,9 @@ const getAssetBackupPaths = async (input: TargetAssetInput) => {
     }
   }
   addSkillRefBackupPaths(paths, targetPaths, input);
+  for (const legacyPath of await legacyOwnedSkillDirs(targetPaths)) {
+    paths.add(legacyPath);
+  }
   if (targetPaths.agentsDir) {
     for (const ownedFile of profile.assetPolicy.ownedFiles ?? []) {
       if (ownedFile.kind === "agent") {
@@ -231,10 +245,7 @@ const getAssetBackupPaths = async (input: TargetAssetInput) => {
 
       const targetDir = join(targetPaths.skillsDir, entry.name);
       if (
-        await isAgentEnvOwnedDir(targetDir, {
-          targetId: targetPaths.targetId,
-          kind: "skill"
-        })
+        await isOwnedSkillDir(targetDir, targetPaths)
       ) {
         paths.add(targetDir);
       }
@@ -279,10 +290,7 @@ const applyAssets = async (input: TargetAssetInput) => {
     const targetDir = join(targetPaths.skillsDir ?? "", ownedDir.targetName);
 
     if (
-      await isAgentEnvOwnedDir(targetDir, {
-        targetId: targetPaths.targetId,
-        kind: "skill"
-      })
+      await isOwnedSkillDir(targetDir, targetPaths)
     ) {
       await rm(targetDir, { recursive: true, force: true });
     }
@@ -293,7 +301,7 @@ const applyAssets = async (input: TargetAssetInput) => {
       markerPathFor(targetDir),
       createOwnerMarkerContent({
         profileId: profile.id,
-        targetId: profile.manifest.targetId,
+        targetId: targetPaths.targetId,
         kind: ownedDir.kind,
         source: ownedDir.source
       }),
@@ -308,12 +316,16 @@ const applyAssets = async (input: TargetAssetInput) => {
     const sourceFile = join(profile.profileDir ?? "", ownedFile.source);
     const targetFile = join(targetPaths.agentsDir, ownedFile.targetName);
 
-    if (
-      await isAgentEnvOwnedFile(targetFile, {
-        targetId: targetPaths.targetId,
-        kind: "agent"
-      })
-    ) {
+    const owned = await isAgentEnvOwnedFile(targetFile, {
+      targetId: targetPaths.targetId,
+      kind: "agent"
+    });
+    const matching =
+      input.allowMatchingUnmanagedAssets &&
+      await pathExists(sourceFile) &&
+      await pathExists(targetFile) &&
+      (await hashComparableResource(sourceFile)) === (await hashComparableResource(targetFile));
+    if (owned || matching) {
       await rm(targetFile, { force: true });
       await rm(markerPathForFile(targetFile), { force: true });
     }
@@ -324,7 +336,7 @@ const applyAssets = async (input: TargetAssetInput) => {
       markerPathForFile(targetFile),
       createOwnerMarkerContent({
         profileId: profile.id,
-        targetId: profile.manifest.targetId,
+        targetId: targetPaths.targetId,
         kind: ownedFile.kind,
         source: ownedFile.source
       }),
@@ -332,6 +344,9 @@ const applyAssets = async (input: TargetAssetInput) => {
     );
   }
   await applySkillRefs(input);
+  for (const legacyPath of await legacyOwnedSkillDirs(targetPaths)) {
+    await rm(legacyPath, { recursive: true, force: true });
+  }
 };
 
 const readAssetPolicy = async (profileDir: string) => {
@@ -373,7 +388,8 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
   },
   createTargetPaths: ({ homeDir }) => {
     const codexHome = join(homeDir, ".codex");
-    const skillsDir = join(homeDir, ".agents", "skills");
+    const skillsDir = join(codexHome, "skills");
+    const sharedSkillsDir = join(homeDir, ".agents", "skills");
     return {
       targetId: "codex",
       configDir: codexHome,
@@ -382,7 +398,11 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       configPath: join(codexHome, "config.toml"),
       agentsDir: join(codexHome, "agents"),
       skillsDir,
-      skillScanDirs: [skillsDir]
+      skillLocations: [
+        { path: skillsDir, role: "preferred-runtime", shared: false },
+        { path: sharedSkillsDir, role: "compatibility-runtime", shared: true }
+      ],
+      skillScanDirs: [skillsDir, sharedSkillsDir]
     };
   },
   createDefaultProfile: (id) => ({
@@ -400,6 +420,68 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     configText: "",
     assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], mcpRefs: [], disabledSkillPaths: [] }
   }),
+  captureProfile: async (targetPaths) => {
+    const [instructions, configText] = await Promise.all([
+      readTextIfExists(targetPaths.instructionsPath),
+      readTextIfExists(targetPaths.configPath)
+    ]);
+    const parsed = TOML.parse(configText || "") as Record<string, unknown>;
+    const rawServers =
+      parsed.mcp_servers && typeof parsed.mcp_servers === "object" && !Array.isArray(parsed.mcp_servers)
+        ? (parsed.mcp_servers as Record<string, unknown>)
+        : {};
+    const mcpServers = [];
+    const excluded: string[] = [];
+    for (const [name, raw] of Object.entries(rawServers)) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        excluded.push(`mcp_servers.${name}`);
+        continue;
+      }
+      const server = raw as Record<string, unknown>;
+      const command = typeof server.command === "string" ? server.command : undefined;
+      const url = typeof server.url === "string" ? server.url : undefined;
+      const args = Array.isArray(server.args)
+        ? server.args.filter((item): item is string => typeof item === "string")
+        : [];
+      const envVars = Array.isArray(server.env_vars)
+        ? server.env_vars.filter((item): item is string => typeof item === "string")
+        : [];
+      if ((!command && !url) || server.env || server.http_headers || server.env_http_headers) {
+        excluded.push(`mcp_servers.${name}`);
+        continue;
+      }
+      mcpServers.push({
+        id: name.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "mcp-server",
+        name,
+        transport: command ? "stdio" as const : "http" as const,
+        ...(command ? { command, args, env: Object.fromEntries(envVars.map((item) => [item, item])) } : { url, args: [], env: {} })
+      });
+    }
+    const skills =
+      parsed.skills && typeof parsed.skills === "object" && !Array.isArray(parsed.skills)
+        ? (parsed.skills as Record<string, unknown>)
+        : {};
+    const disabledSkillPaths = Array.isArray(skills.config)
+      ? skills.config.flatMap((entry) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+          const item = entry as Record<string, unknown>;
+          return item.enabled === false && typeof item.path === "string" ? [item.path] : [];
+        })
+      : [];
+    const managedKeys = new Set(["mcp_servers", "skills"]);
+    const nativeKeys = Object.keys(parsed).filter((key) => !managedKeys.has(key));
+    return {
+      instructions,
+      configText: "",
+      mcpServers,
+      disabledSkillPaths,
+      warnings: [
+        ...excluded.map((path) => `${path} was excluded because it contains unsupported or literal credential fields`),
+        ...(nativeKeys.length > 0 ? [`Codex native settings remain Target-owned: ${nativeKeys.join(", ")}`] : [])
+      ],
+      excluded: excluded.concat(nativeKeys.map((key) => `config.toml.${key}`))
+    };
+  },
   readProfileFiles: async (profileDir, manifest) => {
     const [instructions, configText, assetPolicy] = await Promise.all([
       readFile(join(profileDir, "AGENTS.md"), "utf8"),
@@ -427,7 +509,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       )
     ]);
   },
-  createPreview: async ({ profile, targetPaths }): Promise<TargetActivationPreview> => {
+  createPreview: async ({ profile, targetPaths, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const createdState: TargetState = {
       managedConfigKeys: [],
       managedMcpNames: []
@@ -474,7 +556,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     }
 
     if (liveValidation.ok && profileMcpValidation.ok && profile.manifest.managed.config) {
-      const conflicts = findUnmanagedMcpConflicts(liveConfig, profile.configText);
+      const conflicts = findUnmanagedMcpConflicts(liveConfig, profile.configText, allowMatchingUnmanagedConfig);
       errors.push(
         ...conflicts.map(
           (name) =>

@@ -72,7 +72,18 @@ The Library is global to AgentEnv Manager and contains canonical reusable resour
 
 Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data root.
 
-### 4.2 Profile
+### 4.2 Shared Runtime Locations
+
+`~/.agents/skills` and other cross-tool compatibility paths MAY be consumed by more than one Target. They are migration sources, not canonical Library storage or AgentEnv's default deployment destination.
+
+- Canonical Skill content MUST remain under AgentEnv data.
+- Apply MUST deploy Skills to the selected Target's dedicated managed directory.
+- Applying an OpenCode Profile MUST NOT change Codex or Claude Code Skill directories, and equivalent isolation applies to every Target pair.
+- Compatibility copies MAY be captured into a Profile, but MUST remain in place while any installed consumer lacks an equivalent managed Target-specific copy.
+- Once every installed consumer has an equivalent managed copy, the compatibility copy MAY be removed automatically after Preview, backup, and successful Apply.
+- A compatibility copy with conflicting content blocks automatic consolidation.
+
+### 4.3 Profile
 
 A Profile is a saved environment recipe. It owns:
 
@@ -87,7 +98,7 @@ A Profile has one **native Target format** used to edit and validate native Adva
 
 Source of truth: the saved Profile directory in AgentEnv data.
 
-### 4.3 Target
+### 4.4 Target
 
 A Target is a detected local agent tool and its deployment locations. OpenCode, Codex, and Claude Code are Targets.
 
@@ -97,7 +108,7 @@ A Target is a detected local agent tool and its deployment locations. OpenCode, 
 - One Profile can be active on multiple Targets simultaneously.
 - A Target can be modified by AgentEnv Manager, the agent itself, or another local process.
 
-### 4.4 Backup
+### 4.5 Backup
 
 A Backup is an immutable pre-operation snapshot used for recovery.
 
@@ -105,7 +116,7 @@ A Backup is an immutable pre-operation snapshot used for recovery.
 - Backup is not a Profile and MUST NOT silently become canonical content.
 - A no-op MUST NOT create a Backup.
 
-### 4.5 Deployment State
+### 4.6 Deployment State
 
 Deployment State records AgentEnv ownership and the exact Profile and Library versions applied to a Target.
 
@@ -160,6 +171,7 @@ It MUST include enough information to distinguish:
 | Preview | Compute a fresh, complete deployment plan against current Profile, Library, and Target state. It does not write. |
 | Apply | Transactionally replace the AgentEnv-managed Target environment with the selected saved Profile after Preview, using compensating rollback when a multi-path write fails. |
 | Take over | First Apply to an unmanaged Target. It establishes ownership after previewing existing content. |
+| Create from Target | Capture a Target's portable environment as a new Profile, import reusable resources into Library, apply the resulting Profile, and consolidate redundant runtime copies in one reviewed transaction. |
 | Stop managing | End AgentEnv ownership through an explicit keep-current or restore-pre-takeover path. |
 | Remove from Profile | Remove a reference from the Profile draft. It does not delete Library content. |
 | Remove from Library | Delete canonical Library content only after references are resolved; managed installs are included explicitly. |
@@ -499,7 +511,28 @@ Status: local and recursive GitHub import, in-place Refresh, per-Skill update po
 
 Status: reusable references, immutable identity, deletion protection, portable stdio environment references, and remote URL validation are `Implemented`; richer remote authentication and broad secret masking are `Partial`.
 
-## 18. Profile Deletion Contract
+## 18. Create From Target And Consolidation Contract
+
+Create from Target turns an existing native environment into a managed Profile without requiring manual filesystem cleanup.
+
+- Capture MUST read only paths declared by the selected Target adapter.
+- Preview MUST list portable resources to include or reuse, new Library imports, excluded resources, conflicts, and old copies that will be removed.
+- Profile Instructions and Advanced configuration remain in the source Target's native format. Reusable Skills and supported MCP definitions become Library references.
+- Existing Library content is reused only when its comparable content hash or semantic MCP definition matches exactly.
+- Sensitive values, credentials, caches, history, runtime state, and unsupported native fields MUST remain Target-owned and MUST be named as excluded.
+- Ignored Skills remain in place, are excluded from the new Profile, and MUST NOT be removed by consolidation.
+- Duplicate active runtime copies with identical content MAY be consolidated. Same-name copies with different content block the operation.
+- The preferred runtime copy is established by Apply. Alternate copies are removed only after Apply succeeds and only when they were listed in Preview.
+- Apply backup MUST include every path scheduled for consolidation cleanup.
+- Skills are deployed to the selected Target's dedicated directory. Compatibility copies are removed only after every installed consumer has an equivalent managed copy.
+- Preview becomes stale when any captured source path changes before confirmation.
+- Failure before Apply removes newly created Profile and Library resources. Failure after Apply MUST restore the Target and cleanup paths before those new canonical resources are removed.
+- If automatic restoration fails, the new Profile, Library resources, and recovery backup MUST be preserved and the operation MUST enter an explicit recovery-required outcome.
+- A content-identical unmanaged Target MAY still be taken over to establish ownership and deployment state; this is not treated as an ordinary no-op.
+
+Status: OpenCode, Codex, and Claude Code adapter capture, Target-specific deployment, compatibility-copy preservation and eventual cleanup, reviewed import, stale protection, and rollback are `Implemented`.
+
+## 19. Profile Deletion Contract
 
 - Delete removes the saved Profile recipe only.
 - Delete is blocked while the Profile is active on any Target.
@@ -509,7 +542,7 @@ Status: reusable references, immutable identity, deletion protection, portable s
 
 Status: deletion blocking, complete affected-Target disclosure, and navigation to Target resolution are `Implemented`.
 
-## 19. Feedback Contract
+## 20. Feedback Contract
 
 Every command follows:
 
@@ -529,7 +562,7 @@ Idle -> Pressed -> Working -> Success | Warning | Error | Partial failure
 
 Status: shared transient success, persistent error, background progress, GitHub remediation, and non-blocking global feedback are `Implemented`.
 
-## 20. Desktop Interaction Contract
+## 21. Desktop Interaction Contract
 
 - Supported minimum content viewport is `920 x 620` at 100% scale.
 - Default content viewport is `1180 x 728`.
@@ -560,7 +593,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 
 Status: supported viewport containment, topmost overlays, modal focus trapping, Escape and outside-click dismissal, and focus restoration are `Implemented`.
 
-## 21. Security And Privacy Contract
+## 22. Security And Privacy Contract
 
 - All data remains local unless the user explicitly accesses GitHub or opens an external URL.
 - Renderer-requested external links MUST be validated by the main process and limited to `http` and `https` URLs.
@@ -571,7 +604,7 @@ Status: supported viewport containment, topmost overlays, modal focus trapping, 
 - AgentEnv MUST never modify agent authentication files such as Codex `auth.json`.
 - Real Target writes require an installed executable and writable destination; missing directories MAY be created only inside adapter-declared roots.
 
-## 22. Target Adapter Contract
+## 23. Target Adapter Contract
 
 A new Target adapter MUST define:
 
@@ -593,7 +626,7 @@ A new Target adapter MUST define:
 
 Registration MUST occur in the Target registry. Renderer components MUST NOT require Target-specific branches for ordinary lifecycle behavior.
 
-## 22.1 AgentEnv Data Lifecycle
+## 23.1 AgentEnv Data Lifecycle
 
 - AgentEnv data has an explicit format version and migration path.
 - Legacy storage migration MUST preserve Profiles, Library content, deployment state, Settings, and Backups.
@@ -603,7 +636,7 @@ Registration MUST occur in the Target registry. Renderer components MUST NOT req
 - Corrupt or unsupported future data MUST fail closed with recovery guidance rather than being partially loaded.
 - A restore/import flow MUST create a safety backup before replacing current canonical data, reject unsafe links or unsupported formats, and refresh all visible canonical state after success.
 
-## 22.2 First-Run Workflow
+## 23.2 First-Run Workflow
 
 The first useful journey is:
 
@@ -617,7 +650,7 @@ The first useful journey is:
 
 The product MAY use contextual empty states for this journey; it MUST NOT require a marketing-style onboarding page.
 
-## 23. Required Acceptance Matrix
+## 24. Required Acceptance Matrix
 
 Every release that changes Profile, Library, Target, or Apply behavior MUST verify these scenarios:
 
@@ -631,6 +664,10 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Dirty Profile blocks Preview and preserves draft.
 - Missing executable and missing directory are distinguished.
 - Copy mode keeps Library updates pending; Live link mode visibly propagates them immediately.
+- Create from Target captures portable resources, reuses exact Library matches, applies the resulting Profile, and removes only reviewed redundant copies.
+- Ignored resources and unsupported native data remain Target-owned after Create from Target.
+- Applying the same Library Skill to OpenCode, Codex, and Claude Code creates isolated Target-specific runtime copies.
+- A shared compatibility copy remains until all installed consumers have equivalent managed copies, then is removed automatically.
 
 ### Cross-Target
 
@@ -678,7 +715,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 
 E2E assertions MUST verify persisted files and state, not only successful clicks.
 
-## 24. Production Release Gate
+## 25. Production Release Gate
 
 AgentEnv Manager is production-ready only when all of these are true:
 
@@ -693,13 +730,13 @@ AgentEnv Manager is production-ready only when all of these are true:
 - Default and minimum desktop viewports pass containment and overlay checks.
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
 
-Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, rollback, stale rollback protection, no-op, cross-Target payload review, canonical Target lifecycle, data backup and restore, native Instructions adoption, active-Profile deletion recovery, Stop Managing workflows, and portable MCP environment references are functional. Richer remote MCP authentication, complete secret handling, and broader drift adoption remain release requirements.
+Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, rollback, stale rollback protection, no-op, cross-Target payload review, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, native Instructions adoption, active-Profile deletion recovery, Stop Managing workflows, and portable MCP environment references are functional. Richer remote MCP authentication, complete secret handling, and broader drift adoption remain release requirements.
 
-### 24.1 Verification Snapshot
+### 25.1 Verification Snapshot
 
 Last verified: 2026-07-14 against the current `main` tree at the time of this snapshot.
 
-- `297` automated tests passed across `39` test files; the `65`-test E2E suite covers native Target, cross-Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `313` automated tests passed across `42` test files; the `67`-test E2E suite covers native Target, cross-Target, Create from Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
@@ -713,7 +750,7 @@ Last verified: 2026-07-14 against the current `main` tree at the time of this sn
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
 - Signed and notarized distribution verification remains outstanding; the local packaged primary-workflow smoke uses an unsigned `.app`.
 
-## 25. Current Priority Gaps
+## 26. Current Priority Gaps
 
 1. Add richer remote MCP authentication, complete secret masking, and backup permission guarantees.
 2. Add explicit Backup retention controls.

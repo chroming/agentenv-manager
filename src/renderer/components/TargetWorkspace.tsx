@@ -4,6 +4,7 @@ import {
   ChevronUp,
   Clock3,
   Monitor,
+  Plus,
   RefreshCw,
   TerminalSquare
 } from "lucide-react";
@@ -32,6 +33,7 @@ interface TargetWorkspaceProps {
   busy: boolean;
   onRefresh(): Promise<void>;
   onManageTarget(targetId: string): void;
+  onCreateProfileFromTarget(targetId: string): void;
   onPreviewRollback(backupId: string): void;
   onCancelRollback(): void;
   onRestoreRollback(): void;
@@ -75,6 +77,7 @@ export const TargetWorkspace = ({
   busy,
   onRefresh,
   onManageTarget,
+  onCreateProfileFromTarget,
   onPreviewRollback,
   onCancelRollback,
   onRestoreRollback,
@@ -145,15 +148,28 @@ export const TargetWorkspace = ({
                 <span className={`target-badge target-badge--${target.health.status}`}>
                   {targetStatusLabel[target.health.status]}
                 </span>
-                <button
-                  className="primary-inline-action"
-                  type="button"
-                  aria-label={`Open ${target.name} in Profiles`}
-                  onClick={() => onManageTarget(target.id)}
-                >
-                  Open in Profiles
-                  <ArrowRight size={14} strokeWidth={2.2} />
-                </button>
+                <span className="target-workflow-actions">
+                  <button
+                    className="secondary-action"
+                    type="button"
+                    aria-label={`Create profile from ${target.name}`}
+                    disabled={busy || !target.health.executableFound}
+                    title={target.health.executableFound ? undefined : `${target.name} command is missing`}
+                    onClick={() => onCreateProfileFromTarget(target.id)}
+                  >
+                    <Plus size={14} strokeWidth={2.2} />
+                    Create Profile
+                  </button>
+                  <button
+                    className="primary-inline-action"
+                    type="button"
+                    aria-label={`Open ${target.name} in Profiles`}
+                    onClick={() => onManageTarget(target.id)}
+                  >
+                    Open
+                    <ArrowRight size={14} strokeWidth={2.2} />
+                  </button>
+                </span>
               </header>
 
               <div className="target-state-grid">

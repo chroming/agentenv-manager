@@ -54,7 +54,7 @@ describe("Codex target adapter", () => {
       instructionsPath: join(root, ".codex", "AGENTS.md"),
       configPath: join(root, ".codex", "config.toml"),
       agentsDir: join(root, ".codex", "agents"),
-      skillsDir: join(root, ".agents", "skills")
+      skillsDir: join(root, ".codex", "skills")
     });
   });
 
@@ -160,5 +160,43 @@ describe("Codex target adapter", () => {
         "utf8"
       )
     ).resolves.toContain('"kind": "agent"');
+  });
+
+  it("captures portable Codex MCP and disabled skills while excluding native settings", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-codex-capture-"));
+    const adapter = createCodexTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.instructionsPath, "# Existing Codex\n", "utf8");
+    await writeFile(
+      targetPaths.configPath,
+      [
+        'model = "gpt-5"',
+        "",
+        "[mcp_servers.docs]",
+        'command = "node"',
+        'args = ["server.js"]',
+        'env_vars = ["DOCS_TOKEN"]',
+        "",
+        "[[skills.config]]",
+        'path = "/tmp/disabled/SKILL.md"',
+        "enabled = false",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const captured = await adapter.captureProfile(targetPaths);
+    expect(captured.instructions).toBe("# Existing Codex\n");
+    expect(captured.configText).toBe("");
+    expect(captured.mcpServers).toEqual([
+      expect.objectContaining({
+        name: "docs",
+        command: "node",
+        env: { DOCS_TOKEN: "DOCS_TOKEN" }
+      })
+    ]);
+    expect(captured.disabledSkillPaths).toEqual(["/tmp/disabled/SKILL.md"]);
+    expect(captured.excluded).toContain("config.toml.model");
   });
 });

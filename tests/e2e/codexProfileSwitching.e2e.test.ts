@@ -181,7 +181,7 @@ describe("Codex profile switching e2e", () => {
     expect(betaConfig).not.toContain("[mcp_servers.agentenv-alpha-mcp]");
     await expect(readFile(authPath, "utf8")).resolves.toBe('{"token":"never-touch"}\n');
     await expect(
-      readFile(join(paths.homeDir, ".agents", "skills", "agentenv-beta-skill", "SKILL.md"), "utf8")
+      readFile(join(codexDir, "skills", "agentenv-beta-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("beta skill");
     await expect(
       readFile(join(codexDir, "agents", "agentenv-beta-agent.toml"), "utf8")
@@ -193,8 +193,8 @@ describe("Codex profile switching e2e", () => {
       expect.arrayContaining([
         join(codexDir, "AGENTS.md"),
         configPath,
-        join(paths.homeDir, ".agents", "skills", "agentenv-alpha-skill"),
-        join(paths.homeDir, ".agents", "skills", "agentenv-beta-skill"),
+        join(codexDir, "skills", "agentenv-alpha-skill"),
+        join(codexDir, "skills", "agentenv-beta-skill"),
         join(codexDir, "agents", "agentenv-alpha-agent.toml"),
         join(codexDir, "agents", "agentenv-beta-agent.toml")
       ])

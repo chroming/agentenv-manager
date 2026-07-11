@@ -68,6 +68,12 @@ describe("OpenCode target adapter", () => {
       join(root, ".agents", "skills"),
       join(root, ".claude", "skills")
     ]);
+    expect(targetPaths.skillLocations).toEqual([
+      { path: join(root, ".config", "opencode", "skills"), role: "preferred-runtime", shared: false },
+      { path: join(root, ".config", "opencode", "skill"), role: "alternate-runtime", shared: false },
+      { path: join(root, ".agents", "skills"), role: "compatibility-runtime", shared: true },
+      { path: join(root, ".claude", "skills"), role: "compatibility-runtime", shared: true }
+    ]);
   });
 
   it("plans instructions, JSONC overlay, and managed MCP state without clobbering unmanaged config", async () => {

@@ -1494,7 +1494,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await checkUpdateItem.click();
     await popover.waitFor({ state: "hidden" });
-    await expect.poll(() => page.getByRole("status").textContent()).toContain(
+    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
       "shared-reviewer source is current"
     );
     expect(
@@ -2865,15 +2865,17 @@ describe("Electron UI profile switching e2e", () => {
     expect((await lstat(installedSkillMd)).isSymbolicLink()).toBe(false);
   }, 30_000);
 
-  it("moves the shared skill library storage through Settings and installs from the new location", async () => {
-    const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
+  it("keeps canonical skills in app data while installing Target-specific runtime copies", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
 
     await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByLabel("Global skill storage location").selectOption("agents");
-    const movedSkillMd = join(homeDir, ".agents", "skills", "shared-reviewer", "SKILL.md");
-    await expect.poll(() => fileExists(movedSkillMd)).toBe(true);
+    await expect.poll(() => page.getByLabel("Global skill storage location").textContent())
+      .toBe("AgentEnv data");
+    const canonicalSkillMd = join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md");
+    const runtimeSkillMd = join(opencodeDir, "skills", "shared-reviewer", "SKILL.md");
+    await expect(fileExists(canonicalSkillMd)).resolves.toBe(true);
     await expect(
-      fileExists(join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md"))
+      fileExists(runtimeSkillMd)
     ).resolves.toBe(false);
 
     await selectProfile(page, "UI OpenCode alpha");
@@ -2882,10 +2884,60 @@ describe("Electron UI profile switching e2e", () => {
     await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
-    const installedSkillMd = join(opencodeDir, "skills", "shared-reviewer", "SKILL.md");
-    await expect(readFile(installedSkillMd, "utf8")).resolves.toBe(
-      await readFile(movedSkillMd, "utf8")
+    await expect(readFile(runtimeSkillMd, "utf8")).resolves.toBe(
+      await readFile(canonicalSkillMd, "utf8")
     );
+    await expect(fileExists(canonicalSkillMd)).resolves.toBe(true);
+  }, 30_000);
+
+  it("creates and applies a managed Profile from the live OpenCode Target", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
+    await resizeAppWindow(page, 920, 620);
+    await page.getByRole("button", { name: "Targets", exact: true }).click();
+    const targetCard = page.getByRole("article", { name: "Target OpenCode" });
+    await targetCard.getByRole("button", { name: "Create profile from OpenCode" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "New profile" });
+    await dialog.getByRole("button", { name: "Review" }).click();
+    const impact = dialog.getByRole("region", { name: "Capture impact" });
+    await expect.poll(() => impact.textContent()).toContain("target-only-reviewer");
+    const captureGeometry = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const confirm = element.querySelector<HTMLButtonElement>(".primary-action")?.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        confirmBottom: confirm?.bottom ?? 0
+      };
+    });
+    expect(captureGeometry.left).toBeGreaterThanOrEqual(0);
+    expect(captureGeometry.right).toBeLessThanOrEqual(920);
+    expect(captureGeometry.top).toBeGreaterThanOrEqual(0);
+    expect(captureGeometry.bottom).toBeLessThanOrEqual(620);
+    expect(captureGeometry.confirmBottom).toBeLessThanOrEqual(captureGeometry.bottom);
+    await dialog.getByRole("button", { name: "Create & Manage" }).click();
+    await dialog.waitFor({ state: "hidden" });
+    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
+      "OpenCode Current created and applied"
+    );
+
+    await expect(
+      readFile(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("Migrate me into the shared library.");
+    await expect(
+      readFile(join(opencodeDir, "skills", "target-only-reviewer", ".agentenv-owner.json"), "utf8")
+    ).resolves.toContain('"targetId": "opencode"');
+    const manifests = await Promise.all(
+      (await readdir(join(appDataRoot, "profiles"), { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => readJson<{ id: string; name: string }>(join(appDataRoot, "profiles", entry.name, "profile.json")))
+    );
+    const captured = manifests.find((manifest) => manifest.name === "OpenCode Current");
+    expect(captured?.id).toBeTruthy();
+    await expect(readJson<{ activeProfileId: string }>(join(appDataRoot, "target-states", "opencode.json")))
+      .resolves.toMatchObject({ activeProfileId: captured?.id });
   }, 30_000);
 
   it("persists skill background update check settings from Settings", async () => {
@@ -3393,7 +3445,7 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("switches OpenCode profiles through the rendered app and restores from history", async () => {
-    const { opencodeDir, page } = await launchApp();
+    const { homeDir, opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
@@ -3450,7 +3502,7 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("applies an OpenCode profile's portable resources to Codex and then reports it applied", async () => {
-    const { codexDir, homeDir, page } = await launchApp();
+    const { codexDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
     await selectTarget(page, "Codex");
@@ -3469,7 +3521,7 @@ describe("Electron UI profile switching e2e", () => {
       "Active UI profile: alpha"
     );
     await expect(
-      readFile(join(homeDir, ".agents", "skills", "ui-alpha-skill", "SKILL.md"), "utf8")
+      readFile(join(codexDir, "skills", "ui-alpha-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("alpha skill prompt");
     await expect(fileExists(join(codexDir, "agents", "ui-alpha-agent"))).resolves.toBe(false);
     await expect
@@ -3499,7 +3551,7 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("switches Codex profiles through the rendered app without touching auth", async () => {
-    const { codexDir, homeDir, page } = await launchApp();
+    const { codexDir, page } = await launchApp();
 
     await page.getByRole("button", { name: "Profiles" }).click();
     await selectTarget(page, "Codex");
@@ -3527,7 +3579,7 @@ describe("Electron UI profile switching e2e", () => {
       fileExists(join(codexDir, "agents", "ui-codex-alpha-agent.toml"))
     ).resolves.toBe(false);
     await expect(
-      readFile(join(homeDir, ".agents", "skills", "ui-codex-beta-skill", "SKILL.md"), "utf8")
+      readFile(join(codexDir, "skills", "ui-codex-beta-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("beta Codex skill prompt");
   }, 30_000);
 });

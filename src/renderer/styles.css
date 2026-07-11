@@ -907,6 +907,22 @@ h2 {
   width: min(520px, calc(100vw - 80px));
 }
 
+.profile-form-dialog--capture {
+  max-width: 620px;
+  width: min(620px, calc(100vw - 40px));
+}
+
+.settings-readonly-value {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  padding: 0 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+}
+
 .profile-form-dialog--compact {
   max-width: 420px;
 }
@@ -945,9 +961,115 @@ h2 {
   font-weight: 700;
 }
 
+.profile-form-grid .field-error {
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .profile-form-grid textarea {
   font-family: inherit;
   min-height: 88px;
+}
+
+.profile-source-choice {
+  background: #f1f4f8;
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+}
+
+.profile-source-choice button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  min-height: 34px;
+}
+
+.profile-source-choice button.is-selected {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  color: var(--text);
+}
+
+.target-capture-review {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.target-capture-review__summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.target-capture-review__summary span {
+  background: #f6f8fb;
+  border-radius: 7px;
+  color: var(--muted);
+  display: grid;
+  font-size: 11px;
+  gap: 2px;
+  padding: 8px 10px;
+}
+
+.target-capture-review__summary strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.target-capture-review__list {
+  border-block: 1px solid var(--border);
+  max-height: 184px;
+  overflow-y: auto;
+}
+
+.target-capture-resource {
+  align-items: center;
+  border-bottom: 1px solid #edf1f6;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 6px 2px;
+}
+
+.target-capture-resource:last-child {
+  border-bottom: 0;
+}
+
+.target-capture-resource > span {
+  display: grid;
+  min-width: 0;
+}
+
+.target-capture-resource strong,
+.target-capture-resource small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-capture-resource small {
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.target-capture-resource em {
+  color: #2563eb;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.target-capture-resource--exclude em {
+  color: #9a3412;
 }
 
 .danger-action {

@@ -138,7 +138,11 @@ describe("Claude Code target adapter", () => {
     const adapter = createClaudeCodeTargetAdapter();
     const targetPaths = adapter.createTargetPaths({ homeDir: root });
     await mkdir(targetPaths.configDir, { recursive: true });
-    await writeFile(targetPaths.configPath, JSON.stringify({ model: "sonnet" }), "utf8");
+    await writeFile(
+      targetPaths.configPath,
+      JSON.stringify({ model: "sonnet" }),
+      "utf8"
+    );
     await writeFile(
       targetPaths.mcpConfigPath ?? "",
       JSON.stringify({
@@ -244,5 +248,41 @@ describe("Claude Code target adapter", () => {
     ).resolves.toContain(
       `skill target already exists and is not AgentEnv-owned: ${targetDir}`
     );
+  });
+
+  it("captures portable Claude settings and excludes literal MCP credentials", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-capture-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.instructionsPath, "# Existing Claude\n", "utf8");
+    await writeFile(
+      targetPaths.configPath,
+      JSON.stringify({ model: "sonnet", customHeader: "Bearer hidden-value-123" }),
+      "utf8"
+    );
+    await writeFile(
+      targetPaths.mcpConfigPath ?? "",
+      JSON.stringify({
+        mcpServers: {
+          docs: { type: "stdio", command: "node", args: ["server.js"] },
+          secret: { type: "stdio", command: "node", env: { TOKEN: "literal-secret" } },
+          remoteSecret: {
+            type: "http",
+            url: "https://example.com/mcp",
+            headers: { Authorization: "Bearer hidden" }
+          }
+        }
+      }),
+      "utf8"
+    );
+
+    const captured = await adapter.captureProfile(targetPaths);
+    expect(JSON.parse(captured.configText)).toMatchObject({ settings: { model: "sonnet" } });
+    expect(JSON.parse(captured.configText).settings).not.toHaveProperty("customHeader");
+    expect(captured.mcpServers.map((server) => server.name)).toEqual(["docs"]);
+    expect(captured.excluded).toContain(".claude.json.mcpServers.secret");
+    expect(captured.excluded).toContain(".claude.json.mcpServers.remoteSecret");
+    expect(captured.excluded).toContain("claude.settings.customHeader");
   });
 });

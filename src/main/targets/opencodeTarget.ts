@@ -18,6 +18,7 @@ import type {
 } from "../../shared/types";
 import { createUnifiedDiff } from "../diff";
 import { isMissingFileError, pathExists, readTextIfExists } from "../fileUtils";
+import { hashComparableResource } from "../resourceHash";
 import {
   createOwnerMarkerContent,
   isAgentEnvOwnedDir,
@@ -31,6 +32,7 @@ import {
   validateSkillRefs
 } from "./skillRefs";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
+import { captureJsonMcpServers, sameJsonValue, sanitizeCapturedJson } from "./capture";
 
 const DEFAULT_STATE: TargetState = {
   managedConfigKeys: [],
@@ -168,7 +170,8 @@ const applyJsoncOverlay = (
 const findOverlayConflicts = (
   liveConfig: Record<string, unknown>,
   profileConfig: Record<string, unknown>,
-  state: TargetState
+  state: TargetState,
+  allowMatchingUnmanaged = false
 ) => {
   const errors: string[] = [];
   const managedConfigKeys = new Set(state.managedConfigKeys);
@@ -179,13 +182,21 @@ const findOverlayConflicts = (
   for (const key of Object.keys(profileConfig).filter(
     (name) => name !== "mcp" && !METADATA_CONFIG_KEYS.has(name)
   )) {
-    if (key in liveConfig && !managedConfigKeys.has(key)) {
+    if (
+      key in liveConfig &&
+      !managedConfigKeys.has(key) &&
+      !(allowMatchingUnmanaged && sameJsonValue(liveConfig[key], profileConfig[key]))
+    ) {
       errors.push(`Config key ${key} already exists outside AgentEnv management`);
     }
   }
 
   for (const name of Object.keys(profileMcp)) {
-    if (name in liveMcp && !managedMcpNames.has(name)) {
+    if (
+      name in liveMcp &&
+      !managedMcpNames.has(name) &&
+      !(allowMatchingUnmanaged && sameJsonValue(liveMcp[name], profileMcp[name]))
+    ) {
       errors.push(`MCP server ${name} already exists outside AgentEnv management`);
     }
   }
@@ -195,6 +206,12 @@ const findOverlayConflicts = (
 
 const targetRootFor = (targetPaths: TargetPaths, kind: "agent" | "skill") =>
   kind === "agent" ? targetPaths.agentsDir : targetPaths.skillsDir;
+
+const isOwnedTargetDir = async (
+  targetDir: string,
+  targetPaths: TargetPaths,
+  kind: "agent" | "skill"
+) => isAgentEnvOwnedDir(targetDir, { targetId: targetPaths.targetId, kind });
 
 const targetDirFor = (
   targetPaths: TargetPaths,
@@ -237,13 +254,12 @@ const validateAssets = async (input: TargetAssetInput) => {
     if (!sourceExists) {
       errors.push(`Owned ${ownedDir.kind} source does not exist: ${sourceDir}`);
     }
-    if (
-      (await pathExists(targetDir)) &&
-      !(await isAgentEnvOwnedDir(targetDir, {
-        targetId: targetPaths.targetId,
-        kind: ownedDir.kind
-      }))
-    ) {
+    const targetExists = await pathExists(targetDir);
+    const owned = targetExists && await isOwnedTargetDir(targetDir, targetPaths, ownedDir.kind);
+    const matching =
+      targetExists && sourceExists && input.allowMatchingUnmanagedAssets &&
+      (await hashComparableResource(sourceDir)) === (await hashComparableResource(targetDir));
+    if (targetExists && !owned && !matching) {
       errors.push(
         `${ownedDir.kind} target already exists and is not AgentEnv-owned: ${targetDir}`
       );
@@ -283,10 +299,7 @@ const removeStaleOwnedDirs = async (input: TargetAssetInput) => {
       const key = `${root.kind}:${entry.name}`;
       if (
         !desired.has(key) &&
-        (await isAgentEnvOwnedDir(targetDir, {
-          targetId: targetPaths.targetId,
-          kind: root.kind
-        }))
+        (await isOwnedTargetDir(targetDir, targetPaths, root.kind))
       ) {
         await rm(targetDir, { recursive: true, force: true });
       }
@@ -328,10 +341,7 @@ const getAssetBackupPaths = async (input: TargetAssetInput) => {
       const key = `${root.kind}:${entry.name}`;
       if (
         !desired.has(key) &&
-        (await isAgentEnvOwnedDir(targetDir, {
-          targetId: targetPaths.targetId,
-          kind: root.kind
-        }))
+        (await isOwnedTargetDir(targetDir, targetPaths, root.kind))
       ) {
         paths.add(targetDir);
       }
@@ -349,12 +359,13 @@ const applyAssets = async (input: TargetAssetInput) => {
     const sourceDir = join(profile.profileDir ?? "", ownedDir.source);
     const targetDir = targetDirFor(targetPaths, ownedDir.kind, ownedDir.targetName);
 
-    if (
-      await isAgentEnvOwnedDir(targetDir, {
-        targetId: targetPaths.targetId,
-        kind: ownedDir.kind
-      })
-    ) {
+    const owned = await isOwnedTargetDir(targetDir, targetPaths, ownedDir.kind);
+    const matching =
+      input.allowMatchingUnmanagedAssets &&
+      await pathExists(sourceDir) &&
+      await pathExists(targetDir) &&
+      (await hashComparableResource(sourceDir)) === (await hashComparableResource(targetDir));
+    if (owned || matching) {
       await rm(targetDir, { recursive: true, force: true });
     }
 
@@ -364,7 +375,7 @@ const applyAssets = async (input: TargetAssetInput) => {
       markerPathFor(targetDir),
       createOwnerMarkerContent({
         profileId: profile.id,
-        targetId: profile.manifest.targetId,
+        targetId: targetPaths.targetId,
         kind: ownedDir.kind,
         source: ownedDir.source
       }),
@@ -394,18 +405,25 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   },
   createTargetPaths: ({ homeDir }) => {
     const configDir = join(homeDir, ".config", "opencode");
-    const skillsDir = join(configDir, "skills");
+    const privateSkillsDir = join(configDir, "skills");
+    const sharedSkillsDir = join(homeDir, ".agents", "skills");
     return {
       targetId: "opencode",
       configDir,
       instructionsPath: join(configDir, "AGENTS.md"),
       configPath: join(configDir, "opencode.jsonc"),
       agentsDir: join(configDir, "agents"),
-      skillsDir,
+      skillsDir: privateSkillsDir,
+      skillLocations: [
+        { path: privateSkillsDir, role: "preferred-runtime", shared: false },
+        { path: join(configDir, "skill"), role: "alternate-runtime", shared: false },
+        { path: sharedSkillsDir, role: "compatibility-runtime", shared: true },
+        { path: join(homeDir, ".claude", "skills"), role: "compatibility-runtime", shared: true }
+      ],
       skillScanDirs: [
-        skillsDir,
+        privateSkillsDir,
         join(configDir, "skill"),
-        join(homeDir, ".agents", "skills"),
+        sharedSkillsDir,
         join(homeDir, ".claude", "skills")
       ]
     };
@@ -425,6 +443,26 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     configText: "{}\n",
     assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], mcpRefs: [], disabledSkillPaths: [] }
   }),
+  captureProfile: async (targetPaths) => {
+    const [instructions, configText] = await Promise.all([
+      readTextIfExists(targetPaths.instructionsPath),
+      readTextIfExists(targetPaths.configPath)
+    ]);
+    const parsed = parseJsoncObject(configText, "Invalid live opencode.jsonc");
+    if (!parsed.ok) throw new Error(parsed.message);
+    const config = cloneJson(parsed.value);
+    const capturedMcp = captureJsonMcpServers(config.mcp, "opencode");
+    delete config.mcp;
+    const sanitized = sanitizeCapturedJson(config, "opencode");
+    return {
+      instructions,
+      configText: `${JSON.stringify(sanitized.value, null, 2)}\n`,
+      mcpServers: capturedMcp.servers,
+      disabledSkillPaths: [],
+      warnings: capturedMcp.excluded.map((name) => `MCP server ${name} was excluded because it contains unsupported or literal environment values`),
+      excluded: sanitized.excluded.concat(capturedMcp.excluded.map((name) => `mcp.${name}`))
+    };
+  },
   readProfileFiles: async (profileDir, manifest) => {
     const [instructions, configText, assetPolicyContent] = await Promise.all([
       readFile(join(profileDir, "AGENTS.md"), "utf8"),
@@ -452,7 +490,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       )
     ]);
   },
-  createPreview: async ({ profile, targetPaths, state }): Promise<TargetActivationPreview> => {
+  createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;
     const warnings = findSecretWarnings(profile.instructions).concat(
       findSecretWarnings(profile.configText)
@@ -485,7 +523,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     }
 
     if (liveConfig.ok && profileConfig.ok) {
-      errors.push(...findOverlayConflicts(liveConfig.value, profileConfig.value, activeState));
+      errors.push(...findOverlayConflicts(liveConfig.value, profileConfig.value, activeState, allowMatchingUnmanagedConfig));
       if (errors.length === 0) {
         const planned = applyJsoncOverlay(
           liveConfigText,

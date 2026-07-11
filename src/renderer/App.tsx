@@ -63,6 +63,7 @@ import type {
   SkillUpdatePlan,
   SkillUpdateSourceInput,
   TargetInfo,
+  TargetCapturePreview,
   TargetManagementState
 } from "../shared/types";
 import {
@@ -117,6 +118,7 @@ const emptyAssetPolicy: AssetPolicy = {
 
 type ComposerSection = "instructions" | "skills" | "mcp" | "advanced";
 type ProfileDialogMode = "create" | "edit";
+type ProfileCreateSource = "blank" | "target";
 
 interface PendingProfileAction {
   label: string;
@@ -520,6 +522,10 @@ export const App = () => {
   const [isTargetMenuOpen, setIsTargetMenuOpen] = useState(false);
   const [isProfileActionsOpen, setIsProfileActionsOpen] = useState(false);
   const [profileDialogMode, setProfileDialogMode] = useState<ProfileDialogMode>();
+  const [profileCreateSource, setProfileCreateSource] = useState<ProfileCreateSource>("blank");
+  const [targetCapturePreview, setTargetCapturePreview] = useState<TargetCapturePreview>();
+  const [profileCaptureStatus, setProfileCaptureStatus] = useState("");
+  const [profileFormError, setProfileFormError] = useState("");
   const [profileForm, setProfileForm] = useState({
     targetId: "",
     name: "",
@@ -977,6 +983,9 @@ export const App = () => {
       return;
     }
     setProfileForm({ targetId, name: "", description: "" });
+    setProfileCreateSource("blank");
+    setTargetCapturePreview(undefined);
+    setProfileFormError("");
     setProfileDialogMode("create");
     setActiveWorkspace("profiles");
     setIsProfileActionsOpen(false);
@@ -984,6 +993,25 @@ export const App = () => {
 
   const openCreateProfileDialog = () => {
     guardProfileAction("create a new profile", openCreateProfileDialogNow);
+  };
+
+  const openCreateFromTargetDialogNow = (targetId: string) => {
+    const target = targets.find((item) => item.id === targetId);
+    setProfileForm({
+      targetId,
+      name: target ? `${target.name} Current` : "Current Environment",
+      description: ""
+    });
+    setProfileCreateSource("target");
+    setTargetCapturePreview(undefined);
+    setProfileFormError("");
+    setProfileDialogMode("create");
+    setActiveWorkspace("profiles");
+  };
+
+  const openCreateFromTargetDialog = (targetId: string) => {
+    const targetName = targets.find((item) => item.id === targetId)?.name ?? "Target";
+    guardProfileAction(`create a profile from ${targetName}`, () => openCreateFromTargetDialogNow(targetId));
   };
 
   const openEditProfileDialog = () => {
@@ -996,30 +1024,53 @@ export const App = () => {
       description: draftProfile.manifest.description
     });
     setProfileDialogMode("edit");
+    setProfileFormError("");
     setIsProfileActionsOpen(false);
   };
 
   const submitProfileDialog = async () => {
     const name = profileForm.name.trim();
     const description = profileForm.description.trim();
-    if (!profileDialogMode || !name) {
-      setError("Profile name is required");
+    const nameRequired =
+      profileDialogMode === "edit" ||
+      profileCreateSource === "blank" ||
+      Boolean(targetCapturePreview);
+    if (!profileDialogMode || (nameRequired && !name)) {
+      setProfileFormError("Profile name is required");
       return;
     }
 
+    setProfileFormError("");
     setBusy(true);
     setError(undefined);
     try {
       if (profileDialogMode === "create") {
-        const saved = await window.agentEnv.createProfile({
-          targetId: profileForm.targetId,
-          name,
-          description
-        });
+        if (profileCreateSource === "target" && !targetCapturePreview) {
+          const captured = await window.agentEnv.previewCreateProfileFromTarget(profileForm.targetId);
+          setTargetCapturePreview(captured);
+          setProfileForm((current) => ({
+            ...current,
+            name: current.name.trim() || captured.suggestedName
+          }));
+          return;
+        }
+        const saved = profileCreateSource === "target" && targetCapturePreview
+          ? (await window.agentEnv.createProfileFromTarget({
+              previewId: targetCapturePreview.id,
+              name
+            })).profile
+          : await window.agentEnv.createProfile({
+              targetId: profileForm.targetId,
+              name,
+              description
+            });
         await refreshProfiles();
         setSelectedTargetId(saved.manifest.targetId);
         setSelectedProfileId(saved.id);
         setDraftProfile(saved);
+        if (profileCreateSource === "target") {
+          setProfileCaptureStatus(`${saved.manifest.name} created and applied`);
+        }
       } else if (draftProfile) {
         const updatedProfile: ProfileDetail = {
           ...draftProfile,
@@ -1034,6 +1085,7 @@ export const App = () => {
       setActiveComposerSection(undefined);
       setActiveWorkspace("profiles");
       setProfileDialogMode(undefined);
+      setTargetCapturePreview(undefined);
       setPreview(undefined);
       setRollbackPreview(undefined);
     } catch (unknownError) {
@@ -1118,6 +1170,8 @@ export const App = () => {
     setDeleteProfileDialogOpen(false);
     setPreview(undefined);
     setRollbackPreview(undefined);
+    setTargetCapturePreview(undefined);
+    setProfileFormError("");
   };
 
   const appModalOpen = Boolean(
@@ -2266,6 +2320,7 @@ export const App = () => {
     setTargetRefreshStatus(undefined);
     setSkillRefreshStatus(undefined);
     setSkillCleanupResult(undefined);
+    setProfileCaptureStatus("");
   };
   const openGitHubConnectionSettings = () => {
     setError(undefined);
@@ -2295,6 +2350,8 @@ export const App = () => {
           ? { label: "Connect GitHub", onClick: openGitHubConnectionSettings }
           : undefined
       }
+    : profileCaptureStatus
+      ? { kind: "success", title: profileCaptureStatus }
     : skillCleanupResult
       ? {
           kind: "success",
@@ -3160,7 +3217,7 @@ export const App = () => {
                 <div className="preview-modal-backdrop" onClick={busy ? undefined : closeProfileDialog}>
                   <section
                     ref={appModalDialogRef}
-                    className="profile-form-dialog"
+                    className={`profile-form-dialog${targetCapturePreview ? " profile-form-dialog--capture" : ""}`}
                     role="dialog"
                     aria-label={profileDialogMode === "create" ? "New profile" : "Edit profile"}
                     aria-modal="true"
@@ -3173,51 +3230,119 @@ export const App = () => {
                         </div>
                         <p className="muted">
                           {profileDialogMode === "create"
-                            ? "Create a reusable environment and choose its native format."
+                            ? targetCapturePreview
+                              ? "Review what will be imported, consolidated, and managed."
+                              : "Start blank or capture an existing local agent environment."
                             : "Update the profile name and description."}
                         </p>
                       </div>
                     </header>
                     <div className="profile-form-grid">
                       {profileDialogMode === "create" ? (
-                        <label>
-                          <span>Target</span>
-                          <select
-                            aria-label="Profile target"
-                            value={profileForm.targetId}
-                            onChange={(event) =>
-                              setProfileForm({ ...profileForm, targetId: event.currentTarget.value })
-                            }
-                          >
-                            {targets.map((target) => (
-                              <option value={target.id} key={target.id}>
-                                {target.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <>
+                          {!targetCapturePreview ? (
+                            <div className="profile-source-choice" role="group" aria-label="Profile source">
+                              <button
+                                className={profileCreateSource === "blank" ? "is-selected" : ""}
+                                type="button"
+                                onClick={() => setProfileCreateSource("blank")}
+                              >
+                                Blank
+                              </button>
+                              <button
+                                className={profileCreateSource === "target" ? "is-selected" : ""}
+                                type="button"
+                                onClick={() => {
+                                  setProfileCreateSource("target");
+                                  if (!targets.find((target) => target.id === profileForm.targetId)?.health.executableFound) {
+                                    const installedTarget = targets.find((target) => target.health.executableFound);
+                                    if (installedTarget) {
+                                      setProfileForm((current) => ({ ...current, targetId: installedTarget.id }));
+                                    }
+                                  }
+                                }}
+                              >
+                                From Target
+                              </button>
+                            </div>
+                          ) : null}
+                          <label>
+                            <span>{profileCreateSource === "target" ? "Source Target" : "Native Target"}</span>
+                            <select
+                              aria-label="Profile target"
+                              value={profileForm.targetId}
+                              disabled={Boolean(targetCapturePreview)}
+                              onChange={(event) => {
+                                setTargetCapturePreview(undefined);
+                                setProfileForm({ ...profileForm, targetId: event.currentTarget.value });
+                              }}
+                            >
+                              {targets.map((target) => (
+                                <option
+                                  value={target.id}
+                                  key={target.id}
+                                  disabled={profileCreateSource === "target" && !target.health.executableFound}
+                                >
+                                  {target.name}{profileCreateSource === "target" && !target.health.executableFound ? " (missing)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </>
                       ) : null}
                       <label>
                         <span>Profile name</span>
                         <input
                           aria-label="Profile name"
+                          aria-invalid={Boolean(profileFormError)}
+                          aria-describedby={profileFormError ? "profile-name-error" : undefined}
                           value={profileForm.name}
-                          onChange={(event) =>
-                            setProfileForm({ ...profileForm, name: event.currentTarget.value })
-                          }
+                          onChange={(event) => {
+                            setProfileFormError("");
+                            setProfileForm({ ...profileForm, name: event.currentTarget.value });
+                          }}
                         />
+                        {profileFormError ? (
+                          <small className="field-error" id="profile-name-error">
+                            {profileFormError}
+                          </small>
+                        ) : null}
                       </label>
-                      <label>
-                        <span>Description</span>
-                        <textarea
-                          aria-label="Description"
-                          rows={3}
-                          value={profileForm.description}
-                          onChange={(event) =>
-                            setProfileForm({ ...profileForm, description: event.currentTarget.value })
-                          }
-                        />
-                      </label>
+                      {profileDialogMode === "edit" || profileCreateSource === "blank" ? (
+                        <label>
+                          <span>Description</span>
+                          <textarea
+                            aria-label="Description"
+                            rows={3}
+                            value={profileForm.description}
+                            onChange={(event) =>
+                              setProfileForm({ ...profileForm, description: event.currentTarget.value })
+                            }
+                          />
+                        </label>
+                      ) : null}
+                      {targetCapturePreview ? (
+                        <section className="target-capture-review" aria-label="Capture impact">
+                          <div className="target-capture-review__summary">
+                            <span><strong>{targetCapturePreview.resources.filter((item) => item.action !== "exclude").length}</strong> resources</span>
+                            <span><strong>{targetCapturePreview.resources.filter((item) => item.action === "import").length}</strong> imports</span>
+                            <span><strong>{targetCapturePreview.cleanupPaths.length}</strong> old copies removed</span>
+                          </div>
+                          <div className="target-capture-review__list">
+                            {targetCapturePreview.resources.map((resource) => (
+                              <div className={`target-capture-resource target-capture-resource--${resource.action}`} key={`${resource.kind}:${resource.id}`}>
+                                <span title={resource.detail}>
+                                  <strong>{resource.name}</strong>
+                                  <small>{resource.kind}{resource.detail ? ` · ${resource.detail}` : ""}</small>
+                                </span>
+                                <em>{resource.action}</em>
+                              </div>
+                            ))}
+                          </div>
+                          {targetCapturePreview.warnings.map((warning) => <p className="warning" key={warning}>{warning}</p>)}
+                          {targetCapturePreview.errors.map((captureError) => <p className="error" key={captureError}>{captureError}</p>)}
+                        </section>
+                      ) : null}
                     </div>
                     <footer className="preview-actions">
                       <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
@@ -3226,10 +3351,25 @@ export const App = () => {
                       <button
                         className="primary-action"
                         type="button"
-                        disabled={busy || profileForm.name.trim().length === 0}
+                        disabled={
+                          busy ||
+                          ((profileDialogMode === "edit" ||
+                            profileCreateSource === "blank" ||
+                            Boolean(targetCapturePreview)) &&
+                            profileForm.name.trim().length === 0) ||
+                          (profileCreateSource === "target" &&
+                            !targets.find((target) => target.id === profileForm.targetId)?.health.executableFound) ||
+                          Boolean(targetCapturePreview?.errors.length)
+                        }
                         onClick={submitProfileDialog}
                       >
-                        {profileDialogMode === "create" ? "Create" : "Done"}
+                        {profileDialogMode === "edit"
+                          ? "Done"
+                          : profileCreateSource === "target"
+                            ? targetCapturePreview
+                              ? "Create & Manage"
+                              : "Review"
+                            : "Create"}
                       </button>
                     </footer>
                   </section>
@@ -3295,6 +3435,7 @@ export const App = () => {
               selectTarget(targetId);
               setActiveWorkspace("profiles");
             }}
+            onCreateProfileFromTarget={openCreateFromTargetDialog}
             onPreviewRollback={previewSelectedRollback}
             onCancelRollback={() => {
               setRollbackPreview(undefined);
@@ -3344,18 +3485,9 @@ export const App = () => {
                 </label>
                 <label>
                   <span>Storage</span>
-                  <select
-                    aria-label="Global skill storage location"
-                    value={skillSettings.skillStorageLocation}
-                    onChange={(event) =>
-                      updateSkillSettings({
-                        skillStorageLocation: event.currentTarget.value as AgentEnvSettings["skillStorageLocation"]
-                      })
-                    }
-                  >
-                    <option value="appData">AgentEnv data</option>
-                    <option value="agents">~/.agents/skills</option>
-                  </select>
+                  <div className="settings-readonly-value" aria-label="Global skill storage location">
+                    AgentEnv data
+                  </div>
                 </label>
                 <div className="settings-toggle-field">
                   <span>Auto-check</span>

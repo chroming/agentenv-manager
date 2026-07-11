@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 describe("settings store", () => {
-  it("persists skill sync method and storage location", async () => {
+  it("persists skill sync method while keeping Library originals in app data", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const store = createSettingsStore(paths);
@@ -29,33 +29,61 @@ describe("settings store", () => {
 
     await store.updateSettings({
       skillSyncMethod: "copy",
-      skillStorageLocation: "agents",
+      skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 120
     });
 
     expect(await store.readSettings()).toEqual({
       skillSyncMethod: "copy",
-      skillStorageLocation: "agents",
+      skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
       skillAutoCheckIntervalMinutes: 120
     });
     expect(resolveSkillsLibraryDir(paths, await store.readSettings())).toBe(
-      join(root, "home", ".agents", "skills")
+      join(root, "app-data", "skills-library")
     );
   });
 
-  it("moves existing library skills before changing the storage location", async () => {
+  it("migrates legacy Library originals out of the shared runtime without deleting it", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const store = createSettingsStore(paths);
-    await mkdir(join(paths.skillsLibraryDir, "reviewer"), { recursive: true });
-    await writeFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "# Reviewer\n", "utf8");
+    await mkdir(join(paths.userSkillsDir, "reviewer"), { recursive: true });
+    await writeFile(join(paths.userSkillsDir, "reviewer", "SKILL.md"), "# Reviewer\n", "utf8");
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await writeFile(
+      join(paths.appDataRoot, "settings.json"),
+      JSON.stringify({ skillStorageLocation: "agents", skillSyncMethod: "copy" })
+    );
 
-    await store.updateSettings({ skillStorageLocation: "agents" });
-
-    await expect(readFile(join(paths.userSkillsDir, "reviewer", "SKILL.md"), "utf8")).resolves.toBe(
+    await expect(store.readSettings()).resolves.toEqual(expect.objectContaining({
+      skillStorageLocation: "appData"
+    }));
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).resolves.toBe(
       "# Reviewer\n"
     );
+    await expect(readFile(join(paths.userSkillsDir, "reviewer", "SKILL.md"), "utf8")).resolves.toBe("# Reviewer\n");
+  });
+
+  it("preserves a conflicting app-data copy during legacy shared Library migration", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-conflict-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const store = createSettingsStore(paths);
+    await mkdir(join(paths.userSkillsDir, "reviewer"), { recursive: true });
+    await mkdir(join(paths.skillsLibraryDir, "reviewer"), { recursive: true });
+    await writeFile(join(paths.userSkillsDir, "reviewer", "SKILL.md"), "# Shared source\n", "utf8");
+    await writeFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "# Existing app data\n", "utf8");
+    await writeFile(
+      join(paths.appDataRoot, "settings.json"),
+      JSON.stringify({ skillStorageLocation: "agents", skillSyncMethod: "copy" })
+    );
+
+    await store.readSettings();
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toBe("# Shared source\n");
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "reviewer-pre-shared-migration", "SKILL.md"), "utf8")
+    ).resolves.toBe("# Existing app data\n");
   });
 });

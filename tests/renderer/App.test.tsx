@@ -456,6 +456,8 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
         description: input.description ?? ""
       }
     })),
+    previewCreateProfileFromTarget: vi.fn().mockRejectedValue(new Error("not configured")),
+    createProfileFromTarget: vi.fn().mockRejectedValue(new Error("not configured")),
     duplicateProfile: vi.fn().mockResolvedValue({
       ...profile,
       id: "daily-coding-copy",
@@ -1728,6 +1730,11 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit profile" }));
     const editDialog = screen.getByRole("dialog", { name: "Edit profile" });
     fireEvent.change(within(editDialog).getByLabelText("Profile name"), {
+      target: { value: "" }
+    });
+    expect(within(editDialog).getByRole("button", { name: "Done" })).toBeDisabled();
+    expect(screen.getByRole("dialog", { name: "Edit profile" })).toBeInTheDocument();
+    fireEvent.change(within(editDialog).getByLabelText("Profile name"), {
       target: { value: "Review Focus" }
     });
     fireEvent.change(within(editDialog).getByLabelText("Description"), {
@@ -1778,6 +1785,79 @@ describe("App", () => {
     fireEvent.click(within(deleteDialog).getByRole("button", { name: "Remove profile" }));
 
     await waitFor(() => expect(api.deleteProfile).toHaveBeenCalledWith("opencode-created"));
+  });
+
+  it("reviews and creates a managed profile from a Target", async () => {
+    const capturedProfile: ProfileDetail = {
+      ...profile,
+      id: "captured-opencode",
+      manifest: {
+        ...profile.manifest,
+        id: "captured-opencode",
+        name: "OpenCode Current",
+        description: "Captured from OpenCode"
+      }
+    };
+    const api = installApi({
+      previewCreateProfileFromTarget: vi.fn().mockResolvedValue({
+        id: "capture-preview",
+        targetId: "opencode",
+        targetName: "OpenCode",
+        suggestedName: "OpenCode Current",
+        createdAt: "2026-07-14T00:00:00.000Z",
+        resources: [
+          {
+            kind: "skill",
+            id: "review-workflow",
+            name: "review-workflow",
+            libraryId: "review-workflow",
+            action: "import",
+            detail: "1 compatibility copy preserved"
+          },
+          {
+            kind: "instructions",
+            id: "instructions",
+            name: "AGENTS.md",
+            action: "include"
+          }
+        ],
+        cleanupPaths: ["/tmp/home/.config/opencode/skills/review-workflow"],
+        warnings: [],
+        errors: []
+      }),
+      createProfileFromTarget: vi.fn().mockResolvedValue({
+        profile: capturedProfile,
+        targetId: "opencode",
+        backupId: "capture-backup",
+        importedSkillCount: 1,
+        importedMcpCount: 0,
+        cleanedPathCount: 1,
+        warnings: []
+      })
+    });
+    render(<App />);
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    let dialog = screen.getByRole("dialog", { name: "New profile" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "From Target" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
+
+    await waitFor(() => expect(api.previewCreateProfileFromTarget).toHaveBeenCalledWith("opencode"));
+    dialog = screen.getByRole("dialog", { name: "New profile" });
+    expect(within(dialog).getByRole("region", { name: "Capture impact" })).toHaveTextContent(
+      "1 old copies removed"
+    );
+    expect(within(dialog).getByText(/1 compatibility copy preserved/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create & Manage" }));
+
+    await waitFor(() =>
+      expect(api.createProfileFromTarget).toHaveBeenCalledWith({
+        previewId: "capture-preview",
+        name: "OpenCode Current"
+      })
+    );
+    expect(await screen.findByText("OpenCode Current created and applied")).toBeInTheDocument();
   });
 
   it("guards dirty profile drafts before context-changing actions", async () => {

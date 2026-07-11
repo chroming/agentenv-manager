@@ -18,6 +18,7 @@ import type {
 } from "../../shared/types";
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
+import { hashComparableResource } from "../resourceHash";
 import {
   createOwnerMarkerContent,
   isAgentEnvOwnedDir,
@@ -31,6 +32,7 @@ import {
   validateSkillRefs
 } from "./skillRefs";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
+import { captureJsonMcpServers, sameJsonValue, sanitizeCapturedJson } from "./capture";
 
 const DEFAULT_STATE: TargetState = {
   managedConfigKeys: [],
@@ -186,7 +188,8 @@ const findOverlayConflicts = (
   liveMcpConfig: Record<string, unknown>,
   profileSettings: Record<string, unknown>,
   profileMcp: Record<string, unknown>,
-  state: TargetState
+  state: TargetState,
+  allowMatchingUnmanaged = false
 ) => {
   const errors: string[] = [];
   const managedConfigKeys = new Set(state.managedConfigKeys);
@@ -196,13 +199,21 @@ const findOverlayConflicts = (
   for (const key of Object.keys(profileSettings).filter(
     (name) => !METADATA_CONFIG_KEYS.has(name)
   )) {
-    if (key in liveSettings && !managedConfigKeys.has(key)) {
+    if (
+      key in liveSettings &&
+      !managedConfigKeys.has(key) &&
+      !(allowMatchingUnmanaged && sameJsonValue(liveSettings[key], profileSettings[key]))
+    ) {
       errors.push(`Config key ${key} already exists outside AgentEnv management`);
     }
   }
 
   for (const name of Object.keys(profileMcp)) {
-    if (name in liveMcp && !managedMcpNames.has(name)) {
+    if (
+      name in liveMcp &&
+      !managedMcpNames.has(name) &&
+      !(allowMatchingUnmanaged && sameJsonValue(liveMcp[name], profileMcp[name]))
+    ) {
       errors.push(`MCP server ${name} already exists outside AgentEnv management`);
     }
   }
@@ -243,13 +254,15 @@ const validateAssets = async (input: TargetAssetInput) => {
     if (!sourceExists) {
       errors.push(`Owned ${ownedDir.kind} source does not exist: ${sourceDir}`);
     }
-    if (
-      (await pathExists(targetDir)) &&
-      !(await isAgentEnvOwnedDir(targetDir, {
-        targetId: targetPaths.targetId,
-        kind: ownedDir.kind
-      }))
-    ) {
+    const targetExists = await pathExists(targetDir);
+    const owned = targetExists && await isAgentEnvOwnedDir(targetDir, {
+      targetId: targetPaths.targetId,
+      kind: ownedDir.kind
+    });
+    const matching =
+      targetExists && sourceExists && input.allowMatchingUnmanagedAssets &&
+      (await hashComparableResource(sourceDir)) === (await hashComparableResource(targetDir));
+    if (targetExists && !owned && !matching) {
       errors.push(
         `${ownedDir.kind} target already exists and is not AgentEnv-owned: ${targetDir}`
       );
@@ -355,12 +368,16 @@ const applyAssets = async (input: TargetAssetInput) => {
     const sourceDir = join(profile.profileDir ?? "", ownedDir.source);
     const targetDir = targetDirFor(targetPaths, ownedDir.kind, ownedDir.targetName);
 
-    if (
-      await isAgentEnvOwnedDir(targetDir, {
-        targetId: targetPaths.targetId,
-        kind: ownedDir.kind
-      })
-    ) {
+    const owned = await isAgentEnvOwnedDir(targetDir, {
+      targetId: targetPaths.targetId,
+      kind: ownedDir.kind
+    });
+    const matching =
+      input.allowMatchingUnmanagedAssets &&
+      await pathExists(sourceDir) &&
+      await pathExists(targetDir) &&
+      (await hashComparableResource(sourceDir)) === (await hashComparableResource(targetDir));
+    if (owned || matching) {
       await rm(targetDir, { recursive: true, force: true });
     }
 
@@ -409,6 +426,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       mcpConfigPath: join(homeDir, ".claude.json"),
       agentsDir: join(claudeDir, "agents"),
       skillsDir,
+      skillLocations: [{ path: skillsDir, role: "preferred-runtime", shared: false }],
       skillScanDirs: [skillsDir]
     };
   },
@@ -436,6 +454,28 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     )}\n`,
     assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], mcpRefs: [], disabledSkillPaths: [] }
   }),
+  captureProfile: async (targetPaths) => {
+    const [instructions, settingsText, mcpText] = await Promise.all([
+      readTextIfExists(targetPaths.instructionsPath),
+      readTextIfExists(targetPaths.configPath),
+      readTextIfExists(targetPaths.mcpConfigPath ?? "")
+    ]);
+    const settings = parseJsoncObject(settingsText, "Invalid live settings.json");
+    const mcpConfig = parseJsoncObject(mcpText, "Invalid live .claude.json");
+    if (!settings.ok) throw new Error(settings.message);
+    if (!mcpConfig.ok) throw new Error(mcpConfig.message);
+    const liveMcp = isRecord(mcpConfig.value.mcpServers) ? mcpConfig.value.mcpServers : {};
+    const capturedMcp = captureJsonMcpServers(liveMcp, "claude");
+    const sanitized = sanitizeCapturedJson(settings.value, "claude.settings");
+    return {
+      instructions,
+      configText: `${JSON.stringify({ settings: sanitized.value, mcpServers: {} }, null, 2)}\n`,
+      mcpServers: capturedMcp.servers,
+      disabledSkillPaths: [],
+      warnings: capturedMcp.excluded.map((name) => `MCP server ${name} was excluded because it contains unsupported or literal environment values`),
+      excluded: sanitized.excluded.concat(capturedMcp.excluded.map((name) => `.claude.json.mcpServers.${name}`))
+    };
+  },
   readProfileFiles: async (profileDir, manifest) => {
     const [instructions, configText, assetPolicyContent] = await Promise.all([
       readFile(join(profileDir, "CLAUDE.md"), "utf8"),
@@ -463,7 +503,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       )
     ]);
   },
-  createPreview: async ({ profile, targetPaths, state }): Promise<TargetActivationPreview> => {
+  createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;
     const warnings = findSecretWarnings(profile.instructions).concat(
       findSecretWarnings(profile.configText)
@@ -509,7 +549,8 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
           liveMcp.value,
           settings,
           mcpServers,
-          activeState
+          activeState,
+          allowMatchingUnmanagedConfig
         )
       );
       if (errors.length === 0) {

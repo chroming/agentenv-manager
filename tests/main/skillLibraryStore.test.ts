@@ -616,6 +616,58 @@ describe("skill library store", () => {
     ]);
   });
 
+  it("keeps Target ownership markers isolated even when a path is scanned by another Target", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-target-owner-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const libraryDir = join(paths.skillsLibraryDir, "shared-reviewer");
+    const targetDir = join(paths.userSkillsDir, "shared-reviewer");
+    await mkdir(libraryDir, { recursive: true });
+    await mkdir(targetDir, { recursive: true });
+    const content = "---\nname: Shared Reviewer\n---\n\n# Shared\n";
+    await writeFile(join(libraryDir, "SKILL.md"), content, "utf8");
+    await writeFile(join(targetDir, "SKILL.md"), content, "utf8");
+    await writeFile(
+      join(targetDir, ".agentenv-owner.json"),
+      JSON.stringify({
+        owner: "agentenv-manager",
+        profileId: "codex-profile",
+        targetId: "codex",
+        kind: "skill",
+        source: "skills-library/shared-reviewer"
+      }),
+      "utf8"
+    );
+
+    const store = createSkillLibraryStore(paths);
+    const codexInventory = await store.scanInventory([
+      {
+        targetId: "codex",
+        configDir: join(paths.homeDir, ".codex"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: paths.userSkillsDir
+      }
+    ]);
+    const openCodeInventory = await store.scanInventory([
+      {
+        targetId: "opencode",
+        configDir: join(paths.homeDir, ".config", "opencode"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: paths.userSkillsDir
+      }
+    ]);
+
+    expect(codexInventory[0]).toMatchObject({
+      status: "managed",
+      libraryId: "shared-reviewer"
+    });
+    expect(openCodeInventory[0]).toMatchObject({
+      status: "library",
+      libraryId: "shared-reviewer"
+    });
+  });
+
   it("backs up, consolidates, and rolls back a duplicate skill group transactionally", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

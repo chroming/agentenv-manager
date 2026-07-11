@@ -469,6 +469,18 @@
   min-width: 0;
 }
 
+.target-workflow-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.target-workflow-actions .secondary-action,
+.target-workflow-actions .primary-inline-action {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .target-workflow-icon {
   align-items: center;
   background: #eef4ff;
@@ -1236,7 +1248,17 @@
 
   .target-workflow-header {
     gap: 10px;
-    grid-template-columns: 34px minmax(0, 1fr) auto auto;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .target-workflow-header > .target-badge {
+    display: none;
+  }
+
+  .target-workflow-actions .secondary-action {
+    font-size: 0;
+    min-width: 34px;
+    padding-inline: 8px;
   }
 
   .target-workflow-icon {

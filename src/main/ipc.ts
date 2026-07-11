@@ -8,9 +8,11 @@ import type { ProfileStore } from "./profileStore";
 import type { SettingsStore } from "./settingsStore";
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
+import type { TargetCaptureService } from "./targetCaptureService";
 import { ResourceIconKeySchema, SafeIdSchema } from "../shared/schemas";
 import type {
   CreateProfileInput,
+  CreateProfileFromTargetInput,
   GitHubSkillImportInput,
   ManageTargetSkillInput,
   SkillCleanupRequest,
@@ -35,6 +37,7 @@ export interface IpcServices {
   mcpLibraryStore: McpLibraryStore;
   targetRegistry: TargetRegistry;
   targetDiscoveryService: TargetDiscoveryService;
+  targetCaptureService: TargetCaptureService;
   paths: AgentEnvPaths;
 }
 
@@ -56,6 +59,7 @@ export const registerIpcHandlers = ({
   mcpLibraryStore,
   targetRegistry,
   targetDiscoveryService,
+  targetCaptureService,
   paths
 }: IpcServices) => {
   ipcMain.handle("clipboard:write-text", (_event, text: unknown) => {
@@ -247,6 +251,12 @@ export const registerIpcHandlers = ({
     profileStore.createProfile(
       typeof input === "string" ? { targetId: parseId(input, "target id") } : input
     )
+  );
+  ipcMain.handle("profiles:preview-create-from-target", (_event, targetId: unknown) =>
+    targetCaptureService.previewTarget(parseId(targetId, "target id"))
+  );
+  ipcMain.handle("profiles:create-from-target", (_event, input: CreateProfileFromTargetInput) =>
+    targetCaptureService.createFromTarget(input)
   );
   ipcMain.handle("profiles:duplicate", (_event, id: unknown) =>
     profileStore.duplicateProfile(parseId(id, "profile id"))

@@ -107,7 +107,7 @@ describe("activation service", () => {
       kind: "skill",
       action: "install",
       name: "agentenv-daily-coding-example-skill",
-      path: join(paths.userSkillsDir, "agentenv-daily-coding-example-skill"),
+      path: join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill"),
       source: "skills/example-skill"
     });
     const result = await service.applyProfile("daily-coding", preview.id);
@@ -131,7 +131,8 @@ describe("activation service", () => {
     await expect(
       readFile(
         join(
-          paths.userSkillsDir,
+          paths.codexHome,
+          "skills",
           "agentenv-daily-coding-example-skill",
           "SKILL.md"
         ),
@@ -170,6 +171,34 @@ describe("activation service", () => {
     expect(state?.errorCount).toBe(0);
   });
 
+  it("migrates legacy AgentEnv-owned Codex Skills out of the compatibility directory", async () => {
+    const { paths, service } = await makeEnv();
+    const legacySkill = join(paths.userSkillsDir, "agentenv-daily-coding-example-skill");
+    const dedicatedSkill = join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill");
+    await mkdir(legacySkill, { recursive: true });
+    await writeFile(join(legacySkill, "SKILL.md"), "---\nname: example\n---\n");
+    await writeFile(
+      join(legacySkill, ".agentenv-owner.json"),
+      `${JSON.stringify({
+        owner: "agentenv-manager",
+        profileId: "daily-coding",
+        targetId: "codex",
+        kind: "skill",
+        source: "skills/example-skill"
+      }, null, 2)}\n`
+    );
+
+    const preview = await service.previewProfile("daily-coding");
+    expect(preview.resourceChanges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: legacySkill, action: "remove", kind: "skill" }),
+      expect.objectContaining({ path: dedicatedSkill, action: "install", kind: "skill" })
+    ]));
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+
+    await expect(readFile(join(legacySkill, "SKILL.md"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(dedicatedSkill, "SKILL.md"), "utf8")).resolves.toContain("name: example");
+  });
+
   it("keeps a Target visible when recovery is required without an active Profile", async () => {
     const { paths, service } = await makeEnv();
     await mkdir(paths.targetStatesDir, { recursive: true });
@@ -201,11 +230,7 @@ describe("activation service", () => {
     const openCodeDir = join(paths.homeDir, ".config", "opencode");
     const openCodeInstructions = join(openCodeDir, "AGENTS.md");
     const openCodeConfig = join(openCodeDir, "opencode.jsonc");
-    const openCodeSkill = join(
-      openCodeDir,
-      "skills",
-      "agentenv-daily-coding-example-skill"
-    );
+    const openCodeSkill = join(openCodeDir, "skills", "agentenv-daily-coding-example-skill");
     await mkdir(openCodeDir, { recursive: true });
     await writeFile(openCodeInstructions, "# Old OpenCode agents\n");
     await writeFile(openCodeConfig, "{}\n");
@@ -248,7 +273,7 @@ describe("activation service", () => {
 
   it("blocks apply when a resource changes after preview", async () => {
     const { paths, service } = await makeEnv();
-    const targetSkill = join(paths.userSkillsDir, "agentenv-daily-coding-example-skill");
+    const targetSkill = join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill");
     const preview = await service.previewProfile("daily-coding");
 
     await mkdir(targetSkill, { recursive: true });
@@ -430,7 +455,7 @@ describe("activation service", () => {
   it("refuses non-AgentEnv skill target conflicts without writing", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");
-    await mkdir(join(paths.userSkillsDir, "agentenv-daily-coding-example-skill"), {
+    await mkdir(join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill"), {
       recursive: true
     });
 
@@ -448,11 +473,11 @@ describe("activation service", () => {
 
   it("reports ignored unmanaged skill conflicts during profile preview", async () => {
     const { paths, service } = await makeEnv();
-    await mkdir(join(paths.userSkillsDir, "agentenv-daily-coding-example-skill"), {
+    await mkdir(join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill"), {
       recursive: true
     });
     await writeFile(
-      join(paths.userSkillsDir, "agentenv-daily-coding-example-skill", "SKILL.md"),
+      join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill", "SKILL.md"),
       "---\nname: Local copy\ndescription: Keep unmanaged.\n---\n"
     );
     await mkdir(paths.appDataRoot, { recursive: true });
@@ -473,7 +498,8 @@ describe("activation service", () => {
 
     expect(preview.errors).toContain(
       `Cannot install agentenv-daily-coding-example-skill because an ignored unmanaged skill already exists at ${join(
-        paths.userSkillsDir,
+        paths.codexHome,
+        "skills",
         "agentenv-daily-coding-example-skill"
       )}`
     );
@@ -539,7 +565,7 @@ describe("activation service", () => {
     await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe("# New agents\n");
     await expect(
       readFile(
-        join(paths.userSkillsDir, "agentenv-daily-coding-example-skill", ".agentenv-owner.json"),
+        join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill", ".agentenv-owner.json"),
         "utf8"
       )
     ).rejects.toMatchObject({ code: "ENOENT" });
@@ -618,6 +644,9 @@ describe("activation service", () => {
         skillsDir: paths.userSkillsDir
       }),
       createDefaultProfile: () => {
+        throw new Error("not used");
+      },
+      captureProfile: () => {
         throw new Error("not used");
       },
       readProfileFiles: () => {

@@ -71,13 +71,17 @@ export interface ActivationServiceOptions {
   skillLibraryStore?: SkillLibraryStore;
 }
 
+interface InternalApplyProfileOptions extends ApplyProfileOptions {
+  additionalBackupPaths?: string[];
+}
+
 export interface ActivationService {
   listTargetStates(): Promise<TargetManagementState[]>;
   previewProfile(profileId: string, targetId?: string): Promise<ActivationPreview>;
   applyProfile(
     profileId: string,
     previewId: string,
-    options?: ApplyProfileOptions
+    options?: InternalApplyProfileOptions
   ): Promise<ApplyResult>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
   rollback(backupId: string): Promise<RollbackResult>;
@@ -547,7 +551,11 @@ export const createActivationService = ({
     if (path === targetPaths.configPath || path === targetPaths.mcpConfigPath) {
       return { kind: "config", id: "config" };
     }
-    if (targetPaths.skillsDir && path.startsWith(`${targetPaths.skillsDir}/`)) {
+    if (
+      [targetPaths.skillsDir, ...(targetPaths.skillLocations ?? []).map((location) => location.path)]
+        .filter(Boolean)
+        .some((skillsRoot) => path.startsWith(`${skillsRoot}/`))
+    ) {
       return { kind: "skill", id: basename(path) };
     }
     if (targetPaths.agentsDir && path.startsWith(`${targetPaths.agentsDir}/`)) {
@@ -732,12 +740,16 @@ export const createActivationService = ({
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     const stateFile = await readTargetStateFile(adapter.descriptor.id);
+    const isTakeover = !stateFile.state.activeProfileId;
     const targetPreview = await adapter.createPreview({
       profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
-      state: stateFile.state
+      state: stateFile.state,
+      allowMatchingUnmanagedConfig: isTakeover,
+      allowMatchingUnmanagedSkills: isTakeover,
+      allowMatchingUnmanagedAssets: isTakeover
     });
     const profileErrors = validateProfileStructure(profile);
     const recoveryErrors = stateFile.state.recoveryRequired
@@ -759,7 +771,9 @@ export const createActivationService = ({
       profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
-      skillSyncMethod: settings.skillSyncMethod
+      skillSyncMethod: settings.skillSyncMethod,
+      allowMatchingUnmanagedSkills: isTakeover,
+      allowMatchingUnmanagedAssets: isTakeover
     });
     const drift = await findManagedDrift(stateFile.state, materializedProfile, targetPaths);
     const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, targetPaths);
@@ -768,7 +782,9 @@ export const createActivationService = ({
       profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
-      skillSyncMethod: settings.skillSyncMethod
+      skillSyncMethod: settings.skillSyncMethod,
+      allowMatchingUnmanagedSkills: isTakeover,
+      allowMatchingUnmanagedAssets: isTakeover
     });
     const assetPlan = await planAssetResources(
       materializedProfile,
@@ -810,7 +826,8 @@ export const createActivationService = ({
       targetState: targetPreview.targetState,
       effectivePayload,
       omissions: targeted.omissions,
-      requiresOmissionAcknowledgement: targeted.omissions.length > 0
+      requiresOmissionAcknowledgement: targeted.omissions.length > 0,
+      operation: isTakeover ? "takeover" : "apply"
     };
     previews.set(preview.id, preview);
     return preview;
@@ -819,7 +836,7 @@ export const createActivationService = ({
   const applyProfile = async (
     profileId: string,
     previewId: string,
-    options: ApplyProfileOptions = {}
+    options: InternalApplyProfileOptions = {}
   ): Promise<ApplyResult> => {
     const preview = previews.get(previewId);
     if (!preview || preview.profileId !== profileId) {
@@ -831,7 +848,11 @@ export const createActivationService = ({
     if (blockingErrors.length > 0) {
       return { ok: false, errors: blockingErrors };
     }
-    if (preview.changes.length === 0 && preview.resourceChanges.length === 0) {
+    if (
+      preview.operation !== "takeover" &&
+      preview.changes.length === 0 &&
+      preview.resourceChanges.length === 0
+    ) {
       return { ok: false, errors: ["No changes to apply"] };
     }
     if (preview.requiresOmissionAcknowledgement && !options.allowOmissions) {
@@ -871,6 +892,7 @@ export const createActivationService = ({
     });
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
+    const isTakeover = preview.operation === "takeover";
     if (
       !allowRealHomeWrites &&
       !adapter.descriptor.realWritesEnabled &&
@@ -905,7 +927,9 @@ export const createActivationService = ({
       profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
-      skillSyncMethod: settings.skillSyncMethod
+      skillSyncMethod: settings.skillSyncMethod,
+      allowMatchingUnmanagedSkills: isTakeover,
+      allowMatchingUnmanagedAssets: isTakeover
     });
     if (assetErrors.length > 0) {
       return { ok: false, errors: assetErrors };
@@ -916,12 +940,23 @@ export const createActivationService = ({
       profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
-      skillSyncMethod: settings.skillSyncMethod
+      skillSyncMethod: settings.skillSyncMethod,
+      allowMatchingUnmanagedSkills: isTakeover,
+      allowMatchingUnmanagedAssets: isTakeover
     });
+    const takeoverPaths = isTakeover
+      ? [
+          targetPaths.instructionsPath,
+          targetPaths.configPath,
+          ...(targetPaths.mcpConfigPath ? [targetPaths.mcpConfigPath] : [])
+        ]
+      : [];
     const backup = await backupStore.createBackup(
       [
+        ...takeoverPaths,
         ...preview.changes.map((change) => change.path),
         ...assetBackupPaths,
+        ...(options.additionalBackupPaths ?? []),
         statePath
       ],
       {
@@ -942,11 +977,13 @@ export const createActivationService = ({
           profile: materializedProfile,
           targetPaths,
           skillLibraryDir,
-          skillSyncMethod: settings.skillSyncMethod
+          skillSyncMethod: settings.skillSyncMethod,
+          allowMatchingUnmanagedSkills: isTakeover,
+          allowMatchingUnmanagedAssets: isTakeover
         });
       }
       const managedResources = await snapshotManagedResources(
-        [...preview.changes.map((change) => change.path), ...assetBackupPaths],
+        [...takeoverPaths, ...preview.changes.map((change) => change.path), ...assetBackupPaths],
         targetPaths
       );
       for (const resource of managedResources) {

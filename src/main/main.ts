@@ -18,6 +18,7 @@ import { seedDefaultProfiles } from "./seedProfiles";
 import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
+import { createTargetCaptureService } from "./targetCaptureService";
 import { createTargetRegistry } from "./targets/registry";
 import { preloadScriptName, windowBackgroundColor } from "./windowConfig";
 
@@ -245,11 +246,21 @@ const createServices = async () => {
     profileStore,
     targetRegistry,
     settingsStore,
-    mcpLibraryStore
+    mcpLibraryStore,
+    skillLibraryStore
   });
   const targetDiscoveryService = createTargetDiscoveryService({
     paths,
     targetRegistry
+  });
+  const targetCaptureService = createTargetCaptureService({
+    paths,
+    targetRegistry,
+    profileStore,
+    skillLibraryStore,
+    mcpLibraryStore,
+    activationService,
+    targetDiscoveryService
   });
 
   await seedDefaultProfiles(paths, targetRegistry);
@@ -263,6 +274,7 @@ const createServices = async () => {
     skillLibraryStore,
     mcpLibraryStore,
     activationService,
+    targetCaptureService,
     targetRegistry,
     targetDiscoveryService
   };

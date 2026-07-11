@@ -53,6 +53,8 @@ export interface AgentEnvApi {
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
   createProfile(input: CreateProfileInput): Promise<ProfileDetail>;
+  previewCreateProfileFromTarget(targetId: string): Promise<TargetCapturePreview>;
+  createProfileFromTarget(input: CreateProfileFromTargetInput): Promise<TargetCaptureResult>;
   duplicateProfile(id: string): Promise<ProfileDetail>;
   deleteProfile(id: string): Promise<void>;
   previewApply(profileId: string, targetId?: string): Promise<ActivationPreview>;
@@ -310,6 +312,43 @@ export interface CreateProfileInput {
   description?: string;
 }
 
+export interface CreateProfileFromTargetInput {
+  previewId: string;
+  name: string;
+}
+
+export interface TargetCaptureResource {
+  kind: "instructions" | "config" | "skill" | "mcp" | "agent";
+  id: string;
+  name: string;
+  sourcePath?: string;
+  libraryId?: string;
+  action: "include" | "reuse" | "import" | "consolidate" | "exclude";
+  detail?: string;
+}
+
+export interface TargetCapturePreview {
+  id: string;
+  targetId: string;
+  targetName: string;
+  suggestedName: string;
+  createdAt: string;
+  resources: TargetCaptureResource[];
+  cleanupPaths: string[];
+  warnings: string[];
+  errors: string[];
+}
+
+export interface TargetCaptureResult {
+  profile: ProfileDetail;
+  targetId: string;
+  backupId: string;
+  importedSkillCount: number;
+  importedMcpCount: number;
+  cleanedPathCount: number;
+  warnings: string[];
+}
+
 export interface TargetDescriptor {
   id: string;
   name: string;
@@ -340,6 +379,19 @@ export interface TargetPaths {
   agentsDir?: string;
   skillsDir?: string;
   skillScanDirs?: string[];
+  skillLocations?: TargetSkillLocation[];
+}
+
+export type TargetSkillLocationRole =
+  | "preferred-runtime"
+  | "alternate-runtime"
+  | "compatibility-runtime"
+  | "discovery-only";
+
+export interface TargetSkillLocation {
+  path: string;
+  role: TargetSkillLocationRole;
+  shared: boolean;
 }
 
 export interface TargetState {
@@ -491,6 +543,7 @@ export interface ActivationPreview {
   effectivePayload?: EffectiveProfilePayload;
   omissions?: PlannedOmission[];
   requiresOmissionAcknowledgement?: boolean;
+  operation?: "apply" | "takeover";
 }
 
 export interface EffectiveProfilePayload {

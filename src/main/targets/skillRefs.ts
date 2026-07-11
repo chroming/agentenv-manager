@@ -2,6 +2,7 @@ import { cp, mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { TargetPaths } from "../../shared/types";
 import { pathExists } from "../fileUtils";
+import { hashComparableResource } from "../resourceHash";
 import {
   createOwnerMarkerContent,
   isAgentEnvOwnedDir,
@@ -40,6 +41,17 @@ const symlinkEntries = async (sourceDir: string, targetDir: string) => {
 const librarySourceFor = (skillLibraryDir: string, libraryId: string) =>
   join(skillLibraryDir, libraryId);
 
+const isOwnedSkillDir = async (targetDir: string, targetPaths: TargetPaths) =>
+  isAgentEnvOwnedDir(targetDir, {
+    targetId: targetPaths.targetId,
+    kind: "skill"
+  });
+
+const contentMatches = async (sourceDir: string, targetDir: string) =>
+  (await pathExists(sourceDir)) &&
+  (await pathExists(targetDir)) &&
+  (await hashComparableResource(sourceDir)) === (await hashComparableResource(targetDir));
+
 export const skillTargetNames = ({ profile }: TargetAssetInput) =>
   new Set(
     profile.assetPolicy.ownedDirs
@@ -51,7 +63,8 @@ export const skillTargetNames = ({ profile }: TargetAssetInput) =>
 export const validateSkillRefs = async ({
   profile,
   targetPaths,
-  skillLibraryDir
+  skillLibraryDir,
+  allowMatchingUnmanagedSkills
 }: TargetAssetInput) => {
   const errors: string[] = [];
   const skillRefs = profile.assetPolicy.skillRefs ?? [];
@@ -87,13 +100,11 @@ export const validateSkillRefs = async ({
     if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
       errors.push(`Library skill does not exist: ${sourceDir}`);
     }
-    if (
-      (await pathExists(targetDir)) &&
-      !(await isAgentEnvOwnedDir(targetDir, {
-        targetId: targetPaths.targetId,
-        kind: "skill"
-      }))
-    ) {
+    const exists = await pathExists(targetDir);
+    const owned = exists && await isOwnedSkillDir(targetDir, targetPaths);
+    const matchingUnmanaged =
+      exists && allowMatchingUnmanagedSkills && await contentMatches(sourceDir, targetDir);
+    if (exists && !owned && !matchingUnmanaged) {
       errors.push(`Skill target already exists and is not AgentEnv-owned: ${targetDir}`);
     }
   }
@@ -118,7 +129,8 @@ export const applySkillRefs = async ({
   profile,
   targetPaths,
   skillLibraryDir,
-  skillSyncMethod = "copy"
+  skillSyncMethod = "copy",
+  allowMatchingUnmanagedSkills
 }: TargetAssetInput) => {
   if (!targetPaths.skillsDir || !skillLibraryDir) {
     return;
@@ -128,12 +140,8 @@ export const applySkillRefs = async ({
     const sourceDir = librarySourceFor(skillLibraryDir, skillRef.libraryId);
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
 
-    if (
-      await isAgentEnvOwnedDir(targetDir, {
-        targetId: targetPaths.targetId,
-        kind: "skill"
-      })
-    ) {
+    const owned = await isOwnedSkillDir(targetDir, targetPaths);
+    if (owned || (allowMatchingUnmanagedSkills && await contentMatches(sourceDir, targetDir))) {
       await removeIfExists(targetDir);
     }
 
@@ -155,7 +163,7 @@ export const applySkillRefs = async ({
       markerPathFor(targetDir),
       createOwnerMarkerContent({
         profileId: profile.id,
-        targetId: profile.manifest.targetId,
+        targetId: targetPaths.targetId,
         kind: "skill",
         source: `skills-library/${skillRef.libraryId}`
       }),

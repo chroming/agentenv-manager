@@ -173,6 +173,7 @@ describe("OpenCode profile switching e2e", () => {
   it("switches active instructions, MCP config, agents, and skills between profiles", async () => {
     const { paths, profileStore, activationService, listTargets } = await makeEnv();
     const targetDir = join(paths.homeDir, ".config", "opencode");
+    const skillsDir = join(targetDir, "skills");
     await mkdir(targetDir, { recursive: true });
     await writeFile(
       join(targetDir, "opencode.jsonc"),
@@ -219,7 +220,7 @@ describe("OpenCode profile switching e2e", () => {
       fileExists(join(targetDir, "agents", "agentenv-alpha-agent", "agent.md"))
     ).resolves.toBe(true);
     await expect(
-      fileExists(join(targetDir, "skills", "agentenv-alpha-skill", "SKILL.md"))
+      fileExists(join(skillsDir, "agentenv-alpha-skill", "SKILL.md"))
     ).resolves.toBe(true);
 
     await expectApplyOk(activationService, beta.id);
@@ -252,19 +253,20 @@ describe("OpenCode profile switching e2e", () => {
       fileExists(join(targetDir, "agents", "agentenv-alpha-agent"))
     ).resolves.toBe(false);
     await expect(
-      fileExists(join(targetDir, "skills", "agentenv-alpha-skill"))
+      fileExists(join(skillsDir, "agentenv-alpha-skill"))
     ).resolves.toBe(false);
     await expect(
       readFile(join(targetDir, "agents", "agentenv-beta-agent", "agent.md"), "utf8")
     ).resolves.toContain("beta agent prompt");
     await expect(
-      readFile(join(targetDir, "skills", "agentenv-beta-skill", "SKILL.md"), "utf8")
+      readFile(join(skillsDir, "agentenv-beta-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("name: agentenv-beta-skill");
   });
 
   it("switches reusable library skill copies without duplicating the library skill", async () => {
     const { paths, profileStore, activationService } = await makeEnv();
     const targetDir = join(paths.homeDir, ".config", "opencode");
+    const skillsDir = join(targetDir, "skills");
     const librarySkillDir = join(paths.skillsLibraryDir, "shared-reviewer");
     await mkdir(librarySkillDir, { recursive: true });
     await writeFile(
@@ -313,14 +315,14 @@ describe("OpenCode profile switching e2e", () => {
     });
 
     await expectApplyOk(activationService, alpha.id);
-    const alphaSkillMd = join(targetDir, "skills", "agentenv-alpha-shared", "SKILL.md");
+    const alphaSkillMd = join(skillsDir, "agentenv-alpha-shared", "SKILL.md");
     await expect(readFile(alphaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
 
     await expectApplyOk(activationService, beta.id);
-    await expect(fileExists(join(targetDir, "skills", "agentenv-alpha-shared"))).resolves.toBe(
+    await expect(fileExists(join(skillsDir, "agentenv-alpha-shared"))).resolves.toBe(
       false
     );
-    const betaSkillMd = join(targetDir, "skills", "agentenv-beta-shared", "SKILL.md");
+    const betaSkillMd = join(skillsDir, "agentenv-beta-shared", "SKILL.md");
     await expect(readFile(betaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
     await expect(readFile(join(librarySkillDir, "SKILL.md"), "utf8")).resolves.toContain(
       "name: shared-reviewer"
@@ -330,6 +332,7 @@ describe("OpenCode profile switching e2e", () => {
   it("blocks a profile switch when the target has an unmanaged MCP conflict", async () => {
     const { paths, profileStore, activationService } = await makeEnv();
     const targetDir = join(paths.homeDir, ".config", "opencode");
+    const skillsDir = join(targetDir, "skills");
     const alpha = await createOpenCodeProfile(profileStore, "alpha");
     const beta = await createOpenCodeProfile(profileStore, "beta");
     await expectApplyOk(activationService, alpha.id);
@@ -388,19 +391,20 @@ describe("OpenCode profile switching e2e", () => {
       fileExists(join(targetDir, "agents", "agentenv-alpha-agent"))
     ).resolves.toBe(true);
     await expect(
-      fileExists(join(targetDir, "skills", "agentenv-alpha-skill"))
+      fileExists(join(skillsDir, "agentenv-alpha-skill"))
     ).resolves.toBe(true);
     await expect(
       fileExists(join(targetDir, "agents", "agentenv-beta-agent"))
     ).resolves.toBe(false);
     await expect(
-      fileExists(join(targetDir, "skills", "agentenv-beta-skill"))
+      fileExists(join(skillsDir, "agentenv-beta-skill"))
     ).resolves.toBe(false);
   });
 
   it("rolls back a profile switch including owned agents and skills", async () => {
     const { paths, profileStore, activationService } = await makeEnv();
     const targetDir = join(paths.homeDir, ".config", "opencode");
+    const skillsDir = join(targetDir, "skills");
     await mkdir(targetDir, { recursive: true });
     await writeFile(
       join(targetDir, "opencode.jsonc"),
@@ -437,9 +441,9 @@ describe("OpenCode profile switching e2e", () => {
         join(targetDir, "AGENTS.md"),
         join(targetDir, "opencode.jsonc"),
         join(targetDir, "agents", "agentenv-alpha-agent"),
-        join(targetDir, "skills", "agentenv-alpha-skill"),
+        join(skillsDir, "agentenv-alpha-skill"),
         join(targetDir, "agents", "agentenv-beta-agent"),
-        join(targetDir, "skills", "agentenv-beta-skill")
+        join(skillsDir, "agentenv-beta-skill")
       ])
     );
 
@@ -470,13 +474,13 @@ describe("OpenCode profile switching e2e", () => {
       readFile(join(targetDir, "agents", "agentenv-alpha-agent", "agent.md"), "utf8")
     ).resolves.toContain("alpha agent prompt");
     await expect(
-      readFile(join(targetDir, "skills", "agentenv-alpha-skill", "SKILL.md"), "utf8")
+      readFile(join(skillsDir, "agentenv-alpha-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("name: agentenv-alpha-skill");
     await expect(
       fileExists(join(targetDir, "agents", "agentenv-beta-agent"))
     ).resolves.toBe(false);
     await expect(
-      fileExists(join(targetDir, "skills", "agentenv-beta-skill"))
+      fileExists(join(skillsDir, "agentenv-beta-skill"))
     ).resolves.toBe(false);
   });
 });
