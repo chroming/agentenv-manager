@@ -483,8 +483,10 @@ Resolution contract:
 - Groups are classified as `Auto-ready`, `Review`, or resolved. Needs attention counts unresolved groups, not raw paths, and excludes managed and ignored groups.
 - A single unmanaged copy, identical unmanaged duplicates, a local copy that exactly matches Library, and stale managed copies MAY be handled automatically because no content choice is required.
 - Differing content, a local copy that differs from an existing Library version, external-manager ownership, and missing Target identity MUST remain in manual Review.
-- `Auto-manage` backs up and processes every currently auto-ready group. A failure in one group MUST NOT undo successful independent groups, and the result MUST report both completed and remaining groups.
-- `Auto-manage` is shown only when at least one group is currently eligible. While it is running, the initiating control exposes a local working state and conflicting cleanup actions are disabled until the refreshed result is available.
+- `Take over` is an immediate, mutating action: it backs up the affected locations, creates or reuses the Library copy, and replaces every eligible detected copy with an AgentEnv-owned installation. `Review` opens a decision dialog and MUST NOT mutate files by itself. `Details` is read-only and remains available for every group.
+- `Take over all` backs up and processes every currently auto-ready group. A failure in one group MUST NOT undo successful independent groups, and the result MUST report both completed and remaining groups.
+- `Take over all` is shown only when at least one group is currently eligible. While it is running, the initiating control exposes a local working state and conflicting cleanup actions are disabled until the refreshed result is available.
+- After a successful takeover, every selected location MUST rescan as current and `Managed`; the group MUST NOT retain `Duplicate`, `Auto-ready`, or another takeover action. A managed group may remain visible for inspection through `Details`, but it is not pending work.
 - AgentEnv ownership is attached to the physical managed installation. A shared compatibility path scanned by multiple Targets MUST appear as one managed location rather than a duplicate caused by Target-specific scanning.
 - A physical location shared by multiple Target adapters MUST be labelled as shared in cleanup review instead of presenting the Target names as separate copies.
 

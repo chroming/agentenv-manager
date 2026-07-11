@@ -2117,7 +2117,7 @@ export const App = () => {
     setSkillCleanupResult(undefined);
     setSkillUpdateCheckStatus({
       state: "checking",
-      message: `Auto-managing ${plural(inputs.length, "skill")}...`
+      message: `Taking over ${plural(inputs.length, "skill")}...`
     });
     const completed: SkillCleanupResult[] = [];
     const failures: string[] = [];
@@ -2139,7 +2139,7 @@ export const App = () => {
         } else {
           setSkillUpdateCheckStatus({
             state: "success",
-            message: `Managed ${plural(completed.length, "local skill")} · Backups are available in cleanup history`
+            message: `Took over ${plural(completed.length, "local skill")} · Backups are available in cleanup history`
           });
         }
       } else {
@@ -2571,7 +2571,7 @@ export const App = () => {
           title:
             skillCleanupResult.operation === "remove"
               ? `Removed ${skillCleanupResult.libraryId}`
-              : `Cleaned up ${skillCleanupResult.libraryId}`,
+              : `Took over ${skillCleanupResult.libraryId}`,
           message:
             skillCleanupResult.operation === "remove"
               ? skillCleanupResult.managedLocations.length === 0

@@ -54,7 +54,8 @@ import {
 } from "../libraryViewState";
 import {
   automaticSkillCleanupRequest,
-  buildSkillCleanupGroups
+  buildSkillCleanupGroups,
+  type SkillCleanupGroupState
 } from "../../shared/skillCleanup";
 
 export type SkillUpdateCheckStatus = {
@@ -145,6 +146,21 @@ const cleanupLocationLabel = (item: SkillInventoryEntry) => {
   return names[0] ?? "Unknown Target";
 };
 
+const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
+  if (status === "library") return "Imported";
+  if (status === "external") return "External";
+  if (status === "unmanaged") return "Unmanaged";
+  if (status === "ignored") return "Ignored";
+  return "Managed";
+};
+
+const cleanupStateLabel = (state: SkillCleanupGroupState) => {
+  if (state === "duplicate") return "Duplicate";
+  if (state === "conflict") return "Conflict";
+  if (state === "stale") return "Out of sync";
+  return inventoryStatusLabel(state);
+};
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
@@ -208,6 +224,7 @@ export const SkillLibraryPanel = ({
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
+  const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
   const [cleanupDraft, setCleanupDraft] = useState<{
     skillKey: string;
     libraryId: string;
@@ -236,6 +253,8 @@ export const SkillLibraryPanel = ({
       onCloseUpdatePreview();
     } else if (deleteCandidate) {
       setDeleteCandidate(undefined);
+    } else if (cleanupDetailsKey) {
+      setCleanupDetailsKey(undefined);
     } else if (bulkUpdatePlans) {
       onCloseBulkUpdatePreview();
     } else if (externalImport) {
@@ -249,6 +268,7 @@ export const SkillLibraryPanel = ({
       deleteCandidate ||
       bulkUpdatePlans ||
       externalImport ||
+      cleanupDetailsKey ||
       cleanupDraft
   );
   useLayoutEffect(() => {
@@ -334,14 +354,19 @@ export const SkillLibraryPanel = ({
       ) {
         setOpenAction(undefined);
       }
-      if (activeTool && !githubOperation && !target.closest(".library-drawer")) {
+      if (
+        activeTool &&
+        !githubOperation &&
+        !modalOpen &&
+        !target.closest(".library-drawer")
+      ) {
         onCloseTool?.();
       }
     };
 
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [activeTool, githubOperation, onCloseTool, openActionId]);
+  }, [activeTool, githubOperation, modalOpen, onCloseTool, openActionId]);
 
   useEffect(() => {
     if (activeTool === "import") {
@@ -464,6 +489,9 @@ export const SkillLibraryPanel = ({
   const localImportLabel = selectedLocalCanManage ? "Import & manage" : "Import copy";
   const cleanupCandidate = cleanupDraft
     ? cleanupGroups.find((group) => group.skillKey === cleanupDraft.skillKey)
+    : undefined;
+  const cleanupDetails = cleanupDetailsKey
+    ? cleanupGroups.find((group) => group.skillKey === cleanupDetailsKey)
     : undefined;
   const externalImportGroup = externalImport
     ? cleanupGroups.find((group) => group.skillKey === externalImport.skillKey)
@@ -1311,6 +1339,65 @@ export const SkillLibraryPanel = ({
         </div>
       ) : null}
 
+      {cleanupDetails ? (
+        <div className="preview-modal-backdrop" onClick={() => setCleanupDetailsKey(undefined)}>
+          <section
+            ref={modalDialogRef}
+            className="profile-form-dialog profile-form-dialog--compact cleanup-details-dialog"
+            role="dialog"
+            aria-label={`Skill details ${cleanupDetails.skillKey}`}
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">
+                  {cleanupDetails.primary?.name ?? cleanupDetails.skillKey}
+                </div>
+                <p className="muted">
+                  {cleanupDetails.primary?.description || "Local Skill details and detected locations."}
+                </p>
+              </div>
+              <span className={`resource-chip resource-chip--${cleanupDetails.state}`}>
+                {cleanupStateLabel(cleanupDetails.state)}
+              </span>
+            </header>
+            <div className="cleanup-details-list">
+              {cleanupDetails.items.map((item) => (
+                <div className="cleanup-details-location" key={`${item.status}-${item.path}`}>
+                  <div>
+                    <strong>{cleanupLocationLabel(item)}</strong>
+                    <span className={`resource-chip resource-chip--${item.status}`}>
+                      {inventoryStatusLabel(item.status)}
+                    </span>
+                  </div>
+                  <PreviewText
+                    ariaLabel={`Full detail path ${item.path}`}
+                    className="cleanup-option-path"
+                    text={item.path}
+                    tooltipClassName="library-source-tooltip"
+                  />
+                  <small>
+                    {item.libraryId ? `Library: ${item.libraryId} · ` : ""}
+                    Content {item.contentHash ? item.contentHash.slice(0, 7) : "unavailable"}
+                  </small>
+                </div>
+              ))}
+            </div>
+            <footer className="preview-actions">
+              <button
+                ref={modalInitialFocusRef}
+                className="secondary-action"
+                type="button"
+                onClick={() => setCleanupDetailsKey(undefined)}
+              >
+                Close
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
       {cleanupDraft && cleanupCandidate ? (
         <div className="preview-modal-backdrop" onClick={() => setCleanupDraft(undefined)}>
           <section
@@ -1323,7 +1410,7 @@ export const SkillLibraryPanel = ({
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">Manage {cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</div>
+                <div className="section-title">Review {cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</div>
                 <p className="muted">
                   {cleanupUsesExistingLibrary
                     ? "Use the existing Library version and choose which local copies it should manage."
@@ -1453,7 +1540,7 @@ export const SkillLibraryPanel = ({
                   setCleanupDraft(undefined);
                 }}
               >
-                Back up and manage
+                Back up and take over
               </button>
             </footer>
           </section>
@@ -1511,7 +1598,7 @@ export const SkillLibraryPanel = ({
                 <button
                   className="primary-action cleanup-auto-action"
                   type="button"
-                  aria-label={`Auto-manage ${automaticCleanupRequests.length}`}
+                  aria-label={`Take over ${automaticCleanupRequests.length} skills`}
                   disabled={Boolean(automaticCleanupKey)}
                   onClick={() => void runAutomaticCleanup("all", automaticCleanupRequests)}
                 >
@@ -1521,7 +1608,7 @@ export const SkillLibraryPanel = ({
                     strokeWidth={2.2}
                     aria-hidden="true"
                   />
-                  {automaticCleanupKey === "all" ? "Managing..." : "Auto-manage"}
+                  {automaticCleanupKey === "all" ? "Taking over..." : "Take over all"}
                 </button>
               ) : null}
             </div>
@@ -1536,22 +1623,7 @@ export const SkillLibraryPanel = ({
                 const allIgnored = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
                 const automaticRequest = automaticSkillCleanupRequest(group);
-                const chipLabel =
-                  group.state === "ignored"
-                    ? "Ignored"
-                    : group.state === "conflict"
-                      ? "Conflict"
-                      : group.state === "duplicate"
-                        ? "Duplicate"
-                        : group.state === "external"
-                          ? "External"
-                          : group.state === "stale"
-                            ? "Out of sync"
-                            : group.state === "library"
-                              ? "Imported"
-                              : group.state === "managed"
-                                ? "Managed"
-                                : "Unmanaged";
+                const chipLabel = cleanupStateLabel(group.state);
                 const actionLabel = group.state === "conflict" ? "Resolve conflict" : "Review";
 
                 return (
@@ -1606,15 +1678,24 @@ export const SkillLibraryPanel = ({
                       ) : null}
                     </div>
                     <div className="cleanup-group-actions">
+                      <button
+                        className="secondary-action"
+                        type="button"
+                        aria-label={`View details ${group.skillKey}`}
+                        disabled={Boolean(automaticCleanupKey)}
+                        onClick={() => setCleanupDetailsKey(group.skillKey)}
+                      >
+                        Details
+                      </button>
                       {automaticRequest ? (
                         <button
                           className="secondary-action"
                           type="button"
-                          aria-label={`Auto-manage group ${group.skillKey}`}
+                          aria-label={`Take over ${group.skillKey}`}
                           disabled={Boolean(automaticCleanupKey)}
                           onClick={() => void runAutomaticCleanup(group.skillKey, [automaticRequest])}
                         >
-                          {automaticCleanupKey === group.skillKey ? "Managing..." : "Manage"}
+                          {automaticCleanupKey === group.skillKey ? "Taking over..." : "Take over"}
                         </button>
                       ) : group.state === "external" && !group.items.some((item) => item.libraryId) ? (
                         <button

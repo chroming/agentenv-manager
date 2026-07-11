@@ -557,6 +557,58 @@
   margin: 0;
 }
 
+.cleanup-details-dialog {
+  max-width: 640px;
+}
+
+.cleanup-details-dialog .profile-dialog-header {
+  align-items: flex-start;
+}
+
+.cleanup-details-list {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+.cleanup-details-location {
+  border-top: 1px solid var(--border-soft);
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 0;
+}
+
+.cleanup-details-location:first-child {
+  border-top: 0;
+}
+
+.cleanup-details-location > div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.cleanup-details-location > div strong {
+  font-size: 13px;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.cleanup-details-location > small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.cleanup-details-dialog .preview-actions button {
+  height: 40px;
+  min-height: 40px;
+  width: auto;
+}
+
 .library-inline-action {
   background: transparent;
   border: 0;

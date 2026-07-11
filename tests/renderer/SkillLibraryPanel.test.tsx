@@ -514,8 +514,10 @@ describe("SkillLibraryPanel", () => {
         resolveAutoCleanup = resolve;
       })
     );
-    const autoManageButton = within(discoveries).getByRole("button", { name: "Auto-manage 3" });
-    fireEvent.click(autoManageButton);
+    const takeOverAllButton = within(discoveries).getByRole("button", {
+      name: "Take over 3 skills"
+    });
+    fireEvent.click(takeOverAllButton);
     expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ skillKey: "copied-local" }),
@@ -523,7 +525,7 @@ describe("SkillLibraryPanel", () => {
         expect.objectContaining({ skillKey: "target-only-reviewer" })
       ])
     );
-    expect(autoManageButton).toHaveTextContent("Managing...");
+    expect(takeOverAllButton).toHaveTextContent("Taking over...");
     expect(screen.getByRole("button", { name: "Close library tool" })).toBeDisabled();
     resolveAutoCleanup?.();
     const externalGroup = screen.getByRole("group", {
@@ -571,8 +573,20 @@ describe("SkillLibraryPanel", () => {
     expect(mixedGroup).toHaveTextContent("Unmanaged");
     expect(within(mixedGroup).queryByText("Ignored", { exact: true })).not.toBeInTheDocument();
     expect(
-      within(mixedGroup).getByRole("button", { name: "Auto-manage group target-only-reviewer" })
+      within(mixedGroup).getByRole("button", { name: "Take over target-only-reviewer" })
     ).toBeInTheDocument();
+    fireEvent.click(
+      within(mixedGroup).getByRole("button", { name: "View details target-only-reviewer" })
+    );
+    const detailsDialog = screen.getByRole("dialog", {
+      name: "Skill details target-only-reviewer"
+    });
+    expect(detailsDialog).toHaveTextContent("Found on disk");
+    expect(detailsDialog).toHaveTextContent("/tmp/opencode/skills/target-only-reviewer");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: "Skill details target-only-reviewer" })
+    ).not.toBeInTheDocument();
     expect(
       within(mixedGroup).queryByRole("button", { name: "Ignore group target-only-reviewer" })
     ).not.toBeInTheDocument();
@@ -581,7 +595,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(
       within(screen.getByRole("group", { name: "Cleanup group legacy-reviewer" })).getByRole(
         "button",
-        { name: "Auto-manage group legacy-reviewer" }
+        { name: "Take over legacy-reviewer" }
       )
     );
     expect(onAutoConsolidateSkillGroups).toHaveBeenLastCalledWith([
@@ -639,7 +653,9 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent(
       "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
     );
-    fireEvent.click(within(conflictDialog).getByRole("button", { name: "Back up and manage" }));
+    fireEvent.click(
+      within(conflictDialog).getByRole("button", { name: "Back up and take over" })
+    );
     expect(onConsolidateSkillGroup).toHaveBeenCalledWith({
       skillKey: "conflict-reviewer",
       libraryId: "conflict-reviewer",

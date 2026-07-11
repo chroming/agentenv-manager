@@ -1284,15 +1284,34 @@ describe("Electron UI profile switching e2e", () => {
     await locationsPreview.evaluate((element) => element.blur());
 
     await expect.poll(() => cleanupGroup.textContent()).toContain("Auto-ready");
+    await cleanupGroup.getByRole("button", { name: "View details target-only-reviewer" }).click();
+    const detailsDialog = page.getByRole("dialog", {
+      name: "Skill details target-only-reviewer"
+    });
+    await detailsDialog.waitFor({ state: "visible" });
+    await expect.poll(() => detailsDialog.textContent()).toContain(
+      join(opencodeDir, "skills", "target-only-reviewer")
+    );
+    await page.keyboard.press("Escape");
+    await detailsDialog.waitFor({ state: "hidden" });
     await cleanupGroup
-      .getByRole("button", { name: "Auto-manage group target-only-reviewer" })
+      .getByRole("button", { name: "Take over target-only-reviewer" })
       .click();
     await expect
       .poll(() => page.locator(".app-feedback").textContent(), { timeout: 5_000 })
-      .toContain("Cleaned up target-only-reviewer");
+      .toContain("Took over target-only-reviewer");
     await page
       .getByRole("group", { name: "Library item target-only-reviewer" })
       .waitFor({ state: "visible", timeout: 5_000 });
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Managed");
+    await expect.poll(() => cleanupGroup.textContent()).not.toContain("Duplicate");
+    await expect.poll(() => cleanupGroup.textContent()).not.toContain("Auto-ready");
+    expect(
+      await cleanupGroup.getByRole("button", { name: "Take over target-only-reviewer" }).count()
+    ).toBe(0);
+    expect(
+      await cleanupGroup.getByRole("button", { name: "View details target-only-reviewer" }).count()
+    ).toBe(1);
     await page.getByRole("button", { name: "Close library tool" }).click();
 
     expect(await page.getByText("Existing target skill ready to migrate.").count()).toBeGreaterThan(
@@ -2557,7 +2576,12 @@ describe("Electron UI profile switching e2e", () => {
     await cleanupGroup.waitFor({ state: "visible" });
     await expect.poll(() => cleanupGroup.textContent()).toContain("Managed");
     expect(await cleanupGroup.getByText("Auto-ready", { exact: true }).count()).toBe(0);
-    expect(await cleanupGroup.getByRole("button", { name: /manage/i }).count()).toBe(0);
+    expect(
+      await cleanupGroup.getByRole("button", { name: "Take over managed-after-import" }).count()
+    ).toBe(0);
+    expect(
+      await cleanupGroup.getByRole("button", { name: "View details managed-after-import" }).count()
+    ).toBe(1);
   }, 30_000);
 
   it("auto-manages safe cleanup groups while leaving content conflicts for review", async () => {
@@ -2646,16 +2670,32 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     await assertCleanupLayout(true);
 
-    await page.getByRole("button", { name: /Auto-manage \d+/ }).click();
+    await duplicateGroup
+      .getByRole("button", { name: "Take over auto-duplicate-reviewer" })
+      .click();
     await expect
       .poll(() => fileExists(join(openCodeDuplicate, ".agentenv-owner.json")), { timeout: 10_000 })
       .toBe(true);
     await expect
       .poll(() => fileExists(join(codexDuplicate, ".agentenv-owner.json")), { timeout: 10_000 })
       .toBe(true);
-    await expect(
-      fileExists(join(appDataRoot, "skills-library", "auto-local-reviewer", "SKILL.md"))
-    ).resolves.toBe(true);
+    await expect.poll(() => duplicateGroup.textContent()).toContain("Managed");
+    await expect
+      .poll(() => duplicateGroup.getByText("Duplicate", { exact: true }).count())
+      .toBe(0);
+    expect(
+      await duplicateGroup
+        .getByRole("button", { name: "Take over auto-duplicate-reviewer" })
+        .count()
+    ).toBe(0);
+
+    await page.getByRole("button", { name: /Take over \d+ skills/ }).click();
+    await expect
+      .poll(
+        () => fileExists(join(appDataRoot, "skills-library", "auto-local-reviewer", "SKILL.md")),
+        { timeout: 10_000 }
+      )
+      .toBe(true);
     await expect(
       fileExists(join(appDataRoot, "skills-library", "auto-duplicate-reviewer", "SKILL.md"))
     ).resolves.toBe(true);
@@ -2664,7 +2704,7 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe(false);
     await expect.poll(() => conflictGroup.textContent()).toContain("Review");
     await expect
-      .poll(() => page.getByRole("button", { name: /Auto-manage \d+/ }).count())
+      .poll(() => page.getByRole("button", { name: /Take over \d+ skills/ }).count())
       .toBe(0);
   }, 30_000);
 

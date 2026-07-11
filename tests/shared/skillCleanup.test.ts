@@ -115,4 +115,26 @@ describe("skill cleanup groups", () => {
     expect(groups.find((group) => group.skillKey === "current")?.resolution).toBe("resolved");
     expect(groups.find((group) => group.skillKey === "ignored")?.resolution).toBe("resolved");
   });
+
+  it("treats multiple current managed locations as one resolved group", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "managed",
+        libraryId: "reviewer",
+        contentMatchesLibrary: true,
+        installMethod: "linked"
+      }),
+      inventoryItem({
+        path: "/tmp/codex/skills/reviewer",
+        foundIn: ["codex"],
+        status: "managed",
+        libraryId: "reviewer",
+        contentMatchesLibrary: true,
+        installMethod: "copied"
+      })
+    ]);
+
+    expect(group).toMatchObject({ state: "managed", resolution: "resolved" });
+    expect(automaticSkillCleanupRequest(group)).toBeUndefined();
+  });
 });
