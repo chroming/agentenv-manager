@@ -35,7 +35,7 @@ export interface AgentEnvApi {
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
   consolidateSkillGroup(input: SkillCleanupRequest): Promise<SkillCleanupResult>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
-  checkSkillLibraryUpdates(): Promise<SkillUpdateInfo[]>;
+  checkSkillLibraryUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   setSkillUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
   setSkillIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;

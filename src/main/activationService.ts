@@ -315,7 +315,7 @@ const effectivePayloadFor = (profile: Awaited<ReturnType<ProfileStore["readProfi
   const skills = profile.manifest.managed.assets
     ? profile.assetPolicy.ownedDirs.filter((asset) => asset.kind === "skill").length +
       profile.assetPolicy.ownedFiles.filter((asset) => asset.kind === "skill").length +
-      (profile.assetPolicy.skillRefs?.length ?? 0)
+      (profile.assetPolicy.skillRefs?.filter((reference) => reference.enabled !== false).length ?? 0)
     : 0;
   const agents = profile.manifest.managed.assets
     ? profile.assetPolicy.ownedDirs.filter((asset) => asset.kind === "agent").length +
@@ -471,7 +471,11 @@ export const createActivationService = ({
       profile.assetPolicy.ownedDirs
         .filter((ownedDir) => ownedDir.kind === "skill")
         .map((ownedDir) => ownedDir.targetName)
-        .concat((profile.assetPolicy.skillRefs ?? []).map((skillRef) => skillRef.targetName))
+        .concat(
+          (profile.assetPolicy.skillRefs ?? [])
+            .filter((skillRef) => skillRef.enabled !== false)
+            .map((skillRef) => skillRef.targetName)
+        )
     );
 
   const desiredManagedPaths = (
@@ -619,7 +623,9 @@ export const createActivationService = ({
         });
       }
     }
-    for (const skillRef of profile.assetPolicy.skillRefs ?? []) {
+    for (const skillRef of (profile.assetPolicy.skillRefs ?? []).filter(
+      (reference) => reference.enabled !== false
+    )) {
       if (targetPaths.skillsDir) {
         desired.set(join(targetPaths.skillsDir, skillRef.targetName), {
           resource: {
@@ -711,7 +717,11 @@ export const createActivationService = ({
       profile.assetPolicy.ownedDirs
         .filter((ownedDir) => ownedDir.kind === "skill")
         .map((ownedDir) => ownedDir.targetName)
-        .concat((profile.assetPolicy.skillRefs ?? []).map((skillRef) => skillRef.targetName))
+        .concat(
+          (profile.assetPolicy.skillRefs ?? [])
+            .filter((skillRef) => skillRef.enabled !== false)
+            .map((skillRef) => skillRef.targetName)
+        )
     );
     if (desiredSkillTargets.size === 0) {
       return [];

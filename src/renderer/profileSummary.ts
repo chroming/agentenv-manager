@@ -94,7 +94,9 @@ export const summarizeProfile = (
     .map((asset) => asset.targetName);
   const skillNames = unique([
     ...profileOwnedSkills,
-    ...profile.assetPolicy.skillRefs.map((skill) => skill.targetName)
+    ...profile.assetPolicy.skillRefs
+      .filter((skill) => skill.enabled !== false)
+      .map((skill) => skill.targetName)
   ]);
   const mcpNames = unique([
     ...profile.assetPolicy.mcpRefs.map((server) => server.targetName),

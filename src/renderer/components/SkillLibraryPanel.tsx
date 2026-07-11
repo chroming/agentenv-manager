@@ -45,9 +45,9 @@ import type {
   SkillUpdateSourceInput
 } from "../../shared/types";
 import { InfoTip } from "./InfoTip";
-import { DiffViewer } from "./DiffViewer";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { ResourceIconPicker } from "./ResourceIconPicker";
+import { SkillUpdateDialog } from "./SkillUpdateDialog";
 import {
   type SkillLibraryViewState,
   updateSkillLibraryControls
@@ -1117,51 +1117,11 @@ export const SkillLibraryPanel = ({
         </div>
       </section>
 
-      {selectedUpdatePlan && selectedUpdatePlan.changes.length > 0 ? (
-        <div className="preview-modal-backdrop" onClick={onCloseUpdatePreview}>
-          <section
-            ref={modalDialogRef}
-            className="profile-form-dialog skill-update-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Update preview for ${selectedUpdatePlan.id}`}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">Update {selectedUpdatePlan.name}</div>
-                <p className="muted">
-                  {selectedUpdatePlan.changes.length} file {selectedUpdatePlan.changes.length === 1 ? "change" : "changes"}
-                  {selectedUpdatePlan.latestRevision
-                    ? ` · ${(selectedUpdatePlan.currentRevision ?? "current").slice(0, 7)} → ${selectedUpdatePlan.latestRevision.slice(0, 7)}`
-                    : ""}
-                </p>
-              </div>
-            </header>
-            <div className="update-change-list">
-              {selectedUpdatePlan.changes.map((change) => (
-                <details key={change.path} open>
-                  <summary>{change.path}</summary>
-                  <DiffViewer path={change.path} diff={change.diff} />
-                </details>
-              ))}
-            </div>
-            <footer className="preview-actions">
-              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={onCloseUpdatePreview}>
-                Cancel
-              </button>
-              <button
-                className="primary-action"
-                type="button"
-                aria-label={`Apply update ${selectedUpdatePlan.id}`}
-                onClick={() => onUpdateLibrarySkill(selectedUpdatePlan.id)}
-              >
-                Update skill
-              </button>
-            </footer>
-          </section>
-        </div>
-      ) : null}
+      <SkillUpdateDialog
+        plan={selectedUpdatePlan}
+        onClose={onCloseUpdatePreview}
+        onConfirm={onUpdateLibrarySkill}
+      />
 
       {deleteCandidate ? (
         <div className="preview-modal-backdrop" onClick={() => setDeleteCandidate(undefined)}>

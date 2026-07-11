@@ -265,7 +265,11 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:rollback-cleanup", (_event, backupId: unknown) =>
     skillLibraryStore.rollbackSkillCleanup(parseId(backupId, "cleanup backup id"))
   );
-  ipcMain.handle("skills:check-updates", () => skillLibraryStore.checkUpdates());
+  ipcMain.handle("skills:check-updates", (_event, ids: unknown) =>
+    skillLibraryStore.checkUpdates(
+      Array.isArray(ids) ? ids.map((id) => parseId(id, "skill id")) : undefined
+    )
+  );
   ipcMain.handle("skills:set-update-source", (_event, input: SkillUpdateSourceInput) =>
     skillLibraryStore.setUpdateSource(input)
   );

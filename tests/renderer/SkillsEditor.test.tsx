@@ -174,6 +174,8 @@ describe("SkillsEditor", () => {
 
   it("renders only skill resources in skills mode", () => {
     const onChange = vi.fn();
+    const onCheckSkillUpdates = vi.fn();
+    const onPreviewSkillUpdate = vi.fn();
     render(
       <SkillsEditor
         mode="skills"
@@ -182,40 +184,53 @@ describe("SkillsEditor", () => {
         configLanguage="jsonc"
         librarySkills={librarySkills}
         mcpServers={mcpServers}
+        skillUpdates={[
+          {
+            id: "shared-reviewer",
+            name: "Shared Reviewer",
+            sourceType: "local",
+            currentRevision: "abc123",
+            latestRevision: "def456",
+            updateAvailable: true
+          }
+        ]}
+        onCheckSkillUpdates={onCheckSkillUpdates}
+        onPreviewSkillUpdate={onPreviewSkillUpdate}
         onChange={onChange}
       />
     );
 
-    const inventory = screen.getByRole("region", { name: "Resource inventory" });
-    const ownedSkill = within(inventory).getByRole("group", {
-      name: "Skill agentenv-reviewer"
+    const inventory = screen.getByRole("region", { name: "Profile skills" });
+    const ownedSkill = within(inventory).getByRole("listitem", {
+      name: "Profile-owned skill agentenv-reviewer"
     });
     expect(ownedSkill).toBeInTheDocument();
-    const librarySkill = within(inventory).getByRole("group", {
-      name: "Library skill agentenv-shared-reviewer"
+    const librarySkill = within(inventory).getByRole("listitem", {
+      name: "Profile skill agentenv-shared-reviewer"
     });
     expect(librarySkill).toBeInTheDocument();
-    expect(
-      within(inventory).queryByRole("group", { name: "Agent reviewer.toml" })
-    ).not.toBeInTheDocument();
-    expect(within(inventory).queryByRole("group", { name: /MCP / })).not.toBeInTheDocument();
+    expect(librarySkill).toHaveTextContent("Update available");
+    expect(within(inventory).queryByText("Agent reviewer.toml")).not.toBeInTheDocument();
+    expect(within(inventory).queryByText("context7")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add library MCP" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Disabled Skill Paths" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add skill" })).not.toBeInTheDocument();
 
-    fireEvent.change(within(ownedSkill).getByLabelText("Target name"), {
-      target: { value: "agentenv-updated-reviewer" }
-    });
+    fireEvent.click(within(librarySkill).getByRole("switch", { name: "Disable Shared Reviewer" }));
     expect(onChange).toHaveBeenLastCalledWith({
       ...mixedPolicy,
-      ownedDirs: [
+      skillRefs: [
         {
-          ...mixedPolicy.ownedDirs[0],
-          targetName: "agentenv-updated-reviewer"
-        },
-        mixedPolicy.ownedDirs[1]
+          ...mixedPolicy.skillRefs[0],
+          enabled: false
+        }
       ]
     });
+
+    fireEvent.click(screen.getByRole("button", { name: "Check profile skill updates" }));
+    expect(onCheckSkillUpdates).toHaveBeenCalledWith(["shared-reviewer"]);
+    fireEvent.click(within(librarySkill).getByRole("button", { name: "Update" }));
+    expect(onPreviewSkillUpdate).toHaveBeenCalledWith("shared-reviewer");
 
     fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
     const dialog = screen.getByRole("dialog", { name: "Add library skills" });
@@ -228,18 +243,48 @@ describe("SkillsEditor", () => {
         mixedPolicy.skillRefs[0],
         {
           libraryId: "github-reviewer",
-          targetName: "github-reviewer"
+          targetName: "github-reviewer",
+          enabled: true
         }
       ]
     });
 
-    fireEvent.click(within(ownedSkill).getByRole("button", { name: "Remove profile skill" }));
+    fireEvent.click(
+      within(ownedSkill).getByRole("button", {
+        name: "More actions for profile-owned skill agentenv-reviewer"
+      })
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit install name" }));
+    const editDialog = screen.getByRole("dialog", { name: "Edit profile-owned skill" });
+    fireEvent.change(within(editDialog).getByLabelText("Target name"), {
+      target: { value: "agentenv-updated-reviewer" }
+    });
+    fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...mixedPolicy,
+      ownedDirs: [
+        { ...mixedPolicy.ownedDirs[0], targetName: "agentenv-updated-reviewer" },
+        mixedPolicy.ownedDirs[1]
+      ]
+    });
+
+    fireEvent.click(
+      within(ownedSkill).getByRole("button", {
+        name: "More actions for profile-owned skill agentenv-reviewer"
+      })
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove from profile" }));
     expect(onChange).toHaveBeenLastCalledWith({
       ...mixedPolicy,
       ownedDirs: [mixedPolicy.ownedDirs[1]]
     });
 
-    fireEvent.click(within(librarySkill).getByRole("button", { name: "Remove from profile" }));
+    fireEvent.click(
+      within(librarySkill).getByRole("button", {
+        name: "More actions for profile skill agentenv-shared-reviewer"
+      })
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove from profile" }));
     expect(onChange).toHaveBeenLastCalledWith({
       ...mixedPolicy,
       skillRefs: []
@@ -427,7 +472,7 @@ describe("SkillsEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
     const dialog = screen.getByRole("dialog", { name: "Add library skills" });
     fireEvent.click(within(dialog).getByLabelText("GitHub Reviewer"));
-    const firstControl = dialog.querySelector<HTMLElement>(".info-tip");
+    const firstControl = within(dialog).getByLabelText("GitHub Reviewer");
     const lastControl = within(dialog).getByRole("button", { name: "Add selected skills" });
     lastControl.focus();
 

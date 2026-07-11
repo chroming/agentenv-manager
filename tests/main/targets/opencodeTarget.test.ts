@@ -278,6 +278,59 @@ describe("OpenCode target adapter", () => {
     );
   });
 
+  it("removes a previously managed library skill when its profile reference is disabled", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const skillLibraryDir = join(root, "app-data", "skills-library");
+    await mkdir(join(skillLibraryDir, "shared-reviewer"), { recursive: true });
+    await writeFile(
+      join(skillLibraryDir, "shared-reviewer", "SKILL.md"),
+      "# Shared reviewer\n"
+    );
+    const enabledProfile: ProfileDetail = {
+      ...makeProfile("{}"),
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [
+          { libraryId: "shared-reviewer", targetName: "shared-reviewer", enabled: true }
+        ],
+        mcpRefs: [],
+        disabledSkillPaths: []
+      }
+    };
+
+    await adapter.applyAssets({
+      profile: enabledProfile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: "copy"
+    });
+    const targetDir = join(targetPaths.skillsDir ?? "", "shared-reviewer");
+    await expect(readFile(join(targetDir, "SKILL.md"), "utf8")).resolves.toBe(
+      "# Shared reviewer\n"
+    );
+
+    const disabledProfile: ProfileDetail = {
+      ...enabledProfile,
+      assetPolicy: {
+        ...enabledProfile.assetPolicy,
+        skillRefs: [
+          { libraryId: "shared-reviewer", targetName: "shared-reviewer", enabled: false }
+        ]
+      }
+    };
+    await adapter.applyAssets({
+      profile: disabledProfile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: "copy"
+    });
+
+    await expect(readFile(join(targetDir, "SKILL.md"), "utf8")).rejects.toThrow();
+  });
+
   it("can copy reusable library skills when symlinks are not desired", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
     const adapter = createOpenCodeTargetAdapter();

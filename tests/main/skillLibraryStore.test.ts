@@ -1003,6 +1003,10 @@ description: >
     });
     await store.setUpdatePolicy({ id: "reviewer", policy: "tracked" });
 
+    fetchImpl.mockClear();
+    await expect(store.checkUpdates(["another-skill"])).resolves.toEqual([]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+
     const updates = await store.checkUpdates();
 
     expect(updates).toEqual([

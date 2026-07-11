@@ -52,7 +52,8 @@ describe("profile summary", () => {
         ],
         skillRefs: [
           { libraryId: "testing", targetName: "library-testing" },
-          { libraryId: "review", targetName: "profile-review" }
+          { libraryId: "review", targetName: "profile-review" },
+          { libraryId: "paused", targetName: "paused-skill", enabled: false }
         ],
         mcpRefs: [
           { libraryId: "docs", targetName: "library-docs" },

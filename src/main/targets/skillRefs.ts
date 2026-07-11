@@ -57,7 +57,11 @@ export const skillTargetNames = ({ profile }: TargetAssetInput) =>
     profile.assetPolicy.ownedDirs
       .filter((ownedDir) => ownedDir.kind === "skill")
       .map((ownedDir) => ownedDir.targetName)
-      .concat((profile.assetPolicy.skillRefs ?? []).map((skillRef) => skillRef.targetName))
+      .concat(
+        (profile.assetPolicy.skillRefs ?? [])
+          .filter((skillRef) => skillRef.enabled !== false)
+          .map((skillRef) => skillRef.targetName)
+      )
   );
 
 export const validateSkillRefs = async ({
@@ -67,7 +71,9 @@ export const validateSkillRefs = async ({
   allowMatchingUnmanagedSkills
 }: TargetAssetInput) => {
   const errors: string[] = [];
-  const skillRefs = profile.assetPolicy.skillRefs ?? [];
+  const skillRefs = (profile.assetPolicy.skillRefs ?? []).filter(
+    (skillRef) => skillRef.enabled !== false
+  );
   if (skillRefs.length === 0) {
     return errors;
   }
@@ -120,7 +126,9 @@ export const addSkillRefBackupPaths = (
   if (!targetPaths.skillsDir) {
     return;
   }
-  for (const skillRef of input.profile.assetPolicy.skillRefs ?? []) {
+  for (const skillRef of (input.profile.assetPolicy.skillRefs ?? []).filter(
+    (reference) => reference.enabled !== false
+  )) {
     paths.add(join(targetPaths.skillsDir, skillRef.targetName));
   }
 };
@@ -136,7 +144,9 @@ export const applySkillRefs = async ({
     return;
   }
 
-  for (const skillRef of profile.assetPolicy.skillRefs ?? []) {
+  for (const skillRef of (profile.assetPolicy.skillRefs ?? []).filter(
+    (reference) => reference.enabled !== false
+  )) {
     const sourceDir = librarySourceFor(skillLibraryDir, skillRef.libraryId);
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
 

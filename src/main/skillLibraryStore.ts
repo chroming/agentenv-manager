@@ -96,7 +96,7 @@ export interface SkillLibraryStore {
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   consolidateSkillGroup(input: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
-  checkUpdates(): Promise<SkillUpdateInfo[]>;
+  checkUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   setUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
   setIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
@@ -1455,11 +1455,15 @@ export const createSkillLibraryStore = (
     await rm(backupDir, { recursive: true, force: true });
   };
 
-  const checkUpdates = async (): Promise<SkillUpdateInfo[]> => {
+  const checkUpdates = async (ids?: string[]): Promise<SkillUpdateInfo[]> => {
     const skills = await listSkills();
+    const selectedIds = ids ? new Set(ids.map((id) => SafeIdSchema.parse(id))) : undefined;
     const updates: SkillUpdateInfo[] = [];
     for (const skill of skills.filter(
-      (item) => item.updatePolicy === "tracked" && Boolean(item.source)
+      (item) =>
+        (!selectedIds || selectedIds.has(item.id)) &&
+        item.updatePolicy === "tracked" &&
+        Boolean(item.source)
     )) {
       const metadata = await readLibraryMetadata(skill.path);
       if (!metadata.source) {

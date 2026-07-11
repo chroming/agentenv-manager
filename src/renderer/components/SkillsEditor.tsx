@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { MoreHorizontal, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import {
   parse as parseJsonc,
   printParseErrorCode,
@@ -9,9 +11,13 @@ import type {
   AssetPolicy,
   McpLibraryEntry,
   SkillLibraryEntry,
+  SkillUpdateInfo,
   TargetInfo
 } from "../../shared/types";
 import { InfoTip } from "./InfoTip";
+import { OverflowTooltip } from "./OverflowTooltip";
+import { ResourceIcon } from "./ResourceIconPicker";
+import { useModalDialog } from "../hooks/useModalDialog";
 
 interface SkillsEditorProps {
   mode?: "skills" | "mcp" | "advanced";
@@ -20,7 +26,11 @@ interface SkillsEditorProps {
   configLanguage?: TargetInfo["configLanguage"];
   preview?: ActivationPreview;
   librarySkills?: SkillLibraryEntry[];
+  skillUpdates?: SkillUpdateInfo[];
+  checkingSkillUpdates?: boolean;
   mcpServers?: McpLibraryEntry[];
+  onCheckSkillUpdates?(ids: string[]): void;
+  onPreviewSkillUpdate?(id: string): void;
   onChange(value: AssetPolicy): void;
 }
 
@@ -226,7 +236,11 @@ export const SkillsEditor = ({
   configLanguage,
   preview,
   librarySkills = [],
+  skillUpdates = [],
+  checkingSkillUpdates = false,
   mcpServers = [],
+  onCheckSkillUpdates,
+  onPreviewSkillUpdate,
   onChange
 }: SkillsEditorProps) => {
   const mode = requestedMode ?? "all";
@@ -236,11 +250,22 @@ export const SkillsEditor = ({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedLibrarySkillIds, setSelectedLibrarySkillIds] = useState<string[]>([]);
   const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>([]);
+  const [profileSkillMenu, setProfileSkillMenu] = useState<{
+    kind: "owned" | "library";
+    index: number;
+    left: number;
+    top: number;
+  }>();
+  const [editingOwnedSkillIndex, setEditingOwnedSkillIndex] = useState<number>();
+  const [editingOwnedSkillTarget, setEditingOwnedSkillTarget] = useState("");
   const skillPickerButtonRef = useRef<HTMLButtonElement>(null);
   const mcpPickerButtonRef = useRef<HTMLButtonElement>(null);
   const pickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const pickerCancelButtonRef = useRef<HTMLButtonElement>(null);
   const pickerDialogRef = useRef<HTMLElement>(null);
+  const ownedSkillDialogRef = useRef<HTMLElement>(null);
+  const ownedSkillInputRef = useRef<HTMLInputElement>(null);
+  const profileSkillMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const skillEntries = value.ownedDirs
     .map((ownedDir, index) => ({ ownedDir, index }))
     .filter((entry) => entry.ownedDir.kind === "skill");
@@ -266,6 +291,15 @@ export const SkillsEditor = ({
     (activePicker === "mcp" && showsMcp);
   const attachedSkillIds = new Set(librarySkillEntries.map((entry) => entry.libraryId));
   const attachedMcpIds = new Set(libraryMcpEntries.map((entry) => entry.libraryId));
+  const enabledLibrarySkillCount = librarySkillEntries.filter(
+    (entry) => entry.enabled !== false
+  ).length;
+  const checkableSkillIds = librarySkillEntries
+    .filter((entry) => entry.enabled !== false)
+    .map((entry) => librarySkills.find((skill) => skill.id === entry.libraryId))
+    .filter((skill): skill is SkillLibraryEntry => Boolean(skill))
+    .filter((skill) => skill.updatePolicy === "tracked")
+    .map((skill) => skill.id);
 
   const updateOwnedDir = (
     index: number,
@@ -290,6 +324,15 @@ export const SkillsEditor = ({
     onChange({
       ...value,
       skillRefs: (value.skillRefs ?? []).filter((_, currentIndex) => currentIndex !== index)
+    });
+  };
+
+  const toggleSkillRef = (index: number) => {
+    onChange({
+      ...value,
+      skillRefs: (value.skillRefs ?? []).map((entry, currentIndex) =>
+        currentIndex === index ? { ...entry, enabled: entry.enabled === false } : entry
+      )
     });
   };
 
@@ -335,7 +378,8 @@ export const SkillsEditor = ({
       .filter((libraryId) => !attachedSkillIds.has(libraryId))
       .map((libraryId) => ({
         libraryId,
-        targetName: libraryId
+        targetName: libraryId,
+        enabled: true
       }));
     if (additions.length === 0) {
       return;
@@ -421,19 +465,404 @@ export const SkillsEditor = ({
     }
   }, [activePicker, activePickerIsValid, closePicker]);
 
+  useEffect(() => {
+    if (!profileSkillMenu) {
+      return undefined;
+    }
+    const dismiss = () => setProfileSkillMenu(undefined);
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dismiss();
+      }
+    };
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [profileSkillMenu]);
+
+  const closeOwnedSkillDialog = useCallback(() => {
+    setEditingOwnedSkillIndex(undefined);
+    setEditingOwnedSkillTarget("");
+  }, []);
+
+  useModalDialog({
+    open: editingOwnedSkillIndex !== undefined,
+    dialogRef: ownedSkillDialogRef,
+    initialFocusRef: ownedSkillInputRef,
+    fallbackFocusRef: profileSkillMenuTriggerRef,
+    onDismiss: closeOwnedSkillDialog,
+    focusKey: String(editingOwnedSkillIndex ?? "closed")
+  });
+
+  const openProfileSkillMenu = (
+    kind: "owned" | "library",
+    index: number,
+    button: HTMLButtonElement
+  ) => {
+    const rect = button.getBoundingClientRect();
+    const width = 190;
+    const height = kind === "owned" ? 92 : 52;
+    profileSkillMenuTriggerRef.current = button;
+    setProfileSkillMenu({
+      kind,
+      index,
+      left: Math.min(window.innerWidth - width - 12, Math.max(12, rect.right - width)),
+      top:
+        rect.bottom + height + 8 <= window.innerHeight
+          ? rect.bottom + 6
+          : Math.max(12, rect.top - height - 6)
+    });
+  };
+
+  if (mode === "skills") {
+    return (
+      <section className="profile-skill-manager" aria-label="Profile skills">
+        <header className="profile-skill-toolbar">
+          <div className="profile-skill-summary">
+            <strong>Skills</strong>
+            <span>
+              {enabledLibrarySkillCount} on
+              {librarySkillEntries.length > enabledLibrarySkillCount
+                ? ` · ${librarySkillEntries.length - enabledLibrarySkillCount} off`
+                : ""}
+            </span>
+          </div>
+          <div className="profile-skill-toolbar__actions">
+            <button
+              className="secondary-action profile-skill-check"
+              type="button"
+              aria-label="Check profile skill updates"
+              title={
+                checkableSkillIds.length > 0
+                  ? "Check updates for enabled tracked skills"
+                  : "No enabled tracked skills"
+              }
+              disabled={checkingSkillUpdates || checkableSkillIds.length === 0}
+              onClick={() => onCheckSkillUpdates?.(checkableSkillIds)}
+            >
+              <RefreshCw
+                className={checkingSkillUpdates ? "is-spinning" : undefined}
+                size={14}
+                strokeWidth={2.2}
+                aria-hidden="true"
+              />
+              {checkingSkillUpdates ? "Checking" : "Check"}
+            </button>
+            <button
+              className="secondary-action"
+              ref={skillPickerButtonRef}
+              type="button"
+              aria-label="Add library skill"
+              onClick={openSkillPicker}
+            >
+              <Plus size={14} strokeWidth={2.2} aria-hidden="true" />
+              Add
+            </button>
+          </div>
+        </header>
+
+        <div className="profile-skill-list" role="list">
+          {skillEntries.map(({ ownedDir: asset, index }) => (
+            <div
+              className="profile-skill-row profile-skill-row--owned"
+              key={`${asset.source}:${asset.targetName}:${index}`}
+              role="listitem"
+              aria-label={`Profile-owned skill ${asset.targetName}`}
+            >
+              <span className="profile-skill-icon" aria-hidden="true">
+                <ResourceIcon iconKey="folder" size={16} />
+              </span>
+              <div className="profile-skill-main">
+                <OverflowTooltip
+                  className="profile-skill-name"
+                  text={asset.targetName}
+                  ariaLabel={`Full skill name ${asset.targetName}`}
+                />
+                <OverflowTooltip
+                  className="profile-skill-detail"
+                  text={`Profile-owned · ${asset.source}`}
+                  ariaLabel={`Full skill source ${asset.targetName}`}
+                />
+              </div>
+              <span className="profile-skill-state">Profile-owned</span>
+              <button
+                className="icon-action"
+                type="button"
+                aria-label={`More actions for profile-owned skill ${asset.targetName}`}
+                aria-expanded={
+                  profileSkillMenu?.kind === "owned" && profileSkillMenu.index === index
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openProfileSkillMenu("owned", index, event.currentTarget);
+                }}
+              >
+                <MoreHorizontal size={15} strokeWidth={2.2} aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+
+          {librarySkillEntries.map((entry, index) => {
+            const skill = librarySkills.find((item) => item.id === entry.libraryId);
+            const update = skillUpdates.find((item) => item.id === entry.libraryId);
+            const enabled = entry.enabled !== false;
+            const status = !skill
+              ? "Missing"
+              : update?.error
+                ? "Check failed"
+                : update?.updateAvailable
+                  ? "Update available"
+                  : skill.updatePolicy === "untracked"
+                    ? "Not tracked"
+                    : update
+                      ? "Up to date"
+                      : "Tracked";
+            const iconKey = skill?.iconKey ?? (skill?.sourceType === "github" ? "github" : "folder");
+            const revision = skill?.remoteRevision?.slice(0, 7);
+            const detail = skill
+              ? `${skill.sourceType === "github" ? "GitHub" : "Local"}${revision ? ` · ${revision}` : ""}${entry.targetName !== skill.id ? ` · installs as ${entry.targetName}` : ""}`
+              : `Library skill ${entry.libraryId} is missing`;
+            return (
+              <div
+                className={`profile-skill-row${enabled ? "" : " is-disabled"}`}
+                key={`${entry.libraryId}:${entry.targetName}:${index}`}
+                role="listitem"
+                aria-label={`Profile skill ${entry.targetName}`}
+              >
+                <span className="profile-skill-icon" aria-hidden="true">
+                  <ResourceIcon iconKey={iconKey} size={16} />
+                </span>
+                <div className="profile-skill-main">
+                  <OverflowTooltip
+                    className="profile-skill-name"
+                    text={skill?.name ?? entry.targetName}
+                    ariaLabel={`Full skill name ${entry.targetName}`}
+                  />
+                  <OverflowTooltip
+                    className="profile-skill-detail"
+                    text={detail}
+                    ariaLabel={`Full skill detail ${entry.targetName}`}
+                  />
+                </div>
+                <span
+                  className={`profile-skill-state${update?.updateAvailable ? " is-update" : ""}${update?.error || !skill ? " is-error" : ""}`}
+                  title={update?.error}
+                >
+                  {status}
+                </span>
+                {enabled && update?.updateAvailable ? (
+                  <button
+                    className="secondary-action profile-skill-update"
+                    type="button"
+                    onClick={() => onPreviewSkillUpdate?.(entry.libraryId)}
+                  >
+                    Update
+                  </button>
+                ) : null}
+                <button
+                  className={`profile-skill-switch${enabled ? " is-on" : ""}`}
+                  type="button"
+                  role="switch"
+                  aria-checked={enabled}
+                  aria-label={`${enabled ? "Disable" : "Enable"} ${skill?.name ?? entry.targetName}`}
+                  title={enabled ? "Disable in this profile" : "Enable in this profile"}
+                  onClick={() => toggleSkillRef(index)}
+                >
+                  <span aria-hidden="true" />
+                </button>
+                <button
+                  className="icon-action"
+                  type="button"
+                  aria-label={`More actions for profile skill ${entry.targetName}`}
+                  aria-expanded={
+                    profileSkillMenu?.kind === "library" && profileSkillMenu.index === index
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openProfileSkillMenu("library", index, event.currentTarget);
+                  }}
+                >
+                  <MoreHorizontal size={15} strokeWidth={2.2} aria-hidden="true" />
+                </button>
+              </div>
+            );
+          })}
+
+          {!hasResources ? (
+            <div className="profile-skill-empty">
+              <strong>No skills in this profile</strong>
+              <span>Add reusable skills from Library.</span>
+            </div>
+          ) : null}
+        </div>
+
+        {profileSkillMenu
+          ? createPortal(
+              <div
+                className="row-action-menu profile-skill-menu"
+                role="menu"
+                aria-label="Profile skill actions"
+                style={{ left: profileSkillMenu.left, top: profileSkillMenu.top }}
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                {profileSkillMenu.kind === "owned" ? (
+                  <button
+                    className="row-action-item"
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      const ownedDir = value.ownedDirs[profileSkillMenu.index];
+                      setEditingOwnedSkillIndex(profileSkillMenu.index);
+                      setEditingOwnedSkillTarget(ownedDir?.targetName ?? "");
+                      setProfileSkillMenu(undefined);
+                    }}
+                  >
+                    <Pencil size={14} strokeWidth={2.2} aria-hidden="true" />
+                    <span>Edit install name</span>
+                  </button>
+                ) : null}
+                <button
+                  className="row-action-item row-action-item--danger"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    if (profileSkillMenu.kind === "owned") {
+                      removeOwnedDir(profileSkillMenu.index);
+                    } else {
+                      removeSkillRef(profileSkillMenu.index);
+                    }
+                    setProfileSkillMenu(undefined);
+                  }}
+                >
+                  <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />
+                  <span>Remove from profile</span>
+                </button>
+              </div>,
+              document.body
+            )
+          : null}
+
+        {editingOwnedSkillIndex !== undefined ? (
+          <div className="preview-modal-backdrop" onClick={closeOwnedSkillDialog}>
+            <section
+              ref={ownedSkillDialogRef}
+              className="profile-form-dialog profile-form-dialog--compact profile-owned-skill-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Edit profile-owned skill"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="profile-dialog-header">
+                <div className="section-title">Edit install name</div>
+              </header>
+              <label className="field-block">
+                <span>Target name</span>
+                <input
+                  ref={ownedSkillInputRef}
+                  value={editingOwnedSkillTarget}
+                  onChange={(event) => setEditingOwnedSkillTarget(event.currentTarget.value)}
+                />
+              </label>
+              <footer className="preview-actions">
+                <button className="secondary-action" type="button" onClick={closeOwnedSkillDialog}>
+                  Cancel
+                </button>
+                <button
+                  className="primary-action"
+                  type="button"
+                  disabled={editingOwnedSkillTarget.trim().length === 0}
+                  onClick={() => {
+                    updateOwnedDir(editingOwnedSkillIndex, {
+                      targetName: editingOwnedSkillTarget.trim()
+                    });
+                    closeOwnedSkillDialog();
+                  }}
+                >
+                  Save
+                </button>
+              </footer>
+            </section>
+          </div>
+        ) : null}
+
+        {activePicker === "skills" ? (
+          <div className="preview-modal-backdrop" onClick={closePicker}>
+            <section
+              aria-label="Add library skills"
+              aria-modal="true"
+              className="profile-form-dialog resource-picker-dialog"
+              ref={pickerDialogRef}
+              role="dialog"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="profile-dialog-header">
+                <div className="section-title">Add library skills</div>
+              </header>
+              <div className="resource-picker-list">
+                {librarySkills.length === 0 ? (
+                  <div className="inline-state">No library skills available</div>
+                ) : null}
+                {librarySkills.map((skill) => {
+                  const isAttached = attachedSkillIds.has(skill.id);
+                  return (
+                    <label className="resource-picker-option" key={skill.id}>
+                      <input
+                        aria-label={skill.name}
+                        checked={selectedLibrarySkillIds.includes(skill.id)}
+                        disabled={isAttached}
+                        type="checkbox"
+                        onChange={() => toggleSelectedSkill(skill.id)}
+                      />
+                      <span>
+                        <strong>{skill.name}</strong>
+                        <small>{skill.description || skill.id}</small>
+                      </span>
+                      {isAttached ? <em>Already added</em> : null}
+                    </label>
+                  );
+                })}
+              </div>
+              <footer className="preview-actions">
+                <button
+                  className="secondary-action"
+                  ref={pickerCancelButtonRef}
+                  type="button"
+                  onClick={closePicker}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="primary-action"
+                  type="button"
+                  aria-label="Add selected skills"
+                  disabled={selectedLibrarySkillIds.length === 0}
+                  onClick={addSelectedLibrarySkills}
+                >
+                  Add {selectedLibrarySkillIds.length || "selected"}
+                </button>
+              </footer>
+            </section>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
   return (
     <section className="skills-editor" aria-label="Resources">
       {mode !== "advanced" ? (
         <div className="asset-editor-header">
           <div>
             <div className="section-title">
-              {mode === "all" ? "Resources" : mode === "skills" ? "Skills" : "MCP servers"}
+              {mode === "all" ? "Resources" : "MCP servers"}
               <InfoTip
                 label={
                   mode === "all"
                     ? "Attach shared library skills and MCP servers to this profile. Preview before apply verifies target paths and ownership."
-                    : mode === "skills"
-                    ? "Attach profile-owned and shared library skills to this profile."
                     : "Attach shared library MCP servers and review raw-config MCP servers."
                 }
               />

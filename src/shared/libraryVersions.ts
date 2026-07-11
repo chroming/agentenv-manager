@@ -26,7 +26,11 @@ export const collectLibraryResourceVersions = (
   const mcpById = new Map(mcpServers.map((server) => [server.id, server]));
   return {
     skills: Object.fromEntries(
-      [...new Set(profile.assetPolicy.skillRefs.map((reference) => reference.libraryId))]
+      [...new Set(
+        profile.assetPolicy.skillRefs
+          .filter((reference) => reference.enabled !== false)
+          .map((reference) => reference.libraryId)
+      )]
         .sort()
         .map((id) => [id, skillById.get(id)?.contentHash ?? "missing"])
     ),

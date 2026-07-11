@@ -225,7 +225,9 @@ export const createTargetCaptureService = ({
           const activeProfile = await profileStore.readProfile(activeProfileId);
           const hasEquivalentReference = (activeProfile.assetPolicy.skillRefs ?? []).some(
             (reference) =>
-              reference.targetName === skill.targetName && reference.libraryId === skill.libraryId
+              reference.enabled !== false &&
+              reference.targetName === skill.targetName &&
+              reference.libraryId === skill.libraryId
           );
           if (!hasEquivalentReference) return false;
         } catch {

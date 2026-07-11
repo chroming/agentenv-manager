@@ -567,7 +567,7 @@ describe("App", () => {
     );
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
-    expect(screen.getByText("Native format: OpenCode")).toBeInTheDocument();
+    expect(screen.getByText("Native: OpenCode")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "MCP Servers" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Advanced" })).toBeInTheDocument();
@@ -980,6 +980,90 @@ describe("App", () => {
     expect(screen.queryByLabelText("OpenCode-only opencode.jsonc")).not.toBeInTheDocument();
   });
 
+  it("focuses the active profile and manages its enabled library skills", async () => {
+    const activeProfile: ProfileDetail = {
+      ...richProfile,
+      assetPolicy: {
+        ...richProfile.assetPolicy,
+        skillRefs: [
+          { libraryId: "testing", targetName: "library-testing" },
+          { libraryId: "docs", targetName: "library-docs", enabled: false }
+        ]
+      }
+    };
+    const checkSkillLibraryUpdates = vi.fn().mockResolvedValue([]);
+    const api = installApi({
+      listProfiles: vi.fn().mockResolvedValue([summaryOf(profileB), summaryOf(activeProfile)]),
+      readProfile: vi.fn().mockImplementation(async (profileId) =>
+        profileId === activeProfile.id ? activeProfile : profileB
+      ),
+      listTargetStates: vi.fn().mockResolvedValue([managedState()]),
+      listSkillLibrary: vi.fn().mockResolvedValue([
+        {
+          id: "testing",
+          name: "Testing",
+          description: "Testing workflows",
+          path: "/tmp/skills/testing",
+          sourceType: "github",
+          source: "https://github.com/acme/skills/tree/main/testing",
+          updatePolicy: "tracked",
+          contentHash: "testing-hash",
+          updatedAt: "2026-07-12T00:00:00.000Z"
+        },
+        {
+          id: "docs",
+          name: "Docs",
+          description: "Documentation workflows",
+          path: "/tmp/skills/docs",
+          sourceType: "github",
+          source: "https://github.com/acme/skills/tree/main/docs",
+          updatePolicy: "tracked",
+          contentHash: "docs-hash",
+          updatedAt: "2026-07-12T00:00:00.000Z"
+        }
+      ]),
+      checkSkillLibraryUpdates
+    });
+    render(<App />);
+
+    await openProfiles();
+    expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
+    const profileList = screen.getByRole("complementary", { name: "Profile list" });
+    const profileRows = profileList.querySelectorAll(".profile-row");
+    expect(profileRows[0]).toHaveTextContent("Daily Coding");
+    expect(profileRows[0]).toHaveTextContent("Current");
+
+    const skillsRegion = await screen.findByRole("region", { name: "Profile skills" });
+    expect(within(skillsRegion).getByRole("switch", { name: "Disable Testing" })).toBeChecked();
+    expect(within(skillsRegion).getByRole("switch", { name: "Enable Docs" })).not.toBeChecked();
+
+    checkSkillLibraryUpdates.mockClear();
+    fireEvent.click(
+      within(skillsRegion).getByRole("button", { name: "Check profile skill updates" })
+    );
+    await waitFor(() =>
+      expect(checkSkillLibraryUpdates).toHaveBeenCalledWith(["testing"])
+    );
+
+    fireEvent.click(within(skillsRegion).getByRole("switch", { name: "Disable Testing" }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(api.saveProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          assetPolicy: expect.objectContaining({
+            skillRefs: [
+              { libraryId: "testing", targetName: "library-testing", enabled: false },
+              { libraryId: "docs", targetName: "library-docs", enabled: false }
+            ]
+          })
+        })
+      )
+    );
+  });
+
   it("shows rich profile row metadata", async () => {
     installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
@@ -1034,12 +1118,12 @@ describe("App", () => {
 
     const edit = screen.getByRole("button", { name: "Edit profile" });
     const more = screen.getByRole("button", { name: "More profile actions" });
-    const targetMenu = screen.getByRole("button", { name: "Select apply target" });
     expect(edit).toHaveAttribute("title", "Edit profile");
     expect(more).toHaveAttribute("title", "More profile actions");
     expect(more.closest(".profile-hero")).not.toBeNull();
     expect(more.closest(".profile-page-header")).toBeNull();
-    expect(targetMenu).toHaveAttribute("title", "Select apply target");
+    expect(screen.getByLabelText("Current target OpenCode")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Select apply target" })).not.toBeInTheDocument();
   });
 
   it("keeps whole-profile Save beside Apply in their workflow order", async () => {
@@ -1259,7 +1343,9 @@ describe("App", () => {
   });
 
   it("preserves a dirty draft when the checked target is re-selected", async () => {
-    installApi();
+    installApi({
+      listTargets: vi.fn().mockResolvedValue([target, codexTarget])
+    });
     render(<App />);
 
     await openProfiles();
@@ -1441,7 +1527,9 @@ describe("App", () => {
   });
 
   it("keeps header menus exclusive and restores trigger focus", async () => {
-    const api = installApi();
+    const api = installApi({
+      listTargets: vi.fn().mockResolvedValue([target, codexTarget])
+    });
     render(<App />);
 
     await openProfiles();

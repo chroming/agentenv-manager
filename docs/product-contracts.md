@@ -100,6 +100,13 @@ A Profile has one **native Target format** used to edit and validate native Adva
 
 Source of truth: the saved Profile directory in AgentEnv data.
 
+Each Library Skill reference has a Profile-scoped enabled state. Missing legacy state means enabled.
+
+- Turning a Skill off MUST preserve the reference and its Library content; it removes the Skill only from that Profile's effective payload.
+- Turning a Skill back on MUST restore the same reference without another Library import or picker flow.
+- A disabled Skill MUST NOT be deployed, validated as a desired Target resource, counted as an effective resource, or recorded in applied Library versions.
+- Enable and disable are Profile edits: they become durable on Save and affect a Target only after Preview and Apply.
+
 ### 4.4 Target
 
 A Target is a detected local agent tool and its deployment locations. OpenCode, Codex, and Claude Code are Targets.
@@ -208,8 +215,12 @@ Rules:
 - Switching Profile, Target, workspace, or closing the window with a dirty draft MUST offer Save, Discard, or Cancel.
 - Failed validation or Save MUST preserve all draft input.
 - Applying a Profile MUST NOT change its native Target format.
+- When exactly one installed Target is available, Profiles MUST show it as stable context instead of an option menu. When multiple installed Targets are available, Target selection remains available.
+- On entry, Profiles SHOULD select the chosen Target's active Profile, pin it first in the list, mark it Current, and open its Skills section for the common single-Target workflow.
+- Profile Skills MUST expose enabled and disabled Library references in one compact list. Check checks only enabled tracked references in that Profile; Add selects Library references; Remove detaches a reference from the Profile without deleting Library content.
+- Updating from Profile Skills still updates the global Library copy. The update confirmation MUST disclose how many Profiles reference it and whether Copy or Live link mode changes installed Targets immediately.
 
-Status: whole-Profile Save, dirty protection, and per-Target applied hashes are `Implemented`. Adopting native live Instructions is `Implemented`; adoption of other compatible surfaces is `Partial`.
+Status: whole-Profile Save, dirty protection, per-Target applied hashes, active-Profile focus, and Profile-scoped Skill enablement are `Implemented`. Adopting native live Instructions is `Implemented`; adoption of other compatible surfaces is `Partial`.
 
 ## 8. Target Lifecycle
 
@@ -511,6 +522,7 @@ External ownership contract:
 - In the default Copy mode, Profiles remain saved and their deployed Targets become `Changes pending`; copied installs require explicit synchronization or Profile Apply.
 - In advanced Live link mode, linked Target content changes immediately. The UI MUST disclose this before enabling the mode and MUST NOT represent the linked deployment as an immutable applied snapshot.
 - Local imports without an explicit tracked source MUST NOT produce repeated update failures.
+- A Profile-scoped Check MUST inspect only enabled tracked Skills referenced by that Profile. Disabled, missing, and untracked references remain visible but MUST NOT trigger network or filesystem checks.
 
 ### 16.4 Delete
 
@@ -697,6 +709,9 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Switching active Profile removes only previous managed resources.
 - Identical second Preview produces no changes and no Apply action.
 - Dirty Profile blocks Preview and preserves draft.
+- Active Profile is selected and pinned for the chosen Target; a single installed Target is static context.
+- Disabling a referenced Library Skill preserves the Profile reference, requires Save, previews a remove operation, removes only the managed Target copy on Apply, and can be re-enabled later.
+- Profile-scoped update Check excludes disabled and untracked references while a Library update discloses cross-Profile and Copy versus Live link impact.
 - Missing executable and missing directory are distinguished.
 - Copy mode keeps Library updates pending; Live link mode visibly propagates them immediately.
 - Create from Target captures portable resources, reuses exact Library matches, applies the resulting Profile, and removes only reviewed redundant copies.

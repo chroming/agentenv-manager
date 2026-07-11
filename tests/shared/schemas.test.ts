@@ -98,4 +98,22 @@ describe("profile schemas", () => {
       }
     ]);
   });
+
+  it("keeps legacy skill references enabled and accepts an explicit disabled state", () => {
+    const policy = AssetPolicySchema.parse({
+      ownedDirs: [],
+      ownedFiles: [],
+      skillRefs: [
+        { libraryId: "legacy", targetName: "legacy" },
+        { libraryId: "paused", targetName: "paused", enabled: false }
+      ],
+      mcpRefs: [],
+      disabledSkillPaths: []
+    });
+
+    expect(policy.skillRefs).toEqual([
+      { libraryId: "legacy", targetName: "legacy" },
+      { libraryId: "paused", targetName: "paused", enabled: false }
+    ]);
+  });
 });

@@ -89,6 +89,7 @@ import {
   SkillLibraryPanel,
   type SkillUpdateCheckStatus
 } from "./components/SkillLibraryPanel";
+import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
 import { SkillsEditor } from "./components/SkillsEditor";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
@@ -512,6 +513,7 @@ export const App = () => {
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
+  const [checkingProfileSkillUpdates, setCheckingProfileSkillUpdates] = useState(false);
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
@@ -735,7 +737,7 @@ export const App = () => {
     setProfileResourceCounts(nextProfileResourceCounts);
     setProfileLibraryVersions(nextProfileLibraryVersions);
     setSelectedTargetId((current) => current ?? targetItems[0]?.id);
-    return { targetItems, profileItems, backupItems, skillUpdateItems };
+    return { targetItems, targetStateItems, profileItems, backupItems, skillUpdateItems };
   };
 
   const refreshSkills = async () => {
@@ -757,18 +759,30 @@ export const App = () => {
     let isMounted = true;
 
     refreshProfiles()
-      .then(async ({ profileItems, targetItems }) => {
+      .then(async ({ profileItems, targetItems, targetStateItems }) => {
         if (!isMounted || profileItems.length === 0) {
           return;
         }
 
-        const initialTargetId = targetItems[0]?.id;
+        const initialTarget =
+          targetItems.find(
+            (target) =>
+              target.health.executableFound &&
+              targetStateItems.some(
+                (state) => state.targetId === target.id && Boolean(state.activeProfileId)
+              )
+          ) ?? targetItems.find((target) => target.health.executableFound) ?? targetItems[0];
+        const initialTargetId = initialTarget?.id;
+        const activeProfileId = targetStateItems.find(
+          (state) => state.targetId === initialTargetId
+        )?.activeProfileId;
         const initialProfile =
+          profileItems.find((profile) => profile.id === activeProfileId) ??
           profileItems.find((profile) => !initialTargetId || profile.targetId === initialTargetId) ??
           profileItems[0];
-        setSelectedTargetId(initialProfile.targetId);
+        setSelectedTargetId(initialTargetId ?? initialProfile.targetId);
         setSelectedProfileId(initialProfile.id);
-        setActiveComposerSection(undefined);
+        setActiveComposerSection(activeProfileId === initialProfile.id ? "skills" : undefined);
         const requestId = ++profileFlowRequestRef.current;
         const profile = await window.agentEnv.readProfile(initialProfile.id);
         if (isMounted && requestId === profileFlowRequestRef.current) {
@@ -1368,10 +1382,14 @@ export const App = () => {
   }, [isProfileActionsOpen, isTargetMenuOpen]);
 
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
+  const installedTargets = targets.filter((target) => target.health.executableFound);
   const profileTarget = targets.find(
     (target) => target.id === draftProfile?.manifest.targetId
   );
   const normalizedProfileSearch = profileSearch.trim().toLowerCase();
+  const currentProfileId = targetStates.find(
+    (state) => state.targetId === selectedTargetId
+  )?.activeProfileId;
   const visibleProfiles = profiles
     .filter((profile) => {
       if (normalizedProfileSearch.length === 0) {
@@ -1380,10 +1398,24 @@ export const App = () => {
 
       return `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedProfileSearch);
     })
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .sort((left, right) => {
+      if (left.id === currentProfileId) return -1;
+      if (right.id === currentProfileId) return 1;
+      return left.name.localeCompare(right.name);
+    });
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
+  const selectedSkillUpdateImpact = selectedSkillUpdatePlan
+    ? `Updates the shared Library copy used by ${plural(
+        skillUsage[selectedSkillUpdatePlan.id]?.length ?? 0,
+        "profile"
+      )}. ${
+        skillSettings.skillSyncMethod === "copy"
+          ? "Copied Target installs remain unchanged until their Profiles are applied."
+          : "Linked Target installs may change immediately after this update."
+      }`
+    : undefined;
   const isSelectedProfileActive = Boolean(
     selectedProfileId && targetStates.some((state) => state.activeProfileId === selectedProfileId)
   );
@@ -1908,6 +1940,33 @@ export const App = () => {
       setSkillUpdateCheckStatus({ state: "error", message: "Update check failed" });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const checkProfileSkillUpdates = async (ids: string[]) => {
+    if (checkingProfileSkillUpdates || ids.length === 0) {
+      return;
+    }
+    setCheckingProfileSkillUpdates(true);
+    setError(undefined);
+    setSkillUpdateCheckStatus({ state: "checking", message: "Checking profile skills..." });
+    try {
+      const updates = await window.agentEnv.checkSkillLibraryUpdates(ids);
+      const selectedIds = new Set(ids);
+      setSkillUpdates((current) => [
+        ...current.filter((update) => !selectedIds.has(update.id)),
+        ...updates
+      ]);
+      setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(updates));
+      const checkError = updates.find((item) => item.error)?.error;
+      if (checkError) {
+        setError(checkError);
+      }
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setSkillUpdateCheckStatus({ state: "error", message: "Profile skill check failed" });
+    } finally {
+      setCheckingProfileSkillUpdates(false);
     }
   };
 
@@ -2576,7 +2635,23 @@ export const App = () => {
       <span id="profile-apply-description" hidden>{applyDescription}</span>
     </div>
   );
-  const targetWorkspaceControl = (
+  const targetWorkspaceControl = installedTargets.length === 1 && selectedTarget ? (
+    <div
+      className="profile-target-workspace-button is-static"
+      aria-label={`Current target ${selectedTarget.name}`}
+    >
+      {selectedTargetIcon?.assetUrl ? (
+        <img
+          className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`}
+          src={selectedTargetIcon.assetUrl}
+          alt=""
+        />
+      ) : (
+        <Monitor size={16} aria-hidden="true" />
+      )}
+      <span>Target: {selectedTarget.name}</span>
+    </div>
+  ) : (
     <div className="profile-target-workspace-control">
       <button
         ref={targetMenuButtonRef}
@@ -2922,6 +2997,9 @@ export const App = () => {
                         <span className="profile-row__title">
                           <span className="profile-row__name">{profile.name}</span>
                           {isSelected && isProfileDirty ? <strong>Unsaved</strong> : null}
+                          {profile.id === currentProfileId && !(isSelected && isProfileDirty) ? (
+                            <strong className="profile-row__current">Current</strong>
+                          ) : null}
                         </span>
                         <small title={profile.description || "No description"}>
                           {profile.description || "No description"}
@@ -3015,7 +3093,7 @@ export const App = () => {
                       />
                       <div className="profile-hero__body">
                         <div className="profile-hero__title">
-                          <h2>{draftProfile.manifest.name}</h2>
+                          <h2 title={draftProfile.manifest.name}>{draftProfile.manifest.name}</h2>
                           <button
                             className="icon-action"
                             type="button"
@@ -3031,7 +3109,7 @@ export const App = () => {
                         </p>
                         <div className="profile-hero__meta">
                           <span className="success-pill">
-                            Native format: {profileTarget?.name ?? draftProfile.manifest.targetId}
+                            Native: {profileTarget?.name ?? draftProfile.manifest.targetId}
                           </span>
                           {selectedTarget && selectedTarget.id !== profileTarget?.id ? (
                             <span className="profile-hero__destination">
@@ -3077,6 +3155,17 @@ export const App = () => {
                           </button>
                           {isProfileActionsOpen ? (
                             <div className="profile-actions-menu" role="menu" aria-label="Profile actions">
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setIsProfileActionsOpen(false);
+                                  openEditProfileDialog();
+                                }}
+                              >
+                                <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
+                                <span>Edit profile</span>
+                              </button>
                               <button type="button" role="menuitem" onClick={duplicateSelectedProfile}>
                                 <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
                                 <span>Duplicate profile</span>
@@ -3169,7 +3258,11 @@ export const App = () => {
                   configLanguage={profileTarget?.configLanguage}
                   preview={preview}
                   librarySkills={librarySkills}
+                  skillUpdates={skillUpdates}
+                  checkingSkillUpdates={checkingProfileSkillUpdates}
                   mcpServers={mcpServers}
+                  onCheckSkillUpdates={(ids) => void checkProfileSkillUpdates(ids)}
+                  onPreviewSkillUpdate={(id) => void previewLibrarySkillUpdate(id)}
                   onChange={(assetPolicy) => {
                     updateDraftProfile({ ...draftProfile, assetPolicy });
                   }}
@@ -3314,6 +3407,13 @@ export const App = () => {
                 onConfirm={applySelectedProfile}
               />
             ) : null}
+            <SkillUpdateDialog
+              plan={selectedSkillUpdatePlan}
+              impact={selectedSkillUpdateImpact}
+              busy={busy}
+              onClose={() => setSelectedSkillUpdatePlan(undefined)}
+              onConfirm={(id) => void updateLibrarySkill(id)}
+            />
                   </>
                 ) : (
                   <div className="profile-empty-surface">

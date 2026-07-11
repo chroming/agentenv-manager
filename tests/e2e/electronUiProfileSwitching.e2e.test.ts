@@ -1544,10 +1544,6 @@ describe("Electron UI profile switching e2e", () => {
     const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
     await skillPicker.waitFor({ state: "visible" });
     await expectInViewport(page, skillPicker);
-    await skillPicker.locator(".info-tip").hover();
-    const pickerTip = page.getByRole("tooltip");
-    await pickerTip.waitFor({ state: "visible" });
-    await expectInViewport(page, pickerTip);
     await page.keyboard.press("Escape");
     await skillPicker.waitFor({ state: "hidden" });
 
@@ -1604,7 +1600,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(initialOverflow[0].overflowY).toBe("hidden");
     expect(["auto", "scroll"]).toContain(initialOverflow[1].overflowY);
-    expect(["auto", "scroll"]).toContain(initialOverflow[2].overflowY);
+    expect(initialOverflow[2].overflowY).toBe("hidden");
     for (const metrics of initialOverflow) {
       expect(metrics.clientHeight).toBeGreaterThan(0);
     }
@@ -1648,16 +1644,14 @@ describe("Electron UI profile switching e2e", () => {
     ]);
     expect(advancedEditorBox).not.toBeNull();
     expect(advancedComposerBox).not.toBeNull();
-    expect(advancedComposerBox!.height).toBeGreaterThanOrEqual(540);
+    expect(advancedComposerBox!.height).toBeGreaterThanOrEqual(300);
     const advancedEditorMetrics = await editor.evaluate((element) => ({
       clientHeight: element.clientHeight,
       overflowY: getComputedStyle(element).overflowY,
       scrollHeight: element.scrollHeight
     }));
-    expect(["auto", "scroll"]).toContain(advancedEditorMetrics.overflowY);
-    expect(advancedEditorMetrics.scrollHeight).toBeGreaterThan(
-      advancedEditorMetrics.clientHeight
-    );
+    expect(advancedEditorMetrics.overflowY).toBe("hidden");
+    expect(advancedEditorMetrics.scrollHeight).toBe(advancedEditorMetrics.clientHeight);
     await expectInViewport(page, commitActions);
     const advancedDocumentMetrics = await page.evaluate(() => ({
       documentHeight: document.documentElement.scrollHeight,
@@ -1679,12 +1673,16 @@ describe("Electron UI profile switching e2e", () => {
     ]);
     expect(editorBox).not.toBeNull();
     expect(composerBox).not.toBeNull();
-    expect(composerBox!.height).toBeGreaterThanOrEqual(540);
+    expect(composerBox!.height).toBeGreaterThanOrEqual(300);
     const expandedPanel = page.locator(
       '[data-profile-composer-id="skills"] .profile-composer-section__panel'
     );
-    await expandedPanel.scrollIntoViewIfNeeded();
     await expectInViewport(page, expandedPanel);
+    await expectInViewport(page, skillsTrigger);
+    await expectInViewport(
+      page,
+      page.getByRole("button", { name: "Check profile skill updates" })
+    );
     await expectInViewport(page, commitActions);
     await expectInViewport(page, header);
     await expectInViewport(page, workbench);
@@ -1701,12 +1699,37 @@ describe("Electron UI profile switching e2e", () => {
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight
     }));
-    expect(["auto", "scroll"]).toContain(expandedMetrics.overflowY);
-    expect(expandedMetrics.scrollHeight).toBeGreaterThan(expandedMetrics.clientHeight);
+    const skillList = page.locator(".profile-skill-list");
+    const skillListMetrics = await skillList.evaluate((element) => ({
+      overflowY: getComputedStyle(element).overflowY,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight
+    }));
+    expect(expandedMetrics.overflowY).toBe("hidden");
+    expect(expandedMetrics.scrollHeight).toBe(expandedMetrics.clientHeight);
     expect(["auto", "scroll"]).toContain(panelMetrics.overflowY);
     expect(panelMetrics.clientHeight).toBeGreaterThanOrEqual(220);
-    expect(panelMetrics.scrollHeight).toBeGreaterThan(panelMetrics.clientHeight);
+    expect(panelMetrics.scrollHeight).toBe(panelMetrics.clientHeight);
+    expect(["auto", "scroll"]).toContain(skillListMetrics.overflowY);
+    expect(skillListMetrics.scrollHeight).toBeGreaterThan(skillListMetrics.clientHeight);
     expect(expandedMetrics.documentHeight).toBe(expandedMetrics.viewportHeight);
+
+    await resizeAppWindow(page, 920, 620);
+    await expectInViewport(page, page.locator(".profile-hero"));
+    await expectInViewport(page, skillsTrigger);
+    await expectInViewport(
+      page,
+      page.getByRole("button", { name: "Check profile skill updates" })
+    );
+    const minimumPanelMetrics = await expandedPanel.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight
+    }));
+    expect(minimumPanelMetrics.clientHeight).toBeGreaterThanOrEqual(180);
+    expect(minimumPanelMetrics.scrollHeight).toBe(minimumPanelMetrics.clientHeight);
+    expect(
+      await skillList.evaluate((element) => element.scrollHeight > element.clientHeight)
+    ).toBe(true);
   }, 30_000);
 
   it("keeps core management actions usable at the minimum supported viewport", async () => {
@@ -1748,7 +1771,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(Math.abs(saveBox!.height - applyButtonBox!.height)).toBeLessThanOrEqual(1);
       expect(Math.abs(saveBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
       expect(Math.round(saveBox!.height)).toBe(40);
-      expect(Math.round(saveBox!.width)).toBe(104);
+      expect(Math.round(saveBox!.width)).toBe((page.viewportSize()?.width ?? 0) <= 1050 ? 92 : 104);
 
       const controlsFitText = await commitActions.locator("button").evaluateAll((buttons) =>
         buttons.every((button) => {
@@ -2846,7 +2869,7 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page);
     await page
-      .getByRole("group", { name: "Library skill shared-reviewer" })
+      .getByRole("listitem", { name: "Profile skill shared-reviewer" })
       .waitFor({ state: "visible" });
     await saveProfile(page);
     await previewAndApply(page, "OpenCode");
@@ -3552,13 +3575,52 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "Skills");
     expect(await page.getByRole("button", { name: "Add skill" }).count()).toBe(0);
     await page
-      .getByRole("group", { name: "Skill ui-alpha-skill" })
-      .getByRole("button", { name: "Remove profile skill" })
+      .getByRole("listitem", { name: "Profile-owned skill ui-alpha-skill" })
+      .getByRole("button", { name: "More actions for profile-owned skill ui-alpha-skill" })
       .click();
+    await page.getByRole("menuitem", { name: "Remove from profile" }).click();
     await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
+  }, 30_000);
+
+  it("disables a current Profile library skill and removes only its managed Target copy", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp({
+      openCodeAlphaLibrarySkillCount: 1
+    });
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+
+    const installedSkillDir = join(opencodeDir, "skills", "layout-skill-1");
+    await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);
+
+    await expandComposerSection(page, "Skills");
+    const skillRow = page.getByRole("listitem", { name: "Profile skill layout-skill-1" });
+    await skillRow.getByRole("switch", { name: "Disable layout-skill-1" }).click();
+    expect(await page.getByRole("button", { name: "Save", exact: true }).isEnabled()).toBe(true);
+    expect(await page.getByRole("button", { name: "Apply", exact: true }).isDisabled()).toBe(true);
+    await saveProfile(page);
+
+    const savedAssets = await readJson<{
+      skillRefs: Array<{ libraryId: string; targetName: string; enabled?: boolean }>;
+    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "assets.json"));
+    expect(savedAssets.skillRefs).toEqual([
+      { libraryId: "layout-skill-1", targetName: "layout-skill-1", enabled: false }
+    ]);
+
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    const resourceChanges = previewDialog.getByRole("region", { name: "Resource changes" });
+    await resourceChanges.waitFor({ state: "visible" });
+    await expect.poll(() => resourceChanges.textContent()).toContain("remove");
+    await expect.poll(() => resourceChanges.textContent()).toContain("layout-skill-1");
+    await previewDialog.getByRole("button", { name: "Apply profile" }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+
+    await expect(fileExists(installedSkillDir)).resolves.toBe(false);
+    await expect(fileExists(join(appDataRoot, "skills-library", "layout-skill-1", "SKILL.md")))
+      .resolves.toBe(true);
   }, 30_000);
 
   it("shows profile-owned skill conflicts before applying from the rendered app", async () => {
@@ -3566,8 +3628,17 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "Skills");
-    const alphaSkill = page.getByRole("group", { name: "Skill ui-alpha-skill" });
-    await alphaSkill.getByLabel("Target name").fill("target-only-reviewer");
+    const alphaSkill = page.getByRole("listitem", {
+      name: "Profile-owned skill ui-alpha-skill"
+    });
+    await alphaSkill
+      .getByRole("button", { name: "More actions for profile-owned skill ui-alpha-skill" })
+      .click();
+    await page.getByRole("menuitem", { name: "Edit install name" }).click();
+    const editDialog = page.getByRole("dialog", { name: "Edit profile-owned skill" });
+    await editDialog.getByLabel("Target name").fill("target-only-reviewer");
+    await editDialog.getByRole("button", { name: "Save" }).click();
+    await editDialog.waitFor({ state: "hidden" });
     await saveProfile(page);
 
     await applyActionButton(page, "OpenCode").click();

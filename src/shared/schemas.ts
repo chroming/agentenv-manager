@@ -79,7 +79,8 @@ export const AssetPolicySchema = z.object({
     .array(
       z.object({
         libraryId: SafeIdSchema,
-        targetName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
+        targetName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/),
+        enabled: z.boolean().optional()
       })
     )
     .default([]),
