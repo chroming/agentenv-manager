@@ -6,3 +6,4 @@
 @import "../product-shell.css" layer(product);
 @import "./primitives.css" layer(primitives);
 @import "./shell.css" layer(shell);
+@import "./pages/skills.css" layer(pages);

@@ -3039,6 +3039,8 @@ describe("Electron UI profile switching e2e", () => {
         };
       });
       return {
+        containerName: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel")!).containerName,
+        headerDisplay: head ? getComputedStyle(head).display : "missing",
         headerLefts,
         rowMetrics,
         documentWidth: document.documentElement.scrollWidth,
@@ -3047,6 +3049,8 @@ describe("Electron UI profile switching e2e", () => {
     });
 
     expect(defaultGeometry.documentWidth).toBe(defaultGeometry.viewportWidth);
+    expect(defaultGeometry.containerName).toBe("skill-library");
+    expect(defaultGeometry.headerDisplay).toBe("grid");
     for (const row of defaultGeometry.rowMetrics) {
       row.cellLefts.forEach((left, index) => {
         expect(Math.abs(left - defaultGeometry.headerLefts[index]!)).toBeLessThanOrEqual(1);
@@ -3068,6 +3072,7 @@ describe("Electron UI profile switching e2e", () => {
       const installs = row.querySelector<HTMLElement>(".library-installs-cell")!.getBoundingClientRect();
       return {
         actionGap: actions.left - Math.max(update.right, installs.right),
+        headerDisplay: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel .library-table__head")!).display,
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: document.documentElement.clientWidth,
         versionDisplay: getComputedStyle(row.querySelector<HTMLElement>(".library-version-cell")!).display
@@ -3075,6 +3080,7 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(compactGeometry.documentWidth).toBe(compactGeometry.viewportWidth);
     expect(compactGeometry.actionGap).toBeGreaterThanOrEqual(9);
+    expect(compactGeometry.headerDisplay).toBe("none");
     expect(compactGeometry.versionDisplay).toBe("none");
   }, 30_000);
 
