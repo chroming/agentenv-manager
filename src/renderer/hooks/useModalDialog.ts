@@ -16,6 +16,7 @@ interface ModalDialogOptions {
   initialFocusRef?: RefObject<HTMLElement | null>;
   fallbackFocusRef?: RefObject<HTMLElement | null>;
   dismissDisabled?: boolean;
+  focusKey?: string;
 }
 
 export const useModalDialog = ({
@@ -24,7 +25,8 @@ export const useModalDialog = ({
   onDismiss,
   initialFocusRef,
   fallbackFocusRef,
-  dismissDisabled = false
+  dismissDisabled = false,
+  focusKey = "default"
 }: ModalDialogOptions) => {
   const onDismissRef = useRef(onDismiss);
   const dismissDisabledRef = useRef(dismissDisabled);
@@ -97,5 +99,5 @@ export const useModalDialog = ({
         fallbackFocusRef.current = null;
       }
     };
-  }, [dialogRef, fallbackFocusRef, initialFocusRef, open]);
+  }, [dialogRef, fallbackFocusRef, focusKey, initialFocusRef, open]);
 };

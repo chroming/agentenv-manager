@@ -478,6 +478,23 @@ try {
     "targets",
     () => page.getByRole("region", { name: "Targets", exact: true })
   );
+  await page
+    .getByRole("article", { name: "Target OpenCode" })
+    .getByRole("button", { name: "Create profile from OpenCode" })
+    .click();
+  const targetCaptureDialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
+  await targetCaptureDialog.waitFor({ state: "visible" });
+  await capturePage(windowHandle, join(outputDir, "target-capture-setup-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(windowHandle, join(outputDir, "target-capture-setup-1180x728.png"));
+  await targetCaptureDialog.getByRole("button", { name: "Review" }).click();
+  const targetCaptureReview = page.getByRole("dialog", { name: "Review OpenCode takeover" });
+  await targetCaptureReview.waitFor({ state: "visible" });
+  await capturePage(windowHandle, join(outputDir, "target-capture-review-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(windowHandle, join(outputDir, "target-capture-review-920x620.png"));
+  await page.keyboard.press("Escape");
+  await targetCaptureReview.waitFor({ state: "hidden" });
   await captureWorkspace(
     "Settings",
     "settings",

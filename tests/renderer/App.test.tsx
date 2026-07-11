@@ -924,7 +924,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Targets" }));
     expect(await screen.findByRole("article", { name: "Target OpenCode" })).toHaveTextContent("Ready");
 
-    fireEvent.click(screen.getByRole("button", { name: "Refresh targets" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
     await waitFor(() => expect(api.listTargets).toHaveBeenCalledTimes(2));
     await waitFor(() =>
@@ -1841,15 +1841,20 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
     let dialog = screen.getByRole("dialog", { name: "New profile" });
     fireEvent.click(within(dialog).getByRole("button", { name: "From Target" }));
+    dialog = screen.getByRole("dialog", { name: "Create profile from OpenCode" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
 
     await waitFor(() => expect(api.previewCreateProfileFromTarget).toHaveBeenCalledWith("opencode"));
-    dialog = screen.getByRole("dialog", { name: "New profile" });
-    expect(within(dialog).getByRole("region", { name: "Capture impact" })).toHaveTextContent(
-      "1 old copies removed"
-    );
-    expect(within(dialog).getByText(/1 compatibility copy preserved/)).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create & Manage" }));
+    dialog = screen.getByRole("dialog", { name: "Review OpenCode takeover" });
+    const impact = within(dialog).getByRole("region", { name: "Capture impact" });
+    expect(within(impact).getByLabelText("Takeover summary")).toHaveTextContent("1Copies removed");
+    expect(within(dialog).getByText("A shared copy will remain in its current location")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
+    dialog = screen.getByRole("dialog", { name: "Create profile from OpenCode" });
+    expect(within(dialog).getByLabelText("Profile name")).toHaveValue("OpenCode Current");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
+    dialog = await screen.findByRole("dialog", { name: "Review OpenCode takeover" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create and take over" }));
 
     await waitFor(() =>
       expect(api.createProfileFromTarget).toHaveBeenCalledWith({
@@ -1858,6 +1863,59 @@ describe("App", () => {
       })
     );
     expect(await screen.findByText("OpenCode Current created and applied")).toBeInTheDocument();
+  });
+
+  it("keeps the Targets workspace and restores context when capture is cancelled", async () => {
+    installApi();
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Skill library" });
+    fireEvent.click(screen.getByRole("button", { name: "Targets" }));
+    const targetsWorkspace = await screen.findByRole("region", { name: "Targets" });
+    const targetCard = within(targetsWorkspace).getByRole("article", { name: "Target OpenCode" });
+    fireEvent.click(within(targetCard).getByRole("button", { name: "Create profile from OpenCode" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Create profile from OpenCode" });
+    expect(screen.getByRole("region", { name: "Targets" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog", { name: "Create profile from OpenCode" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Targets" })).toBeInTheDocument();
+  });
+
+  it("keeps capture failures inside the dialog and refreshes the review in place", async () => {
+    const api = installApi({
+      previewCreateProfileFromTarget: vi
+        .fn()
+        .mockRejectedValueOnce(new Error("Target changed while it was being reviewed"))
+        .mockResolvedValueOnce({
+          id: "refreshed-capture-preview",
+          targetId: "opencode",
+          targetName: "OpenCode",
+          suggestedName: "OpenCode Current",
+          createdAt: "2026-07-14T00:00:00.000Z",
+          resources: [],
+          cleanupPaths: [],
+          warnings: [],
+          errors: []
+        })
+    });
+    render(<App />);
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "From Target" }));
+    let dialog = screen.getByRole("dialog", { name: "Create profile from OpenCode" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
+
+    const localError = await within(dialog).findByRole("alert");
+    expect(localError).toHaveTextContent("Target changed while it was being reviewed");
+    expect(screen.queryByText("Action failed")).not.toBeInTheDocument();
+    fireEvent.click(within(localError).getByRole("button", { name: "Refresh review" }));
+
+    dialog = await screen.findByRole("dialog", { name: "Review OpenCode takeover" });
+    expect(api.previewCreateProfileFromTarget).toHaveBeenCalledTimes(2);
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("guards dirty profile drafts before context-changing actions", async () => {

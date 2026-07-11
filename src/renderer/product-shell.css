@@ -519,7 +519,7 @@
   border: 1px solid #edf1f6;
   border-radius: 7px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .target-state-grid > span {
@@ -1248,15 +1248,10 @@
 
   .target-workflow-header {
     gap: 10px;
-    grid-template-columns: 34px minmax(0, 1fr) auto;
-  }
-
-  .target-workflow-header > .target-badge {
-    display: none;
+    grid-template-columns: 34px minmax(100px, 1fr) auto auto;
   }
 
   .target-workflow-actions .secondary-action {
-    font-size: 0;
     min-width: 34px;
     padding-inline: 8px;
   }

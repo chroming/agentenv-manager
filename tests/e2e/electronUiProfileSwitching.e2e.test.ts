@@ -355,7 +355,10 @@ const writeMcpLibrary = async (appDataRoot: string, count = 1) => {
 };
 
 const launchApp = async (
-  options: { openCodeAlphaLibrarySkillCount?: number; mcpLibraryCount?: number } = {}
+  options: {
+    openCodeAlphaLibrarySkillCount?: number;
+    mcpLibraryCount?: number;
+  } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
   const appDataRoot = join(root, "app-data");
@@ -1037,7 +1040,7 @@ describe("Electron UI profile switching e2e", () => {
     await codexCard.getByRole("button", { name: "Show Codex diagnostics" }).click();
     await expect.poll(() => codexCard.textContent()).toContain(join(homeDir, ".codex"));
 
-    await page.getByRole("button", { name: "Refresh targets" }).click();
+    await page.getByRole("button", { name: "Refresh" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Targets refreshed");
     await page.getByText("Targets refreshed").waitFor({ state: "hidden", timeout: 7000 });
   }, 30_000);
@@ -1068,10 +1071,12 @@ describe("Electron UI profile switching e2e", () => {
     }, targets);
 
     await page.getByRole("button", { name: "Targets", exact: true }).click();
-    await page.getByRole("button", { name: "Refresh targets" }).click();
+    await page.getByRole("button", { name: "Refresh" }).click();
     const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
     await expect.poll(() => openCodeCard.textContent()).toContain("Missing");
-    await expect.poll(() => openCodeCard.textContent()).toContain("CommandMissing");
+    const captureCurrent = openCodeCard.getByRole("button", { name: "Create profile from OpenCode" });
+    await expect.poll(() => captureCurrent.isDisabled()).toBe(true);
+    expect(await captureCurrent.getAttribute("title")).toBe("OpenCode command is missing");
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toBe(
       originalInstructions
     );
@@ -1102,7 +1107,7 @@ describe("Electron UI profile switching e2e", () => {
     await chmod(opencodeDir, 0o555);
     try {
       await page.getByRole("button", { name: "Targets" }).click();
-      await page.getByRole("button", { name: "Refresh targets" }).click();
+      await page.getByRole("button", { name: "Refresh" }).click();
       const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
       await expect.poll(() => openCodeCard.textContent()).toContain("Needs setup");
       await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
@@ -1442,7 +1447,7 @@ describe("Electron UI profile switching e2e", () => {
     await writeFile(join(opencodeDir, "AGENTS.md"), "# Changed outside AgentEnv\n", "utf8");
 
     await page.getByRole("button", { name: "Targets", exact: true }).click();
-    await page.getByRole("button", { name: "Refresh targets" }).click();
+    await page.getByRole("button", { name: "Refresh" }).click();
     await page.getByText("Targets refreshed", { exact: true }).waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Profiles", exact: true }).click();
     await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible" });
@@ -1965,7 +1970,7 @@ describe("Electron UI profile switching e2e", () => {
       const workspaces = [
         { button: "MCP Servers", heading: "Library/MCP Servers", action: "Add MCP server" },
         { button: "Profiles", heading: "Profiles", action: "New Profile" },
-        { button: "Targets", heading: "Targets", action: "Refresh targets" },
+        { button: "Targets", heading: "Targets", action: "Refresh" },
         { button: "Settings", heading: "Settings", action: "Sign in with GitHub" }
       ];
       for (const workspace of workspaces) {
@@ -2979,29 +2984,50 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     await page.getByRole("button", { name: "Targets", exact: true }).click();
     const targetCard = page.getByRole("article", { name: "Target OpenCode" });
-    await targetCard.getByRole("button", { name: "Create profile from OpenCode" }).click();
+    const captureButton = targetCard.getByRole("button", { name: "Create profile from OpenCode" });
+    await captureButton.click();
 
-    const dialog = page.getByRole("dialog", { name: "New profile" });
+    let dialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
+    await dialog.waitFor({ state: "visible" });
+    await expect.poll(() => page.getByRole("region", { name: "Targets", exact: true }).isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
+    await dialog.waitFor({ state: "hidden" });
+    await expect.poll(() => captureButton.evaluate((element) => document.activeElement === element)).toBe(true);
+
+    await captureButton.click();
+    dialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
     await dialog.getByRole("button", { name: "Review" }).click();
+
+    dialog = page.getByRole("dialog", { name: "Review OpenCode takeover" });
     const impact = dialog.getByRole("region", { name: "Capture impact" });
     await expect.poll(() => impact.textContent()).toContain("target-only-reviewer");
     const captureGeometry = await dialog.evaluate((element) => {
       const rect = element.getBoundingClientRect();
-      const confirm = element.querySelector<HTMLButtonElement>(".primary-action")?.getBoundingClientRect();
+      const footer = element.querySelector<HTMLElement>(".capture-dialog__footer")?.getBoundingClientRect();
+      const confirm = element.querySelector<HTMLButtonElement>(".capture-dialog__footer .primary-action")?.getBoundingClientRect();
+      const body = element.querySelector<HTMLElement>(".capture-dialog__body");
       return {
         left: rect.left,
         right: rect.right,
         top: rect.top,
         bottom: rect.bottom,
-        confirmBottom: confirm?.bottom ?? 0
+        footerTop: footer?.top ?? 0,
+        footerBottom: footer?.bottom ?? 0,
+        confirmBottom: confirm?.bottom ?? 0,
+        dialogOverflow: getComputedStyle(element).overflowY,
+        bodyOverflow: body ? getComputedStyle(body).overflowY : ""
       };
     });
     expect(captureGeometry.left).toBeGreaterThanOrEqual(0);
     expect(captureGeometry.right).toBeLessThanOrEqual(920);
     expect(captureGeometry.top).toBeGreaterThanOrEqual(0);
     expect(captureGeometry.bottom).toBeLessThanOrEqual(620);
+    expect(captureGeometry.footerTop).toBeGreaterThanOrEqual(captureGeometry.top);
+    expect(captureGeometry.footerBottom).toBeLessThanOrEqual(captureGeometry.bottom);
     expect(captureGeometry.confirmBottom).toBeLessThanOrEqual(captureGeometry.bottom);
-    await dialog.getByRole("button", { name: "Create & Manage" }).click();
+    expect(captureGeometry.dialogOverflow).toBe("hidden");
+    expect(captureGeometry.bodyOverflow).toBe("auto");
+    await dialog.getByRole("button", { name: "Create and take over" }).click();
     await dialog.waitFor({ state: "hidden" });
     await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
       "OpenCode Current created and applied"
@@ -3022,6 +3048,82 @@ describe("Electron UI profile switching e2e", () => {
     expect(captured?.id).toBeTruthy();
     await expect(readJson<{ activeProfileId: string }>(join(appDataRoot, "target-states", "opencode.json")))
       .resolves.toMatchObject({ activeProfileId: captured?.id });
+  }, 30_000);
+
+  it("keeps capture actions visible with long, high-density review content", async () => {
+    const { app: electronApp, page } = await launchApp();
+    await electronApp.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("profiles:preview-create-from-target");
+      ipcMain.handle("profiles:preview-create-from-target", () => ({
+        id: "dense-capture-preview",
+        targetId: "opencode",
+        targetName: "OpenCode",
+        suggestedName: "OpenCode Current",
+        createdAt: "2026-07-14T00:00:00.000Z",
+        resources: Array.from({ length: 30 }, (_, index) => ({
+          kind: index === 0 ? "instructions" : "skill",
+          id: `dense-capture-resource-${index + 1}`,
+          name: `dense-capture-resource-${index + 1}-with-a-long-name`,
+          action: index === 0 ? "include" : "import",
+          detail: index > 0 && index < 7
+            ? "1 compatibility copy preserved"
+            : "A deliberately long path and description used to verify compact window containment"
+        })),
+        cleanupPaths: Array.from({ length: 4 }, (_, index) => `/tmp/old-copy-${index + 1}`),
+        warnings: Array.from(
+          { length: 6 },
+          (_, index) => `dense-capture-resource-${index + 1}: compatibility copies stay in place until every installed consumer has an equivalent managed Skill`
+        ),
+        errors: []
+      }));
+    });
+    await resizeAppWindow(page, 920, 620);
+    await page.getByRole("button", { name: "Targets", exact: true }).click();
+    await page
+      .getByRole("article", { name: "Target OpenCode" })
+      .getByRole("button", { name: "Create profile from OpenCode" })
+      .click();
+    await page.getByRole("dialog", { name: "Create profile from OpenCode" })
+      .getByRole("button", { name: "Review" })
+      .click();
+
+    const dialog = page.getByRole("dialog", { name: "Review OpenCode takeover" });
+    const impact = dialog.getByRole("region", { name: "Capture impact" });
+    await expect.poll(() => impact.textContent()).toContain("dense-capture-resource-30");
+    await expect.poll(() => impact.textContent()).toContain("6 items will remain outside AgentEnv");
+    const geometry = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const footer = element.querySelector<HTMLElement>(".capture-dialog__footer")?.getBoundingClientRect();
+      const confirm = element.querySelector<HTMLButtonElement>(".capture-dialog__footer .primary-action")?.getBoundingClientRect();
+      const body = element.querySelector<HTMLElement>(".capture-dialog__body");
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        footerTop: footer?.top ?? 0,
+        footerBottom: footer?.bottom ?? 0,
+        confirmBottom: confirm?.bottom ?? 0,
+        dialogOverflow: getComputedStyle(element).overflowY,
+        bodyOverflow: body ? getComputedStyle(body).overflowY : "",
+        bodyScrollable: body ? body.scrollHeight > body.clientHeight : false,
+        nestedScrollers: Array.from(element.querySelectorAll<HTMLElement>("*"))
+          .filter((item) => {
+            const style = getComputedStyle(item);
+            return item !== body && /(auto|scroll)/.test(style.overflowY) && item.scrollHeight > item.clientHeight;
+          }).length
+      };
+    });
+    expect(geometry.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.bottom).toBeLessThanOrEqual(620);
+    expect(geometry.footerTop).toBeGreaterThanOrEqual(geometry.top);
+    expect(geometry.footerBottom).toBeLessThanOrEqual(geometry.bottom);
+    expect(geometry.confirmBottom).toBeLessThanOrEqual(geometry.bottom);
+    expect(geometry.dialogOverflow).toBe("hidden");
+    expect(geometry.bodyOverflow).toBe("auto");
+    expect(geometry.bodyScrollable).toBe(true);
+    expect(geometry.nestedScrollers).toBe(0);
+    await dialog.getByRole("button", { name: "Back" }).click();
+    await expect.poll(() => page.getByLabel("Profile name").inputValue()).toBe("OpenCode Current");
+    await page.keyboard.press("Escape");
   }, 30_000);
 
   it("persists skill background update check settings from Settings", async () => {

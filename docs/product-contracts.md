@@ -529,7 +529,13 @@ Status: reusable references, immutable identity, deletion protection, portable s
 Create from Target turns an existing native environment into a managed Profile without requiring manual filesystem cleanup.
 
 - Capture MUST read only paths declared by the selected Target adapter.
+- A Target-row capture command MUST keep the invoking Targets workspace visible until the user confirms. Cancel and Escape return focus to that exact command without changing workspace.
+- Profiles may offer a general `From Target` entry, but a Target-row entry MUST bind the source Target directly and MUST NOT ask the user to choose Blank versus From Target again.
+- Capture uses two explicit steps: setup and takeover review. Review provides Back without losing the Profile name or selected Target.
 - Preview MUST list portable resources to include or reuse, new Library imports, excluded resources, conflicts, and old copies that will be removed.
+- Takeover review MUST summarize Profile resources, Library imports, preserved copies, and removed copies before the detailed resource list.
+- Blocking errors, preserved-copy advisories, and backup behavior MUST appear before long resource details. Repeated compatibility warnings MUST be aggregated with expandable details.
+- Review and Create expose local working and error states. A stale or failed review remains in the dialog and offers `Refresh review`.
 - Profile Instructions and Advanced configuration remain in the source Target's native format. Reusable Skills and supported MCP definitions become Library references.
 - Existing Library content is reused only when its comparable content hash or semantic MCP definition matches exactly.
 - Sensitive values, credentials, caches, history, runtime state, and unsupported native fields MUST remain Target-owned and MUST be named as excluded.
@@ -598,6 +604,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Buttons do not wrap at supported desktop widths.
 - Text line boxes, icon boxes, and control padding MUST fit inside their controls without vertical clipping.
 - Apply Preview keeps its header and footer stable while summary, resources, and diffs own bounded internal scrolling.
+- Create from Target keeps its step header and action footer visible at both supported viewports. Only the dialog body scrolls; resource groups MUST NOT introduce a second nested scroll region.
 - Menus, tooltips, and dialogs remain above rows and inside the visible viewport.
 - Modal dialogs trap keyboard focus until they close.
 - Escape closes dismissible layers; safe outside click closes them; focus returns to the trigger or the next logical surviving control.
@@ -750,11 +757,12 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-14 against the current `main` tree at the time of this snapshot.
 
-- `313` automated tests passed across `42` test files; the `67`-test E2E suite covers native Target, cross-Target, Create from Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `326` automated tests passed across `44` test files; the `62`-test Electron E2E suite covers native Target, cross-Target, Create from Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
+- Target-row capture preserves the Targets workspace until confirmation; setup, Back, local failure recovery, grouped takeover review, and a 30-resource minimum-viewport stress case keep the action footer visible with one scrolling body.
 - Library deletion isolates the selected Skill from invalid neighboring content, and global feedback provides a non-blocking copy action.
 - Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
 - In-place Skill Refresh, GitHub directory candidate selection, partial batch import behavior, source-default Skill icons, custom Skill icon persistence, and draft-gated Profile icons passed Store, renderer, and Electron E2E coverage.

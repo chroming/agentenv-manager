@@ -119,7 +119,7 @@ export const TargetWorkspace = ({
           onClick={() => { void onRefresh(); }}
         >
           <RefreshCw size={15} strokeWidth={2.2} />
-          {busy ? "Refreshing..." : "Refresh targets"}
+          {busy ? "Refreshing..." : "Refresh"}
         </button>
       </header>
 
@@ -150,7 +150,7 @@ export const TargetWorkspace = ({
                 </span>
                 <span className="target-workflow-actions">
                   <button
-                    className="secondary-action"
+                    className="primary-inline-action"
                     type="button"
                     aria-label={`Create profile from ${target.name}`}
                     disabled={busy || !target.health.executableFound}
@@ -158,25 +158,21 @@ export const TargetWorkspace = ({
                     onClick={() => onCreateProfileFromTarget(target.id)}
                   >
                     <Plus size={14} strokeWidth={2.2} />
-                    Create Profile
+                    Capture current
                   </button>
                   <button
-                    className="primary-inline-action"
+                    className="secondary-action"
                     type="button"
                     aria-label={`Open ${target.name} in Profiles`}
                     onClick={() => onManageTarget(target.id)}
                   >
-                    Open
+                    Manage
                     <ArrowRight size={14} strokeWidth={2.2} />
                   </button>
                 </span>
               </header>
 
               <div className="target-state-grid">
-                <span>
-                  <small>Command</small>
-                  <strong>{target.health.executableFound ? "Detected" : "Missing"}</strong>
-                </span>
                 <span>
                   <small>Management</small>
                   <strong>{state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed"}</strong>

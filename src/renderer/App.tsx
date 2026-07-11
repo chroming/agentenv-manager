@@ -89,6 +89,7 @@ import {
   type SkillUpdateCheckStatus
 } from "./components/SkillLibraryPanel";
 import { SkillsEditor } from "./components/SkillsEditor";
+import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
 import {
   deriveApplyActionLabel,
@@ -119,6 +120,8 @@ const emptyAssetPolicy: AssetPolicy = {
 type ComposerSection = "instructions" | "skills" | "mcp" | "advanced";
 type ProfileDialogMode = "create" | "edit";
 type ProfileCreateSource = "blank" | "target";
+type ProfileCaptureOrigin = "profiles" | "targets";
+type ProfileCaptureActivity = "idle" | "reviewing" | "creating";
 
 interface PendingProfileAction {
   label: string;
@@ -523,8 +526,11 @@ export const App = () => {
   const [isProfileActionsOpen, setIsProfileActionsOpen] = useState(false);
   const [profileDialogMode, setProfileDialogMode] = useState<ProfileDialogMode>();
   const [profileCreateSource, setProfileCreateSource] = useState<ProfileCreateSource>("blank");
+  const [profileCaptureOrigin, setProfileCaptureOrigin] = useState<ProfileCaptureOrigin>("profiles");
+  const [profileCaptureActivity, setProfileCaptureActivity] = useState<ProfileCaptureActivity>("idle");
   const [targetCapturePreview, setTargetCapturePreview] = useState<TargetCapturePreview>();
   const [profileCaptureStatus, setProfileCaptureStatus] = useState("");
+  const [profileCaptureError, setProfileCaptureError] = useState("");
   const [profileFormError, setProfileFormError] = useState("");
   const [profileForm, setProfileForm] = useState({
     targetId: "",
@@ -984,7 +990,10 @@ export const App = () => {
     }
     setProfileForm({ targetId, name: "", description: "" });
     setProfileCreateSource("blank");
+    setProfileCaptureOrigin("profiles");
+    setProfileCaptureActivity("idle");
     setTargetCapturePreview(undefined);
+    setProfileCaptureError("");
     setProfileFormError("");
     setProfileDialogMode("create");
     setActiveWorkspace("profiles");
@@ -1003,10 +1012,12 @@ export const App = () => {
       description: ""
     });
     setProfileCreateSource("target");
+    setProfileCaptureOrigin("targets");
+    setProfileCaptureActivity("idle");
     setTargetCapturePreview(undefined);
+    setProfileCaptureError("");
     setProfileFormError("");
     setProfileDialogMode("create");
-    setActiveWorkspace("profiles");
   };
 
   const openCreateFromTargetDialog = (targetId: string) => {
@@ -1023,36 +1034,64 @@ export const App = () => {
       name: draftProfile.manifest.name,
       description: draftProfile.manifest.description
     });
+    setProfileCreateSource("blank");
+    setProfileCaptureError("");
     setProfileDialogMode("edit");
     setProfileFormError("");
     setIsProfileActionsOpen(false);
   };
 
+  const reviewTargetCapture = async () => {
+    if (!profileForm.name.trim()) {
+      setProfileFormError("Profile name is required");
+      return;
+    }
+    setProfileFormError("");
+    setProfileCaptureError("");
+    setTargetCapturePreview(undefined);
+    setProfileCaptureActivity("reviewing");
+    setBusy(true);
+    try {
+      const captured = await window.agentEnv.previewCreateProfileFromTarget(profileForm.targetId);
+      setTargetCapturePreview(captured);
+      setProfileForm((current) => ({
+        ...current,
+        name: current.name.trim() || captured.suggestedName
+      }));
+    } catch (unknownError) {
+      setProfileCaptureError(
+        unknownError instanceof Error ? unknownError.message : String(unknownError)
+      );
+    } finally {
+      setProfileCaptureActivity("idle");
+      setBusy(false);
+    }
+  };
+
   const submitProfileDialog = async () => {
     const name = profileForm.name.trim();
     const description = profileForm.description.trim();
-    const nameRequired =
-      profileDialogMode === "edit" ||
-      profileCreateSource === "blank" ||
-      Boolean(targetCapturePreview);
-    if (!profileDialogMode || (nameRequired && !name)) {
+    const isTargetCapture = profileDialogMode === "create" && profileCreateSource === "target";
+    if (!profileDialogMode || !name) {
       setProfileFormError("Profile name is required");
       return;
     }
 
+    if (isTargetCapture && !targetCapturePreview) {
+      await reviewTargetCapture();
+      return;
+    }
+
     setProfileFormError("");
+    setProfileCaptureError("");
     setBusy(true);
-    setError(undefined);
+    if (!isTargetCapture) {
+      setError(undefined);
+    }
     try {
       if (profileDialogMode === "create") {
-        if (profileCreateSource === "target" && !targetCapturePreview) {
-          const captured = await window.agentEnv.previewCreateProfileFromTarget(profileForm.targetId);
-          setTargetCapturePreview(captured);
-          setProfileForm((current) => ({
-            ...current,
-            name: current.name.trim() || captured.suggestedName
-          }));
-          return;
+        if (profileCreateSource === "target") {
+          setProfileCaptureActivity("creating");
         }
         const saved = profileCreateSource === "target" && targetCapturePreview
           ? (await window.agentEnv.createProfileFromTarget({
@@ -1089,8 +1128,14 @@ export const App = () => {
       setPreview(undefined);
       setRollbackPreview(undefined);
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      if (isTargetCapture) {
+        setProfileCaptureError(message);
+      } else {
+        setError(message);
+      }
     } finally {
+      setProfileCaptureActivity("idle");
       setBusy(false);
     }
   };
@@ -1171,6 +1216,8 @@ export const App = () => {
     setPreview(undefined);
     setRollbackPreview(undefined);
     setTargetCapturePreview(undefined);
+    setProfileCaptureActivity("idle");
+    setProfileCaptureError("");
     setProfileFormError("");
   };
 
@@ -1194,7 +1241,11 @@ export const App = () => {
       ? dataRestoreReturnFocusRef
       : appModalFallbackFocusRef,
     onDismiss: dismissAppModal,
-    dismissDisabled: busy
+    dismissDisabled: busy,
+    focusKey:
+      profileDialogMode === "create" && profileCreateSource === "target"
+        ? `target-capture:${targetCapturePreview ? "review" : "setup"}`
+        : profileDialogMode ?? (deleteProfileDialogOpen ? "delete" : dataRestorePreview ? "restore" : "guard")
   });
 
   const selectTargetNow = (targetId: string) => {
@@ -3241,11 +3292,11 @@ export const App = () => {
                   </section>
                 </div>
               ) : null}
-              {profileDialogMode ? (
+              {profileDialogMode && !(profileDialogMode === "create" && profileCreateSource === "target") ? (
                 <div className="preview-modal-backdrop" onClick={busy ? undefined : closeProfileDialog}>
                   <section
                     ref={appModalDialogRef}
-                    className={`profile-form-dialog${targetCapturePreview ? " profile-form-dialog--capture" : ""}`}
+                    className="profile-form-dialog"
                     role="dialog"
                     aria-label={profileDialogMode === "create" ? "New profile" : "Edit profile"}
                     aria-modal="true"
@@ -3258,9 +3309,7 @@ export const App = () => {
                         </div>
                         <p className="muted">
                           {profileDialogMode === "create"
-                            ? targetCapturePreview
-                              ? "Review what will be imported, consolidated, and managed."
-                              : "Start blank or capture an existing local agent environment."
+                            ? "Start blank or capture an existing local agent environment."
                             : "Update the profile name and description."}
                         </p>
                       </div>
@@ -3282,11 +3331,18 @@ export const App = () => {
                                 type="button"
                                 onClick={() => {
                                   setProfileCreateSource("target");
-                                  if (!targets.find((target) => target.id === profileForm.targetId)?.health.executableFound) {
-                                    const installedTarget = targets.find((target) => target.health.executableFound);
-                                    if (installedTarget) {
-                                      setProfileForm((current) => ({ ...current, targetId: installedTarget.id }));
-                                    }
+                                  setProfileCaptureOrigin("profiles");
+                                  setProfileCaptureError("");
+                                  const currentTarget = targets.find((target) => target.id === profileForm.targetId);
+                                  const nextTarget = currentTarget?.health.executableFound
+                                    ? currentTarget
+                                    : targets.find((target) => target.health.executableFound);
+                                  if (nextTarget) {
+                                    setProfileForm((current) => ({
+                                      ...current,
+                                      targetId: nextTarget.id,
+                                      name: current.name.trim() || `${nextTarget.name} Current`
+                                    }));
                                   }
                                 }}
                               >
@@ -3295,24 +3351,16 @@ export const App = () => {
                             </div>
                           ) : null}
                           <label>
-                            <span>{profileCreateSource === "target" ? "Source Target" : "Native Target"}</span>
+                            <span>Native Target</span>
                             <select
                               aria-label="Profile target"
                               value={profileForm.targetId}
-                              disabled={Boolean(targetCapturePreview)}
                               onChange={(event) => {
-                                setTargetCapturePreview(undefined);
                                 setProfileForm({ ...profileForm, targetId: event.currentTarget.value });
                               }}
                             >
                               {targets.map((target) => (
-                                <option
-                                  value={target.id}
-                                  key={target.id}
-                                  disabled={profileCreateSource === "target" && !target.health.executableFound}
-                                >
-                                  {target.name}{profileCreateSource === "target" && !target.health.executableFound ? " (missing)" : ""}
-                                </option>
+                                <option value={target.id} key={target.id}>{target.name}</option>
                               ))}
                             </select>
                           </label>
@@ -3349,28 +3397,6 @@ export const App = () => {
                           />
                         </label>
                       ) : null}
-                      {targetCapturePreview ? (
-                        <section className="target-capture-review" aria-label="Capture impact">
-                          <div className="target-capture-review__summary">
-                            <span><strong>{targetCapturePreview.resources.filter((item) => item.action !== "exclude").length}</strong> resources</span>
-                            <span><strong>{targetCapturePreview.resources.filter((item) => item.action === "import").length}</strong> imports</span>
-                            <span><strong>{targetCapturePreview.cleanupPaths.length}</strong> old copies removed</span>
-                          </div>
-                          <div className="target-capture-review__list">
-                            {targetCapturePreview.resources.map((resource) => (
-                              <div className={`target-capture-resource target-capture-resource--${resource.action}`} key={`${resource.kind}:${resource.id}`}>
-                                <span title={resource.detail}>
-                                  <strong>{resource.name}</strong>
-                                  <small>{resource.kind}{resource.detail ? ` · ${resource.detail}` : ""}</small>
-                                </span>
-                                <em>{resource.action}</em>
-                              </div>
-                            ))}
-                          </div>
-                          {targetCapturePreview.warnings.map((warning) => <p className="warning" key={warning}>{warning}</p>)}
-                          {targetCapturePreview.errors.map((captureError) => <p className="error" key={captureError}>{captureError}</p>)}
-                        </section>
-                      ) : null}
                     </div>
                     <footer className="preview-actions">
                       <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
@@ -3381,23 +3407,11 @@ export const App = () => {
                         type="button"
                         disabled={
                           busy ||
-                          ((profileDialogMode === "edit" ||
-                            profileCreateSource === "blank" ||
-                            Boolean(targetCapturePreview)) &&
-                            profileForm.name.trim().length === 0) ||
-                          (profileCreateSource === "target" &&
-                            !targets.find((target) => target.id === profileForm.targetId)?.health.executableFound) ||
-                          Boolean(targetCapturePreview?.errors.length)
+                          profileForm.name.trim().length === 0
                         }
                         onClick={submitProfileDialog}
                       >
-                        {profileDialogMode === "edit"
-                          ? "Done"
-                          : profileCreateSource === "target"
-                            ? targetCapturePreview
-                              ? "Create & Manage"
-                              : "Review"
-                            : "Create"}
+                        {profileDialogMode === "edit" ? "Done" : "Create"}
                       </button>
                     </footer>
                   </section>
@@ -3710,6 +3724,43 @@ export const App = () => {
             <h2>No profile selected</h2>
           </div>
         )}
+        {profileDialogMode === "create" && profileCreateSource === "target" ? (
+          <TargetCaptureDialog
+            target={targets.find((target) => target.id === profileForm.targetId)}
+            targets={targets}
+            name={profileForm.name}
+            origin={profileCaptureOrigin}
+            preview={targetCapturePreview}
+            activity={profileCaptureActivity}
+            nameError={profileFormError}
+            flowError={profileCaptureError}
+            dialogRef={appModalDialogRef}
+            initialFocusRef={appModalInitialFocusRef}
+            onNameChange={(name) => {
+              setProfileFormError("");
+              setProfileCaptureError("");
+              setProfileForm((current) => ({ ...current, name }));
+            }}
+            onTargetChange={(targetId) => {
+              const target = targets.find((candidate) => candidate.id === targetId);
+              setTargetCapturePreview(undefined);
+              setProfileCaptureError("");
+              setProfileForm((current) => ({
+                ...current,
+                targetId,
+                name: target ? `${target.name} Current` : current.name
+              }));
+            }}
+            onBack={() => {
+              setTargetCapturePreview(undefined);
+              setProfileCaptureError("");
+            }}
+            onCancel={closeProfileDialog}
+            onReview={() => void reviewTargetCapture()}
+            onCreate={() => void submitProfileDialog()}
+            onRefreshReview={() => void reviewTargetCapture()}
+          />
+        ) : null}
       </section>
 
     </main>
