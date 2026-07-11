@@ -828,6 +828,98 @@ describe("skill library store", () => {
     );
   });
 
+  it("discovers and imports every skill in a GitHub directory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const skillFiles = new Map([
+      [
+        "skills/engineering/code-review/SKILL.md",
+        "---\nname: Code Review\ndescription: Review code carefully.\n---\n"
+      ],
+      [
+        "skills/engineering/research/SKILL.md",
+        "---\nname: Research\ndescription: Research primary sources.\n---\n"
+      ]
+    ]);
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith("/commits/main")) {
+        return new Response(JSON.stringify({ commit: { tree: { sha: "tree-main" } } }));
+      }
+      if (url.includes("/commits/")) {
+        return new Response("Not found", { status: 404, statusText: "Not Found" });
+      }
+      if (url.includes("/git/trees/tree-main")) {
+        return new Response(
+          JSON.stringify({
+            truncated: false,
+            tree: [...skillFiles.keys()].map((path, index) => ({
+              path,
+              type: "blob",
+              sha: `skill-${index}`
+            }))
+          })
+        );
+      }
+      if (url.startsWith("https://raw.githubusercontent.com/acme/skills/main/")) {
+        const path = url.slice("https://raw.githubusercontent.com/acme/skills/main/".length);
+        return new Response(skillFiles.get(path) ?? "Not found", {
+          status: skillFiles.has(path) ? 200 : 404
+        });
+      }
+      const contentsMatch = url.match(/\/contents\/(.+)\?ref=main$/);
+      if (contentsMatch) {
+        const path = `${contentsMatch[1]}/SKILL.md`;
+        if (!skillFiles.has(path)) {
+          return new Response("Not found", { status: 404, statusText: "Not Found" });
+        }
+        return new Response(
+          JSON.stringify([
+            {
+              type: "file",
+              name: "SKILL.md",
+              path,
+              sha: `contents-${path}`,
+              download_url: `https://raw.githubusercontent.com/acme/skills/main/${path}`
+            }
+          ])
+        );
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+
+    const scan = await store.scanGitHubSkills(
+      "https://github.com/acme/skills/tree/main/skills/engineering"
+    );
+
+    expect(scan).toMatchObject({
+      owner: "acme",
+      repo: "skills",
+      ref: "main",
+      rootPath: "skills/engineering",
+      truncated: false
+    });
+    expect(scan.candidates).toEqual([
+      expect.objectContaining({ id: "code-review", name: "Code Review", status: "ready" }),
+      expect.objectContaining({ id: "research", name: "Research", status: "ready" })
+    ]);
+
+    const result = await store.importGitHubSkills(
+      scan.candidates.map((candidate) => ({
+        url: candidate.sourceUrl,
+        id: candidate.id,
+        ref: candidate.ref,
+        remotePath: candidate.remotePath
+      }))
+    );
+
+    expect(result.failed).toEqual([]);
+    expect(result.imported.map((skill) => skill.id)).toEqual(["code-review", "research"]);
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "research", "SKILL.md"), "utf8")
+    ).resolves.toContain("Research primary sources");
+  });
+
   it("imports a skill from a GitHub repository directory URL", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

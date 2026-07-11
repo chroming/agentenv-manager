@@ -11,7 +11,26 @@ afterEach(() => {
 describe("SkillLibraryPanel", () => {
   it("keeps the skill list clean and routes secondary workflows through drawers and row actions", async () => {
     const onImportUnmanaged = vi.fn();
-    const onImportGitHubSkill = vi.fn();
+    const onScanGitHubSkills = vi.fn().mockResolvedValue({
+      owner: "acme",
+      repo: "agent-skills",
+      ref: "main",
+      rootPath: "skills",
+      truncated: false,
+      candidates: [
+        {
+          id: "github-reviewer",
+          name: "GitHub Reviewer",
+          description: "Review from GitHub",
+          remotePath: "skills/reviewer",
+          sourceUrl: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+          ref: "main",
+          revision: "revision-1",
+          status: "ready"
+        }
+      ]
+    });
+    const onImportGitHubSkills = vi.fn().mockResolvedValue({ imported: [], failed: [] });
     const onPreviewLibrarySkillUpdate = vi.fn();
     const onCloseUpdatePreview = vi.fn();
     const onUpdateLibrarySkill = vi.fn();
@@ -221,7 +240,8 @@ describe("SkillLibraryPanel", () => {
         onCloseTool={onCloseTool}
         onSelectLocalSkillFolder={onSelectLocalSkillFolder}
         onImportUnmanaged={onImportUnmanaged}
-        onImportGitHubSkill={onImportGitHubSkill}
+        onScanGitHubSkills={onScanGitHubSkills}
+        onImportGitHubSkills={onImportGitHubSkills}
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
         onCloseUpdatePreview={onCloseUpdatePreview}
         onUpdateLibrarySkill={onUpdateLibrarySkill}
@@ -258,7 +278,7 @@ describe("SkillLibraryPanel", () => {
     });
 
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "GitHub skill import" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Import skills" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Environment skills" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Library storage settings" })).not.toBeInTheDocument();
     expect(screen.getByRole("group", { name: "Library item shared-reviewer" })).toHaveTextContent(
@@ -384,27 +404,33 @@ describe("SkillLibraryPanel", () => {
         "/tmp/local-skills/path-reviewer"
       )
     );
-    fireEvent.click(screen.getByRole("button", { name: "Import local skill" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Import$/ }));
     expect(onImportUnmanaged).toHaveBeenCalledWith("/tmp/local-skills/path-reviewer");
 
     fireEvent.change(screen.getByLabelText("GitHub skill URL"), {
       target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
     });
-    fireEvent.change(screen.getByLabelText("GitHub skill library id"), {
-      target: { value: "github-reviewer" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Import from GitHub" }));
-    expect(onImportGitHubSkill).toHaveBeenCalledWith({
-      url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
-      id: "github-reviewer"
-    });
+    fireEvent.click(screen.getByRole("button", { name: /^Scan$/ }));
+    await screen.findByRole("checkbox", { name: "Select GitHub Reviewer" });
+    expect(screen.getByRole("checkbox", { name: "Select GitHub Reviewer" })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Import 1" }));
+    await waitFor(() =>
+      expect(onImportGitHubSkills).toHaveBeenCalledWith([
+        {
+          url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+          id: "github-reviewer",
+          ref: "main",
+          remotePath: "skills/reviewer"
+        }
+      ])
+    );
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(onCloseTool).toHaveBeenCalledTimes(1);
+    expect(onCloseTool).toHaveBeenCalledTimes(2);
 
     rerender(renderPanel("discoveries"));
     const discoveries = screen.getByRole("region", { name: "Environment skills" });
     fireEvent.mouseDown(document.body);
-    expect(onCloseTool).toHaveBeenCalledTimes(2);
+    expect(onCloseTool).toHaveBeenCalledTimes(3);
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Imported");
     expect(discoveries).toHaveTextContent("Restore ignored");
@@ -473,7 +499,7 @@ describe("SkillLibraryPanel", () => {
     expect(conflictDialog).toHaveTextContent("Choose the copy whose contents you want to preserve");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Review skill cleanup" })).not.toBeInTheDocument();
-    expect(onCloseTool).toHaveBeenCalledTimes(2);
+    expect(onCloseTool).toHaveBeenCalledTimes(3);
     fireEvent.click(
       within(conflictGroup).getByRole("button", { name: "Resolve conflict conflict-reviewer" })
     );

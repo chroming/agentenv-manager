@@ -30,6 +30,8 @@ import { createPortal } from "react-dom";
 import { useModalDialog } from "../hooks/useModalDialog";
 import type {
   GitHubSkillImportInput,
+  GitHubSkillImportResult,
+  GitHubSkillScanResult,
   ManageTargetSkillInput,
   SkillCleanupBackupSummary,
   SkillCleanupRequest,
@@ -67,7 +69,8 @@ interface SkillLibraryPanelProps {
   onCloseTool?(): void;
   onSelectLocalSkillFolder(): Promise<string | undefined>;
   onImportUnmanaged(sourcePath: string): void;
-  onImportGitHubSkill(input: GitHubSkillImportInput): void;
+  onScanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
+  onImportGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): void;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
@@ -139,7 +142,8 @@ export const SkillLibraryPanel = ({
   onCloseTool,
   onSelectLocalSkillFolder,
   onImportUnmanaged,
-  onImportGitHubSkill,
+  onScanGitHubSkills,
+  onImportGitHubSkills,
   onManageTargetSkill,
   onConsolidateSkillGroup,
   onSetUpdateSource,
@@ -164,7 +168,12 @@ export const SkillLibraryPanel = ({
   searchInputRef
 }: SkillLibraryPanelProps) => {
   const [githubUrl, setGithubUrl] = useState("");
-  const [githubId, setGithubId] = useState("");
+  const [githubScanResult, setGithubScanResult] = useState<GitHubSkillScanResult>();
+  const [githubSelectedIds, setGithubSelectedIds] = useState<string[]>([]);
+  const [githubCandidateIds, setGithubCandidateIds] = useState<Record<string, string>>({});
+  const [githubImportResult, setGithubImportResult] = useState<GitHubSkillImportResult>();
+  const [githubOperation, setGithubOperation] = useState<"scanning" | "importing">();
+  const [githubOperationError, setGithubOperationError] = useState("");
   const [localSkillPath, setLocalSkillPath] = useState("");
   const { search, sourceFilter, usageFilter, targetFilter, updateFilter } = viewState;
   const updateControls = (
@@ -183,6 +192,8 @@ export const SkillLibraryPanel = ({
     Record<string, { sourceType: SkillSourceType; source: string }>
   >({});
   const modalDialogRef = useRef<HTMLElement>(null);
+  const importDialogRef = useRef<HTMLElement>(null);
+  const importFallbackFocusRef = useRef<HTMLElement>(null);
   const modalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const modalFallbackFocusRef = useRef<HTMLElement>(null);
   const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
@@ -248,19 +259,29 @@ export const SkillLibraryPanel = ({
         return;
       }
       if (activeTool) {
+        if (activeTool === "import" && githubOperation) {
+          return;
+        }
         onCloseTool?.();
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, modalOpen, onCloseTool, openActionId]);
+  }, [activeTool, githubOperation, modalOpen, onCloseTool, openActionId]);
   useModalDialog({
     open: modalOpen,
     dialogRef: modalDialogRef,
     initialFocusRef: modalInitialFocusRef,
     fallbackFocusRef: modalFallbackFocusRef,
     onDismiss: dismissModal
+  });
+  useModalDialog({
+    open: activeTool === "import",
+    dialogRef: importDialogRef,
+    fallbackFocusRef: importFallbackFocusRef,
+    dismissDisabled: Boolean(githubOperation),
+    onDismiss: () => onCloseTool?.()
   });
 
   useEffect(() => {
@@ -280,14 +301,26 @@ export const SkillLibraryPanel = ({
       ) {
         setOpenAction(undefined);
       }
-      if (activeTool && !target.closest(".library-drawer")) {
+      if (activeTool && !githubOperation && !target.closest(".library-drawer")) {
         onCloseTool?.();
       }
     };
 
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [activeTool, onCloseTool, openActionId]);
+  }, [activeTool, githubOperation, onCloseTool, openActionId]);
+
+  useEffect(() => {
+    if (activeTool === "import") {
+      return;
+    }
+    setGithubScanResult(undefined);
+    setGithubSelectedIds([]);
+    setGithubCandidateIds({});
+    setGithubImportResult(undefined);
+    setGithubOperationError("");
+    setGithubOperation(undefined);
+  }, [activeTool]);
 
   const installsFor = (libraryId: string) =>
     skillInventory.filter((skill) => skill.libraryId === libraryId || skill.id === libraryId);
@@ -410,17 +443,68 @@ export const SkillLibraryPanel = ({
     });
   };
 
-  const importGitHubSkill = () => {
+  const scanGitHub = async () => {
     const url = githubUrl.trim();
     if (!url) {
       return;
     }
-    onImportGitHubSkill({
-      url,
-      id: githubId.trim() || undefined
-    });
-    setGithubUrl("");
-    setGithubId("");
+    setGithubOperation("scanning");
+    setGithubOperationError("");
+    setGithubImportResult(undefined);
+    try {
+      const result = await onScanGitHubSkills(url);
+      setGithubScanResult(result);
+      setGithubSelectedIds(
+        result.candidates.filter((candidate) => candidate.status === "ready").map((candidate) => candidate.id)
+      );
+      setGithubCandidateIds(
+        Object.fromEntries(result.candidates.map((candidate) => [candidate.id, candidate.id]))
+      );
+    } catch (error) {
+      setGithubOperationError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGithubOperation(undefined);
+    }
+  };
+
+  const importSelectedGitHubSkills = async () => {
+    if (!githubScanResult || githubSelectedIds.length === 0) {
+      return;
+    }
+    const selected = githubScanResult.candidates.filter(
+      (candidate) => candidate.status === "ready" && githubSelectedIds.includes(candidate.id)
+    );
+    setGithubOperation("importing");
+    setGithubOperationError("");
+    try {
+      const result = await onImportGitHubSkills(
+        selected.map((candidate) => ({
+          url: candidate.sourceUrl,
+          id: githubCandidateIds[candidate.id] || candidate.id,
+          ref: candidate.ref,
+          remotePath: candidate.remotePath
+        }))
+      );
+      setGithubImportResult(result);
+      if (result.failed.length === 0) {
+        setGithubUrl("");
+        setGithubScanResult(undefined);
+        setGithubSelectedIds([]);
+        onCloseTool?.();
+      } else {
+        const importedIds = new Set(result.imported.map((skill) => skill.id));
+        setGithubSelectedIds((current) =>
+          current.filter((candidateId) => {
+            const resolvedId = githubCandidateIds[candidateId] || candidateId;
+            return !importedIds.has(resolvedId);
+          })
+        );
+      }
+    } catch (error) {
+      setGithubOperationError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGithubOperation(undefined);
+    }
   };
 
   const importLocalSkill = () => {
@@ -1407,94 +1491,242 @@ export const SkillLibraryPanel = ({
         </section>
       ) : null}
 
-      {activeTool === "import" ? (
-        <section className="library-drawer" aria-label="GitHub skill import">
-          <div className="library-drawer__header">
-            <div>
-              <strong>
-                Import Skill
-                <InfoTip label="Add one shared skill to the library from a local folder, or track a public GitHub skill directory for future updates." />
-              </strong>
-            </div>
-            <button className="icon-action" type="button" aria-label="Close library tool" onClick={onCloseTool}>
-              <X size={16} strokeWidth={2.2} />
-            </button>
-          </div>
-          <section className="resource-section library-import-panel">
-            <div>
-              <div className="resource-heading">
-                Import from local folder
-                <InfoTip label="Choose an existing skill folder that contains a SKILL.md file." />
-              </div>
-            </div>
-            <div className="library-import-grid">
-              <label>
-                <span>Selected folder</span>
-                <input
-                  aria-label="Local skill folder path"
-                  placeholder="No folder selected"
-                  readOnly
-                  value={localSkillPath}
-                />
-              </label>
-              <button
-                className="secondary-action"
-                aria-label="Choose local skill folder"
-                type="button"
-                onClick={() => {
-                  void selectLocalSkillFolder();
-                }}
+      {activeTool === "import"
+        ? createPortal(
+            <div className="library-drawer-backdrop">
+              <section
+                ref={importDialogRef}
+                className="library-drawer library-import-dialog"
+                role="dialog"
+                aria-label="Import skills"
+                aria-modal="true"
+                tabIndex={-1}
               >
-                Choose folder
-              </button>
-              <button
-                className="primary-action library-import-action"
-                type="button"
-                disabled={!localSkillPath.trim()}
-                onClick={importLocalSkill}
-              >
-                Import local skill
-              </button>
-            </div>
-          </section>
-      <section className="resource-section library-import-panel">
-        <div>
-          <div className="resource-heading">
-            Import from GitHub directory
-            <InfoTip label="Paste a public GitHub tree URL. AgentEnv tracks the directory revision for future updates." />
-          </div>
-        </div>
-        <div className="library-import-grid">
-          <label>
-            <span>GitHub URL</span>
-            <input
-              aria-label="GitHub skill URL"
-              placeholder="https://github.com/owner/repo/tree/main/path/to/skill"
-              value={githubUrl}
-              onChange={(event) => setGithubUrl(event.currentTarget.value)}
-            />
-          </label>
-          <label>
-            <span>Library ID</span>
-            <input
-              aria-label="GitHub skill library id"
-              placeholder="Optional"
-              value={githubId}
-              onChange={(event) => setGithubId(event.currentTarget.value)}
-            />
-          </label>
-          <button
-            className="primary-action library-import-action"
-            type="button"
-            disabled={!githubUrl.trim()}
-            onClick={importGitHubSkill}
-          >
-            Import from GitHub
-          </button>
-        </div>
-      </section>
-        </section>
-      ) : null}
+                <div className="library-drawer__header">
+                  <strong>Import skills</strong>
+                  <button
+                    className="icon-action"
+                    type="button"
+                    aria-label="Close import"
+                    disabled={Boolean(githubOperation)}
+                    onClick={onCloseTool}
+                  >
+                    <X size={16} strokeWidth={2.2} />
+                  </button>
+                </div>
+
+                {!githubScanResult ? (
+                  <div className="library-import-content">
+                    <section className="resource-section library-import-panel">
+                      <div className="resource-heading">Local folder</div>
+                      <div className="library-import-grid">
+                        <label>
+                          <span>Selected folder</span>
+                          <input
+                            aria-label="Local skill folder path"
+                            placeholder="No folder selected"
+                            readOnly
+                            value={localSkillPath}
+                          />
+                        </label>
+                        <button
+                          className="secondary-action"
+                          aria-label="Choose local skill folder"
+                          type="button"
+                          onClick={() => {
+                            void selectLocalSkillFolder();
+                          }}
+                        >
+                          Choose folder
+                        </button>
+                        <button
+                          className="primary-action library-import-action"
+                          type="button"
+                          disabled={!localSkillPath.trim()}
+                          onClick={importLocalSkill}
+                        >
+                          Import
+                        </button>
+                      </div>
+                    </section>
+                    <section className="resource-section library-import-panel">
+                      <div className="resource-heading">
+                        GitHub
+                        <InfoTip label="Paste a skill, directory, or repository URL." />
+                      </div>
+                      <label className="github-scan-field">
+                        <span>GitHub URL</span>
+                        <input
+                          aria-label="GitHub skill URL"
+                          placeholder="https://github.com/owner/repo"
+                          value={githubUrl}
+                          onChange={(event) => setGithubUrl(event.currentTarget.value)}
+                        />
+                      </label>
+                    </section>
+                  </div>
+                ) : (
+                  <div className="github-scan-results">
+                    <div className="github-scan-summary">
+                      <div>
+                        <strong>{githubScanResult.candidates.length} found</strong>
+                        <span>{githubScanResult.owner}/{githubScanResult.repo} · {githubScanResult.ref}</span>
+                      </div>
+                      <button
+                        className="secondary-action"
+                        type="button"
+                        disabled={Boolean(githubOperation)}
+                        onClick={() => {
+                          setGithubScanResult(undefined);
+                          setGithubImportResult(undefined);
+                          setGithubOperationError("");
+                        }}
+                      >
+                        Change
+                      </button>
+                    </div>
+                    {githubScanResult.truncated ? (
+                      <div className="inline-state inline-state--warning" role="status">
+                        <TriangleAlert size={15} aria-hidden="true" />
+                        Results are incomplete. GitHub truncated this repository tree.
+                      </div>
+                    ) : null}
+                    <label className="github-select-all">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all discovered skills"
+                        checked={
+                          githubScanResult.candidates.some((candidate) => candidate.status === "ready") &&
+                          githubScanResult.candidates
+                            .filter((candidate) => candidate.status === "ready")
+                            .every((candidate) => githubSelectedIds.includes(candidate.id))
+                        }
+                        onChange={(event) =>
+                          setGithubSelectedIds(
+                            event.currentTarget.checked
+                              ? githubScanResult.candidates
+                                  .filter((candidate) => candidate.status === "ready")
+                                  .map((candidate) => candidate.id)
+                              : []
+                          )
+                        }
+                      />
+                      <span>Select all</span>
+                      <strong>{githubSelectedIds.length} selected</strong>
+                    </label>
+                    <div className="github-candidate-list">
+                      {githubScanResult.candidates.length === 0 ? (
+                        <div className="inline-state">No skills found</div>
+                      ) : null}
+                      {githubScanResult.candidates.map((candidate) => {
+                        const selectable = candidate.status === "ready";
+                        const checked = githubSelectedIds.includes(candidate.id);
+                        const failure = githubImportResult?.failed.find(
+                          (item) => item.sourceUrl === candidate.sourceUrl
+                        );
+                        return (
+                          <div
+                            className={`github-candidate-row${selectable ? "" : " is-disabled"}`}
+                            key={candidate.sourceUrl}
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${candidate.name}`}
+                              disabled={!selectable || Boolean(githubOperation)}
+                              checked={checked}
+                              onChange={(event) => {
+                                const checked = event.currentTarget.checked;
+                                setGithubSelectedIds((current) =>
+                                  checked
+                                    ? [...current, candidate.id]
+                                    : current.filter((id) => id !== candidate.id)
+                                );
+                              }}
+                            />
+                            <span className="resource-avatar resource-avatar--github" aria-hidden="true">
+                              <GitBranch size={16} strokeWidth={2.2} />
+                            </span>
+                            <span className="github-candidate-main">
+                              <strong>{candidate.name}</strong>
+                              <PreviewText
+                                ariaLabel={`Full GitHub path ${candidate.id}`}
+                                className="github-candidate-path"
+                                text={candidate.remotePath || "/"}
+                                tooltipClassName="library-source-tooltip"
+                              />
+                              {candidate.description ? <small>{candidate.description}</small> : null}
+                              {failure ? <small className="field-error">{failure.error}</small> : null}
+                            </span>
+                            {selectable ? (
+                              <input
+                                className="github-candidate-id"
+                                aria-label={`Library ID for ${candidate.name}`}
+                                disabled={Boolean(githubOperation)}
+                                value={githubCandidateIds[candidate.id] ?? candidate.id}
+                                onChange={(event) => {
+                                  const value = event.currentTarget.value;
+                                  setGithubCandidateIds((current) => ({
+                                    ...current,
+                                    [candidate.id]: value
+                                  }));
+                                }}
+                              />
+                            ) : (
+                              <span className="resource-chip resource-chip--managed">
+                                {candidate.status === "duplicate" ? "Duplicate" : "Imported"}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {githubOperationError ? (
+                  <div className="inline-state inline-state--error import-inline-error" role="alert">
+                    <TriangleAlert size={15} aria-hidden="true" />
+                    <span>{githubOperationError}</span>
+                  </div>
+                ) : null}
+                <footer className="preview-actions import-dialog-actions">
+                  <button
+                    className="secondary-action"
+                    type="button"
+                    disabled={Boolean(githubOperation)}
+                    onClick={onCloseTool}
+                  >
+                    Cancel
+                  </button>
+                  {!githubScanResult ? (
+                    <button
+                      className="primary-action"
+                      type="button"
+                      disabled={!githubUrl.trim() || Boolean(githubOperation)}
+                      onClick={() => {
+                        void scanGitHub();
+                      }}
+                    >
+                      {githubOperation === "scanning" ? "Scanning..." : "Scan"}
+                    </button>
+                  ) : (
+                    <button
+                      className="primary-action"
+                      type="button"
+                      disabled={githubSelectedIds.length === 0 || Boolean(githubOperation)}
+                      onClick={() => {
+                        void importSelectedGitHubSkills();
+                      }}
+                    >
+                      {githubOperation === "importing" ? "Importing..." : `Import ${githubSelectedIds.length}`}
+                    </button>
+                  )}
+                </footer>
+              </section>
+            </div>,
+            document.body
+          )
+        : null}
     </section>
   );
 };

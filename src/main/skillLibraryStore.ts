@@ -5,7 +5,10 @@ import { basename, dirname, join, relative } from "node:path";
 import { SafeIdSchema } from "../shared/schemas";
 import type {
   AgentEnvSettings,
+  GitHubSkillCandidate,
   GitHubSkillImportInput,
+  GitHubSkillImportResult,
+  GitHubSkillScanResult,
   PlannedFileChange,
   SkillCleanupIgnoreRule,
   SkillCleanupBackupSummary,
@@ -79,6 +82,8 @@ export interface SkillLibraryStore {
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   importSkill(input: ImportSkillInput): Promise<SkillLibraryEntry>;
   importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
+  scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
+  importGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
   removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   consolidateSkillGroup(input: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult>;
@@ -111,6 +116,26 @@ interface ParsedGitHubSkillSource {
   remotePath: string;
   sourceUrl: string;
   defaultId: string;
+}
+
+interface ParsedGitHubLocation {
+  owner: string;
+  repo: string;
+  kind: "repository" | "tree" | "blob";
+  pathSegments: string[];
+}
+
+interface GitHubRepositoryResponse {
+  default_branch?: string;
+}
+
+interface GitHubCommitResponse {
+  commit?: { tree?: { sha?: string } };
+}
+
+interface GitHubTreeResponse {
+  truncated?: boolean;
+  tree?: Array<{ path?: string; type?: string; sha?: string }>;
 }
 
 interface GitHubContentBase {
@@ -291,7 +316,7 @@ const symlinkSkillEntries = async (sourceDir: string, targetDir: string) => {
   }
 };
 
-const parseGitHubSkillUrl = (rawUrl: string): ParsedGitHubSkillSource => {
+const parseGitHubLocation = (rawUrl: string): ParsedGitHubLocation => {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -304,21 +329,53 @@ const parseGitHubSkillUrl = (rawUrl: string): ParsedGitHubSkillSource => {
   }
 
   const segments = url.pathname.split("/").filter(Boolean);
-  const [owner, repo, kind, ref, ...rest] = segments;
-  if (!owner || !repo || (kind !== "tree" && kind !== "blob") || !ref) {
-    throw new Error("GitHub skill URL must point to a repository tree directory");
+  const [owner, rawRepo, rawKind, ...pathSegments] = segments;
+  const repo = rawRepo?.replace(/\.git$/, "");
+  if (!owner || !repo) {
+    throw new Error("GitHub URL must point to a repository");
   }
 
-  const pathSegments = kind === "blob" && rest.at(-1) === "SKILL.md" ? rest.slice(0, -1) : rest;
-  const remotePath = pathSegments.join("/");
-  const defaultId = pathSegments.at(-1) ?? repo;
+  const kind = rawKind === "tree" || rawKind === "blob" ? rawKind : "repository";
+  if (rawKind && kind === "repository") {
+    throw new Error("GitHub URL must point to a repository, directory, or SKILL.md");
+  }
+  return { owner, repo, kind, pathSegments };
+};
+
+const githubSkillSourceUrl = (owner: string, repo: string, ref: string, remotePath: string) =>
+  `https://github.com/${owner}/${repo}/tree/${ref}${remotePath ? `/${remotePath}` : ""}`;
+
+const skillIdFrom = (value: string) => {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return SafeIdSchema.safeParse(normalized).success ? normalized : "skill";
+};
+
+const parseGitHubSkillUrl = (
+  rawUrl: string,
+  resolved?: { ref?: string; remotePath?: string }
+): ParsedGitHubSkillSource => {
+  const location = parseGitHubLocation(rawUrl);
+  const [urlRef, ...rest] = location.pathSegments;
+  const ref = resolved?.ref ?? urlRef;
+  if (!ref) {
+    throw new Error("GitHub skill URL must include a branch or resolved ref");
+  }
+
+  const pathSegments =
+    location.kind === "blob" && rest.at(-1) === "SKILL.md" ? rest.slice(0, -1) : rest;
+  const remotePath = resolved?.remotePath ?? pathSegments.join("/");
+  const defaultId = pathSegments.at(-1) ?? location.repo;
   return {
-    owner,
-    repo,
+    owner: location.owner,
+    repo: location.repo,
     ref,
     remotePath,
-    sourceUrl: rawUrl,
-    defaultId
+    sourceUrl: githubSkillSourceUrl(location.owner, location.repo, ref, remotePath),
+    defaultId: skillIdFrom(resolved?.remotePath?.split("/").at(-1) ?? defaultId)
   };
 };
 
@@ -463,6 +520,66 @@ export const createSkillLibraryStore = (
       throw await githubRequestError(response, url);
     }
     return response.text();
+  };
+
+  const tryFetchGitHubJson = async <T>(url: string): Promise<T | undefined> => {
+    const response = await fetchImpl(url, await githubRequestInit());
+    if (response.status === 404 || response.status === 422) {
+      return undefined;
+    }
+    if (!response.ok) {
+      throw await githubRequestError(response, url);
+    }
+    return (await response.json()) as T;
+  };
+
+  const resolveGitHubLocation = async (rawUrl: string) => {
+    const location = parseGitHubLocation(rawUrl);
+    let ref: string;
+    let rootPath: string;
+    let commit: GitHubCommitResponse | undefined;
+
+    if (location.kind === "repository") {
+      const repository = await fetchGitHubJson(
+        `https://api.github.com/repos/${location.owner}/${location.repo}`
+      ) as GitHubRepositoryResponse;
+      if (!repository.default_branch) {
+        throw new Error("GitHub repository response is missing a default branch");
+      }
+      ref = repository.default_branch;
+      rootPath = "";
+      commit = await tryFetchGitHubJson<GitHubCommitResponse>(
+        `https://api.github.com/repos/${location.owner}/${location.repo}/commits/${encodeURIComponent(ref)}`
+      );
+    } else {
+      const segments =
+        location.kind === "blob" && location.pathSegments.at(-1) === "SKILL.md"
+          ? location.pathSegments.slice(0, -1)
+          : location.pathSegments;
+      let resolvedLength = 0;
+      for (let length = 1; length <= segments.length; length += 1) {
+        const candidateRef = segments.slice(0, length).join("/");
+        const candidateCommit = await tryFetchGitHubJson<GitHubCommitResponse>(
+          `https://api.github.com/repos/${location.owner}/${location.repo}/commits/${encodeURIComponent(candidateRef)}`
+        );
+        if (candidateCommit?.commit?.tree?.sha) {
+          ref = candidateRef;
+          commit = candidateCommit;
+          resolvedLength = length;
+        }
+      }
+      if (!commit || !resolvedLength) {
+        throw new Error("GitHub branch or commit could not be resolved");
+      }
+      ref = segments.slice(0, resolvedLength).join("/");
+      rootPath = segments.slice(resolvedLength).join("/");
+    }
+
+    const treeSha = commit?.commit?.tree?.sha;
+    if (!treeSha) {
+      throw new Error(`GitHub commit could not be resolved: ${ref}`);
+    }
+    return { ...location, ref, rootPath, treeSha };
   };
 
   const githubContentsUrl = (source: ParsedGitHubSkillSource, remotePath = source.remotePath) => {
@@ -624,6 +741,113 @@ export const createSkillLibraryStore = (
     return skills
       .filter((skill): skill is SkillLibraryEntry => Boolean(skill))
       .sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const scanGitHubSkills = async (rawUrl: string): Promise<GitHubSkillScanResult> => {
+    const source = await resolveGitHubLocation(rawUrl);
+    const treeUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${encodeURIComponent(source.treeSha)}?recursive=1`;
+    const treeResponse = await fetchGitHubJson(treeUrl) as GitHubTreeResponse;
+    const treeItems = (treeResponse.tree ?? []).filter(
+      (item): item is { path: string; type: string; sha: string } =>
+        typeof item.path === "string" &&
+        typeof item.type === "string" &&
+        typeof item.sha === "string"
+    );
+    const skillFiles = treeItems
+      .filter(
+        (item) =>
+          item.type === "blob" &&
+          (item.path === "SKILL.md" || item.path.endsWith("/SKILL.md")) &&
+          (!source.rootPath ||
+            item.path === `${source.rootPath}/SKILL.md` ||
+            item.path.startsWith(`${source.rootPath}/`))
+      )
+      .sort((a, b) => a.path.localeCompare(b.path));
+    const directSkillPath = source.rootPath ? `${source.rootPath}/SKILL.md` : "SKILL.md";
+    const boundedSkillFiles = skillFiles.some((item) => item.path === directSkillPath)
+      ? skillFiles.filter((item) => item.path === directSkillPath)
+      : skillFiles.filter((item, index, items) => {
+          const candidateDir = dirname(item.path) === "." ? "" : dirname(item.path);
+          return !items.slice(0, index).some((parent) => {
+            const parentDir = dirname(parent.path) === "." ? "" : dirname(parent.path);
+            return parentDir && candidateDir.startsWith(`${parentDir}/`);
+          });
+        });
+    const existingSkills = await listSkills();
+    const reservedIds = new Set(existingSkills.map((skill) => skill.id));
+    const candidates: GitHubSkillCandidate[] = [];
+
+    for (const skillFile of boundedSkillFiles.slice(0, 500)) {
+      const remotePath = dirname(skillFile.path) === "." ? "" : dirname(skillFile.path);
+      const sourceUrl = githubSkillSourceUrl(
+        source.owner,
+        source.repo,
+        source.ref,
+        remotePath
+      );
+      const rawSkillUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(source.ref)}/${encodeGitHubPath(skillFile.path)}`;
+      const content = await fetchGitHubText(rawSkillUrl);
+      const subtree = treeItems
+        .filter((item) => !remotePath || item.path.startsWith(`${remotePath}/`))
+        .map((item) => ({
+          ...item,
+          relativePath: relativeGitHubPath(remotePath, item.path)
+        }))
+        .filter(
+          (item) =>
+            item.relativePath &&
+            !boundedSkillFiles.some((nested) => {
+              const nestedDir = dirname(nested.path) === "." ? "" : dirname(nested.path);
+              return nestedDir !== remotePath && item.path.startsWith(`${nestedDir}/`);
+            })
+        )
+        .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+      const revision = createHash("sha1")
+        .update(subtree.map((item) => `${item.type}:${item.relativePath}:${item.sha}\n`).join(""))
+        .digest("hex");
+      const existingSource = existingSkills.find(
+        (skill) => skill.source?.replace(/\/$/, "") === sourceUrl.replace(/\/$/, "")
+      );
+      const duplicate = existingSkills.find(
+        (skill) => !existingSource && skill.remoteRevision === revision
+      );
+      const pathName = remotePath.split("/").filter(Boolean).at(-1) ?? source.repo;
+      const baseId = skillIdFrom(pathName);
+      let id = existingSource?.id ?? duplicate?.id ?? baseId;
+      if (!existingSource && !duplicate && reservedIds.has(id)) {
+        const parentName = remotePath.split("/").filter(Boolean).at(-2) ?? source.repo;
+        id = skillIdFrom(`${parentName}-${baseId}`);
+      }
+      let suffix = 2;
+      const unsuffixedId = id;
+      while (!existingSource && !duplicate && reservedIds.has(id)) {
+        id = `${unsuffixedId}-${suffix}`;
+        suffix += 1;
+      }
+      if (!existingSource && !duplicate) {
+        reservedIds.add(id);
+      }
+      candidates.push({
+        id,
+        name: metadataValue(content, "name") || pathName,
+        description: metadataValue(content, "description"),
+        remotePath,
+        sourceUrl,
+        ref: source.ref,
+        revision,
+        status: existingSource ? "already-imported" : duplicate ? "duplicate" : "ready",
+        existingLibraryId: existingSource?.id ?? duplicate?.id
+      });
+    }
+
+    return {
+      owner: source.owner,
+      repo: source.repo,
+      ref: source.ref,
+      rootPath: source.rootPath,
+      truncated: Boolean(treeResponse.truncated) || boundedSkillFiles.length > 500,
+      candidates
+    };
   };
 
   const ownedLibraryId = async (skillDir: string) => {
@@ -910,9 +1134,11 @@ export const createSkillLibraryStore = (
 
   const importGitHubSkill = async ({
     url,
-    id
+    id,
+    ref,
+    remotePath
   }: GitHubSkillImportInput): Promise<SkillLibraryEntry> => {
-    const source = parseGitHubSkillUrl(url);
+    const source = parseGitHubSkillUrl(url, { ref, remotePath });
     const safeId = SafeIdSchema.parse(id ?? source.defaultId);
     const targetDir = join(await libraryDir(), safeId);
     if (await pathExists(targetDir)) {
@@ -938,6 +1164,25 @@ export const createSkillLibraryStore = (
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
+  };
+
+  const importGitHubSkills = async (
+    inputs: GitHubSkillImportInput[]
+  ): Promise<GitHubSkillImportResult> => {
+    const imported: SkillLibraryEntry[] = [];
+    const failed: GitHubSkillImportResult["failed"] = [];
+    for (const input of inputs) {
+      try {
+        imported.push(await importGitHubSkill(input));
+      } catch (error) {
+        failed.push({
+          id: input.id ?? "skill",
+          sourceUrl: input.url,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    return { imported, failed };
   };
 
   const manageTargetSkill = async ({
@@ -1141,7 +1386,10 @@ export const createSkillLibraryStore = (
           });
           continue;
         }
-        const source = parseGitHubSkillUrl(metadata.source);
+        const source = parseGitHubSkillUrl(metadata.source, {
+          ref: metadata.remoteRef,
+          remotePath: metadata.remotePath
+        });
         const latest = await readGitHubTree(source);
         updates.push({
           id: skill.id,
@@ -1219,7 +1467,10 @@ export const createSkillLibraryStore = (
         throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
       }
       if (sourceType === "github") {
-        parseGitHubSkillUrl(metadata.source);
+        parseGitHubSkillUrl(metadata.source, {
+          ref: metadata.remoteRef,
+          remotePath: metadata.remotePath
+        });
       }
     }
     await writeMetadata(targetDir, {
@@ -1267,7 +1518,10 @@ export const createSkillLibraryStore = (
     }
 
     if (metadata.sourceType === "github") {
-      const source = parseGitHubSkillUrl(metadata.source);
+      const source = parseGitHubSkillUrl(metadata.source, {
+        ref: metadata.remoteRef,
+        remotePath: metadata.remotePath
+      });
       const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-preview-"));
       try {
         const { hasSkillMd, revision } = await readGitHubTree(source, tempDir);
@@ -1329,7 +1583,10 @@ export const createSkillLibraryStore = (
       throw new Error(`${safeId} is not tracked for updates`);
     }
     if (metadata.sourceType === "github" && metadata.source) {
-      const source = parseGitHubSkillUrl(metadata.source);
+      const source = parseGitHubSkillUrl(metadata.source, {
+        ref: metadata.remoteRef,
+        remotePath: metadata.remotePath
+      });
       const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-"));
       try {
         const { hasSkillMd, revision } = await readGitHubTree(source, tempDir);
@@ -1375,6 +1632,8 @@ export const createSkillLibraryStore = (
     scanUnmanaged,
     importSkill,
     importGitHubSkill,
+    scanGitHubSkills,
+    importGitHubSkills,
     removeSkill,
     manageTargetSkill,
     consolidateSkillGroup,

@@ -120,6 +120,12 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>
     skillLibraryStore.importGitHubSkill(input)
   );
+  ipcMain.handle("skills:scan-github", (_event, url: unknown) =>
+    skillLibraryStore.scanGitHubSkills(String(url))
+  );
+  ipcMain.handle("skills:import-github-batch", (_event, inputs: GitHubSkillImportInput[]) =>
+    skillLibraryStore.importGitHubSkills(Array.isArray(inputs) ? inputs : [])
+  );
   ipcMain.handle("skills:remove-library", async (_event, id: unknown) => {
     const skillId = parseId(id, "skill id");
     const profiles = await profileStore.listProfiles();

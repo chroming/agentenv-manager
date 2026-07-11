@@ -291,6 +291,30 @@ const writeGitHubFixtureSkill = async (fixtureRoot: string, version: "v1" | "v2"
   return skillDir;
 };
 
+const writeGitHubFixtureDirectory = async (fixtureRoot: string) => {
+  const skills = [
+    {
+      path: "skills/engineering/api-design",
+      name: "API Design",
+      description: "Design stable APIs."
+    },
+    {
+      path: "skills/engineering/release-check",
+      name: "Release Check",
+      description: "Verify releases before shipping."
+    }
+  ];
+  for (const skill of skills) {
+    const skillDir = join(fixtureRoot, "acme", "agent-skills", "main", skill.path);
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      `---\nname: ${skill.name}\ndescription: ${skill.description}\n---\n\n# ${skill.name}\n`,
+      "utf8"
+    );
+  }
+};
+
 const writeUnmanagedTargetSkill = async (
   opencodeDir: string,
   id = "target-only-reviewer",
@@ -546,11 +570,12 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
     expect(await page.getByRole("tablist", { name: "Profile sections" }).count()).toBe(0);
 
-    await page.getByRole("button", { name: "Import Skill" }).click();
+    await page.getByRole("button", { name: "Import skills" }).click();
     await page
       .getByLabel("GitHub skill URL")
       .fill("https://github.com/acme/agent-skills/tree/main/skills/reviewer");
-    expect(await page.getByRole("button", { name: "Import from GitHub" }).isEnabled()).toBe(true);
+    expect(await page.getByRole("button", { name: "Scan", exact: true }).isEnabled()).toBe(true);
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
     await selectProfile(page, "UI OpenCode alpha");
     expect(await applyActionButton(page, "OpenCode").count()).toBe(1);
@@ -1225,11 +1250,11 @@ describe("Electron UI profile switching e2e", () => {
     await targetMenu.waitFor({ state: "hidden", timeout: 5_000 });
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Import Skill" }).click({ timeout: 5_000 });
-    const importDrawer = page.getByRole("region", { name: "GitHub skill import" });
-    await importDrawer.waitFor({ state: "visible", timeout: 5_000 });
+    await page.getByRole("button", { name: "Import skills" }).click({ timeout: 5_000 });
+    const importDialog = page.getByRole("dialog", { name: "Import skills" });
+    await importDialog.waitFor({ state: "visible", timeout: 5_000 });
     await page.mouse.click(240, 120);
-    await importDrawer.waitFor({ state: "hidden", timeout: 5_000 });
+    await importDialog.waitFor({ state: "hidden", timeout: 5_000 });
   }, 30_000);
 
   it("consolidates an existing target skill into the shared library", async () => {
@@ -1935,7 +1960,7 @@ describe("Electron UI profile switching e2e", () => {
     ]) {
       await page.setViewportSize(viewport);
       await skillsButton.click();
-      const skillsGeometry = await readGeometry("Library/Skills", "Import Skill");
+      const skillsGeometry = await readGeometry("Library/Skills", "Import skills");
 
       const workspaces = [
         { button: "MCP Servers", heading: "Library/MCP Servers", action: "Add MCP server" },
@@ -2374,7 +2399,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
   }, 30_000);
 
-  it("imports a local skill folder from the Import Skill drawer", async () => {
+  it("imports a local skill folder from the Import dialog", async () => {
     const { appDataRoot, page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 760 });
     const localSkillDir = join(appDataRoot, "manual-import-skills", "path-reviewer");
@@ -2396,14 +2421,14 @@ describe("Electron UI profile switching e2e", () => {
       localSkillDir
     );
 
-    await page.getByRole("button", { name: "Import Skill" }).click();
+    await page.getByRole("button", { name: "Import skills" }).click();
     await page.getByRole("button", { name: "Choose local skill folder" }).waitFor({
       state: "visible"
     });
     await expect
       .poll(
         () =>
-          page.locator(".library-drawer").evaluate((element) => ({
+          page.locator(".library-import-dialog").evaluate((element) => ({
             clientHeight: element.clientHeight,
             scrollHeight: element.scrollHeight
           })),
@@ -2413,7 +2438,7 @@ describe("Electron UI profile switching e2e", () => {
         clientHeight: expect.any(Number),
         scrollHeight: expect.any(Number)
       });
-    const drawerMetrics = await page.locator(".library-drawer").evaluate((element) => ({
+    const drawerMetrics = await page.locator(".library-import-dialog").evaluate((element) => ({
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight
     }));
@@ -2424,7 +2449,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByLabel("Local skill folder path").inputValue(), { timeout: 5_000 })
       .toBe(localSkillDir);
-    await page.getByRole("button", { name: "Import local skill" }).click();
+    await page.getByRole("button", { name: "Import", exact: true }).click();
     await expect
       .poll(() => fileExists(join(appDataRoot, "skills-library", "path-reviewer", "SKILL.md")), {
         timeout: 5_000
@@ -2449,8 +2474,8 @@ describe("Electron UI profile switching e2e", () => {
     await rm(localSkillDir, { recursive: true, force: true });
     const importedRow = page.getByRole("group", { name: "Library item path-reviewer" });
     await expect.poll(() => importedRow.textContent()).toContain("Not tracked");
-    await page.getByRole("button", { name: "Close library tool" }).click();
-    await page.getByRole("region", { name: "GitHub skill import" }).waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "Close import" }).click();
+    await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Check updates" }).click();
     await expect.poll(() => importedRow.textContent()).not.toContain("Check failed");
   }, 30_000);
@@ -3044,20 +3069,22 @@ describe("Electron UI profile switching e2e", () => {
     const { app: electronApp, appDataRoot, githubFixtureRoot, page } = await launchApp();
     const sourceUrl = "https://github.com/acme/agent-skills/tree/main/skills/reviewer";
 
-    await page.getByRole("button", { name: "Import Skill" }).click();
+    await page.getByRole("button", { name: "Import skills" }).click();
     await page.getByLabel("GitHub skill URL").fill(sourceUrl);
-    await page.getByLabel("GitHub skill library id").fill("github-reviewer");
+    await page.getByRole("button", { name: "Scan", exact: true }).click();
+    const githubReviewer = page.getByRole("checkbox", { name: "Select GitHub Reviewer" });
+    await githubReviewer.waitFor();
+    expect(await githubReviewer.isChecked()).toBe(true);
+    await page.getByLabel("Library ID for GitHub Reviewer").fill("github-reviewer");
+    expect(await githubReviewer.isChecked()).toBe(true);
     const librarySkillMd = join(appDataRoot, "skills-library", "github-reviewer", "SKILL.md");
-    await page.getByRole("button", { name: "Import from GitHub" }).click();
+    await page.getByRole("button", { name: "Import 1" }).click();
     await expect.poll(() => fileExists(librarySkillMd), { timeout: 5_000 }).toBe(true);
     await page
       .getByRole("group", { name: "Library item github-reviewer" })
       .getByText("GitHub skill v1.")
       .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Close library tool" }).click();
-    await page
-      .getByRole("region", { name: "GitHub skill import" })
-      .waitFor({ state: "hidden" });
+    await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
 
     await electronApp.evaluate(({ ipcMain }) => {
       const state = globalThis as typeof globalThis & { __agentEnvOpenedSource?: string };
@@ -3155,6 +3182,35 @@ describe("Electron UI profile switching e2e", () => {
     expect(codexConfig).toContain('path = "/Users/example/.agents/skills/legacy-reviewer"');
     expect(codexConfig).toContain('path = "/Users/example/.agents/skills/noisy-helper"');
     expect(codexConfig).toContain("enabled = false");
+  }, 30_000);
+
+  it("scans a GitHub directory and imports only the selected skills", async () => {
+    const { appDataRoot, githubFixtureRoot, page } = await launchApp();
+    await writeGitHubFixtureDirectory(githubFixtureRoot);
+
+    await page.getByRole("button", { name: "Import skills" }).click();
+    await page
+      .getByLabel("GitHub skill URL")
+      .fill("https://github.com/acme/agent-skills/tree/main/skills/engineering");
+    await page.getByRole("button", { name: "Scan", exact: true }).click();
+
+    const apiDesign = page.getByRole("checkbox", { name: "Select API Design" });
+    const releaseCheck = page.getByRole("checkbox", { name: "Select Release Check" });
+    await apiDesign.waitFor({ state: "visible" });
+    expect(await apiDesign.isChecked()).toBe(true);
+    expect(await releaseCheck.isChecked()).toBe(true);
+    await releaseCheck.uncheck();
+    await page.getByRole("button", { name: "Import 1" }).click();
+
+    await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
+    await page.getByRole("group", { name: "Library item api-design" }).waitFor({ state: "visible" });
+    expect(await page.getByRole("group", { name: "Library item release-check" }).count()).toBe(0);
+    await expect(
+      readFile(join(appDataRoot, "skills-library", "api-design", "SKILL.md"), "utf8")
+    ).resolves.toContain("Design stable APIs");
+    await expect(
+      readFile(join(appDataRoot, "skills-library", "release-check", "SKILL.md"), "utf8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
   }, 30_000);
 
   it("updates a local library skill from its tracked source", async () => {

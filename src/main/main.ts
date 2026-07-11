@@ -22,6 +22,7 @@ import { createTargetRegistry } from "./targets/registry";
 import { preloadScriptName, windowBackgroundColor } from "./windowConfig";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
+  const fixtureTrees = new Map<string, string>();
   const fileResponse = (content: string, init?: ResponseInit) =>
     new Response(content, {
       status: init?.status ?? 200,
@@ -39,13 +40,89 @@ const createGitHubFixtureFetch = (fixtureRoot: string) => {
       return fileResponse(await readFile(fixturePath, "utf8"));
     }
 
+    if (parsed.hostname === "raw.githubusercontent.com") {
+      const [owner, repo, encodedRef, ...pathParts] = parsed.pathname.split("/").filter(Boolean);
+      if (!owner || !repo || !encodedRef) {
+        return fileResponse("Not found", { status: 404, statusText: "Not Found" });
+      }
+      const filePath = join(
+        fixtureRoot,
+        owner,
+        repo,
+        decodeURIComponent(encodedRef),
+        ...pathParts.map(decodeURIComponent)
+      );
+      try {
+        return fileResponse(await readFile(filePath, "utf8"));
+      } catch {
+        return fileResponse("Not found", { status: 404, statusText: "Not Found" });
+      }
+    }
+
     if (parsed.hostname !== "api.github.com") {
       return fetch(url);
     }
 
     const parts = parsed.pathname.split("/").filter(Boolean);
-    const [repos, owner, repo, contents, ...pathParts] = parts;
-    if (repos !== "repos" || contents !== "contents" || !owner || !repo) {
+    const [repos, owner, repo, resource, ...pathParts] = parts;
+    if (repos !== "repos" || !owner || !repo) {
+      return fileResponse("Not found", { status: 404, statusText: "Not Found" });
+    }
+
+    if (!resource) {
+      return fileResponse(JSON.stringify({ default_branch: "main" }), {
+        headers: { "content-type": "application/json" }
+      });
+    }
+
+    if (resource === "commits") {
+      const ref = decodeURIComponent(pathParts.join("/"));
+      if (ref !== "main") {
+        return fileResponse("Not found", { status: 404, statusText: "Not Found" });
+      }
+      const contentRoot = join(fixtureRoot, owner, repo, ref);
+      try {
+        await stat(contentRoot);
+      } catch {
+        return fileResponse("Not found", { status: 404, statusText: "Not Found" });
+      }
+      const treeSha = createHash("sha1").update(`${owner}/${repo}/${ref}`).digest("hex");
+      fixtureTrees.set(treeSha, contentRoot);
+      return fileResponse(JSON.stringify({ commit: { tree: { sha: treeSha } } }), {
+        headers: { "content-type": "application/json" }
+      });
+    }
+
+    if (resource === "git" && pathParts[0] === "trees" && pathParts[1]) {
+      const contentRoot = fixtureTrees.get(pathParts[1]);
+      if (!contentRoot) {
+        return fileResponse("Not found", { status: 404, statusText: "Not Found" });
+      }
+      const tree: Array<{ path: string; type: "blob" | "tree"; sha: string }> = [];
+      const walk = async (directory: string, prefix = "") => {
+        const entries = await readdir(directory, { withFileTypes: true });
+        for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+          const child = join(directory, entry.name);
+          const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+          if (entry.isDirectory()) {
+            tree.push({
+              path: relativePath,
+              type: "tree",
+              sha: createHash("sha1").update(`${relativePath}/`).digest("hex")
+            });
+            await walk(child, relativePath);
+          } else if (entry.isFile()) {
+            tree.push({ path: relativePath, type: "blob", sha: await shaFor(child) });
+          }
+        }
+      };
+      await walk(contentRoot);
+      return fileResponse(JSON.stringify({ truncated: false, tree }), {
+        headers: { "content-type": "application/json" }
+      });
+    }
+
+    if (resource !== "contents") {
       return fileResponse("Not found", { status: 404, statusText: "Not Found" });
     }
 

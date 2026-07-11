@@ -28,6 +28,8 @@ export interface AgentEnvApi {
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   importSkillToLibrary(sourcePath: string): Promise<SkillLibraryEntry>;
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
+  scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
+  importGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
   removeSkillFromLibrary(id: string): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
   consolidateSkillGroup(input: SkillCleanupRequest): Promise<SkillCleanupResult>;
@@ -91,6 +93,42 @@ export interface SkillLibraryEntry {
 export interface GitHubSkillImportInput {
   url: string;
   id?: string;
+  ref?: string;
+  remotePath?: string;
+}
+
+export type GitHubSkillCandidateStatus = "ready" | "already-imported" | "duplicate";
+
+export interface GitHubSkillCandidate {
+  id: string;
+  name: string;
+  description: string;
+  remotePath: string;
+  sourceUrl: string;
+  ref: string;
+  revision: string;
+  status: GitHubSkillCandidateStatus;
+  existingLibraryId?: string;
+}
+
+export interface GitHubSkillScanResult {
+  owner: string;
+  repo: string;
+  ref: string;
+  rootPath: string;
+  truncated: boolean;
+  candidates: GitHubSkillCandidate[];
+}
+
+export interface GitHubSkillImportFailure {
+  id: string;
+  sourceUrl: string;
+  error: string;
+}
+
+export interface GitHubSkillImportResult {
+  imported: SkillLibraryEntry[];
+  failed: GitHubSkillImportFailure[];
 }
 
 export interface SkillUpdateInfo {

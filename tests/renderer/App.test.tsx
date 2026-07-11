@@ -310,6 +310,15 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       contentHash: "hash",
       updatedAt: "2026-07-02T00:00:00.000Z"
     }),
+    scanGitHubSkills: vi.fn().mockResolvedValue({
+      owner: "acme",
+      repo: "skills",
+      ref: "main",
+      rootPath: "",
+      truncated: false,
+      candidates: []
+    }),
+    importGitHubSkills: vi.fn().mockResolvedValue({ imported: [], failed: [] }),
     removeSkillFromLibrary: vi.fn().mockResolvedValue({
       backupId: "remove-backup",
       libraryId: "skill",

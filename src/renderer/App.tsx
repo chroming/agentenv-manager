@@ -44,6 +44,9 @@ import type {
   GitHubAuthStatus,
   GitHubDeviceLogin,
   GitHubDeviceLoginResult,
+  GitHubSkillImportInput,
+  GitHubSkillImportResult,
+  GitHubSkillScanResult,
   LibraryResourceVersions,
   ManageTargetSkillInput,
   McpLibraryEntry,
@@ -1792,15 +1795,32 @@ export const App = () => {
     }
   };
 
-  const importGitHubSkill = async (input: { url: string; id?: string }) => {
+  const scanGitHubSkills = (url: string): Promise<GitHubSkillScanResult> =>
+    window.agentEnv.scanGitHubSkills(url);
+
+  const importGitHubSkills = async (
+    inputs: GitHubSkillImportInput[]
+  ): Promise<GitHubSkillImportResult> => {
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.importGitHubSkillToLibrary(input);
+      const result = await window.agentEnv.importGitHubSkills(inputs);
       setSelectedSkillUpdatePlan(undefined);
-      await refreshProfiles();
+      await refreshProfiles({ checkSkillUpdates: false });
+      if (result.imported.length > 0) {
+        setSkillUpdateCheckStatus({
+          state: result.failed.length > 0 ? "info" : "success",
+          message:
+            result.failed.length > 0
+              ? `Imported ${result.imported.length} · ${result.failed.length} failed`
+              : `Imported ${result.imported.length} ${result.imported.length === 1 ? "skill" : "skills"}`
+        });
+      }
+      return result;
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      throw unknownError;
     } finally {
       setBusy(false);
     }
@@ -2409,10 +2429,11 @@ export const App = () => {
                     <button
                       className="primary-inline-action"
                       type="button"
+                      aria-label="Import skills"
                       onClick={() => setSkillLibraryTool("import")}
                     >
                       <Plus size={16} strokeWidth={2.4} />
-                      Import Skill
+                      Import
                     </button>
                     <button
                       className="secondary-action"
@@ -2516,7 +2537,8 @@ export const App = () => {
                 onCloseTool={() => setSkillLibraryTool(undefined)}
                 onSelectLocalSkillFolder={() => window.agentEnv.selectSkillFolder()}
                 onImportUnmanaged={importUnmanagedSkill}
-                onImportGitHubSkill={importGitHubSkill}
+                onScanGitHubSkills={scanGitHubSkills}
+                onImportGitHubSkills={importGitHubSkills}
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={(input) => void consolidateSkillGroup(input)}
                 onSetUpdateSource={setSkillUpdateSource}
