@@ -240,8 +240,12 @@ const prepareFixture = async (root) => {
   return { appDataRoot, binDir, githubFixtureRoot, homeDir };
 };
 
-const capturePage = async (page, path, { preserveFocus = false } = {}) => {
-  await page.evaluate(async (shouldPreserveFocus) => {
+const capturePage = async (
+  page,
+  path,
+  { forceFullRepaint = false, preserveFocus = false, preservePointer = false } = {}
+) => {
+  await page.evaluate(async ({ shouldForceFullRepaint, shouldPreserveFocus }) => {
     await document.fonts?.ready;
     for (const animation of document.getAnimations()) {
       animation.finish();
@@ -249,20 +253,30 @@ const capturePage = async (page, path, { preserveFocus = false } = {}) => {
     if (!shouldPreserveFocus && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    const previousVisibility = document.body.style.visibility;
-    document.body.style.visibility = "hidden";
-    document.body.getBoundingClientRect();
-    document.body.style.visibility = previousVisibility;
+    if (shouldForceFullRepaint) {
+      const previousVisibility = document.body.style.visibility;
+      document.body.style.visibility = "hidden";
+      document.body.getBoundingClientRect();
+      document.body.style.visibility = previousVisibility;
+    }
     await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
-  }, preserveFocus);
-  await page.mouse.move(2, 2);
-  const windowHandle = await app.browserWindow(page);
-  const pngBase64 = await windowHandle.evaluate(async (browserWindow) => {
-    browserWindow.webContents.invalidate();
-    await new Promise((resolveFrame) => setTimeout(resolveFrame, 100));
-    return (await browserWindow.capturePage()).toPNG().toString("base64");
+  }, {
+    shouldForceFullRepaint: forceFullRepaint,
+    shouldPreserveFocus: preserveFocus
   });
-  await writeFile(path, Buffer.from(pngBase64, "base64"));
+  if (!preservePointer) {
+    await page.mouse.move(2, 2);
+  }
+  await page.bringToFront();
+  const windowHandle = await app.browserWindow(page);
+  await windowHandle.evaluate(async (browserWindow) => {
+    browserWindow.show();
+    browserWindow.focus();
+    browserWindow.moveTop();
+    browserWindow.webContents.invalidate();
+    await new Promise((resolveFrame) => setTimeout(resolveFrame, 200));
+  });
+  await page.screenshot({ path, animations: "disabled" });
 };
 
 const fileExists = async (path) => {
@@ -276,10 +290,13 @@ const fileExists = async (path) => {
 
 const setWindowSize = async (page, windowHandle, width, height) => {
   await windowHandle.evaluate((browserWindow, size) => {
+    browserWindow.setAlwaysOnTop(true, "screen-saver");
+    browserWindow.webContents.setBackgroundThrottling(false);
     browserWindow.setContentSize(size.width, size.height);
     browserWindow.center();
     browserWindow.show();
     browserWindow.focus();
+    browserWindow.moveTop();
   }, { width, height });
   await page.setViewportSize({ width, height });
   await page.waitForTimeout(300);
@@ -400,7 +417,7 @@ try {
   await capturePage(page, join(outputDir, "skills-920x620.png"));
   const githubSource = page.getByLabel("Full source for react-best-practices");
   await githubSource.scrollIntoViewIfNeeded();
-  await githubSource.focus();
+  await githubSource.hover();
   await page
     .getByRole("tooltip")
     .filter({ hasText: "agentenv-community/agent-skills" })
@@ -408,9 +425,9 @@ try {
   await capturePage(
     page,
     join(outputDir, "skills-source-tooltip-920x620.png"),
-    { preserveFocus: true }
+    { preservePointer: true }
   );
-  await githubSource.evaluate((element) => element.blur());
+  await page.mouse.move(2, 2);
 
   await page.getByRole("button", { name: "Import skills" }).click();
   const importDialog = page.getByRole("dialog", { name: "Import skills" });
@@ -444,14 +461,14 @@ try {
   const cleanupLocations = cleanupGroup.getByLabel(
     "Full cleanup locations cross-agent-review-workflow-with-a-long-name"
   );
-  await cleanupLocations.focus();
+  await cleanupLocations.hover();
   await page.getByRole("tooltip").waitFor({ state: "visible", timeout: 5_000 });
   await capturePage(
     page,
     join(outputDir, "skills-cleanup-tooltip-920x620.png"),
-    { preserveFocus: true }
+    { preservePointer: true }
   );
-  await cleanupLocations.evaluate((element) => element.blur());
+  await page.mouse.move(2, 2);
   await cleanupGroup
     .getByRole("button", {
       name: "Resolve conflict cross-agent-review-workflow-with-a-long-name"
@@ -513,7 +530,8 @@ try {
       .waitFor({ state: "visible" });
     await capturePage(
       page,
-      join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`)
+      join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`),
+      sectionName === "Advanced" ? { forceFullRepaint: true } : undefined
     );
   }
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -525,10 +543,17 @@ try {
   await capturePage(page, join(outputDir, "apply-preview-920x620.png"));
   await previewDialog.getByRole("button", { name: "Apply profile" }).click();
   await previewDialog.waitFor({ state: "hidden" });
-  await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(page, join(outputDir, "profiles-applied-1180x728.png"));
+  await page.reload();
+  await page.waitForLoadState("domcontentloaded");
+  await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Profiles", exact: true }).click();
+  await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "profiles-applied-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "profiles-applied-1180x728.png"));
   await captureWorkspace(
     "Targets",
     "targets",

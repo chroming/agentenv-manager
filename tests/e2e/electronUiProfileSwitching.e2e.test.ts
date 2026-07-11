@@ -1726,6 +1726,25 @@ describe("Electron UI profile switching e2e", () => {
     expect(
       await skillList.evaluate((element) => element.scrollHeight > element.clientHeight)
     ).toBe(true);
+    const skillActionGeometry = await page
+      .locator(".profile-skill-row:not(.profile-skill-row--owned)")
+      .first()
+      .evaluate((row) => {
+        const toggle = row.querySelector<HTMLElement>(".profile-skill-switch");
+        const more = row.querySelector<HTMLElement>(".icon-action");
+        const rowBox = row.getBoundingClientRect();
+        const toggleBox = toggle?.getBoundingClientRect();
+        const moreBox = more?.getBoundingClientRect();
+        return {
+          gap: toggleBox && moreBox ? moreBox.left - toggleBox.right : -1,
+          rowRight: rowBox.right,
+          toggleRight: toggleBox?.right ?? Number.POSITIVE_INFINITY,
+          moreRight: moreBox?.right ?? Number.POSITIVE_INFINITY
+        };
+      });
+    expect(skillActionGeometry.gap).toBeGreaterThanOrEqual(8);
+    expect(skillActionGeometry.toggleRight).toBeLessThanOrEqual(skillActionGeometry.rowRight);
+    expect(skillActionGeometry.moreRight).toBeLessThanOrEqual(skillActionGeometry.rowRight);
     expect(await workbench.evaluate((element) => getComputedStyle(element).gridTemplateColumns))
       .toMatch(/^220px /);
   }, 30_000);
@@ -2032,6 +2051,10 @@ describe("Electron UI profile switching e2e", () => {
 
     for (const workspace of ["Skills", "MCP Servers", "Profiles", "Targets", "Settings"]) {
       await page.getByRole("button", { name: workspace, exact: true }).click();
+      await page.evaluate(() => window.scrollTo({ top: 240, left: 120 }));
+      await page.locator(".app-shell").evaluate((shell) => {
+        shell.scrollTo({ top: 240, left: 120 });
+      });
       const paint = await page.evaluate(() => {
         const root = document.getElementById("root");
         const shell = document.querySelector(".app-shell");
@@ -2044,6 +2067,10 @@ describe("Electron UI profile switching e2e", () => {
           rootWidth: rootRect?.width ?? 0,
           shellHeight: shellRect?.height ?? 0,
           shellWidth: shellRect?.width ?? 0,
+          shellScrollLeft: shell?.scrollLeft ?? -1,
+          shellScrollTop: shell?.scrollTop ?? -1,
+          scrollX: window.scrollX,
+          scrollY: window.scrollY,
           viewportHeight: window.innerHeight,
           viewportWidth: window.innerWidth
         };
@@ -2055,6 +2082,10 @@ describe("Electron UI profile switching e2e", () => {
       expect(paint.rootHeight).toBe(paint.viewportHeight);
       expect(paint.shellWidth).toBe(paint.viewportWidth);
       expect(paint.shellHeight).toBe(paint.viewportHeight);
+      expect(paint.shellScrollLeft).toBe(0);
+      expect(paint.shellScrollTop).toBe(0);
+      expect(paint.scrollX).toBe(0);
+      expect(paint.scrollY).toBe(0);
     }
   }, 30_000);
 

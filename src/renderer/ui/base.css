@@ -21,11 +21,16 @@ body,
   width: 100%;
 }
 
+html,
+body {
+  overflow: clip;
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--page);
   margin: 0;
   min-width: 920px;
-  overflow: hidden;
 }
 
 button,

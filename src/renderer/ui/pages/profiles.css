@@ -1151,10 +1151,12 @@
   transition: background-color var(--motion-fast);
   width: 36px;
   grid-column: 5;
+  justify-self: center;
 }
 
 .profile-skill-row:not(.profile-skill-row--owned) > .icon-action {
   grid-column: 6;
+  justify-self: center;
 }
 
 .profile-skill-switch span {
@@ -1221,7 +1223,7 @@
 @media (max-width: 980px) {
   .profile-skill-row {
     gap: 8px;
-    grid-template-columns: 32px minmax(100px, 1fr) minmax(78px, auto) auto 32px 32px;
+    grid-template-columns: 32px minmax(100px, 1fr) minmax(78px, auto) auto 40px 40px;
     padding-inline: 8px;
   }
 

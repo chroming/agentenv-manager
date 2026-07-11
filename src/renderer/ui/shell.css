@@ -3,6 +3,7 @@
   background: var(--page);
   gap: 0;
   grid-template-columns: 212px minmax(0, 1fr);
+  overflow: clip;
   padding: 0;
 }
 
