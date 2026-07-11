@@ -1709,8 +1709,10 @@ export const App = () => {
             ? `Imported ${result.skill.name} · Local copy is now managed`
             : `Imported ${result.skill.name} to Library`
       });
+      return true;
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -1736,8 +1738,10 @@ export const App = () => {
         state: "success",
         message: `Imported ${skill.name} to Library`
       });
+      return true;
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -2783,7 +2787,7 @@ export const App = () => {
                 onImportGitHubSkills={importGitHubSkills}
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={(input) => void consolidateSkillGroup(input)}
-                onAutoConsolidateSkillGroups={(inputs) => void autoConsolidateSkillGroups(inputs)}
+                onAutoConsolidateSkillGroups={autoConsolidateSkillGroups}
                 onSetUpdateSource={setSkillUpdateSource}
                 onSetUpdatePolicy={(input) => void setSkillUpdatePolicy(input)}
                 onSetIcon={(input) => void setSkillIcon(input)}

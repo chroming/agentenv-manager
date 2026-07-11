@@ -438,6 +438,9 @@ Status: Apply and cleanup rollback plus stale rollback conflict handling are `Im
 - The global auto-check setting controls scheduling only; it never overrides a per-Skill `Untracked` policy.
 - Legacy metadata without an explicit policy defaults to `Untracked` for local sources and `Tracked` for GitHub sources.
 - Import validates `SKILL.md` and rejects unsafe or ambiguous directory layouts.
+- Local import MUST distinguish a non-destructive `Import copy` from `Import & manage` for a folder already inside a Target. Before `Import & manage`, the UI discloses that AgentEnv will back up the Target copy, import it to Library, and replace that location with a managed installation.
+- A selected Target folder that is already managed, ignored, or conflicts with an existing Library version MUST block generic import and direct the user to Scan local for the appropriate resolution.
+- A failed local or external import MUST preserve the selected source and keep its dialog open so the user can retry or inspect the global error.
 - The Library Skill icon defaults to its source type and MAY be replaced by a built-in icon. The selected icon is presentation metadata and MUST survive content updates.
 - `SKILL.md` frontmatter MUST be parsed as YAML rather than with line-oriented string matching. Folded, quoted, and multiline values remain valid.
 
@@ -467,7 +470,9 @@ Resolution contract:
 - A single unmanaged copy, identical unmanaged duplicates, a local copy that exactly matches Library, and stale managed copies MAY be handled automatically because no content choice is required.
 - Differing content, a local copy that differs from an existing Library version, external-manager ownership, and missing Target identity MUST remain in manual Review.
 - `Auto-manage` backs up and processes every currently auto-ready group. A failure in one group MUST NOT undo successful independent groups, and the result MUST report both completed and remaining groups.
+- `Auto-manage` is shown only when at least one group is currently eligible. While it is running, the initiating control exposes a local working state and conflicting cleanup actions are disabled until the refreshed result is available.
 - AgentEnv ownership is attached to the physical managed installation. A shared compatibility path scanned by multiple Targets MUST appear as one managed location rather than a duplicate caused by Target-specific scanning.
+- A physical location shared by multiple Target adapters MUST be labelled as shared in cleanup review instead of presenting the Target names as separate copies.
 
 Cleanup review contract:
 

@@ -10,7 +10,7 @@ afterEach(() => {
 
 describe("SkillLibraryPanel", () => {
   it("keeps the skill list clean and routes secondary workflows through drawers and row actions", async () => {
-    const onImportUnmanaged = vi.fn();
+    const onImportUnmanaged = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
     const onScanGitHubSkills = vi.fn().mockResolvedValue({
       owner: "acme",
       repo: "agent-skills",
@@ -43,18 +43,20 @@ describe("SkillLibraryPanel", () => {
     const onCheckUpdates = vi.fn();
     const onOpenSource = vi.fn();
     const onSetUpdateSource = vi.fn();
-    const onImportExternal = vi.fn();
+    const onImportExternal = vi.fn().mockResolvedValue(true);
     const onSetUpdatePolicy = vi.fn();
     const onSetIcon = vi.fn();
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn();
-    const onAutoConsolidateSkillGroups = vi.fn();
+    const onAutoConsolidateSkillGroups = vi.fn().mockResolvedValue(undefined);
     const onIgnoreSkillGroup = vi.fn();
     const onUnignoreSkillGroup = vi.fn();
     const onRestoreCleanup = vi.fn();
     const onCloseTool = vi.fn();
     const onViewStateChange = vi.fn();
-    const onSelectLocalSkillFolder = vi.fn().mockResolvedValue("/tmp/local-skills/path-reviewer");
+    const onSelectLocalSkillFolder = vi.fn().mockResolvedValue(
+      "/tmp/opencode/skills/target-only-reviewer"
+    );
 
     const renderPanel = (
       activeTool?: "import" | "discoveries",
@@ -111,7 +113,7 @@ describe("SkillLibraryPanel", () => {
             name: "Shared Reviewer",
             description: "Review code",
             path: "/tmp/opencode/skills/shared-reviewer",
-            foundIn: ["opencode"],
+            foundIn: ["opencode", "codex"],
             status: "managed",
             libraryId: "shared-reviewer",
             skillKey: "shared-reviewer",
@@ -450,11 +452,24 @@ describe("SkillLibraryPanel", () => {
     expect(onSelectLocalSkillFolder).toHaveBeenCalled();
     await waitFor(() =>
       expect(screen.getByLabelText("Local skill folder path")).toHaveValue(
-        "/tmp/local-skills/path-reviewer"
+        "/tmp/opencode/skills/target-only-reviewer"
       )
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Import$/ }));
-    expect(onImportUnmanaged).toHaveBeenCalledWith("/tmp/local-skills/path-reviewer");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "back up this Target copy"
+    );
+    const localImportButton = screen.getByRole("button", { name: "Import & manage" });
+    fireEvent.click(localImportButton);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Local skill folder path")).toHaveValue(
+        "/tmp/opencode/skills/target-only-reviewer"
+      )
+    );
+    fireEvent.click(localImportButton);
+    await waitFor(() => expect(screen.getByLabelText("Local skill folder path")).toHaveValue(""));
+    expect(onImportUnmanaged).toHaveBeenCalledWith(
+      "/tmp/opencode/skills/target-only-reviewer"
+    );
 
     fireEvent.change(screen.getByLabelText("GitHub skill URL"), {
       target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
@@ -485,7 +500,15 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Restore ignored");
     expect(discoveries).toHaveTextContent("Auto-ready");
     expect(discoveries).toHaveTextContent("Review");
-    fireEvent.click(within(discoveries).getByRole("button", { name: "Auto-manage 3" }));
+    expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
+    let resolveAutoCleanup: (() => void) | undefined;
+    onAutoConsolidateSkillGroups.mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        resolveAutoCleanup = resolve;
+      })
+    );
+    const autoManageButton = within(discoveries).getByRole("button", { name: "Auto-manage 3" });
+    fireEvent.click(autoManageButton);
     expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ skillKey: "copied-local" }),
@@ -493,11 +516,19 @@ describe("SkillLibraryPanel", () => {
         expect.objectContaining({ skillKey: "target-only-reviewer" })
       ])
     );
+    expect(autoManageButton).toHaveTextContent("Managing...");
+    expect(screen.getByRole("button", { name: "Close library tool" })).toBeDisabled();
+    resolveAutoCleanup?.();
     const externalGroup = screen.getByRole("group", {
       name: "Cleanup group external-reviewer"
     });
     expect(externalGroup).toHaveTextContent("External");
     expect(externalGroup).toHaveTextContent("Managed externally by Skills CLI");
+    await waitFor(() =>
+      expect(
+        within(externalGroup).getByRole("button", { name: "Import copy external-reviewer" })
+      ).toBeEnabled()
+    );
     fireEvent.click(
       within(externalGroup).getByRole("button", { name: "Import copy external-reviewer" })
     );
@@ -512,8 +543,10 @@ describe("SkillLibraryPanel", () => {
     );
     externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
     fireEvent.click(within(externalDialog).getByRole("button", { name: "Import copy" }));
-    expect(onImportExternal).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "external-reviewer", status: "external" })
+    await waitFor(() =>
+      expect(onImportExternal).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "external-reviewer", status: "external" })
+      )
     );
     const cleanupHistory = screen.getByRole("region", { name: "Cleanup history" });
     expect(cleanupHistory).toHaveTextContent("shared-reviewer");
@@ -554,6 +587,9 @@ describe("SkillLibraryPanel", () => {
         ]
       }
     ]);
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Close library tool" })).toBeEnabled()
+    );
 
     const conflictGroup = screen.getByRole("group", { name: "Cleanup group conflict-reviewer" });
     expect(conflictGroup).toHaveTextContent("Conflict");

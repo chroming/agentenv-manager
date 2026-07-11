@@ -2419,7 +2419,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByLabel("Local skill folder path").inputValue(), { timeout: 5_000 })
       .toBe(localSkillDir);
-    await page.getByRole("button", { name: "Import", exact: true }).click();
+    await page.getByRole("button", { name: "Import copy", exact: true }).click();
     await expect
       .poll(() => fileExists(join(appDataRoot, "skills-library", "path-reviewer", "SKILL.md")), {
         timeout: 5_000
@@ -2473,7 +2473,10 @@ describe("Electron UI profile switching e2e", () => {
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Import skills" }).click();
     await page.getByRole("button", { name: "Choose local skill folder" }).click();
-    await page.getByRole("button", { name: "Import", exact: true }).click();
+    await expect.poll(() => page.getByRole("status").textContent()).toContain(
+      "back up this Target copy"
+    );
+    await page.getByRole("button", { name: "Import & manage", exact: true }).click();
 
     const markerPath = join(localSkillDir, ".agentenv-owner.json");
     await expect.poll(() => fileExists(markerPath), { timeout: 5_000 }).toBe(true);
@@ -2608,6 +2611,9 @@ describe("Electron UI profile switching e2e", () => {
       fileExists(join(appDataRoot, "skills-library", "manual-conflict-reviewer"))
     ).resolves.toBe(false);
     await expect.poll(() => conflictGroup.textContent()).toContain("Review");
+    await expect
+      .poll(() => page.getByRole("button", { name: /Auto-manage \d+/ }).count())
+      .toBe(0);
   }, 30_000);
 
   it("imports a Skills CLI installation without changing the external copy or lock", async () => {

@@ -1766,6 +1766,10 @@
   white-space: nowrap;
 }
 
+.cleanup-auto-action .is-spinning {
+  animation: spin 0.9s linear infinite;
+}
+
 .cleanup-group-status {
   align-items: flex-start;
   display: grid;
@@ -1816,6 +1820,31 @@
 
 .skill-library-panel .cleanup-group-actions {
   min-width: 0;
+}
+
+.local-import-impact {
+  align-items: flex-start;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  line-height: 1.45;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.local-import-impact svg {
+  color: var(--accent);
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.local-import-impact--warning {
+  color: #8a560c;
+}
+
+.local-import-impact--warning svg {
+  color: #b26b00;
 }
 
 @media (max-width: 980px) {
