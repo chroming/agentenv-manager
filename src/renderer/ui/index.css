@@ -1,0 +1,6 @@
+@layer tokens, base, legacy, product, primitives, shell, pages;
+
+@import "./tokens.css" layer(tokens);
+@import "./base.css" layer(base);
+@import "../styles.css" layer(legacy);
+@import "../product-shell.css" layer(product);

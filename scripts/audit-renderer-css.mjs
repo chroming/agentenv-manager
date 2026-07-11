@@ -1,8 +1,24 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, readdir } from "node:fs/promises";
+import { relative, resolve } from "node:path";
 
 const projectRoot = resolve(import.meta.dirname, "..");
-const files = ["src/renderer/styles.css", "src/renderer/product-shell.css"];
+const rendererRoot = resolve(projectRoot, "src/renderer");
+
+const listCssFiles = async (directory) => {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nestedFiles = await Promise.all(
+    entries.map((entry) => {
+      const path = resolve(directory, entry.name);
+      if (entry.isDirectory()) return listCssFiles(path);
+      return entry.isFile() && entry.name.endsWith(".css") ? [path] : [];
+    })
+  );
+  return nestedFiles.flat();
+};
+
+const files = (await listCssFiles(rendererRoot))
+  .map((file) => relative(projectRoot, file))
+  .sort();
 
 const selectorCounts = (content) => {
   const counts = new Map();
@@ -36,13 +52,20 @@ for (const file of files) {
   });
 }
 
-const [first, second] = reports;
-const sharedSelectors = [...first.selectors.keys()]
-  .filter((selector) => second.selectors.has(selector))
+const selectorFiles = new Map();
+for (const report of reports) {
+  for (const [selector, count] of report.selectors) {
+    const locations = selectorFiles.get(selector) ?? [];
+    locations.push({ file: report.file, count });
+    selectorFiles.set(selector, locations);
+  }
+}
+const sharedSelectors = [...selectorFiles.entries()]
+  .filter(([, locations]) => locations.length > 1)
   .sort(
-    (left, right) =>
-      (first.selectors.get(right) ?? 0) + (second.selectors.get(right) ?? 0) -
-      ((first.selectors.get(left) ?? 0) + (second.selectors.get(left) ?? 0))
+    ([, left], [, right]) =>
+      right.reduce((total, location) => total + location.count, 0) -
+      left.reduce((total, location) => total + location.count, 0)
   );
 
 const result = {
@@ -58,10 +81,9 @@ const result = {
     ),
     rawNumericLayers: reports.flatMap((report) => report.rawNumericLayers)
   },
-  topCrossFileSelectors: sharedSelectors.slice(0, 25).map((selector) => ({
+  topCrossFileSelectors: sharedSelectors.slice(0, 25).map(([selector, locations]) => ({
     selector,
-    [first.file]: first.selectors.get(selector),
-    [second.file]: second.selectors.get(selector)
+    ...Object.fromEntries(locations.map(({ file, count }) => [file, count]))
   }))
 };
 

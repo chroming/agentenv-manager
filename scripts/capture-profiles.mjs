@@ -362,7 +362,7 @@ try {
   const { appDataRoot, binDir, githubFixtureRoot, homeDir } = await prepareFixture(fixtureRoot);
   app = await electron.launch({
     executablePath: electronPath,
-    args: ["--disable-gpu", join(projectRoot, "out", "main", "main.js")],
+    args: [join(projectRoot, "out", "main", "main.js")],
     env: {
       ...process.env,
       AGENTENV_AUTOMATION: "1",
