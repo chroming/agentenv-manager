@@ -391,13 +391,13 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       updatedAt: "2026-07-02T00:00:00.000Z"
     }),
     readSettings: vi.fn().mockResolvedValue({
-      skillSyncMethod: "copy",
+      skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60
     }),
     updateSettings: vi.fn().mockImplementation(async (input) => ({
-      skillSyncMethod: input.skillSyncMethod ?? "copy",
+      skillSyncMethod: input.skillSyncMethod ?? "symlink",
       skillStorageLocation: input.skillStorageLocation ?? "appData",
       skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
       skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60
@@ -814,6 +814,20 @@ describe("App", () => {
     await waitFor(() => expect(api.pollGitHubDeviceLogin).toHaveBeenCalledWith("login-1"));
     await waitFor(() => expect(screen.getByText("Connected as octocat")).toBeInTheDocument());
     expect(screen.getByText("Connected")).toBeInTheDocument();
+  });
+
+  it("presents Live link as the default recommended Skill deployment mode", async () => {
+    installApi();
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+
+    const syncMethod = screen.getByLabelText("Global skill sync method");
+    expect(syncMethod).toHaveValue("symlink");
+    expect(
+      within(syncMethod).getByRole("option", { name: "Live link (recommended)" })
+    ).toBeInTheDocument();
   });
 
   it("opens the MCP library and saves reusable MCP servers", async () => {

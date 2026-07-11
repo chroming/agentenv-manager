@@ -137,7 +137,7 @@ export const applySkillRefs = async ({
   profile,
   targetPaths,
   skillLibraryDir,
-  skillSyncMethod = "copy",
+  skillSyncMethod = "symlink",
   allowMatchingUnmanagedSkills
 }: TargetAssetInput) => {
   if (!targetPaths.skillsDir || !skillLibraryDir) {

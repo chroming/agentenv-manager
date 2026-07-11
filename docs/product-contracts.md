@@ -68,7 +68,7 @@ The Library is global to AgentEnv Manager and contains canonical reusable resour
 - Library content MUST NOT be duplicated into every Profile.
 - A Profile stores references to Library resources, not private copies of them.
 - In Copy mode, updating the Library MUST NOT silently deploy changes to a Target.
-- Live link mode is an explicit advanced policy: Library updates immediately affect linked Target Skills and therefore do not provide an Apply-gated snapshot.
+- Live link is the default deployment policy: Library updates immediately affect linked Target Skills and therefore do not provide an Apply-gated snapshot. Copy remains available when Apply-gated snapshots are preferred.
 
 Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data root.
 
@@ -519,8 +519,8 @@ External ownership contract:
 - GitHub rate limiting MUST provide a GitHub sign-in remediation.
 - Update Preview MUST show changed files and validation errors.
 - Applying a Library update changes canonical content.
-- In the default Copy mode, Profiles remain saved and their deployed Targets become `Changes pending`; copied installs require explicit synchronization or Profile Apply.
-- In advanced Live link mode, linked Target content changes immediately. The UI MUST disclose this before enabling the mode and MUST NOT represent the linked deployment as an immutable applied snapshot.
+- In optional Copy mode, Profiles remain saved and their deployed Targets become `Changes pending`; copied installs require explicit synchronization or Profile Apply.
+- In default Live link mode, linked Target content changes immediately. The UI MUST disclose this behavior and MUST NOT represent the linked deployment as an immutable applied snapshot.
 - Local imports without an explicit tracked source MUST NOT produce repeated update failures.
 - A Profile-scoped Check MUST inspect only enabled tracked Skills referenced by that Profile. Disabled, missing, and untracked references remain visible but MUST NOT trigger network or filesystem checks.
 

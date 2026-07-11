@@ -167,7 +167,7 @@ interface GitHubContentDir extends GitHubContentBase {
 type GitHubContentItem = GitHubContentFile | GitHubContentDir;
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
-  skillSyncMethod: "copy",
+  skillSyncMethod: "symlink",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
   skillAutoCheckIntervalMinutes: 60

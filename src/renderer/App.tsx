@@ -473,7 +473,7 @@ export const App = () => {
     Record<string, LibraryResourceVersions>
   >({});
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
-    skillSyncMethod: "copy",
+    skillSyncMethod: "symlink",
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: true,
     skillAutoCheckIntervalMinutes: 60
@@ -3680,14 +3680,16 @@ export const App = () => {
                       })
                     }
                   >
-                    <option value="copy">Copy (recommended)</option>
-                    <option value="symlink">Live link (instant updates)</option>
+                    <option value="symlink">Live link (recommended)</option>
+                    <option value="copy">Copy (apply-gated updates)</option>
                     <option value="auto">Auto (live link when possible)</option>
                   </select>
-                  <small className={skillSettings.skillSyncMethod === "copy" ? "settings-field-note" : "settings-field-note is-warning"}>
+                  <small className="settings-field-note">
                     {skillSettings.skillSyncMethod === "copy"
                       ? "Library updates stay pending until installs are explicitly synchronized."
-                      : "Library updates immediately change linked Target skills without another Apply preview."}
+                      : skillSettings.skillSyncMethod === "auto"
+                        ? "Uses live links when supported and falls back to copied installs."
+                        : "Library updates immediately change linked Target skills without another Apply preview."}
                   </small>
                 </label>
                 <label>
