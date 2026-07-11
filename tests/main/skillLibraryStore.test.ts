@@ -38,7 +38,7 @@ describe("skill library store", () => {
         path: join(paths.skillsLibraryDir, "reviewer"),
         sourceType: "local",
         source: undefined,
-        updateCheckEnabled: false,
+        updatePolicy: "untracked",
         contentHash: expect.any(String),
         updatedAt: expect.any(String)
       }
@@ -73,7 +73,7 @@ describe("skill library store", () => {
       description: "Source skill.",
       sourceType: "local",
       source: sourceDir,
-      updateCheckEnabled: false
+      updatePolicy: "untracked"
     });
     await expect(
       readFile(join(paths.skillsLibraryDir, "shared-reviewer", "prompt.md"), "utf8")
@@ -90,6 +90,9 @@ describe("skill library store", () => {
     await expect(
       readFile(join(paths.skillsLibraryDir, "shared-reviewer", ".agentenv-skill.json"), "utf8")
     ).resolves.toContain('"updateCheckEnabled": false');
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "shared-reviewer", ".agentenv-skill.json"), "utf8")
+    ).resolves.toContain('"updatePolicy": "untracked"');
   });
 
   it("does not check a copied local import after the original source folder is removed", async () => {
@@ -110,7 +113,7 @@ describe("skill library store", () => {
     await expect(store.checkUpdates()).resolves.toEqual([]);
     await expect(store.previewUpdate("shared-reviewer")).resolves.toMatchObject({
       updateAvailable: false,
-      errors: ["Update checks are disabled for this skill"]
+      errors: ["This skill is not tracked for updates"]
     });
   });
 
@@ -133,12 +136,12 @@ describe("skill library store", () => {
       expect.objectContaining({
         id: "legacy-local",
         source: missingSource,
-        updateCheckEnabled: false
+        updatePolicy: "untracked"
       })
     ]);
     await expect(store.checkUpdates()).resolves.toEqual([]);
     await expect(
-      store.setUpdateCheckEnabled({ id: "legacy-local", enabled: true })
+      store.setUpdatePolicy({ id: "legacy-local", policy: "tracked" })
     ).rejects.toThrow(`Skill source is missing SKILL.md: ${missingSource}`);
   });
 
@@ -718,7 +721,7 @@ describe("skill library store", () => {
 
     expect(updated.sourceType).toBe("local");
     expect(updated.source).toBe(updateDir);
-    expect(updated.updateCheckEnabled).toBe(false);
+    expect(updated.updatePolicy).toBe("tracked");
     await expect(
       readFile(join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json"), "utf8")
     ).resolves.toContain(updateDir);
@@ -754,7 +757,7 @@ describe("skill library store", () => {
       sourceType: "github",
       source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
     });
-    await store.setUpdateCheckEnabled({ id: "reviewer", enabled: true });
+    await store.setUpdatePolicy({ id: "reviewer", policy: "tracked" });
 
     const updates = await store.checkUpdates();
 
@@ -781,7 +784,7 @@ describe("skill library store", () => {
     const store = createSkillLibraryStore(paths);
     await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
     await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
-    await store.setUpdateCheckEnabled({ id: "reviewer", enabled: true });
+    await store.setUpdatePolicy({ id: "reviewer", policy: "tracked" });
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
     await writeFile(join(sourceDir, "new.md"), "add me\n", "utf8");
     await rm(join(sourceDir, "old.md"));
@@ -814,7 +817,7 @@ describe("skill library store", () => {
       sourceType: "local"
     });
     await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
-    await store.setUpdateCheckEnabled({ id: "reviewer", enabled: true });
+    await store.setUpdatePolicy({ id: "reviewer", policy: "tracked" });
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n\n# v2\n", "utf8");
 
     const updated = await store.updateSkill("reviewer");
@@ -882,7 +885,7 @@ describe("skill library store", () => {
       description: "GitHub skill.",
       sourceType: "github",
       source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
-      updateCheckEnabled: true,
+      updatePolicy: "tracked",
       remoteRef: "main",
       remoteRevision: "1056668e8f218b8cadafa95d64b401fbf7d9e87c"
     });
@@ -890,12 +893,12 @@ describe("skill library store", () => {
       readFile(join(paths.skillsLibraryDir, "github-reviewer", "references", "guide.md"), "utf8")
     ).resolves.toBe("# Guide\n");
 
-    await store.setUpdateCheckEnabled({ id: "github-reviewer", enabled: false });
+    await store.setUpdatePolicy({ id: "github-reviewer", policy: "untracked" });
     fetchImpl.mockClear();
     await expect(store.checkUpdates()).resolves.toEqual([]);
     expect(fetchImpl).not.toHaveBeenCalled();
     await expect(store.listSkills()).resolves.toEqual([
-      expect.objectContaining({ id: "github-reviewer", updateCheckEnabled: false })
+      expect.objectContaining({ id: "github-reviewer", updatePolicy: "untracked" })
     ]);
   });
 

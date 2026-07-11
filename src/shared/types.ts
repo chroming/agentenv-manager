@@ -34,7 +34,7 @@ export interface AgentEnvApi {
   rollbackSkillCleanup(backupId: string): Promise<void>;
   checkSkillLibraryUpdates(): Promise<SkillUpdateInfo[]>;
   setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
-  setSkillUpdateCheckEnabled(input: SkillUpdateCheckPolicyInput): Promise<SkillLibraryEntry>;
+  setSkillUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
   updateLibrarySkill(id: string): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
@@ -81,7 +81,7 @@ export interface SkillLibraryEntry {
   path: string;
   sourceType: SkillSourceType;
   source?: string;
-  updateCheckEnabled?: boolean;
+  updatePolicy: SkillUpdatePolicy;
   remoteRef?: string;
   remoteRevision?: string;
   contentHash: string;
@@ -109,9 +109,9 @@ export interface SkillUpdateSourceInput {
   source: string;
 }
 
-export interface SkillUpdateCheckPolicyInput {
+export interface SkillUpdatePolicyInput {
   id: string;
-  enabled: boolean;
+  policy: SkillUpdatePolicy;
 }
 
 export interface ManageTargetSkillInput {
@@ -180,6 +180,7 @@ export interface UnmanagedSkillEntry {
 }
 
 export type SkillSourceType = "local" | "github" | "zip";
+export type SkillUpdatePolicy = "tracked" | "untracked";
 export type SkillSyncMethod = "symlink" | "copy" | "auto";
 export type SkillStorageLocation = "appData" | "agents";
 

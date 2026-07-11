@@ -53,7 +53,7 @@ import type {
   SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillLibraryEntry,
-  SkillUpdateCheckPolicyInput,
+  SkillUpdatePolicyInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdateSourceInput,
@@ -1846,16 +1846,19 @@ export const App = () => {
     }
   };
 
-  const setSkillUpdateCheckEnabled = async (input: SkillUpdateCheckPolicyInput) => {
+  const setSkillUpdatePolicy = async (input: SkillUpdatePolicyInput) => {
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.setSkillUpdateCheckEnabled(input);
+      await window.agentEnv.setSkillUpdatePolicy(input);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
       setSkillUpdateCheckStatus({
         state: "success",
-        message: `Update checks ${input.enabled ? "enabled" : "disabled"} for ${input.id}`
+        message:
+          input.policy === "tracked"
+            ? `Tracking updates for ${input.id}`
+            : `Update tracking disabled for ${input.id}`
       });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -2467,7 +2470,7 @@ export const App = () => {
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={(input) => void consolidateSkillGroup(input)}
                 onSetUpdateSource={setSkillUpdateSource}
-                onSetUpdateCheckEnabled={(input) => void setSkillUpdateCheckEnabled(input)}
+                onSetUpdatePolicy={(input) => void setSkillUpdatePolicy(input)}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onCloseUpdatePreview={() => setSelectedSkillUpdatePlan(undefined)}
                 onUpdateLibrarySkill={updateLibrarySkill}

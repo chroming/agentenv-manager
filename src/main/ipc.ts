@@ -16,7 +16,7 @@ import type {
   SkillCleanupRequest,
   SaveMcpServerInput,
   SaveProfileInput,
-  SkillUpdateCheckPolicyInput,
+  SkillUpdatePolicyInput,
   SkillUpdateSourceInput
 } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
@@ -194,11 +194,11 @@ export const registerIpcHandlers = ({
     skillLibraryStore.setUpdateSource(input)
   );
   ipcMain.handle(
-    "skills:set-update-check-enabled",
-    (_event, input: SkillUpdateCheckPolicyInput) =>
-      skillLibraryStore.setUpdateCheckEnabled({
+    "skills:set-update-policy",
+    (_event, input: SkillUpdatePolicyInput) =>
+      skillLibraryStore.setUpdatePolicy({
         id: parseId(input?.id, "skill id"),
-        enabled: input?.enabled === true
+        policy: input?.policy === "tracked" ? "tracked" : "untracked"
       })
   );
   ipcMain.handle("skills:preview-update", (_event, id: unknown) =>

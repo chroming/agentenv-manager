@@ -9,11 +9,11 @@ import {
 import {
   BookOpenText,
   CheckCircle2,
-  CirclePause,
   ExternalLink,
   Folder,
   GitBranch,
   Link2,
+  Link2Off,
   MoreHorizontal,
   RefreshCw,
   RotateCcw,
@@ -36,7 +36,7 @@ import type {
   SkillInventoryEntry,
   SkillLibraryEntry,
   SkillSourceType,
-  SkillUpdateCheckPolicyInput,
+  SkillUpdatePolicyInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdateSourceInput
@@ -70,7 +70,7 @@ interface SkillLibraryPanelProps {
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): void;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
-  onSetUpdateCheckEnabled(input: SkillUpdateCheckPolicyInput): void;
+  onSetUpdatePolicy(input: SkillUpdatePolicyInput): void;
   onPreviewLibrarySkillUpdate(id: string): void;
   onCloseUpdatePreview(): void;
   onUpdateLibrarySkill(id: string): void;
@@ -141,7 +141,7 @@ export const SkillLibraryPanel = ({
   onManageTargetSkill,
   onConsolidateSkillGroup,
   onSetUpdateSource,
-  onSetUpdateCheckEnabled,
+  onSetUpdatePolicy,
   onPreviewLibrarySkillUpdate,
   onCloseUpdatePreview,
   onUpdateLibrarySkill,
@@ -558,8 +558,8 @@ export const SkillLibraryPanel = ({
           <span>Source</span>
           <span>Version</span>
           <span className="library-column-label">
-            Source status
-            <InfoTip label="Compares the Library copy with its tracked local or GitHub source." />
+            Updates
+            <InfoTip label="Shows whether this skill tracks its source and whether an update is available." />
           </span>
           <span>Usage</span>
           <span className="library-column-label">
@@ -586,21 +586,20 @@ export const SkillLibraryPanel = ({
               source: skill.source ?? ""
             };
             const hasUpdateSource = Boolean(skill.source);
-            const updateCheckEnabled =
-              skill.updateCheckEnabled ?? skill.sourceType === "github";
-            const updateLabel = !updateCheckEnabled
-              ? "Checks off"
+            const isTracked = skill.updatePolicy === "tracked";
+            const updateLabel = !isTracked
+              ? "Not tracked"
               : updateInfo?.error
                 ? "Check failed"
                 : updateInfo?.updateAvailable
                   ? "Update available"
                   : updateInfo
-                    ? "Source current"
+                    ? "Up to date"
                     : hasUpdateSource
                       ? "Not checked"
                       : "Library only";
-            const hasUpdate = updateCheckEnabled && Boolean(updateInfo?.updateAvailable);
-            const hasError = updateCheckEnabled && Boolean(updateInfo?.error);
+            const hasUpdate = isTracked && Boolean(updateInfo?.updateAvailable);
+            const hasError = isTracked && Boolean(updateInfo?.error);
             const rowAction = hasUpdate
               ? "update"
               : staleCopies.length > 0
@@ -614,7 +613,9 @@ export const SkillLibraryPanel = ({
             const versionDetail = skill.remoteRef
               ? revisionLabel
               : hasUpdateSource
-                ? "Tracked source"
+                ? isTracked
+                  ? "Tracked source"
+                  : "Source retained"
                 : "Library revision";
             return (
               <div
@@ -668,8 +669,8 @@ export const SkillLibraryPanel = ({
                       hasError ? " is-error" : ""
                     }`}
                   >
-                    {!updateCheckEnabled ? (
-                      <CirclePause size={13} strokeWidth={2.2} />
+                    {!isTracked ? (
+                      <Link2Off size={13} strokeWidth={2.2} />
                     ) : hasError ? (
                       <TriangleAlert size={13} strokeWidth={2.2} />
                     ) : hasUpdate ? (
@@ -787,7 +788,7 @@ export const SkillLibraryPanel = ({
                           aria-label={`Actions for ${skill.id}`}
                           style={{ left: openAction.left, top: openAction.top }}
                         >
-                          {hasUpdateSource && updateCheckEnabled ? (
+                          {hasUpdateSource && isTracked ? (
                             <button
                               className="row-action-item"
                               type="button"
@@ -819,24 +820,26 @@ export const SkillLibraryPanel = ({
                             </div>
                             <div className="row-action-update-policy">
                               <span>
-                                <strong>Check for updates</strong>
+                                <strong>Track updates</strong>
                                 <small>
-                                  {hasUpdateSource
-                                    ? "Include this skill in manual and automatic checks."
-                                    : "Add an update source before enabling checks."}
+                                  {isTracked
+                                    ? "Include in manual and automatic checks."
+                                    : hasUpdateSource
+                                      ? "Excluded from all update checks."
+                                      : "Add an update source before tracking."}
                                 </small>
                               </span>
                               <button
-                                aria-checked={updateCheckEnabled}
-                                aria-label={`Update checks for ${skill.id}`}
-                                className={`settings-switch${updateCheckEnabled ? " is-on" : ""}`}
+                                aria-checked={isTracked}
+                                aria-label={`Track updates for ${skill.id}`}
+                                className={`settings-switch${isTracked ? " is-on" : ""}`}
                                 disabled={!hasUpdateSource}
                                 role="switch"
                                 type="button"
                                 onClick={() => {
-                                  onSetUpdateCheckEnabled({
+                                  onSetUpdatePolicy({
                                     id: skill.id,
-                                    enabled: !updateCheckEnabled
+                                    policy: isTracked ? "untracked" : "tracked"
                                   });
                                   setOpenAction(undefined);
                                 }}
@@ -844,7 +847,7 @@ export const SkillLibraryPanel = ({
                                 <span className="settings-switch__track" aria-hidden="true">
                                   <span />
                                 </span>
-                                <strong>{updateCheckEnabled ? "On" : "Off"}</strong>
+                                <strong>{isTracked ? "On" : "Off"}</strong>
                               </button>
                             </div>
                             <div className="library-source-editor row-action-source-editor">

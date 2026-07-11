@@ -60,6 +60,7 @@ const librarySkills: SkillLibraryEntry[] = [
     path: "/tmp/skills-library/shared-reviewer",
     sourceType: "local",
     source: "/tmp/source/shared-reviewer",
+    updatePolicy: "tracked",
     contentHash: "abc123",
     updatedAt: "2026-07-02T00:00:00.000Z"
   },
@@ -70,6 +71,7 @@ const librarySkills: SkillLibraryEntry[] = [
     path: "/tmp/skills-library/github-reviewer",
     sourceType: "github",
     source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+    updatePolicy: "tracked",
     remoteRef: "main",
     remoteRevision: "revision-1",
     contentHash: "def456",
