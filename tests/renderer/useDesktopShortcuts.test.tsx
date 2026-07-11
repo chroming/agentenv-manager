@@ -36,6 +36,7 @@ describe("useDesktopShortcuts", () => {
           activeLibraryTab: "skills",
           isProfileSaving,
           onSaveProfile,
+          onRefreshSkills: vi.fn(),
           profileSearchRef: createSearchRef("daily"),
           skillSearchRef: createSearchRef("skill"),
           mcpSearchRef: createSearchRef("mcp"),
@@ -66,6 +67,7 @@ describe("useDesktopShortcuts", () => {
         activeLibraryTab: "skills",
         isProfileSaving: false,
         onSaveProfile,
+        onRefreshSkills: vi.fn(),
         profileSearchRef: createSearchRef("daily"),
         skillSearchRef: createSearchRef("skill"),
         mcpSearchRef: createSearchRef("mcp"),
@@ -94,6 +96,7 @@ describe("useDesktopShortcuts", () => {
         activeLibraryTab,
         isProfileSaving: false,
         onSaveProfile: vi.fn(),
+        onRefreshSkills: vi.fn(),
         profileSearchRef: refs.profile,
         skillSearchRef: refs.skill,
         mcpSearchRef: refs.mcp,
@@ -117,6 +120,7 @@ describe("useDesktopShortcuts", () => {
         activeLibraryTab: "skills",
         isProfileSaving: false,
         onSaveProfile: vi.fn(),
+        onRefreshSkills: vi.fn(),
         profileSearchRef,
         skillSearchRef: createSearchRef("skill"),
         mcpSearchRef: createSearchRef("mcp"),
@@ -127,6 +131,28 @@ describe("useDesktopShortcuts", () => {
     const event = dispatchCommand("f", { metaKey: true });
     expect(event.defaultPrevented).toBe(false);
     expect(document.activeElement).not.toBe(profileSearchRef.current);
+  });
+
+  it("refreshes Skills in place with Command-R", () => {
+    const onRefreshSkills = vi.fn();
+    renderHook(() =>
+      useDesktopShortcuts({
+        activeWorkspace: "library",
+        activeLibraryTab: "skills",
+        isProfileSaving: false,
+        onSaveProfile: vi.fn(),
+        onRefreshSkills,
+        profileSearchRef: createSearchRef("daily"),
+        skillSearchRef: createSearchRef("skill"),
+        mcpSearchRef: createSearchRef("mcp"),
+        platform: "MacIntel"
+      })
+    );
+
+    const event = dispatchCommand("r", { metaKey: true });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onRefreshSkills).toHaveBeenCalledTimes(1);
   });
 
   it("blocks Save and Find behind a visible modal", () => {
@@ -141,6 +167,7 @@ describe("useDesktopShortcuts", () => {
         activeLibraryTab: "skills",
         isProfileSaving: false,
         onSaveProfile,
+        onRefreshSkills: vi.fn(),
         profileSearchRef,
         skillSearchRef: createSearchRef("skill"),
         mcpSearchRef: createSearchRef("mcp"),

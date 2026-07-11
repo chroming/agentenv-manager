@@ -55,6 +55,7 @@ export type SkillUpdateCheckStatus = {
 };
 
 interface SkillLibraryPanelProps {
+  isLoading?: boolean;
   librarySkills: SkillLibraryEntry[];
   skillUpdates: SkillUpdateInfo[];
   skillInventory: SkillInventoryEntry[];
@@ -126,6 +127,7 @@ const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
 export const SkillLibraryPanel = ({
+  isLoading = false,
   librarySkills,
   skillUpdates,
   skillInventory,
@@ -569,7 +571,13 @@ export const SkillLibraryPanel = ({
           <span>Actions</span>
         </div>
         <div className="library-table__body">
-          {librarySkills.length === 0 ? (
+          {isLoading && librarySkills.length === 0 ? (
+            <div className="inline-state inline-state--loading library-empty" role="status">
+              <span className="inline-state__icon" aria-hidden="true" />
+              <span>Loading skills</span>
+            </div>
+          ) : null}
+          {!isLoading && librarySkills.length === 0 ? (
             <p className="muted library-empty">Import a skill from a folder or GitHub to start the library.</p>
           ) : null}
           {librarySkills.length > 0 && filteredSkills.length === 0 ? (

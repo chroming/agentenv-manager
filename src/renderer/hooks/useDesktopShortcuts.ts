@@ -6,6 +6,7 @@ interface DesktopShortcutOptions {
   activeLibraryTab: LibraryTab;
   isProfileSaving: boolean;
   onSaveProfile(): void | Promise<void>;
+  onRefreshSkills(): void | Promise<void>;
   profileSearchRef: RefObject<HTMLInputElement | null>;
   skillSearchRef: RefObject<HTMLInputElement | null>;
   mcpSearchRef: RefObject<HTMLInputElement | null>;
@@ -28,6 +29,7 @@ export const useDesktopShortcuts = ({
   activeLibraryTab,
   isProfileSaving,
   onSaveProfile,
+  onRefreshSkills,
   profileSearchRef,
   skillSearchRef,
   mcpSearchRef,
@@ -45,14 +47,16 @@ export const useDesktopShortcuts = ({
       }
 
       const key = event.key.toLowerCase();
-      if (key !== "s" && key !== "f") {
+      if (key !== "s" && key !== "f" && key !== "r") {
         return;
       }
       const isSaveContext = key === "s" && activeWorkspace === "profiles";
       const isFindContext =
         key === "f" &&
         (activeWorkspace === "profiles" || activeWorkspace === "library");
-      if (!isSaveContext && !isFindContext) {
+      const isRefreshContext =
+        key === "r" && activeWorkspace === "library" && activeLibraryTab === "skills";
+      if (!isSaveContext && !isFindContext && !isRefreshContext) {
         return;
       }
 
@@ -65,6 +69,11 @@ export const useDesktopShortcuts = ({
         if (!isProfileSaving) {
           void onSaveProfile();
         }
+        return;
+      }
+
+      if (isRefreshContext) {
+        void onRefreshSkills();
         return;
       }
 
@@ -86,6 +95,7 @@ export const useDesktopShortcuts = ({
     isProfileSaving,
     mcpSearchRef,
     onSaveProfile,
+    onRefreshSkills,
     platform,
     profileSearchRef,
     skillSearchRef

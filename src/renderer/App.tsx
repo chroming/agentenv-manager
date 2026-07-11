@@ -507,6 +507,7 @@ export const App = () => {
   const [dataBackupStatus, setDataBackupStatus] = useState("");
   const [dataRestorePreview, setDataRestorePreview] = useState<DataRestorePreview>();
   const [targetRefreshStatus, setTargetRefreshStatus] = useState<"refreshing" | "refreshed">();
+  const [skillRefreshStatus, setSkillRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [profileSearch, setProfileSearch] = useState("");
   const [activeComposerSection, setActiveComposerSection] =
     useState<ComposerSection>();
@@ -600,6 +601,14 @@ export const App = () => {
   }, [targetRefreshStatus]);
 
   useEffect(() => {
+    if (skillRefreshStatus !== "refreshed") {
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => setSkillRefreshStatus(undefined), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [skillRefreshStatus]);
+
+  useEffect(() => {
     if (!skillUpdateCheckStatus || !["success", "info"].includes(skillUpdateCheckStatus.state)) {
       return undefined;
     }
@@ -615,7 +624,7 @@ export const App = () => {
     }
   };
 
-  const refreshProfiles = async () => {
+  const refreshProfiles = async ({ checkSkillUpdates = true } = {}) => {
     const [
       targetItems,
       targetStateItems,
@@ -637,7 +646,9 @@ export const App = () => {
     ]);
     const [skillUpdatesResult, skillInventoryResult, githubStatusResult] =
       await Promise.allSettled([
-        window.agentEnv.checkSkillLibraryUpdates(),
+        checkSkillUpdates
+          ? window.agentEnv.checkSkillLibraryUpdates()
+          : Promise.resolve(skillUpdates),
         window.agentEnv.scanSkillInventory(),
         window.agentEnv.readGitHubAuthStatus()
       ]);
@@ -706,6 +717,21 @@ export const App = () => {
     setProfileLibraryVersions(nextProfileLibraryVersions);
     setSelectedTargetId((current) => current ?? targetItems[0]?.id);
     return { targetItems, profileItems, backupItems, skillUpdateItems };
+  };
+
+  const refreshSkills = async () => {
+    if (skillRefreshStatus === "refreshing") {
+      return;
+    }
+    setError(undefined);
+    setSkillRefreshStatus("refreshing");
+    try {
+      await refreshProfiles({ checkSkillUpdates: false });
+      setSkillRefreshStatus("refreshed");
+    } catch (unknownError) {
+      setSkillRefreshStatus(undefined);
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    }
   };
 
   useEffect(() => {
@@ -902,6 +928,7 @@ export const App = () => {
     activeLibraryTab,
     isProfileSaving,
     onSaveProfile: saveSelectedProfile,
+    onRefreshSkills: refreshSkills,
     profileSearchRef: profileSearchInputRef,
     skillSearchRef: skillSearchInputRef,
     mcpSearchRef: mcpSearchInputRef
@@ -2171,6 +2198,7 @@ export const App = () => {
     setProfileSaveStatus("");
     setSettingsSaveStatus("");
     setTargetRefreshStatus(undefined);
+    setSkillRefreshStatus(undefined);
     setSkillCleanupResult(undefined);
   };
   const openGitHubConnectionSettings = () => {
@@ -2218,6 +2246,11 @@ export const App = () => {
             label: skillCleanupResult.operation === "remove" ? "Undo removal" : "Undo cleanup",
             onClick: () => void undoSkillCleanup()
           }
+        }
+    : skillRefreshStatus
+      ? {
+          kind: skillRefreshStatus === "refreshing" ? "loading" : "success",
+          title: skillRefreshStatus === "refreshing" ? "Refreshing skills" : "Skills refreshed"
         }
     : targetRefreshStatus
       ? {
@@ -2389,7 +2422,23 @@ export const App = () => {
                       }}
                     >
                       <ScanLine size={15} strokeWidth={2.2} />
-                      Scan local Skills
+                      Scan local
+                    </button>
+                    <button
+                      className="secondary-action"
+                      type="button"
+                      aria-label="Refresh skills"
+                      disabled={skillRefreshStatus === "refreshing"}
+                      onClick={() => {
+                        void refreshSkills();
+                      }}
+                    >
+                      <RefreshCw
+                        className={skillRefreshStatus === "refreshing" ? "is-spinning" : ""}
+                        size={15}
+                        strokeWidth={2.2}
+                      />
+                      Refresh
                     </button>
                   </>
                 ) : (
@@ -2455,6 +2504,7 @@ export const App = () => {
             ) : null}
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
+                isLoading={isLoading}
                 librarySkills={librarySkills}
                 skillUpdates={skillUpdates}
                 skillInventory={skillInventory}

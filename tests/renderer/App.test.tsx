@@ -555,32 +555,34 @@ describe("App", () => {
   });
 
   it("opens libraries as an app-level workspace", async () => {
+    const listSkillLibrary = vi.fn().mockResolvedValue([
+      {
+        id: "github-reviewer",
+        name: "GitHub Reviewer",
+        description: "Review from GitHub",
+        path: "/tmp/skills-library/github-reviewer",
+        sourceType: "github",
+        source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+        updatePolicy: "tracked",
+        remoteRef: "main",
+        remoteRevision: "revision-1",
+        contentHash: "hash",
+        updatedAt: "2026-07-02T00:00:00.000Z"
+      }
+    ]);
+    const checkSkillLibraryUpdates = vi.fn().mockResolvedValue([
+      {
+        id: "github-reviewer",
+        name: "GitHub Reviewer",
+        sourceType: "github",
+        currentRevision: "revision-1",
+        latestRevision: "revision-2",
+        updateAvailable: true
+      }
+    ]);
     installApi({
-      listSkillLibrary: vi.fn().mockResolvedValue([
-        {
-          id: "github-reviewer",
-          name: "GitHub Reviewer",
-          description: "Review from GitHub",
-          path: "/tmp/skills-library/github-reviewer",
-          sourceType: "github",
-          source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
-          updatePolicy: "tracked",
-          remoteRef: "main",
-          remoteRevision: "revision-1",
-          contentHash: "hash",
-          updatedAt: "2026-07-02T00:00:00.000Z"
-        }
-      ]),
-      checkSkillLibraryUpdates: vi.fn().mockResolvedValue([
-        {
-          id: "github-reviewer",
-          name: "GitHub Reviewer",
-          sourceType: "github",
-          currentRevision: "revision-1",
-          latestRevision: "revision-2",
-          updateAvailable: true
-        }
-      ])
+      listSkillLibrary,
+      checkSkillLibraryUpdates
     });
     render(<App />);
 
@@ -594,6 +596,11 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 update available"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh skills" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Skills refreshed"));
+    expect(listSkillLibrary).toHaveBeenCalledTimes(3);
+    expect(checkSkillLibraryUpdates).toHaveBeenCalledTimes(2);
   });
 
   it("offers GitHub connection recovery when an anonymous update check is rate limited", async () => {
@@ -696,7 +703,7 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Skill library" });
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Scan local Skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Scan local" }));
 
     expect(await screen.findByRole("region", { name: "Environment skills" })).toBeInTheDocument();
     expect(api.scanSkillInventory).toHaveBeenCalledTimes(2);

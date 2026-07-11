@@ -934,7 +934,7 @@ describe("Electron UI profile switching e2e", () => {
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
       await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
-      await changingRow.getByText("Source current").waitFor({ state: "visible" });
+      await changingRow.getByText("Up to date").waitFor({ state: "visible" });
       await expect
         .poll(() => changingRow.getByRole("button", { name: "Check update layout-skill-1" }).count())
         .toBe(0);
@@ -1242,7 +1242,7 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local Skills" }).click();
+    await page.getByRole("button", { name: "Scan local" }).click();
     await page
       .getByRole("group", { name: "Cleanup group target-only-reviewer" })
       .waitFor({ state: "visible", timeout: 5_000 });
@@ -1355,7 +1355,7 @@ describe("Electron UI profile switching e2e", () => {
       fileExists(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"))
     ).resolves.toBe(true);
 
-    await page.getByRole("button", { name: "Scan local Skills" }).click();
+    await page.getByRole("button", { name: "Scan local" }).click();
     const cleanupHistory = page.getByRole("region", { name: "Cleanup history" });
     await cleanupHistory.waitFor({ state: "visible", timeout: 5_000 });
     expect(await cleanupHistory.locator(".cleanup-history-row.resource-row").count()).toBeGreaterThan(0);
@@ -1391,7 +1391,7 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local Skills" }).click();
+    await page.getByRole("button", { name: "Scan local" }).click();
     const cleanupGroup = page.getByRole("group", { name: "Cleanup group ui-alpha-skill" });
     await cleanupGroup.waitFor({ state: "visible" });
     await cleanupGroup.getByRole("button", { name: "Ignore group ui-alpha-skill" }).click();
@@ -2448,11 +2448,48 @@ describe("Electron UI profile switching e2e", () => {
     });
     await rm(localSkillDir, { recursive: true, force: true });
     const importedRow = page.getByRole("group", { name: "Library item path-reviewer" });
-    await expect.poll(() => importedRow.textContent()).toContain("Checks off");
+    await expect.poll(() => importedRow.textContent()).toContain("Not tracked");
     await page.getByRole("button", { name: "Close library tool" }).click();
     await page.getByRole("region", { name: "GitHub skill import" }).waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Check updates" }).click();
     await expect.poll(() => importedRow.textContent()).not.toContain("Check failed");
+  }, 30_000);
+
+  it("refreshes Skills in place without clearing the current view", async () => {
+    const { appDataRoot, page } = await launchApp();
+    const search = page.getByRole("textbox", { name: "Search skills" });
+    await search.waitFor({ state: "visible" });
+
+    const shortcutSkill = join(appDataRoot, "skills-library", "refresh-shortcut");
+    await mkdir(shortcutSkill, { recursive: true });
+    await writeFile(
+      join(shortcutSkill, "SKILL.md"),
+      "---\nname: Refresh Shortcut\ndescription: Added outside the app.\n---\n",
+      "utf8"
+    );
+    await search.fill("Refresh Shortcut");
+    await page.keyboard.press("Meta+R");
+
+    await page.getByRole("group", { name: "Library item refresh-shortcut" }).waitFor({
+      state: "visible"
+    });
+    await expect.poll(() => search.inputValue()).toBe("Refresh Shortcut");
+    await page.getByText("Skills refreshed", { exact: true }).waitFor({ state: "visible" });
+
+    const buttonSkill = join(appDataRoot, "skills-library", "refresh-button");
+    await mkdir(buttonSkill, { recursive: true });
+    await writeFile(
+      join(buttonSkill, "SKILL.md"),
+      "---\nname: Refresh Button\ndescription: Added for the toolbar refresh.\n---\n",
+      "utf8"
+    );
+    await search.fill("Refresh Button");
+    await page.getByRole("button", { name: "Refresh skills" }).click();
+
+    await page.getByRole("group", { name: "Library item refresh-button" }).waitFor({
+      state: "visible"
+    });
+    await expect.poll(() => search.inputValue()).toBe("Refresh Button");
   }, 30_000);
 
   it("adds and removes reusable MCP servers through the rendered MCP library", async () => {
@@ -3056,11 +3093,11 @@ describe("Electron UI profile switching e2e", () => {
 
     await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
     const updateCheckSwitch = page.getByRole("switch", {
-      name: "Update checks for github-reviewer"
+      name: "Track updates for github-reviewer"
     });
     await expect.poll(() => updateCheckSwitch.getAttribute("aria-checked")).toBe("true");
     await updateCheckSwitch.click();
-    await expect.poll(() => githubRow.textContent()).toContain("Checks off");
+    await expect.poll(() => githubRow.textContent()).toContain("Not tracked");
     await expect
       .poll(async () =>
         (await readJson<{ updateCheckEnabled?: boolean }>(
@@ -3073,7 +3110,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await expect.poll(() => githubRow.textContent()).not.toContain("Update available");
     await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
-    await page.getByRole("switch", { name: "Update checks for github-reviewer" }).click();
+    await page.getByRole("switch", { name: "Track updates for github-reviewer" }).click();
     await expect
       .poll(async () =>
         (await readJson<{ updateCheckEnabled?: boolean }>(
