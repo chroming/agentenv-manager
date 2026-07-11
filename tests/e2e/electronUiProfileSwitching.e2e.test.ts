@@ -22,6 +22,12 @@ import {
   type Page
 } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  expectInViewport,
+  expectNoHorizontalOverflow,
+  expectTextFits,
+  expectTopmost
+} from "./layoutAssertions";
 
 let root = "";
 let app: ElectronApplication | undefined;
@@ -482,35 +488,6 @@ const openSkillLibrary = async (page: Page) => {
     .click();
 };
 
-const expectInViewport = async (page: Page, locator: Locator) => {
-  const box = await locator.boundingBox();
-  const viewport = page.viewportSize();
-  expect(box).not.toBeNull();
-  expect(viewport).not.toBeNull();
-  expect(box!.x).toBeGreaterThanOrEqual(0);
-  expect(box!.y).toBeGreaterThanOrEqual(0);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
-};
-
-const expectTopmost = async (locator: Locator) => {
-  const isTopmost = await locator.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    const points = [
-      [rect.left + rect.width / 2, rect.top + 18],
-      [rect.left + rect.width / 2, rect.top + rect.height / 2],
-      [rect.left + rect.width / 2, rect.bottom - 18]
-    ];
-
-    return points.every(([x, y]) => {
-      const target = document.elementFromPoint(x, y);
-      return target === element || element.contains(target);
-    });
-  });
-
-  expect(isTopmost).toBe(true);
-};
-
 const applyActionButton = (page: Page, _targetName: "OpenCode" | "Codex") =>
   page.getByRole("button", { name: "Apply", exact: true }).first();
 
@@ -873,9 +850,9 @@ describe("Electron UI profile switching e2e", () => {
 
   it("keeps Library scale correct and responsive at supported viewports", async () => {
     const cases = [
-      { count: 100, width: 1180, height: 760, initialBudget: 750, actionBudget: 250 },
+      { count: 100, width: 1180, height: 728, initialBudget: 750, actionBudget: 250 },
       { count: 100, width: 920, height: 620, initialBudget: 750, actionBudget: 250 },
-      { count: 500, width: 1180, height: 760, initialBudget: 1500, actionBudget: 500 },
+      { count: 500, width: 1180, height: 728, initialBudget: 1500, actionBudget: 500 },
       { count: 500, width: 920, height: 620, initialBudget: 1500, actionBudget: 500 }
     ];
     const median = (values: number[]) => [...values].sort((a, b) => a - b)[1];
@@ -942,18 +919,7 @@ describe("Electron UI profile switching e2e", () => {
       await targetFilter.selectOption("all");
       await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
 
-      const overflow = await page.evaluate(() => {
-        const shell = document.querySelector<HTMLElement>(".app-shell");
-        const panel = document.querySelector<HTMLElement>(".editor-panel");
-        return {
-          document: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-          shell: shell ? shell.scrollWidth - shell.clientWidth : -1,
-          panel: panel ? panel.scrollWidth - panel.clientWidth : -1
-        };
-      });
-      expect(overflow.document).toBeLessThanOrEqual(0);
-      expect(overflow.shell).toBeLessThanOrEqual(0);
-      expect(overflow.panel).toBeLessThanOrEqual(0);
+      await expectNoHorizontalOverflow(page, [".app-shell", ".editor-panel"]);
 
       const changingRow = page.getByRole("group", {
         name: "Library item layout-skill-1",
@@ -978,6 +944,7 @@ describe("Electron UI profile switching e2e", () => {
         buttonInsideUpdateColumn: true,
         columnsDoNotOverlap: true
       });
+      await expectTextFits(changingRow.locator(".library-row-inline-action"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
       await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
@@ -1525,7 +1492,7 @@ describe("Electron UI profile switching e2e", () => {
 
   it("keeps menus, dialogs, and info tips inside the visible app window", async () => {
     const { page } = await launchApp();
-    await page.setViewportSize({ width: 1180, height: 760 });
+    await page.setViewportSize({ width: 1180, height: 728 });
 
     await page.locator(".skill-description").first().hover();
     const descriptionTip = page
@@ -2413,7 +2380,7 @@ describe("Electron UI profile switching e2e", () => {
 
   it("imports a local skill folder from the Import dialog", async () => {
     const { appDataRoot, page } = await launchApp();
-    await page.setViewportSize({ width: 1180, height: 760 });
+    await page.setViewportSize({ width: 1180, height: 728 });
     const localSkillDir = join(appDataRoot, "manual-import-skills", "path-reviewer");
     await mkdir(localSkillDir, { recursive: true });
     await writeFile(

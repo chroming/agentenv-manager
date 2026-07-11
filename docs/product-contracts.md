@@ -616,6 +616,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Supported minimum content viewport is `920 x 620` at 100% scale.
 - Default content viewport is `1180 x 728`.
 - No supported viewport has page-level horizontal scrolling.
+- Layout verification MUST measure document and owned scroll-region overflow, child containment, text fit, sibling control overlap, and floating-layer stacking; successful clicks alone do not satisfy this contract.
 - The Electron compositor, document root, and application shell MUST paint the complete content viewport with the page background; short pages and navigation transitions MUST NOT expose an unpainted window background.
 - Packaged macOS PNG and ICNS assets MUST preserve transparent corners around the app-icon silhouette so Finder volumes and Dock icons do not render an opaque square frame.
 - Primary commands and lifecycle state remain visible.
