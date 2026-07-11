@@ -1353,12 +1353,31 @@
 }
 
 .cleanup-review-dialog {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: calc(100vh - 48px);
   max-width: 720px;
+  overflow: hidden;
+  width: min(720px, calc(100vw - 48px));
 }
 
 .cleanup-review-content {
   display: grid;
-  gap: 14px;
+  gap: 16px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.cleanup-review-dialog .preview-actions {
+  background: #fff;
+  margin: 0;
+  min-height: 53px;
+  padding-top: 12px;
+}
+
+.cleanup-review-dialog .preview-actions button {
+  height: 40px;
+  min-height: 40px;
 }
 
 .cleanup-review-group {
@@ -1371,9 +1390,18 @@
 
 .cleanup-review-group legend {
   color: var(--text);
+  display: grid;
   font-size: 12px;
   font-weight: 750;
+  gap: 2px;
   margin-bottom: 6px;
+}
+
+.cleanup-review-group legend small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .cleanup-review-option {
@@ -1383,8 +1411,8 @@
   display: grid;
   gap: 10px;
   grid-template-columns: 18px minmax(0, 1fr) auto;
-  min-height: 52px;
-  padding: 8px 10px;
+  min-height: 58px;
+  padding: 9px 10px;
 }
 
 .cleanup-review-option:has(input:checked) {
@@ -1399,7 +1427,10 @@
 }
 
 .cleanup-review-option strong,
-.cleanup-review-option small {
+.cleanup-option-path,
+.cleanup-option-description {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1409,12 +1440,56 @@
   font-size: 12px;
 }
 
-.cleanup-review-option small,
+.cleanup-option-path,
+.cleanup-option-description,
 .cleanup-review-option em,
 .cleanup-review-option code {
   color: var(--muted);
   font-size: 11px;
   font-style: normal;
+}
+
+.cleanup-option-description {
+  color: #66758a;
+}
+
+.cleanup-review-option code,
+.cleanup-review-option em {
+  white-space: nowrap;
+}
+
+.cleanup-library-source {
+  align-items: center;
+  background: #f5f8ff;
+  border: 1px solid #cfdbf5;
+  border-radius: 7px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  min-height: 58px;
+  padding: 9px 10px;
+}
+
+.cleanup-library-source > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cleanup-library-source strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.cleanup-library-source small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.cleanup-library-source .resource-avatar {
+  height: 34px;
+  width: 34px;
 }
 
 .cleanup-safety-note {
@@ -1423,7 +1498,12 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+  margin: 0;
   padding: 9px 10px;
+}
+
+.cleanup-safety-note strong {
+  color: var(--text);
 }
 
 .cleanup-history-section {
@@ -1433,36 +1513,45 @@
 }
 
 .cleanup-history-list {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.cleanup-history-row {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 54px;
-  padding: 8px 10px;
-}
-
-.cleanup-history-row + .cleanup-history-row {
-  border-top: 1px solid var(--border);
-}
-
-.cleanup-history-row > span {
-  display: grid;
-  gap: 3px;
   min-width: 0;
 }
 
-.cleanup-history-row strong {
-  font-size: 12px;
+.cleanup-history-row {
+  grid-template-columns: 86px minmax(0, 1fr) auto;
 }
 
-.cleanup-history-row small {
+.cleanup-history-name,
+.cleanup-history-details,
+.cleanup-group-name,
+.cleanup-group-summary,
+.cleanup-group-locations {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cleanup-history-name,
+.cleanup-group-name {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.cleanup-history-details,
+.cleanup-group-summary,
+.cleanup-group-locations {
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.cleanup-group-locations {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
   font-size: 11px;
 }
 

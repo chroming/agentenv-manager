@@ -304,6 +304,23 @@ export const SkillLibraryPanel = ({
     .filter((update) => update.updateAvailable && !update.error)
     .map((update) => update.id);
   const availableUpdateCount = updateableSkillIds.length;
+  const dismissModal = () => {
+    if (selectedUpdatePlan) {
+      onCloseUpdatePreview();
+    } else if (deleteCandidate) {
+      setDeleteCandidate(undefined);
+    } else if (bulkUpdatePlans) {
+      onCloseBulkUpdatePreview();
+    } else {
+      setCleanupDraft(undefined);
+    }
+  };
+  const modalOpen = Boolean(
+    (selectedUpdatePlan && selectedUpdatePlan.changes.length > 0) ||
+      deleteCandidate ||
+      bulkUpdatePlans ||
+      cleanupDraft
+  );
   useLayoutEffect(() => {
     if (!openActionId) {
       return;
@@ -337,6 +354,9 @@ export const SkillLibraryPanel = ({
       if (event.key !== "Escape") {
         return;
       }
+      if (modalOpen) {
+        return;
+      }
       if (openActionId) {
         setOpenAction(undefined);
         return;
@@ -348,25 +368,7 @@ export const SkillLibraryPanel = ({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, onCloseTool, openActionId]);
-
-  const dismissModal = () => {
-    if (selectedUpdatePlan) {
-      onCloseUpdatePreview();
-    } else if (deleteCandidate) {
-      setDeleteCandidate(undefined);
-    } else if (bulkUpdatePlans) {
-      onCloseBulkUpdatePreview();
-    } else {
-      setCleanupDraft(undefined);
-    }
-  };
-  const modalOpen = Boolean(
-    (selectedUpdatePlan && selectedUpdatePlan.changes.length > 0) ||
-      deleteCandidate ||
-      bulkUpdatePlans ||
-      cleanupDraft
-  );
+  }, [activeTool, modalOpen, onCloseTool, openActionId]);
   useModalDialog({
     open: modalOpen,
     dialogRef: modalDialogRef,
@@ -495,17 +497,26 @@ export const SkillLibraryPanel = ({
   const cleanupCandidate = cleanupDraft
     ? cleanupGroups.find((group) => group.skillKey === cleanupDraft.skillKey)
     : undefined;
+  const cleanupUsesExistingLibrary = Boolean(
+    cleanupCandidate?.items.some((item) => item.status === "library" || item.status === "managed") ||
+      (cleanupDraft && librarySkills.some((skill) => skill.id === cleanupDraft.libraryId))
+  );
 
   const openCleanupReview = (group: (typeof cleanupGroups)[number]) => {
-    const canonical = group.items.find((item) => item.status === "library") ?? group.items[0];
     const libraryId = group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey;
+    const manageableItems = group.items.filter(
+      (item) => item.status !== "managed" && item.status !== "ignored"
+    );
+    const canonical =
+      manageableItems.find((item) => item.status === "library") ?? manageableItems[0];
+    if (!canonical) {
+      return;
+    }
     setCleanupDraft({
       skillKey: group.skillKey,
       libraryId,
       canonicalPath: canonical.path,
-      selectedPaths: group.items
-        .filter((item) => item.status !== "managed" && item.status !== "ignored")
-        .map((item) => item.path)
+      selectedPaths: manageableItems.map((item) => item.path)
     });
   };
 
@@ -1196,34 +1207,85 @@ export const SkillLibraryPanel = ({
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">Review {cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</div>
-                <p className="muted">Choose the canonical copy, then select each location AgentEnv should replace with the managed library version.</p>
+                <div className="section-title">Manage {cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</div>
+                <p className="muted">
+                  {cleanupUsesExistingLibrary
+                    ? "Use the existing Library version and choose which local copies it should manage."
+                    : "Choose the local copy to keep in Library, then choose where to install that managed version."}
+                </p>
               </div>
             </header>
             <div className="cleanup-review-content">
+              {cleanupUsesExistingLibrary ? (
+                <div className="cleanup-library-source" role="status">
+                  <span className="resource-avatar" aria-hidden="true">
+                    <BookOpenText size={16} strokeWidth={2.2} />
+                  </span>
+                  <span>
+                    <strong>Existing Library version</strong>
+                    <small>The shared Library copy remains the source of truth.</small>
+                  </span>
+                </div>
+              ) : (
+                <fieldset className="cleanup-review-group">
+                  <legend>
+                    Version to keep in Library
+                    <small>Choose the copy whose contents you want to preserve.</small>
+                  </legend>
+                  {cleanupCandidate.items
+                    .filter((item) => item.status !== "managed" && item.status !== "ignored")
+                    .map((item) => (
+                      <label className="cleanup-review-option" key={`canonical-${item.path}`}>
+                        <input
+                          type="radio"
+                          name="canonical-skill-copy"
+                          checked={cleanupDraft.canonicalPath === item.path}
+                          onChange={() =>
+                            setCleanupDraft({
+                              ...cleanupDraft,
+                              canonicalPath: item.path,
+                              selectedPaths: cleanupDraft.selectedPaths.includes(item.path)
+                                ? cleanupDraft.selectedPaths
+                                : cleanupDraft.selectedPaths.concat(item.path)
+                            })
+                          }
+                        />
+                        <span>
+                          <strong>{item.foundIn.map(targetName).join(", ")}</strong>
+                          <PreviewText
+                            ariaLabel={`Full source path ${item.path}`}
+                            className="cleanup-option-path"
+                            text={item.path}
+                            tooltipClassName="library-source-tooltip"
+                          />
+                          {item.description ? (
+                            <PreviewText
+                              ariaLabel={`Full description for ${item.path}`}
+                              className="cleanup-option-description"
+                              text={item.description}
+                            />
+                          ) : null}
+                        </span>
+                        <code>Content {item.contentHash.slice(0, 7)}</code>
+                      </label>
+                    ))}
+                </fieldset>
+              )}
               <fieldset className="cleanup-review-group">
-                <legend>Canonical copy</legend>
-                {cleanupCandidate.items.map((item) => (
-                  <label className="cleanup-review-option" key={`canonical-${item.path}`}>
-                    <input
-                      type="radio"
-                      name="canonical-skill-copy"
-                      checked={cleanupDraft.canonicalPath === item.path}
-                      onChange={() => setCleanupDraft({ ...cleanupDraft, canonicalPath: item.path })}
-                    />
-                    <span><strong>{item.foundIn.join(", ")}</strong><small>{item.path}</small></span>
-                    <code>{item.contentHash.slice(0, 7)}</code>
-                  </label>
-                ))}
-              </fieldset>
-              <fieldset className="cleanup-review-group">
-                <legend>Locations to manage</legend>
+                <legend>
+                  Locations to manage
+                  <small>Selected copies are backed up, then replaced by the Library version.</small>
+                </legend>
                 {cleanupCandidate.items.map((item) => (
                   <label className="cleanup-review-option" key={`location-${item.path}`}>
                     <input
                       type="checkbox"
                       checked={cleanupDraft.selectedPaths.includes(item.path)}
-                      disabled={item.status === "managed"}
+                      disabled={
+                        item.status === "managed" ||
+                        item.status === "ignored" ||
+                        (!cleanupUsesExistingLibrary && cleanupDraft.canonicalPath === item.path)
+                      }
                       onChange={() => setCleanupDraft({
                         ...cleanupDraft,
                         selectedPaths: cleanupDraft.selectedPaths.includes(item.path)
@@ -1231,12 +1293,31 @@ export const SkillLibraryPanel = ({
                           : cleanupDraft.selectedPaths.concat(item.path)
                       })}
                     />
-                    <span><strong>{item.foundIn.join(", ")}</strong><small>{item.path}</small></span>
-                    <em>{item.status === "managed" ? "Already managed" : "Replace"}</em>
+                    <span>
+                      <strong>{item.foundIn.map(targetName).join(", ")}</strong>
+                      <PreviewText
+                        ariaLabel={`Full managed path ${item.path}`}
+                        className="cleanup-option-path"
+                        text={item.path}
+                        tooltipClassName="library-source-tooltip"
+                      />
+                    </span>
+                    <em>
+                      {item.status === "managed"
+                        ? "Already managed"
+                        : item.status === "ignored"
+                          ? "Ignored"
+                          : !cleanupUsesExistingLibrary && cleanupDraft.canonicalPath === item.path
+                            ? "Source copy"
+                            : "Replace"}
+                    </em>
                   </label>
                 ))}
               </fieldset>
-              <p className="cleanup-safety-note">A backup is created before any selected location is changed. It remains available in Cleanup history.</p>
+              <p className="cleanup-safety-note">
+                <strong>{cleanupDraft.selectedPaths.length} {cleanupDraft.selectedPaths.length === 1 ? "location" : "locations"}</strong>
+                {" "}will use <strong>{cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</strong> from Library. Originals are backed up first.
+              </p>
             </div>
             <footer className="preview-actions">
               <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={() => setCleanupDraft(undefined)}>Cancel</button>
@@ -1256,7 +1337,7 @@ export const SkillLibraryPanel = ({
                   setCleanupDraft(undefined);
                 }}
               >
-                Back up and clean up
+                Back up and manage
               </button>
             </footer>
           </section>
@@ -1277,8 +1358,9 @@ export const SkillLibraryPanel = ({
             </button>
           </div>
           <section className="resource-section target-discovery-section">
-            <div>
-            <div className="resource-heading">Cleanup groups</div>
+            <div className="resource-heading">
+              Cleanup groups
+              <InfoTip label="Each group represents one skill found across local agent folders. Resolve conflicts, consolidate duplicates, or add an unmanaged skill to Library." />
             </div>
             <div className="resource-list resource-list--unmanaged">
               {cleanupGroups.length === 0 ? (
@@ -1299,8 +1381,16 @@ export const SkillLibraryPanel = ({
                         : group.state === "library"
                           ? "Imported"
                           : group.state === "managed"
-                            ? "Managed"
-                            : "Unmanaged";
+                          ? "Managed"
+                          : "Unmanaged";
+                const actionLabel =
+                  group.state === "conflict"
+                    ? "Resolve conflict"
+                    : group.state === "duplicate"
+                      ? "Consolidate copies"
+                      : group.state === "library"
+                        ? "Use Library version"
+                        : "Add to Library";
 
                 return (
                   <div
@@ -1313,26 +1403,38 @@ export const SkillLibraryPanel = ({
                       {chipLabel}
                     </span>
                     <div className="resource-row__main">
-                      <span>{group.primary?.name ?? group.skillKey}</span>
-                      <small>
-                        {group.primary?.description || group.skillKey} · {group.items.length}{" "}
-                        {group.items.length === 1 ? "location" : "locations"}
-                      </small>
-                      <small title={group.items.map((skill) => skill.path).join("\n")}>
-                        {group.items
-                          .map((skill) => `${skill.foundIn.join(", ")} · ${skill.path}`)
+                      <PreviewText
+                        ariaLabel={`Full skill name ${group.skillKey}`}
+                        className="cleanup-group-name"
+                        text={group.primary?.name ?? group.skillKey}
+                      />
+                      <PreviewText
+                        ariaLabel={`Full cleanup summary ${group.skillKey}`}
+                        className="cleanup-group-summary"
+                        displayText={`${group.primary?.description || group.skillKey} · ${group.items.length} ${group.items.length === 1 ? "location" : "locations"}`}
+                        text={`${group.primary?.description || group.skillKey} · ${group.items.length} ${group.items.length === 1 ? "location" : "locations"}`}
+                      />
+                      <PreviewText
+                        ariaLabel={`Full cleanup locations ${group.skillKey}`}
+                        className="cleanup-group-locations"
+                        displayText={group.items
+                          .map((skill) => `${skill.foundIn.map(targetName).join(", ")} · ${skill.path}`)
                           .join(" | ")}
-                      </small>
+                        text={group.items
+                          .map((skill) => `${skill.foundIn.map(targetName).join(", ")} · ${skill.path}`)
+                          .join("\n")}
+                        tooltipClassName="library-source-tooltip"
+                      />
                     </div>
                     <div className="cleanup-group-actions">
                       {group.state !== "managed" && group.state !== "ignored" ? (
                         <button
                           className="secondary-action"
                           type="button"
-                          aria-label={`Review cleanup ${group.skillKey}`}
+                          aria-label={`${actionLabel} ${group.skillKey}`}
                           onClick={() => openCleanupReview(group)}
                         >
-                          Review cleanup
+                          {actionLabel}
                         </button>
                       ) : null}
                       {canIgnore ? (
@@ -1362,28 +1464,41 @@ export const SkillLibraryPanel = ({
             </div>
           </section>
           <section className="resource-section cleanup-history-section" aria-label="Cleanup history">
-            <div className="resource-heading">Cleanup history</div>
+            <div className="resource-heading">
+              Cleanup history
+              <InfoTip label="Every cleanup creates a restorable backup. Restoring returns the affected local copies to their state before cleanup." />
+            </div>
             {cleanupBackups.length === 0 ? (
               <p className="muted library-empty">No cleanup backups yet.</p>
             ) : (
-              <div className="cleanup-history-list">
+              <div className="resource-list resource-list--unmanaged cleanup-history-list">
                 {cleanupBackups.map((backup) => (
-                  <div className="cleanup-history-row" key={backup.id}>
-                    <span>
-                      <strong>{backup.libraryId}</strong>
-                      <small>
-                        {backup.operation === "remove" ? "Removal" : "Cleanup"} · {backup.locationCount} locations · {new Date(backup.createdAt).toLocaleString()}
-                      </small>
-                    </span>
-                    <button
-                      className="secondary-action"
-                      type="button"
-                      aria-label={`Restore cleanup ${backup.libraryId}`}
-                      onClick={() => onRestoreCleanup(backup.id)}
-                    >
-                      <RotateCcw size={14} aria-hidden="true" />
-                      Restore
-                    </button>
+                  <div className="resource-row cleanup-history-row" key={backup.id}>
+                    <span className="resource-chip resource-chip--managed">Backup</span>
+                    <div className="resource-row__main">
+                      <PreviewText
+                        ariaLabel={`Full cleanup history name ${backup.libraryId}`}
+                        className="cleanup-history-name"
+                        text={backup.libraryId}
+                      />
+                      <PreviewText
+                        ariaLabel={`Full cleanup history details ${backup.libraryId}`}
+                        className="cleanup-history-details"
+                        displayText={`${backup.operation === "remove" ? "Removal" : "Cleanup"} · ${backup.locationCount} ${backup.locationCount === 1 ? "location" : "locations"} · ${new Date(backup.createdAt).toLocaleString()}`}
+                        text={`${backup.operation === "remove" ? "Removal" : "Cleanup"} · ${backup.locationCount} ${backup.locationCount === 1 ? "location" : "locations"} · ${new Date(backup.createdAt).toLocaleString()}`}
+                      />
+                    </div>
+                    <div className="cleanup-group-actions">
+                      <button
+                        className="secondary-action"
+                        type="button"
+                        aria-label={`Restore cleanup ${backup.libraryId}`}
+                        onClick={() => onRestoreCleanup(backup.id)}
+                      >
+                        <RotateCcw size={14} aria-hidden="true" />
+                        Restore
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

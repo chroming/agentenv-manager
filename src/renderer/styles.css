@@ -1813,17 +1813,23 @@ summary {
 }
 
 .cleanup-group-row {
-  align-items: start;
+  align-items: center;
   grid-template-columns: 86px minmax(0, 1fr) auto;
 }
 
 .cleanup-group-actions {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   justify-content: flex-end;
   max-width: 320px;
+}
+
+.cleanup-group-actions .secondary-action {
+  height: 36px;
+  min-height: 36px;
+  white-space: nowrap;
 }
 
 .resource-chip,
@@ -4282,7 +4288,7 @@ button svg,
   position: fixed;
   right: 24px;
   top: 88px;
-  width: min(520px, calc(100vw - 260px));
+  width: min(620px, calc(100vw - 280px));
   z-index: var(--z-drawer);
 }
 

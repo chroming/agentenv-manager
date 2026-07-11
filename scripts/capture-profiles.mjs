@@ -163,6 +163,46 @@ const prepareFixture = async (root) => {
 
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Existing OpenCode environment\n", "utf8");
   await writeJson(join(opencodeDir, "opencode.jsonc"), { shell: "/bin/zsh" });
+  const cleanupSkillName = "cross-agent-review-workflow-with-a-long-name";
+  const cleanupVariants = [
+    {
+      directory: join(opencodeDir, "skills", cleanupSkillName),
+      description: "OpenCode review workflow with repository checks, release validation, and detailed reporting.",
+      heading: "OpenCode review workflow"
+    },
+    {
+      directory: join(homeDir, ".agents", "skills", cleanupSkillName),
+      description: "Codex review workflow with security checks, migration validation, and detailed reporting.",
+      heading: "Codex review workflow"
+    }
+  ];
+  for (const variant of cleanupVariants) {
+    await mkdir(variant.directory, { recursive: true });
+    await writeFile(
+      join(variant.directory, "SKILL.md"),
+      `---\nname: Cross-agent Review Workflow With A Long Name\ndescription: ${variant.description}\n---\n\n# ${variant.heading}\n`,
+      "utf8"
+    );
+  }
+  const cleanupBackupDir = join(appDataRoot, "backups", "skill-cleanup", "cleanup-capture-1");
+  await mkdir(cleanupBackupDir, { recursive: true });
+  await writeJson(join(cleanupBackupDir, "manifest.json"), {
+    id: "cleanup-capture-1",
+    libraryId: "archived-cross-agent-review-workflow-with-a-long-name",
+    libraryCreated: true,
+    createdAt: "2026-07-13T08:30:00.000Z",
+    operation: "cleanup",
+    entries: [
+      {
+        sourcePath: join(opencodeDir, "skills", cleanupSkillName),
+        backupPath: join(cleanupBackupDir, "locations", `0-${cleanupSkillName}`)
+      },
+      {
+        sourcePath: join(homeDir, ".agents", "skills", cleanupSkillName),
+        backupPath: join(cleanupBackupDir, "locations", `1-${cleanupSkillName}`)
+      }
+    ]
+  });
   await writeJson(join(appDataRoot, "settings.json"), {
     skillSyncMethod: "copy",
     skillStorageLocation: "appData",
@@ -312,6 +352,39 @@ try {
     .waitFor({ state: "visible" });
   await capturePage(windowHandle, join(outputDir, "skills-source-tooltip-920x620.png"));
   await githubSource.evaluate((element) => element.blur());
+
+  await page.getByRole("button", { name: "Scan local Skills" }).click();
+  const cleanupGroup = page.getByRole("group", {
+    name: "Cleanup group cross-agent-review-workflow-with-a-long-name"
+  });
+  await cleanupGroup.waitFor({ state: "visible", timeout: 5_000 });
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(windowHandle, join(outputDir, "skills-cleanup-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(windowHandle, join(outputDir, "skills-cleanup-920x620.png"));
+  const cleanupLocations = cleanupGroup.getByLabel(
+    "Full cleanup locations cross-agent-review-workflow-with-a-long-name"
+  );
+  await cleanupLocations.focus();
+  await page.getByRole("tooltip").waitFor({ state: "visible", timeout: 5_000 });
+  await capturePage(windowHandle, join(outputDir, "skills-cleanup-tooltip-920x620.png"));
+  await cleanupLocations.evaluate((element) => element.blur());
+  await cleanupGroup
+    .getByRole("button", {
+      name: "Resolve conflict cross-agent-review-workflow-with-a-long-name"
+    })
+    .click();
+  const cleanupDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
+  await cleanupDialog.waitFor({ state: "visible", timeout: 5_000 });
+  await capturePage(windowHandle, join(outputDir, "skills-cleanup-review-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(windowHandle, join(outputDir, "skills-cleanup-review-1180x728.png"));
+  await page.keyboard.press("Escape");
+  await cleanupDialog.waitFor({ state: "hidden", timeout: 5_000 });
+  await page
+    .getByRole("region", { name: "Environment skills" })
+    .waitFor({ state: "visible", timeout: 5_000 });
+  await page.getByRole("button", { name: "Close library tool" }).click();
 
   const captureWorkspace = async (buttonName, filePrefix, readyLocator) => {
     await page.getByRole("button", { name: buttonName, exact: true }).click();

@@ -654,6 +654,49 @@ describe("skill library store", () => {
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("uses an existing Library version without requiring a selected canonical location", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const librarySource = join(root, "source", "reviewer");
+    const targetSkillsDir = join(root, "home", ".config", "opencode", "skills");
+    const targetCopy = join(targetSkillsDir, "reviewer");
+    await mkdir(librarySource, { recursive: true });
+    await mkdir(targetCopy, { recursive: true });
+    await writeFile(join(librarySource, "SKILL.md"), "# Library source\n", "utf8");
+    await writeFile(join(targetCopy, "SKILL.md"), "# Local drift\n", "utf8");
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({
+      sourcePath: librarySource,
+      id: "reviewer",
+      sourceType: "local"
+    });
+
+    await store.consolidateSkillGroup({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      canonicalPath: join(root, "not-selected", "reviewer"),
+      locations: [
+        {
+          targetPaths: {
+            targetId: "opencode",
+            configDir: dirname(targetSkillsDir),
+            instructionsPath: "",
+            configPath: "",
+            skillsDir: targetSkillsDir
+          },
+          targetDir: targetCopy
+        }
+      ]
+    });
+
+    await expect(readFile(join(targetCopy, "SKILL.md"), "utf8")).resolves.toBe(
+      "# Library source\n"
+    );
+    await expect(readFile(join(targetCopy, ".agentenv-owner.json"), "utf8")).resolves.toContain(
+      '"source": "skills-library/reviewer"'
+    );
+  });
+
   it("saves an update source for an existing library skill", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

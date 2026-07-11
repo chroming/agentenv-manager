@@ -1250,10 +1250,54 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Cleanup group late-target-reviewer" })
       .waitFor({ state: "visible", timeout: 5_000 });
 
-    await page.getByRole("button", { name: "Review cleanup target-only-reviewer" }).click();
+    const cleanupGroup = page.getByRole("group", { name: "Cleanup group target-only-reviewer" });
+    const locationsPreview = cleanupGroup.getByLabel("Full cleanup locations target-only-reviewer");
+    await locationsPreview.focus();
+    const locationsTooltip = page.getByRole("tooltip");
+    await locationsTooltip.waitFor({ state: "visible", timeout: 5_000 });
+    await expect.poll(() => locationsTooltip.textContent()).toContain("target-only-reviewer");
+    await locationsPreview.evaluate((element) => element.blur());
+
+    await cleanupGroup.getByRole("button", { name: "Add to Library target-only-reviewer" }).click();
     const cleanupDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
     await cleanupDialog.waitFor({ state: "visible", timeout: 5_000 });
-    await cleanupDialog.getByRole("button", { name: "Back up and clean up" }).click();
+    await expect.poll(() => cleanupDialog.textContent()).toContain("Version to keep in Library");
+    await expect.poll(() => cleanupDialog.textContent()).toContain(
+      "Choose the copy whose contents you want to preserve"
+    );
+    expect(await cleanupDialog.getByRole("checkbox").isDisabled()).toBe(true);
+    await expect.poll(() => cleanupDialog.textContent()).toContain("Source copy");
+    await resizeAppWindow(page, 920, 620);
+    const cleanupGeometry = await cleanupDialog.evaluate((dialog) => {
+      const rect = dialog.getBoundingClientRect();
+      const actions = dialog.querySelector<HTMLElement>(".preview-actions")?.getBoundingClientRect();
+      const primary = dialog.querySelector<HTMLButtonElement>(".primary-action");
+      const secondary = dialog.querySelector<HTMLButtonElement>(".secondary-action");
+      const primaryRect = primary?.getBoundingClientRect();
+      const secondaryRect = secondary?.getBoundingClientRect();
+      return {
+        dialogBottom: rect.bottom,
+        dialogRight: rect.right,
+        actionsBottom: actions?.bottom ?? 0,
+        primaryHeight: primaryRect?.height ?? 0,
+        secondaryHeight: secondaryRect?.height ?? 0,
+        primaryTextFits: primary ? primary.scrollWidth <= primary.clientWidth : false
+      };
+    });
+    expect(cleanupGeometry.dialogBottom).toBeLessThanOrEqual(620);
+    expect(cleanupGeometry.dialogRight).toBeLessThanOrEqual(920);
+    expect(cleanupGeometry.actionsBottom).toBeLessThanOrEqual(cleanupGeometry.dialogBottom);
+    expect(cleanupGeometry.primaryHeight).toBe(40);
+    expect(cleanupGeometry.primaryHeight).toBe(cleanupGeometry.secondaryHeight);
+    expect(cleanupGeometry.primaryTextFits).toBe(true);
+    await page.keyboard.press("Escape");
+    await cleanupDialog.waitFor({ state: "hidden", timeout: 5_000 });
+    await page
+      .getByRole("region", { name: "Environment skills" })
+      .waitFor({ state: "visible", timeout: 5_000 });
+    await cleanupGroup.getByRole("button", { name: "Add to Library target-only-reviewer" }).click();
+    await cleanupDialog.waitFor({ state: "visible", timeout: 5_000 });
+    await cleanupDialog.getByRole("button", { name: "Back up and manage" }).click();
     await expect
       .poll(() => page.locator(".app-feedback").textContent(), { timeout: 5_000 })
       .toContain("Cleaned up target-only-reviewer");
@@ -1305,6 +1349,13 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Scan local Skills" }).click();
     const cleanupHistory = page.getByRole("region", { name: "Cleanup history" });
     await cleanupHistory.waitFor({ state: "visible", timeout: 5_000 });
+    expect(await cleanupHistory.locator(".cleanup-history-row.resource-row").count()).toBeGreaterThan(0);
+    const historyDetails = cleanupHistory.getByLabel(
+      "Full cleanup history details target-only-reviewer"
+    );
+    await historyDetails.focus();
+    await page.getByRole("tooltip").waitFor({ state: "visible", timeout: 5_000 });
+    await historyDetails.evaluate((element) => element.blur());
     await cleanupHistory
       .getByRole("button", { name: "Restore cleanup target-only-reviewer" })
       .click();

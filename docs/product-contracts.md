@@ -426,6 +426,14 @@ Each group can be:
 - Left unmanaged.
 - Ignored.
 
+Cleanup review contract:
+
+- If the Skill is not yet in Library, the user chooses the local version whose content will be preserved as the Library source of truth.
+- The chosen source location is always included in the cleanup and cannot be deselected accidentally.
+- If the Skill already exists in Library, cleanup MUST state that the existing Library version remains authoritative and MUST NOT ask for a meaningless local canonical choice.
+- Every truncated Skill name, description, path, and history detail in the cleanup workflow exposes its full value on pointer hover and keyboard focus.
+- Cleanup groups and Cleanup history use the same row hierarchy, control scale, overflow behavior, and restore vocabulary.
+
 Ignore contract:
 
 - Ignored Skills remain visible in cleanup results.

@@ -1141,6 +1141,9 @@ export const App = () => {
       if (event.key !== "Escape") {
         return;
       }
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) {
+        return;
+      }
       if (skillLibraryTool) {
         setSkillLibraryTool(undefined);
         return;

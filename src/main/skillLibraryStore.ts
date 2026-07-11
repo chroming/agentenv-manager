@@ -1007,16 +1007,16 @@ export const createSkillLibraryStore = (
   }: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult> => {
     const safeSkillKey = SafeIdSchema.parse(skillKey);
     const safeLibraryId = SafeIdSchema.parse(libraryId);
-    if (!locations.some((location) => location.targetDir === canonicalPath)) {
-      throw new Error("Canonical skill must be one of the scanned cleanup locations");
+    const targetLibraryDir = join(await libraryDir(), safeLibraryId);
+    const libraryCreated = !(await pathExists(join(targetLibraryDir, "SKILL.md")));
+    if (libraryCreated && !locations.some((location) => location.targetDir === canonicalPath)) {
+      throw new Error("Source skill must be one of the selected cleanup locations");
     }
-    if (!(await pathExists(join(canonicalPath, "SKILL.md")))) {
-      throw new Error(`Canonical skill is missing SKILL.md: ${canonicalPath}`);
+    if (libraryCreated && !(await pathExists(join(canonicalPath, "SKILL.md")))) {
+      throw new Error(`Source skill is missing SKILL.md: ${canonicalPath}`);
     }
 
     const uniqueLocations = [...new Map(locations.map((item) => [item.targetDir, item])).values()];
-    const targetLibraryDir = join(await libraryDir(), safeLibraryId);
-    const libraryCreated = !(await pathExists(join(targetLibraryDir, "SKILL.md")));
     const backupId = `cleanup-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const backupDir = join(cleanupBackupRoot(), backupId);
     const entries: SkillCleanupBackupManifest["entries"] = [];

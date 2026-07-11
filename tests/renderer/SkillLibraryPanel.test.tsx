@@ -142,6 +142,26 @@ describe("SkillLibraryPanel", () => {
             skillKey: "target-only-reviewer",
             contentHash: "target-only-hash",
             ignoreRuleId: "ignore-target-only-reviewer"
+          },
+          {
+            id: "conflict-reviewer",
+            name: "Conflict Reviewer With A Deliberately Long Display Name",
+            description: "Preserve the OpenCode variant with its full review workflow and detailed instructions.",
+            path: "/tmp/opencode/skills/a-very-long-parent-directory/conflict-reviewer",
+            foundIn: ["opencode"],
+            status: "unmanaged",
+            skillKey: "conflict-reviewer",
+            contentHash: "opencode-conflict-hash"
+          },
+          {
+            id: "conflict-reviewer",
+            name: "Conflict Reviewer With A Deliberately Long Display Name",
+            description: "Preserve the Codex variant with its alternate review workflow and detailed instructions.",
+            path: "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer",
+            foundIn: ["codex"],
+            status: "unmanaged",
+            skillKey: "conflict-reviewer",
+            contentHash: "codex-conflict-hash"
           }
         ]}
         cleanupBackups={[
@@ -391,6 +411,9 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("region", { name: "Cleanup history" })).toHaveTextContent(
       "shared-reviewer"
     );
+    expect(
+      screen.getByRole("region", { name: "Cleanup history" }).querySelector(".cleanup-history-row")
+    ).toHaveClass("resource-row");
     fireEvent.click(screen.getByRole("button", { name: "Restore cleanup shared-reviewer" }));
     expect(onRestoreCleanup).toHaveBeenCalledWith("cleanup-1");
     expect(screen.getByRole("group", { name: "Cleanup group target-only-reviewer" })).toHaveTextContent(
@@ -403,17 +426,73 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(
       within(screen.getByRole("group", { name: "Cleanup group legacy-reviewer" })).getByRole(
         "button",
-        { name: "Review cleanup legacy-reviewer" }
+        { name: "Use Library version legacy-reviewer" }
       )
     );
     const cleanupDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
-    fireEvent.click(within(cleanupDialog).getByRole("button", { name: "Back up and clean up" }));
+    expect(cleanupDialog).toHaveTextContent("Existing Library version");
+    expect(cleanupDialog).not.toHaveTextContent("Canonical copy");
+    fireEvent.click(within(cleanupDialog).getByRole("button", { name: "Back up and manage" }));
     expect(onConsolidateSkillGroup).toHaveBeenCalledWith({
       skillKey: "legacy-reviewer",
       libraryId: "legacy-reviewer",
       canonicalPath: "/tmp/opencode/skills/legacy-reviewer",
       locations: [
         { targetId: "opencode", path: "/tmp/opencode/skills/legacy-reviewer" }
+      ]
+    });
+
+    const conflictGroup = screen.getByRole("group", { name: "Cleanup group conflict-reviewer" });
+    expect(conflictGroup).toHaveTextContent("Conflict");
+    fireEvent.focus(
+      within(conflictGroup).getByLabelText("Full cleanup locations conflict-reviewer")
+    );
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
+    );
+    fireEvent.blur(
+      within(conflictGroup).getByLabelText("Full cleanup locations conflict-reviewer")
+    );
+    fireEvent.click(
+      within(conflictGroup).getByRole("button", { name: "Resolve conflict conflict-reviewer" })
+    );
+    let conflictDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
+    expect(conflictDialog).toHaveTextContent("Version to keep in Library");
+    expect(conflictDialog).toHaveTextContent("Choose the copy whose contents you want to preserve");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Review skill cleanup" })).not.toBeInTheDocument();
+    expect(onCloseTool).toHaveBeenCalledTimes(2);
+    fireEvent.click(
+      within(conflictGroup).getByRole("button", { name: "Resolve conflict conflict-reviewer" })
+    );
+    conflictDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
+    const codexVersion = within(conflictDialog).getByRole("radio", { name: /Codex/ });
+    fireEvent.click(codexVersion);
+    const codexLocation = within(conflictDialog).getByRole("checkbox", { name: /Codex/ });
+    expect(codexLocation).toBeChecked();
+    expect(codexLocation).toBeDisabled();
+    fireEvent.focus(
+      within(conflictDialog).getByLabelText(
+        "Full source path /tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
+      )
+    );
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
+    );
+    fireEvent.click(within(conflictDialog).getByRole("button", { name: "Back up and manage" }));
+    expect(onConsolidateSkillGroup).toHaveBeenCalledWith({
+      skillKey: "conflict-reviewer",
+      libraryId: "conflict-reviewer",
+      canonicalPath: "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer",
+      locations: [
+        {
+          targetId: "opencode",
+          path: "/tmp/opencode/skills/a-very-long-parent-directory/conflict-reviewer"
+        },
+        {
+          targetId: "codex",
+          path: "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
+        }
       ]
     });
 
