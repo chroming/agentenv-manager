@@ -5,3 +5,4 @@
 @import "../styles.css" layer(legacy);
 @import "../product-shell.css" layer(product);
 @import "./primitives.css" layer(primitives);
+@import "./shell.css" layer(shell);

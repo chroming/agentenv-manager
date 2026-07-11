@@ -1,0 +1,156 @@
+/* Stable desktop chrome shared by every workspace. */
+.app-shell {
+  background: var(--page);
+  gap: 0;
+  grid-template-columns: 212px minmax(0, 1fr);
+  padding: 0;
+}
+
+.global-sidebar {
+  background: #f8faff;
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid var(--border);
+  box-shadow: none;
+  gap: var(--space-3);
+  padding: 12px 14px 18px;
+}
+
+.global-sidebar .sidebar__header {
+  padding: 14px 6px 18px;
+}
+
+.brand-lockup h1 {
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.brand-lockup .muted {
+  line-height: 1.2;
+}
+
+.workspace-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workspace-nav .nav-section-label {
+  display: block;
+}
+
+.workspace-nav > button {
+  height: var(--control-height-prominent);
+  min-height: var(--control-height-prominent);
+  order: initial;
+  padding: 7px 10px;
+}
+
+.nav-section-label {
+  line-height: 13px;
+}
+
+.workspace-button > span:not(.workspace-button__icon) {
+  font-size: 13px;
+}
+
+.workspace-button.is-active {
+  box-shadow: none;
+}
+
+.system-status-card {
+  gap: 10px;
+  min-height: 0;
+  padding: 12px;
+}
+
+.system-status-card > div:first-child strong {
+  font-size: 12px;
+}
+
+.page-header h2,
+.profile-page-header h2 {
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.profile-page-heading p {
+  font-size: 13px;
+}
+
+.profile-page-actions button {
+  min-height: var(--control-height-default);
+}
+
+.editor-panel {
+  padding: 24px;
+}
+
+@media (max-width: 1300px) {
+  .editor-panel {
+    padding: 14px 18px 18px;
+  }
+}
+
+.editor-panel {
+  background: #fbfcff;
+  border-right: 0;
+  min-width: 0;
+}
+
+.editor-panel > .app-feedback {
+  bottom: 18px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
+  margin: 0;
+  max-width: min(420px, calc(100vw - 36px));
+  position: fixed;
+  right: 18px;
+  top: auto;
+  width: max-content;
+  z-index: var(--z-popover);
+  pointer-events: none;
+}
+
+.editor-panel > .app-feedback {
+  align-items: center;
+  grid-template-columns: 16px minmax(0, 1fr) 28px;
+}
+
+.editor-panel > .app-feedback--dismissible {
+  grid-template-columns: 16px minmax(0, 1fr) 60px;
+}
+
+.app-feedback__controls {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.editor-panel > .app-feedback .app-feedback__controls button {
+  background: transparent;
+  border: 0;
+  color: currentColor;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+  user-select: none;
+}
+
+.app-feedback__action {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 750;
+  margin-top: 6px;
+  min-height: 24px;
+  padding: 0;
+  pointer-events: auto;
+}
+
+.app-feedback__action:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-strong);
+}
