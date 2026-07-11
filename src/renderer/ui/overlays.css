@@ -1,0 +1,150 @@
+@media (max-width: 760px) {
+  .preview-modal-backdrop {
+    padding: 12px;
+  }
+
+  .preview-dialog--modal {
+    max-height: calc(100vh - 24px);
+    padding: 14px;
+    width: calc(100vw - 24px);
+  }
+
+  .preview-dialog--modal .preview-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-dialog--modal .preview-actions {
+    margin: 0 -14px -14px;
+    padding: 12px 14px 14px;
+  }
+}
+
+@media (min-height: 700px) {
+  .preview-resource-plan:has(article + article) {
+    min-height: 146px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .github-device-card {
+    grid-template-columns: minmax(160px, 190px) minmax(150px, 1fr);
+  }
+
+  .github-device-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+.resource-icon-trigger {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  min-height: 0;
+  padding: 0;
+  transition: box-shadow 140ms ease, transform 140ms ease;
+}
+
+.resource-icon-trigger:hover {
+  box-shadow: 0 0 0 3px rgba(23, 105, 245, 0.12);
+  transform: translateY(-1px);
+}
+
+.resource-icon-trigger:focus-visible {
+  box-shadow: 0 0 0 3px rgba(23, 105, 245, 0.2);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.resource-icon-trigger[data-icon="github"],
+.resource-icon-option[data-icon="github"] {
+  background: #eef1f5;
+  color: #202938;
+}
+
+.resource-icon-trigger[data-icon="folder"],
+.resource-icon-option[data-icon="folder"] {
+  background: #eef4ff;
+  color: #1769f5;
+}
+
+.resource-icon-trigger[data-icon="code"],
+.resource-icon-option[data-icon="code"] {
+  background: #f2edff;
+  color: #7047d8;
+}
+
+.resource-icon-trigger[data-icon="rocket"],
+.resource-icon-option[data-icon="rocket"] {
+  background: #eafaf1;
+  color: #15945d;
+}
+
+.resource-icon-trigger[data-icon="shield"],
+.resource-icon-option[data-icon="shield"] {
+  background: #edf9f6;
+  color: #12806e;
+}
+
+.resource-icon-trigger[data-icon="flask"],
+.resource-icon-option[data-icon="flask"] {
+  background: #fff3e3;
+  color: #c66a12;
+}
+
+.resource-icon-trigger[data-icon="pen"],
+.resource-icon-option[data-icon="pen"] {
+  background: #fff0f3;
+  color: #c44569;
+}
+
+.resource-icon-trigger[data-icon="terminal"],
+.resource-icon-option[data-icon="terminal"] {
+  background: #eef7f8;
+  color: #24717b;
+}
+
+.resource-icon-trigger[data-icon="database"],
+.resource-icon-option[data-icon="database"] {
+  background: #eaf7ff;
+  color: #087da8;
+}
+
+.resource-icon-trigger[data-icon="sparkles"],
+.resource-icon-option[data-icon="sparkles"] {
+  background: #fff8df;
+  color: #aa7410;
+}
+
+.resource-icon-menu {
+  background: #fff;
+  border: 1px solid #dfe6f0;
+  border-radius: 8px;
+  box-sizing: border-box;
+  box-shadow: 0 14px 34px rgba(26, 38, 59, 0.18);
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(5, 34px);
+  padding: 10px;
+  position: fixed;
+  width: 214px;
+  z-index: var(--z-popover);
+}
+
+.resource-icon-option {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
+  width: 34px;
+}
+
+.resource-icon-option:hover,
+.resource-icon-option[aria-checked="true"] {
+  border-color: #8cb4fa;
+  box-shadow: 0 0 0 2px rgba(23, 105, 245, 0.1);
+}

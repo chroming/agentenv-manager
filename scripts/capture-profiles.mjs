@@ -243,18 +243,26 @@ const prepareFixture = async (root) => {
 const capturePage = async (page, path, { preserveFocus = false } = {}) => {
   await page.evaluate(async (shouldPreserveFocus) => {
     await document.fonts?.ready;
+    for (const animation of document.getAnimations()) {
+      animation.finish();
+    }
     if (!shouldPreserveFocus && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
+    const previousVisibility = document.body.style.visibility;
+    document.body.style.visibility = "hidden";
+    document.body.getBoundingClientRect();
+    document.body.style.visibility = previousVisibility;
+    await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
   }, preserveFocus);
   await page.mouse.move(2, 2);
-  await page.waitForTimeout(50);
-  await page.screenshot({
-    path,
-    animations: "disabled",
-    caret: "hide",
-    scale: "css"
+  const windowHandle = await app.browserWindow(page);
+  const pngBase64 = await windowHandle.evaluate(async (browserWindow) => {
+    browserWindow.webContents.invalidate();
+    await new Promise((resolveFrame) => setTimeout(resolveFrame, 100));
+    return (await browserWindow.capturePage()).toPNG().toString("base64");
   });
+  await writeFile(path, Buffer.from(pngBase64, "base64"));
 };
 
 const fileExists = async (path) => {

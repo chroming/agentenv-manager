@@ -3,6 +3,7 @@ import { relative, resolve } from "node:path";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const rendererRoot = resolve(projectRoot, "src/renderer");
+const shouldCheck = process.argv.includes("--check");
 
 const listCssFiles = async (directory) => {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -88,3 +89,38 @@ const result = {
 };
 
 process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+
+if (shouldCheck) {
+  const legacyStyles = result.files.find(({ file }) => file === "src/renderer/styles.css");
+  const importantOutsideAccessibility = result.files.filter(
+    ({ file, importantDeclarations }) =>
+      importantDeclarations > 0 && file !== "src/renderer/ui/accessibility.css"
+  );
+  const failures = [
+    files.includes("src/renderer/product-shell.css")
+      ? "src/renderer/product-shell.css must not return"
+      : undefined,
+    (legacyStyles?.lines ?? Number.POSITIVE_INFINITY) > 5795
+      ? "src/renderer/styles.css grew beyond its frozen migration baseline"
+      : undefined,
+    result.totals.containerQueries < 2
+      ? "Skills and Profiles container-query contracts are missing"
+      : undefined,
+    result.totals.rawNumericLayers.length > 0
+      ? "Use named z-index tokens instead of numeric layers"
+      : undefined,
+    importantOutsideAccessibility.length > 0
+      ? `!important is only allowed in accessibility.css: ${importantOutsideAccessibility
+          .map(({ file }) => file)
+          .join(", ")}`
+      : undefined,
+    result.totals.importantDeclarations !== 4
+      ? "The reduced-motion contract must remain the only four !important declarations"
+      : undefined
+  ].filter(Boolean);
+
+  if (failures.length > 0) {
+    process.stderr.write(`\nCSS architecture check failed:\n- ${failures.join("\n- ")}\n`);
+    process.exitCode = 1;
+  }
+}

@@ -1,0 +1,224 @@
+.mcp-library-search {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 11px;
+}
+
+.mcp-library-search input {
+  background: transparent;
+  border: 0;
+  min-width: 0;
+  outline: 0;
+  width: 100%;
+}
+
+.mcp-editor-drawer .mcp-server-form {
+  padding: 16px;
+}
+
+.mcp-server-form .field-help,
+.mcp-server-form .field-error {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.mcp-server-form .field-help {
+  color: var(--muted);
+}
+
+.mcp-server-form .field-error {
+  color: var(--danger);
+}
+
+.library-drawer-backdrop {
+  background: rgba(15, 23, 42, 0.14);
+  inset: 0;
+  position: fixed;
+  z-index: calc(var(--z-drawer) - 1);
+}
+
+.library-drawer-backdrop .library-drawer {
+  z-index: var(--z-drawer);
+}
+
+.library-drawer.library-import-dialog {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  left: 50%;
+  max-height: min(680px, calc(100vh - 48px));
+  right: auto;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 48px));
+}
+
+.library-import-content,
+.github-scan-results {
+  min-height: 0;
+  overflow: auto;
+}
+
+.library-import-content .resource-section {
+  padding: 16px;
+}
+
+.library-import-content .resource-section + .resource-section {
+  border-top: 1px solid var(--border);
+}
+
+.github-scan-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.github-scan-summary,
+.github-select-all {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.github-scan-summary {
+  border-bottom: 1px solid var(--border);
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.github-scan-summary > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.github-scan-summary span,
+.github-candidate-main small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.github-select-all {
+  border-bottom: 1px solid var(--border);
+  min-height: 42px;
+  padding: 0 16px;
+}
+
+.github-select-all strong {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.github-candidate-list {
+  display: grid;
+}
+
+.github-candidate-row {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 18px 32px minmax(0, 1fr) minmax(120px, 160px);
+  min-height: 76px;
+  padding: 9px 16px;
+}
+
+.github-candidate-row.is-disabled {
+  background: #f8fafc;
+}
+
+.github-candidate-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.github-candidate-main > strong,
+.github-candidate-main > span,
+.github-candidate-main > small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.github-candidate-id {
+  min-width: 0;
+  width: 100%;
+}
+
+.import-inline-error {
+  margin: 0 16px 12px;
+}
+
+.import-dialog-actions {
+  border-top: 1px solid var(--border);
+  margin: 0;
+  padding: 12px 16px;
+}
+
+.mcp-editor-drawer .library-drawer__header p {
+  margin-top: 4px;
+}
+
+.skill-library-panel[aria-label="MCP library"] .resource-row {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  min-height: 72px;
+  padding-block: 9px;
+}
+
+.skill-library-panel[aria-label="MCP library"] .resource-section {
+  padding-top: 0;
+}
+
+.skill-library-panel[aria-label="MCP library"] .resource-list {
+  gap: 6px;
+}
+
+.skill-library-panel[aria-label="MCP library"] .resource-row__main {
+  gap: 4px;
+}
+
+.mcp-row-name,
+.mcp-row-endpoint {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-row-meta {
+  align-items: center;
+  display: flex;
+  font-family: inherit;
+  font-weight: 500;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mcp-row-meta-item {
+  display: block;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-row-meta-item + .mcp-row-meta-item::before {
+  color: #c1c9d6;
+  content: "·";
+  margin-right: 8px;
+}
+
+.danger-icon-action {
+  color: var(--danger);
+}

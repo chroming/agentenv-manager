@@ -39,6 +39,8 @@
   --motion-standard: 220ms ease;
 
   --z-base: 0;
+  --z-raised: 1;
+  --z-actions: 3;
   --z-sticky: 20;
   --z-dropdown: 80;
   --z-drawer: 90;

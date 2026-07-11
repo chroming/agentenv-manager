@@ -1,0 +1,71 @@
+@media (max-width: 1050px) {
+  .app-shell,
+  .app-shell--library,
+  .app-shell--profiles {
+    grid-template-columns: 196px minmax(0, 1fr);
+  }
+
+  .editor-panel,
+  .app-shell--library .editor-panel,
+  .app-shell--profiles .editor-panel {
+    padding: 12px 14px 14px;
+  }
+
+  .profile-page-heading p {
+    display: none;
+  }
+
+  .profile-target-workspace-button {
+    max-width: 166px;
+  }
+
+  .profile-apply-button {
+    min-width: 0;
+  }
+
+  .target-workflow-header {
+    gap: 10px;
+    grid-template-columns: 34px minmax(100px, 1fr) auto auto;
+  }
+
+  .target-workflow-actions .secondary-action {
+    min-width: 34px;
+    padding-inline: 8px;
+  }
+
+  .target-workflow-icon {
+    height: 34px;
+    width: 34px;
+  }
+
+  .target-workflow-title > small {
+    display: none;
+  }
+
+  .target-card--workflow {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .target-state-grid > span {
+    gap: 2px;
+    padding: 6px 8px;
+  }
+
+  .target-diagnostics-toggle {
+    min-height: 22px;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .workspace-button:hover:not(:disabled),
+  .profile-row:hover:not(:disabled),
+  .resource-picker-option:hover,
+  .resource-row:hover,
+  .target-card:hover,
+  .resource-overview-card:hover,
+  .compatibility-item:hover,
+  .metric-tile--button:hover {
+    transform: none;
+  }
+}

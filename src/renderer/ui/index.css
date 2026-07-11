@@ -1,10 +1,15 @@
-@layer tokens, base, legacy, product, primitives, shell, pages;
+@layer accessibility, tokens, base, legacy, primitives, shell, pages, overlays;
 
+@import "./accessibility.css" layer(accessibility);
 @import "./tokens.css" layer(tokens);
 @import "./base.css" layer(base);
 @import "../styles.css" layer(legacy);
-@import "../product-shell.css" layer(product);
 @import "./primitives.css" layer(primitives);
 @import "./shell.css" layer(shell);
+@import "./pages/targets.css" layer(pages);
+@import "./pages/settings.css" layer(pages);
+@import "./pages/mcp.css" layer(pages);
 @import "./pages/skills.css" layer(pages);
 @import "./pages/profiles.css" layer(pages);
+@import "./pages/responsive.css" layer(pages);
+@import "./overlays.css" layer(overlays);

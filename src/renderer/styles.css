@@ -3021,7 +3021,7 @@ summary {
   display: grid;
   gap: 0;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .library-quick-tabs {
@@ -3120,7 +3120,7 @@ summary {
   min-height: 70px;
   padding: 13px 18px;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .library-resource-cell,
@@ -3216,7 +3216,7 @@ summary {
   gap: 8px;
   justify-content: flex-end;
   position: relative;
-  z-index: 3;
+  z-index: var(--z-actions);
 }
 
 .resource-avatar {
@@ -3297,7 +3297,7 @@ summary {
   padding: 8px;
   position: fixed;
   width: min(420px, calc(100vw - 32px));
-  z-index: 1200;
+  z-index: var(--z-popover);
 }
 
 .library-row-details {
@@ -3316,7 +3316,7 @@ summary {
   box-shadow: none;
   margin: 0;
   position: relative;
-  z-index: 0;
+  z-index: var(--z-base);
 }
 
 .library-import-grid .library-import-action {
@@ -4246,7 +4246,7 @@ button svg,
   grid-row: 1;
   margin-left: 11px;
   pointer-events: none;
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .library-search input {
@@ -5308,7 +5308,7 @@ button svg,
   padding: 12px 14px;
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: var(--z-sticky);
 }
 
 .profile-hero__icon {
