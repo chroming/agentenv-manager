@@ -353,6 +353,26 @@ try {
   await capturePage(windowHandle, join(outputDir, "skills-source-tooltip-920x620.png"));
   await githubSource.evaluate((element) => element.blur());
 
+  await page.getByRole("button", { name: "Import Skill" }).click();
+  const importDrawer = page.getByRole("region", { name: "GitHub skill import" });
+  await importDrawer.waitFor({ state: "visible" });
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(windowHandle, join(outputDir, "skills-import-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(windowHandle, join(outputDir, "skills-import-920x620.png"));
+  await importDrawer.getByRole("button", { name: "Close library tool" }).click();
+  await importDrawer.waitFor({ state: "hidden" });
+
+  const skillActionsButton = page.getByRole("button", {
+    name: "More actions for react-best-practices"
+  });
+  await skillActionsButton.click();
+  await page.getByRole("menu", { name: "Actions for react-best-practices" }).waitFor({
+    state: "visible"
+  });
+  await capturePage(windowHandle, join(outputDir, "skills-actions-920x620.png"));
+  await page.keyboard.press("Escape");
+
   await page.getByRole("button", { name: "Scan local Skills" }).click();
   const cleanupGroup = page.getByRole("group", {
     name: "Cleanup group cross-agent-review-workflow-with-a-long-name"
@@ -400,11 +420,32 @@ try {
     "mcp-servers",
     () => page.getByRole("region", { name: "MCP library" })
   );
+  await page.getByRole("button", { name: "Add MCP server" }).click();
+  const mcpEditor = page.getByRole("dialog", { name: "MCP server editor" });
+  await mcpEditor.waitFor({ state: "visible" });
+  await capturePage(windowHandle, join(outputDir, "mcp-editor-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(windowHandle, join(outputDir, "mcp-editor-1180x728.png"));
+  await page.keyboard.press("Escape");
+  await mcpEditor.waitFor({ state: "hidden" });
   await captureWorkspace(
     "Profiles",
     "profiles",
     () => page.getByRole("region", { name: "Profiles", exact: true })
   );
+  for (const sectionName of ["Instructions", "Skills", "MCP Servers", "Advanced"]) {
+    await page
+      .locator(`[data-profile-composer-id="${sectionName === "MCP Servers" ? "mcp" : sectionName.toLowerCase()}"]`)
+      .getByRole("button", { name: sectionName, exact: true })
+      .click();
+    await page
+      .locator(`[data-profile-composer-id="${sectionName === "MCP Servers" ? "mcp" : sectionName.toLowerCase()}"] .profile-composer-section__panel`)
+      .waitFor({ state: "visible" });
+    await capturePage(
+      windowHandle,
+      join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`)
+    );
+  }
   await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   const previewDialog = page.getByRole("dialog", { name: "Preview" });

@@ -1,10 +1,32 @@
 // @vitest-environment jsdom
+import { useRef, useState, type ComponentProps } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { McpLibraryPanel } from "../../src/renderer/components/McpLibraryPanel";
 import { defaultMcpLibraryViewState } from "../../src/renderer/libraryViewState";
 
 afterEach(cleanup);
+
+const McpCreateHarness = (props: ComponentProps<typeof McpLibraryPanel>) => {
+  const [createRequest, setCreateRequest] = useState(0);
+  const createTriggerRef = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button
+        ref={createTriggerRef}
+        type="button"
+        onClick={() => setCreateRequest((current) => current + 1)}
+      >
+        Add MCP server
+      </button>
+      <McpLibraryPanel
+        {...props}
+        createRequest={createRequest}
+        createTriggerRef={createTriggerRef}
+      />
+    </>
+  );
+};
 
 describe("McpLibraryPanel", () => {
   it("emits a controlled search update with reset scroll", () => {
@@ -63,7 +85,7 @@ describe("McpLibraryPanel", () => {
   it("protects MCP identity and validates portable environment references", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(
-      <McpLibraryPanel
+      <McpCreateHarness
         mcpServers={[
           {
             id: "context7",
@@ -137,7 +159,7 @@ describe("McpLibraryPanel", () => {
 
   it("rejects malformed remote server URLs before saving", () => {
     render(
-      <McpLibraryPanel
+      <McpCreateHarness
         mcpServers={[]}
         mcpUsage={{}}
         viewState={defaultMcpLibraryViewState}

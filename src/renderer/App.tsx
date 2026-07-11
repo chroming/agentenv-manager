@@ -497,6 +497,7 @@ export const App = () => {
   const [mcpLibraryViewState, setMcpLibraryViewState] = useState(
     defaultMcpLibraryViewState
   );
+  const [mcpCreateRequest, setMcpCreateRequest] = useState(0);
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
@@ -531,6 +532,7 @@ export const App = () => {
   const profileSearchInputRef = useRef<HTMLInputElement>(null);
   const skillSearchInputRef = useRef<HTMLInputElement>(null);
   const mcpSearchInputRef = useRef<HTMLInputElement>(null);
+  const mcpCreateButtonRef = useRef<HTMLButtonElement>(null);
   const profileFlowRequestRef = useRef(0);
   const activeProfileFlowRequestRef = useRef<number | undefined>(undefined);
   const saveInFlightRef = useRef(false);
@@ -2400,7 +2402,17 @@ export const App = () => {
                       Scan local Skills
                     </button>
                   </>
-                ) : null}
+                ) : (
+                  <button
+                    ref={mcpCreateButtonRef}
+                    className="primary-inline-action"
+                    type="button"
+                    onClick={() => setMcpCreateRequest((current) => current + 1)}
+                  >
+                    <Plus size={16} strokeWidth={2.4} />
+                    Add MCP server
+                  </button>
+                )}
               </div>
             </header>
             {activeLibraryTab === "mcp" || updateCount > 0 || needsManagementCount > 0 ? (
@@ -2503,6 +2515,8 @@ export const App = () => {
               <McpLibraryPanel
                 mcpServers={mcpServers}
                 mcpUsage={mcpUsage}
+                createRequest={mcpCreateRequest}
+                createTriggerRef={mcpCreateButtonRef}
                 viewState={mcpLibraryViewState}
                 onViewStateChange={(next) => {
                   libraryScroll.resetScrollNow();
@@ -3237,7 +3251,7 @@ export const App = () => {
               </div>
             </section>
             <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">
-              <div className="settings-section-header">
+              <div className="settings-section-header settings-data-header">
                 <div>
                   <div className="resource-heading" id="agentenv-data-heading">AgentEnv data</div>
                   <p className="settings-muted">Profiles, Library resources, deployment state, and recovery backups.</p>

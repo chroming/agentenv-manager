@@ -524,10 +524,14 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Primary commands and lifecycle state remain visible.
 - Switching workspaces MUST NOT resize or reposition global chrome. Sidebar, brand lockup, navigation rows, status card, page gutter, first-level page titles, and page-header control height use shared geometry at a given viewport.
 - Workspace-specific content MAY use its own density only inside the stable page content region.
+- Page-level creation and import commands remain in the page header. A resource list MUST NOT repeat the page title and primary command inside a nested header.
 - Comparable actions in one command group use the same control height; Profile Save and Apply also reserve the same width so lifecycle state changes do not shift surrounding content.
+- A related command group MAY move below its heading at narrower supported widths, but its individual controls MUST remain together rather than orphan-wrapping one control onto another line.
 - Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.
 - Profile list icons use one consistent compact slot and icon family. Decorative per-row icon colors MUST NOT imply unsupported categories or state.
 - Lists and expanded editors own intentional internal scrolling.
+- Expanding a Profile Composer section MUST expose a practically editable panel at the minimum viewport; presence of a clipped panel alone does not satisfy the interaction contract.
+- Profile Save and Apply remain visible while the selected Profile's Composer owns internal scrolling.
 - Buttons do not wrap at supported desktop widths.
 - Text line boxes, icon boxes, and control padding MUST fit inside their controls without vertical clipping.
 - Apply Preview keeps its header and footer stable while summary, resources, and diffs own bounded internal scrolling.

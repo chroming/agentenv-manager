@@ -11,6 +11,8 @@ import { OverflowTooltip } from "./OverflowTooltip";
 interface McpLibraryPanelProps {
   mcpServers: McpLibraryEntry[];
   mcpUsage: Record<string, string[]>;
+  createRequest?: number;
+  createTriggerRef?: RefObject<HTMLButtonElement | null>;
   viewState: McpLibraryViewState;
   onViewStateChange(next: McpLibraryViewState): void;
   searchInputRef?: RefObject<HTMLInputElement | null>;
@@ -78,6 +80,8 @@ const remoteUrlError = (value: string) => {
 export const McpLibraryPanel = ({
   mcpServers,
   mcpUsage,
+  createRequest = 0,
+  createTriggerRef,
   viewState,
   onViewStateChange,
   searchInputRef,
@@ -94,6 +98,7 @@ export const McpLibraryPanel = ({
   const [isSaving, setIsSaving] = useState(false);
   const { search } = viewState;
   const editorTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const previousCreateRequestRef = useRef(createRequest);
   const editorIdFieldRef = useRef<HTMLInputElement>(null);
   const editorNameFieldRef = useRef<HTMLInputElement>(null);
   const editorDialogRef = useRef<HTMLElement>(null);
@@ -168,6 +173,16 @@ export const McpLibraryPanel = ({
     resetEditor();
     setIsEditorOpen(true);
   };
+
+  useEffect(() => {
+    if (createRequest === previousCreateRequestRef.current) {
+      return;
+    }
+    previousCreateRequestRef.current = createRequest;
+    editorTriggerRef.current = createTriggerRef?.current ?? null;
+    resetEditor();
+    setIsEditorOpen(true);
+  }, [createRequest, createTriggerRef]);
 
   const editServer = (server: McpLibraryEntry) => {
     setEditingId(server.id);
@@ -251,24 +266,6 @@ export const McpLibraryPanel = ({
 
   return (
     <section className="skill-library-panel" aria-label="MCP library">
-      <div className="asset-editor-header">
-        <div>
-          <div className="section-title">MCP Library</div>
-          <p className="muted">{mcpServers.length} shared servers</p>
-        </div>
-        <button
-          className="primary-inline-action"
-          type="button"
-          onClick={(event) => {
-            editorTriggerRef.current = event.currentTarget;
-            createServer();
-          }}
-        >
-          <Plus size={15} strokeWidth={2.3} />
-          Add MCP server
-        </button>
-      </div>
-
       <label className="mcp-library-search">
         <Search size={15} strokeWidth={2.2} aria-hidden="true" />
         <input

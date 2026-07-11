@@ -1582,6 +1582,7 @@ describe("Electron UI profile switching e2e", () => {
     const profileList = page.locator(".profile-list");
     const editor = page.locator(".profile-editor-surface");
     const composer = page.getByRole("region", { name: "Profile composer" });
+    const commitActions = page.getByRole("group", { name: "Selected profile actions" });
 
     await expectInViewport(page, header);
     await expectInViewport(page, readiness);
@@ -1610,7 +1611,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(initialOverflow[0].overflowY).toBe("hidden");
     expect(["auto", "scroll"]).toContain(initialOverflow[1].overflowY);
-    expect(initialOverflow[2].overflowY).toBe("hidden");
+    expect(["auto", "scroll"]).toContain(initialOverflow[2].overflowY);
     for (const metrics of initialOverflow) {
       expect(metrics.clientHeight).toBeGreaterThan(0);
     }
@@ -1642,6 +1643,7 @@ describe("Electron UI profile switching e2e", () => {
       scrollHeight: element.scrollHeight
     }));
     expect(["auto", "scroll"]).toContain(advancedPanelMetrics.overflowY);
+    expect(advancedPanelMetrics.clientHeight).toBeGreaterThanOrEqual(220);
     expect(advancedPanelMetrics.scrollHeight).toBeGreaterThan(
       advancedPanelMetrics.clientHeight
     );
@@ -1653,15 +1655,17 @@ describe("Electron UI profile switching e2e", () => {
     ]);
     expect(advancedEditorBox).not.toBeNull();
     expect(advancedComposerBox).not.toBeNull();
-    expect(advancedComposerBox!.y + advancedComposerBox!.height).toBeLessThanOrEqual(
-      advancedEditorBox!.y + advancedEditorBox!.height
+    expect(advancedComposerBox!.height).toBeGreaterThanOrEqual(540);
+    const advancedEditorMetrics = await editor.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      overflowY: getComputedStyle(element).overflowY,
+      scrollHeight: element.scrollHeight
+    }));
+    expect(["auto", "scroll"]).toContain(advancedEditorMetrics.overflowY);
+    expect(advancedEditorMetrics.scrollHeight).toBeGreaterThan(
+      advancedEditorMetrics.clientHeight
     );
-    for (const sectionName of ["Instructions", "Skills", "MCP Servers", "Advanced"] as const) {
-      await expectInViewport(
-        page,
-        composer.getByRole("button", { name: sectionName, exact: true })
-      );
-    }
+    await expectInViewport(page, commitActions);
     const advancedDocumentMetrics = await page.evaluate(() => ({
       documentHeight: document.documentElement.scrollHeight,
       viewportHeight: document.documentElement.clientHeight
@@ -1682,15 +1686,13 @@ describe("Electron UI profile switching e2e", () => {
     ]);
     expect(editorBox).not.toBeNull();
     expect(composerBox).not.toBeNull();
-    expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(
-      editorBox!.y + editorBox!.height
+    expect(composerBox!.height).toBeGreaterThanOrEqual(540);
+    const expandedPanel = page.locator(
+      '[data-profile-composer-id="skills"] .profile-composer-section__panel'
     );
-    for (const sectionName of ["Instructions", "Skills", "MCP Servers", "Advanced"] as const) {
-      await expectInViewport(
-        page,
-        composer.getByRole("button", { name: sectionName, exact: true })
-      );
-    }
+    await expandedPanel.scrollIntoViewIfNeeded();
+    await expectInViewport(page, expandedPanel);
+    await expectInViewport(page, commitActions);
     await expectInViewport(page, header);
     await expectInViewport(page, readiness);
     await expectInViewport(page, workbench);
@@ -1702,16 +1704,15 @@ describe("Electron UI profile switching e2e", () => {
       documentHeight: document.documentElement.scrollHeight,
       viewportHeight: document.documentElement.clientHeight
     }));
-    const expandedPanel = page.locator(
-      '[data-profile-composer-id="skills"] .profile-composer-section__panel'
-    );
     const panelMetrics = await expandedPanel.evaluate((element) => ({
       overflowY: getComputedStyle(element).overflowY,
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight
     }));
-    expect(expandedMetrics.overflowY).toBe("hidden");
+    expect(["auto", "scroll"]).toContain(expandedMetrics.overflowY);
+    expect(expandedMetrics.scrollHeight).toBeGreaterThan(expandedMetrics.clientHeight);
     expect(["auto", "scroll"]).toContain(panelMetrics.overflowY);
+    expect(panelMetrics.clientHeight).toBeGreaterThanOrEqual(220);
     expect(panelMetrics.scrollHeight).toBeGreaterThan(panelMetrics.clientHeight);
     expect(expandedMetrics.documentHeight).toBe(expandedMetrics.viewportHeight);
   }, 30_000);
@@ -1972,6 +1973,27 @@ describe("Electron UI profile switching e2e", () => {
           x: skillsGeometry.heading.x
         });
         expect(workspaceGeometry.action?.height).toBe(skillsGeometry.action?.height);
+        if (workspace.button === "Settings") {
+          const actionGeometry = await page.locator(".settings-data-actions button").evaluateAll(
+            (buttons) =>
+              buttons.map((button) => {
+                const box = button.getBoundingClientRect();
+                return {
+                  height: Math.round(box.height),
+                  right: Math.round(box.right),
+                  y: Math.round(box.y)
+                };
+              })
+          );
+          const dataSectionRight = await page
+            .locator('[aria-labelledby="agentenv-data-heading"]')
+            .evaluate((element) => Math.round(element.getBoundingClientRect().right));
+          expect(new Set(actionGeometry.map((box) => box.y)).size).toBe(1);
+          expect(new Set(actionGeometry.map((box) => box.height)).size).toBe(1);
+          expect(Math.max(...actionGeometry.map((box) => box.right))).toBeLessThanOrEqual(
+            dataSectionRight
+          );
+        }
       }
     }
 
@@ -2204,14 +2226,23 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp();
     await page.getByRole("button", { name: "MCP Servers", exact: true }).click();
 
+    const addButton = page
+      .locator(".library-page-header")
+      .getByRole("button", { name: "Add MCP server" });
+    expect(await addButton.count()).toBe(1);
+    expect(
+      await page
+        .getByRole("region", { name: "MCP library" })
+        .getByText("MCP Library", { exact: true })
+        .count()
+    ).toBe(0);
     expect(await page.getByRole("region", { name: "MCP server editor" }).count()).toBe(0);
-    await page.getByRole("button", { name: "Add MCP server" }).click();
+    await addButton.click();
     const editor = page.getByRole("dialog", { name: "MCP server editor" });
     await editor.waitFor({ state: "visible" });
     await page.mouse.click(220, 420);
     await editor.waitFor({ state: "detached" });
 
-    const addButton = page.getByRole("button", { name: "Add MCP server" });
     await addButton.click();
     await editor.waitFor({ state: "visible" });
     await expect

@@ -4939,7 +4939,7 @@ button svg,
   align-content: start;
   gap: 10px;
   grid-template-rows: auto minmax(0, 1fr);
-  overflow-y: hidden;
+  overflow-y: auto;
 }
 
 .profile-hero {
@@ -4948,6 +4948,9 @@ button svg,
   grid-template-columns: 44px minmax(0, 1fr);
   min-height: 94px;
   padding: 12px 14px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .profile-hero__icon {
@@ -4983,6 +4986,10 @@ button svg,
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.profile-composer:has(.profile-composer-section.is-expanded) {
+  min-height: 540px;
 }
 
 .profile-composer-section {
@@ -5196,6 +5203,17 @@ button svg,
 
   .profile-readiness-strip__metric-icon {
     display: none;
+  }
+
+  .settings-data-header {
+    align-items: start;
+    display: grid;
+    gap: 12px;
+  }
+
+  .settings-data-header .settings-data-actions {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
   }
 }
 
