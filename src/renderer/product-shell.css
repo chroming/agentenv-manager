@@ -825,25 +825,6 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.metric-strip--compact.metric-strip--skills {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.metric-strip--compact.metric-strip--skills .metric-tile {
-  grid-template-columns: 34px minmax(0, 1fr);
-  min-height: 66px;
-  padding: 10px 14px;
-}
-
-.metric-strip--compact.metric-strip--skills .metric-icon {
-  height: 34px;
-  width: 34px;
-}
-
-.metric-strip--compact.metric-strip--skills .metric-tile > div > span {
-  display: none;
-}
-
 .skill-library-panel .library-table,
 .skill-library-panel .library-table__body,
 .skill-library-panel .library-table-row,
@@ -862,8 +843,8 @@
     minmax(78px, 0.48fr)
     minmax(116px, 0.78fr)
     minmax(92px, 0.58fr)
-    minmax(92px, 0.58fr)
-    112px;
+    minmax(108px, 0.68fr)
+    42px;
 }
 
 .skill-library-panel .library-table__head {
@@ -956,14 +937,8 @@
   display: none;
 }
 
-.skill-library-panel .library-actions-cell .library-row-update-action {
-  min-width: 68px;
-  padding-left: 9px;
-  padding-right: 9px;
-}
-
 .skill-library-panel .library-actions-cell {
-  gap: 6px;
+  gap: 0;
   overflow: visible;
 }
 
@@ -1036,7 +1011,7 @@
     grid-template-areas:
       "resource source update actions"
       "resource usage installs actions";
-    grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.62fr) minmax(120px, 0.58fr) 112px;
+    grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.62fr) minmax(120px, 0.58fr) 42px;
     min-height: 76px;
   }
 

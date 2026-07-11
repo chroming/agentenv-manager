@@ -72,7 +72,9 @@ interface SkillLibraryPanelProps {
   bulkUpdatePlans?: SkillUpdatePlan[];
   skillUsage: Record<string, string[]>;
   activeTool?: "import" | "discoveries";
+  isRefreshingInventory?: boolean;
   onCloseTool?(): void;
+  onRefreshInventory(): Promise<void>;
   onSelectLocalSkillFolder(): Promise<string | undefined>;
   onImportUnmanaged(sourcePath: string): Promise<boolean>;
   onImportExternal(skill: SkillInventoryEntry): Promise<boolean>;
@@ -156,7 +158,9 @@ export const SkillLibraryPanel = ({
   bulkUpdatePlans,
   skillUsage,
   activeTool,
+  isRefreshingInventory = false,
   onCloseTool,
+  onRefreshInventory,
   onSelectLocalSkillFolder,
   onImportUnmanaged,
   onImportExternal,
@@ -782,13 +786,7 @@ export const SkillLibraryPanel = ({
                       : "Library only";
             const hasUpdate = isTracked && Boolean(updateInfo?.updateAvailable);
             const hasError = isTracked && Boolean(updateInfo?.error);
-            const rowAction = hasUpdate
-              ? "update"
-              : staleCopies.length > 0
-                ? "sync"
-                : hasError
-                  ? "retry"
-                  : undefined;
+            const updateAction = hasUpdate ? "update" : hasError ? "retry" : undefined;
             const usageCount = (skillUsage[skill.id] ?? []).length;
             const revisionLabel = shortRevision(skill);
             const versionLabel = skill.remoteRef ?? revisionLabel;
@@ -849,29 +847,51 @@ export const SkillLibraryPanel = ({
                   <small>{versionDetail}</small>
                 </div>
                 <div className="library-update-cell">
-                  <strong
-                    aria-label={hasUpdate ? "Update available" : updateLabel}
-                    className={`resource-status${hasUpdate ? " is-warning" : ""}${
-                      hasError ? " is-error" : ""
-                    }`}
-                  >
-                    {!isTracked ? (
-                      <Link2Off size={13} strokeWidth={2.2} />
-                    ) : hasError ? (
-                      <TriangleAlert size={13} strokeWidth={2.2} />
-                    ) : hasUpdate ? (
-                      <Sparkles size={13} strokeWidth={2.2} />
-                    ) : !hasUpdateSource ? (
-                      <Folder size={13} strokeWidth={2.2} />
-                    ) : (
-                      <CheckCircle2 size={13} strokeWidth={2.2} />
-                    )}
-                    <span>{updateLabel}</span>
-                  </strong>
+                  {updateAction ? (
+                    <button
+                      className={`library-row-inline-action${
+                        updateAction === "update" ? " is-update" : " is-error"
+                      }`}
+                      type="button"
+                      aria-label={
+                        updateAction === "update"
+                          ? `Review update ${skill.id}`
+                          : `Retry update check ${skill.id}`
+                      }
+                      disabled={updateCheckStatus?.state === "checking"}
+                      onClick={(event) => {
+                        modalFallbackFocusRef.current = event.currentTarget;
+                        onPreviewLibrarySkillUpdate(skill.id);
+                      }}
+                    >
+                      {updateAction === "update" ? (
+                        <Sparkles size={14} strokeWidth={2.2} />
+                      ) : (
+                        <TriangleAlert size={14} strokeWidth={2.2} />
+                      )}
+                      <span>{updateAction === "update" ? "Update" : "Retry"}</span>
+                    </button>
+                  ) : (
+                    <strong
+                      aria-label={updateLabel}
+                      className="resource-status"
+                    >
+                      {!isTracked ? (
+                        <Link2Off size={13} strokeWidth={2.2} />
+                      ) : !hasUpdateSource ? (
+                        <Folder size={13} strokeWidth={2.2} />
+                      ) : (
+                        <CheckCircle2 size={13} strokeWidth={2.2} />
+                      )}
+                      <span>{updateLabel}</span>
+                    </strong>
+                  )}
                   {updateInfo?.latestRevision ? (
                     <small>
                       {updateInfo.latestRevision.slice(0, 7)} {hasUpdate ? "available" : "current"}
                     </small>
+                  ) : hasError ? (
+                    <small>Source check failed</small>
                   ) : null}
                 </div>
                 <div className="library-usage-cell">
@@ -886,8 +906,22 @@ export const SkillLibraryPanel = ({
                   </small>
                 </div>
                 <div className="library-installs-cell">
+                  {staleCopies.length > 0 ? (
+                    <>
+                      <button
+                        className="library-row-inline-action"
+                        type="button"
+                        aria-label={`Sync ${staleCopies.length === 1 ? "install" : `${staleCopies.length} installs`} of ${skill.id}`}
+                        onClick={() => onSyncSkillInstalls(skill.id)}
+                      >
+                        <RefreshCw size={14} strokeWidth={2.2} />
+                        <span>Sync</span>
+                      </button>
+                      <small>{staleCopies.length} out of sync</small>
+                    </>
+                  ) : null}
                   {installs.length === 0 ? <strong className="library-install-empty">Not installed</strong> : null}
-                  {installs.slice(0, 1).map((install) => (
+                  {staleCopies.length === 0 ? installs.slice(0, 1).map((install) => (
                     <span className="library-install-entry" key={install.path}>
                       <span title={install.foundIn.map(targetName).join(", ")}>
                         {install.foundIn.map(targetName).join(", ")}
@@ -916,44 +950,9 @@ export const SkillLibraryPanel = ({
                               : "Unmanaged"}
                       </strong>
                     </span>
-                  ))}
+                  )) : null}
                 </div>
                 <div className="library-actions-cell">
-                  {rowAction ? (
-                    <button
-                      className={`icon-action library-row-update-action${
-                        rowAction === "update" || rowAction === "sync" ? " is-update" : " is-error"
-                      }`}
-                      type="button"
-                      aria-label={
-                        rowAction === "update"
-                          ? `Review update ${skill.id}`
-                          : rowAction === "sync"
-                            ? `Sync ${staleCopies.length === 1 ? "install" : `${staleCopies.length} installs`} of ${skill.id}`
-                            : `Retry update check ${skill.id}`
-                      }
-                      disabled={updateCheckStatus?.state === "checking"}
-                      onClick={(event) => {
-                        if (rowAction !== "sync") {
-                          modalFallbackFocusRef.current = event.currentTarget;
-                        }
-                        if (rowAction === "sync") {
-                          onSyncSkillInstalls(skill.id);
-                        } else {
-                          onPreviewLibrarySkillUpdate(skill.id);
-                        }
-                      }}
-                    >
-                      {rowAction === "update" ? (
-                        <Sparkles size={15} strokeWidth={2.2} />
-                      ) : rowAction === "retry" ? (
-                        <TriangleAlert size={15} strokeWidth={2.2} />
-                      ) : (
-                        <RefreshCw size={15} strokeWidth={2.2} />
-                      )}
-                      <span>{rowAction === "update" ? "Update" : rowAction === "sync" ? "Sync" : "Retry"}</span>
-                    </button>
-                  ) : null}
                   <div className="row-action-menu">
                     <button
                       className="icon-action"
@@ -1470,15 +1469,31 @@ export const SkillLibraryPanel = ({
                 <InfoTip label="Scans supported local targets for skills that can be imported into the shared library, ignored, or kept outside AgentEnv management." />
               </strong>
             </div>
-            <button
-              className="icon-action"
-              type="button"
-              aria-label="Close library tool"
-              disabled={Boolean(automaticCleanupKey)}
-              onClick={onCloseTool}
-            >
-              <X size={16} strokeWidth={2.2} />
-            </button>
+            <div className="library-drawer__actions">
+              <button
+                className="secondary-action library-drawer__refresh"
+                type="button"
+                aria-label="Refresh local skills"
+                disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
+                onClick={() => void onRefreshInventory()}
+              >
+                <RefreshCw
+                  className={isRefreshingInventory ? "is-spinning" : undefined}
+                  size={14}
+                  strokeWidth={2.2}
+                />
+                <span>{isRefreshingInventory ? "Refreshing" : "Refresh"}</span>
+              </button>
+              <button
+                className="icon-action"
+                type="button"
+                aria-label="Close library tool"
+                disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
+                onClick={onCloseTool}
+              >
+                <X size={16} strokeWidth={2.2} />
+              </button>
+            </div>
           </div>
           <section className="resource-section target-discovery-section">
             <div className="cleanup-section-heading">

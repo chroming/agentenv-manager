@@ -70,7 +70,6 @@ import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
 } from "../shared/libraryVersions";
-import { buildSkillCleanupGroups } from "../shared/skillCleanup";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { HistoryView } from "./components/HistoryView";
 import { InfoTip } from "./components/InfoTip";
@@ -462,6 +461,7 @@ export const App = () => {
   const [mcpServers, setMcpServers] = useState<McpLibraryEntry[]>([]);
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
+  const [skillInventoryRefreshing, setSkillInventoryRefreshing] = useState(false);
   const [skillCleanupBackups, setSkillCleanupBackups] = useState<SkillCleanupBackupSummary[]>([]);
   const [skillCleanupResult, setSkillCleanupResult] = useState<SkillCleanupResult>();
   const [selectedSkillUpdatePlan, setSelectedSkillUpdatePlan] = useState<SkillUpdatePlan>();
@@ -1519,7 +1519,6 @@ export const App = () => {
       (selectedTarget?.health.canWrite ?? false)
   );
 
-  const updateCount = skillUpdates.filter((update) => update.updateAvailable).length;
   const readyTargetCount = targets.filter(
     (target) => target.health.status === "ready" && target.health.canWrite
   ).length;
@@ -1970,17 +1969,34 @@ export const App = () => {
     }
   };
 
-  const openSkillDiscoveries = async () => {
-    setSkillLibraryTool("discoveries");
+  const refreshSkillDiscoveries = async (announce = true) => {
     setBusy(true);
+    setSkillInventoryRefreshing(true);
     setError(undefined);
+    if (announce) {
+      setSkillUpdateCheckStatus({ state: "checking", message: "Refreshing local skills..." });
+    }
     try {
-      setSkillInventory(await window.agentEnv.scanSkillInventory());
+      const inventory = await window.agentEnv.scanSkillInventory();
+      setSkillInventory(inventory);
+      if (announce) {
+        setSkillUpdateCheckStatus({ state: "success", message: "Local skills refreshed" });
+      }
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      if (announce) {
+        setSkillUpdateCheckStatus({ state: "error", message: "Local skill refresh failed" });
+      }
     } finally {
+      setSkillInventoryRefreshing(false);
       setBusy(false);
     }
+  };
+
+  const openSkillDiscoveries = async () => {
+    setSkillLibraryTool("discoveries");
+    await refreshSkillDiscoveries(false);
   };
 
   const ignoreSkillGroup = async (skillKey: string) => {
@@ -2509,10 +2525,6 @@ export const App = () => {
     }
   };
 
-  const skillCleanupGroups = buildSkillCleanupGroups(skillInventory);
-  const needsManagementCount = skillCleanupGroups.filter(
-    (group) => group.resolution !== "resolved"
-  ).length;
   const dismissAppFeedback = () => {
     setError(undefined);
     setSkillUpdateCheckStatus(undefined);
@@ -2795,12 +2807,11 @@ export const App = () => {
                 )}
               </div>
             </header>
-            {activeLibraryTab === "mcp" || updateCount > 0 || needsManagementCount > 0 ? (
-            <section
-              className={`metric-strip metric-strip--compact metric-strip--${activeLibraryTab}`}
-              aria-label="Library summary"
-            >
-              {activeLibraryTab === "mcp" ? (
+            {activeLibraryTab === "mcp" ? (
+              <section
+                className="metric-strip metric-strip--compact metric-strip--mcp"
+                aria-label="Library summary"
+              >
                 <div className="metric-tile">
                   <span className="metric-icon metric-icon--purple" aria-hidden="true">
                     <Network size={21} strokeWidth={2.2} />
@@ -2811,37 +2822,15 @@ export const App = () => {
                     <span>Shared across profiles</span>
                   </div>
                 </div>
-              ) : null}
-              {activeLibraryTab === "skills" ? (
-                <>
-                  <div className="metric-tile">
-                    <span className="metric-icon metric-icon--green" aria-hidden="true">
-                      <RefreshCw size={21} strokeWidth={2.2} />
-                    </span>
-                    <div>
-                      <strong>{updateCount}</strong>
-                      <small>Updates</small>
-                      <span>{skillUpdates.length} tracked sources</span>
-                    </div>
-                  </div>
-                  <button className="metric-tile metric-tile--button" type="button" onClick={() => { void openSkillDiscoveries(); }}>
-                    <span className="metric-icon metric-icon--slate" aria-hidden="true"><HardDrive size={21} strokeWidth={2.2} /></span>
-                    <div><strong>{needsManagementCount}</strong><small>Needs attention</small><span>Local target skills</span></div>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="metric-tile">
-                    <span className="metric-icon metric-icon--amber" aria-hidden="true"><FolderKanban size={21} strokeWidth={2.2} /></span>
-                    <div><strong>{Object.keys(mcpUsage).length}</strong><small>In use</small><span>Across {profiles.length} profiles</span></div>
-                  </div>
-                  <div className="metric-tile">
-                    <span className="metric-icon metric-icon--blue" aria-hidden="true"><MonitorCheck size={21} strokeWidth={2.2} /></span>
-                    <div><strong>{readyTargetCount}</strong><small>Ready targets</small><span>{readyTargetCount}/{targets.length || 0} available</span></div>
-                  </div>
-                </>
-              )}
-            </section>
+                <div className="metric-tile">
+                  <span className="metric-icon metric-icon--amber" aria-hidden="true"><FolderKanban size={21} strokeWidth={2.2} /></span>
+                  <div><strong>{Object.keys(mcpUsage).length}</strong><small>In use</small><span>Across {profiles.length} profiles</span></div>
+                </div>
+                <div className="metric-tile">
+                  <span className="metric-icon metric-icon--blue" aria-hidden="true"><MonitorCheck size={21} strokeWidth={2.2} /></span>
+                  <div><strong>{readyTargetCount}</strong><small>Ready targets</small><span>{readyTargetCount}/{targets.length || 0} available</span></div>
+                </div>
+              </section>
             ) : null}
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
@@ -2854,7 +2843,9 @@ export const App = () => {
                 bulkUpdatePlans={bulkSkillUpdatePlans}
                 skillUsage={skillUsage}
                 activeTool={skillLibraryTool}
+                isRefreshingInventory={skillInventoryRefreshing}
                 onCloseTool={() => setSkillLibraryTool(undefined)}
+                onRefreshInventory={refreshSkillDiscoveries}
                 onSelectLocalSkillFolder={() => window.agentEnv.selectSkillFolder()}
                 onImportUnmanaged={importUnmanagedSkill}
                 onImportExternal={importExternalSkill}

@@ -4764,6 +4764,18 @@ button svg,
   margin-bottom: 4px;
 }
 
+.library-drawer__actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.library-drawer__refresh {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
 .library-drawer .target-discovery-section,
 .library-drawer .library-import-panel {
   border-top: 0;
@@ -5828,13 +5840,22 @@ button svg,
   padding-top: 0;
 }
 
-.library-actions-cell .library-row-update-action {
+.library-row-inline-action {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  display: inline-flex;
   gap: 6px;
   justify-content: center;
-  min-width: 110px;
+  min-height: 28px;
+  min-width: 72px;
+  padding: 0 9px;
+  width: fit-content;
 }
 
-.library-actions-cell .library-row-update-action span {
+.library-row-inline-action span {
   font-size: 12px;
   font-weight: 760;
   line-height: 1;
@@ -5845,19 +5866,19 @@ button svg,
   opacity: 0.58;
 }
 
-.library-actions-cell .library-row-update-action.is-update {
+.library-row-inline-action.is-update {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 
-.library-actions-cell .library-row-update-action.is-update:hover:not(:disabled) {
+.library-row-inline-action.is-update:hover:not(:disabled) {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
   color: #fff;
 }
 
-.library-actions-cell .library-row-update-action.is-error {
+.library-row-inline-action.is-error {
   border-color: #ffd4cf;
   color: var(--danger);
 }

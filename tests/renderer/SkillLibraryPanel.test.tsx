@@ -53,6 +53,7 @@ describe("SkillLibraryPanel", () => {
     const onUnignoreSkillGroup = vi.fn();
     const onRestoreCleanup = vi.fn();
     const onCloseTool = vi.fn();
+    const onRefreshInventory = vi.fn().mockResolvedValue(undefined);
     const onViewStateChange = vi.fn();
     const onSelectLocalSkillFolder = vi.fn().mockResolvedValue(
       "/tmp/opencode/skills/target-only-reviewer"
@@ -277,7 +278,9 @@ describe("SkillLibraryPanel", () => {
         bulkUpdatePlans={bulkUpdatePlans}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         activeTool={activeTool}
+        isRefreshingInventory={false}
         onCloseTool={onCloseTool}
+        onRefreshInventory={onRefreshInventory}
         onSelectLocalSkillFolder={onSelectLocalSkillFolder}
         onImportUnmanaged={onImportUnmanaged}
         onImportExternal={onImportExternal}
@@ -344,7 +347,9 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseLeave(sharedDescription);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
-    expect(within(githubRow).getByLabelText("Update available")).toHaveTextContent("Available");
+    expect(
+      within(githubRow).getByRole("button", { name: "Review update github-reviewer" })
+    ).toHaveTextContent("Update");
     const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
     expect(githubSource).not.toHaveAttribute("title");
     fireEvent.mouseEnter(githubSource);
@@ -366,7 +371,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.blur(localSource);
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
     expect(copiedLocalRow).toHaveTextContent("Not tracked");
-    expect(copiedLocalRow).toHaveTextContent("Needs sync");
+    expect(copiedLocalRow).toHaveTextContent("1 out of sync");
     expect(within(copiedLocalRow).queryByRole("button", { name: /Check update/ })).toBeNull();
     fireEvent.click(
       within(copiedLocalRow).getByRole("button", { name: "Sync install of copied-local" })
@@ -493,6 +498,8 @@ describe("SkillLibraryPanel", () => {
 
     rerender(renderPanel("discoveries"));
     const discoveries = screen.getByRole("region", { name: "Environment skills" });
+    fireEvent.click(within(discoveries).getByRole("button", { name: "Refresh local skills" }));
+    expect(onRefreshInventory).toHaveBeenCalledTimes(1);
     fireEvent.mouseDown(document.body);
     expect(onCloseTool).toHaveBeenCalledTimes(3);
     expect(discoveries).toHaveTextContent("Managed");

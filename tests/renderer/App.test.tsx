@@ -618,8 +618,8 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Library/Skills" })).toBeInTheDocument();
     expect(
       within(screen.getByRole("group", { name: "Library item github-reviewer" }))
-        .getByLabelText("Update available")
-    ).toHaveTextContent("Available");
+        .getByRole("button", { name: "Review update github-reviewer" })
+    ).toHaveTextContent("Update");
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
@@ -726,6 +726,15 @@ describe("App", () => {
           foundIn: ["opencode"],
           status: "unmanaged"
         }
+      ]).mockResolvedValueOnce([
+        {
+          id: "refreshed-reviewer",
+          name: "Refreshed Reviewer",
+          description: "Found after rescanning",
+          path: "/tmp/opencode/skills/refreshed-reviewer",
+          foundIn: ["opencode"],
+          status: "unmanaged"
+        }
       ])
     });
     render(<App />);
@@ -740,6 +749,13 @@ describe("App", () => {
     expect(
       await screen.findByRole("group", { name: "Cleanup group target-only-reviewer" })
     ).toHaveTextContent("Found on disk");
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh local skills" }));
+    expect(
+      await screen.findByRole("group", { name: "Cleanup group refreshed-reviewer" })
+    ).toHaveTextContent("Found after rescanning");
+    expect(api.scanSkillInventory).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole("status")).toHaveTextContent("Local skills refreshed");
   });
 
   it("checks skill updates on the configured background interval", async () => {

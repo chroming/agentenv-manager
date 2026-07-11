@@ -959,6 +959,25 @@ describe("Electron UI profile switching e2e", () => {
         name: "Library item layout-skill-1",
         exact: true
       });
+      const updateActionGeometry = await changingRow.evaluate((row) => {
+        const updateCell = row.querySelector<HTMLElement>(".library-update-cell")!;
+        const updateButton = updateCell.querySelector<HTMLButtonElement>(".library-row-inline-action")!;
+        const actionsCell = row.querySelector<HTMLElement>(".library-actions-cell")!;
+        const updateRect = updateCell.getBoundingClientRect();
+        const buttonRect = updateButton.getBoundingClientRect();
+        const actionsRect = actionsCell.getBoundingClientRect();
+        return {
+          buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
+          buttonInsideUpdateColumn:
+            buttonRect.left >= updateRect.left - 1 && buttonRect.right <= updateRect.right + 1,
+          columnsDoNotOverlap: updateRect.right <= actionsRect.left
+        };
+      });
+      expect(updateActionGeometry).toEqual({
+        buttonFitsText: true,
+        buttonInsideUpdateColumn: true,
+        columnsDoNotOverlap: true
+      });
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
       await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
@@ -2639,6 +2658,36 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(0);
   }, 30_000);
 
+  it("refreshes the open local skill cleanup with a new disk scan", async () => {
+    const { opencodeDir, page } = await launchApp();
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const drawer = page.getByRole("region", { name: "Environment skills" });
+    await drawer.waitFor({ state: "visible" });
+    expect(
+      await drawer.getByRole("group", { name: "Cleanup group refresh-only-reviewer" }).count()
+    ).toBe(0);
+
+    await writeUnmanagedTargetSkill(
+      opencodeDir,
+      "refresh-only-reviewer",
+      "Found by an explicit cleanup refresh."
+    );
+    await drawer.getByRole("button", { name: "Refresh local skills" }).click();
+
+    const refreshedGroup = drawer.getByRole("group", {
+      name: "Cleanup group refresh-only-reviewer"
+    });
+    await refreshedGroup.waitFor({ state: "visible", timeout: 5_000 });
+    await expect.poll(() => refreshedGroup.textContent()).toContain(
+      "Found by an explicit cleanup refresh"
+    );
+    await expect.poll(() => page.getByRole("status").textContent()).toContain(
+      "Local skills refreshed"
+    );
+  }, 30_000);
+
   it("imports a Skills CLI installation without changing the external copy or lock", async () => {
     const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
     const canonicalDir = join(homeDir, ".agents", "skills", "skills-cli-reviewer");
@@ -2883,7 +2932,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(installedSkillMd, "utf8")).resolves.toContain(
       "Review code changes before applying them."
     );
-    expect((await lstat(installedSkillMd)).isSymbolicLink()).toBe(false);
+    expect((await lstat(installedSkillMd)).isSymbolicLink()).toBe(true);
     await expect(
       readFile(
         join(opencodeDir, "skills", "shared-reviewer", ".agentenv-owner.json"),
@@ -2917,7 +2966,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
-      .getByLabel("Update available")
+      .getByRole("button", { name: "Review update shared-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
     await page
@@ -2935,7 +2984,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     await page.setViewportSize({ width: 920, height: 620 });
     const updatedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
-    await updatedRow.getByText("Needs sync").waitFor({ state: "visible" });
+    await updatedRow.getByText("1 out of sync").waitFor({ state: "visible" });
     const installActionGap = await updatedRow.evaluate((element) => {
       const installs = element.querySelector(".library-installs-cell")?.getBoundingClientRect();
       const actions = element.querySelector(".library-actions-cell")?.getBoundingClientRect();
@@ -2969,7 +3018,9 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     const updateRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     const staticRow = page.getByRole("group", { name: "Library item static-layout-reference" });
-    await updateRow.getByLabel("Update available").waitFor({ state: "visible" });
+    await updateRow
+      .getByRole("button", { name: "Review update shared-reviewer" })
+      .waitFor({ state: "visible" });
     await staticRow.waitFor({ state: "visible" });
     await resizeAppWindow(page, 1180, 728);
 
@@ -3078,11 +3129,11 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
-      .getByLabel("Update available")
+      .getByRole("button", { name: "Review update shared-reviewer" })
       .waitFor({ state: "visible" });
     await page
       .getByRole("group", { name: "Library item batch-helper" })
-      .getByLabel("Update available")
+      .getByRole("button", { name: "Review update batch-helper" })
       .waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: "Update all skills" }).click();
@@ -3723,7 +3774,9 @@ describe("Electron UI profile switching e2e", () => {
 
     await writeGitHubFixtureSkill(githubFixtureRoot, "v2");
     await page.getByRole("button", { name: "Check updates" }).click();
-    await expect.poll(() => githubRow.getByLabel("Update available").count()).toBe(0);
+    await expect
+      .poll(() => githubRow.getByRole("button", { name: "Review update github-reviewer" }).count())
+      .toBe(0);
     await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
     await page.getByRole("switch", { name: "Track updates for github-reviewer" }).click();
     await expect
@@ -3736,7 +3789,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item github-reviewer" })
-      .getByLabel("Update available")
+      .getByRole("button", { name: "Review update github-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Review update github-reviewer" }).click();
     await page
