@@ -145,6 +145,29 @@ describe("skill library store", () => {
     ).rejects.toThrow(`Skill source is missing SKILL.md: ${missingSource}`);
   });
 
+  it("persists a custom skill icon across source updates", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "source", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: Reviewer\n---\n\n# v1\n", "utf8");
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
+
+    await store.setIcon({ id: "reviewer", iconKey: "shield" });
+    await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: Reviewer\n---\n\n# v2\n", "utf8");
+    const updated = await store.updateSkill("reviewer");
+
+    expect(updated.iconKey).toBe("shield");
+    await expect(store.listSkills()).resolves.toEqual([
+      expect.objectContaining({ id: "reviewer", iconKey: "shield" })
+    ]);
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json"), "utf8")
+    ).resolves.toContain('"iconKey": "shield"');
+  });
+
   it("removes managed installs with a library skill and restores both from history", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

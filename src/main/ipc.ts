@@ -8,12 +8,13 @@ import type { ProfileStore } from "./profileStore";
 import type { SettingsStore } from "./settingsStore";
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
-import { SafeIdSchema } from "../shared/schemas";
+import { ResourceIconKeySchema, SafeIdSchema } from "../shared/schemas";
 import type {
   CreateProfileInput,
   GitHubSkillImportInput,
   ManageTargetSkillInput,
   SkillCleanupRequest,
+  SkillIconInput,
   SaveMcpServerInput,
   SaveProfileInput,
   SkillUpdatePolicyInput,
@@ -206,6 +207,12 @@ export const registerIpcHandlers = ({
         id: parseId(input?.id, "skill id"),
         policy: input?.policy === "tracked" ? "tracked" : "untracked"
       })
+  );
+  ipcMain.handle("skills:set-icon", (_event, input: SkillIconInput) =>
+    skillLibraryStore.setIcon({
+      id: parseId(input?.id, "skill id"),
+      iconKey: ResourceIconKeySchema.parse(input?.iconKey)
+    })
   );
   ipcMain.handle("skills:preview-update", (_event, id: unknown) =>
     skillLibraryStore.previewUpdate(parseId(id, "skill id"))

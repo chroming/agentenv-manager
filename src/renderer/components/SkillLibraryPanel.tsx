@@ -36,6 +36,7 @@ import type {
   SkillCleanupBackupSummary,
   SkillCleanupRequest,
   SkillInventoryEntry,
+  SkillIconInput,
   SkillLibraryEntry,
   SkillSourceType,
   SkillUpdatePolicyInput,
@@ -46,6 +47,7 @@ import type {
 import { InfoTip } from "./InfoTip";
 import { DiffViewer } from "./DiffViewer";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
+import { ResourceIconPicker } from "./ResourceIconPicker";
 import {
   type SkillLibraryViewState,
   updateSkillLibraryControls
@@ -75,6 +77,7 @@ interface SkillLibraryPanelProps {
   onConsolidateSkillGroup(input: SkillCleanupRequest): void;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
   onSetUpdatePolicy(input: SkillUpdatePolicyInput): void;
+  onSetIcon(input: SkillIconInput): void;
   onPreviewLibrarySkillUpdate(id: string): void;
   onCloseUpdatePreview(): void;
   onUpdateLibrarySkill(id: string): void;
@@ -148,6 +151,7 @@ export const SkillLibraryPanel = ({
   onConsolidateSkillGroup,
   onSetUpdateSource,
   onSetUpdatePolicy,
+  onSetIcon,
   onPreviewLibrarySkillUpdate,
   onCloseUpdatePreview,
   onUpdateLibrarySkill,
@@ -717,9 +721,12 @@ export const SkillLibraryPanel = ({
                 role="group"
               >
                 <div className="library-resource-cell">
-                  <span className="resource-avatar" aria-hidden="true">
-                    <BookOpenText size={18} strokeWidth={2.2} />
-                  </span>
+                  <ResourceIconPicker
+                    className="resource-avatar"
+                    iconKey={skill.iconKey ?? (skill.sourceType === "github" ? "github" : "folder")}
+                    label={skill.name}
+                    onChange={(iconKey) => onSetIcon({ id: skill.id, iconKey })}
+                  />
                   <div className="skill-title-stack">
                     <strong className="skill-title">{skill.name}</strong>
                     <PreviewText className="skill-description" text={skill.description || skill.id} />

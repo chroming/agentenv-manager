@@ -12,10 +12,25 @@ describe("profile schemas", () => {
         targetId: "opencode",
         name: "Daily Coding",
         description: "Default coding environment.",
+        iconKey: "rocket",
         version: 1,
         managed: { instructions: true, config: true, assets: true }
       }).id
     ).toBe("daily-coding");
+  });
+
+  it("rejects unknown resource icons", () => {
+    expect(() =>
+      ProfileManifestSchema.parse({
+        id: "daily-coding",
+        targetId: "opencode",
+        name: "Daily Coding",
+        description: "",
+        iconKey: "random-icon",
+        version: 1,
+        managed: { instructions: true, config: true, assets: true }
+      })
+    ).toThrow();
   });
 
   it("rejects ids with path separators", () => {

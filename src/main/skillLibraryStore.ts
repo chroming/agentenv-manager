@@ -14,7 +14,9 @@ import type {
   SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillInventoryEntry,
+  SkillIconInput,
   SkillLibraryEntry,
+  ResourceIconKey,
   SkillSourceType,
   SkillUpdateInfo,
   SkillUpdatePolicy,
@@ -38,6 +40,7 @@ interface SkillMetadataFile {
   remoteRevision?: string;
   updateCheckEnabled?: boolean;
   updatePolicy?: SkillUpdatePolicy;
+  iconKey?: ResourceIconKey;
   contentHash?: string;
   updatedAt?: string;
 }
@@ -91,6 +94,7 @@ export interface SkillLibraryStore {
   checkUpdates(): Promise<SkillUpdateInfo[]>;
   setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   setUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
+  setIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewUpdate(id: string): Promise<SkillUpdatePlan>;
   updateSkill(id: string): Promise<SkillLibraryEntry>;
 }
@@ -639,6 +643,7 @@ export const createSkillLibraryStore = (
       id,
       name: metadataValue(content, "name") || id,
       description: metadataValue(content, "description"),
+      iconKey: metadata.iconKey,
       path: skillDir,
       sourceType: metadata.sourceType ?? "local",
       source: metadata.source,
@@ -664,7 +669,7 @@ export const createSkillLibraryStore = (
       | "remoteRevision"
       | "updatePolicy"
       | "updateCheckEnabled"
-    >
+    > & { iconKey?: ResourceIconKey }
   ) => {
     const current = await readLibraryMetadata(skillDir);
     const sourceType = metadata.sourceType ?? "local";
@@ -678,6 +683,7 @@ export const createSkillLibraryStore = (
           remoteRef: metadata.remoteRef,
           remotePath: metadata.remotePath,
           remoteRevision: metadata.remoteRevision,
+          iconKey: metadata.iconKey ?? current.iconKey,
           updatePolicy:
             metadata.updatePolicy ??
             (typeof metadata.updateCheckEnabled === "boolean"
@@ -1484,6 +1490,25 @@ export const createSkillLibraryStore = (
     return entryFor(safeId, targetDir);
   };
 
+  const setIcon = async ({ id, iconKey }: SkillIconInput): Promise<SkillLibraryEntry> => {
+    const safeId = SafeIdSchema.parse(id);
+    const targetDir = join(await libraryDir(), safeId);
+    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
+      throw new Error(`Library skill does not exist: ${safeId}`);
+    }
+    const metadata = await readLibraryMetadata(targetDir);
+    await writeMetadata(targetDir, {
+      sourceType: metadata.sourceType ?? "local",
+      source: metadata.source,
+      remoteRef: metadata.remoteRef,
+      remotePath: metadata.remotePath,
+      remoteRevision: metadata.remoteRevision,
+      updatePolicy: updatePolicyFor(metadata),
+      iconKey
+    });
+    return entryFor(safeId, targetDir);
+  };
+
   const previewUpdate = async (id: string): Promise<SkillUpdatePlan> => {
     const safeId = SafeIdSchema.parse(id);
     const targetDir = join(await libraryDir(), safeId);
@@ -1600,7 +1625,8 @@ export const createSkillLibraryStore = (
           remoteRef: source.ref,
           remotePath: source.remotePath,
           remoteRevision: revision,
-          updatePolicy: "tracked"
+          updatePolicy: "tracked",
+          iconKey: metadata.iconKey
         });
         return entryFor(safeId, targetDir);
       } finally {
@@ -1617,7 +1643,8 @@ export const createSkillLibraryStore = (
     await writeMetadata(targetDir, {
       sourceType: "local",
       source: metadata.source,
-      updatePolicy: "tracked"
+      updatePolicy: "tracked",
+      iconKey: metadata.iconKey
     });
     return entryFor(safeId, targetDir);
   };
@@ -1641,6 +1668,7 @@ export const createSkillLibraryStore = (
     checkUpdates,
     setUpdateSource,
     setUpdatePolicy,
+    setIcon,
     previewUpdate,
     updateSkill
   };

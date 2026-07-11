@@ -3,12 +3,13 @@ export interface ProfileSummary {
   targetId: string;
   name: string;
   description: string;
+  iconKey?: ResourceIconKey;
   contentHash?: string;
   targetContentHashes?: Record<string, string>;
 }
 
-export type { AssetPolicy, ProfileManifest } from "./schemas";
-import type { AssetPolicy, ProfileManifest } from "./schemas";
+export type { AssetPolicy, ProfileManifest, ResourceIconKey } from "./schemas";
+import type { AssetPolicy, ProfileManifest, ResourceIconKey } from "./schemas";
 
 export interface AgentEnvApi {
   onWindowCloseRequested(callback: () => void): () => void;
@@ -37,6 +38,7 @@ export interface AgentEnvApi {
   checkSkillLibraryUpdates(): Promise<SkillUpdateInfo[]>;
   setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   setSkillUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
+  setSkillIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
   updateLibrarySkill(id: string): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
@@ -80,6 +82,7 @@ export interface SkillLibraryEntry {
   id: string;
   name: string;
   description: string;
+  iconKey?: ResourceIconKey;
   path: string;
   sourceType: SkillSourceType;
   source?: string;
@@ -150,6 +153,11 @@ export interface SkillUpdateSourceInput {
 export interface SkillUpdatePolicyInput {
   id: string;
   policy: SkillUpdatePolicy;
+}
+
+export interface SkillIconInput {
+  id: string;
+  iconKey: ResourceIconKey;
 }
 
 export interface ManageTargetSkillInput {

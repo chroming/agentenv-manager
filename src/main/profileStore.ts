@@ -90,6 +90,7 @@ export const createProfileStore = (
           targetId: profile.manifest.targetId,
           name: profile.manifest.name,
           description: profile.manifest.description,
+          iconKey: profile.manifest.iconKey,
           contentHash: profile.contentHash,
           targetContentHashes: profile.targetContentHashes
         };

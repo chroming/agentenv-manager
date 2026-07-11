@@ -2517,6 +2517,43 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => search.inputValue()).toBe("Refresh Button");
   }, 30_000);
 
+  it("persists custom Skill and Profile icons through the rendered app", async () => {
+    const { appDataRoot, page } = await launchApp();
+    const skillRow = page.getByRole("group", { name: "Library item shared-reviewer" });
+    const skillIcon = skillRow.getByRole("button", { name: "Change icon for Shared Reviewer" });
+    expect(await skillIcon.getAttribute("data-icon")).toBe("folder");
+    await skillIcon.click();
+    await page
+      .getByRole("menu", { name: "Icons for Shared Reviewer" })
+      .getByRole("menuitemradio", { name: "Shield" })
+      .click();
+    await expect
+      .poll(async () =>
+        (await readJson<{ iconKey?: string }>(
+          join(appDataRoot, "skills-library", "shared-reviewer", ".agentenv-skill.json")
+        )).iconKey
+      )
+      .toBe("shield");
+    await expect.poll(() => skillIcon.getAttribute("data-icon")).toBe("shield");
+
+    await selectProfile(page, "UI OpenCode alpha");
+    const profileRow = page.getByRole("group", { name: "Profile UI OpenCode alpha" });
+    await profileRow
+      .getByRole("button", { name: "Change icon for profile ui-opencode-alpha" })
+      .click();
+    await page
+      .getByRole("menu", { name: "Icons for UI OpenCode alpha" })
+      .getByRole("menuitemradio", { name: "Rocket" })
+      .click();
+    expect(await page.getByRole("button", { name: "Save", exact: true }).isEnabled()).toBe(true);
+    await saveProfile(page);
+    await expect(
+      readJson<{ iconKey?: string }>(
+        join(appDataRoot, "profiles", "ui-opencode-alpha", "profile.json")
+      )
+    ).resolves.toMatchObject({ iconKey: "rocket" });
+  }, 30_000);
+
   it("adds and removes reusable MCP servers through the rendered MCP library", async () => {
     const { appDataRoot, page } = await launchApp();
     const mcpLibraryPath = join(appDataRoot, "mcp-library.json");

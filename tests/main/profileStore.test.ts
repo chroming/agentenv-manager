@@ -16,6 +16,7 @@ const writeProfile = async (profileRoot: string) => {
         targetId: "codex",
         name: "Daily Coding",
         description: "Default",
+        iconKey: "rocket",
         version: 1,
         managed: { instructions: true, config: true, assets: true }
       })
@@ -51,6 +52,7 @@ describe("profile store", () => {
         targetId: "codex",
         name: "Daily Coding",
         description: "Default",
+        iconKey: "rocket",
         contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         targetContentHashes: {
           opencode: expect.stringMatching(/^[a-f0-9]{64}$/),

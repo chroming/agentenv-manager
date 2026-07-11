@@ -44,6 +44,7 @@ describe("SkillLibraryPanel", () => {
     const onOpenSource = vi.fn();
     const onSetUpdateSource = vi.fn();
     const onSetUpdatePolicy = vi.fn();
+    const onSetIcon = vi.fn();
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn();
     const onIgnoreSkillGroup = vi.fn();
@@ -255,6 +256,7 @@ describe("SkillLibraryPanel", () => {
         onOpenSource={onOpenSource}
         onSetUpdateSource={onSetUpdateSource}
         onSetUpdatePolicy={onSetUpdatePolicy}
+        onSetIcon={onSetIcon}
         onManageTargetSkill={onManageTargetSkill}
         onConsolidateSkillGroup={onConsolidateSkillGroup}
         onIgnoreSkillGroup={onIgnoreSkillGroup}
@@ -267,6 +269,16 @@ describe("SkillLibraryPanel", () => {
     );
 
     const { rerender } = render(renderPanel());
+
+    const sharedIcon = screen.getByRole("button", { name: "Change icon for Shared Reviewer" });
+    expect(sharedIcon).toHaveAttribute("data-icon", "folder");
+    fireEvent.click(sharedIcon);
+    const iconMenu = screen.getByRole("menu", { name: "Icons for Shared Reviewer" });
+    fireEvent.click(within(iconMenu).getByRole("menuitemradio", { name: "Rocket" }));
+    expect(onSetIcon).toHaveBeenCalledWith({ id: "shared-reviewer", iconKey: "rocket" });
+    expect(
+      screen.getByRole("button", { name: "Change icon for GitHub Reviewer" })
+    ).toHaveAttribute("data-icon", "github");
 
     fireEvent.change(screen.getByRole("textbox", { name: "Search skills" }), {
       target: { value: "github" }

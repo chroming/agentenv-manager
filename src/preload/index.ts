@@ -32,6 +32,7 @@ const api: AgentEnvApi = {
   checkSkillLibraryUpdates: () => ipcRenderer.invoke("skills:check-updates"),
   setSkillUpdateSource: (input) => ipcRenderer.invoke("skills:set-update-source", input),
   setSkillUpdatePolicy: (input) => ipcRenderer.invoke("skills:set-update-policy", input),
+  setSkillIcon: (input) => ipcRenderer.invoke("skills:set-icon", input),
   previewLibrarySkillUpdate: (id) => ipcRenderer.invoke("skills:preview-update", id),
   updateLibrarySkill: (id) => ipcRenderer.invoke("skills:update-library", id),
   readSettings: () => ipcRenderer.invoke("settings:read"),

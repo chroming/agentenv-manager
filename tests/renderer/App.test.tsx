@@ -236,6 +236,7 @@ const summaryOf = (detail: ProfileDetail) => ({
   targetId: detail.manifest.targetId,
   name: detail.manifest.name,
   description: detail.manifest.description,
+  iconKey: detail.manifest.iconKey,
   contentHash: detail.contentHash,
   targetContentHashes: detail.targetContentHashes
 });
@@ -350,6 +351,17 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       sourceType: "local",
       source: "/tmp/skill",
       updatePolicy: input.policy,
+      contentHash: "hash",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    })),
+    setSkillIcon: vi.fn().mockImplementation(async (input) => ({
+      id: input.id,
+      name: input.id,
+      description: "",
+      iconKey: input.iconKey,
+      path: "/tmp/skill",
+      sourceType: "local",
+      updatePolicy: "untracked",
       contentHash: "hash",
       updatedAt: "2026-07-02T00:00:00.000Z"
     })),
@@ -1041,6 +1053,36 @@ describe("App", () => {
     expect(applyButton).toBeEnabled();
     expect(document.querySelector(".profile-page-header .save-button")).toBeNull();
     expect(document.querySelector(".profile-page-header [aria-label='More profile actions']")).toBeNull();
+  });
+
+  it("saves a profile icon through the whole-profile draft workflow", async () => {
+    const api = installApi();
+    render(<App />);
+
+    await openProfiles();
+    const row = screen.getByRole("group", { name: "Profile Daily Coding" });
+    const icon = within(row).getByRole("button", {
+      name: "Change icon for profile daily-coding"
+    });
+    expect(icon).toHaveAttribute("data-icon", "folder");
+    fireEvent.click(icon);
+    fireEvent.click(
+      within(screen.getByRole("menu", { name: "Icons for Daily Coding" })).getByRole(
+        "menuitemradio",
+        { name: "Rocket" }
+      )
+    );
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    expect(row).toHaveTextContent("Unsaved");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(api.saveProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          manifest: expect.objectContaining({ iconKey: "rocket" })
+        })
+      )
+    );
   });
 
   it("makes Save primary and disables Apply until profile changes are saved", async () => {

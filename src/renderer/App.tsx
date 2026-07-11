@@ -36,6 +36,7 @@ import type {
   DataRestorePreview,
   ProfileDetail,
   ProfileSummary,
+  ResourceIconKey,
   RollbackPreview,
   StopManagingMode,
   StopManagingPreview,
@@ -52,6 +53,7 @@ import type {
   McpLibraryEntry,
   SaveMcpServerInput,
   SkillInventoryEntry,
+  SkillIconInput,
   SkillCleanupRequest,
   SkillCleanupBackupSummary,
   SkillCleanupResult,
@@ -74,6 +76,7 @@ import { McpEditor } from "./components/McpEditor";
 import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
+import { ResourceIconPicker } from "./components/ResourceIconPicker";
 import {
   ProfileSidebar,
   targetIconFor,
@@ -891,6 +894,36 @@ export const App = () => {
     setSkillUpdateCheckStatus(undefined);
     setPreview(undefined);
     setRollbackPreview(undefined);
+  };
+
+  const changeProfileIconNow = async (profileId: string, iconKey: ResourceIconKey) => {
+    if (draftProfile?.id === profileId) {
+      updateDraftProfile({
+        ...draftProfile,
+        manifest: { ...draftProfile.manifest, iconKey }
+      });
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      const profile = await window.agentEnv.readProfile(profileId);
+      setActiveWorkspace("profiles");
+      setSelectedProfileId(profileId);
+      setSelectedTargetId((current) => current ?? profile.manifest.targetId);
+      updateDraftProfile({
+        ...profile,
+        manifest: { ...profile.manifest, iconKey }
+      });
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeProfileIcon = (profileId: string, iconKey: ResourceIconKey) => {
+    guardProfileAction("change the profile icon", () => changeProfileIconNow(profileId, iconKey));
   };
 
   const saveDraft = async () => {
@@ -1914,6 +1947,19 @@ export const App = () => {
     }
   };
 
+  const setSkillIcon = async (input: SkillIconInput) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.setSkillIcon(input);
+      await refreshSkills();
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const previewLibrarySkillUpdate = async (id: string) => {
     setBusy(true);
     setError(undefined);
@@ -2543,6 +2589,7 @@ export const App = () => {
                 onConsolidateSkillGroup={(input) => void consolidateSkillGroup(input)}
                 onSetUpdateSource={setSkillUpdateSource}
                 onSetUpdatePolicy={(input) => void setSkillUpdatePolicy(input)}
+                onSetIcon={(input) => void setSkillIcon(input)}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onCloseUpdatePreview={() => setSelectedSkillUpdatePlan(undefined)}
                 onUpdateLibrarySkill={updateLibrarySkill}
@@ -2639,7 +2686,7 @@ export const App = () => {
                       <span>No profiles match this view</span>
                     </div>
                   ) : null}
-                  {visibleProfiles.map((profile, index) => {
+                  {visibleProfiles.map((profile) => {
                     const counts = profileResourceCounts[profile.id];
                     const profileApplications = listProfileApplications(
                       profile.id,
@@ -2647,18 +2694,30 @@ export const App = () => {
                       targets
                     );
                     const isSelected = profile.id === selectedProfileId;
+                    const profileIconKey =
+                      (isSelected ? draftProfile?.manifest.iconKey : undefined) ??
+                      profile.iconKey ??
+                      "folder";
                     return (
-                      <button
+                      <div
                         className={`profile-row${isSelected ? " is-active" : ""}`}
+                        key={profile.id}
+                        role="group"
+                        aria-label={`Profile ${profile.name}`}
+                      >
+                      <ResourceIconPicker
+                        className="profile-row__icon"
+                        iconKey={profileIconKey}
+                        label={profile.name}
+                        triggerLabel={`Change icon for profile ${profile.id}`}
+                        onChange={(iconKey) => changeProfileIcon(profile.id, iconKey)}
+                      />
+                      <button
+                        className="profile-row__content"
                         type="button"
                         aria-current={isSelected ? "page" : undefined}
-                        key={profile.id}
                         onClick={() => selectProfile(profile.id)}
                       >
-                      <span className={`profile-row__icon profile-row__icon--${isSelected ? "selected" : index % 5}`} aria-hidden="true">
-                        <FolderKanban size={15} strokeWidth={2.2} />
-                      </span>
-                      <span className="profile-row__content">
                         <span className="profile-row__title">
                           <span className="profile-row__name">{profile.name}</span>
                           {isSelected && isProfileDirty ? <strong>Unsaved</strong> : null}
@@ -2731,8 +2790,8 @@ export const App = () => {
                             );
                           })}
                         </span>
-                      </span>
                       </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -2741,9 +2800,18 @@ export const App = () => {
                 {draftProfile ? (
                   <>
                     <header className="profile-hero">
-                      <div className="profile-hero__icon" aria-hidden="true">
-                        <FolderKanban size={20} strokeWidth={2.2} />
-                      </div>
+                      <ResourceIconPicker
+                        className="profile-hero__icon"
+                        iconKey={draftProfile.manifest.iconKey ?? "folder"}
+                        label={draftProfile.manifest.name}
+                        triggerLabel={`Change icon for profile ${draftProfile.id}`}
+                        onChange={(iconKey) =>
+                          updateDraftProfile({
+                            ...draftProfile,
+                            manifest: { ...draftProfile.manifest, iconKey }
+                          })
+                        }
+                      />
                       <div className="profile-hero__body">
                         <div className="profile-hero__title">
                           <h2>{draftProfile.manifest.name}</h2>

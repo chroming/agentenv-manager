@@ -33,11 +33,25 @@ const ManagedSurfaceSchema = z
   ])
   .default({ instructions: true, config: true, assets: true });
 
+export const ResourceIconKeySchema = z.enum([
+  "github",
+  "folder",
+  "code",
+  "rocket",
+  "shield",
+  "flask",
+  "pen",
+  "terminal",
+  "database",
+  "sparkles"
+]);
+
 export const ProfileManifestSchema = z.object({
   id: SafeIdSchema,
   targetId: SafeIdSchema.default("codex"),
   name: z.string().min(1),
   description: z.string().default(""),
+  iconKey: ResourceIconKeySchema.optional(),
   version: z.literal(1),
   managed: ManagedSurfaceSchema
 });
@@ -115,3 +129,4 @@ export const SkillsPolicySchema = LegacySkillsPolicySchema;
 export type ProfileManifest = z.infer<typeof ProfileManifestSchema>;
 export type AssetPolicy = z.infer<typeof AssetPolicySchema>;
 export type SkillsPolicy = AssetPolicy;
+export type ResourceIconKey = z.infer<typeof ResourceIconKeySchema>;
