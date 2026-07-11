@@ -188,6 +188,8 @@ Rules:
 - Save and Apply MUST appear as one ordered action group in the selected Profile context: Save first, then Apply. Page creation and Target selection controls MUST NOT separate these two lifecycle commands.
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
 - Edit, Duplicate, Delete, Save, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation and Target context.
+- Every Profile row MUST list all Targets currently using that Profile, even when legacy deployment state has no application timestamp. Each Target is visibly distinguished as current, pending, or needing attention.
+- Selected-Target lifecycle status belongs beside Save and Apply inside the selected Profile surface. It MUST NOT be repeated as a separate page-level summary strip.
 - Unsaved changes MUST block Preview and Apply.
 - Switching Profile, Target, workspace, or closing the window with a dirty draft MUST offer Save, Discard, or Cancel.
 - Failed validation or Save MUST preserve all draft input.
@@ -521,6 +523,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Default content viewport is `1180 x 728`.
 - No supported viewport has page-level horizontal scrolling.
 - The Electron compositor, document root, and application shell MUST paint the complete content viewport with the page background; short pages and navigation transitions MUST NOT expose an unpainted window background.
+- Packaged macOS PNG and ICNS assets MUST preserve transparent corners around the app-icon silhouette so Finder volumes and Dock icons do not render an opaque square frame.
 - Primary commands and lifecycle state remain visible.
 - Switching workspaces MUST NOT resize or reposition global chrome. Sidebar, brand lockup, navigation rows, status card, page gutter, first-level page titles, and page-header control height use shared geometry at a given viewport.
 - Workspace-specific content MAY use its own density only inside the stable page content region.

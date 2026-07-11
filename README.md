@@ -123,6 +123,8 @@ npx electron .
 
 项目使用 `electron-builder` 打包。常用入口：
 
+以下打包命令会先通过 macOS 自带的 Swift 与 `iconutil` 重新生成透明圆角的 PNG/ICNS 图标，不需要额外安装图标工具。
+
 ```bash
 npm run pack
 ```

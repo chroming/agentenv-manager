@@ -6,6 +6,7 @@ import type {
 } from "../../src/shared/types";
 import {
   findRecentProfileApplication,
+  listProfileApplications,
   summarizeProfile
 } from "../../src/renderer/profileSummary";
 
@@ -196,5 +197,33 @@ describe("profile summary", () => {
       target: targets[0]
     });
     expect(findRecentProfileApplication("missing", states, targets)).toBeUndefined();
+  });
+
+  it("lists every active target even when application time is unavailable", () => {
+    const states = [
+      {
+        targetId: "opencode",
+        activeProfileId: "daily-coding"
+      },
+      {
+        targetId: "codex",
+        activeProfileId: "daily-coding",
+        lastAppliedAt: "2026-07-10T08:00:00.000Z"
+      },
+      {
+        targetId: "claude-code",
+        activeProfileId: "other-profile"
+      }
+    ] as TargetManagementState[];
+    const targets = [
+      { id: "opencode", name: "OpenCode" },
+      { id: "codex", name: "Codex" },
+      { id: "claude-code", name: "Claude Code" }
+    ] as TargetInfo[];
+
+    expect(listProfileApplications("daily-coding", states, targets)).toEqual([
+      { state: states[1], target: targets[1] },
+      { state: states[0], target: targets[0] }
+    ]);
   });
 });

@@ -17,6 +17,29 @@ export interface RecentProfileApplication {
   target?: TargetInfo;
 }
 
+export const listProfileApplications = (
+  profileId: string,
+  targetStates: readonly TargetManagementState[],
+  targets: readonly TargetInfo[]
+): RecentProfileApplication[] =>
+  targetStates
+    .filter((state) => state.activeProfileId === profileId)
+    .map((state) => ({
+      state,
+      target: targets.find((target) => target.id === state.targetId)
+    }))
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.state.lastAppliedAt ?? "");
+      const rightTime = Date.parse(right.state.lastAppliedAt ?? "");
+      if (Number.isFinite(leftTime) || Number.isFinite(rightTime)) {
+        return (Number.isFinite(rightTime) ? rightTime : 0) -
+          (Number.isFinite(leftTime) ? leftTime : 0);
+      }
+      return (left.target?.name ?? left.state.targetId).localeCompare(
+        right.target?.name ?? right.state.targetId
+      );
+    });
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
@@ -93,28 +116,7 @@ export const findRecentProfileApplication = (
   targetStates: readonly TargetManagementState[],
   targets: readonly TargetInfo[]
 ): RecentProfileApplication | undefined => {
-  const state = targetStates.reduce<TargetManagementState | undefined>((newest, candidate) => {
-    if (candidate.activeProfileId !== profileId || !candidate.lastAppliedAt) {
-      return newest;
-    }
-
-    const candidateTime = Date.parse(candidate.lastAppliedAt);
-    if (!Number.isFinite(candidateTime)) {
-      return newest;
-    }
-
-    if (!newest || candidateTime > Date.parse(newest.lastAppliedAt ?? "")) {
-      return candidate;
-    }
-    return newest;
-  }, undefined);
-
-  if (!state) {
-    return undefined;
-  }
-
-  return {
-    state,
-    target: targets.find((target) => target.id === state.targetId)
-  };
+  return listProfileApplications(profileId, targetStates, targets).find(
+    (application) => Number.isFinite(Date.parse(application.state.lastAppliedAt ?? ""))
+  );
 };

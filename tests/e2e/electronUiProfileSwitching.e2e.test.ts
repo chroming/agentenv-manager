@@ -1576,7 +1576,6 @@ describe("Electron UI profile switching e2e", () => {
     await selectProfile(page, "UI OpenCode alpha");
 
     const header = page.locator(".profile-page-header");
-    const readiness = page.locator(".profile-readiness-strip");
     const workbench = page.locator(".profile-workbench");
     const profileIndex = page.locator(".profile-index");
     const profileList = page.locator(".profile-list");
@@ -1585,7 +1584,6 @@ describe("Electron UI profile switching e2e", () => {
     const commitActions = page.getByRole("group", { name: "Selected profile actions" });
 
     await expectInViewport(page, header);
-    await expectInViewport(page, readiness);
     await expectInViewport(page, workbench);
 
     const shellMetrics = await page.evaluate(() => ({
@@ -1694,7 +1692,6 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, expandedPanel);
     await expectInViewport(page, commitActions);
     await expectInViewport(page, header);
-    await expectInViewport(page, readiness);
     await expectInViewport(page, workbench);
 
     const expandedMetrics = await editor.evaluate((element) => ({
@@ -1727,10 +1724,12 @@ describe("Electron UI profile switching e2e", () => {
     const saveButton = commitActions.getByRole("button", { name: "Save" });
     const moreButton = commitActions.getByRole("button", { name: "More profile actions" });
     const applyControl = page.locator(".profile-apply-control");
+    const actionStatus = page.getByRole("status", { name: "Profile readiness" });
     const expectCommitActionsToFit = async () => {
-      for (const locator of [profileTitle, commitActions, saveButton, applyControl, moreButton]) {
+      for (const locator of [profileTitle, commitActions, saveButton, applyControl, moreButton, actionStatus]) {
         await expectInViewport(page, locator);
       }
+      expect(await page.locator(".profile-readiness-strip").count()).toBe(0);
 
       const [titleBox, applyBox, saveBox, applyButtonBox] = await Promise.all([
         profileTitle.boundingBox(),
@@ -1809,7 +1808,6 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     for (const locator of [
       page.locator(".profile-page-header"),
-      page.locator(".profile-readiness-strip"),
       page.locator(".profile-workbench")
     ]) {
       await expectInViewport(page, locator);
@@ -3347,6 +3345,27 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByRole("button", { name: "Apply", exact: true }).isDisabled())
       .toBe(true);
+
+    const profileRow = page.getByRole("button", { name: /UI OpenCode alpha/ });
+    await expect
+      .poll(() => profileRow.locator(".profile-row__deployments").getAttribute("aria-label"))
+      .toBe("Active on: Codex");
+
+    await selectTarget(page, "OpenCode");
+    await previewAndApply(page, "OpenCode");
+    await expect
+      .poll(() => profileRow.locator(".profile-row__deployments").getAttribute("aria-label"))
+      .toBe("Active on: OpenCode, Codex");
+    await resizeAppWindow(page, 920, 620);
+    const deploymentGeometry = await profileRow.locator(".profile-row__deployments").evaluate(
+      (element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        targetCount: element.querySelectorAll(".profile-target-chip").length
+      })
+    );
+    expect(deploymentGeometry.targetCount).toBe(2);
+    expect(deploymentGeometry.scrollWidth - deploymentGeometry.clientWidth).toBeLessThanOrEqual(1);
   }, 30_000);
 
   it("switches Codex profiles through the rendered app without touching auth", async () => {

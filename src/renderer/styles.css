@@ -4697,7 +4697,7 @@ button svg,
 .app-shell--profiles .editor-panel {
   display: grid;
   gap: 12px;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   padding: 18px 22px;
   position: relative;
@@ -4915,24 +4915,25 @@ button svg,
   white-space: nowrap;
 }
 
-.profile-row__recent {
+.profile-row__deployments {
   align-items: center;
   color: var(--muted);
   display: flex;
   font-size: 10px;
-  gap: 8px;
-  justify-content: space-between;
+  gap: 4px;
   min-width: 0;
-}
-
-.profile-row__recent > span {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.profile-row__recent time {
-  flex: 0 0 auto;
+.profile-row__deployments--empty {
+  min-height: 18px;
+}
+
+.profile-target-chip {
+  align-items: center;
+  display: inline-flex;
+  gap: 3px;
+  min-width: 0;
 }
 
 .profile-editor-surface {

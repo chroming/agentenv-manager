@@ -1631,7 +1631,7 @@
 
 .app-shell--profiles .editor-panel {
   gap: 12px;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   padding: 14px 18px 18px;
 }
 
@@ -1738,7 +1738,7 @@
   border-radius: 0;
   gap: 9px;
   grid-template-columns: var(--profile-icon-slot) minmax(0, 1fr);
-  min-height: 98px;
+  min-height: 112px;
   padding: 11px 9px;
 }
 
@@ -1822,11 +1822,66 @@
   margin: 0 6px;
 }
 
-.profile-row__recent {
+.profile-row__deployments {
   display: flex;
+  flex-wrap: wrap;
   font-size: 10px;
-  gap: 6px;
+  gap: 4px;
   line-height: 16px;
+  max-height: 40px;
+  min-height: 18px;
+  overflow: hidden;
+}
+
+.profile-row__deployments--empty {
+  color: #94a3b8;
+  padding-left: 2px;
+}
+
+.profile-target-chip {
+  align-items: center;
+  background: #f5f7fb;
+  border: 1px solid #e3e9f1;
+  border-radius: 999px;
+  color: #53627a;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 720;
+  gap: 3px;
+  height: 18px;
+  min-width: 0;
+  padding: 0 5px 0 4px;
+}
+
+.profile-target-chip > span {
+  max-width: 62px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-target-chip .profile-target-logo {
+  height: 11px;
+  width: 11px;
+}
+
+.profile-target-chip--current {
+  background: #edf9f3;
+  border-color: #ccecdf;
+  color: #177a52;
+}
+
+.profile-target-chip--pending {
+  background: #fff7e8;
+  border-color: #f3dfb8;
+  color: #9a6518;
+}
+
+.profile-target-chip--attention {
+  background: #fff1ef;
+  border-color: #f5d1cc;
+  color: #b83a31;
 }
 
 .profile-editor-surface {
@@ -1890,6 +1945,14 @@
   justify-self: end;
 }
 
+.profile-action-stack {
+  align-self: start;
+  display: grid;
+  gap: 7px;
+  justify-items: end;
+  min-width: 0;
+}
+
 .profile-commit-actions .save-button,
 .profile-commit-actions .profile-apply-button {
   flex: 0 0 104px;
@@ -1905,6 +1968,68 @@
 .profile-commit-actions > .icon-action {
   height: var(--profile-control-height);
   width: var(--profile-control-height);
+}
+
+.profile-action-status {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #64748b;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 700;
+  gap: 5px;
+  justify-content: flex-end;
+  line-height: 16px;
+  margin: 0;
+  max-width: 100%;
+  min-height: 18px;
+  padding: 0 2px;
+}
+
+.profile-action-status__copy {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  min-width: 0;
+}
+
+.profile-action-status__copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-action-status__action {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  margin: 0;
+  min-height: 18px;
+  padding: 0;
+  width: 18px;
+}
+
+.profile-action-status__action:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
+.profile-action-status--applied {
+  color: #168455;
+}
+
+.profile-action-status--dirty,
+.profile-action-status--apply-pending,
+.profile-action-status--target-unavailable,
+.profile-action-status--validation-error,
+.profile-action-status--preview-error {
+  color: #a86b14;
 }
 
 .profile-composer__header {
@@ -2100,7 +2225,7 @@
 
   .profile-row {
     gap: 8px;
-    min-height: 96px;
+    min-height: 112px;
     padding: 10px 8px;
   }
 
@@ -2108,7 +2233,7 @@
     display: block;
   }
 
-  .profile-row__recent {
+  .profile-row__deployments {
     display: flex;
   }
 
@@ -2135,9 +2260,10 @@
     display: flex;
   }
 
-  .profile-commit-actions {
+  .profile-action-stack {
     grid-column: 2;
-    justify-self: start;
+    justify-items: start;
+    justify-self: stretch;
   }
 
   .profile-commit-actions .profile-apply-control {

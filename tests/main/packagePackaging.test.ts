@@ -97,12 +97,17 @@ describe("package metadata", () => {
     };
 
     expect(packageJson.devDependencies).toHaveProperty("electron-builder");
-    expect(packageJson.scripts?.pack).toBe(
-      "npm run build && electron-builder --dir"
+    expect(packageJson.scripts?.["icons:mac"]).toBe(
+      "swift scripts/generate-mac-icon.swift"
     );
-    expect(packageJson.scripts?.dist).toBe("npm run build && electron-builder");
+    expect(packageJson.scripts?.pack).toBe(
+      "npm run icons:mac && npm run build && electron-builder --dir"
+    );
+    expect(packageJson.scripts?.dist).toBe(
+      "npm run icons:mac && npm run build && electron-builder"
+    );
     expect(packageJson.scripts?.["dist:mac"]).toBe(
-      "npm run build && electron-builder --mac"
+      "npm run icons:mac && npm run build && electron-builder --mac"
     );
     expect(packageJson.scripts?.["test:e2e:packaged"]).toBe(
       "npm run pack && node scripts/test-packaged-app.mjs"
@@ -123,7 +128,7 @@ describe("package metadata", () => {
     });
   });
 
-  it("keeps the macOS icon corners opaque and non-white", async () => {
+  it("keeps the macOS icon corners transparent", async () => {
     const icon = await readPngRgba(join(process.cwd(), "build", "icon.png"));
     const cornerPixels = [
       icon.pixel(0, 0),
@@ -132,9 +137,9 @@ describe("package metadata", () => {
       icon.pixel(icon.width - 1, icon.height - 1)
     ];
 
-    for (const [red, green, blue, alpha] of cornerPixels) {
-      expect(alpha).toBe(255);
-      expect(red + green + blue).toBeLessThan(720);
+    for (const [, , , alpha] of cornerPixels) {
+      expect(alpha).toBe(0);
     }
+    expect(icon.pixel(Math.floor(icon.width / 2), Math.floor(icon.height / 2))[3]).toBe(255);
   });
 });

@@ -20,7 +20,6 @@ import {
   ScanLine,
   Search,
   Settings2,
-  ShieldCheck,
   TriangleAlert,
   Trash2,
   X
@@ -97,7 +96,7 @@ import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration
 import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
 import {
-  findRecentProfileApplication,
+  listProfileApplications,
   summarizeProfile,
   type ProfileResourceSummary
 } from "./profileSummary";
@@ -1273,38 +1272,26 @@ export const App = () => {
         ? RefreshCw
         : TriangleAlert;
   const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
-  const applySafetyTitle =
+  const readinessActionText =
     readiness.status === "applied"
-      ? "No changes"
-      : readiness.status === "unmanaged"
-      ? "Review before apply"
-      : readiness.status === "ready"
-        ? "Ready to review"
-        : readiness.status === "apply-pending"
-          ? "Saved version pending"
-        : readiness.status === "no-profile"
-          ? "Profile required"
-          : readiness.status === "no-target"
-            ? "Target required"
+      ? `Up to date on ${selectedTarget?.name ?? "Target"}`
+      : readiness.status === "apply-pending"
+        ? `Apply pending on ${selectedTarget?.name ?? "Target"}`
+        : readiness.status === "unmanaged"
+          ? `Ready to take over ${selectedTarget?.name ?? "Target"}`
+          : readiness.status === "ready"
+            ? `Ready for ${selectedTarget?.name ?? "Target"}`
             : readiness.status === "dirty"
-              ? "Save required"
-              : "Review required";
-  const applySafetyMessage =
-    readiness.status === "applied"
-      ? "The saved profile and managed target resources are in sync."
-      : readiness.status === "unmanaged" || readiness.status === "ready" || readiness.status === "apply-pending"
-      ? "Preview shows every replacement before a backup is created."
-      : readiness.message;
-  const readinessTitle =
-    readiness.status === "applied"
-      ? `${selectedTarget?.name ?? "Target"} applied`
-      : readiness.status === "ready" || readiness.status === "unmanaged"
-      ? `${selectedTarget?.name ?? "Target"} ready`
-      : readiness.label;
-  const selectedProfileApplication =
-    draftProfile && selectedTargetState?.activeProfileId === draftProfile.id
-      ? { state: selectedTargetState, target: selectedTarget }
-      : undefined;
+              ? "Save changes to continue"
+              : readiness.status === "target-unavailable"
+                ? `${selectedTarget?.name ?? "Target"} unavailable`
+                : readiness.status === "validation-error"
+                  ? "Review profile configuration"
+                  : readiness.status === "preview-error"
+                    ? "Review blocking issues"
+                    : readiness.status === "no-target"
+                      ? "Select a Target"
+                      : readiness.message;
   const applyDisabled =
     !draftProfile || !selectedTarget || busy || isProfileDirty || readiness.status === "applied";
   const applyDescription = !draftProfile
@@ -2548,35 +2535,6 @@ export const App = () => {
                 </button>
               </div>
             </header>
-            <section
-              className={`profile-readiness-strip profile-readiness-strip--${readiness.status}`}
-              role="status"
-              aria-label="Profile readiness"
-            >
-              <div className="profile-readiness-strip__state">
-                <span className="profile-readiness-strip__icon" aria-hidden="true">
-                  <ReadinessIcon size={18} strokeWidth={2.3} />
-                </span>
-                <span className="profile-readiness-strip__copy">
-                  <strong>{readinessTitle}</strong>
-                  <span>{readiness.message}</span>
-                </span>
-              </div>
-              <div className="profile-readiness-strip__attention">
-                <span className="profile-readiness-strip__attention-icon" aria-hidden="true">
-                  <ShieldCheck size={18} strokeWidth={2.25} />
-                </span>
-                <span className="profile-readiness-strip__copy">
-                  <strong>{applySafetyTitle}</strong>
-                  <span>{applySafetyMessage}</span>
-                </span>
-                {readiness.remediationLabel ? (
-                  <button type="button" disabled={busy} onClick={runReadinessRemediation}>
-                    {readiness.remediationLabel}
-                  </button>
-                ) : null}
-              </div>
-            </section>
             <section className="profile-workbench" aria-label="Profiles">
               <aside className="profile-index" aria-label="Profile list">
                 <div className="profile-list-toolbar">
@@ -2608,30 +2566,20 @@ export const App = () => {
                   ) : null}
                   {visibleProfiles.map((profile, index) => {
                     const counts = profileResourceCounts[profile.id];
-                    const recentApplication = findRecentProfileApplication(
+                    const profileApplications = listProfileApplications(
                       profile.id,
                       targetStates,
                       targets
                     );
                     const isSelected = profile.id === selectedProfileId;
-                    const isAppliedVersionCurrent = Boolean(
-                      recentApplication?.state.appliedProfileHash &&
-                        recentApplication.state.appliedProfileHash ===
-                          (profile.targetContentHashes?.[recentApplication.state.targetId] ??
-                            profile.contentHash) &&
-                        libraryResourceVersionsEqual(
-                          recentApplication.state.appliedLibraryVersions,
-                          profileLibraryVersions[profile.id]
-                        )
-                    );
                     return (
-                    <button
-                      className={`profile-row${isSelected ? " is-active" : ""}`}
-                      type="button"
-                      aria-current={isSelected ? "page" : undefined}
-                      key={profile.id}
-                      onClick={() => selectProfile(profile.id)}
-                    >
+                      <button
+                        className={`profile-row${isSelected ? " is-active" : ""}`}
+                        type="button"
+                        aria-current={isSelected ? "page" : undefined}
+                        key={profile.id}
+                        onClick={() => selectProfile(profile.id)}
+                      >
                       <span className={`profile-row__icon profile-row__icon--${isSelected ? "selected" : index % 5}`} aria-hidden="true">
                         <FolderKanban size={15} strokeWidth={2.2} />
                       </span>
@@ -2648,18 +2596,68 @@ export const App = () => {
                           <span>{counts?.mcp.count ?? 0} MCP</span>
                           <span>{plural(counts?.instructions.count ?? 0, "file")}</span>
                         </span>
-                        {recentApplication?.state.lastAppliedAt ? (
-                          <span className="profile-row__recent">
-                            <span>
-                              {isAppliedVersionCurrent ? "Applied to" : "Apply pending on"} {recentApplication.target?.name ?? recentApplication.state.targetId}
-                            </span>
-                            <time dateTime={recentApplication.state.lastAppliedAt}>
-                              {formatShortDate(recentApplication.state.lastAppliedAt)}
-                            </time>
-                          </span>
-                        ) : null}
+                        <span
+                          className={`profile-row__deployments${profileApplications.length === 0 ? " profile-row__deployments--empty" : ""}`}
+                          aria-label={
+                            profileApplications.length > 0
+                              ? `Active on: ${profileApplications.map((application) => application.target?.name ?? application.state.targetId).join(", ")}`
+                              : "Not active"
+                          }
+                        >
+                          {profileApplications.length === 0 ? (
+                            <span>Not active</span>
+                          ) : profileApplications.map((application) => {
+                            const targetName = application.target?.name ?? application.state.targetId;
+                            const targetIcon = application.target
+                              ? targetIconFor(application.target)
+                              : undefined;
+                            const needsAttention =
+                              application.state.lifecycleStatus === "drifted" ||
+                              application.state.lifecycleStatus === "recovery-required" ||
+                              (application.state.errorCount ?? 0) > 0;
+                            const isCurrent = Boolean(
+                              !needsAttention &&
+                                application.state.appliedProfileHash &&
+                                application.state.appliedProfileHash ===
+                                  (profile.targetContentHashes?.[application.state.targetId] ??
+                                    profile.contentHash) &&
+                                libraryResourceVersionsEqual(
+                                  application.state.appliedLibraryVersions,
+                                  profileLibraryVersions[profile.id]
+                                )
+                            );
+                            const deploymentState = needsAttention
+                              ? "attention"
+                              : isCurrent
+                                ? "current"
+                                : "pending";
+                            const deploymentTitle = needsAttention
+                              ? `${targetName} needs attention`
+                              : isCurrent
+                                ? `${targetName} is up to date`
+                                : `${targetName} uses this profile; changes are pending`;
+                            return (
+                              <span
+                                className={`profile-target-chip profile-target-chip--${deploymentState}`}
+                                title={deploymentTitle}
+                                key={application.state.targetId}
+                              >
+                                {targetIcon?.assetUrl ? (
+                                  <img
+                                    className={`profile-target-logo profile-target-logo--${targetIcon.flavor}`}
+                                    src={targetIcon.assetUrl}
+                                    alt=""
+                                  />
+                                ) : (
+                                  <Monitor size={12} strokeWidth={2.2} aria-hidden="true" />
+                                )}
+                                <span>{targetName}</span>
+                              </span>
+                            );
+                          })}
+                        </span>
                       </span>
-                    </button>
+                      </button>
                     );
                   })}
                 </div>
@@ -2697,79 +2695,88 @@ export const App = () => {
                               Deploying to {selectedTarget.name}
                             </span>
                           ) : null}
-                          <span className="profile-hero__recent">
-                            <Monitor size={14} strokeWidth={2.2} aria-hidden="true" />
-                            {selectedProfileApplication?.state.lastAppliedAt
-                              ? selectedProfileApplication.state.appliedProfileHash &&
-                                selectedProfileApplication.state.appliedProfileHash ===
-                                  selectedTargetProfileHash &&
-                                libraryResourceVersionsEqual(
-                                  selectedProfileApplication.state.appliedLibraryVersions,
-                                  collectLibraryResourceVersions(
-                                    draftProfile,
-                                    librarySkills,
-                                    mcpServers
-                                  )
-                                )
-                                ? `Applied ${formatShortDate(selectedProfileApplication.state.lastAppliedAt)}`
-                                : "Saved changes pending apply"
-                              : "Not applied yet"}
-                          </span>
                         </div>
                       </div>
-                      <div
-                        className="profile-commit-actions"
-                        ref={profileObjectActionsRef}
-                        role="group"
-                        aria-label="Selected profile actions"
-                      >
-                        <div className="profile-save-control">
-                          <button
-                            ref={saveButtonRef}
-                            className={`save-button${isProfileDirty ? " is-primary" : ""}`}
-                            type="button"
-                            disabled={busy || !isProfileDirty}
-                            onClick={saveSelectedProfile}
-                          >
-                            Save
-                          </button>
-                        </div>
-                        {profileApplyControl}
-                        <button
-                          ref={profileActionsButtonRef}
-                          className="icon-action"
-                          type="button"
-                          aria-expanded={isProfileActionsOpen}
-                          aria-haspopup="menu"
-                          aria-label="More profile actions"
-                          title="More profile actions"
-                          onClick={() => {
-                            setIsTargetMenuOpen(false);
-                            setIsProfileActionsOpen((current) => !current);
-                          }}
+                      <div className="profile-action-stack">
+                        <div
+                          className="profile-commit-actions"
+                          ref={profileObjectActionsRef}
+                          role="group"
+                          aria-label="Selected profile actions"
                         >
-                          <MoreHorizontal size={16} strokeWidth={2.2} />
-                        </button>
-                        {isProfileActionsOpen ? (
-                          <div className="profile-actions-menu" role="menu" aria-label="Profile actions">
-                            <button type="button" role="menuitem" onClick={duplicateSelectedProfile}>
-                              <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
-                              <span>Duplicate profile</span>
-                            </button>
+                          <div className="profile-save-control">
                             <button
-                              className="is-danger"
+                              ref={saveButtonRef}
+                              className={`save-button${isProfileDirty ? " is-primary" : ""}`}
                               type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                setIsProfileActionsOpen(false);
-                                openDeleteProfileDialog();
-                              }}
+                              disabled={busy || !isProfileDirty}
+                              onClick={saveSelectedProfile}
                             >
-                              <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                              <span>Delete profile</span>
+                              Save
                             </button>
                           </div>
-                        ) : null}
+                          {profileApplyControl}
+                          <button
+                            ref={profileActionsButtonRef}
+                            className="icon-action"
+                            type="button"
+                            aria-expanded={isProfileActionsOpen}
+                            aria-haspopup="menu"
+                            aria-label="More profile actions"
+                            title="More profile actions"
+                            onClick={() => {
+                              setIsTargetMenuOpen(false);
+                              setIsProfileActionsOpen((current) => !current);
+                            }}
+                          >
+                            <MoreHorizontal size={16} strokeWidth={2.2} />
+                          </button>
+                          {isProfileActionsOpen ? (
+                            <div className="profile-actions-menu" role="menu" aria-label="Profile actions">
+                              <button type="button" role="menuitem" onClick={duplicateSelectedProfile}>
+                                <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
+                                <span>Duplicate profile</span>
+                              </button>
+                              <button
+                                className="is-danger"
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setIsProfileActionsOpen(false);
+                                  openDeleteProfileDialog();
+                                }}
+                              >
+                                <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                                <span>Delete profile</span>
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div
+                          className={`profile-action-status profile-action-status--${readiness.status}`}
+                        >
+                          <span
+                            className="profile-action-status__copy"
+                            role="status"
+                            aria-label="Profile readiness"
+                            title={readiness.message}
+                          >
+                            <ReadinessIcon size={13} strokeWidth={2.3} aria-hidden="true" />
+                            <span>{readinessActionText}</span>
+                          </span>
+                          {readiness.remediationLabel && readiness.remediationLabel !== "Save now" ? (
+                            <button
+                              className="profile-action-status__action"
+                              type="button"
+                              aria-label={readiness.remediationLabel}
+                              title={readiness.remediationLabel}
+                              disabled={busy}
+                              onClick={runReadinessRemediation}
+                            >
+                              <ArrowRight size={12} strokeWidth={2.3} aria-hidden="true" />
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </header>
             <section className="profile-composer" aria-label="Profile composer">

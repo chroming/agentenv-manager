@@ -9,9 +9,10 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "tsc --noEmit && electron-vite build",
-    "pack": "npm run build && electron-builder --dir",
-    "dist": "npm run build && electron-builder",
-    "dist:mac": "npm run build && electron-builder --mac",
+    "icons:mac": "swift scripts/generate-mac-icon.swift",
+    "pack": "npm run icons:mac && npm run build && electron-builder --dir",
+    "dist": "npm run icons:mac && npm run build && electron-builder",
+    "dist:mac": "npm run icons:mac && npm run build && electron-builder --mac",
     "capture:profiles": "npm run build && node scripts/capture-profiles.mjs",
     "test": "vitest run",
     "test:e2e": "npm run build && vitest run tests/e2e",

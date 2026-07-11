@@ -453,8 +453,12 @@ try {
   await capturePage(windowHandle, join(outputDir, "apply-preview-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(windowHandle, join(outputDir, "apply-preview-920x620.png"));
-  await page.keyboard.press("Escape");
+  await previewDialog.getByRole("button", { name: "Apply profile" }).click();
   await previewDialog.waitFor({ state: "hidden" });
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(windowHandle, join(outputDir, "profiles-applied-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(windowHandle, join(outputDir, "profiles-applied-920x620.png"));
   await captureWorkspace(
     "Targets",
     "targets",
