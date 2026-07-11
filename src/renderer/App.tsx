@@ -17,7 +17,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  Rocket,
   ScanLine,
   Search,
   Settings2,
@@ -2617,20 +2616,20 @@ export const App = () => {
                       onClick={() => selectProfile(profile.id)}
                     >
                       <span className={`profile-row__icon profile-row__icon--${isSelected ? "selected" : index % 5}`} aria-hidden="true">
-                        <Rocket size={18} strokeWidth={2.2} />
+                        <FolderKanban size={15} strokeWidth={2.2} />
                       </span>
                       <span className="profile-row__content">
                         <span className="profile-row__title">
-                          {profile.name}
+                          <span className="profile-row__name">{profile.name}</span>
                           {isSelected && isProfileDirty ? <strong>Unsaved</strong> : null}
                         </span>
-                        <small>{profile.description || "No description"}</small>
+                        <small title={profile.description || "No description"}>
+                          {profile.description || "No description"}
+                        </small>
                         <span className="profile-row__stats">
-                          <span>{counts?.skills.count ?? 0} Skills</span>
+                          <span>{counts?.skills.count ?? 0} skills</span>
                           <span>{counts?.mcp.count ?? 0} MCP</span>
-                          <span>
-                            {plural(counts?.instructions.count ?? 0, "Instruction")}
-                          </span>
+                          <span>{plural(counts?.instructions.count ?? 0, "file")}</span>
                         </span>
                         {recentApplication?.state.lastAppliedAt ? (
                           <span className="profile-row__recent">
@@ -2653,7 +2652,7 @@ export const App = () => {
                   <>
                     <header className="profile-hero">
                       <div className="profile-hero__icon" aria-hidden="true">
-                        <Rocket size={30} strokeWidth={2.2} />
+                        <FolderKanban size={20} strokeWidth={2.2} />
                       </div>
                       <div className="profile-hero__body">
                         <div className="profile-hero__title">

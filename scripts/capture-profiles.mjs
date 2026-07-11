@@ -1,4 +1,4 @@
-import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -198,6 +198,15 @@ const capturePage = async (windowHandle, path) => {
   await writeFile(path, Buffer.from(dataUrl.split(",", 2)[1], "base64"));
 };
 
+const fileExists = async (path) => {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const setWindowSize = async (page, windowHandle, width, height) => {
   await windowHandle.evaluate((browserWindow, size) => {
     browserWindow.setContentSize(size.width, size.height);
@@ -323,6 +332,15 @@ try {
     "profiles",
     () => page.getByRole("region", { name: "Profiles", exact: true })
   );
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  const previewDialog = page.getByRole("dialog", { name: "Preview" });
+  await previewDialog.waitFor({ state: "visible" });
+  await capturePage(windowHandle, join(outputDir, "apply-preview-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(windowHandle, join(outputDir, "apply-preview-920x620.png"));
+  await page.keyboard.press("Escape");
+  await previewDialog.waitFor({ state: "hidden" });
   await captureWorkspace(
     "Targets",
     "targets",
@@ -346,10 +364,12 @@ try {
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(windowHandle, join(outputDir, "implementation-1180x728.png"));
 
-  const htmlPath = await writeComparisonPage();
-  await captureComparison(page, windowHandle, htmlPath, "full", "comparison.png", 570);
-  await captureComparison(page, windowHandle, htmlPath, "header", "header-comparison.png", 250);
-  await captureComparison(page, windowHandle, htmlPath, "composer", "composer-comparison.png", 420);
+  if (await fileExists(referencePath)) {
+    const htmlPath = await writeComparisonPage();
+    await captureComparison(page, windowHandle, htmlPath, "full", "comparison.png", 570);
+    await captureComparison(page, windowHandle, htmlPath, "header", "header-comparison.png", 250);
+    await captureComparison(page, windowHandle, htmlPath, "composer", "composer-comparison.png", 420);
+  }
 } finally {
   await app?.close();
   await rm(fixtureRoot, { recursive: true, force: true });

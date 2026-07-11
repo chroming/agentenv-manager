@@ -975,9 +975,9 @@ describe("App", () => {
     const profileList = screen.getByRole("complementary", { name: "Profile list" });
     const row = within(profileList).getByRole("button", { name: /Daily Coding/ });
     expect(row).toHaveAttribute("aria-current", "page");
-    expect(row).toHaveTextContent("4 Skills");
+    expect(row).toHaveTextContent("4 skills");
     expect(row).toHaveTextContent("4 MCP");
-    expect(row).toHaveTextContent("1 Instruction");
+    expect(row).toHaveTextContent("1 file");
     expect(row).toHaveTextContent("Applied to Codex");
     expect(within(row).getByText("Jul 10")).toHaveAttribute(
       "datetime",

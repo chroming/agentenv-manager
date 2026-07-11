@@ -507,8 +507,13 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Primary commands and lifecycle state remain visible.
 - Switching workspaces MUST NOT resize or reposition global chrome. Sidebar, brand lockup, navigation rows, status card, page gutter, first-level page titles, and page-header control height use shared geometry at a given viewport.
 - Workspace-specific content MAY use its own density only inside the stable page content region.
+- Comparable actions in one command group use the same control height; Profile Save and Apply also reserve the same width so lifecycle state changes do not shift surrounding content.
+- Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.
+- Profile list icons use one consistent compact slot and icon family. Decorative per-row icon colors MUST NOT imply unsupported categories or state.
 - Lists and expanded editors own intentional internal scrolling.
 - Buttons do not wrap at supported desktop widths.
+- Text line boxes, icon boxes, and control padding MUST fit inside their controls without vertical clipping.
+- Apply Preview keeps its header and footer stable while summary, resources, and diffs own bounded internal scrolling.
 - Menus, tooltips, and dialogs remain above rows and inside the visible viewport.
 - Modal dialogs trap keyboard focus until they close.
 - Escape closes dismissible layers; safe outside click closes them; focus returns to the trigger or the next logical surviving control.

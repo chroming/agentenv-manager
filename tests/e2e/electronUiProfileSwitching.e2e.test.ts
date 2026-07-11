@@ -408,6 +408,18 @@ const launchApp = async (
   };
 };
 
+const resizeAppWindow = async (page: Page, width: number, height: number) => {
+  if (!app) {
+    throw new Error("Electron application is not running");
+  }
+  const windowHandle = await app.browserWindow(page);
+  await windowHandle.evaluate((browserWindow, size) => {
+    browserWindow.setContentSize(size.width, size.height);
+  }, { width, height });
+  await page.setViewportSize({ width, height });
+  await page.waitForTimeout(300);
+};
+
 const selectProfile = async (page: Page, name: string) => {
   await page
     .getByRole("complementary", { name: "Global navigation" })
@@ -1507,6 +1519,7 @@ describe("Electron UI profile switching e2e", () => {
     const readiness = page.locator(".profile-readiness-strip");
     const workbench = page.locator(".profile-workbench");
     const profileIndex = page.locator(".profile-index");
+    const profileList = page.locator(".profile-list");
     const editor = page.locator(".profile-editor-surface");
     const composer = page.getByRole("region", { name: "Profile composer" });
 
@@ -1527,7 +1540,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(initialWorkbenchBox).not.toBeNull();
 
     const initialOverflow = await Promise.all(
-      [profileIndex, editor].map((locator) =>
+      [profileIndex, profileList, editor].map((locator) =>
         locator.evaluate((element) => ({
           overflowY: getComputedStyle(element).overflowY,
           clientHeight: element.clientHeight,
@@ -1535,8 +1548,9 @@ describe("Electron UI profile switching e2e", () => {
         }))
       )
     );
-    expect(["auto", "scroll"]).toContain(initialOverflow[0].overflowY);
-    expect(initialOverflow[1].overflowY).toBe("hidden");
+    expect(initialOverflow[0].overflowY).toBe("hidden");
+    expect(["auto", "scroll"]).toContain(initialOverflow[1].overflowY);
+    expect(initialOverflow[2].overflowY).toBe("hidden");
     for (const metrics of initialOverflow) {
       expect(metrics.clientHeight).toBeGreaterThan(0);
     }
@@ -1644,7 +1658,7 @@ describe("Electron UI profile switching e2e", () => {
 
   it("keeps core management actions usable at the minimum supported viewport", async () => {
     const { page } = await launchApp();
-    await page.setViewportSize({ width: 1180, height: 728 });
+    await resizeAppWindow(page, 1180, 728);
     await selectProfile(page, "UI OpenCode alpha");
 
     const profileTitle = page.locator(".profile-hero__title");
@@ -1676,10 +1690,62 @@ describe("Electron UI profile switching e2e", () => {
       expect(titleOverlapsApply).toBe(false);
       expect(applyButtonBox!.x - (saveBox!.x + saveBox!.width)).toBeLessThanOrEqual(10);
       expect(Math.abs(saveBox!.y - applyButtonBox!.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(saveBox!.height - applyButtonBox!.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(saveBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
+      expect(Math.round(saveBox!.height)).toBe(40);
+      expect(Math.round(saveBox!.width)).toBe(104);
+
+      const controlsFitText = await commitActions.locator("button").evaluateAll((buttons) =>
+        buttons.every((button) => {
+          const style = getComputedStyle(button);
+          const lineHeight = Number.parseFloat(style.lineHeight);
+          const verticalPadding =
+            Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+          return lineHeight + verticalPadding <= button.clientHeight + 1;
+        })
+      );
+      expect(controlsFitText).toBe(true);
+
+      const profileGeometry = await page.locator(".profile-row.is-active").evaluate((row) => {
+        const icon = row.querySelector<HTMLElement>(".profile-row__icon");
+        const content = row.querySelector<HTMLElement>(".profile-row__content");
+        const description = row.querySelector<HTMLElement>("small");
+        const stats = row.querySelector<HTMLElement>(".profile-row__stats");
+        const rowBox = row.getBoundingClientRect();
+        const iconBox = icon?.getBoundingClientRect();
+        const contentBox = content?.getBoundingClientRect();
+        return {
+          childrenFit:
+            Boolean(iconBox && contentBox) &&
+            iconBox!.top >= rowBox.top &&
+            iconBox!.bottom <= rowBox.bottom &&
+            contentBox!.top >= rowBox.top &&
+            contentBox!.bottom <= rowBox.bottom,
+          descriptionDisplay: description ? getComputedStyle(description).display : "missing",
+          gap: iconBox && contentBox ? contentBox.left - iconBox.right : Number.NaN,
+          iconHeight: iconBox?.height ?? 0,
+          statsOverflow: stats ? stats.scrollWidth - stats.clientWidth : Number.POSITIVE_INFINITY
+        };
+      });
+      expect(profileGeometry.childrenFit).toBe(true);
+      expect(profileGeometry.descriptionDisplay).not.toBe("none");
+      expect(profileGeometry.iconHeight).toBeLessThanOrEqual(30);
+      expect(profileGeometry.gap).toBeGreaterThanOrEqual(6);
+      expect(profileGeometry.gap).toBeLessThanOrEqual(10);
+      expect(profileGeometry.statsOverflow).toBeLessThanOrEqual(1);
+
+      const heroContent = await page.locator(".profile-hero").evaluate((hero) => ({
+        description: getComputedStyle(
+          hero.querySelector<HTMLElement>(".profile-description")!
+        ).display,
+        meta: getComputedStyle(hero.querySelector<HTMLElement>(".profile-hero__meta")!).display
+      }));
+      expect(heroContent.description).not.toBe("none");
+      expect(heroContent.meta).not.toBe("none");
     };
 
     await expectCommitActionsToFit();
-    await page.setViewportSize({ width: 920, height: 620 });
+    await resizeAppWindow(page, 920, 620);
     for (const locator of [
       page.locator(".profile-page-header"),
       page.locator(".profile-readiness-strip"),
@@ -1688,6 +1754,29 @@ describe("Electron UI profile switching e2e", () => {
       await expectInViewport(page, locator);
     }
     await expectCommitActionsToFit();
+    const profileContainment = await page.evaluate(() => {
+      const overflowingComposerChildren = [...document.querySelectorAll<HTMLElement>(
+        ".profile-composer-section__trigger"
+      )].flatMap((trigger, triggerIndex) => {
+        const box = trigger.getBoundingClientRect();
+        return [...trigger.children].flatMap((child) => {
+          if (getComputedStyle(child).display === "none") {
+            return [];
+          }
+          const childBox = child.getBoundingClientRect();
+          return childBox.top < box.top - 1 || childBox.bottom > box.bottom + 1
+            ? [`${triggerIndex}:${(child as HTMLElement).className}`]
+            : [];
+        });
+      });
+      return {
+        overflowingComposerChildren,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth
+      };
+    });
+    expect(profileContainment.documentWidth).toBe(profileContainment.viewportWidth);
+    expect(profileContainment.overflowingComposerChildren).toEqual([]);
     await moreButton.click();
     const profileActionsMenu = page.getByRole("menu", { name: "Profile actions" });
     await expectInViewport(page, profileActionsMenu);
@@ -1875,7 +1964,7 @@ describe("Electron UI profile switching e2e", () => {
 
   it("opens the apply preview at its summary instead of scrolling to the footer", async () => {
     const { page } = await launchApp();
-    await page.setViewportSize({ width: 1180, height: 728 });
+    await resizeAppWindow(page, 1180, 728);
     await selectProfile(page, "UI OpenCode alpha");
 
     await applyActionButton(page, "OpenCode").click();
@@ -1893,6 +1982,56 @@ describe("Electron UI profile switching e2e", () => {
       .evaluateAll((cards) => cards.map((card) => getComputedStyle(card).alignSelf));
     expect(summaryCardAlignment.length).toBeGreaterThan(0);
     expect(summaryCardAlignment.every((alignment) => alignment === "start")).toBe(true);
+
+    const expectPreviewGeometry = async () => {
+      const cancelButton = previewDialog.getByRole("button", { name: "Cancel" });
+      const confirmButton = previewDialog.getByRole("button", { name: "Apply profile" });
+      const [cancelBox, confirmBox] = await Promise.all([
+        cancelButton.boundingBox(),
+        confirmButton.boundingBox()
+      ]);
+      expect(cancelBox).not.toBeNull();
+      expect(confirmBox).not.toBeNull();
+      expect(Math.round(cancelBox!.height)).toBe(40);
+      expect(Math.abs(cancelBox!.height - confirmBox!.height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(cancelBox!.width - confirmBox!.width)).toBeLessThanOrEqual(1);
+      await expectInViewport(page, previewDialog.locator(".preview-header"));
+      await expectInViewport(page, previewDialog.locator(".preview-actions"));
+
+      const geometry = await previewDialog.evaluate((dialog) => {
+        const textFits = (element: Element) => {
+          const style = getComputedStyle(element);
+          const lineHeight = Number.parseFloat(style.lineHeight);
+          const verticalPadding =
+            Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+          return lineHeight + verticalPadding <= (element as HTMLElement).clientHeight + 1;
+        };
+        const resourceRows = [...dialog.querySelectorAll<HTMLElement>(".preview-resource-plan article")];
+        return {
+          buttonsFitText: [...dialog.querySelectorAll(".preview-actions button")].every(textFits),
+          dialogOverflow: dialog.scrollWidth - dialog.clientWidth,
+          resourceRows: resourceRows.map((row) => row.getBoundingClientRect().height),
+          summaryCardsFit: [...dialog.querySelectorAll<HTMLElement>(".preview-summary-card")].every(
+            (card) => {
+              const box = card.getBoundingClientRect();
+              return [...card.children].every((child) => {
+                const childBox = child.getBoundingClientRect();
+                return childBox.top >= box.top && childBox.bottom <= box.bottom;
+              });
+            }
+          )
+        };
+      });
+      expect(geometry.buttonsFitText).toBe(true);
+      expect(geometry.dialogOverflow).toBeLessThanOrEqual(1);
+      expect(geometry.resourceRows.length).toBeGreaterThan(0);
+      expect(geometry.resourceRows.every((height) => height >= 51)).toBe(true);
+      expect(geometry.summaryCardsFit).toBe(true);
+    };
+
+    await expectPreviewGeometry();
+    await resizeAppWindow(page, 920, 620);
+    await expectPreviewGeometry();
   }, 30_000);
 
   it("makes Targets a sequential management workflow with on-demand diagnostics", async () => {
