@@ -2,6 +2,7 @@ import { useRef } from "react";
 import type { SkillUpdatePlan } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffViewer } from "./DiffViewer";
+import { Button, ModalFrame } from "./ui";
 
 interface SkillUpdateDialogProps {
   plan?: SkillUpdatePlan;
@@ -35,15 +36,13 @@ export const SkillUpdateDialog = ({
   }
 
   return (
-    <div className="preview-modal-backdrop" onClick={busy ? undefined : onClose}>
-      <section
-        ref={dialogRef}
-        className="profile-form-dialog skill-update-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Update preview for ${plan.id}`}
-        onClick={(event) => event.stopPropagation()}
-      >
+    <ModalFrame
+      ariaLabel={`Update preview for ${plan.id}`}
+      className="skill-update-dialog"
+      dialogRef={dialogRef}
+      dismissDisabled={busy}
+      onDismiss={onClose}
+    >
         <header className="profile-dialog-header">
           <div>
             <div className="section-title">Update {plan.name}</div>
@@ -65,26 +64,24 @@ export const SkillUpdateDialog = ({
           ))}
         </div>
         <footer className="preview-actions">
-          <button
+          <Button
             ref={initialFocusRef}
-            className="secondary-action"
-            type="button"
             disabled={busy}
+            size="prominent"
             onClick={onClose}
           >
             Cancel
-          </button>
-          <button
-            className="primary-action"
-            type="button"
+          </Button>
+          <Button
             aria-label={`Apply update ${plan.id}`}
             disabled={busy}
+            size="prominent"
+            variant="primary"
             onClick={() => onConfirm(plan.id)}
           >
             {busy ? "Updating..." : "Update skill"}
-          </button>
+          </Button>
         </footer>
-      </section>
-    </div>
+    </ModalFrame>
   );
 };
