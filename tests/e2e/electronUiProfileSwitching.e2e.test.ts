@@ -2763,7 +2763,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
-      .getByText("Update available")
+      .getByLabel("Update available")
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
     await page
@@ -2795,6 +2795,117 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, 30_000);
 
+  it("keeps Skill table columns and two-line metadata aligned across row actions", async () => {
+    const { appDataRoot, librarySkill, page } = await launchApp();
+    const staticSkillDir = join(appDataRoot, "skills-library", "static-layout-reference");
+    await mkdir(staticSkillDir, { recursive: true });
+    await writeFile(
+      join(staticSkillDir, "SKILL.md"),
+      "---\nname: Static Layout Reference\ndescription: A stable row without a contextual update action.\n---\n\n# Static Layout Reference\n",
+      "utf8"
+    );
+    await writeFile(
+      join(librarySkill.sourceDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Layout update available.\n---\n\n# Shared Reviewer\n\nUpdated layout fixture.\n",
+      "utf8"
+    );
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Refresh skills" }).click();
+    await page.getByRole("button", { name: "Check updates" }).click();
+    const updateRow = page.getByRole("group", { name: "Library item shared-reviewer" });
+    const staticRow = page.getByRole("group", { name: "Library item static-layout-reference" });
+    await updateRow.getByLabel("Update available").waitFor({ state: "visible" });
+    await staticRow.waitFor({ state: "visible" });
+    await resizeAppWindow(page, 1180, 728);
+
+    const defaultGeometry = await page.evaluate(() => {
+      const head = document.querySelector<HTMLElement>(".skill-library-panel .library-table__head");
+      const rows = [
+        document.querySelector<HTMLElement>('[aria-label="Library item shared-reviewer"]'),
+        document.querySelector<HTMLElement>('[aria-label="Library item static-layout-reference"]')
+      ];
+      const cellSelectors = [
+        ".library-source-cell",
+        ".library-version-cell",
+        ".library-update-cell",
+        ".library-usage-cell",
+        ".library-installs-cell"
+      ];
+      const headerCells = head ? Array.from(head.children) as HTMLElement[] : [];
+      const headerLefts = headerCells.slice(1, 6).map((cell) => cell.getBoundingClientRect().left);
+      const rowMetrics = rows.map((row) => {
+        const cells = cellSelectors.map((selector) => row?.querySelector<HTMLElement>(selector));
+        const actions = row?.querySelector<HTMLElement>(".library-actions-cell");
+        const installs = row?.querySelector<HTMLElement>(".library-installs-cell");
+        const version = row?.querySelector<HTMLElement>(".library-version-cell");
+        const primary = [
+          version?.querySelector<HTMLElement>("strong"),
+          row?.querySelector<HTMLElement>(".library-update-cell .resource-status"),
+          row?.querySelector<HTMLElement>(".library-usage-cell .usage-summary"),
+          row?.querySelector<HTMLElement>(".library-installs-cell .library-install-empty, .library-installs-cell .library-install-entry > span")
+        ].filter((item): item is HTMLElement => Boolean(item));
+        const rowBox = row?.getBoundingClientRect();
+        const actionBox = actions?.getBoundingClientRect();
+        const installBox = installs?.getBoundingClientRect();
+        return {
+          cellLefts: cells.map((cell) => cell?.getBoundingClientRect().left ?? -1),
+          actionsLeft: actionBox?.left ?? -1,
+          actionGap: actionBox && installBox ? actionBox.left - installBox.right : -1,
+          childrenFit: Boolean(rowBox) && Array.from(row!.children).every((child) => {
+            const box = child.getBoundingClientRect();
+            return box.left >= rowBox!.left - 1 && box.right <= rowBox!.right + 1;
+          }),
+          primaryTops: primary.map((item) => item.getBoundingClientRect().top),
+          versionChildLefts: version
+            ? Array.from(version.children).map((child) => child.getBoundingClientRect().left)
+            : [],
+          statusOverflow: (() => {
+            const label = row?.querySelector<HTMLElement>(".library-update-cell .resource-status > span");
+            return label ? label.scrollWidth - label.clientWidth : 0;
+          })()
+        };
+      });
+      return {
+        headerLefts,
+        rowMetrics,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth
+      };
+    });
+
+    expect(defaultGeometry.documentWidth).toBe(defaultGeometry.viewportWidth);
+    for (const row of defaultGeometry.rowMetrics) {
+      row.cellLefts.forEach((left, index) => {
+        expect(Math.abs(left - defaultGeometry.headerLefts[index]!)).toBeLessThanOrEqual(1);
+      });
+      expect(row.childrenFit).toBe(true);
+      expect(row.actionGap).toBeGreaterThanOrEqual(9);
+      expect(row.statusOverflow).toBeLessThanOrEqual(1);
+      expect(Math.max(...row.primaryTops) - Math.min(...row.primaryTops)).toBeLessThanOrEqual(1);
+      expect(Math.max(...row.versionChildLefts) - Math.min(...row.versionChildLefts)).toBeLessThanOrEqual(1);
+    }
+    expect(
+      Math.abs(defaultGeometry.rowMetrics[0]!.actionsLeft - defaultGeometry.rowMetrics[1]!.actionsLeft)
+    ).toBeLessThanOrEqual(1);
+
+    await resizeAppWindow(page, 920, 620);
+    const compactGeometry = await updateRow.evaluate((row) => {
+      const actions = row.querySelector<HTMLElement>(".library-actions-cell")!.getBoundingClientRect();
+      const update = row.querySelector<HTMLElement>(".library-update-cell")!.getBoundingClientRect();
+      const installs = row.querySelector<HTMLElement>(".library-installs-cell")!.getBoundingClientRect();
+      return {
+        actionGap: actions.left - Math.max(update.right, installs.right),
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+        versionDisplay: getComputedStyle(row.querySelector<HTMLElement>(".library-version-cell")!).display
+      };
+    });
+    expect(compactGeometry.documentWidth).toBe(compactGeometry.viewportWidth);
+    expect(compactGeometry.actionGap).toBeGreaterThanOrEqual(9);
+    expect(compactGeometry.versionDisplay).toBe("none");
+  }, 30_000);
+
   it("updates all available library skill updates from the rendered app", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
     const helperSkill = await writeTrackedLibrarySkill(
@@ -2813,11 +2924,11 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
-      .getByText("Update available")
+      .getByLabel("Update available")
       .waitFor({ state: "visible" });
     await page
       .getByRole("group", { name: "Library item batch-helper" })
-      .getByText("Update available")
+      .getByLabel("Update available")
       .waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: "Update all skills" }).click();
@@ -3410,7 +3521,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await writeGitHubFixtureSkill(githubFixtureRoot, "v2");
     await page.getByRole("button", { name: "Check updates" }).click();
-    await expect.poll(() => githubRow.textContent()).not.toContain("Update available");
+    await expect.poll(() => githubRow.getByLabel("Update available").count()).toBe(0);
     await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
     await page.getByRole("switch", { name: "Track updates for github-reviewer" }).click();
     await expect
@@ -3423,7 +3534,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item github-reviewer" })
-      .getByText("Update available")
+      .getByLabel("Update available")
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Review update github-reviewer" }).click();
     await page

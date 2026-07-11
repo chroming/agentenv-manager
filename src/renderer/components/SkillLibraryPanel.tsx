@@ -707,7 +707,7 @@ export const SkillLibraryPanel = ({
               : updateInfo?.error
                 ? "Check failed"
                 : updateInfo?.updateAvailable
-                  ? "Update available"
+                  ? "Available"
                   : updateInfo
                     ? "Up to date"
                     : hasUpdateSource
@@ -783,6 +783,7 @@ export const SkillLibraryPanel = ({
                 </div>
                 <div className="library-update-cell">
                   <strong
+                    aria-label={hasUpdate ? "Update available" : updateLabel}
                     className={`resource-status${hasUpdate ? " is-warning" : ""}${
                       hasError ? " is-error" : ""
                     }`}
@@ -798,7 +799,7 @@ export const SkillLibraryPanel = ({
                     ) : (
                       <CheckCircle2 size={13} strokeWidth={2.2} />
                     )}
-                    {updateLabel}
+                    <span>{updateLabel}</span>
                   </strong>
                   {updateInfo?.latestRevision ? (
                     <small>
@@ -818,11 +819,12 @@ export const SkillLibraryPanel = ({
                   </small>
                 </div>
                 <div className="library-installs-cell">
-                  {installs.length === 0 ? <small>Not installed</small> : null}
+                  {installs.length === 0 ? <strong className="library-install-empty">Not installed</strong> : null}
                   {installs.slice(0, 1).map((install) => (
                     <span className="library-install-entry" key={install.path}>
                       <span title={install.foundIn.map(targetName).join(", ")}>
                         {install.foundIn.map(targetName).join(", ")}
+                        {installs.length > 1 ? ` +${installs.length - 1}` : ""}
                       </span>
                       <strong className={`resource-chip resource-chip--${install.status}`}>
                         {install.status === "managed" && install.installMethod === "linked" ? (
@@ -848,7 +850,6 @@ export const SkillLibraryPanel = ({
                       </strong>
                     </span>
                   ))}
-                  {installs.length > 1 ? <small>+{installs.length - 1} more installs</small> : null}
                 </div>
                 <div className="library-actions-cell">
                   {rowAction ? (

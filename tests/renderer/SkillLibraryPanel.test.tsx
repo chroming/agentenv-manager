@@ -338,10 +338,8 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("Review code");
     fireEvent.mouseLeave(sharedDescription);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent(
-      "Update available"
-    );
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
+    expect(within(githubRow).getByLabelText("Update available")).toHaveTextContent("Available");
     const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
     expect(githubSource).not.toHaveAttribute("title");
     fireEvent.mouseEnter(githubSource);

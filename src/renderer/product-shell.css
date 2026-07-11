@@ -848,17 +848,18 @@
 .skill-library-panel .library-table__head {
   column-gap: 10px;
   grid-template-columns:
-    minmax(210px, 1.45fr)
-    minmax(118px, 0.8fr)
-    minmax(68px, 0.42fr)
-    minmax(112px, 0.72fr)
-    minmax(98px, 0.6fr)
-    minmax(104px, 0.68fr)
-    auto;
+    minmax(198px, 1.45fr)
+    minmax(112px, 0.76fr)
+    minmax(78px, 0.48fr)
+    minmax(116px, 0.78fr)
+    minmax(92px, 0.58fr)
+    minmax(92px, 0.58fr)
+    112px;
 }
 
 .skill-library-panel .library-table__head {
   display: grid;
+  padding: 11px 14px;
 }
 
 .skill-library-panel .library-table-row {
@@ -881,6 +882,67 @@
   padding-top: 0;
 }
 
+.skill-library-panel .library-version-cell,
+.skill-library-panel .library-update-cell,
+.skill-library-panel .library-usage-cell,
+.skill-library-panel .library-installs-cell {
+  align-content: center;
+  display: grid;
+  gap: 2px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 23px 16px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.skill-library-panel .library-version-cell strong,
+.skill-library-panel .library-version-cell small,
+.skill-library-panel .library-update-cell > small,
+.skill-library-panel .library-usage-cell strong,
+.skill-library-panel .library-usage-cell > small,
+.skill-library-panel .library-install-empty,
+.skill-library-panel .library-install-entry > span,
+.skill-library-panel .library-install-entry > strong {
+  align-self: center;
+  line-height: 1.25;
+  margin: 0;
+  min-width: 0;
+}
+
+.skill-library-panel .library-version-cell strong,
+.skill-library-panel .library-version-cell small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.skill-library-panel .library-update-cell .resource-status {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.skill-library-panel .library-update-cell .resource-status > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-library-panel .library-install-empty {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  font-weight: 500;
+  min-height: 23px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .skill-library-panel .library-version-cell::before {
   display: none;
 }
@@ -889,6 +951,15 @@
   min-width: 68px;
   padding-left: 9px;
   padding-right: 9px;
+}
+
+.skill-library-panel .library-actions-cell {
+  gap: 6px;
+  overflow: visible;
+}
+
+.skill-library-panel .library-table__head > span:last-child {
+  justify-self: end;
 }
 
 .skill-library-panel .library-column-label {
@@ -903,11 +974,12 @@
 }
 
 .skill-library-panel .library-install-entry {
-  align-items: flex-start;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  overflow: visible;
+  align-items: stretch;
+  display: grid;
+  gap: 2px;
+  grid-template-rows: 23px 16px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .skill-library-panel .library-install-entry > span {
@@ -955,7 +1027,7 @@
     grid-template-areas:
       "resource source update actions"
       "resource usage installs actions";
-    grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.62fr) minmax(120px, 0.58fr) auto;
+    grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.62fr) minmax(120px, 0.58fr) 112px;
     min-height: 76px;
   }
 

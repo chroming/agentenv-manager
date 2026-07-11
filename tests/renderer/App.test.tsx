@@ -612,7 +612,10 @@ describe("App", () => {
     expect(await screen.findByRole("group", { name: "Library item github-reviewer" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Library/Skills" })).toBeInTheDocument();
-    expect(screen.getByRole("group", { name: "Library item github-reviewer" })).toHaveTextContent("Update available");
+    expect(
+      within(screen.getByRole("group", { name: "Library item github-reviewer" }))
+        .getByLabelText("Update available")
+    ).toHaveTextContent("Available");
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
