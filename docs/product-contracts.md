@@ -423,6 +423,8 @@ Status: Apply and cleanup rollback plus stale rollback conflict handling are `Im
 ### 16.1 Import
 
 - Import from a local folder copies canonical content into the Library.
+- When the selected local folder is an adapter-declared Target Skill location, Import MUST back it up and replace it with a managed link or copy in the same transaction. A successfully managed source MUST NOT remain in Needs attention as a duplicate.
+- Local folders outside supported Target locations remain independent provenance sources and are not modified.
 - Normal use MUST continue if the original folder is later deleted.
 - The original local path is retained as provenance, but local imports default to the `Untracked` update policy.
 - A user MAY explicitly track a stable local folder as an update source.
@@ -458,6 +460,14 @@ Each group can be:
 - Linked or copied back to selected Targets.
 - Left unmanaged.
 - Ignored.
+
+Resolution contract:
+
+- Groups are classified as `Auto-ready`, `Review`, or resolved. Needs attention counts unresolved groups, not raw paths, and excludes managed and ignored groups.
+- A single unmanaged copy, identical unmanaged duplicates, a local copy that exactly matches Library, and stale managed copies MAY be handled automatically because no content choice is required.
+- Differing content, a local copy that differs from an existing Library version, external-manager ownership, and missing Target identity MUST remain in manual Review.
+- `Auto-manage` backs up and processes every currently auto-ready group. A failure in one group MUST NOT undo successful independent groups, and the result MUST report both completed and remaining groups.
+- AgentEnv ownership is attached to the physical managed installation. A shared compatibility path scanned by multiple Targets MUST appear as one managed location rather than a duplicate caused by Target-specific scanning.
 
 Cleanup review contract:
 
@@ -759,7 +769,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-14 against the current `main` tree at the time of this snapshot.
 
-- `327` automated tests passed across `44` test files; the `63`-test Electron E2E suite covers native Target, cross-Target, Create from Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `332` automated tests passed across `45` test files; the `65`-test Electron E2E suite covers native Target, cross-Target, Create from Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
@@ -769,6 +779,7 @@ Last verified: 2026-07-14 against the current `main` tree at the time of this sn
 - Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
 - In-place Skill Refresh, GitHub directory candidate selection, partial batch import behavior, source-default Skill icons, custom Skill icon persistence, and draft-gated Profile icons passed Store, renderer, and Electron E2E coverage.
 - Skill table headers, mixed-action rows, two-line metadata, empty install states, and update labels passed coordinate and overflow assertions at both supported viewports.
+- Target-local import now creates a transactional managed install, shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards.
 - Production dependency audit reported zero known vulnerabilities.

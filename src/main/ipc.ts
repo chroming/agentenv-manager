@@ -120,11 +120,72 @@ export const registerIpcHandlers = ({
       .listTargets()
       .then((targets) => skillLibraryStore.scanUnmanaged(targets.map((target) => target.paths)))
   );
-  ipcMain.handle("skills:import-library", (_event, input: SkillImportInput) => {
+  ipcMain.handle("skills:import-library", async (_event, input: SkillImportInput) => {
     if (!input || typeof input !== "object" || typeof input.sourcePath !== "string") {
       throw new Error("Skill import requires a source path");
     }
-    return skillLibraryStore.importSkill(input);
+    const sourcePath = resolve(input.sourcePath);
+    const libraryId = SafeIdSchema.parse(input.id ?? basename(sourcePath));
+    const targets = await targetDiscoveryService.listTargets();
+    const inventory = await skillLibraryStore.scanInventory(
+      targets.map((target) => target.paths)
+    );
+    const localInstall = inventory.find((item) => resolve(item.path) === sourcePath);
+
+    if (localInstall?.status === "managed" && localInstall.libraryId) {
+      const skill = (await skillLibraryStore.listSkills()).find(
+        (item) => item.id === localInstall.libraryId
+      );
+      if (skill) {
+        return { skill, managedLocations: [sourcePath] };
+      }
+    }
+
+    const canTakeOwnership =
+      localInstall &&
+      localInstall.status !== "external" &&
+      localInstall.status !== "ignored" &&
+      input.provenance?.externalManager !== "skills-cli";
+    if (canTakeOwnership) {
+      const existingLibrary = (await skillLibraryStore.listSkills()).find(
+        (item) => item.id === libraryId
+      );
+      if (existingLibrary && existingLibrary.contentHash !== localInstall.contentHash) {
+        throw new Error(
+          `${libraryId} differs from the existing Library version. Open Scan local to review the conflict.`
+        );
+      }
+      const target = targets
+        .filter((item) => localInstall.foundIn.includes(item.id))
+        .sort((left, right) => {
+          const leftPreferred = resolve(left.paths.skillsDir ?? "") === dirname(sourcePath);
+          const rightPreferred = resolve(right.paths.skillsDir ?? "") === dirname(sourcePath);
+          return Number(rightPreferred) - Number(leftPreferred);
+        })[0];
+      if (!target) {
+        throw new Error(`No supported Target owns the local skill path: ${sourcePath}`);
+      }
+      const cleanup = await skillLibraryStore.consolidateSkillGroup({
+        skillKey: localInstall.skillKey,
+        libraryId,
+        canonicalPath: sourcePath,
+        locations: [{ targetPaths: target.paths, targetDir: sourcePath }]
+      });
+      const skill = (await skillLibraryStore.listSkills()).find(
+        (item) => item.id === cleanup.libraryId
+      );
+      if (!skill) {
+        throw new Error(`Imported Library skill could not be read: ${cleanup.libraryId}`);
+      }
+      return {
+        skill,
+        managedLocations: cleanup.managedLocations,
+        backupId: cleanup.backupId
+      };
+    }
+
+    const skill = await skillLibraryStore.importSkill({ ...input, sourcePath });
+    return { skill, managedLocations: [] };
   });
   ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>
     skillLibraryStore.importGitHubSkill(input)

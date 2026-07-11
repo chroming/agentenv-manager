@@ -48,6 +48,7 @@ describe("SkillLibraryPanel", () => {
     const onSetIcon = vi.fn();
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn();
+    const onAutoConsolidateSkillGroups = vi.fn();
     const onIgnoreSkillGroup = vi.fn();
     const onUnignoreSkillGroup = vi.fn();
     const onRestoreCleanup = vi.fn();
@@ -140,7 +141,8 @@ describe("SkillLibraryPanel", () => {
             status: "library",
             libraryId: "legacy-reviewer",
             skillKey: "legacy-reviewer",
-            contentHash: "legacy-hash"
+            contentHash: "legacy-hash",
+            contentMatchesLibrary: true
           },
           {
             id: "target-only-reviewer",
@@ -295,6 +297,7 @@ describe("SkillLibraryPanel", () => {
         onSetIcon={onSetIcon}
         onManageTargetSkill={onManageTargetSkill}
         onConsolidateSkillGroup={onConsolidateSkillGroup}
+        onAutoConsolidateSkillGroups={onAutoConsolidateSkillGroups}
         onIgnoreSkillGroup={onIgnoreSkillGroup}
         onUnignoreSkillGroup={onUnignoreSkillGroup}
         onRestoreCleanup={onRestoreCleanup}
@@ -480,6 +483,16 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Imported");
     expect(discoveries).toHaveTextContent("Restore ignored");
+    expect(discoveries).toHaveTextContent("Auto-ready");
+    expect(discoveries).toHaveTextContent("Review");
+    fireEvent.click(within(discoveries).getByRole("button", { name: "Auto-manage 3" }));
+    expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ skillKey: "copied-local" }),
+        expect.objectContaining({ skillKey: "legacy-reviewer" }),
+        expect.objectContaining({ skillKey: "target-only-reviewer" })
+      ])
+    );
     const externalGroup = screen.getByRole("group", {
       name: "Cleanup group external-reviewer"
     });
@@ -518,7 +531,7 @@ describe("SkillLibraryPanel", () => {
     expect(mixedGroup).toHaveTextContent("Unmanaged");
     expect(within(mixedGroup).queryByText("Ignored", { exact: true })).not.toBeInTheDocument();
     expect(
-      within(mixedGroup).getByRole("button", { name: "Add to Library target-only-reviewer" })
+      within(mixedGroup).getByRole("button", { name: "Auto-manage group target-only-reviewer" })
     ).toBeInTheDocument();
     expect(
       within(mixedGroup).queryByRole("button", { name: "Ignore group target-only-reviewer" })
@@ -528,21 +541,19 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(
       within(screen.getByRole("group", { name: "Cleanup group legacy-reviewer" })).getByRole(
         "button",
-        { name: "Use Library version legacy-reviewer" }
+        { name: "Auto-manage group legacy-reviewer" }
       )
     );
-    const cleanupDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
-    expect(cleanupDialog).toHaveTextContent("Existing Library version");
-    expect(cleanupDialog).not.toHaveTextContent("Canonical copy");
-    fireEvent.click(within(cleanupDialog).getByRole("button", { name: "Back up and manage" }));
-    expect(onConsolidateSkillGroup).toHaveBeenCalledWith({
-      skillKey: "legacy-reviewer",
-      libraryId: "legacy-reviewer",
-      canonicalPath: "/tmp/opencode/skills/legacy-reviewer",
-      locations: [
-        { targetId: "opencode", path: "/tmp/opencode/skills/legacy-reviewer" }
-      ]
-    });
+    expect(onAutoConsolidateSkillGroups).toHaveBeenLastCalledWith([
+      {
+        skillKey: "legacy-reviewer",
+        libraryId: "legacy-reviewer",
+        canonicalPath: "/tmp/opencode/skills/legacy-reviewer",
+        locations: [
+          { targetId: "opencode", path: "/tmp/opencode/skills/legacy-reviewer" }
+        ]
+      }
+    ]);
 
     const conflictGroup = screen.getByRole("group", { name: "Cleanup group conflict-reviewer" });
     expect(conflictGroup).toHaveTextContent("Conflict");

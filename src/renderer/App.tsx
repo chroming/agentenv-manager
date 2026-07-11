@@ -70,6 +70,7 @@ import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
 } from "../shared/libraryVersions";
+import { buildSkillCleanupGroups } from "../shared/skillCleanup";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { HistoryView } from "./components/HistoryView";
 import { InfoTip } from "./components/InfoTip";
@@ -1698,9 +1699,16 @@ export const App = () => {
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.importSkillToLibrary({ sourcePath });
+      const result = await window.agentEnv.importSkillToLibrary({ sourcePath });
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message:
+          result.managedLocations.length > 0
+            ? `Imported ${result.skill.name} · Local copy is now managed`
+            : `Imported ${result.skill.name} to Library`
+      });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2016,6 +2024,55 @@ export const App = () => {
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setSkillUpdateCheckStatus(undefined);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const autoConsolidateSkillGroups = async (inputs: SkillCleanupRequest[]) => {
+    if (inputs.length === 0) {
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    setSkillCleanupResult(undefined);
+    setSkillUpdateCheckStatus({
+      state: "checking",
+      message: `Auto-managing ${plural(inputs.length, "skill")}...`
+    });
+    const completed: SkillCleanupResult[] = [];
+    const failures: string[] = [];
+    for (const input of inputs) {
+      try {
+        completed.push(await window.agentEnv.consolidateSkillGroup(input));
+      } catch (unknownError) {
+        failures.push(
+          `${input.skillKey}: ${unknownError instanceof Error ? unknownError.message : String(unknownError)}`
+        );
+      }
+    }
+    try {
+      await refreshProfiles({ checkSkillUpdates: false });
+      if (failures.length === 0) {
+        if (completed.length === 1) {
+          setSkillCleanupResult(completed[0]);
+          setSkillUpdateCheckStatus(undefined);
+        } else {
+          setSkillUpdateCheckStatus({
+            state: "success",
+            message: `Managed ${plural(completed.length, "local skill")} · Backups are available in cleanup history`
+          });
+        }
+      } else {
+        setSkillUpdateCheckStatus({
+          state: "error",
+          message: `${plural(completed.length, "skill")} managed · ${plural(failures.length, "skill")} need review`
+        });
+        setError(failures.join("\n"));
+      }
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setSkillUpdateCheckStatus({ state: "error", message: "Skill cleanup refresh failed" });
     } finally {
       setBusy(false);
     }
@@ -2389,7 +2446,10 @@ export const App = () => {
     }
   };
 
-  const needsManagementCount = skillInventory.filter((skill) => skill.status !== "managed").length;
+  const skillCleanupGroups = buildSkillCleanupGroups(skillInventory);
+  const needsManagementCount = skillCleanupGroups.filter(
+    (group) => group.resolution !== "resolved"
+  ).length;
   const dismissAppFeedback = () => {
     setError(undefined);
     setSkillUpdateCheckStatus(undefined);
@@ -2723,6 +2783,7 @@ export const App = () => {
                 onImportGitHubSkills={importGitHubSkills}
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={(input) => void consolidateSkillGroup(input)}
+                onAutoConsolidateSkillGroups={(inputs) => void autoConsolidateSkillGroups(inputs)}
                 onSetUpdateSource={setSkillUpdateSource}
                 onSetUpdatePolicy={(input) => void setSkillUpdatePolicy(input)}
                 onSetIcon={(input) => void setSkillIcon(input)}

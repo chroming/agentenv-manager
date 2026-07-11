@@ -290,14 +290,18 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     removeMcpServer: vi.fn().mockResolvedValue(undefined),
     scanUnmanagedSkills: vi.fn().mockResolvedValue([]),
     importSkillToLibrary: vi.fn().mockResolvedValue({
-      id: "skill",
-      name: "skill",
-      description: "",
-      path: "/tmp/skill",
-      sourceType: "local",
-      source: "/tmp/skill",
-      contentHash: "hash",
-      updatedAt: "2026-07-02T00:00:00.000Z"
+      skill: {
+        id: "skill",
+        name: "skill",
+        description: "",
+        path: "/tmp/skill",
+        sourceType: "local",
+        source: "/tmp/skill",
+        updatePolicy: "untracked",
+        contentHash: "hash",
+        updatedAt: "2026-07-02T00:00:00.000Z"
+      },
+      managedLocations: []
     }),
     importGitHubSkillToLibrary: vi.fn().mockResolvedValue({
       id: "github-reviewer",

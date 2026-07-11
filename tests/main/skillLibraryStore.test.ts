@@ -763,7 +763,7 @@ description: >
     ]);
   });
 
-  it("keeps Target ownership markers isolated even when a path is scanned by another Target", async () => {
+  it("recognizes an AgentEnv-owned install from every Target that scans the same path", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-target-owner-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const libraryDir = join(paths.skillsLibraryDir, "shared-reviewer");
@@ -804,14 +804,36 @@ description: >
         skillsDir: paths.userSkillsDir
       }
     ]);
+    const sharedInventory = await store.scanInventory([
+      {
+        targetId: "codex",
+        configDir: join(paths.homeDir, ".codex"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: paths.userSkillsDir
+      },
+      {
+        targetId: "opencode",
+        configDir: join(paths.homeDir, ".config", "opencode"),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: paths.userSkillsDir
+      }
+    ]);
 
     expect(codexInventory[0]).toMatchObject({
       status: "managed",
       libraryId: "shared-reviewer"
     });
     expect(openCodeInventory[0]).toMatchObject({
-      status: "library",
+      status: "managed",
       libraryId: "shared-reviewer"
+    });
+    expect(sharedInventory).toHaveLength(1);
+    expect(sharedInventory[0]).toMatchObject({
+      status: "managed",
+      libraryId: "shared-reviewer",
+      foundIn: ["codex", "opencode"]
     });
   });
 

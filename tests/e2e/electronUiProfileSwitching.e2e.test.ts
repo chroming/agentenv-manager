@@ -1297,52 +1297,17 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => locationsTooltip.textContent()).toContain("target-only-reviewer");
     await locationsPreview.evaluate((element) => element.blur());
 
-    await cleanupGroup.getByRole("button", { name: "Add to Library target-only-reviewer" }).click();
-    const cleanupDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
-    await cleanupDialog.waitFor({ state: "visible", timeout: 5_000 });
-    await expect.poll(() => cleanupDialog.textContent()).toContain("Version to keep in Library");
-    await expect.poll(() => cleanupDialog.textContent()).toContain(
-      "Choose the copy whose contents you want to preserve"
-    );
-    expect(await cleanupDialog.getByRole("checkbox").isDisabled()).toBe(true);
-    await expect.poll(() => cleanupDialog.textContent()).toContain("Source copy");
-    await resizeAppWindow(page, 920, 620);
-    const cleanupGeometry = await cleanupDialog.evaluate((dialog) => {
-      const rect = dialog.getBoundingClientRect();
-      const actions = dialog.querySelector<HTMLElement>(".preview-actions")?.getBoundingClientRect();
-      const primary = dialog.querySelector<HTMLButtonElement>(".primary-action");
-      const secondary = dialog.querySelector<HTMLButtonElement>(".secondary-action");
-      const primaryRect = primary?.getBoundingClientRect();
-      const secondaryRect = secondary?.getBoundingClientRect();
-      return {
-        dialogBottom: rect.bottom,
-        dialogRight: rect.right,
-        actionsBottom: actions?.bottom ?? 0,
-        primaryHeight: primaryRect?.height ?? 0,
-        secondaryHeight: secondaryRect?.height ?? 0,
-        primaryTextFits: primary ? primary.scrollWidth <= primary.clientWidth : false
-      };
-    });
-    expect(cleanupGeometry.dialogBottom).toBeLessThanOrEqual(620);
-    expect(cleanupGeometry.dialogRight).toBeLessThanOrEqual(920);
-    expect(cleanupGeometry.actionsBottom).toBeLessThanOrEqual(cleanupGeometry.dialogBottom);
-    expect(cleanupGeometry.primaryHeight).toBe(40);
-    expect(cleanupGeometry.primaryHeight).toBe(cleanupGeometry.secondaryHeight);
-    expect(cleanupGeometry.primaryTextFits).toBe(true);
-    await page.keyboard.press("Escape");
-    await cleanupDialog.waitFor({ state: "hidden", timeout: 5_000 });
-    await page
-      .getByRole("region", { name: "Environment skills" })
-      .waitFor({ state: "visible", timeout: 5_000 });
-    await cleanupGroup.getByRole("button", { name: "Add to Library target-only-reviewer" }).click();
-    await cleanupDialog.waitFor({ state: "visible", timeout: 5_000 });
-    await cleanupDialog.getByRole("button", { name: "Back up and manage" }).click();
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Auto-ready");
+    await cleanupGroup
+      .getByRole("button", { name: "Auto-manage group target-only-reviewer" })
+      .click();
     await expect
       .poll(() => page.locator(".app-feedback").textContent(), { timeout: 5_000 })
       .toContain("Cleaned up target-only-reviewer");
     await page
       .getByRole("group", { name: "Library item target-only-reviewer" })
       .waitFor({ state: "visible", timeout: 5_000 });
+    await page.getByRole("button", { name: "Close library tool" }).click();
 
     expect(await page.getByText("Existing target skill ready to migrate.").count()).toBeGreaterThan(
       0
@@ -2483,6 +2448,166 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Check updates" }).click();
     await expect.poll(() => importedRow.textContent()).not.toContain("Check failed");
+  }, 30_000);
+
+  it("imports a Target-local skill and immediately replaces the source with a managed install", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
+    const localSkillDir = join(opencodeDir, "skills", "managed-after-import");
+    await mkdir(localSkillDir, { recursive: true });
+    await writeFile(
+      join(localSkillDir, "SKILL.md"),
+      "---\nname: Managed After Import\ndescription: The original Target copy becomes managed.\n---\n\n# Managed After Import\n",
+      "utf8"
+    );
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      localSkillDir
+    );
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Import skills" }).click();
+    await page.getByRole("button", { name: "Choose local skill folder" }).click();
+    await page.getByRole("button", { name: "Import", exact: true }).click();
+
+    const markerPath = join(localSkillDir, ".agentenv-owner.json");
+    await expect.poll(() => fileExists(markerPath), { timeout: 5_000 }).toBe(true);
+    await expect(
+      readFile(join(appDataRoot, "skills-library", "managed-after-import", "SKILL.md"), "utf8")
+    ).resolves.toContain("The original Target copy becomes managed");
+    await expect(readFile(markerPath, "utf8")).resolves.toContain(
+      '"source": "skills-library/managed-after-import"'
+    );
+    const managedInventory = await page.evaluate(() => window.agentEnv.scanSkillInventory());
+    expect(
+      managedInventory.filter((item) => item.skillKey === "managed-after-import")
+    ).toEqual([
+      expect.objectContaining({
+        status: "managed",
+        libraryId: "managed-after-import",
+        contentMatchesLibrary: true
+      })
+    ]);
+
+    await page.getByRole("button", { name: "Close import" }).click();
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const cleanupGroup = page.getByRole("group", {
+      name: "Cleanup group managed-after-import"
+    });
+    await cleanupGroup.waitFor({ state: "visible" });
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Managed");
+    expect(await cleanupGroup.getByText("Auto-ready", { exact: true }).count()).toBe(0);
+    expect(await cleanupGroup.getByRole("button", { name: /manage/i }).count()).toBe(0);
+  }, 30_000);
+
+  it("auto-manages safe cleanup groups while leaving content conflicts for review", async () => {
+    const { appDataRoot, opencodeDir, homeDir, page } = await launchApp();
+    await writeUnmanagedTargetSkill(
+      opencodeDir,
+      "auto-local-reviewer",
+      "A single safe local copy."
+    );
+    const openCodeDuplicate = join(opencodeDir, "skills", "auto-duplicate-reviewer");
+    const codexDuplicate = join(homeDir, ".codex", "skills", "auto-duplicate-reviewer");
+    await mkdir(openCodeDuplicate, { recursive: true });
+    await mkdir(codexDuplicate, { recursive: true });
+    const duplicateContent =
+      "---\nname: Auto Duplicate Reviewer\ndescription: Identical copies.\n---\n\n# Same\n";
+    await writeFile(join(openCodeDuplicate, "SKILL.md"), duplicateContent, "utf8");
+    await writeFile(join(codexDuplicate, "SKILL.md"), duplicateContent, "utf8");
+    const openCodeConflict = join(opencodeDir, "skills", "manual-conflict-reviewer");
+    const codexConflict = join(homeDir, ".codex", "skills", "manual-conflict-reviewer");
+    await mkdir(openCodeConflict, { recursive: true });
+    await mkdir(codexConflict, { recursive: true });
+    await writeFile(join(openCodeConflict, "SKILL.md"), "# OpenCode version\n", "utf8");
+    await writeFile(join(codexConflict, "SKILL.md"), "# Codex version\n", "utf8");
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const safeGroup = page.getByRole("group", { name: "Cleanup group auto-local-reviewer" });
+    const duplicateGroup = page.getByRole("group", {
+      name: "Cleanup group auto-duplicate-reviewer"
+    });
+    const conflictGroup = page.getByRole("group", {
+      name: "Cleanup group manual-conflict-reviewer"
+    });
+    await safeGroup.waitFor({ state: "visible" });
+    await expect.poll(() => safeGroup.textContent()).toContain("Auto-ready");
+    await expect.poll(() => duplicateGroup.textContent()).toContain("Auto-ready");
+    await expect.poll(() => conflictGroup.textContent()).toContain("Review");
+    expect(
+      await conflictGroup.getByRole("button", { name: "Resolve conflict manual-conflict-reviewer" }).count()
+    ).toBe(1);
+    await conflictGroup
+      .getByRole("button", { name: "Resolve conflict manual-conflict-reviewer" })
+      .click();
+    const cleanupDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
+    await cleanupDialog.waitFor({ state: "visible" });
+    await expect.poll(() => cleanupDialog.textContent()).toContain("Version to keep in Library");
+    await expect.poll(() => cleanupDialog.textContent()).toContain(
+      "Choose the copy whose contents you want to preserve"
+    );
+    await page.keyboard.press("Escape");
+    await cleanupDialog.waitFor({ state: "hidden" });
+
+    const assertCleanupLayout = async (stacked: boolean) => {
+      const geometry = await page.getByRole("region", { name: "Environment skills" }).evaluate((drawer) => {
+        const heading = drawer.querySelector<HTMLElement>(".cleanup-section-heading")!;
+        const headingCopy = heading.firstElementChild!.getBoundingClientRect();
+        const autoAction = heading.querySelector<HTMLElement>(".cleanup-auto-action")!.getBoundingClientRect();
+        const rows = Array.from(drawer.querySelectorAll<HTMLElement>(".cleanup-group-row")).map((row) => {
+          const rowBox = row.getBoundingClientRect();
+          const status = row.querySelector<HTMLElement>(".cleanup-group-status")!.getBoundingClientRect();
+          const main = row.querySelector<HTMLElement>(".resource-row__main")!.getBoundingClientRect();
+          const actions = row.querySelector<HTMLElement>(".cleanup-group-actions")!.getBoundingClientRect();
+          return {
+            contained:
+              status.left >= rowBox.left - 1 &&
+              actions.right <= rowBox.right + 1 &&
+              status.right <= main.left &&
+              main.right <= actions.left,
+            textFits: Array.from(row.querySelectorAll<HTMLElement>(".resource-row__main > *")).every(
+              (item) => item.clientWidth <= main.width + 1
+            )
+          };
+        });
+        return {
+          actionBelowCopy: autoAction.top >= headingCopy.bottom - 1,
+          actionAfterCopy: autoAction.left >= headingCopy.right,
+          actionContained: autoAction.right <= heading.getBoundingClientRect().right + 1,
+          rows
+        };
+      });
+      expect(geometry.actionContained).toBe(true);
+      expect(stacked ? geometry.actionBelowCopy : geometry.actionAfterCopy).toBe(true);
+      expect(geometry.rows.every((row) => row.contained && row.textFits)).toBe(true);
+    };
+    await assertCleanupLayout(false);
+    await resizeAppWindow(page, 920, 620);
+    await assertCleanupLayout(true);
+
+    await page.getByRole("button", { name: /Auto-manage \d+/ }).click();
+    await expect
+      .poll(() => fileExists(join(openCodeDuplicate, ".agentenv-owner.json")), { timeout: 10_000 })
+      .toBe(true);
+    await expect
+      .poll(() => fileExists(join(codexDuplicate, ".agentenv-owner.json")), { timeout: 10_000 })
+      .toBe(true);
+    await expect(
+      fileExists(join(appDataRoot, "skills-library", "auto-local-reviewer", "SKILL.md"))
+    ).resolves.toBe(true);
+    await expect(
+      fileExists(join(appDataRoot, "skills-library", "auto-duplicate-reviewer", "SKILL.md"))
+    ).resolves.toBe(true);
+    await expect(
+      fileExists(join(appDataRoot, "skills-library", "manual-conflict-reviewer"))
+    ).resolves.toBe(false);
+    await expect.poll(() => conflictGroup.textContent()).toContain("Review");
   }, 30_000);
 
   it("imports a Skills CLI installation without changing the external copy or lock", async () => {

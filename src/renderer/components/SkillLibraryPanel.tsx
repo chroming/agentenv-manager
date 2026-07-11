@@ -52,6 +52,10 @@ import {
   type SkillLibraryViewState,
   updateSkillLibraryControls
 } from "../libraryViewState";
+import {
+  automaticSkillCleanupRequest,
+  buildSkillCleanupGroups
+} from "../../shared/skillCleanup";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -76,6 +80,7 @@ interface SkillLibraryPanelProps {
   onImportGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): void;
+  onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): void;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
   onSetUpdatePolicy(input: SkillUpdatePolicyInput): void;
   onSetIcon(input: SkillIconInput): void;
@@ -151,6 +156,7 @@ export const SkillLibraryPanel = ({
   onImportGitHubSkills,
   onManageTargetSkill,
   onConsolidateSkillGroup,
+  onAutoConsolidateSkillGroups,
   onSetUpdateSource,
   onSetUpdatePolicy,
   onSetIcon,
@@ -395,46 +401,20 @@ export const SkillLibraryPanel = ({
     updateFilter !== "all";
   const usedSkillCount = librarySkills.filter((skill) => (skillUsage[skill.id] ?? []).length > 0).length;
   const unusedSkillCount = Math.max(librarySkills.length - usedSkillCount, 0);
-  const cleanupGroups = useMemo(() => {
-    const byKey = new Map<string, SkillInventoryEntry[]>();
-    for (const skill of skillInventory) {
-      const key = skill.skillKey ?? skill.id;
-      byKey.set(key, [...(byKey.get(key) ?? []), skill]);
-    }
-
-    return [...byKey.entries()]
-      .map(([skillKey, items]) => {
-        const activeItems = items.filter((item) => item.status !== "ignored");
-        const hashes = new Set(activeItems.map((item) => item.contentHash).filter(Boolean));
-        const statuses = new Set(activeItems.map((item) => item.status));
-        const allIgnored = activeItems.length === 0;
-        const allManaged = activeItems.length > 0 && activeItems.every((item) => item.status === "managed");
-        const hasExternal = statuses.has("external");
-        const state = allIgnored
-          ? "ignored"
-          : allManaged
-            ? "managed"
-            : hasExternal
-              ? "external"
-              : hashes.size > 1
-                ? "conflict"
-                : activeItems.length > 1
-                  ? "duplicate"
-                  : statuses.has("unmanaged")
-                    ? "unmanaged"
-                    : statuses.has("library")
-                      ? "library"
-                      : "managed";
-        return {
-          skillKey,
-          items,
-          activeItems,
-          state,
-          primary: activeItems[0] ?? items[0]
-        };
-      })
-      .sort((a, b) => (a.primary?.name ?? a.skillKey).localeCompare(b.primary?.name ?? b.skillKey));
-  }, [skillInventory]);
+  const cleanupGroups = useMemo(
+    () => buildSkillCleanupGroups(skillInventory),
+    [skillInventory]
+  );
+  const automaticCleanupRequests = useMemo(
+    () =>
+      cleanupGroups
+        .map(automaticSkillCleanupRequest)
+        .filter((request): request is SkillCleanupRequest => Boolean(request)),
+    [cleanupGroups]
+  );
+  const manualCleanupCount = cleanupGroups.filter(
+    (group) => group.resolution === "manual"
+  ).length;
   const cleanupCandidate = cleanupDraft
     ? cleanupGroups.find((group) => group.skillKey === cleanupDraft.skillKey)
     : undefined;
@@ -1455,9 +1435,27 @@ export const SkillLibraryPanel = ({
             </button>
           </div>
           <section className="resource-section target-discovery-section">
-            <div className="resource-heading">
-              Cleanup groups
-              <InfoTip label="Each group represents one skill found across local agent folders. Resolve conflicts, consolidate duplicates, or add an unmanaged skill to Library." />
+            <div className="cleanup-section-heading">
+              <div>
+                <div className="resource-heading">
+                  Cleanup groups
+                  <InfoTip label="Each group represents one skill found across local agent folders. Safe groups can be managed automatically; content conflicts and external ownership require review." />
+                </div>
+                <small>
+                  {automaticCleanupRequests.length} auto-ready
+                  {manualCleanupCount > 0 ? ` · ${manualCleanupCount} need review` : ""}
+                </small>
+              </div>
+              <button
+                className="primary-action cleanup-auto-action"
+                type="button"
+                aria-label={`Auto-manage ${automaticCleanupRequests.length}`}
+                disabled={automaticCleanupRequests.length === 0}
+                onClick={() => onAutoConsolidateSkillGroups(automaticCleanupRequests)}
+              >
+                <Sparkles size={15} strokeWidth={2.2} aria-hidden="true" />
+                Auto-manage
+              </button>
             </div>
             <div className="resource-list resource-list--unmanaged">
               {cleanupGroups.length === 0 ? (
@@ -1469,6 +1467,7 @@ export const SkillLibraryPanel = ({
                 const hasIgnored = group.items.some((skill) => skill.status === "ignored");
                 const allIgnored = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
+                const automaticRequest = automaticSkillCleanupRequest(group);
                 const chipLabel =
                   group.state === "ignored"
                     ? "Ignored"
@@ -1478,21 +1477,14 @@ export const SkillLibraryPanel = ({
                         ? "Duplicate"
                         : group.state === "external"
                           ? "External"
+                          : group.state === "stale"
+                            ? "Out of sync"
                           : group.state === "library"
                             ? "Imported"
                             : group.state === "managed"
                               ? "Managed"
                               : "Unmanaged";
-                const actionLabel =
-                  group.state === "conflict"
-                    ? "Resolve conflict"
-                    : group.state === "duplicate"
-                      ? "Consolidate copies"
-                      : group.state === "external"
-                        ? "Import copy"
-                        : group.state === "library"
-                          ? "Use Library version"
-                          : "Add to Library";
+                const actionLabel = group.state === "conflict" ? "Resolve conflict" : "Review";
 
                 return (
                   <div
@@ -1501,9 +1493,21 @@ export const SkillLibraryPanel = ({
                     key={group.skillKey}
                     role="group"
                   >
-                    <span className={`resource-chip resource-chip--${group.state}`}>
-                      {chipLabel}
-                    </span>
+                    <div className="cleanup-group-status">
+                      <span className={`resource-chip resource-chip--${group.state}`}>
+                        {chipLabel}
+                      </span>
+                      {group.resolution !== "resolved" ? (
+                        <span className="cleanup-resolution-detail">
+                          <span
+                            className={`cleanup-resolution cleanup-resolution--${group.resolution}`}
+                          >
+                            {group.resolution === "automatic" ? "Auto-ready" : "Review"}
+                          </span>
+                          <InfoTip label={group.resolutionReason} />
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="resource-row__main">
                       <PreviewText
                         ariaLabel={`Full skill name ${group.skillKey}`}
@@ -1534,7 +1538,16 @@ export const SkillLibraryPanel = ({
                       ) : null}
                     </div>
                     <div className="cleanup-group-actions">
-                      {group.state === "external" && !group.items.some((item) => item.libraryId) ? (
+                      {automaticRequest ? (
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          aria-label={`Auto-manage group ${group.skillKey}`}
+                          onClick={() => onAutoConsolidateSkillGroups([automaticRequest])}
+                        >
+                          Manage
+                        </button>
+                      ) : group.state === "external" && !group.items.some((item) => item.libraryId) ? (
                         <button
                           className="secondary-action"
                           type="button"
@@ -1560,9 +1573,7 @@ export const SkillLibraryPanel = ({
                         >
                           Import copy
                         </button>
-                      ) : group.state !== "managed" &&
-                        group.state !== "ignored" &&
-                        group.state !== "external" ? (
+                      ) : group.resolution === "manual" && group.state !== "external" ? (
                         <button
                           className="secondary-action"
                           type="button"

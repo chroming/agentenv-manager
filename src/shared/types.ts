@@ -27,7 +27,7 @@ export interface AgentEnvApi {
   saveMcpServer(input: SaveMcpServerInput): Promise<McpLibraryEntry>;
   removeMcpServer(id: string): Promise<void>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
-  importSkillToLibrary(input: SkillImportInput): Promise<SkillLibraryEntry>;
+  importSkillToLibrary(input: SkillImportInput): Promise<SkillImportResult>;
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   importGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
@@ -126,6 +126,12 @@ export interface SkillImportInput {
   id?: string;
   provenance?: SkillProvenance;
   upstream?: SkillUpstream;
+}
+
+export interface SkillImportResult {
+  skill: SkillLibraryEntry;
+  managedLocations: string[];
+  backupId?: string;
 }
 
 export interface GitHubSkillImportInput {

@@ -886,14 +886,6 @@ export const createSkillLibraryStore = (
     return undefined;
   };
 
-  const markerLibraryId = async (skillDir: string, target: TargetPaths) => {
-    const marker = await readJsonIfExists<Record<string, unknown>>(markerPathFor(skillDir));
-    if (marker?.targetId !== target.targetId) {
-      return undefined;
-    }
-    return ownedLibraryId(skillDir);
-  };
-
   const scanInventory = async (targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]> => {
     const librarySkills = await listSkills();
     const libraryIds = new Set(librarySkills.map((skill) => skill.id));
@@ -950,7 +942,8 @@ export const createSkillLibraryStore = (
           }
           const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
           const frontmatter = parseSkillFrontmatter(content);
-          const markerId = await markerLibraryId(skillDir, target);
+          const ownedId = await ownedLibraryId(skillDir);
+          const markerId = ownedId && libraryIds.has(ownedId) ? ownedId : undefined;
           const ignoreRule = findIgnoreRule(ignoreRules, { skillKey, path: skillDir });
           let externalOwnership = evidence;
           if (externalOwnership) {
@@ -1427,6 +1420,8 @@ export const createSkillLibraryStore = (
         await removeAndCopy(canonicalPath, targetLibraryDir);
         await writeMetadata(targetLibraryDir, {
           sourceType: "local",
+          source: canonicalPath,
+          updatePolicy: "untracked",
           upstream: { kind: "local", locator: canonicalPath },
           provenance: { importedVia: "local-scan" }
         });
