@@ -2322,7 +2322,6 @@ const AppContent = ({
   };
 
   const setSkillAvailability = async (input: SkillAvailabilityInput) => {
-    setBusy(true);
     setError(undefined);
     try {
       await window.agentEnv.setSkillAvailability(input);
@@ -2334,6 +2333,7 @@ const AppContent = ({
           ? t("{{id}} is available to Profiles", { id: input.id })
           : t("{{id}} is hidden from Profile selection", { id: input.id })
       });
+      return true;
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setSkillUpdateCheckStatus({
@@ -2342,8 +2342,7 @@ const AppContent = ({
           id: input.id
         })
       });
-    } finally {
-      setBusy(false);
+      return false;
     }
   };
 
@@ -2993,7 +2992,7 @@ const AppContent = ({
                 onAutoConsolidateSkillGroups={autoConsolidateSkillGroups}
                 onSetUpdateSource={setSkillUpdateSource}
                 onSetUpdatePolicy={(input) => void setSkillUpdatePolicy(input)}
-                onSetAvailability={(input) => void setSkillAvailability(input)}
+                onSetAvailability={setSkillAvailability}
                 onSetIcon={(input) => void setSkillIcon(input)}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onCloseUpdatePreview={() => setSelectedSkillUpdatePlan(undefined)}

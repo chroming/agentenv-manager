@@ -60,14 +60,22 @@
 }
 
 .library-global-state {
+  align-items: center;
   background: #eef1f5;
   border-radius: var(--radius-pill);
   color: #64748b;
+  display: inline-flex;
   flex: 0 0 auto;
   font-size: 10px;
   font-weight: 760;
+  gap: 4px;
   line-height: 19px;
   padding-inline: 7px;
+}
+
+.library-global-state.is-working {
+  background: #eaf2ff;
+  color: var(--accent);
 }
 
 .skill-library-panel .library-resource-cell,
@@ -687,3 +695,4 @@
   display: block;
   margin-top: 7px;
 }
+  display: inline-flex;

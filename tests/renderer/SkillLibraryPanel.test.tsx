@@ -55,7 +55,10 @@ describe("SkillLibraryPanel", () => {
     const onSetUpdateSource = vi.fn();
     const onImportExternal = vi.fn().mockResolvedValue(true);
     const onSetUpdatePolicy = vi.fn();
-    const onSetAvailability = vi.fn();
+    let resolveAvailability: ((succeeded: boolean) => void) | undefined;
+    const onSetAvailability = vi.fn(
+      () => new Promise<boolean>((resolve) => (resolveAvailability = resolve))
+    );
     const onSetIcon = vi.fn();
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn();
@@ -446,6 +449,14 @@ describe("SkillLibraryPanel", () => {
     expect(disableDialog).toHaveTextContent("removed the next time that Profile is applied");
     fireEvent.click(within(disableDialog).getByRole("button", { name: "Disable globally" }));
     expect(onSetAvailability).toHaveBeenCalledWith({ id: "shared-reviewer", enabled: false });
+    expect(within(sharedRow).getByText("Disabling...")).toBeInTheDocument();
+    expect(within(disableDialog).getByRole("button", { name: "Disabling..." })).toBeDisabled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "Disable library skill" })).toBeInTheDocument();
+    resolveAvailability?.(true);
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Disable library skill" })).not.toBeInTheDocument()
+    );
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Remove from library/ }));
     const deleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });

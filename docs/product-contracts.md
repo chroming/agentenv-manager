@@ -738,6 +738,8 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Dirty Profile blocks Preview and preserves draft.
 - Active Profile is selected and pinned for the chosen Target; a single installed Target is static context.
 - Disabling a Skill in Library preserves its content and every existing Profile reference, hides it from every Add Skill picker, excludes it from update checks and effective Apply payloads, and leaves it visible but locked in Profiles until globally enabled again.
+- Library status views are mutually exclusive. `Updates` includes only enabled, tracked Skills with a confirmed available update; `Referenced` and `Unreferenced` describe Profile references without claiming deployment state; `Disabled` is the durable management entry for globally unavailable Skills.
+- Enabling or disabling a Library Skill MUST expose row-local working feedback, lock duplicate availability commands, and update both the visible row and persisted metadata before reporting success.
 - A globally disabled Skill is removed from managed Target installs on the next Apply of each affected Profile; global disable itself MUST NOT silently rewrite Target environments.
 - Disabling a referenced Library Skill in a Profile is a normal Profile edit: it preserves the reference, marks the whole Profile dirty, and MUST require the same Save, Preview, and Apply flow as adding or removing a Skill.
 - Applying a disabled Profile Skill previews and removes only its managed Target copy; re-enabling previews and restores it. The switch MUST NOT write to a Target before Apply succeeds.

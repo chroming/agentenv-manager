@@ -1,11 +1,15 @@
-import type { SkillInventoryEntry, SkillSourceType } from "../shared/types";
+import type {
+  SkillInventoryEntry,
+  SkillLibraryEntry,
+  SkillSourceType,
+  SkillUpdateInfo
+} from "../shared/types";
 
 export interface SkillLibraryViewState {
   search: string;
   sourceFilter: "all" | SkillSourceType;
-  usageFilter: "all" | "used" | "unused";
+  statusFilter: "all" | "updates" | "referenced" | "unreferenced" | "disabled";
   targetFilter: "all" | SkillInventoryEntry["status"] | "not-installed";
-  updateFilter: "all" | "updates";
   scrollTop: number;
 }
 
@@ -17,9 +21,8 @@ export interface McpLibraryViewState {
 export const defaultSkillLibraryViewState: SkillLibraryViewState = {
   search: "",
   sourceFilter: "all",
-  usageFilter: "all",
+  statusFilter: "all",
   targetFilter: "all",
-  updateFilter: "all",
   scrollTop: 0
 };
 
@@ -37,6 +40,24 @@ export const updateMcpLibraryControls = (
   current: McpLibraryViewState,
   patch: Partial<Omit<McpLibraryViewState, "scrollTop">>
 ): McpLibraryViewState => ({ ...current, ...patch, scrollTop: 0 });
+
+export const matchesSkillStatusFilter = (
+  statusFilter: SkillLibraryViewState["statusFilter"],
+  skill: SkillLibraryEntry,
+  referenced: boolean,
+  update?: SkillUpdateInfo
+) => {
+  if (statusFilter === "all") return true;
+  if (statusFilter === "referenced") return referenced;
+  if (statusFilter === "unreferenced") return !referenced;
+  if (statusFilter === "disabled") return skill.globallyEnabled === false;
+  return (
+    skill.globallyEnabled !== false &&
+    skill.updatePolicy === "tracked" &&
+    Boolean(update?.updateAvailable) &&
+    !update?.error
+  );
+};
 
 export const updateLibraryScroll = <T extends { scrollTop: number }>(
   current: T,

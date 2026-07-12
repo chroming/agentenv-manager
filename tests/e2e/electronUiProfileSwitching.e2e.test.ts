@@ -630,7 +630,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("textbox", { name: "Search skills" }).fill("layout-skill");
     expect(await editorPanel.evaluate((element) => element.scrollTop)).toBe(0);
     await page.getByRole("combobox", { name: "Skill source filter" }).selectOption("local");
-    await page.getByRole("tab", { name: /In use/ }).click();
+    await page.getByRole("tab", { name: /Referenced/ }).click();
     await page
       .getByRole("combobox", { name: "Skill target filter" })
       .selectOption("not-installed");
@@ -666,8 +666,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("combobox", { name: "Skill target filter" }).inputValue()).toBe(
       "not-installed"
     );
-    expect(await page.getByRole("tab", { name: /In use/ }).getAttribute("aria-selected")).toBe(
-      "true"
+    expect(await page.getByRole("tab", { name: /Referenced/ }).getAttribute("aria-selected")).toBe(
+      "false"
     );
     expect(await page.getByRole("tab", { name: /Updates/ }).getAttribute("aria-selected")).toBe(
       "true"
@@ -954,9 +954,9 @@ describe("Electron UI profile switching e2e", () => {
       await sourceFilter.selectOption("local");
       await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
       await sourceFilter.selectOption("all");
-      await page.getByRole("tab", { name: /In use/ }).click();
+      await page.getByRole("tab", { name: /Referenced/ }).click();
       await expect.poll(() => allRows.count()).toBe(testCase.count);
-      await page.getByRole("tab", { name: /Unused/ }).click();
+      await page.getByRole("tab", { name: /Unreferenced/ }).click();
       await expect.poll(() => allRows.count()).toBe(2);
       await allTab.click();
       const targetFilter = page.getByRole("combobox", { name: "Skill target filter" });
@@ -3892,6 +3892,13 @@ describe("Electron UI profile switching e2e", () => {
       )).globallyEnabled
     ).toBe(false);
     await expect.poll(() => libraryRow.textContent()).toContain("Disabled");
+    const disabledTab = page.getByRole("tab", { name: /Disabled 1/ });
+    await disabledTab.click();
+    expect(await disabledTab.getAttribute("aria-selected")).toBe("true");
+    expect(await page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
+    await page.getByRole("tab", { name: /Updates/ }).click();
+    expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
+    await page.getByRole("tab", { name: /^All / }).click();
 
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "Skills");

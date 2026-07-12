@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   defaultMcpLibraryViewState,
   defaultSkillLibraryViewState,
+  matchesSkillStatusFilter,
   updateLibraryScroll,
   updateMcpLibraryControls,
   updateSkillLibraryControls
@@ -12,9 +13,8 @@ describe("library view state", () => {
     expect(defaultSkillLibraryViewState).toEqual({
       search: "",
       sourceFilter: "all",
-      usageFilter: "all",
+      statusFilter: "all",
       targetFilter: "all",
-      updateFilter: "all",
       scrollTop: 0
     });
     expect(defaultMcpLibraryViewState).toEqual({ search: "", scrollTop: 0 });
@@ -24,13 +24,13 @@ describe("library view state", () => {
     const current = { ...defaultSkillLibraryViewState, scrollTop: 240 };
     const next = updateSkillLibraryControls(current, {
       search: "review",
-      usageFilter: "used"
+      statusFilter: "referenced"
     });
 
     expect(next).toEqual({
       ...current,
       search: "review",
-      usageFilter: "used",
+      statusFilter: "referenced",
       scrollTop: 0
     });
     expect(current.scrollTop).toBe(240);
@@ -50,5 +50,38 @@ describe("library view state", () => {
 
     expect(updateLibraryScroll(state, 38.5)).toEqual({ ...state, scrollTop: 38.5 });
     expect(updateLibraryScroll(state, -12)).toEqual({ ...state, scrollTop: 0 });
+  });
+
+  it("keeps Library availability, references, and update eligibility distinct", () => {
+    const enabledSkill = {
+      id: "reviewer",
+      name: "Reviewer",
+      description: "Review code",
+      path: "/tmp/reviewer",
+      sourceType: "github" as const,
+      source: "https://github.com/acme/skills/tree/main/reviewer",
+      updatePolicy: "tracked" as const,
+      contentHash: "current",
+      updatedAt: "2026-07-15T00:00:00.000Z",
+      globallyEnabled: true
+    };
+    const availableUpdate = {
+      id: "reviewer",
+      name: "Reviewer",
+      sourceType: "github" as const,
+      updateAvailable: true,
+      currentRevision: "current",
+      latestRevision: "latest"
+    };
+
+    expect(matchesSkillStatusFilter("updates", enabledSkill, false, availableUpdate)).toBe(true);
+    expect(matchesSkillStatusFilter("referenced", enabledSkill, true, availableUpdate)).toBe(true);
+    expect(matchesSkillStatusFilter("unreferenced", enabledSkill, false, availableUpdate)).toBe(true);
+    expect(matchesSkillStatusFilter("disabled", enabledSkill, true, availableUpdate)).toBe(false);
+
+    const disabledSkill = { ...enabledSkill, globallyEnabled: false };
+    expect(matchesSkillStatusFilter("updates", disabledSkill, true, availableUpdate)).toBe(false);
+    expect(matchesSkillStatusFilter("disabled", disabledSkill, true, availableUpdate)).toBe(true);
+    expect(matchesSkillStatusFilter("referenced", disabledSkill, true, availableUpdate)).toBe(true);
   });
 });

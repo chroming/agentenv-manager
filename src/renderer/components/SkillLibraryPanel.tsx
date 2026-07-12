@@ -14,6 +14,7 @@ import {
   GitBranch,
   Link2,
   Link2Off,
+  LoaderCircle,
   MoreHorizontal,
   Power,
   RefreshCw,
@@ -51,6 +52,7 @@ import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { ResourceIconPicker } from "./ResourceIconPicker";
 import { SkillUpdateDialog } from "./SkillUpdateDialog";
 import {
+  matchesSkillStatusFilter,
   type SkillLibraryViewState,
   updateSkillLibraryControls
 } from "../libraryViewState";
@@ -90,7 +92,7 @@ interface SkillLibraryPanelProps {
   onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<void>;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
   onSetUpdatePolicy(input: SkillUpdatePolicyInput): void;
-  onSetAvailability(input: SkillAvailabilityInput): void;
+  onSetAvailability(input: SkillAvailabilityInput): Promise<boolean>;
   onSetIcon(input: SkillIconInput): void;
   onPreviewLibrarySkillUpdate(id: string): void;
   onCloseUpdatePreview(): void;
@@ -224,7 +226,7 @@ export const SkillLibraryPanel = ({
   const [automaticCleanupKey, setAutomaticCleanupKey] = useState<string>();
   const [githubOperationError, setGithubOperationError] = useState("");
   const [localSkillPath, setLocalSkillPath] = useState("");
-  const { search, sourceFilter, usageFilter, targetFilter, updateFilter } = viewState;
+  const { search, sourceFilter, statusFilter, targetFilter } = viewState;
   const updateControls = (
     patch: Partial<Omit<SkillLibraryViewState, "scrollTop">>
   ) => onViewStateChange(updateSkillLibraryControls(viewState, patch));
@@ -232,6 +234,7 @@ export const SkillLibraryPanel = ({
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
   const [disableCandidate, setDisableCandidate] = useState<SkillLibraryEntry>();
+  const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
   const [cleanupDraft, setCleanupDraft] = useState<{
     skillKey: string;
@@ -252,12 +255,14 @@ export const SkillLibraryPanel = ({
   const modalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const modalFallbackFocusRef = useRef<HTMLElement>(null);
   const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
+  const skillsById = new Map(librarySkills.map((skill) => [skill.id, skill]));
   const enabledSkillIds = new Set(
     librarySkills.filter((skill) => skill.globallyEnabled !== false).map((skill) => skill.id)
   );
   const updateableSkillIds = skillUpdates
     .filter((update) => update.updateAvailable && !update.error)
     .filter((update) => enabledSkillIds.has(update.id))
+    .filter((update) => skillsById.get(update.id)?.updatePolicy === "tracked")
     .map((update) => update.id);
   const availableUpdateCount = updateableSkillIds.length;
   const githubReadyCandidateIds = githubScanResult?.candidates
@@ -353,6 +358,7 @@ export const SkillLibraryPanel = ({
     dialogRef: modalDialogRef,
     initialFocusRef: modalInitialFocusRef,
     fallbackFocusRef: modalFallbackFocusRef,
+    dismissDisabled: Boolean(availabilityOperation),
     onDismiss: dismissModal
   });
   useModalDialog({
@@ -418,26 +424,29 @@ export const SkillLibraryPanel = ({
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(query));
     const matchesSource = sourceFilter === "all" || skill.sourceType === sourceFilter;
-    const matchesUsage =
-      usageFilter === "all" ||
-      (usageFilter === "used" ? usage.length > 0 : usage.length === 0);
     const matchesTarget =
       targetFilter === "all" ||
       (targetFilter === "not-installed"
         ? installs.length === 0
         : installs.some((install) => install.status === targetFilter));
-    const matchesUpdate =
-      updateFilter === "all" || Boolean(updatesById.get(skill.id)?.updateAvailable);
-
-    return matchesSearch && matchesSource && matchesUsage && matchesTarget && matchesUpdate;
+    return (
+      matchesSearch &&
+      matchesSource &&
+      matchesSkillStatusFilter(
+        statusFilter,
+        skill,
+        usage.length > 0,
+        updatesById.get(skill.id)
+      ) &&
+      matchesTarget
+    );
   });
   const resetFilters = () => {
     updateControls({
       search: "",
       sourceFilter: "all",
-      usageFilter: "all",
-      targetFilter: "all",
-      updateFilter: "all"
+      statusFilter: "all",
+      targetFilter: "all"
     });
   };
 
@@ -461,11 +470,27 @@ export const SkillLibraryPanel = ({
   const hasActiveFilters =
     search.trim().length > 0 ||
     sourceFilter !== "all" ||
-    usageFilter !== "all" ||
-    targetFilter !== "all" ||
-    updateFilter !== "all";
-  const usedSkillCount = librarySkills.filter((skill) => (skillUsage[skill.id] ?? []).length > 0).length;
-  const unusedSkillCount = Math.max(librarySkills.length - usedSkillCount, 0);
+    statusFilter !== "all" ||
+    targetFilter !== "all";
+  const referencedSkillCount = librarySkills.filter(
+    (skill) => (skillUsage[skill.id] ?? []).length > 0
+  ).length;
+  const unreferencedSkillCount = Math.max(librarySkills.length - referencedSkillCount, 0);
+  const disabledSkillCount = librarySkills.filter(
+    (skill) => skill.globallyEnabled === false
+  ).length;
+  const runAvailabilityChange = async (input: SkillAvailabilityInput) => {
+    if (availabilityOperation) return;
+    setAvailabilityOperation(input);
+    try {
+      const succeeded = await onSetAvailability(input);
+      if (succeeded && !input.enabled) {
+        setDisableCandidate(undefined);
+      }
+    } finally {
+      setAvailabilityOperation(undefined);
+    }
+  };
   const cleanupGroups = useMemo(
     () => buildSkillCleanupGroups(skillInventory),
     [skillInventory]
@@ -676,46 +701,49 @@ export const SkillLibraryPanel = ({
       <div className="library-control-deck">
         <div className="library-quick-tabs" role="tablist" aria-label={t("Skill status filters")}>
           <button
-            className={`library-quick-tab${updateFilter === "all" && usageFilter === "all" ? " is-active" : ""}`}
+            className={`library-quick-tab${statusFilter === "all" ? " is-active" : ""}`}
             type="button"
             role="tab"
-            aria-selected={updateFilter === "all" && usageFilter === "all"}
-            onClick={() => {
-              updateControls({ updateFilter: "all", usageFilter: "all" });
-            }}
+            aria-selected={statusFilter === "all"}
+            onClick={() => updateControls({ statusFilter: "all" })}
           >
             {t("All")} <strong>{librarySkills.length}</strong>
           </button>
           <button
-            className={`library-quick-tab${updateFilter === "updates" ? " is-active" : ""}`}
+            className={`library-quick-tab${statusFilter === "updates" ? " is-active" : ""}`}
             type="button"
             role="tab"
-            aria-selected={updateFilter === "updates"}
-            onClick={() => updateControls({ updateFilter: "updates" })}
+            aria-selected={statusFilter === "updates"}
+            onClick={() => updateControls({ statusFilter: "updates" })}
           >
             {t("Updates")} <strong>{availableUpdateCount}</strong>
           </button>
           <button
-            className={`library-quick-tab${usageFilter === "used" ? " is-active" : ""}`}
+            className={`library-quick-tab${statusFilter === "referenced" ? " is-active" : ""}`}
             type="button"
             role="tab"
-            aria-selected={usageFilter === "used"}
-            onClick={() => {
-              updateControls({ usageFilter: "used", updateFilter: "all" });
-            }}
+            aria-selected={statusFilter === "referenced"}
+            onClick={() => updateControls({ statusFilter: "referenced" })}
           >
-            {t("In use")} <strong>{usedSkillCount}</strong>
+            {t("Referenced")} <strong>{referencedSkillCount}</strong>
           </button>
           <button
-            className={`library-quick-tab${usageFilter === "unused" ? " is-active" : ""}`}
+            className={`library-quick-tab${statusFilter === "unreferenced" ? " is-active" : ""}`}
             type="button"
             role="tab"
-            aria-selected={usageFilter === "unused"}
-            onClick={() => {
-              updateControls({ usageFilter: "unused", updateFilter: "all" });
-            }}
+            aria-selected={statusFilter === "unreferenced"}
+            onClick={() => updateControls({ statusFilter: "unreferenced" })}
           >
-            {t("Unused")} <strong>{unusedSkillCount}</strong>
+            {t("Unreferenced")} <strong>{unreferencedSkillCount}</strong>
+          </button>
+          <button
+            className={`library-quick-tab${statusFilter === "disabled" ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === "disabled"}
+            onClick={() => updateControls({ statusFilter: "disabled" })}
+          >
+            {t("Disabled")} <strong>{disabledSkillCount}</strong>
           </button>
         </div>
         <div className="library-toolbar">
@@ -795,7 +823,14 @@ export const SkillLibraryPanel = ({
             {t("Updates")}
             <InfoTip label={t("Shows whether this skill tracks its source and whether an update is available.")} />
           </span>
-          <span>{t("Usage")}</span>
+          <span className="library-column-label">
+            {t("Profiles")}
+            <InfoTip
+              label={t(
+                "Shows Profiles that reference this skill, including disabled references."
+              )}
+            />
+          </span>
           <span className="library-column-label">
             {t("Installs")}
             <InfoTip label={t("Shows whether each Target install matches the Library copy. This is separate from source updates.")} />
@@ -828,8 +863,9 @@ export const SkillLibraryPanel = ({
             const hasUpdateSource = Boolean(skill.source);
             const isTracked = skill.updatePolicy === "tracked";
             const globallyEnabled = skill.globallyEnabled !== false;
+            const availabilityIsChanging = availabilityOperation?.id === skill.id;
             const updateLabel = !globallyEnabled
-              ? "Disabled"
+              ? "Not checked"
               : !isTracked
               ? "Not tracked"
               : updateInfo?.error
@@ -871,8 +907,19 @@ export const SkillLibraryPanel = ({
                   <div className="skill-title-stack">
                     <span className="skill-title-line">
                       <strong className="skill-title">{skill.name}</strong>
-                      {!globallyEnabled ? (
-                        <span className="library-global-state">{t("Disabled")}</span>
+                      {!globallyEnabled || availabilityIsChanging ? (
+                        <span className={`library-global-state${availabilityIsChanging ? " is-working" : ""}`}>
+                          {availabilityIsChanging ? (
+                            <LoaderCircle className="is-spinning" size={12} strokeWidth={2.2} />
+                          ) : null}
+                          {t(
+                            availabilityIsChanging
+                              ? availabilityOperation.enabled
+                                ? "Enabling..."
+                                : "Disabling..."
+                              : "Disabled"
+                          )}
+                        </span>
                       ) : null}
                     </span>
                     <PreviewText className="skill-description" text={skill.description || skill.id} />
@@ -939,7 +986,7 @@ export const SkillLibraryPanel = ({
                       className="resource-status"
                     >
                       {!globallyEnabled ? (
-                        <Power size={13} strokeWidth={2.2} />
+                        <Link2Off size={13} strokeWidth={2.2} />
                       ) : !isTracked ? (
                         <Link2Off size={13} strokeWidth={2.2} />
                       ) : !hasUpdateSource ? (
@@ -950,7 +997,7 @@ export const SkillLibraryPanel = ({
                       <span>{t(updateLabel)}</span>
                     </strong>
                   )}
-                  {updateInfo?.latestRevision ? (
+                  {globallyEnabled && updateInfo?.latestRevision ? (
                     <small>
                       {updateInfo.latestRevision.slice(0, 7)} {t(hasUpdate ? "available" : "current")}
                     </small>
@@ -966,7 +1013,7 @@ export const SkillLibraryPanel = ({
                   <small>
                     {(skillUsage[skill.id] ?? []).length > 0
                       ? (skillUsage[skill.id] ?? []).join(", ")
-                      : t("Not used")}
+                      : t("Not referenced")}
                   </small>
                 </div>
                 <div className="library-installs-cell">
@@ -1028,6 +1075,7 @@ export const SkillLibraryPanel = ({
                       type="button"
                       aria-label={t("More actions for {{id}}", { id: skill.id })}
                       aria-expanded={openActionId === skill.id}
+                      disabled={availabilityIsChanging}
                       onClick={(event) => toggleActionMenu(skill.id, event.currentTarget)}
                     >
                       <MoreHorizontal size={16} strokeWidth={2.2} />
@@ -1042,7 +1090,7 @@ export const SkillLibraryPanel = ({
                           aria-label={t("Actions for {{id}}", { id: skill.id })}
                           style={{ left: openAction.left, top: openAction.top }}
                         >
-                          {hasUpdateSource && isTracked ? (
+                          {globallyEnabled && hasUpdateSource && isTracked ? (
                             <button
                               className="row-action-item"
                               type="button"
@@ -1070,6 +1118,7 @@ export const SkillLibraryPanel = ({
                             className="row-action-item"
                             type="button"
                             role="menuitem"
+                            disabled={Boolean(availabilityOperation)}
                             onClick={() => {
                               if (globallyEnabled) {
                                 modalFallbackFocusRef.current = document.querySelector(
@@ -1077,7 +1126,7 @@ export const SkillLibraryPanel = ({
                                 );
                                 setDisableCandidate(skill);
                               } else {
-                                onSetAvailability({ id: skill.id, enabled: true });
+                                void runAvailabilityChange({ id: skill.id, enabled: true });
                               }
                               setOpenAction(undefined);
                             }}
@@ -1104,7 +1153,9 @@ export const SkillLibraryPanel = ({
                               <span>
                                 <strong>{t("Track updates")}</strong>
                                 <small>
-                                  {isTracked
+                                  {!globallyEnabled
+                                    ? t("Checks resume when this skill is enabled.")
+                                    : isTracked
                                     ? t("Include in manual and automatic checks.")
                                     : hasUpdateSource
                                       ? t("Excluded from all update checks.")
@@ -1288,7 +1339,10 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {disableCandidate ? (
-        <div className="preview-modal-backdrop" onClick={() => setDisableCandidate(undefined)}>
+        <div
+          className="preview-modal-backdrop"
+          onClick={availabilityOperation ? undefined : () => setDisableCandidate(undefined)}
+        >
           <section
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
@@ -1319,6 +1373,7 @@ export const SkillLibraryPanel = ({
                 ref={modalInitialFocusRef}
                 className="secondary-action"
                 type="button"
+                disabled={Boolean(availabilityOperation)}
                 onClick={() => setDisableCandidate(undefined)}
               >
                 {t("Cancel")}
@@ -1326,12 +1381,13 @@ export const SkillLibraryPanel = ({
               <button
                 className="primary-action"
                 type="button"
-                onClick={() => {
-                  onSetAvailability({ id: disableCandidate.id, enabled: false });
-                  setDisableCandidate(undefined);
-                }}
+                disabled={Boolean(availabilityOperation)}
+                onClick={() => void runAvailabilityChange({ id: disableCandidate.id, enabled: false })}
               >
-                {t("Disable globally")}
+                {availabilityOperation ? (
+                  <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
+                ) : null}
+                {t(availabilityOperation ? "Disabling..." : "Disable globally")}
               </button>
             </footer>
           </section>
