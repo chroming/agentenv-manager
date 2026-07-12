@@ -608,15 +608,14 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseDown(document.body);
     expect(onCloseTool).toHaveBeenCalledTimes(3);
     expect(discoveries).toHaveTextContent("Managed");
-    expect(discoveries).toHaveTextContent("Not in Library");
-    expect(discoveries).toHaveTextContent("Multiple versions");
-    expect(discoveries).toHaveTextContent("Managed elsewhere");
+    expect(discoveries).toHaveTextContent("Unmanaged");
+    expect(discoveries).toHaveTextContent("Conflict");
+    expect(discoveries).toHaveTextContent("External");
     expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
     const sharedMigrationGroup = screen.getByRole("group", {
       name: "Cleanup group compat-reviewer"
     });
-    expect(sharedMigrationGroup).toHaveTextContent("Shared copy can be replaced");
-    expect(sharedMigrationGroup).toHaveTextContent("Shared compatibility copy");
+    expect(sharedMigrationGroup).toHaveTextContent("Ready");
     expect(sharedMigrationGroup).toHaveTextContent("All consumer Targets are ready");
     fireEvent.click(
       within(sharedMigrationGroup).getByRole("button", {
@@ -691,7 +690,7 @@ describe("SkillLibraryPanel", () => {
     const externalGroup = screen.getByRole("group", {
       name: "Cleanup group external-reviewer"
     });
-    expect(externalGroup).toHaveTextContent("Managed elsewhere");
+    expect(externalGroup).toHaveTextContent("External");
     await waitFor(() =>
       expect(
         within(externalGroup).getByRole("button", { name: "Review ownership external-reviewer" })
@@ -729,7 +728,7 @@ describe("SkillLibraryPanel", () => {
       "2 locations"
     );
     const mixedGroup = screen.getByRole("group", { name: "Cleanup group target-only-reviewer" });
-    expect(mixedGroup).toHaveTextContent("Not in Library");
+    expect(mixedGroup).toHaveTextContent("Unmanaged");
     expect(within(mixedGroup).queryByText("Ignored", { exact: true })).not.toBeInTheDocument();
     expect(
       within(mixedGroup).getByRole("button", { name: "Add to Library target-only-reviewer" })
@@ -761,7 +760,7 @@ describe("SkillLibraryPanel", () => {
     );
 
     const conflictGroup = screen.getByRole("group", { name: "Cleanup group conflict-reviewer" });
-    expect(conflictGroup).toHaveTextContent("Multiple versions");
+    expect(conflictGroup).toHaveTextContent("Conflict");
     fireEvent.click(
       within(conflictGroup).getByRole("button", {
         name: "More cleanup actions for conflict-reviewer"

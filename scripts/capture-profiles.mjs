@@ -239,6 +239,9 @@ const prepareFixture = async (root) => {
   });
   await Promise.all(profileFixtures.map((profile) => writeProfile(appDataRoot, profile)));
   await writeLibrary(appDataRoot);
+  const sharedLibraryDir = join(appDataRoot, "skills-library", sharedSkillName);
+  await mkdir(sharedLibraryDir, { recursive: true });
+  await copyFile(join(sharedSkillDir, "SKILL.md"), join(sharedLibraryDir, "SKILL.md"));
   const githubSkillDir = join(
     githubFixtureRoot,
     "agentenv-community",

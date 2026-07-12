@@ -578,6 +578,11 @@
   animation: spin 0.9s linear infinite;
 }
 
+.skill-library-panel .library-drawer__refresh {
+  height: 36px;
+  min-height: 36px;
+}
+
 .cleanup-resolution {
   border-radius: 999px;
   display: inline-flex;
@@ -615,15 +620,15 @@
 }
 
 .skill-library-panel .cleanup-group-row {
-  align-items: start;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr);
-  padding-block: 8px;
+  align-items: center;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-block: 10px;
 }
 
 .skill-library-panel .cleanup-group-row > .cleanup-group-actions {
-  grid-column: 1;
-  justify-self: end;
+  grid-column: 2;
+  justify-self: stretch;
   max-width: none;
   min-width: 0;
 }
@@ -632,18 +637,22 @@
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 154px);
+  grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
 }
 
 .skill-library-panel .cleanup-group-state {
-  display: block;
+  display: inline-flex;
   justify-self: end;
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: none;
+  min-width: max-content;
+  overflow: visible;
   white-space: nowrap;
+}
+
+.resource-chip--pending {
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .skill-library-panel .cleanup-group-actions .primary-action,
@@ -651,7 +660,11 @@
   flex: 0 0 auto;
   height: 36px;
   min-height: 36px;
-  width: auto;
+}
+
+.skill-library-panel .cleanup-group-actions .cleanup-current-action {
+  justify-content: center;
+  width: 122px;
 }
 
 .local-import-impact {
@@ -693,14 +706,24 @@
 }
 
 @container skill-library (max-width: 560px) {
-  .skill-library-panel .cleanup-group-heading {
-    gap: 5px;
+  .skill-library-panel .cleanup-group-row {
+    align-items: start;
+    gap: 8px;
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .skill-library-panel .cleanup-group-row > .cleanup-group-actions {
+    grid-column: 1;
+    justify-self: end;
+  }
+
+  .skill-library-panel .cleanup-group-heading {
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .skill-library-panel .cleanup-group-state {
-    justify-self: start;
-    max-width: min(100%, 220px);
+    justify-self: end;
   }
 }
 
@@ -709,9 +732,9 @@
 }
 
 .cleanup-history-row {
-  grid-template-columns: 86px minmax(0, 1fr) auto;
-  min-height: 48px;
-  padding-block: 7px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 56px;
+  padding-block: 9px;
 }
 
 .cleanup-review-dialog .section-title {
@@ -768,19 +791,14 @@
 }
 
 .cleanup-shared-progress {
-  align-items: center;
-  color: var(--muted);
-  display: flex;
-  flex-wrap: wrap;
+  color: #52617a;
+  display: block;
   font-size: 11px;
-  gap: 4px 0;
+  font-weight: 650;
   line-height: 1.35;
   min-width: 0;
-}
-
-.cleanup-shared-progress > span {
-  min-width: 0;
-  padding-inline: 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -803,16 +821,6 @@
 .cleanup-migration-target:hover {
   background: transparent;
   color: var(--accent-strong);
-}
-
-.cleanup-shared-progress > span:first-child {
-  color: #52617a;
-  font-weight: 680;
-  padding-left: 0;
-}
-
-.cleanup-shared-progress > span + span {
-  border-left: 1px solid var(--border);
 }
 
 .cleanup-migration-action {

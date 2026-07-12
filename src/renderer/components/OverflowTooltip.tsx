@@ -21,6 +21,7 @@ interface OverflowTooltipProps {
   className: string;
   displayText?: string;
   focusable?: boolean;
+  preferredPlacement?: "top" | "bottom";
   text: string;
   tooltipClassName?: string;
 }
@@ -34,6 +35,7 @@ export const OverflowTooltip = ({
   className,
   displayText,
   focusable = true,
+  preferredPlacement,
   text,
   tooltipClassName = ""
 }: OverflowTooltipProps) => {
@@ -75,11 +77,17 @@ export const OverflowTooltip = ({
     const height = measured?.height ?? 52;
     const gap = 8;
     const margin = 12;
-    const preferredTop = triggerRect.bottom + gap;
-    const placement =
-      preferredTop + height <= window.innerHeight - margin ? "bottom" : "top";
+    const bottomTop = triggerRect.bottom + gap;
+    const topTop = triggerRect.top - height - gap;
+    const bottomFits = bottomTop + height <= window.innerHeight - margin;
+    const topFits = topTop >= margin;
+    const placement = preferredPlacement === "top"
+      ? topFits ? "top" : "bottom"
+      : preferredPlacement === "bottom"
+        ? bottomFits ? "bottom" : "top"
+        : bottomFits ? "bottom" : "top";
     const unclampedTop =
-      placement === "bottom" ? preferredTop : triggerRect.top - height - gap;
+      placement === "bottom" ? bottomTop : topTop;
     const maxTop = Math.max(margin, window.innerHeight - height - margin);
 
     setPosition({
@@ -88,7 +96,7 @@ export const OverflowTooltip = ({
       placement,
       top: clamp(unclampedTop, margin, maxTop)
     });
-  }, []);
+  }, [preferredPlacement]);
 
   useLayoutEffect(() => {
     if (isOpen) {

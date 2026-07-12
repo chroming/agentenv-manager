@@ -190,13 +190,27 @@ const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   return "Managed";
 };
 
+const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState) => {
+  if (state === "duplicate-copies") return "Duplicate";
+  if (state === "multiple-versions" || state === "local-changes-found") return "Conflict";
+  if (state === "managed-copy-changed") return "Changed";
+  if (state === "managed-elsewhere") return "External";
+  if (state === "shared-copy-in-use") return "In use";
+  if (state === "shared-copy-replaceable") return "Ready";
+  if (state === "kept-shared") return "Kept";
+  if (state === "ignored") return "Ignored";
+  if (state === "managed") return "Managed";
+  return "Unmanaged";
+};
+
 const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) => {
   if (state === "managed" || state === "shared-copy-replaceable") return "managed";
   if (state === "ignored" || state === "kept-shared") return "ignored";
   if (state === "managed-elsewhere") return "external";
   if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
   if (state === "managed-copy-changed") return "stale";
-  if (state === "shared-copy-in-use" || state === "duplicate-copies") return "library";
+  if (state === "shared-copy-in-use") return "pending";
+  if (state === "duplicate-copies") return "library";
   return "unmanaged";
 };
 
@@ -206,9 +220,21 @@ const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
   if (action === "review-differences") return "Review differences";
   if (action === "review-drift") return "Review drift";
   if (action === "review-ownership") return "Review ownership";
-  if (action === "open-profiles") return "Open Profiles";
+  if (action === "open-profiles") return "View Profiles";
   if (action === "review-replacement") return "Review replacement";
   return "";
+};
+
+const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
+  if (
+    action === "review-differences" ||
+    action === "review-drift" ||
+    action === "review-ownership" ||
+    action === "review-replacement"
+  ) {
+    return "Review";
+  }
+  return cleanupActionLabel(action);
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -2179,7 +2205,10 @@ export const SkillLibraryPanel = ({
                     strokeWidth={2.2}
                     aria-hidden="true"
                   />
-                  {t(automaticCleanupKey === "all" ? "Managing..." : "Manage ready copies")}
+                  {t(
+                    automaticCleanupKey === "all" ? "Managing..." : "Manage {{count}} skills",
+                    { count: automaticCleanupRequests.length }
+                  )}
                 </button>
               ) : null}
             </div>
@@ -2194,10 +2223,19 @@ export const SkillLibraryPanel = ({
                 const allIgnored = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
                 const sharedMigration = group.sharedMigration;
-                const chipLabel = t(cleanupPresentationLabel(group.presentation.state));
+                const chipLabel = t(cleanupPresentationCompactLabel(group.presentation.state));
+                const chipDetail = t(cleanupPresentationLabel(group.presentation.state));
                 const chipClass = cleanupPresentationChipClass(group.presentation.state);
                 const actionLabel = t(cleanupActionLabel(group.presentation.action));
+                const actionDisplayLabel = t(cleanupActionDisplayLabel(group.presentation.action));
                 const groupIsWorking = sharedOperation?.skillKey === group.skillKey;
+                const sharedProgressText = sharedMigration?.state === "waiting"
+                  ? t("Library ready · {{count}} Targets still use this copy", {
+                      count: sharedMigration.pendingConsumers.length
+                    })
+                  : sharedMigration?.state === "ready"
+                    ? t("All consumer Targets are ready")
+                    : undefined;
                 const cleanupActionId = `cleanup:${group.skillKey}`;
                 const runPrimaryAction = () => {
                   if (
@@ -2248,22 +2286,17 @@ export const SkillLibraryPanel = ({
                         <PreviewText
                           ariaLabel={t("Full cleanup state {{id}}", { id: group.skillKey })}
                           className={`resource-chip resource-chip--${chipClass} cleanup-group-state`}
-                          text={chipLabel}
+                          displayText={chipLabel}
+                          preferredPlacement="top"
+                          text={chipDetail}
                         />
                       </div>
-                      {sharedMigration ? (
-                        <div className="cleanup-shared-progress">
-                          <span>{t("Shared compatibility copy")}</span>
-                          {sharedMigration.state === "waiting" ? (
-                            <span>
-                              {t("Library ready · {{count}} Targets still use this copy", {
-                                count: sharedMigration.pendingConsumers.length
-                              })}
-                            </span>
-                          ) : sharedMigration.state === "ready" ? (
-                            <span>{t("All consumer Targets are ready")}</span>
-                          ) : null}
-                        </div>
+                      {sharedProgressText ? (
+                        <PreviewText
+                          ariaLabel={t("Full shared migration state {{id}}", { id: group.skillKey })}
+                          className="cleanup-shared-progress"
+                          text={sharedProgressText}
+                        />
                       ) : null}
                       <PreviewText
                         ariaLabel={t("Full cleanup summary {{id}}", { id: group.skillKey })}
@@ -2292,7 +2325,7 @@ export const SkillLibraryPanel = ({
                           disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}
                           onClick={runPrimaryAction}
                         >
-                          {actionLabel}
+                          {actionDisplayLabel}
                         </button>
                       ) : null}
                       <button
@@ -2401,7 +2434,6 @@ export const SkillLibraryPanel = ({
                 <div className="resource-list resource-list--unmanaged cleanup-history-list">
                   {cleanupBackups.map((backup) => (
                     <div className="resource-row cleanup-history-row" key={backup.id}>
-                      <span className="resource-chip resource-chip--managed">{t("Backup")}</span>
                       <div className="resource-row__main">
                         <PreviewText
                           ariaLabel={t("Full cleanup history name {{id}}", { id: backup.libraryId })}
@@ -2417,7 +2449,7 @@ export const SkillLibraryPanel = ({
                       </div>
                       <div className="cleanup-group-actions">
                         <button
-                          className="secondary-action"
+                          className="secondary-action cleanup-current-action"
                           type="button"
                           aria-label={t("Restore cleanup {{id}}", { id: backup.libraryId })}
                           disabled={Boolean(automaticCleanupKey)}

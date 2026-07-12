@@ -492,10 +492,11 @@ The surface owns only filesystem-copy normalization into Library. It does not ed
 
 User-facing state and action contract:
 
-- A Skill absent from Library is `Not in Library`, `Duplicate copies`, or `Multiple versions`; its current action is always `Add to Library`.
+- Row status badges use a compact, non-truncating vocabulary: `Managed`, `Unmanaged`, `Duplicate`, `Conflict`, `Changed`, `External`, `In use`, `Ready`, `Kept`, and `Ignored`. The selectable hover/focus detail carries the complete explanation; a badge MUST NOT clip or ellipsize its visible label.
+- A Skill absent from Library is `Unmanaged`, `Duplicate`, or `Conflict`; its current action is always `Add to Library`.
 - Version selection is a conditional field inside `Add to Library`, never a separate `Choose version` action. It appears only when detected contents differ.
-- A Skill already in Library uses `Copies not managed` / `Manage copies`, `Local changes found` / `Review differences`, or `Managed copy changed` / `Review drift`.
-- External ownership uses `Managed elsewhere` / `Review ownership`. Internal states such as `Conflict`, `Auto-ready`, `Take over`, and `Resolve conflict` MUST NOT be presented as user actions.
+- A Skill already in Library uses `Unmanaged` / `Manage copies`, `Conflict` / `Review`, or `Changed` / `Review`.
+- External ownership uses `External` / `Review`. Internal states such as `Auto-ready`, `Take over`, and `Resolve conflict` MUST NOT be presented as user actions.
 - `Add to Library`, `Manage copies`, and every review action open a preview dialog before mutation. Row actions use lightweight styling; filled emphasis is reserved for the dialog commit and an intentional bulk command.
 - `Manage ready copies` opens a bulk confirmation listing every eligible Skill and the independent-backup behavior before it starts. A failure in one Skill does not roll back completed independent Skills, and the result reports both completed and remaining groups.
 - The main process MUST rescan and compare the reviewed content hashes immediately before mutation. Stale previews fail without modifying Library or local copies.
@@ -508,9 +509,9 @@ Shared compatibility migration contract:
 
 - A shared Skill not yet in Library follows the same `Add to Library` intent as every other local Skill. If multiple versions exist, the dialog adds a version choice.
 - Adding a shared Skill to Library is one transaction: back up all copies, create the Library canonical copy, keep exactly one shared compatibility copy active, and remove redundant Target-specific copies. The shared copy MUST NOT receive a Target ownership marker.
-- Once Library is ready, Cleanup shows `Shared copy still in use` and one neutral `Open Profiles` handoff. It MUST NOT show per-Target `Needs Apply` chips or pretend Profile Apply is a Cleanup step.
+- Once Library is ready, Cleanup shows the compact `In use` badge, a one-line explanation, and one neutral `View Profiles` handoff. It MUST NOT show per-Target `Needs Apply` chips or pretend Profile Apply is a Cleanup step.
 - Profiles independently save and apply each Target's install-or-omit decision. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
-- When every installed consumer has a current preparation, Cleanup shows `Shared copy can be replaced` / `Review replacement`.
+- When every installed consumer has a current preparation, Cleanup shows `Ready` / `Review`.
 - `Replace shared copy` requires confirmation that lists each prepared Target's final `Install as <name>` or `Do not install` decision. It executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
 - Cleanup history exposes the completed shared migration as one restorable operation. Restore returns shared paths, Target paths, and preparation state to their pre-migration state.
 - `Keep shared` records a path-scoped decision and resolves the group without changing files. `Review again` removes only that decision.
@@ -522,8 +523,8 @@ Cleanup review contract:
 - The chosen source location is always included in the cleanup and cannot be deselected accidentally.
 - If the Skill already exists in Library, `Review differences` first asks whether to keep the current Library version or use a reviewed local version. Local version selection appears only after the latter choice. Replacing Library content backs up the previous canonical copy and changes its provenance to local/untracked.
 - Every truncated Skill name, description, path, and history detail in the cleanup workflow exposes its full value on pointer hover and keyboard focus. The detail layer remains open while the pointer moves into it, and its text is selectable so paths and errors can be copied directly.
-- Cleanup identity and cleanup state occupy explicit non-overlapping regions. Long state labels truncate inside their region and expose the full state through the same hover and keyboard detail behavior.
-- Cleanup groups and Cleanup history use the same row hierarchy, control scale, overflow behavior, and restore vocabulary.
+- Cleanup identity and compact cleanup state occupy explicit non-overlapping regions. Identity, description, path, and state detail may expose selectable overflow detail; the visible status badge itself never truncates.
+- Cleanup groups and Cleanup history use the same main-content/action-column hierarchy and control scale. History does not add a redundant `Backup` badge when its section and metadata already establish that scope.
 - Cleanup history is a secondary group inside the Local Skill Cleanup surface, not a separate framed panel.
 
 Ignore contract:
@@ -864,7 +865,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-16 against the current `main` tree at the time of this snapshot.
 
-- `390` automated tests passed across `50` test files; the `76`-test Electron UI suite and `83` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `395` automated tests passed across `50` test files; the `77`-test Electron UI suite and `85` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `47` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including available-update rows, disabled, empty, Chinese locale, source-specific Import, and focused update-setting states.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
@@ -877,7 +878,7 @@ Last verified: 2026-07-16 against the current `main` tree at the time of this sn
 - In-place Skill Refresh, GitHub directory candidate selection, partial batch import behavior, source-default Skill icons, custom Skill icon persistence, and draft-gated Profile icons passed Store, renderer, and Electron E2E coverage.
 - Skill Import source modes, compact row command menus, focused update settings, compact MCP rows, overflow-only MCP deletion, resource-first Apply Preview, and neutral Capture outcomes passed renderer, Electron E2E, and visual capture coverage.
 - Library Skill disable, picker exclusion, update-check isolation, re-enable, and Apply-time Target removal and restoration passed Store, renderer, and Electron E2E coverage; Profile Skill switches use the same Save and Apply contract as Add and Remove.
-- Skill table headers, mixed-action rows, two-line metadata, empty install states, update labels, action-to-detail clearance, and long Cleanup states passed coordinate, overlap, and overflow assertions at both supported viewports.
+- Skill table headers, mixed-action rows, two-line metadata, empty install states, update labels, action-to-detail clearance, compact non-truncating Cleanup badges, equal-width Cleanup actions, and status-tooltip clearance passed coordinate, overlap, and overflow assertions at both supported viewports.
 - Target-local import now creates a transactional managed install, shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
 - Shared compatibility migration now distinguishes imported, preparing, ready, retained, external, and conflict states; Apply records per-Target install or omit intent without duplicate runtime copies, and Electron E2E verifies early-switch blocking, transactional cutover, backup history, and full restore.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.

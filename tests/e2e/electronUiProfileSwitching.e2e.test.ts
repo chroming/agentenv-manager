@@ -1389,7 +1389,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => locationsTooltip.textContent()).toContain("target-only-reviewer");
     await locationsPreview.evaluate((element) => element.blur());
 
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Not in Library");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Unmanaged");
     await cleanupGroup
       .getByRole("button", { name: "More cleanup actions for target-only-reviewer" })
       .click();
@@ -2917,7 +2917,7 @@ describe("Electron UI profile switching e2e", () => {
       name: "Cleanup group shared-migration-reviewer"
     });
     await cleanupGroup.waitFor({ state: "visible" });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Not in Library");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Unmanaged");
     expect(
       await cleanupGroup
         .getByRole("button", { name: "Manage copies shared-migration-reviewer" })
@@ -2935,7 +2935,7 @@ describe("Electron UI profile switching e2e", () => {
         const actions = actionGroup.getBoundingClientRect();
         return {
           contained: actions.right <= rowBox.right + 1 && row.scrollWidth <= row.clientWidth + 1,
-          separated: actions.top >= main.bottom - 1,
+          separated: actions.left >= main.right - 1,
           buttonsFit: Array.from(actionGroup.querySelectorAll<HTMLElement>("button"))
             .every((button) => button.scrollWidth <= button.clientWidth + 1)
         };
@@ -2956,13 +2956,14 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(true);
     await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(sharedContent);
     await expect(fileExists(join(sharedSkillDir, ".agentenv-owner.json"))).resolves.toBe(false);
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared copy still in use");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("In use");
     await expect.poll(() => cleanupGroup.textContent()).toContain("2 Targets still use this copy");
     await resizeAppWindow(page, 920, 620);
     const sharedStateGeometry = await cleanupGroup.evaluate((row) => {
       const heading = row.querySelector<HTMLElement>(".cleanup-group-heading")!.getBoundingClientRect();
       const name = row.querySelector<HTMLElement>(".cleanup-group-name")!.getBoundingClientRect();
-      const state = row.querySelector<HTMLElement>(".cleanup-group-state")!.getBoundingClientRect();
+      const stateElement = row.querySelector<HTMLElement>(".cleanup-group-state")!;
+      const state = stateElement.getBoundingClientRect();
       const overlaps =
         name.left < state.right &&
         name.right > state.left &&
@@ -2972,18 +2973,36 @@ describe("Electron UI profile switching e2e", () => {
         contained:
           name.left >= heading.left - 1 &&
           state.right <= heading.right + 1,
-        overlaps
+        overlaps,
+        stateFits: stateElement.scrollWidth <= stateElement.clientWidth + 1
       };
     });
-    expect(sharedStateGeometry).toEqual({ contained: true, overlaps: false });
+    expect(sharedStateGeometry).toEqual({ contained: true, overlaps: false, stateFits: true });
     await cleanupGroup.locator(".cleanup-group-state").hover();
     const sharedStateTooltip = page.getByRole("tooltip").filter({
       hasText: "Shared copy still in use"
     });
     await sharedStateTooltip.waitFor({ state: "visible" });
     await expectInViewport(page, sharedStateTooltip);
+    expect(
+      await Promise.all([
+        sharedStateTooltip.boundingBox(),
+        cleanupGroup
+          .getByRole("button", { name: "View Profiles shared-migration-reviewer" })
+          .boundingBox()
+      ]).then(([tooltip, action]) =>
+        Boolean(
+          tooltip &&
+          action &&
+          tooltip.x < action.x + action.width &&
+          tooltip.x + tooltip.width > action.x &&
+          tooltip.y < action.y + action.height &&
+          tooltip.y + tooltip.height > action.y
+        )
+      )
+    ).toBe(false);
     await cleanupGroup
-      .getByRole("button", { name: "Open Profiles shared-migration-reviewer" })
+      .getByRole("button", { name: "View Profiles shared-migration-reviewer" })
       .click();
     await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
     await openSkillLibrary(page);
@@ -3013,12 +3032,12 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "More cleanup actions for shared-migration-reviewer" })
       .click();
     await page.getByRole("menuitem", { name: "Keep shared" }).click();
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Kept shared");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Kept");
     await cleanupGroup
       .getByRole("button", { name: "More cleanup actions for shared-migration-reviewer" })
       .click();
     await page.getByRole("menuitem", { name: "Review again" }).click();
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared copy still in use");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("In use");
   }, 30_000);
 
   it("atomically migrates and restores a shared Skill after every consumer is prepared", async () => {
@@ -3080,7 +3099,7 @@ describe("Electron UI profile switching e2e", () => {
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local" }).click();
     cleanupGroup = page.getByRole("group", { name: `Cleanup group ${skillId}` });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared copy can be replaced");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Ready");
     await expect.poll(() => cleanupGroup.textContent()).toContain("All consumer Targets are ready");
     for (const viewport of [
       { width: 1180, height: 728 },
@@ -3159,9 +3178,9 @@ describe("Electron UI profile switching e2e", () => {
       name: "Cleanup group manual-conflict-reviewer"
     });
     await safeGroup.waitFor({ state: "visible" });
-    await expect.poll(() => safeGroup.textContent()).toContain("Not in Library");
-    await expect.poll(() => duplicateGroup.textContent()).toContain("Duplicate copies");
-    await expect.poll(() => conflictGroup.textContent()).toContain("Multiple versions");
+    await expect.poll(() => safeGroup.textContent()).toContain("Unmanaged");
+    await expect.poll(() => duplicateGroup.textContent()).toContain("Duplicate");
+    await expect.poll(() => conflictGroup.textContent()).toContain("Conflict");
     expect(
       await conflictGroup.getByRole("button", { name: "Add to Library manual-conflict-reviewer" }).count()
     ).toBe(1);
@@ -3187,7 +3206,8 @@ describe("Electron UI profile switching e2e", () => {
           const main = row.querySelector<HTMLElement>(".resource-row__main")!.getBoundingClientRect();
           const rowHeading = row.querySelector<HTMLElement>(".cleanup-group-heading")!.getBoundingClientRect();
           const name = row.querySelector<HTMLElement>(".cleanup-group-name")!.getBoundingClientRect();
-          const state = row.querySelector<HTMLElement>(".cleanup-group-state")!.getBoundingClientRect();
+          const stateElement = row.querySelector<HTMLElement>(".cleanup-group-state")!;
+          const state = stateElement.getBoundingClientRect();
           const actionGroup = row.querySelector<HTMLElement>(".cleanup-group-actions")!;
           const actions = actionGroup.getBoundingClientRect();
           const headingItemsOverlap =
@@ -3200,8 +3220,9 @@ describe("Electron UI profile switching e2e", () => {
               rowHeading.left >= rowBox.left - 1 &&
               state.right <= rowHeading.right + 1 &&
               actions.right <= rowBox.right + 1 &&
-              actions.top >= main.bottom - 1 &&
+              actions.left >= main.right - 1 &&
               !headingItemsOverlap,
+            stateFits: stateElement.scrollWidth <= stateElement.clientWidth + 1,
             textFits: Array.from(row.querySelectorAll<HTMLElement>(".resource-row__main > *")).every(
               (item) => item.clientWidth <= main.width + 1
             ),
@@ -3213,14 +3234,20 @@ describe("Electron UI profile switching e2e", () => {
           actionBelowCopy: autoAction.top >= headingCopy.bottom - 1,
           actionAfterCopy: autoAction.left >= headingCopy.right,
           actionContained: autoAction.right <= heading.getBoundingClientRect().right + 1,
+          actionWidths: Array.from(
+            drawer.querySelectorAll<HTMLElement>(".cleanup-current-action")
+          ).map((button) => Math.round(button.getBoundingClientRect().width)),
           rows
         };
       });
       expect(geometry.actionContained).toBe(true);
       expect(stacked ? geometry.actionBelowCopy : geometry.actionAfterCopy).toBe(true);
       expect(
-        geometry.rows.every((row) => row.contained && row.textFits && row.actionsFit)
+        geometry.rows.every(
+          (row) => row.contained && row.stateFits && row.textFits && row.actionsFit
+        )
       ).toBe(true);
+      expect(new Set(geometry.actionWidths).size).toBeLessThanOrEqual(1);
     };
     await assertCleanupLayout(false);
     await resizeAppWindow(page, 920, 620);
@@ -3271,7 +3298,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       fileExists(join(appDataRoot, "skills-library", "manual-conflict-reviewer"))
     ).resolves.toBe(false);
-    await expect.poll(() => conflictGroup.textContent()).toContain("Multiple versions");
+    await expect.poll(() => conflictGroup.textContent()).toContain("Conflict");
     await expect
       .poll(() => page.getByRole("button", { name: /Manage \d+ ready skills/ }).count())
       .toBe(0);
@@ -3339,7 +3366,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Scan local" }).click();
     const group = page.getByRole("group", { name: "Cleanup group skills-cli-reviewer" });
     await group.waitFor({ state: "visible", timeout: 5_000 });
-    await expect.poll(() => group.textContent()).toContain("Managed elsewhere");
+    await expect.poll(() => group.textContent()).toContain("External");
     await group.getByRole("button", { name: "Review ownership skills-cli-reviewer" }).click();
     const dialog = page.getByRole("dialog", { name: "Import external skill" });
     await dialog.waitFor({ state: "visible", timeout: 5_000 });
