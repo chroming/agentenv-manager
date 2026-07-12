@@ -1947,6 +1947,33 @@ describe("Electron UI profile switching e2e", () => {
     );
     await page.keyboard.press("Escape");
 
+    await page.getByRole("button", { name: "Add library skill" }).click();
+    const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
+    await skillPicker.waitFor({ state: "visible" });
+    await expectInViewport(page, skillPicker);
+    await skillPicker.getByLabel("Search library skills").fill("shared");
+    await expect.poll(() => skillPicker.textContent()).toContain("Revision");
+    const pickerGeometry = await skillPicker.evaluate((dialog) => {
+      const search = dialog.querySelector<HTMLElement>(".resource-picker-search")?.getBoundingClientRect();
+      const list = dialog.querySelector<HTMLElement>(".resource-picker-list")?.getBoundingClientRect();
+      const footer = dialog.querySelector<HTMLElement>(".preview-actions")?.getBoundingClientRect();
+      const box = dialog.getBoundingClientRect();
+      return {
+        searchBottom: search?.bottom ?? 0,
+        listTop: list?.top ?? 0,
+        listBottom: list?.bottom ?? 0,
+        footerTop: footer?.top ?? 0,
+        right: box.right,
+        bottom: box.bottom
+      };
+    });
+    expect(pickerGeometry.searchBottom).toBeLessThanOrEqual(pickerGeometry.listTop);
+    expect(pickerGeometry.listBottom).toBeLessThanOrEqual(pickerGeometry.footerTop);
+    expect(pickerGeometry.right).toBeLessThanOrEqual(920);
+    expect(pickerGeometry.bottom).toBeLessThanOrEqual(620);
+    await page.keyboard.press("Escape");
+    await skillPicker.waitFor({ state: "hidden" });
+
     await expandComposerSection(page, "Instructions");
     const instructionEditorGeometry = await page
       .getByRole("textbox", { name: "AGENTS.md" })
@@ -4147,7 +4174,6 @@ describe("Electron UI profile switching e2e", () => {
     const capturedSkillRow = page.getByRole("listitem", {
       name: "Profile skill target-only-reviewer"
     });
-    await expect.poll(() => capturedSkillRow.textContent()).toContain("Library copy");
     await expect.poll(() => capturedSkillRow.textContent()).toContain(
       `Library revision ${capturedSkillMetadata.contentHash.slice(0, 7)}`
     );
@@ -4514,6 +4540,63 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
   }, 30_000);
 
+  it("imports a Profile-only skill into Library without deleting its source file", async () => {
+    const { appDataRoot, page } = await launchApp();
+    await resizeAppWindow(page, 920, 620);
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Skills");
+
+    const profileOnlyRow = page.getByRole("listitem", {
+      name: "Profile-owned skill ui-alpha-skill"
+    });
+    await expect.poll(() => profileOnlyRow.textContent()).toContain("Profile only");
+    const importButton = profileOnlyRow.getByRole("button", {
+      name: "Import ui-alpha-skill to Library"
+    });
+    const importGeometry = await profileOnlyRow.evaluate((row) => {
+      const action = row.querySelector<HTMLElement>(".profile-skill-update")!;
+      const menu = row.querySelector<HTMLElement>(".icon-action")!;
+      const rowBox = row.getBoundingClientRect();
+      const actionBox = action.getBoundingClientRect();
+      const menuBox = menu.getBoundingClientRect();
+      return {
+        actionInside: actionBox.left >= rowBox.left && actionBox.right <= rowBox.right,
+        menuInside: menuBox.right <= rowBox.right,
+        actionTextFits: action.scrollWidth <= action.clientWidth,
+        gap: menuBox.left - actionBox.right
+      };
+    });
+    expect(importGeometry.actionInside).toBe(true);
+    expect(importGeometry.menuInside).toBe(true);
+    expect(importGeometry.actionTextFits).toBe(true);
+    expect(importGeometry.gap).toBeGreaterThanOrEqual(8);
+    await importButton.click();
+
+    const libraryRow = page.getByRole("listitem", { name: "Profile skill ui-alpha-skill" });
+    await expect.poll(() => libraryRow.textContent()).toContain("Library revision");
+    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
+      "imported to Library"
+    );
+    await saveProfile(page);
+
+    const savedAssets = await readJson<{
+      ownedDirs: Array<{ kind: string; source: string; targetName: string }>;
+      skillRefs: Array<{ libraryId: string; targetName: string; enabled?: boolean }>;
+    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "assets.json"));
+    expect(savedAssets.ownedDirs.some((entry) => entry.targetName === "ui-alpha-skill")).toBe(false);
+    expect(savedAssets.skillRefs).toContainEqual({
+      libraryId: "ui-alpha-skill",
+      targetName: "ui-alpha-skill",
+      enabled: true
+    });
+    await expect(
+      fileExists(join(appDataRoot, "skills-library", "ui-alpha-skill", "SKILL.md"))
+    ).resolves.toBe(true);
+    await expect(
+      fileExists(join(appDataRoot, "profiles", "ui-opencode-alpha", "skills", "alpha-skill", "SKILL.md"))
+    ).resolves.toBe(true);
+  }, 30_000);
+
   it("saves and applies Profile Skill disable and re-enable changes", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp({
       openCodeAlphaLibrarySkillCount: 1
@@ -4526,9 +4609,15 @@ describe("Electron UI profile switching e2e", () => {
 
     await expandComposerSection(page, "Skills");
     const skillRow = page.getByRole("listitem", { name: "Profile skill layout-skill-1" });
+    const libraryMetadata = await readJson<{ contentHash: string }>(
+      join(appDataRoot, "skills-library", "layout-skill-1", ".agentenv-skill.json")
+    );
+    await expect.poll(() => skillRow.textContent()).toContain(
+      `OpenCode · ${libraryMetadata.contentHash.slice(0, 7)}`
+    );
     await skillRow.getByRole("switch", { name: "Disable layout-skill-1" }).click();
     await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);
-    await expect.poll(() => skillRow.textContent()).toContain("Disabled in Profile");
+    await expect.poll(() => skillRow.textContent()).toContain("Apply pending");
     await skillRow.getByRole("switch", { name: "Enable layout-skill-1" }).waitFor();
     expect(await page.getByRole("button", { name: "Save", exact: true }).isEnabled()).toBe(true);
     expect(await page.getByRole("button", { name: "Apply", exact: true }).isDisabled()).toBe(true);
@@ -4638,7 +4727,7 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(true);
     await page.getByRole("button", { name: "Add library skill" }).click();
     const restoredPicker = page.getByRole("dialog", { name: "Add library skills" });
-    expect(await restoredPicker.getByLabel("layout-skill-1").count()).toBe(1);
+    expect(await restoredPicker.getByLabel("layout-skill-1").count()).toBe(0);
     await restoredPicker.getByRole("button", { name: "Cancel" }).click();
     await previewAndApply(page, "OpenCode");
     await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);

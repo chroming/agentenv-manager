@@ -1208,7 +1208,7 @@
   display: grid;
   gap: 10px;
   grid-template-columns: 34px minmax(120px, 1fr) minmax(90px, auto) auto 42px 34px;
-  min-height: 58px;
+  min-height: 62px;
   min-width: 0;
   padding: 6px 9px 6px 10px;
 }
@@ -1228,7 +1228,11 @@
 }
 
 .profile-skill-row--owned {
-  grid-template-columns: 34px minmax(120px, 1fr) minmax(90px, auto) 34px;
+  grid-template-columns: 34px minmax(120px, 1fr) minmax(82px, auto) auto 34px;
+}
+
+.profile-skill-row--owned > .icon-action {
+  grid-column: 5;
 }
 
 .profile-skill-icon {
@@ -1263,7 +1267,8 @@
 .profile-skill-detail {
   color: var(--muted);
   display: block;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1272,11 +1277,38 @@
 
 .profile-skill-state {
   color: #5d6c83;
+  display: grid;
   font-size: 11px;
-  font-weight: 700;
+  gap: 2px;
+  justify-items: start;
+  line-height: 15px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-skill-state strong,
+.profile-skill-state small {
+  display: block;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.profile-skill-state strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.profile-skill-state small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.profile-skill-state.is-neutral {
+  color: var(--muted);
 }
 
 .profile-skill-state.is-update {

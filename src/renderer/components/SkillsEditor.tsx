@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MoreHorizontal, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { LoaderCircle, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import {
   parse as parseJsonc,
   printParseErrorCode,
@@ -30,9 +30,13 @@ interface SkillsEditorProps {
   librarySkills?: SkillLibraryEntry[];
   skillUpdates?: SkillUpdateInfo[];
   checkingSkillUpdates?: boolean;
+  appliedSkillVersions?: Record<string, string>;
+  selectedTargetName?: string;
+  importingOwnedSkillIndex?: number;
   mcpServers?: McpLibraryEntry[];
   onCheckSkillUpdates?(ids: string[]): void;
   onPreviewSkillUpdate?(id: string): void;
+  onImportOwnedSkill?(index: number, skill: AssetPolicy["ownedDirs"][number]): void;
   onChange(value: AssetPolicy): void;
 }
 
@@ -240,9 +244,13 @@ export const SkillsEditor = ({
   librarySkills = [],
   skillUpdates = [],
   checkingSkillUpdates = false,
+  appliedSkillVersions,
+  selectedTargetName,
+  importingOwnedSkillIndex,
   mcpServers = [],
   onCheckSkillUpdates,
   onPreviewSkillUpdate,
+  onImportOwnedSkill,
   onChange
 }: SkillsEditorProps) => {
   const { t } = useI18n();
@@ -252,6 +260,8 @@ export const SkillsEditor = ({
   const [activePicker, setActivePicker] = useState<"skills" | "mcp">();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedLibrarySkillIds, setSelectedLibrarySkillIds] = useState<string[]>([]);
+  const [skillPickerQuery, setSkillPickerQuery] = useState("");
+  const [replacingSkillRefIndex, setReplacingSkillRefIndex] = useState<number>();
   const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>([]);
   const [profileSkillMenu, setProfileSkillMenu] = useState<{
     kind: "owned" | "library";
@@ -350,9 +360,11 @@ export const SkillsEditor = ({
     });
   };
 
-  const openSkillPicker = () => {
-    pickerTriggerRef.current = skillPickerButtonRef.current;
+  const openSkillPicker = (replaceIndex?: number, trigger?: HTMLButtonElement) => {
+    pickerTriggerRef.current = trigger ?? skillPickerButtonRef.current;
     setSelectedLibrarySkillIds([]);
+    setSkillPickerQuery("");
+    setReplacingSkillRefIndex(replaceIndex);
     setActivePicker("skills");
   };
 
@@ -365,10 +377,16 @@ export const SkillsEditor = ({
   const closePicker = useCallback(() => {
     setActivePicker(undefined);
     setSelectedLibrarySkillIds([]);
+    setSkillPickerQuery("");
+    setReplacingSkillRefIndex(undefined);
     setSelectedMcpIds([]);
   }, []);
 
   const toggleSelectedSkill = (id: string) => {
+    if (replacingSkillRefIndex !== undefined) {
+      setSelectedLibrarySkillIds((current) => current.includes(id) ? [] : [id]);
+      return;
+    }
     setSelectedLibrarySkillIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : current.concat(id)
     );
@@ -381,6 +399,20 @@ export const SkillsEditor = ({
   };
 
   const addSelectedLibrarySkills = () => {
+    if (replacingSkillRefIndex !== undefined) {
+      const libraryId = selectedLibrarySkillIds[0];
+      if (!libraryId) return;
+      onChange({
+        ...value,
+        skillRefs: (value.skillRefs ?? []).map((entry, index) =>
+          index === replacingSkillRefIndex
+            ? { libraryId, targetName: entry.targetName, enabled: entry.enabled !== false }
+            : entry
+        )
+      });
+      closePicker();
+      return;
+    }
     const additions = selectedLibrarySkillIds
       .filter((libraryId) => !attachedSkillIds.has(libraryId))
       .map((libraryId) => ({
@@ -397,6 +429,14 @@ export const SkillsEditor = ({
     });
     closePicker();
   };
+
+  const selectableLibrarySkills = availableLibrarySkills.filter((skill) => {
+    if (attachedSkillIds.has(skill.id)) return false;
+    const query = skillPickerQuery.trim().toLocaleLowerCase();
+    if (!query) return true;
+    return [skill.name, skill.id, skill.description, skill.path, skill.source ?? ""]
+      .some((value) => value.toLocaleLowerCase().includes(query));
+  });
 
   const addSelectedMcpServers = () => {
     const additions = selectedMcpIds
@@ -564,7 +604,7 @@ export const SkillsEditor = ({
               ref={skillPickerButtonRef}
               type="button"
               aria-label={t("Add library skill")}
-              onClick={openSkillPicker}
+              onClick={() => openSkillPicker()}
             >
               <Plus size={14} strokeWidth={2.2} aria-hidden="true" />
               {t("Add")}
@@ -591,11 +631,29 @@ export const SkillsEditor = ({
                 />
                 <OverflowTooltip
                   className="profile-skill-detail"
-                  text={`${t("Profile-owned")} · ${asset.source}`}
+                  text={`${t("Profile file")} · ${t("Revision unavailable")} · ${asset.source}`}
                   ariaLabel={t("Full skill source {{id}}", { id: asset.targetName })}
                 />
               </div>
-              <span className="profile-skill-state">{t("Profile-owned")}</span>
+              <span className="profile-skill-state">
+                <strong>{t("Profile only")}</strong>
+              </span>
+              {onImportOwnedSkill ? (
+                <button
+                  className="secondary-action profile-skill-update"
+                  type="button"
+                  aria-label={t("Import {{name}} to Library", { name: asset.targetName })}
+                  aria-busy={importingOwnedSkillIndex === index}
+                  disabled={importingOwnedSkillIndex !== undefined}
+                  title={t("Create a Library copy and replace this draft entry. The existing Profile file is retained.")}
+                  onClick={() => onImportOwnedSkill(index, asset)}
+                >
+                  {importingOwnedSkillIndex === index ? (
+                    <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} aria-hidden="true" />
+                  ) : null}
+                  {t(importingOwnedSkillIndex === index ? "Importing" : "Import")}
+                </button>
+              ) : null}
               <button
                 className="icon-action"
                 type="button"
@@ -619,35 +677,61 @@ export const SkillsEditor = ({
             const profileEnabled = entry.enabled !== false;
             const globallyEnabled = skill?.globallyEnabled !== false;
             const enabled = profileEnabled && globallyEnabled;
+            const appliedRevision = appliedSkillVersions?.[entry.libraryId];
+            const targetStateKnown = appliedSkillVersions !== undefined;
+            const deploymentPending = Boolean(
+              skill && targetStateKnown && (
+                enabled
+                  ? appliedRevision !== skill.contentHash
+                  : appliedRevision
+              )
+            );
             const status = !skill
               ? "Missing"
               : !globallyEnabled
                 ? "Disabled in Library"
               : !profileEnabled
-                ? "Disabled in Profile"
+                ? deploymentPending ? "Apply pending" : "Disabled in Profile"
               : update?.error
                 ? "Check failed"
                 : update?.updateAvailable
                   ? "Update available"
-                  : skill.updatePolicy === "untracked"
-                    ? "Library copy"
-                    : update
-                      ? "Up to date"
-                      : "Tracked";
+                  : deploymentPending
+                    ? "Apply pending"
+                    : undefined;
             const iconKey = skill?.iconKey ?? (skill?.sourceType === "github" ? "github" : "folder");
             const libraryRevision = skill?.contentHash.slice(0, 7);
+            const sourceLabel = skill?.sourceType === "github" ? "GitHub" : t("Local");
             const installDetail = skill && entry.targetName !== skill.id
               ? ` · ${t("installs as {{name}}", { name: entry.targetName })}`
               : "";
             const detail = skill
-              ? `${t("Library revision")} ${libraryRevision} · ${skill.path}${installDetail}`
+              ? `${t("Library revision")} ${libraryRevision} · ${sourceLabel} · ${skill.path}${installDetail}`
               : t("Library skill {{id}} is missing", { id: entry.libraryId });
             const fullDetail = skill
-              ? `${t("Library revision")} ${skill.contentHash} · ${skill.path}${installDetail}`
+              ? `${t("Library revision")} ${skill.contentHash} · ${sourceLabel} · ${skill.path}${installDetail}`
               : t("Library skill {{id}} is missing", { id: entry.libraryId });
-            const statusTitle = skill?.updatePolicy === "untracked" && !update?.error
-              ? `${t(status)} · ${t("No update source")}`
-              : update?.error ?? t(status);
+            const updateSourceDescription = skill?.updatePolicy === "tracked"
+              ? t("Updates tracked")
+              : t("No update source");
+            const targetRevisionText = appliedRevision && selectedTargetName
+              ? t("{{name}} · {{revision}}", {
+                  name: selectedTargetName,
+                  revision: appliedRevision.slice(0, 7)
+                })
+              : targetStateKnown && selectedTargetName && enabled
+                ? t("Not installed on {{name}}", { name: selectedTargetName })
+                : undefined;
+            const statusTitle = [
+              update?.error ?? (status ? t(status) : undefined),
+              appliedRevision && selectedTargetName
+                ? t("{{name}} revision {{revision}}", {
+                    name: selectedTargetName,
+                    revision: appliedRevision
+                  })
+                : targetRevisionText,
+              updateSourceDescription
+            ].filter(Boolean).join(" · ");
             return (
               <div
                 className={`profile-skill-row${enabled ? "" : " is-disabled"}`}
@@ -672,12 +756,21 @@ export const SkillsEditor = ({
                   />
                 </div>
                 <span
-                  className={`profile-skill-state${update?.updateAvailable ? " is-update" : ""}${update?.error || !skill ? " is-error" : ""}`}
+                  className={`profile-skill-state${status ? "" : " is-neutral"}${status === "Update available" || status === "Apply pending" ? " is-update" : ""}${update?.error || !skill ? " is-error" : ""}`}
                   title={statusTitle}
                 >
-                  {t(status)}
+                  {status ? <strong>{t(status)}</strong> : null}
+                  {targetRevisionText ? <small>{targetRevisionText}</small> : null}
                 </span>
-                {enabled && update?.updateAvailable ? (
+                {!skill ? (
+                  <button
+                    className="secondary-action profile-skill-update"
+                    type="button"
+                    onClick={(event) => openSkillPicker(index, event.currentTarget)}
+                  >
+                    {t("Relink")}
+                  </button>
+                ) : enabled && update?.updateAvailable ? (
                   <button
                     className="secondary-action profile-skill-update"
                     type="button"
@@ -689,9 +782,11 @@ export const SkillsEditor = ({
                 <Switch
                   checked={enabled}
                   className="profile-skill-switch"
-                  disabled={!globallyEnabled}
+                  disabled={!skill || !globallyEnabled}
                   label={t(
-                    !globallyEnabled
+                    !skill
+                      ? "Missing Library skill {{name}}"
+                      : !globallyEnabled
                       ? "{{name}} is disabled in Library"
                       : profileEnabled
                         ? "Disable {{name}}"
@@ -699,7 +794,9 @@ export const SkillsEditor = ({
                     { name: skill?.name ?? entry.targetName }
                   )}
                   title={t(
-                    !globallyEnabled
+                    !skill
+                      ? "Relink or remove this missing skill"
+                      : !globallyEnabled
                       ? "Enable this skill in Library first"
                       : profileEnabled
                         ? "Disable in this profile"
@@ -825,36 +922,76 @@ export const SkillsEditor = ({
         {activePicker === "skills" ? (
           <div className="preview-modal-backdrop" onClick={closePicker}>
             <section
-              aria-label={t("Add library skills")}
+              aria-label={t(
+                replacingSkillRefIndex === undefined ? "Add library skills" : "Relink missing skill"
+              )}
               aria-modal="true"
-              className="profile-form-dialog resource-picker-dialog"
+              className="profile-form-dialog resource-picker-dialog resource-picker-dialog--skills"
               ref={pickerDialogRef}
               role="dialog"
               onClick={(event) => event.stopPropagation()}
             >
               <header className="profile-dialog-header">
-                <div className="section-title">{t("Add library skills")}</div>
+                <div>
+                  <div className="section-title">
+                    {t(replacingSkillRefIndex === undefined ? "Add library skills" : "Relink missing skill")}
+                  </div>
+                  <p>
+                    {t(
+                      replacingSkillRefIndex === undefined
+                        ? "Choose reusable skills from Library."
+                        : "Choose the Library skill that should replace this missing reference."
+                    )}
+                  </p>
+                </div>
               </header>
+              <label className="resource-picker-search">
+                <Search size={15} strokeWidth={2.2} aria-hidden="true" />
+                <input
+                  aria-label={t("Search library skills")}
+                  placeholder={t("Search skills...")}
+                  value={skillPickerQuery}
+                  onChange={(event) => setSkillPickerQuery(event.currentTarget.value)}
+                />
+              </label>
               <div className="resource-picker-list">
                 {availableLibrarySkills.length === 0 ? (
                   <div className="inline-state">{t("No library skills available")}</div>
                 ) : null}
-                {availableLibrarySkills.map((skill) => {
-                  const isAttached = attachedSkillIds.has(skill.id);
+                {availableLibrarySkills.length > 0 && selectableLibrarySkills.length === 0 ? (
+                  <div className="inline-state">
+                    {t(
+                      skillPickerQuery.trim()
+                        ? "No library skills match your search"
+                        : "All available skills are already in this profile"
+                    )}
+                  </div>
+                ) : null}
+                {selectableLibrarySkills.map((skill) => {
+                  const shortRevision = skill.contentHash.slice(0, 7);
+                  const sourceLabel = skill.sourceType === "github" ? "GitHub" : t("Local");
+                  const metadata = `${sourceLabel} · ${t("Revision {{revision}}", { revision: shortRevision })} · ${skill.path}`;
                   return (
                     <label className="resource-picker-option" key={skill.id}>
                       <input
                         aria-label={skill.name}
                         checked={selectedLibrarySkillIds.includes(skill.id)}
-                        disabled={isAttached}
                         type="checkbox"
                         onChange={() => toggleSelectedSkill(skill.id)}
                       />
-                      <span>
+                      <span className="resource-picker-option__main">
                         <strong>{skill.name}</strong>
-                        <small>{skill.description || skill.id}</small>
+                        <OverflowTooltip
+                          className="resource-picker-option__description"
+                          focusable={false}
+                          text={skill.description || skill.id}
+                        />
+                        <OverflowTooltip
+                          className="resource-picker-option__metadata"
+                          focusable={false}
+                          text={metadata}
+                        />
                       </span>
-                      {isAttached ? <em>{t("Already added")}</em> : null}
                     </label>
                   );
                 })}
@@ -871,11 +1008,15 @@ export const SkillsEditor = ({
                 <button
                   className="primary-action"
                   type="button"
-                  aria-label={t("Add selected skills")}
+                  aria-label={t(
+                    replacingSkillRefIndex !== undefined ? "Relink skill" : "Add selected skills"
+                  )}
                   disabled={selectedLibrarySkillIds.length === 0}
                   onClick={addSelectedLibrarySkills}
                 >
-                  {selectedLibrarySkillIds.length > 0
+                  {replacingSkillRefIndex !== undefined
+                    ? t("Relink skill")
+                    : selectedLibrarySkillIds.length > 0
                     ? t("Add {{count}}", { count: selectedLibrarySkillIds.length })
                     : t("Add selected")}
                 </button>
@@ -905,7 +1046,7 @@ export const SkillsEditor = ({
                 className="secondary-action"
                 ref={skillPickerButtonRef}
                 type="button"
-                onClick={openSkillPicker}
+                onClick={() => openSkillPicker()}
               >
                 {t("Add library skill")}
               </button>

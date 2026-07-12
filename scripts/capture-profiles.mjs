@@ -610,6 +610,14 @@ try {
       page,
       join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`)
     );
+    if (sectionName === "Skills") {
+      await page.getByRole("button", { name: "Add library skill" }).click();
+      const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
+      await skillPicker.waitFor({ state: "visible" });
+      await capturePage(page, join(outputDir, "profile-skill-picker-920x620.png"));
+      await page.keyboard.press("Escape");
+      await skillPicker.waitFor({ state: "hidden" });
+    }
   }
   await setWindowSize(page, windowHandle, 1180, 728);
   await page.getByRole("button", { name: "Apply", exact: true }).click();
@@ -629,7 +637,19 @@ try {
   await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "profiles-applied-920x620.png"));
+  await page
+    .locator('[data-profile-composer-id="skills"]')
+    .getByRole("button", { name: "Skills", exact: true })
+    .click();
+  await page.locator('[data-profile-composer-id="skills"] .profile-composer-section__panel')
+    .waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "profile-skills-applied-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "profile-skills-applied-1180x728.png"));
+  await page
+    .locator('[data-profile-composer-id="skills"]')
+    .getByRole("button", { name: "Skills", exact: true })
+    .click();
   await capturePage(page, join(outputDir, "profiles-applied-1180x728.png"));
   await captureWorkspace(
     "Targets",

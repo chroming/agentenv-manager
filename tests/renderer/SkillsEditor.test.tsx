@@ -234,7 +234,8 @@ describe("SkillsEditor", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
     const dialog = screen.getByRole("dialog", { name: "Add library skills" });
-    expect(within(dialog).getByLabelText("Shared Reviewer")).toBeDisabled();
+    expect(within(dialog).queryByLabelText("Shared Reviewer")).not.toBeInTheDocument();
+    expect(dialog).toHaveTextContent("GitHub · Revision def456");
     fireEvent.click(within(dialog).getByLabelText("GitHub Reviewer"));
     fireEvent.click(within(dialog).getByRole("button", { name: "Add selected skills" }));
     expect(onChange).toHaveBeenLastCalledWith({
@@ -320,7 +321,7 @@ describe("SkillsEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("distinguishes an AgentEnv Library copy from update-source tracking", () => {
+  it("distinguishes Library revision, update tracking, and Target deployment", () => {
     render(
       <SkillsEditor
         mode="skills"
@@ -341,20 +342,88 @@ describe("SkillsEditor", () => {
             updatedAt: "2026-07-16T00:00:00.000Z"
           }
         ]}
+        appliedSkillVersions={{ "captured-reviewer": "previous-revision" }}
+        selectedTargetName="OpenCode"
         onChange={vi.fn()}
       />
     );
 
     const row = screen.getByRole("listitem", { name: "Profile skill captured-reviewer" });
-    expect(row).toHaveTextContent("Library copy");
     expect(row).toHaveTextContent("Library revision 78f0608");
+    expect(row).toHaveTextContent("Local");
     expect(row).toHaveTextContent("/tmp/agentenv/skills-library/captured-reviewer");
     expect(row).not.toHaveTextContent("Not tracked");
-    expect(within(row).getByTitle("Library copy · No update source")).toBeInTheDocument();
+    expect(row).toHaveTextContent("Apply pending");
+    expect(row).toHaveTextContent("OpenCode · previou");
+    expect(within(row).getByTitle(/Apply pending.*OpenCode revision previous-revision.*No update source/))
+      .toBeInTheDocument();
     fireEvent.focus(within(row).getByLabelText("Full skill detail captured-reviewer"));
     expect(screen.getByRole("tooltip")).toHaveTextContent(
-      "Library revision 78f06085a49a5f46 · /tmp/agentenv/skills-library/captured-reviewer"
+      "Library revision 78f06085a49a5f46 · Local · /tmp/agentenv/skills-library/captured-reviewer"
     );
+  });
+
+  it("relinks a missing Profile reference through a searchable Library picker", () => {
+    const onChange = vi.fn();
+    render(
+      <SkillsEditor
+        mode="skills"
+        value={{
+          ...emptyPolicy,
+          skillRefs: [{ libraryId: "removed-reviewer", targetName: "reviewer" }]
+        }}
+        configText="{}"
+        librarySkills={librarySkills}
+        onChange={onChange}
+      />
+    );
+
+    const row = screen.getByRole("listitem", { name: "Profile skill reviewer" });
+    expect(row).toHaveTextContent("Missing");
+    expect(within(row).getByRole("switch", { name: "Missing Library skill reviewer" }))
+      .toBeDisabled();
+    fireEvent.click(within(row).getByRole("button", { name: "Relink" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Relink missing skill" });
+    fireEvent.change(within(dialog).getByLabelText("Search library skills"), {
+      target: { value: "github" }
+    });
+    expect(within(dialog).queryByLabelText("Shared Reviewer")).not.toBeInTheDocument();
+    expect(dialog).toHaveTextContent("GitHub · Revision def456");
+    fireEvent.click(within(dialog).getByLabelText("GitHub Reviewer"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Relink skill" }));
+
+    expect(onChange).toHaveBeenCalledWith({
+      ...emptyPolicy,
+      skillRefs: [{ libraryId: "github-reviewer", targetName: "reviewer", enabled: true }]
+    });
+  });
+
+  it("offers a local working state when importing a Profile-only skill", () => {
+    const onImportOwnedSkill = vi.fn();
+    render(
+      <SkillsEditor
+        mode="skills"
+        value={mixedPolicy}
+        configText="{}"
+        librarySkills={librarySkills}
+        importingOwnedSkillIndex={0}
+        onImportOwnedSkill={onImportOwnedSkill}
+        onChange={vi.fn()}
+      />
+    );
+
+    const row = screen.getByRole("listitem", {
+      name: "Profile-owned skill agentenv-reviewer"
+    });
+    expect(row).toHaveTextContent("Profile file · Revision unavailable");
+    const importButton = within(row).getByRole("button", {
+      name: "Import agentenv-reviewer to Library"
+    });
+    expect(importButton).toHaveTextContent("Importing");
+    expect(importButton).toBeDisabled();
+    expect(importButton).toHaveAttribute("aria-busy", "true");
+    expect(onImportOwnedSkill).not.toHaveBeenCalled();
   });
 
   it("renders only MCP resources in mcp mode", () => {
@@ -538,7 +607,7 @@ describe("SkillsEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
     const dialog = screen.getByRole("dialog", { name: "Add library skills" });
     fireEvent.click(within(dialog).getByLabelText("GitHub Reviewer"));
-    const firstControl = within(dialog).getByLabelText("GitHub Reviewer");
+    const firstControl = within(dialog).getByLabelText("Search library skills");
     const lastControl = within(dialog).getByRole("button", { name: "Add selected skills" });
     lastControl.focus();
 

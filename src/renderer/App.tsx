@@ -576,6 +576,7 @@ const AppContent = ({
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
   const [checkingProfileSkillUpdates, setCheckingProfileSkillUpdates] = useState(false);
+  const [importingOwnedSkillIndex, setImportingOwnedSkillIndex] = useState<number>();
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
@@ -1094,6 +1095,58 @@ const AppContent = ({
     setSkillUpdateCheckStatus(undefined);
     setPreview(undefined);
     setRollbackPreview(undefined);
+  };
+
+  const importOwnedSkillToLibrary = async (
+    index: number,
+    asset: AssetPolicy["ownedDirs"][number]
+  ) => {
+    if (!draftProfile?.profileDir) {
+      setError("This Profile has no local storage directory");
+      return;
+    }
+    const baseId = asset.targetName
+      .trim()
+      .toLocaleLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "profile-skill";
+    const usedIds = new Set(librarySkills.map((skill) => skill.id));
+    let libraryId = baseId;
+    for (let suffix = 2; usedIds.has(libraryId); suffix += 1) {
+      libraryId = `${baseId}-${suffix}`;
+    }
+    const sourcePath = `${draftProfile.profileDir.replace(/[\\/]+$/, "")}/${asset.source.replace(/^[\\/]+/, "")}`;
+
+    setImportingOwnedSkillIndex(index);
+    setError(undefined);
+    try {
+      const result = await window.agentEnv.importSkillToLibrary({ sourcePath, id: libraryId });
+      setLibrarySkills((current) => current.concat(result.skill));
+      updateDraftProfile({
+        ...draftProfile,
+        assetPolicy: {
+          ...draftProfile.assetPolicy,
+          ownedDirs: draftProfile.assetPolicy.ownedDirs.filter(
+            (_, currentIndex) => currentIndex !== index
+          ),
+          skillRefs: (draftProfile.assetPolicy.skillRefs ?? []).concat({
+            libraryId: result.skill.id,
+            targetName: asset.targetName,
+            enabled: true
+          })
+        }
+      });
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: t("{{name}} imported to Library. Save the Profile to use this reference.", {
+          name: result.skill.name
+        })
+      });
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setImportingOwnedSkillIndex(undefined);
+    }
   };
 
   const changeProfileIconNow = async (profileId: string, iconKey: ResourceIconKey) => {
@@ -3610,9 +3663,17 @@ const AppContent = ({
                   librarySkills={librarySkills}
                   skillUpdates={skillUpdates}
                   checkingSkillUpdates={checkingProfileSkillUpdates}
+                  appliedSkillVersions={
+                    selectedTargetState?.activeProfileId === draftProfile.id
+                      ? selectedTargetState.appliedLibraryVersions?.skills
+                      : undefined
+                  }
+                  selectedTargetName={selectedTarget?.name}
+                  importingOwnedSkillIndex={importingOwnedSkillIndex}
                   mcpServers={mcpServers}
                   onCheckSkillUpdates={(ids) => void checkProfileSkillUpdates(ids)}
                   onPreviewSkillUpdate={(id) => void previewLibrarySkillUpdate(id)}
+                  onImportOwnedSkill={(index, skill) => void importOwnedSkillToLibrary(index, skill)}
                   onChange={(assetPolicy) => {
                     updateDraftProfile({ ...draftProfile, assetPolicy });
                   }}
