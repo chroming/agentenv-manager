@@ -96,7 +96,7 @@
 .skill-library-panel .library-table-row {
   align-items: center;
   grid-template-areas: none;
-  min-height: 68px;
+  min-height: 72px;
   padding: 10px 14px;
   row-gap: 3px;
 }
@@ -172,29 +172,58 @@
 
 .skill-library-panel .library-version-cell,
 .skill-library-panel .library-update-cell,
-.skill-library-panel .library-usage-cell,
+.skill-library-panel .library-usage-cell {
+  align-content: center;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 28px 20px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .skill-library-panel .library-installs-cell {
   align-content: center;
   display: grid;
-  gap: 2px;
+  gap: 4px;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 23px 16px;
+  grid-template-rows: 28px 20px;
   min-width: 0;
   overflow: hidden;
 }
 
 .skill-library-panel .library-version-cell strong,
 .skill-library-panel .library-version-cell small,
-.skill-library-panel .library-update-cell > small,
+.skill-library-panel .library-update-detail,
 .skill-library-panel .library-usage-cell strong,
 .skill-library-panel .library-usage-cell > small,
 .skill-library-panel .library-install-empty,
+.skill-library-panel .library-install-detail,
 .skill-library-panel .library-install-entry > span,
 .skill-library-panel .library-install-entry > strong {
   align-self: center;
   line-height: 1.25;
   margin: 0;
   min-width: 0;
+}
+
+.skill-library-panel .library-update-detail,
+.skill-library-panel .library-install-detail {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  line-height: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-library-panel .library-update-cell > .library-row-inline-action,
+.skill-library-panel .library-installs-cell > .library-row-inline-action {
+  align-self: center;
+  height: 28px;
+  min-height: 28px;
+  max-width: 100%;
 }
 
 .skill-library-panel .library-version-cell strong,
@@ -256,12 +285,7 @@
 }
 
 .skill-library-panel .library-install-entry {
-  align-items: stretch;
-  display: grid;
-  gap: 2px;
-  grid-template-rows: 23px 16px;
-  min-width: 0;
-  overflow: hidden;
+  display: contents;
 }
 
 .skill-library-panel .library-install-entry > span {
@@ -270,6 +294,37 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.skill-library-panel .library-version-cell > strong,
+.skill-library-panel .library-update-cell > .resource-status,
+.skill-library-panel .library-update-cell > .library-row-inline-action,
+.skill-library-panel .library-usage-cell > strong,
+.skill-library-panel .library-install-empty,
+.skill-library-panel .library-installs-cell > .library-row-inline-action,
+.skill-library-panel .library-install-entry > span {
+  align-items: center;
+  align-self: stretch;
+  display: flex;
+  height: 28px;
+  min-height: 28px;
+}
+
+.skill-library-panel .library-version-cell > small,
+.skill-library-panel .library-update-detail,
+.skill-library-panel .library-usage-cell > small,
+.skill-library-panel .library-install-detail,
+.skill-library-panel .library-install-entry > strong {
+  align-items: center;
+  align-self: stretch;
+  display: flex;
+  height: 20px;
+  line-height: 15px;
+  min-height: 20px;
+}
+
+.skill-library-panel .library-install-entry > strong {
+  padding-block: 0;
 }
 
 .skill-update-dialog {
@@ -523,14 +578,6 @@
   animation: spin 0.9s linear infinite;
 }
 
-.cleanup-group-status {
-  align-items: flex-start;
-  display: grid;
-  gap: 5px;
-  justify-items: start;
-  min-width: 0;
-}
-
 .cleanup-resolution {
   border-radius: 999px;
   display: inline-flex;
@@ -569,16 +616,34 @@
 
 .skill-library-panel .cleanup-group-row {
   align-items: start;
-  gap: 8px 14px;
-  grid-template-columns: 124px minmax(0, 1fr);
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
   padding-block: 8px;
 }
 
 .skill-library-panel .cleanup-group-row > .cleanup-group-actions {
-  grid-column: 2;
+  grid-column: 1;
   justify-self: end;
   max-width: none;
   min-width: 0;
+}
+
+.skill-library-panel .cleanup-group-heading {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 154px);
+  min-width: 0;
+}
+
+.skill-library-panel .cleanup-group-state {
+  display: block;
+  justify-self: end;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .skill-library-panel .cleanup-group-actions .primary-action,
@@ -624,6 +689,18 @@
   .cleanup-auto-action {
     justify-self: stretch;
     width: 100%;
+  }
+}
+
+@container skill-library (max-width: 560px) {
+  .skill-library-panel .cleanup-group-heading {
+    gap: 5px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .skill-library-panel .cleanup-group-state {
+    justify-self: start;
+    max-width: min(100%, 220px);
   }
 }
 

@@ -1145,11 +1145,17 @@ export const SkillLibraryPanel = ({
                     </strong>
                   )}
                   {globallyEnabled && updateInfo?.latestRevision ? (
-                    <small>
-                      {updateInfo.latestRevision.slice(0, 7)} {t(hasUpdate ? "available" : "current")}
-                    </small>
+                    <PreviewText
+                      ariaLabel={t("Full update status for {{id}}", { id: skill.id })}
+                      className="library-update-detail"
+                      text={`${updateInfo.latestRevision.slice(0, 7)} ${t(hasUpdate ? "available" : "current")}`}
+                    />
                   ) : hasError ? (
-                    <small>{t("Source check failed")}</small>
+                    <PreviewText
+                      ariaLabel={t("Full update status for {{id}}", { id: skill.id })}
+                      className="library-update-detail"
+                      text={t("Source check failed")}
+                    />
                   ) : null}
                 </div>
                 <div className="library-usage-cell">
@@ -1180,7 +1186,11 @@ export const SkillLibraryPanel = ({
                         <RefreshCw size={14} strokeWidth={2.2} />
                         <span>{t("Sync")}</span>
                       </button>
-                      <small>{t("{{count}} out of sync", { count: staleCopies.length })}</small>
+                      <PreviewText
+                        ariaLabel={t("Full install status for {{id}}", { id: skill.id })}
+                        className="library-install-detail"
+                        text={t("{{count}} out of sync", { count: staleCopies.length })}
+                      />
                     </>
                   ) : null}
                   {installs.length === 0 ? <strong className="library-install-empty">{t("Not installed")}</strong> : null}
@@ -2228,17 +2238,19 @@ export const SkillLibraryPanel = ({
                     key={group.skillKey}
                     role="group"
                   >
-                    <div className="cleanup-group-status">
-                      <span className={`resource-chip resource-chip--${chipClass}`}>
-                        {chipLabel}
-                      </span>
-                    </div>
                     <div className="resource-row__main">
-                      <PreviewText
-                        ariaLabel={t("Full skill name {{id}}", { id: group.skillKey })}
-                        className="cleanup-group-name"
-                        text={group.primary?.name ?? group.skillKey}
-                      />
+                      <div className="cleanup-group-heading">
+                        <PreviewText
+                          ariaLabel={t("Full skill name {{id}}", { id: group.skillKey })}
+                          className="cleanup-group-name"
+                          text={group.primary?.name ?? group.skillKey}
+                        />
+                        <PreviewText
+                          ariaLabel={t("Full cleanup state {{id}}", { id: group.skillKey })}
+                          className={`resource-chip resource-chip--${chipClass} cleanup-group-state`}
+                          text={chipLabel}
+                        />
+                      </div>
                       {sharedMigration ? (
                         <div className="cleanup-shared-progress">
                           <span>{t("Shared compatibility copy")}</span>

@@ -983,22 +983,24 @@ describe("Electron UI profile switching e2e", () => {
       const updateActionGeometry = await changingRow.evaluate((row) => {
         const updateCell = row.querySelector<HTMLElement>(".library-update-cell")!;
         const updateButton = updateCell.querySelector<HTMLButtonElement>(".library-row-inline-action")!;
+        const updateDetail = updateCell.querySelector<HTMLElement>(".library-update-detail")!;
         const actionsCell = row.querySelector<HTMLElement>(".library-actions-cell")!;
         const updateRect = updateCell.getBoundingClientRect();
         const buttonRect = updateButton.getBoundingClientRect();
+        const detailRect = updateDetail.getBoundingClientRect();
         const actionsRect = actionsCell.getBoundingClientRect();
         return {
           buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
           buttonInsideUpdateColumn:
             buttonRect.left >= updateRect.left - 1 && buttonRect.right <= updateRect.right + 1,
-          columnsDoNotOverlap: updateRect.right <= actionsRect.left
+          columnsDoNotOverlap: updateRect.right <= actionsRect.left,
+          detailClearance: detailRect.top - buttonRect.bottom
         };
       });
-      expect(updateActionGeometry).toEqual({
-        buttonFitsText: true,
-        buttonInsideUpdateColumn: true,
-        columnsDoNotOverlap: true
-      });
+      expect(updateActionGeometry.buttonFitsText).toBe(true);
+      expect(updateActionGeometry.buttonInsideUpdateColumn).toBe(true);
+      expect(updateActionGeometry.columnsDoNotOverlap).toBe(true);
+      expect(updateActionGeometry.detailClearance).toBeGreaterThanOrEqual(4);
       await expectTextFits(changingRow.locator(".library-row-inline-action"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
@@ -2907,6 +2909,30 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(join(sharedSkillDir, ".agentenv-owner.json"))).resolves.toBe(false);
     await expect.poll(() => cleanupGroup.textContent()).toContain("Shared copy still in use");
     await expect.poll(() => cleanupGroup.textContent()).toContain("2 Targets still use this copy");
+    await resizeAppWindow(page, 920, 620);
+    const sharedStateGeometry = await cleanupGroup.evaluate((row) => {
+      const heading = row.querySelector<HTMLElement>(".cleanup-group-heading")!.getBoundingClientRect();
+      const name = row.querySelector<HTMLElement>(".cleanup-group-name")!.getBoundingClientRect();
+      const state = row.querySelector<HTMLElement>(".cleanup-group-state")!.getBoundingClientRect();
+      const overlaps =
+        name.left < state.right &&
+        name.right > state.left &&
+        name.top < state.bottom &&
+        name.bottom > state.top;
+      return {
+        contained:
+          name.left >= heading.left - 1 &&
+          state.right <= heading.right + 1,
+        overlaps
+      };
+    });
+    expect(sharedStateGeometry).toEqual({ contained: true, overlaps: false });
+    await cleanupGroup.locator(".cleanup-group-state").hover();
+    const sharedStateTooltip = page.getByRole("tooltip").filter({
+      hasText: "Shared copy still in use"
+    });
+    await sharedStateTooltip.waitFor({ state: "visible" });
+    await expectInViewport(page, sharedStateTooltip);
     await cleanupGroup
       .getByRole("button", { name: "Open Profiles shared-migration-reviewer" })
       .click();
@@ -3109,16 +3135,24 @@ describe("Electron UI profile switching e2e", () => {
         const autoAction = heading.querySelector<HTMLElement>(".cleanup-auto-action")!.getBoundingClientRect();
         const rows = Array.from(drawer.querySelectorAll<HTMLElement>(".cleanup-group-row")).map((row) => {
           const rowBox = row.getBoundingClientRect();
-          const status = row.querySelector<HTMLElement>(".cleanup-group-status")!.getBoundingClientRect();
           const main = row.querySelector<HTMLElement>(".resource-row__main")!.getBoundingClientRect();
+          const rowHeading = row.querySelector<HTMLElement>(".cleanup-group-heading")!.getBoundingClientRect();
+          const name = row.querySelector<HTMLElement>(".cleanup-group-name")!.getBoundingClientRect();
+          const state = row.querySelector<HTMLElement>(".cleanup-group-state")!.getBoundingClientRect();
           const actionGroup = row.querySelector<HTMLElement>(".cleanup-group-actions")!;
           const actions = actionGroup.getBoundingClientRect();
+          const headingItemsOverlap =
+            name.left < state.right &&
+            name.right > state.left &&
+            name.top < state.bottom &&
+            name.bottom > state.top;
           return {
             contained:
-              status.left >= rowBox.left - 1 &&
+              rowHeading.left >= rowBox.left - 1 &&
+              state.right <= rowHeading.right + 1 &&
               actions.right <= rowBox.right + 1 &&
-              status.right <= main.left &&
-              (actions.top >= main.bottom - 1 || main.right <= actions.left),
+              actions.top >= main.bottom - 1 &&
+              !headingItemsOverlap,
             textFits: Array.from(row.querySelectorAll<HTMLElement>(".resource-row__main > *")).every(
               (item) => item.clientWidth <= main.width + 1
             ),
@@ -3484,6 +3518,11 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Settings" }).click();
     await page.getByLabel("Global skill sync method").selectOption("copy");
+    const autoCheck = page.getByRole("switch", { name: "Skill auto update check" });
+    if ((await autoCheck.getAttribute("aria-checked")) === "true") {
+      await autoCheck.click();
+    }
+    await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("false");
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page);
@@ -3523,12 +3562,24 @@ describe("Electron UI profile switching e2e", () => {
     await page.setViewportSize({ width: 920, height: 620 });
     const updatedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await updatedRow.getByText("1 out of sync").waitFor({ state: "visible" });
-    const installActionGap = await updatedRow.evaluate((element) => {
-      const installs = element.querySelector(".library-installs-cell")?.getBoundingClientRect();
-      const actions = element.querySelector(".library-actions-cell")?.getBoundingClientRect();
-      return installs && actions ? actions.left - installs.right : -1;
+    const installActionGeometry = await updatedRow.evaluate((element) => {
+      const installs = element.querySelector<HTMLElement>(".library-installs-cell")!;
+      const actions = element.querySelector<HTMLElement>(".library-actions-cell")!;
+      const syncButton = installs.querySelector<HTMLElement>(".library-row-inline-action")!;
+      const syncDetail = installs.querySelector<HTMLElement>(".library-install-detail")!;
+      const installsBox = installs.getBoundingClientRect();
+      const actionsBox = actions.getBoundingClientRect();
+      const buttonBox = syncButton.getBoundingClientRect();
+      const detailBox = syncDetail.getBoundingClientRect();
+      return {
+        columnGap: actionsBox.left - installsBox.right,
+        detailClearance: detailBox.top - buttonBox.bottom,
+        verticalOverlap: buttonBox.bottom > detailBox.top
+      };
     });
-    expect(installActionGap).toBeGreaterThanOrEqual(0);
+    expect(installActionGeometry.columnGap).toBeGreaterThanOrEqual(0);
+    expect(installActionGeometry.detailClearance).toBeGreaterThanOrEqual(4);
+    expect(installActionGeometry.verticalOverlap).toBe(false);
     await updatedRow.getByRole("button", { name: "Sync install of shared-reviewer" }).click();
     await updatedRow.getByText("Synced").waitFor({ state: "visible" });
     await expect(readFile(installedSkillMd, "utf8")).resolves.toContain(

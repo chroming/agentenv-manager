@@ -138,6 +138,8 @@ const writeLibrary = async (appDataRoot) => {
         remoteRef: "main",
         remoteRevision: "7ce3f08",
         contentHash: "7ce3f08",
+        updateCheckEnabled: true,
+        updatePolicy: "tracked",
         updatedAt: "2026-07-12T00:00:00.000Z"
       });
     } else if (id === "python-type-hints") {
@@ -263,7 +265,12 @@ const capturePage = async (
   await page.evaluate(async ({ shouldPreserveFocus }) => {
     await document.fonts?.ready;
     for (const animation of document.getAnimations()) {
-      animation.finish();
+      try {
+        animation.finish();
+      } catch {
+        animation.pause();
+        animation.currentTime = 0;
+      }
     }
     if (!shouldPreserveFocus && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
@@ -443,6 +450,29 @@ try {
     { preservePointer: true }
   );
   await page.mouse.move(2, 2);
+  await writeFile(
+    join(
+      githubFixtureRoot,
+      "agentenv-community",
+      "agent-skills",
+      "main",
+      "skills",
+      "react-best-practices",
+      "SKILL.md"
+    ),
+    "---\nname: react-best-practices\ndescription: Updated React review guidance.\n---\n\n# react-best-practices\n\nReview the available update before applying it.\n",
+    "utf8"
+  );
+  await page.getByRole("button", { name: "Check updates" }).click();
+  await page
+    .getByRole("group", { name: "Library item react-best-practices" })
+    .getByRole("button", { name: "Review update react-best-practices" })
+    .waitFor({ state: "visible", timeout: 5_000 });
+  await page.waitForTimeout(5_200);
+  await capturePage(page, join(outputDir, "skills-update-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "skills-update-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
 
   await page.getByRole("button", { name: "Import skills" }).click();
   const importDialog = page.getByRole("dialog", { name: "Import skills" });

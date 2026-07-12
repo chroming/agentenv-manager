@@ -805,12 +805,13 @@ const AppContent = ({
   const loadProfileEnrichment = async (
     core: Awaited<ReturnType<typeof loadProfileCore>>,
     checkSkillUpdates: boolean,
-    shouldApply: () => boolean = () => true
+    shouldApply: () => boolean = () => true,
+    forceSkillUpdateCheck = false
   ) => {
     const { targetItems, profileItems, skillItems, mcpItems, settings } = core;
     const [skillUpdatesResult, skillInventoryResult, githubStatusResult] =
       await Promise.allSettled([
-        checkSkillUpdates && settings.skillAutoCheckEnabled
+        checkSkillUpdates && (forceSkillUpdateCheck || settings.skillAutoCheckEnabled)
           ? window.agentEnv.checkSkillLibraryUpdates()
           : Promise.resolve(skillUpdates),
         window.agentEnv.scanSkillInventory(),
@@ -876,15 +877,22 @@ const AppContent = ({
 
   const refreshProfiles = async ({
     checkSkillUpdates = true,
+    forceSkillUpdateCheck = false,
     settingsOverride
   }: {
     checkSkillUpdates?: boolean;
+    forceSkillUpdateCheck?: boolean;
     settingsOverride?: AgentEnvSettings;
   } = {}) => {
     const requestId = ++dataRefreshRequestRef.current;
     const shouldApply = () => dataRefreshRequestRef.current === requestId;
     const core = await loadProfileCore(settingsOverride, shouldApply);
-    const enrichment = await loadProfileEnrichment(core, checkSkillUpdates, shouldApply);
+    const enrichment = await loadProfileEnrichment(
+      core,
+      checkSkillUpdates,
+      shouldApply,
+      forceSkillUpdateCheck
+    );
     return { ...core, ...enrichment };
   };
 
@@ -2147,7 +2155,7 @@ const AppContent = ({
     setProfileSaveStatus("");
     setSkillUpdateCheckStatus({ state: "checking", message: "Checking library updates..." });
     try {
-      const { skillUpdateItems } = await refreshProfiles();
+      const { skillUpdateItems } = await refreshProfiles({ forceSkillUpdateCheck: true });
       setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(skillUpdateItems, t));
       const checkError = skillUpdateItems.find((item) => item.error)?.error;
       if (checkError) {
