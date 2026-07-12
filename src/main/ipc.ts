@@ -200,7 +200,7 @@ export const registerIpcHandlers = ({
         (item) => item.id === localInstall.libraryId
       );
       if (skill) {
-        return { skill, managedLocations: [sourcePath] };
+        return { skill, managedLocations: [sourcePath], reused: true };
       }
     }
 
@@ -248,7 +248,24 @@ export const registerIpcHandlers = ({
       };
     }
 
-    const skill = await skillLibraryStore.importSkill({ ...input, sourcePath });
+    const librarySkills = await skillLibraryStore.listSkills();
+    const matchingLibrarySkill = localInstall?.contentHash
+      ? librarySkills.find((skill) => skill.contentHash === localInstall.contentHash)
+      : undefined;
+    if (matchingLibrarySkill) {
+      return { skill: matchingLibrarySkill, managedLocations: [], reused: true };
+    }
+
+    const usedIds = new Set(librarySkills.map((skill) => skill.id));
+    let importId = libraryId;
+    for (let suffix = 2; usedIds.has(importId); suffix += 1) {
+      importId = `${libraryId}-${suffix}`;
+    }
+    const skill = await skillLibraryStore.importSkill({
+      ...input,
+      id: importId,
+      sourcePath
+    });
     return { skill, managedLocations: [] };
   });
   ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>

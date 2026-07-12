@@ -503,7 +503,7 @@ User-facing state and action contract:
 - `Add to Library`, `Manage copies`, and every review action open a preview dialog before mutation. Row actions use lightweight styling; filled emphasis is reserved for the dialog commit and an intentional bulk command.
 - `Auto-manage` is a stable Cleanup command rather than a conditionally disappearing feature. It is enabled only when at least one group has one unambiguous canonical version, otherwise it remains visible and disabled with an unavailable explanation. It opens `Manage ready copies`, a bulk confirmation listing every eligible Skill and the independent-backup behavior before it starts. A failure in one Skill does not roll back completed independent Skills, and the result reports both completed and remaining groups.
 - The main process MUST rescan and compare the reviewed content hashes immediately before mutation. Stale previews fail without modifying Library or local copies.
-- Every mutating cleanup backs up all affected locations first. A failure after mutation begins restores Library and every affected location.
+- Every mutating cleanup backs up all affected locations first. A failure after mutation begins attempts to restore Library and every affected location independently; one failed restore MUST NOT prevent later paths from being restored. The error distinguishes a completed rollback from an incomplete rollback, and the renderer rescans disk before presenting the remaining group state.
 - After successful cleanup, selected Target-specific copies rescan as current and `Managed`; the group MUST NOT retain a duplicate or pending action.
 - AgentEnv ownership is attached to the physical managed installation. A shared compatibility path scanned by multiple Targets MUST appear as one managed location rather than a duplicate caused by Target-specific scanning.
 - A physical location shared by multiple Target adapters MUST be labelled as shared in cleanup review instead of presenting the Target names as separate copies.
@@ -547,6 +547,7 @@ External ownership contract:
 - Skills tracked by a supported Skills CLI lock are classified as `External`, not `Unmanaged`.
 - Directory symlinks and broken tracked symlinks remain visible in Scan results.
 - `Import copy` copies a selected healthy external installation into Library, preserves verified upstream metadata, and leaves the external files and lock unchanged.
+- `Import copy` is idempotent. Matching Library content is reused; an occupied ID with different content receives the next available ID instead of failing. After rescan, an external installation with matching Library content remains labelled `External` but has no repeated Import action and shows its Library relationship.
 - External installations MUST NOT enter the ordinary cleanup transaction that replaces selected locations with AgentEnv-managed copies.
 - A desired Profile Skill occupying an externally managed Target path blocks Apply with the manager, path, and required recovery action identified.
 

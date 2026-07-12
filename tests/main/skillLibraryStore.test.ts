@@ -1,4 +1,4 @@
-import { lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -112,6 +112,20 @@ description: >
         externalManager: "skills-cli",
         externalLockPath: lockPath
       }
+    });
+    const representedInventory = await store.scanInventory([
+      {
+        targetId: "opencode",
+        configDir: dirname(targetSkillsDir),
+        instructionsPath: "",
+        configPath: "",
+        skillsDir: targetSkillsDir
+      }
+    ]);
+    expect(representedInventory[0]).toMatchObject({
+      status: "external",
+      libraryId: "reviewer",
+      contentMatchesLibrary: true
     });
     await rm(canonicalDir, { recursive: true, force: true });
     await expect(
@@ -1086,6 +1100,46 @@ description: >
     await expect(readFile(`${targetCopy}.agentenv-owner.json`, "utf8")).resolves.toContain(
       '"source": "skills-library/reviewer"'
     );
+  });
+
+  it("attempts every restore when a later cleanup location cannot be replaced", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const targetRoots = ["one", "two", "three"].map((name) => join(root, name, "skills"));
+    const targetCopies = targetRoots.map((skillsDir) => join(skillsDir, "reviewer"));
+    for (const [index, targetCopy] of targetCopies.entries()) {
+      await mkdir(targetCopy, { recursive: true });
+      await writeFile(join(targetCopy, "SKILL.md"), `# Original ${index + 1}\n`);
+    }
+    const store = createSkillLibraryStore(paths);
+    await chmod(targetRoots[2], 0o555);
+    try {
+      await expect(
+        store.consolidateSkillGroup({
+          skillKey: "reviewer",
+          libraryId: "reviewer",
+          canonicalPath: targetCopies[0],
+          locations: targetCopies.map((targetDir, index) => ({
+            targetPaths: {
+              targetId: `target-${index + 1}`,
+              configDir: dirname(targetRoots[index]),
+              instructionsPath: "",
+              configPath: "",
+              skillsDir: targetRoots[index]
+            },
+            targetDir
+          }))
+        })
+      ).rejects.toThrow(/failed.*rollback/i);
+    } finally {
+      await chmod(targetRoots[2], 0o755);
+    }
+
+    await expect(readFile(join(targetCopies[0], "SKILL.md"), "utf8")).resolves.toBe("# Original 1\n");
+    await expect(readFile(join(targetCopies[1], "SKILL.md"), "utf8")).resolves.toBe("# Original 2\n");
+    await expect(readFile(join(targetCopies[2], "SKILL.md"), "utf8")).resolves.toBe("# Original 3\n");
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("backs up an existing Library version before replacing it with reviewed local content", async () => {

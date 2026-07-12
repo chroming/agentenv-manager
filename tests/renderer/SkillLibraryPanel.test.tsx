@@ -61,7 +61,7 @@ describe("SkillLibraryPanel", () => {
     );
     const onSetIcon = vi.fn();
     const onManageTargetSkill = vi.fn();
-    const onConsolidateSkillGroup = vi.fn();
+    const onConsolidateSkillGroup = vi.fn().mockResolvedValue(true);
     const onAutoConsolidateSkillGroups = vi.fn().mockResolvedValue(undefined);
     const onIgnoreSkillGroup = vi.fn();
     const onUnignoreSkillGroup = vi.fn();
@@ -808,6 +808,11 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(
       within(conflictDialog).getByRole("button", { name: "Add to Library" })
     );
+    expect(within(conflictDialog).getByRole("button", { name: "Applying..." })).toHaveAttribute(
+      "aria-busy",
+      "true"
+    );
+    expect(within(conflictDialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
     expect(onConsolidateSkillGroup).toHaveBeenCalledWith({
       skillKey: "conflict-reviewer",
       libraryId: "conflict-reviewer",
@@ -828,6 +833,9 @@ describe("SkillLibraryPanel", () => {
         }
       ]
     });
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Review skill cleanup" })).not.toBeInTheDocument()
+    );
 
     rerender(
       renderPanel(undefined, [

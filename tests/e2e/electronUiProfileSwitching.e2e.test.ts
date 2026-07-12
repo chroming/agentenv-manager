@@ -13,7 +13,7 @@ import {
   symlink,
   writeFile
 } from "node:fs/promises";
-import { delimiter, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import electronPath from "electron";
 import {
@@ -401,6 +401,7 @@ const launchApp = async (
     backgroundStartupDelayMs?: number;
     testCloseGuard?: boolean;
     migratedBackupFixtures?: boolean;
+    includeClaudeTarget?: boolean;
   } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
@@ -411,6 +412,7 @@ const launchApp = async (
   const githubFixtureRoot = join(root, "github-fixtures");
   const opencodeDir = join(homeDir, ".config", "opencode");
   const codexDir = join(homeDir, ".codex");
+  const claudeDir = join(homeDir, ".claude");
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
@@ -420,6 +422,12 @@ const launchApp = async (
   await chmod(opencodeExecutable, 0o755);
   await writeFile(codexExecutable, "#!/bin/sh\necho fake-codex\n", "utf8");
   await chmod(codexExecutable, 0o755);
+  if (options.includeClaudeTarget) {
+    const claudeExecutable = join(binDir, "claude");
+    await writeFile(claudeExecutable, "#!/bin/sh\necho fake-claude\n", "utf8");
+    await chmod(claudeExecutable, 0o755);
+    await mkdir(claudeDir, { recursive: true });
+  }
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Existing UI OpenCode\n", "utf8");
   await writeJson(join(opencodeDir, "opencode.jsonc"), {
     shell: "/bin/zsh",
@@ -477,6 +485,7 @@ const launchApp = async (
     homeDir,
     opencodeDir,
     codexDir,
+    claudeDir,
     librarySkill,
     githubFixtureRoot,
     page
@@ -3487,6 +3496,106 @@ describe("Electron UI profile switching e2e", () => {
       }
     });
   }, 30_000);
+
+  it("imports an external Skill with a colliding Library id without leaving the dialog open", async () => {
+    const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
+    const skillId = "open-browser-use";
+    const existingLibraryDir = join(appDataRoot, "skills-library", skillId);
+    const canonicalDir = join(homeDir, ".agents", "skills", skillId);
+    const targetDir = join(opencodeDir, "skills", skillId);
+    const lockPath = join(homeDir, ".agents", ".skill-lock.json");
+    await mkdir(existingLibraryDir, { recursive: true });
+    await mkdir(canonicalDir, { recursive: true });
+    await mkdir(dirname(targetDir), { recursive: true });
+    await writeFile(join(existingLibraryDir, "SKILL.md"), "# Existing unrelated Library version\n");
+    await writeFile(
+      join(canonicalDir, "SKILL.md"),
+      "---\nname: Open Browser Use\ndescription: External version.\n---\n# External\n"
+    );
+    await symlink(canonicalDir, targetDir, "dir");
+    await writeJson(lockPath, {
+      version: 3,
+      skills: {
+        [skillId]: {
+          source: "acme/browser-skills",
+          sourceType: "github",
+          sourceUrl: "https://github.com/acme/browser-skills",
+          ref: "main",
+          skillPath: `skills/${skillId}/SKILL.md`,
+          skillFolderHash: "browser-tree"
+        }
+      }
+    });
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const group = page.getByRole("group", { name: `Cleanup group ${skillId}` });
+    await group.waitFor({ state: "visible" });
+    await group.getByRole("button", { name: `Review ownership ${skillId}` }).click();
+    const dialog = page.getByRole("dialog", { name: "Import external skill" });
+    await dialog.getByRole("button", { name: "Import copy" }).click();
+    await dialog.waitFor({ state: "hidden" });
+
+    await page.getByRole("group", { name: "Library item open-browser-use-2" })
+      .waitFor({ state: "visible" });
+    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
+      "Imported Open Browser Use to Library as open-browser-use-2"
+    );
+    await expect(readFile(join(existingLibraryDir, "SKILL.md"), "utf8"))
+      .resolves.toContain("Existing unrelated");
+    await expect(readFile(join(appDataRoot, "skills-library", "open-browser-use-2", "SKILL.md"), "utf8"))
+      .resolves.toContain("# External");
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
+    await expect.poll(() => group.textContent()).toContain("Library / open-browser-use-2");
+    expect(await group.getByRole("button", { name: `Review ownership ${skillId}` }).count()).toBe(0);
+    const repeatedImport = await page.evaluate((sourcePath) =>
+      window.agentEnv.importSkillToLibrary({ sourcePath, id: "open-browser-use" }),
+      targetDir
+    );
+    expect(repeatedImport).toMatchObject({
+      reused: true,
+      managedLocations: [],
+      skill: { id: "open-browser-use-2" }
+    });
+  }, 30_000);
+
+  it("keeps all three conflicting Target copies after a stale cleanup error", async () => {
+    const { opencodeDir, codexDir, claudeDir, page } = await launchApp({
+      includeClaudeTarget: true
+    });
+    const skillId = "three-target-conflict";
+    const copies = [
+      join(opencodeDir, "skills", skillId),
+      join(codexDir, "skills", skillId),
+      join(claudeDir, "skills", skillId)
+    ];
+    for (const [index, path] of copies.entries()) {
+      await mkdir(path, { recursive: true });
+      await writeFile(join(path, "SKILL.md"), `# Target version ${index + 1}\n`);
+    }
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const group = page.getByRole("group", { name: `Cleanup group ${skillId}` });
+    await group.waitFor({ state: "visible" });
+    await expect.poll(() => group.textContent()).toContain("3 locations");
+    await expect.poll(() => group.textContent()).toContain("Conflict");
+
+    await group.getByRole("button", { name: `Add to Library ${skillId}` }).click();
+    let dialog = page.getByRole("dialog", { name: "Review skill cleanup" });
+    await dialog.waitFor({ state: "visible" });
+    await writeFile(join(copies[1], "SKILL.md"), "# Target version changed after preview\n");
+    await dialog.getByRole("button", { name: "Add to Library" }).click();
+    await dialog.waitFor({ state: "hidden" });
+    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
+      "changed after the cleanup preview"
+    );
+    await expect.poll(() => group.textContent()).toContain("3 locations");
+    await expect.poll(() => group.textContent()).toContain("Conflict");
+    for (const path of copies) {
+      await expect(fileExists(join(path, "SKILL.md"))).resolves.toBe(true);
+    }
+  }, 45_000);
 
   it("refreshes Skills in place without clearing the current view", async () => {
     const { appDataRoot, page } = await launchApp();

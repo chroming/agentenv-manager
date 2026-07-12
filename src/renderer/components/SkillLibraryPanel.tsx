@@ -98,7 +98,7 @@ interface SkillLibraryPanelProps {
   onScanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   onImportGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
-  onConsolidateSkillGroup(input: SkillCleanupRequest): void;
+  onConsolidateSkillGroup(input: SkillCleanupRequest): Promise<boolean>;
   onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<void>;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
   onSetUpdatePolicy(input: SkillUpdatePolicyInput): void;
@@ -304,6 +304,7 @@ export const SkillLibraryPanel = ({
   const [githubOperation, setGithubOperation] = useState<"scanning" | "importing">();
   const [localImportOperation, setLocalImportOperation] = useState(false);
   const [automaticCleanupKey, setAutomaticCleanupKey] = useState<string>();
+  const [cleanupOperationKey, setCleanupOperationKey] = useState<string>();
   const [autoCleanupReviewOpen, setAutoCleanupReviewOpen] = useState(false);
   const [sharedOperation, setSharedOperation] = useState<{
     skillKey: string;
@@ -460,7 +461,7 @@ export const SkillLibraryPanel = ({
     dialogRef: modalDialogRef,
     initialFocusRef: modalInitialFocusRef,
     fallbackFocusRef: modalFallbackFocusRef,
-    dismissDisabled: Boolean(availabilityOperation || sharedOperation),
+    dismissDisabled: Boolean(availabilityOperation || sharedOperation || cleanupOperationKey),
     onDismiss: dismissModal
   });
   useModalDialog({
@@ -684,7 +685,10 @@ export const SkillLibraryPanel = ({
     : undefined;
   const externalImportItems =
     externalImportGroup?.activeItems.filter(
-      (item) => item.status === "external" && item.externalOwnership
+      (item) =>
+        item.status === "external" &&
+        item.externalOwnership &&
+        item.contentMatchesLibrary !== true
     ) ?? [];
   const cleanupUsesExistingLibrary = Boolean(
     cleanupCandidate?.items.some((item) => item.status === "library" || item.status === "managed") ||
@@ -1994,7 +1998,12 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {cleanupDraft && cleanupCandidate ? (
-        <div className="preview-modal-backdrop" onClick={() => setCleanupDraft(undefined)}>
+        <div
+          className="preview-modal-backdrop"
+          onClick={() => {
+            if (!cleanupOperationKey) setCleanupDraft(undefined);
+          }}
+        >
           <section
             ref={modalDialogRef}
             className="profile-form-dialog cleanup-review-dialog"
@@ -2182,13 +2191,22 @@ export const SkillLibraryPanel = ({
               </p>
             </div>
             <footer className="preview-actions">
-              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={() => setCleanupDraft(undefined)}>{t("Cancel")}</button>
+              <button
+                ref={modalInitialFocusRef}
+                className="secondary-action"
+                type="button"
+                disabled={Boolean(cleanupOperationKey)}
+                onClick={() => setCleanupDraft(undefined)}
+              >
+                {t("Cancel")}
+              </button>
               <button
                 className="primary-action"
                 type="button"
-                disabled={cleanupDraft.selectedPaths.length === 0}
+                aria-busy={cleanupOperationKey === cleanupDraft.skillKey}
+                disabled={cleanupDraft.selectedPaths.length === 0 || Boolean(cleanupOperationKey)}
                 onClick={() => {
-                  onConsolidateSkillGroup({
+                  const request: SkillCleanupRequest = {
                     skillKey: cleanupDraft.skillKey,
                     libraryId: cleanupDraft.libraryId,
                     canonicalPath: cleanupDraft.canonicalPath,
@@ -2212,11 +2230,24 @@ export const SkillLibraryPanel = ({
                         path: item.path,
                         contentHash: item.contentHash
                       }))
+                  };
+                  setCleanupOperationKey(cleanupDraft.skillKey);
+                  void onConsolidateSkillGroup(request).finally(() => {
+                    setCleanupOperationKey(undefined);
+                    setCleanupDraft(undefined);
                   });
-                  setCleanupDraft(undefined);
                 }}
               >
-                {t(cleanupCandidate.presentation.action === "add-to-library" ? "Add to Library" : "Apply cleanup")}
+                {cleanupOperationKey === cleanupDraft.skillKey ? (
+                  <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} aria-hidden="true" />
+                ) : null}
+                {t(
+                  cleanupOperationKey === cleanupDraft.skillKey
+                    ? "Applying..."
+                    : cleanupCandidate.presentation.action === "add-to-library"
+                      ? "Add to Library"
+                      : "Apply cleanup"
+                )}
               </button>
             </footer>
           </section>
@@ -2340,6 +2371,7 @@ export const SkillLibraryPanel = ({
                     const source = group.activeItems.find(
                       (item) =>
                         item.status === "external" &&
+                        item.contentMatchesLibrary !== true &&
                         item.externalOwnership?.state !== "broken-link"
                     );
                     if (source) {

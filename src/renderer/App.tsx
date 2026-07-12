@@ -2033,7 +2033,7 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.importSkillToLibrary({
+      const result = await window.agentEnv.importSkillToLibrary({
         sourcePath: skill.path,
         id: skill.skillKey,
         upstream: skill.externalOwnership?.upstream,
@@ -2047,7 +2047,9 @@ const AppContent = ({
       await refreshProfiles();
       setSkillUpdateCheckStatus({
         state: "success",
-        message: `Imported ${skill.name} to Library`
+        message: result.reused
+          ? `${skill.name} already has a matching Library copy`
+          : `Imported ${skill.name} to Library as ${result.skill.id}`
       });
       return true;
     } catch (unknownError) {
@@ -2416,9 +2418,21 @@ const AppContent = ({
       setSkillCleanupResult(result);
       await refreshProfiles();
       setSkillUpdateCheckStatus(undefined);
+      return true;
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      const operationError = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      try {
+        await refreshProfiles({ checkSkillUpdates: false });
+        setError(operationError);
+      } catch (refreshError) {
+        setError(
+          `${operationError}\nRefresh failed: ${
+            refreshError instanceof Error ? refreshError.message : String(refreshError)
+          }`
+        );
+      }
       setSkillUpdateCheckStatus(undefined);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -3260,7 +3274,7 @@ const AppContent = ({
                 onScanGitHubSkills={scanGitHubSkills}
                 onImportGitHubSkills={importGitHubSkills}
                 onManageTargetSkill={manageTargetSkill}
-                onConsolidateSkillGroup={(input) => void consolidateSkillGroup(input)}
+                onConsolidateSkillGroup={consolidateSkillGroup}
                 onAutoConsolidateSkillGroups={autoConsolidateSkillGroups}
                 onSetUpdateSource={setSkillUpdateSource}
                 onSetUpdatePolicy={(input) => void setSkillUpdatePolicy(input)}

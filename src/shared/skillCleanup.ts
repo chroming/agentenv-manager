@@ -100,6 +100,11 @@ export const buildSkillCleanupGroups = (
           item.contentMatchesLibrary !== true
       );
       const hasExternal = statuses.has("external");
+      const unresolvedExternal = activeItems.some(
+        (item) =>
+          item.status === "external" &&
+          (!item.libraryId || item.contentMatchesLibrary !== true)
+      );
       const missingTarget = activeItems.some(
         (item) => item.status !== "managed" && item.foundIn.length === 0
       );
@@ -166,7 +171,7 @@ export const buildSkillCleanupGroups = (
                       : "managed";
 
       const resolution: SkillCleanupResolution =
-        state === "ignored" || state === "managed"
+        state === "ignored" || state === "managed" || (state === "external" && !unresolvedExternal)
           ? "resolved"
           : state === "external" || state === "conflict" || missingTarget
             ? "manual"
@@ -175,7 +180,9 @@ export const buildSkillCleanupGroups = (
         resolution === "resolved"
           ? state === "ignored"
             ? "Intentionally excluded from management."
-            : "Every detected copy is managed and current."
+            : state === "external"
+              ? "Every externally managed copy has matching content in Library."
+              : "Every detected copy is managed and current."
           : resolution === "automatic"
             ? state === "stale"
               ? "Managed copies can be refreshed from Library without choosing content."
@@ -195,7 +202,10 @@ export const buildSkillCleanupGroups = (
           ? { state: "kept-shared", action: "none" }
           : { state: "ignored", action: "none" }
         : hasExternal
-          ? { state: "managed-elsewhere", action: "review-ownership" }
+          ? {
+              state: "managed-elsewhere",
+              action: unresolvedExternal ? "review-ownership" : "none"
+            }
           : sharedMigration?.state === "ready"
             ? { state: "shared-copy-replaceable", action: "review-replacement" }
             : sharedMigration?.state === "waiting"

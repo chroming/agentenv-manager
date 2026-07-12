@@ -103,6 +103,24 @@ describe("skill cleanup groups", () => {
     expect(groups.map(automaticSkillCleanupRequest)).toEqual([undefined, undefined, undefined]);
   });
 
+  it("treats an externally managed copy with matching Library content as represented", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        id: "external",
+        skillKey: "external",
+        status: "external",
+        libraryId: "external-2",
+        contentMatchesLibrary: true
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "external",
+      resolution: "resolved",
+      presentation: { state: "managed-elsewhere", action: "none" }
+    });
+  });
+
   it("auto-refreshes stale managed copies and excludes resolved or ignored groups", () => {
     const groups = buildSkillCleanupGroups([
       inventoryItem({

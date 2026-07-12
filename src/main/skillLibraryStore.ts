@@ -1004,6 +1004,10 @@ export const createSkillLibraryStore = (
             }
             externalOwnership = { ...externalOwnership, confidence, state: "healthy" };
           }
+          const contentHash = await computeContentHash(skillDir);
+          const externalLibraryId = externalOwnership
+            ? librarySkills.find((skill) => skill.contentHash === contentHash)?.id
+            : undefined;
           const status = markerId
             ? "managed"
             : ignoreRule
@@ -1013,7 +1017,7 @@ export const createSkillLibraryStore = (
                 : libraryIds.has(entry.name)
                   ? "library"
                   : "unmanaged";
-          const libraryId = markerId ?? (libraryIds.has(entry.name) ? entry.name : undefined);
+          const libraryId = markerId ?? externalLibraryId ?? (libraryIds.has(entry.name) ? entry.name : undefined);
           const key = `${status}:${libraryId ?? entry.name}:${skillDir}`;
           const existing = byKey.get(key);
           if (existing) {
@@ -1022,7 +1026,6 @@ export const createSkillLibraryStore = (
             }
             continue;
           }
-          const contentHash = await computeContentHash(skillDir);
           const skillDirStats = await lstat(skillDir);
           const skillFileStats = await lstat(join(skillDir, "SKILL.md"));
           byKey.set(key, {
@@ -1237,28 +1240,66 @@ export const createSkillLibraryStore = (
   };
 
   const restoreCleanupBackup = async (manifest: SkillCleanupBackupManifest) => {
+    const failures: string[] = [];
+    const attempt = async (label: string, operation: () => Promise<void>) => {
+      try {
+        await operation();
+      } catch (error) {
+        failures.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
     const backedUpPaths = new Set(manifest.entries.map((entry) => resolve(entry.sourcePath)));
     for (const entry of manifest.entries) {
       if (entry.sourcePath.endsWith(".agentenv-owner.json")) continue;
       const markerPath = markerPathForFile(entry.sourcePath);
       if (!backedUpPaths.has(resolve(markerPath))) {
-        await rm(markerPath, { force: true });
+        await attempt(`remove marker ${markerPath}`, () => rm(markerPath, { force: true }));
       }
     }
     for (const entry of manifest.entries) {
-      await replacePathWithCopy(entry.backupPath, entry.sourcePath, {
-        dereference: false
-      });
+      await attempt(`restore ${entry.sourcePath}`, () =>
+        replacePathWithCopy(entry.backupPath, entry.sourcePath, {
+          dereference: false
+        })
+      );
     }
     if (manifest.libraryCreated) {
-      await rm(join(await libraryDir(), manifest.libraryId), { recursive: true, force: true });
+      const createdLibraryPath = join(await libraryDir(), manifest.libraryId);
+      await attempt(`remove created Library copy ${createdLibraryPath}`, () =>
+        rm(createdLibraryPath, { recursive: true, force: true })
+      );
     }
     if (manifest.libraryRemoved && manifest.libraryBackupPath) {
       const targetLibraryDir = join(await libraryDir(), manifest.libraryId);
-      await replacePathWithCopy(manifest.libraryBackupPath, targetLibraryDir, {
-        dereference: false
-      });
+      await attempt(`restore Library copy ${targetLibraryDir}`, () =>
+        replacePathWithCopy(manifest.libraryBackupPath!, targetLibraryDir, {
+          dereference: false
+        })
+      );
     }
+    if (failures.length > 0) {
+      throw new Error(`Backup ${manifest.id} could not restore every path: ${failures.join("; ")}`);
+    }
+  };
+
+  const failAfterCleanupRollback = async (
+    manifest: SkillCleanupBackupManifest,
+    label: string,
+    operationError: unknown
+  ): Promise<never> => {
+    const operationMessage = operationError instanceof Error
+      ? operationError.message
+      : String(operationError);
+    try {
+      await restoreCleanupBackup(manifest);
+    } catch (rollbackError) {
+      throw new Error(
+        `${label} failed: ${operationMessage}. Rollback incomplete: ${
+          rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+        }`
+      );
+    }
+    throw new Error(`${label} failed and was rolled back: ${operationMessage}`);
   };
 
   const removeSkill = async (
@@ -1320,12 +1361,7 @@ export const createSkillLibraryStore = (
         operation: "remove"
       };
     } catch (error) {
-      await restoreCleanupBackup(manifest);
-      throw new Error(
-        `Removing ${safeId} failed and was rolled back: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      return failAfterCleanupRollback(manifest, `Removing ${safeId}`, error);
     }
   };
 
@@ -1457,8 +1493,11 @@ export const createSkillLibraryStore = (
     try {
       await deployLibrarySkill({ ...input, profileId: "library-management" });
     } catch (error) {
-      await restoreCleanupBackup(manifest);
-      throw error;
+      return failAfterCleanupRollback(
+        manifest,
+        `Managing ${input.targetName} for ${input.targetPaths.targetId}`,
+        error
+      );
     }
   };
 
@@ -1578,12 +1617,7 @@ export const createSkillLibraryStore = (
         libraryCreated
       };
     } catch (error) {
-      await restoreCleanupBackup(manifest);
-      throw new Error(
-        `Skill cleanup ${safeSkillKey} failed and was rolled back: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      return failAfterCleanupRollback(manifest, `Skill cleanup ${safeSkillKey}`, error);
     }
   };
 
@@ -1687,12 +1721,7 @@ export const createSkillLibraryStore = (
         libraryCreated
       };
     } catch (error) {
-      await restoreCleanupBackup(manifest);
-      throw new Error(
-        `Shared skill cleanup ${safeSkillKey} failed and was rolled back: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      return failAfterCleanupRollback(manifest, `Shared skill cleanup ${safeSkillKey}`, error);
     }
   };
 

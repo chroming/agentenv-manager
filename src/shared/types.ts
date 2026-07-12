@@ -141,6 +141,7 @@ export interface SkillImportResult {
   skill: SkillLibraryEntry;
   managedLocations: string[];
   backupId?: string;
+  reused?: boolean;
 }
 
 export interface GitHubSkillImportInput {
