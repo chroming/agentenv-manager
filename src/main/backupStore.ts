@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Dirent } from "node:fs";
 import {
   chmod,
   cp,
@@ -11,7 +12,7 @@ import {
   rm,
   symlink,
 } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type {
   BackupEntry,
   BackupManifest,
@@ -51,6 +52,9 @@ const encodePath = (sourcePath: string): string =>
 const sha256 = (content: Buffer): string =>
   createHash("sha256").update(content).digest("hex");
 
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
 const ensurePrivateDir = async (path: string) => {
   await mkdir(path, { recursive: true, mode: 0o700 });
   await chmod(path, 0o700);
@@ -73,6 +77,7 @@ export const createBackupStore = (
     if (manifest.targetId) SafeIdSchema.parse(manifest.targetId);
     if (manifest.profileId) SafeIdSchema.parse(manifest.profileId);
     for (const targetId of manifest.targetIds ?? []) SafeIdSchema.parse(targetId);
+    const normalizedEntries: BackupEntry[] = [];
     for (const entry of manifest.entries) {
       if (!entry || typeof entry.sourcePath !== "string" || !isAbsolute(entry.sourcePath)) {
         throw new Error(`Invalid AgentEnv backup source path: ${safeId}`);
@@ -81,17 +86,25 @@ export const createBackupStore = (
         if (entry.backupPath !== undefined) {
           throw new Error(`Invalid missing-file backup entry: ${safeId}`);
         }
+        normalizedEntries.push(entry);
         continue;
       }
-      const expectedBackupPath = resolve(backupDir, "files", encodePath(entry.sourcePath));
+      const encodedSourcePath = encodePath(entry.sourcePath);
+      const expectedBackupPath = resolve(backupDir, "files", encodedSourcePath);
+      const recordedBackupPath =
+        typeof entry.backupPath === "string" && isAbsolute(entry.backupPath)
+          ? resolve(entry.backupPath)
+          : undefined;
       if (
         (entry.kind !== "file" && entry.kind !== "directory" && entry.kind !== "symlink") ||
-        !entry.backupPath ||
-        resolve(entry.backupPath) !== expectedBackupPath
+        !recordedBackupPath ||
+        basename(recordedBackupPath) !== encodedSourcePath ||
+        basename(dirname(recordedBackupPath)) !== "files" ||
+        basename(dirname(dirname(recordedBackupPath))) !== safeId
       ) {
         throw new Error(`Invalid AgentEnv backup file mapping: ${safeId}`);
       }
-      const backupStats = await lstat(entry.backupPath);
+      const backupStats = await lstat(expectedBackupPath);
       if (
         (entry.kind === "file" && !backupStats.isFile()) ||
         (entry.kind === "directory" && !backupStats.isDirectory()) ||
@@ -99,8 +112,9 @@ export const createBackupStore = (
       ) {
         throw new Error(`AgentEnv backup content does not match its manifest: ${safeId}`);
       }
+      normalizedEntries.push({ ...entry, backupPath: expectedBackupPath });
     }
-    return manifest;
+    return { ...manifest, entries: normalizedEntries };
   };
 
   const createBackup = async (
@@ -186,9 +200,9 @@ export const createBackupStore = (
   };
 
   const listBackups = async (): Promise<BackupSummary[]> => {
-    let entries: string[];
+    let entries: Dirent[];
     try {
-      entries = await readdir(paths.backupsDir);
+      entries = await readdir(paths.backupsDir, { withFileTypes: true });
     } catch (error) {
       if (isMissingFileError(error)) {
         return [];
@@ -198,14 +212,20 @@ export const createBackupStore = (
 
     const manifests = (
       await Promise.all(
-        entries.map(async (entry) => {
+        entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
           try {
-            return await readBackup(entry);
+            if (!SafeIdSchema.safeParse(entry.name).success) {
+              return undefined;
+            }
+            return await readBackup(entry.name);
           } catch (error) {
             if (isMissingFileError(error)) {
               return undefined;
             }
-            throw error;
+            console.warn(
+              `[AgentEnv] Ignoring invalid backup ${entry.name}: ${errorMessage(error)}`
+            );
+            return undefined;
           }
         })
       )

@@ -361,12 +361,46 @@ const writeMcpLibrary = async (appDataRoot: string, count = 1) => {
   ]);
 };
 
+const writeMigratedBackupFixtures = async (appDataRoot: string) => {
+  const backupId = "2026-07-09T04-35-47-638Z";
+  const sourcePath = "/Users/previous-user/.config/opencode/AGENTS.md";
+  const encodedSourcePath = Buffer.from(sourcePath).toString("base64url");
+  const backupDir = join(appDataRoot, "backups", backupId);
+  const currentBackupPath = join(backupDir, "files", encodedSourcePath);
+  await mkdir(join(backupDir, "files"), { recursive: true });
+  await writeFile(currentBackupPath, "# Previous machine backup\n", "utf8");
+  await writeJson(join(backupDir, "manifest.json"), {
+    id: backupId,
+    createdAt: "2026-07-09T04:35:47.638Z",
+    operation: "apply",
+    targetId: "opencode",
+    entries: [
+      {
+        sourcePath,
+        backupPath: join(
+          "/Users/previous-user/.config/agentenv-manager/backups",
+          backupId,
+          "files",
+          encodedSourcePath
+        ),
+        missing: false,
+        kind: "file"
+      }
+    ]
+  });
+
+  const malformedId = "2026-07-09T04-36-00-000Z";
+  await mkdir(join(appDataRoot, "backups", malformedId), { recursive: true });
+  await writeFile(join(appDataRoot, "backups", malformedId, "manifest.json"), "not json\n");
+};
+
 const launchApp = async (
   options: {
     openCodeAlphaLibrarySkillCount?: number;
     mcpLibraryCount?: number;
     backgroundStartupDelayMs?: number;
     testCloseGuard?: boolean;
+    migratedBackupFixtures?: boolean;
   } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
@@ -414,6 +448,9 @@ const launchApp = async (
   await writeGitHubFixtureSkill(githubFixtureRoot, "v1");
   await writeUnmanagedTargetSkill(opencodeDir);
   await writeMcpLibrary(appDataRoot, options.mcpLibraryCount);
+  if (options.migratedBackupFixtures) {
+    await writeMigratedBackupFixtures(appDataRoot);
+  }
 
   app = await electron.launch({
     executablePath: electronPath as unknown as string,
@@ -533,6 +570,18 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("starts when migrated backups contain former-machine paths or malformed siblings", async () => {
+    const { page } = await launchApp({ migratedBackupFixtures: true });
+
+    await page
+      .getByRole("region", { name: "Skill library", exact: true })
+      .waitFor({ state: "visible" });
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .waitFor({ state: "visible" });
+    expect(await page.getByText("Action failed", { exact: true }).count()).toBe(0);
+  }, 30_000);
+
   it("keeps every workspace usable while startup enrichment is still running", async () => {
     const { app: electronApp, page } = await launchApp({ backgroundStartupDelayMs: 10_000 });
 
