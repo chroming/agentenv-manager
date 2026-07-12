@@ -1249,6 +1249,16 @@ describe("Electron UI profile switching e2e", () => {
       state: "visible",
       timeout: 10_000
     });
+    const newProfileRow = page.getByRole("group", { name: "Profile Docs Writing" });
+    const newProfileGeometry = await newProfileRow.evaluate((row) => {
+      const icon = row.querySelector<HTMLElement>(".profile-row__icon")!.getBoundingClientRect();
+      const content = row.querySelector<HTMLElement>(".profile-row__content")!.getBoundingClientRect();
+      return {
+        iconSize: Math.round(icon.width),
+        contentGap: Math.round(content.left - icon.right)
+      };
+    });
+    expect(newProfileGeometry).toEqual({ iconSize: 28, contentGap: 6 });
     expect(await findProfileByName(appDataRoot, "Docs Writing")).toMatchObject({
       name: "Docs Writing",
       description: "Writing workspace"
@@ -2956,11 +2966,11 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(true);
     await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(sharedContent);
     await expect(fileExists(join(sharedSkillDir, ".agentenv-owner.json"))).resolves.toBe(false);
-    await expect.poll(() => cleanupGroup.textContent()).toContain("In use");
-    await expect.poll(() => cleanupGroup.textContent()).toContain("2 Targets still use this copy");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("2 Targets still load this shared copy");
     await resizeAppWindow(page, 920, 620);
     const sharedStateGeometry = await cleanupGroup.evaluate((row) => {
-      const heading = row.querySelector<HTMLElement>(".cleanup-group-heading")!.getBoundingClientRect();
+      const rowBox = row.getBoundingClientRect();
       const name = row.querySelector<HTMLElement>(".cleanup-group-name")!.getBoundingClientRect();
       const stateElement = row.querySelector<HTMLElement>(".cleanup-group-state")!;
       const state = stateElement.getBoundingClientRect();
@@ -2971,8 +2981,8 @@ describe("Electron UI profile switching e2e", () => {
         name.bottom > state.top;
       return {
         contained:
-          name.left >= heading.left - 1 &&
-          state.right <= heading.right + 1,
+          name.left >= rowBox.left - 1 &&
+          state.right <= rowBox.right + 1,
         overlaps,
         stateFits: stateElement.scrollWidth <= stateElement.clientWidth + 1
       };
@@ -2980,7 +2990,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(sharedStateGeometry).toEqual({ contained: true, overlaps: false, stateFits: true });
     await cleanupGroup.locator(".cleanup-group-state").hover();
     const sharedStateTooltip = page.getByRole("tooltip").filter({
-      hasText: "Shared copy still in use"
+      hasText: "Shared copy still active"
     });
     await sharedStateTooltip.waitFor({ state: "visible" });
     await expectInViewport(page, sharedStateTooltip);
@@ -2988,7 +2998,7 @@ describe("Electron UI profile switching e2e", () => {
       await Promise.all([
         sharedStateTooltip.boundingBox(),
         cleanupGroup
-          .getByRole("button", { name: "View Profiles shared-migration-reviewer" })
+          .getByRole("button", { name: "Manage shared Skill shared-migration-reviewer" })
           .boundingBox()
       ]).then(([tooltip, action]) =>
         Boolean(
@@ -3002,8 +3012,18 @@ describe("Electron UI profile switching e2e", () => {
       )
     ).toBe(false);
     await cleanupGroup
-      .getByRole("button", { name: "View Profiles shared-migration-reviewer" })
+      .getByRole("button", { name: "Manage shared Skill shared-migration-reviewer" })
       .click();
+    const sharedTargetReview = page.getByRole("dialog", { name: "Review shared Skill Targets" });
+    await sharedTargetReview.waitFor({ state: "visible" });
+    await expect.poll(() => sharedTargetReview.textContent()).toContain(
+      "independently of Profile references"
+    );
+    await expect.poll(() => sharedTargetReview.textContent()).toContain("OpenCode");
+    await expect.poll(() => sharedTargetReview.textContent()).toContain("Codex");
+    await expect.poll(() => sharedTargetReview.textContent()).toContain("Replace shared");
+    await expect(sharedTargetReview.getByRole("button", { name: "Keep shared" }).count()).resolves.toBe(1);
+    await sharedTargetReview.getByRole("button", { name: "Configure Profiles" }).click();
     await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local" }).click();
@@ -3037,7 +3057,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "More cleanup actions for shared-migration-reviewer" })
       .click();
     await page.getByRole("menuitem", { name: "Review again" }).click();
-    await expect.poll(() => cleanupGroup.textContent()).toContain("In use");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared");
   }, 30_000);
 
   it("atomically migrates and restores a shared Skill after every consumer is prepared", async () => {
@@ -3069,6 +3089,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => fileExists(join(appDataRoot, "skills-library", skillId, "SKILL.md")))
       .toBe(true);
+    await expect.poll(() => fileExists(join(sharedSkillDir, "SKILL.md"))).toBe(true);
     await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(sharedContent);
     await expect(fileExists(join(sharedSkillDir, ".agentenv-owner.json"))).resolves.toBe(false);
     await expect.poll(() => fileExists(openCodeDuplicate), { timeout: 5_000 }).toBe(false);
@@ -3110,13 +3131,21 @@ describe("Electron UI profile switching e2e", () => {
         const rowBox = row.getBoundingClientRect();
         const actionGroup = row.querySelector<HTMLElement>(".cleanup-group-actions")!;
         const actions = actionGroup.getBoundingClientRect();
+        const buttonWidths = Array.from(actionGroup.querySelectorAll<HTMLElement>("button"))
+          .map((button) => ({
+            text: button.textContent?.trim() ?? "",
+            client: button.clientWidth,
+            scroll: button.scrollWidth
+          }));
         return {
           contained: actions.right <= rowBox.right + 1 && row.scrollWidth <= row.clientWidth + 1,
-          buttonsFit: Array.from(actionGroup.querySelectorAll<HTMLElement>("button"))
-            .every((button) => button.scrollWidth <= button.clientWidth + 1)
+          buttonWidths
         };
       });
-      expect(geometry).toEqual({ contained: true, buttonsFit: true });
+      expect(geometry.contained).toBe(true);
+      expect(
+        geometry.buttonWidths.filter((button) => button.scroll > button.client + 1)
+      ).toEqual([]);
     }
     await cleanupGroup
       .getByRole("button", { name: `Review replacement ${skillId}` })
@@ -3204,7 +3233,6 @@ describe("Electron UI profile switching e2e", () => {
         const rows = Array.from(drawer.querySelectorAll<HTMLElement>(".cleanup-group-row")).map((row) => {
           const rowBox = row.getBoundingClientRect();
           const main = row.querySelector<HTMLElement>(".resource-row__main")!.getBoundingClientRect();
-          const rowHeading = row.querySelector<HTMLElement>(".cleanup-group-heading")!.getBoundingClientRect();
           const name = row.querySelector<HTMLElement>(".cleanup-group-name")!.getBoundingClientRect();
           const stateElement = row.querySelector<HTMLElement>(".cleanup-group-state")!;
           const state = stateElement.getBoundingClientRect();
@@ -3217,11 +3245,13 @@ describe("Electron UI profile switching e2e", () => {
             name.bottom > state.top;
           return {
             contained:
-              rowHeading.left >= rowBox.left - 1 &&
-              state.right <= rowHeading.right + 1 &&
+              name.left >= rowBox.left - 1 &&
+              state.right <= rowBox.right + 1 &&
               actions.right <= rowBox.right + 1 &&
-              actions.left >= main.right - 1 &&
+              state.left >= main.right - 1 &&
+              actions.left >= state.right - 1 &&
               !headingItemsOverlap,
+            stateLeft: Math.round(state.left),
             stateFits: stateElement.scrollWidth <= stateElement.clientWidth + 1,
             textFits: Array.from(row.querySelectorAll<HTMLElement>(".resource-row__main > *")).every(
               (item) => item.clientWidth <= main.width + 1
@@ -3247,11 +3277,12 @@ describe("Electron UI profile switching e2e", () => {
           (row) => row.contained && row.stateFits && row.textFits && row.actionsFit
         )
       ).toBe(true);
+      expect(new Set(geometry.rows.map((row) => row.stateLeft)).size).toBe(1);
       expect(new Set(geometry.actionWidths).size).toBeLessThanOrEqual(1);
     };
     await assertCleanupLayout(false);
     await resizeAppWindow(page, 920, 620);
-    await assertCleanupLayout(true);
+    await assertCleanupLayout(false);
 
     await duplicateGroup
       .getByRole("button", { name: "Add to Library auto-duplicate-reviewer" })
@@ -3275,8 +3306,20 @@ describe("Electron UI profile switching e2e", () => {
         .getByRole("button", { name: "Add to Library auto-duplicate-reviewer" })
         .count()
     ).toBe(0);
+    const resolvedAlignment = await Promise.all([duplicateGroup, conflictGroup].map((row) =>
+      row.evaluate((element) => {
+        const state = element.querySelector<HTMLElement>(".cleanup-group-state")!.getBoundingClientRect();
+        const actions = element.querySelector<HTMLElement>(".cleanup-group-actions")!.getBoundingClientRect();
+        return {
+          stateLeft: Math.round(state.left),
+          actionsLeft: Math.round(actions.left),
+          actionsRight: Math.round(actions.right)
+        };
+      })
+    ));
+    expect(resolvedAlignment[0]).toEqual(resolvedAlignment[1]);
 
-    await page.getByRole("button", { name: /Manage \d+ ready skills/ }).click();
+    await page.getByRole("button", { name: /Auto-manage \d+ ready skills/ }).click();
     const bulkCleanupDialog = page.getByRole("dialog", { name: "Manage ready copies" });
     await expect.poll(() => bulkCleanupDialog.textContent()).toContain("Auto Local Reviewer");
     await expectInViewport(page, bulkCleanupDialog);
@@ -3300,7 +3343,7 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe(false);
     await expect.poll(() => conflictGroup.textContent()).toContain("Conflict");
     await expect
-      .poll(() => page.getByRole("button", { name: /Manage \d+ ready skills/ }).count())
+      .poll(() => page.getByRole("button", { name: /Auto-manage \d+ ready skills/ }).count())
       .toBe(0);
   }, 30_000);
 

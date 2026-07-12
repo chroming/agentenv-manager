@@ -647,6 +647,7 @@ describe("SkillLibraryPanel", () => {
     const changedManagedGroup = screen.getByRole("group", {
       name: "Cleanup group copied-local"
     });
+    expect(changedManagedGroup).toHaveTextContent("Library / copied-local · 1 managed installs");
     fireEvent.click(
       within(changedManagedGroup).getByRole("button", { name: "Review drift copied-local" })
     );
@@ -668,8 +669,9 @@ describe("SkillLibraryPanel", () => {
       })
     );
     const takeOverAllButton = within(discoveries).getByRole("button", {
-      name: "Manage 3 ready skills"
+      name: "Auto-manage 3 ready skills"
     });
+    expect(takeOverAllButton).toHaveTextContent("Auto-manage");
     fireEvent.click(takeOverAllButton);
     const bulkCleanupDialog = screen.getByRole("dialog", { name: "Manage ready copies" });
     expect(bulkCleanupDialog).toHaveTextContent("Copied Local");

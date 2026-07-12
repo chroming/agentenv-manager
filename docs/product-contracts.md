@@ -492,13 +492,15 @@ The surface owns only filesystem-copy normalization into Library. It does not ed
 
 User-facing state and action contract:
 
-- Row status badges use a compact, non-truncating vocabulary: `Managed`, `Unmanaged`, `Duplicate`, `Conflict`, `Changed`, `External`, `In use`, `Ready`, `Kept`, and `Ignored`. The selectable hover/focus detail carries the complete explanation; a badge MUST NOT clip or ellipsize its visible label.
+- Row status badges use a compact, non-truncating vocabulary: `Managed`, `Unmanaged`, `Duplicate`, `Conflict`, `Changed`, `External`, `Shared`, `Ready`, `Kept`, and `Ignored`. The selectable hover/focus detail carries the complete explanation; a badge MUST NOT clip or ellipsize its visible label.
+- Cleanup rows reserve stable identity, status, and action columns. Every status badge starts at the same left-aligned position regardless of Skill-name length or whether the row has a current action; the action column remains reserved when only the overflow command is available.
+- Library is the canonical Skill source; a Cleanup row marked `Managed` represents one or more physical Target installations derived from that Library entry, not another Library record. Library-bound rows expose the neutral relationship `Library / <id>` and managed-install count without duplicating Library update or deletion commands inside Cleanup.
 - A Skill absent from Library is `Unmanaged`, `Duplicate`, or `Conflict`; its current action is always `Add to Library`.
 - Version selection is a conditional field inside `Add to Library`, never a separate `Choose version` action. It appears only when detected contents differ.
 - A Skill already in Library uses `Unmanaged` / `Manage copies`, `Conflict` / `Review`, or `Changed` / `Review`.
 - External ownership uses `External` / `Review`. Internal states such as `Auto-ready`, `Take over`, and `Resolve conflict` MUST NOT be presented as user actions.
 - `Add to Library`, `Manage copies`, and every review action open a preview dialog before mutation. Row actions use lightweight styling; filled emphasis is reserved for the dialog commit and an intentional bulk command.
-- `Manage ready copies` opens a bulk confirmation listing every eligible Skill and the independent-backup behavior before it starts. A failure in one Skill does not roll back completed independent Skills, and the result reports both completed and remaining groups.
+- `Auto-manage` is a stable Cleanup command rather than a conditionally disappearing feature. It is enabled only when at least one group has one unambiguous canonical version, otherwise it remains visible and disabled with an unavailable explanation. It opens `Manage ready copies`, a bulk confirmation listing every eligible Skill and the independent-backup behavior before it starts. A failure in one Skill does not roll back completed independent Skills, and the result reports both completed and remaining groups.
 - The main process MUST rescan and compare the reviewed content hashes immediately before mutation. Stale previews fail without modifying Library or local copies.
 - Every mutating cleanup backs up all affected locations first. A failure after mutation begins restores Library and every affected location.
 - After successful cleanup, selected Target-specific copies rescan as current and `Managed`; the group MUST NOT retain a duplicate or pending action.
@@ -509,9 +511,11 @@ Shared compatibility migration contract:
 
 - A shared Skill not yet in Library follows the same `Add to Library` intent as every other local Skill. If multiple versions exist, the dialog adds a version choice.
 - Adding a shared Skill to Library is one transaction: back up all copies, create the Library canonical copy, keep exactly one shared compatibility copy active, and remove redundant Target-specific copies. The shared copy MUST NOT receive a Target ownership marker.
-- Once Library is ready, Cleanup shows the compact `In use` badge, a one-line explanation, and one neutral `View Profiles` handoff. It MUST NOT show per-Target `Needs Apply` chips or pretend Profile Apply is a Cleanup step.
+- Once Library is ready, Cleanup shows the compact `Shared` badge and states that consumer Targets still load the compatibility copy independently of Profile references. `Manage shared Skill` presents the two valid outcomes in one workflow: configure and Apply each affected Target's intended Profile so the shared copy can become Target-managed installs (or explicit omissions), or mark the shared copy `Kept`. A Profile that omits the Skill is a valid explicit decision to remove it for that Target. Cleanup MUST NOT show per-Target `Needs Apply` chips or pretend Profile Apply is a Cleanup step.
+- An installed Target that still reads the compatibility location remains a consumer even when AgentEnv does not manage its Profile. AgentEnv MUST preserve the shared copy and block replacement until that Target records an explicit applied decision. `Keep shared` is the non-takeover outcome; skills-only Target ownership is not currently supported and MUST NOT be implied by the UI.
+- After every affected Target has an explicit current decision, the row shows `Ready` / `Replace shared`; the confirmation remains the mutation boundary.
 - Profiles independently save and apply each Target's install-or-omit decision. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
-- When every installed consumer has a current preparation, Cleanup shows `Ready` / `Review`.
+- When every installed consumer has a current preparation, Cleanup shows `Ready` / `Replace shared`.
 - `Replace shared copy` requires confirmation that lists each prepared Target's final `Install as <name>` or `Do not install` decision. It executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
 - Cleanup history exposes the completed shared migration as one restorable operation. Restore returns shared paths, Target paths, and preparation state to their pre-migration state.
 - `Keep shared` records a path-scoped decision and resolves the group without changing files. `Review again` removes only that decision.
@@ -867,7 +871,7 @@ Last verified: 2026-07-16 against the current `main` tree at the time of this sn
 
 - `395` automated tests passed across `50` test files; the `77`-test Electron UI suite and `85` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
-- All `47` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including available-update rows, disabled, empty, Chinese locale, source-specific Import, and focused update-setting states.
+- All `48` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, and focused update-setting states.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.

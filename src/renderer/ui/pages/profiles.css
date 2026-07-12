@@ -248,7 +248,7 @@
 /* Profiles owns one control and density contract across its supported window sizes. */
 .app-shell--profiles {
   --profile-control-height: 40px;
-  --profile-icon-slot: 30px;
+  --profile-icon-slot: 28px;
 }
 
 .app-shell--profiles .editor-panel {
@@ -368,7 +368,7 @@
   border: 1px solid transparent;
   border-bottom-color: var(--border);
   border-radius: 0;
-  gap: 9px;
+  gap: 6px;
   grid-template-columns: var(--profile-icon-slot) minmax(0, 1fr);
   min-height: 82px;
   padding: 8px 9px;
@@ -1032,7 +1032,7 @@
   }
 
   .profile-row {
-    gap: 8px;
+    gap: 6px;
     min-height: 88px;
     padding: 8px;
   }

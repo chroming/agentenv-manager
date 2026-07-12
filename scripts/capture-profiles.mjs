@@ -510,10 +510,26 @@ try {
     name: "Cleanup group cross-agent-review-workflow-with-a-long-name"
   });
   await cleanupGroup.waitFor({ state: "visible", timeout: 5_000 });
+  const unavailableAutoManage = page.getByRole("button", { name: "Auto-manage unavailable" });
+  await unavailableAutoManage.waitFor({ state: "visible", timeout: 5_000 });
+  if (!(await unavailableAutoManage.isDisabled())) {
+    throw new Error("Auto-manage must stay visible and disabled when no safe cleanup candidates exist");
+  }
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "skills-cleanup-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-cleanup-920x620.png"));
+  const sharedCleanupGroup = page.getByRole("group", {
+    name: "Cleanup group shared-compatibility-reviewer"
+  });
+  await sharedCleanupGroup
+    .getByRole("button", { name: "Manage shared Skill shared-compatibility-reviewer" })
+    .click();
+  const sharedTargetReview = page.getByRole("dialog", { name: "Review shared Skill Targets" });
+  await sharedTargetReview.waitFor({ state: "visible", timeout: 5_000 });
+  await capturePage(page, join(outputDir, "skills-cleanup-shared-review-920x620.png"));
+  await page.keyboard.press("Escape");
+  await sharedTargetReview.waitFor({ state: "hidden", timeout: 5_000 });
   const cleanupSummary = cleanupGroup.getByLabel(
     "Full cleanup summary cross-agent-review-workflow-with-a-long-name"
   );
