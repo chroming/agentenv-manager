@@ -1031,7 +1031,7 @@
   border-bottom: 1px solid #edf1f6;
   display: grid;
   gap: 10px;
-  grid-template-columns: 34px minmax(120px, 1fr) minmax(90px, auto) auto 34px 34px;
+  grid-template-columns: 34px minmax(120px, 1fr) minmax(90px, auto) auto 42px 34px;
   min-height: 58px;
   min-width: 0;
   padding: 6px 9px 6px 10px;
@@ -1118,40 +1118,15 @@
 }
 
 .profile-skill-switch {
-  align-items: center;
-  background: #d9e0ea;
-  border: 0;
-  border-radius: 999px;
-  display: inline-flex;
-  height: 22px;
-  padding: 2px;
-  transition: background-color var(--motion-fast);
-  width: 36px;
   grid-column: 5;
   justify-self: center;
+  min-height: 32px;
+  padding-inline: 2px;
 }
 
 .profile-skill-row:not(.profile-skill-row--owned) > .icon-action {
   grid-column: 6;
   justify-self: center;
-}
-
-.profile-skill-switch span {
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(26, 38, 59, 0.22);
-  height: 18px;
-  transform: translateX(0);
-  transition: transform var(--motion-fast);
-  width: 18px;
-}
-
-.profile-skill-switch.is-on {
-  background: var(--accent);
-}
-
-.profile-skill-switch.is-on span {
-  transform: translateX(14px);
 }
 
 .profile-skill-empty {
@@ -1199,8 +1174,8 @@
 
 @media (max-width: 980px) {
   .profile-skill-row {
-    gap: 8px;
-    grid-template-columns: 32px minmax(100px, 1fr) minmax(78px, auto) auto 40px 40px;
+    gap: 10px;
+    grid-template-columns: 32px minmax(100px, 1fr) minmax(78px, auto) auto 42px 34px;
     padding-inline: 8px;
   }
 

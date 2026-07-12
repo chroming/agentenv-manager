@@ -55,6 +55,7 @@ describe("SkillLibraryPanel", () => {
     const onSetUpdateSource = vi.fn();
     const onImportExternal = vi.fn().mockResolvedValue(true);
     const onSetUpdatePolicy = vi.fn();
+    const onSetAvailability = vi.fn();
     const onSetIcon = vi.fn();
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn();
@@ -309,6 +310,7 @@ describe("SkillLibraryPanel", () => {
         onOpenSource={onOpenSource}
         onSetUpdateSource={onSetUpdateSource}
         onSetUpdatePolicy={onSetUpdatePolicy}
+        onSetAvailability={onSetAvailability}
         onSetIcon={onSetIcon}
         onManageTargetSkill={onManageTargetSkill}
         onConsolidateSkillGroup={onConsolidateSkillGroup}
@@ -437,6 +439,13 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Preview update/ }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledTimes(2);
+    fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Disable globally/ }));
+    const disableDialog = screen.getByRole("dialog", { name: "Disable library skill" });
+    expect(disableDialog).toHaveTextContent("1 Profile");
+    expect(disableDialog).toHaveTextContent("removed the next time that Profile is applied");
+    fireEvent.click(within(disableDialog).getByRole("button", { name: "Disable globally" }));
+    expect(onSetAvailability).toHaveBeenCalledWith({ id: "shared-reviewer", enabled: false });
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Remove from library/ }));
     const deleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });

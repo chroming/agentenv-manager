@@ -38,6 +38,7 @@ export interface AgentEnvApi {
   checkSkillLibraryUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   setSkillUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
+  setSkillAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
   setSkillIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
   updateLibrarySkill(id: string): Promise<SkillLibraryEntry>;
@@ -88,6 +89,7 @@ export interface SkillLibraryEntry {
   path: string;
   sourceType: SkillSourceType;
   source?: string;
+  globallyEnabled?: boolean;
   updatePolicy: SkillUpdatePolicy;
   remoteRef?: string;
   remoteRevision?: string;
@@ -194,6 +196,11 @@ export interface SkillUpdateSourceInput {
 export interface SkillUpdatePolicyInput {
   id: string;
   policy: SkillUpdatePolicy;
+}
+
+export interface SkillAvailabilityInput {
+  id: string;
+  enabled: boolean;
 }
 
 export interface SkillIconInput {

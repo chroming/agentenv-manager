@@ -54,6 +54,7 @@ import type {
   McpLibraryEntry,
   SaveMcpServerInput,
   SkillInventoryEntry,
+  SkillAvailabilityInput,
   SkillIconInput,
   SkillCleanupRequest,
   SkillCleanupBackupSummary,
@@ -94,6 +95,7 @@ import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
 import { SkillsEditor } from "./components/SkillsEditor";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
+import { Switch } from "./components/ui";
 import {
   deriveApplyActionLabel,
   deriveProfileReadiness
@@ -782,7 +784,11 @@ const AppContent = ({
         (targetItem) => targetItem.id === profile.manifest.targetId
       );
       if (profileTarget) {
-        nextProfileResourceCounts[profile.id] = summarizeProfile(profile, profileTarget);
+        nextProfileResourceCounts[profile.id] = summarizeProfile(
+          profile,
+          profileTarget,
+          skillItems
+        );
       }
       for (const skillRef of profile.assetPolicy.skillRefs ?? []) {
         usage[skillRef.libraryId] = (usage[skillRef.libraryId] ?? []).concat(
@@ -1537,7 +1543,7 @@ const AppContent = ({
     .map((row) => row.detail ?? `${row.label} is invalid`);
   const resourceSummary =
     draftProfile && profileTarget
-      ? summarizeProfile(draftProfile, profileTarget)
+      ? summarizeProfile(draftProfile, profileTarget, librarySkills)
       : undefined;
   const selectedTargetProfileHash =
     selectedTarget && draftProfile
@@ -2315,6 +2321,32 @@ const AppContent = ({
     }
   };
 
+  const setSkillAvailability = async (input: SkillAvailabilityInput) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await window.agentEnv.setSkillAvailability(input);
+      setSelectedSkillUpdatePlan(undefined);
+      await refreshProfiles({ checkSkillUpdates: false });
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: input.enabled
+          ? t("{{id}} is available to Profiles", { id: input.id })
+          : t("{{id}} is hidden from Profile selection", { id: input.id })
+      });
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      setSkillUpdateCheckStatus({
+        state: "error",
+        message: t(input.enabled ? "Enable {{id}} failed" : "Disable {{id}} failed", {
+          id: input.id
+        })
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const setSkillIcon = async (input: SkillIconInput) => {
     setBusy(true);
     setError(undefined);
@@ -2961,6 +2993,7 @@ const AppContent = ({
                 onAutoConsolidateSkillGroups={autoConsolidateSkillGroups}
                 onSetUpdateSource={setSkillUpdateSource}
                 onSetUpdatePolicy={(input) => void setSkillUpdatePolicy(input)}
+                onSetAvailability={(input) => void setSkillAvailability(input)}
                 onSetIcon={(input) => void setSkillIcon(input)}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
                 onCloseUpdatePreview={() => setSelectedSkillUpdatePlan(undefined)}
@@ -3819,12 +3852,9 @@ const AppContent = ({
                 </label>
                 <div className="settings-toggle-field">
                   <span>{t("Auto-check")}</span>
-                  <button
-                    className={`settings-switch${skillSettings.skillAutoCheckEnabled ? " is-on" : ""}`}
-                    type="button"
-                    role="switch"
-                    aria-checked={skillSettings.skillAutoCheckEnabled}
-                    aria-label={t("Skill auto update check")}
+                  <Switch
+                    checked={skillSettings.skillAutoCheckEnabled}
+                    label={t("Skill auto update check")}
                     disabled={busy}
                     onClick={() =>
                       updateSkillSettings({
@@ -3832,11 +3862,8 @@ const AppContent = ({
                       })
                     }
                   >
-                    <span className="settings-switch__track" aria-hidden="true">
-                      <span />
-                    </span>
                     <strong>{skillSettings.skillAutoCheckEnabled ? t("Enabled") : t("Disabled")}</strong>
-                  </button>
+                  </Switch>
                   <small className="settings-field-note">
                     {t("Checks only skills that have per-skill update checks enabled.")}
                   </small>

@@ -28,7 +28,11 @@ export const collectLibraryResourceVersions = (
     skills: Object.fromEntries(
       [...new Set(
         profile.assetPolicy.skillRefs
-          .filter((reference) => reference.enabled !== false)
+          .filter(
+            (reference) =>
+              reference.enabled !== false &&
+              skillById.get(reference.libraryId)?.globallyEnabled !== false
+          )
           .map((reference) => reference.libraryId)
       )]
         .sort()

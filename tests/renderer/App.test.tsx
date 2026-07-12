@@ -358,6 +358,17 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       contentHash: "hash",
       updatedAt: "2026-07-02T00:00:00.000Z"
     })),
+    setSkillAvailability: vi.fn().mockImplementation(async (input) => ({
+      id: input.id,
+      name: input.id,
+      description: "",
+      path: "/tmp/skill",
+      sourceType: "local",
+      globallyEnabled: input.enabled,
+      updatePolicy: "untracked",
+      contentHash: "hash",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    })),
     setSkillIcon: vi.fn().mockImplementation(async (input) => ({
       id: input.id,
       name: input.id,
@@ -1086,7 +1097,7 @@ describe("App", () => {
     expect(screen.queryByLabelText("OpenCode-only opencode.jsonc")).not.toBeInTheDocument();
   });
 
-  it("focuses the active profile and manages its enabled library skills", async () => {
+  it("focuses the active profile and edits its enabled library skills through Save", async () => {
     const activeProfile: ProfileDetail = {
       ...richProfile,
       assetPolicy: {
@@ -1154,8 +1165,8 @@ describe("App", () => {
     fireEvent.click(within(skillsRegion).getByRole("switch", { name: "Disable Testing" }));
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    expect(within(skillsRegion).getByRole("switch", { name: "Enable Testing" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
     await waitFor(() =>
       expect(api.saveProfile).toHaveBeenCalledWith(
         expect.objectContaining({

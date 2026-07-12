@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { RefreshCw } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Badge, Button, ControlGroup, IconButton, ModalFrame } from "../../src/renderer/components/ui";
+import { Badge, Button, ControlGroup, IconButton, ModalFrame, Switch } from "../../src/renderer/components/ui";
 
 afterEach(cleanup);
 
@@ -26,6 +26,23 @@ describe("renderer UI primitives", () => {
   it("exposes badge tone as a visual class while preserving its content", () => {
     render(<Badge tone="success">Applied</Badge>);
     expect(screen.getByText("Applied")).toHaveClass("ui-badge--success");
+  });
+
+  it("exposes a stable native switch contract", () => {
+    const onClick = vi.fn();
+    const { rerender } = render(
+      <Switch checked label="Enable reviewer" onClick={onClick} />
+    );
+
+    const control = screen.getByRole("switch", { name: "Enable reviewer" });
+    expect(control).toHaveAttribute("aria-checked", "true");
+    expect(control).toHaveClass("is-on");
+    fireEvent.click(control);
+    expect(onClick).toHaveBeenCalledOnce();
+
+    rerender(<Switch checked={false} disabled label="Enable reviewer" onClick={onClick} />);
+    expect(control).toHaveAttribute("aria-checked", "false");
+    expect(control).toBeDisabled();
   });
 
   it("dismisses a modal from its backdrop but not its dialog content", () => {

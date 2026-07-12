@@ -2,6 +2,7 @@ import * as TOML from "@iarna/toml";
 import { parse as parseJsonc, type ParseError } from "jsonc-parser";
 import type {
   ProfileDetail,
+  SkillLibraryEntry,
   TargetInfo,
   TargetManagementState
 } from "../shared/types";
@@ -87,15 +88,21 @@ const rawMcpNames = (
 
 export const summarizeProfile = (
   profile: Pick<ProfileDetail, "manifest" | "instructions" | "configText" | "assetPolicy">,
-  target: ProfileTargetSchema
+  target: ProfileTargetSchema,
+  librarySkills: readonly Pick<SkillLibraryEntry, "id" | "globallyEnabled">[] = []
 ): ProfileResourceSummary => {
+  const globallyDisabledIds = new Set(
+    librarySkills.filter((skill) => skill.globallyEnabled === false).map((skill) => skill.id)
+  );
   const profileOwnedSkills = [...profile.assetPolicy.ownedDirs, ...profile.assetPolicy.ownedFiles]
     .filter((asset) => asset.kind === "skill")
     .map((asset) => asset.targetName);
   const skillNames = unique([
     ...profileOwnedSkills,
     ...profile.assetPolicy.skillRefs
-      .filter((skill) => skill.enabled !== false)
+      .filter(
+        (skill) => skill.enabled !== false && !globallyDisabledIds.has(skill.libraryId)
+      )
       .map((skill) => skill.targetName)
   ]);
   const mcpNames = unique([

@@ -39,8 +39,10 @@ import type {
   ManagedResourceSnapshot,
   PlannedFileChange,
   PlannedResourceChange,
+  ProfileDetail,
   RollbackPreview,
   RollbackResult,
+  SkillLibraryEntry,
   StopManagingMode,
   StopManagingPreview,
   StopManagingResult,
@@ -294,6 +296,27 @@ const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
 const MANAGED_DRIFT_PREFIX = "External changes detected in AgentEnv-managed";
+
+const applyLibrarySkillAvailability = (
+  profile: ProfileDetail,
+  skillLibrary: readonly SkillLibraryEntry[]
+): ProfileDetail => {
+  const disabledIds = new Set(
+    skillLibrary.filter((skill) => skill.globallyEnabled === false).map((skill) => skill.id)
+  );
+  if (disabledIds.size === 0) {
+    return profile;
+  }
+  return {
+    ...profile,
+    assetPolicy: {
+      ...profile.assetPolicy,
+      skillRefs: profile.assetPolicy.skillRefs.map((reference) =>
+        disabledIds.has(reference.libraryId) ? { ...reference, enabled: false } : reference
+      )
+    }
+  };
+};
 
 const validateProfileStructure = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>) => {
   const errors: string[] = [];
@@ -765,7 +788,14 @@ export const createActivationService = ({
     const skillLibrary = await skillLibraryStore.listSkills();
     const adapter = targetRegistry.get(requestedTargetId ?? sourceProfile.manifest.targetId);
     const targeted = targetProfile(sourceProfile, adapter);
-    const profile = targeted.profile;
+    const profile = applyLibrarySkillAvailability(targeted.profile, skillLibrary);
+    const disabledLibrarySkills = targeted.profile.assetPolicy.skillRefs
+      .filter(
+        (reference) =>
+          reference.enabled !== false &&
+          skillLibrary.find((skill) => skill.id === reference.libraryId)?.globallyEnabled === false
+      )
+      .map((reference) => reference.libraryId);
     const effectivePayload = effectivePayloadFor(profile);
     const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
     const targetPaths = adapter.createTargetPaths({
@@ -840,11 +870,14 @@ export const createActivationService = ({
       profileId: profile.id,
       profileContentHash:
         sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
-        createProfileContentHash(profile),
+        createProfileContentHash(targeted.profile),
       libraryVersions: collectLibraryResourceVersions(profile, skillLibrary, mcpLibrary),
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
       warnings: targeted.warnings.concat(
+        disabledLibrarySkills.map(
+          (id) => `Library Skill ${id} is globally disabled and will not be applied`
+        ),
         targetPreview.warnings,
         drift.warnings,
         unmanagedWarnings
@@ -913,14 +946,20 @@ export const createActivationService = ({
     try {
     const sourceProfile = await profileStore.readProfile(profileId);
     const adapter = targetRegistry.get(preview.targetId);
-    const profile = targetProfile(sourceProfile, adapter).profile;
+    const [mcpLibrary, skillLibrary] = await Promise.all([
+      mcpLibraryStore.listServers(),
+      skillLibraryStore.listSkills()
+    ]);
+    const targetedProfile = targetProfile(sourceProfile, adapter).profile;
+    const profile = applyLibrarySkillAvailability(
+      targetedProfile,
+      skillLibrary
+    );
     const currentProfileHash =
-      sourceProfile.targetContentHashes?.[preview.targetId] ?? createProfileContentHash(profile);
+      sourceProfile.targetContentHashes?.[preview.targetId] ?? createProfileContentHash(targetedProfile);
     if (currentProfileHash !== preview.profileContentHash) {
       return { ok: false, errors: ["Profile changed after preview; review the latest version"] };
     }
-    const mcpLibrary = await mcpLibraryStore.listServers();
-    const skillLibrary = await skillLibraryStore.listSkills();
     const currentLibraryVersions = collectLibraryResourceVersions(
       profile,
       skillLibrary,

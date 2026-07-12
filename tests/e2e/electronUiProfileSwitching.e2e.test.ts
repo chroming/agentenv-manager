@@ -3825,7 +3825,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
   }, 30_000);
 
-  it("disables a current Profile library skill and removes only its managed Target copy", async () => {
+  it("saves and applies Profile Skill disable and re-enable changes", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp({
       openCodeAlphaLibrarySkillCount: 1
     });
@@ -3838,9 +3838,14 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "Skills");
     const skillRow = page.getByRole("listitem", { name: "Profile skill layout-skill-1" });
     await skillRow.getByRole("switch", { name: "Disable layout-skill-1" }).click();
+    await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);
+    await expect.poll(() => skillRow.textContent()).toContain("Disabled in Profile");
+    await skillRow.getByRole("switch", { name: "Enable layout-skill-1" }).waitFor();
     expect(await page.getByRole("button", { name: "Save", exact: true }).isEnabled()).toBe(true);
     expect(await page.getByRole("button", { name: "Apply", exact: true }).isDisabled()).toBe(true);
     await saveProfile(page);
+    await previewAndApply(page, "OpenCode");
+    await expect(fileExists(installedSkillDir)).resolves.toBe(false);
 
     const savedAssets = await readJson<{
       skillRefs: Array<{ libraryId: string; targetName: string; enabled?: boolean }>;
@@ -3848,19 +3853,87 @@ describe("Electron UI profile switching e2e", () => {
     expect(savedAssets.skillRefs).toEqual([
       { libraryId: "layout-skill-1", targetName: "layout-skill-1", enabled: false }
     ]);
+    await expect(fileExists(join(appDataRoot, "skills-library", "layout-skill-1", "SKILL.md")))
+      .resolves.toBe(true);
+
+    await skillRow.getByRole("switch", { name: "Enable layout-skill-1" }).click();
+    await expect(fileExists(installedSkillDir)).resolves.toBe(false);
+    await saveProfile(page);
+    await previewAndApply(page, "OpenCode");
+    await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);
+    await skillRow.getByRole("switch", { name: "Disable layout-skill-1" }).waitFor();
+    const reenabledAssets = await readJson<{
+      skillRefs: Array<{ libraryId: string; targetName: string; enabled?: boolean }>;
+    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "assets.json"));
+    expect(reenabledAssets.skillRefs).toEqual([
+      { libraryId: "layout-skill-1", targetName: "layout-skill-1", enabled: true }
+    ]);
+  }, 30_000);
+
+  it("globally disables a Library skill, hides it from Profile selection, and removes it on Apply", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp({
+      openCodeAlphaLibrarySkillCount: 1
+    });
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    const installedSkillDir = join(opencodeDir, "skills", "layout-skill-1");
+    await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);
+
+    await openSkillLibrary(page);
+    const libraryRow = page.getByRole("group", { name: "Library item layout-skill-1" });
+    await libraryRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
+    await page.getByRole("menuitem", { name: /Disable globally/ }).click();
+    const disableDialog = page.getByRole("dialog", { name: "Disable library skill" });
+    await disableDialog.getByRole("button", { name: "Disable globally" }).click();
+    await disableDialog.waitFor({ state: "hidden" });
+    await expect.poll(async () =>
+      (await readJson<{ globallyEnabled?: boolean }>(
+        join(appDataRoot, "skills-library", "layout-skill-1", ".agentenv-skill.json")
+      )).globallyEnabled
+    ).toBe(false);
+    await expect.poll(() => libraryRow.textContent()).toContain("Disabled");
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Skills");
+    const profileRow = page.getByRole("listitem", { name: "Profile skill layout-skill-1" });
+    await expect.poll(() => profileRow.textContent()).toContain("Disabled in Library");
+    expect(await profileRow.getByRole("switch", { name: "layout-skill-1 is disabled in Library" }).isDisabled())
+      .toBe(true);
+    await page.getByRole("button", { name: "Add library skill" }).click();
+    const picker = page.getByRole("dialog", { name: "Add library skills" });
+    expect(await picker.getByLabel("layout-skill-1").count()).toBe(0);
+    await picker.getByRole("button", { name: "Cancel" }).click();
 
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     const resourceChanges = previewDialog.getByRole("region", { name: "Resource changes" });
-    await resourceChanges.waitFor({ state: "visible" });
-    await expect.poll(() => resourceChanges.textContent()).toContain("remove");
     await expect.poll(() => resourceChanges.textContent()).toContain("layout-skill-1");
+    await expect.poll(() => resourceChanges.textContent()).toContain("remove");
     await previewDialog.getByRole("button", { name: "Apply profile" }).click();
     await previewDialog.waitFor({ state: "hidden" });
-
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
-    await expect(fileExists(join(appDataRoot, "skills-library", "layout-skill-1", "SKILL.md")))
-      .resolves.toBe(true);
+
+    await openSkillLibrary(page);
+    await libraryRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
+    await page.getByRole("menuitem", { name: /Enable globally/ }).click();
+    await expect.poll(async () =>
+      (await readJson<{ globallyEnabled?: boolean }>(
+        join(appDataRoot, "skills-library", "layout-skill-1", ".agentenv-skill.json")
+      )).globallyEnabled
+    ).toBe(true);
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Skills");
+    const restoredProfileRow = page.getByRole("listitem", {
+      name: "Profile skill layout-skill-1"
+    });
+    expect(await restoredProfileRow.getByRole("switch", { name: "Disable layout-skill-1" }).isEnabled())
+      .toBe(true);
+    await page.getByRole("button", { name: "Add library skill" }).click();
+    const restoredPicker = page.getByRole("dialog", { name: "Add library skills" });
+    expect(await restoredPicker.getByLabel("layout-skill-1").count()).toBe(1);
+    await restoredPicker.getByRole("button", { name: "Cancel" }).click();
+    await previewAndApply(page, "OpenCode");
+    await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);
   }, 30_000);
 
   it("shows profile-owned skill conflicts before applying from the rendered app", async () => {

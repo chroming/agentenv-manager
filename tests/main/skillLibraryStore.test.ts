@@ -185,6 +185,7 @@ description: >
         path: join(paths.skillsLibraryDir, "reviewer"),
         sourceType: "local",
         source: undefined,
+        globallyEnabled: true,
         updatePolicy: "untracked",
         contentHash: expect.any(String),
         updatedAt: expect.any(String)
@@ -969,6 +970,38 @@ description: >
     await expect(
       readFile(join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json"), "utf8")
     ).resolves.toContain(updateDir);
+  });
+
+  it("persists global availability and excludes disabled skills from update checks", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "source", "reviewer");
+    const updateDir = join(root, "updates", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await mkdir(updateDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v1\n", "utf8");
+    await writeFile(join(updateDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
+    const store = createSkillLibraryStore(paths);
+    const imported = await store.importSkill({ sourcePath: sourceDir, id: "reviewer" });
+    expect(imported.globallyEnabled).toBe(true);
+    await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: updateDir });
+
+    const disabled = await store.setAvailability({ id: "reviewer", enabled: false });
+
+    expect(disabled.globallyEnabled).toBe(false);
+    await expect(store.checkUpdates()).resolves.toEqual([]);
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json"), "utf8")
+    ).resolves.toContain('"globallyEnabled": false');
+    await expect(store.listSkills()).resolves.toEqual([
+      expect.objectContaining({ id: "reviewer", globallyEnabled: false })
+    ]);
+
+    const enabled = await store.setAvailability({ id: "reviewer", enabled: true });
+    expect(enabled.globallyEnabled).toBe(true);
+    await expect(store.checkUpdates()).resolves.toEqual([
+      expect.objectContaining({ id: "reviewer", updateAvailable: true })
+    ]);
   });
 
   it("detects updates after a GitHub source is configured on an existing library skill", async () => {

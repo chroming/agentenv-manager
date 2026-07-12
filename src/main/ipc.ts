@@ -21,6 +21,7 @@ import type {
   SaveMcpServerInput,
   SaveProfileInput,
   SkillUpdatePolicyInput,
+  SkillAvailabilityInput,
   SkillUpdateSourceInput
 } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
@@ -303,6 +304,18 @@ export const registerIpcHandlers = ({
         id: parseId(input?.id, "skill id"),
         policy: input?.policy === "tracked" ? "tracked" : "untracked"
       })
+  );
+  ipcMain.handle(
+    "skills:set-availability",
+    (_event, input: SkillAvailabilityInput) => {
+      if (typeof input?.enabled !== "boolean") {
+        throw new Error("Skill availability must be a boolean");
+      }
+      return skillLibraryStore.setAvailability({
+        id: parseId(input?.id, "skill id"),
+        enabled: input.enabled
+      });
+    }
   );
   ipcMain.handle("skills:set-icon", (_event, input: SkillIconInput) =>
     skillLibraryStore.setIcon({

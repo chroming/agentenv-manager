@@ -13,6 +13,7 @@ import type {
   SkillCleanupIgnoreRule,
   SkillCleanupBackupSummary,
   SkillCleanupResult,
+  SkillAvailabilityInput,
   SkillInventoryEntry,
   SkillImportInput,
   SkillIconInput,
@@ -45,6 +46,7 @@ interface SkillMetadataFile {
   remoteRevision?: string;
   updateCheckEnabled?: boolean;
   updatePolicy?: SkillUpdatePolicy;
+  globallyEnabled?: boolean;
   iconKey?: ResourceIconKey;
   contentHash?: string;
   updatedAt?: string;
@@ -99,6 +101,7 @@ export interface SkillLibraryStore {
   checkUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   setUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
+  setAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
   setIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewUpdate(id: string): Promise<SkillUpdatePlan>;
   updateSkill(id: string): Promise<SkillLibraryEntry>;
@@ -658,6 +661,7 @@ export const createSkillLibraryStore = (
       path: skillDir,
       sourceType: metadata.sourceType ?? "local",
       source: metadata.source,
+      globallyEnabled: metadata.globallyEnabled !== false,
       updatePolicy: updatePolicyFor(metadata),
       remoteRef: metadata.remoteRef,
       remoteRevision: metadata.remoteRevision,
@@ -682,6 +686,7 @@ export const createSkillLibraryStore = (
       | "remoteRevision"
       | "updatePolicy"
       | "updateCheckEnabled"
+      | "globallyEnabled"
       | "upstream"
       | "provenance"
     > & { iconKey?: ResourceIconKey }
@@ -701,6 +706,7 @@ export const createSkillLibraryStore = (
           upstream: metadata.upstream ?? current.upstream,
           provenance: metadata.provenance ?? current.provenance,
           iconKey: metadata.iconKey ?? current.iconKey,
+          globallyEnabled: metadata.globallyEnabled ?? current.globallyEnabled ?? true,
           updatePolicy:
             metadata.updatePolicy ??
             (typeof metadata.updateCheckEnabled === "boolean"
@@ -1464,6 +1470,7 @@ export const createSkillLibraryStore = (
       (item) =>
         (!selectedIds || selectedIds.has(item.id)) &&
         item.updatePolicy === "tracked" &&
+        item.globallyEnabled &&
         Boolean(item.source)
     )) {
       const metadata = await readLibraryMetadata(skill.path);
@@ -1596,6 +1603,28 @@ export const createSkillLibraryStore = (
       remotePath: metadata.remotePath,
       remoteRevision: metadata.remoteRevision,
       updatePolicy: policy
+    });
+    return entryFor(safeId, targetDir);
+  };
+
+  const setAvailability = async ({
+    id,
+    enabled
+  }: SkillAvailabilityInput): Promise<SkillLibraryEntry> => {
+    const safeId = SafeIdSchema.parse(id);
+    const targetDir = join(await libraryDir(), safeId);
+    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
+      throw new Error(`Library skill does not exist: ${safeId}`);
+    }
+    const metadata = await readLibraryMetadata(targetDir);
+    await writeMetadata(targetDir, {
+      sourceType: metadata.sourceType ?? "local",
+      source: metadata.source,
+      remoteRef: metadata.remoteRef,
+      remotePath: metadata.remotePath,
+      remoteRevision: metadata.remoteRevision,
+      updatePolicy: updatePolicyFor(metadata),
+      globallyEnabled: enabled
     });
     return entryFor(safeId, targetDir);
   };
@@ -1788,6 +1817,7 @@ export const createSkillLibraryStore = (
     checkUpdates,
     setUpdateSource,
     setUpdatePolicy,
+    setAvailability,
     setIcon,
     previewUpdate,
     updateSkill

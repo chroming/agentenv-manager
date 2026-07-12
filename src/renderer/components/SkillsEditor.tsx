@@ -19,6 +19,7 @@ import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIcon } from "./ResourceIconPicker";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
+import { Switch } from "./ui";
 
 interface SkillsEditorProps {
   mode?: "skills" | "mcp" | "advanced";
@@ -275,6 +276,7 @@ export const SkillsEditor = ({
     (ownedFile) => ownedFile.kind === "agent"
   );
   const librarySkillEntries = value.skillRefs ?? [];
+  const availableLibrarySkills = librarySkills.filter((skill) => skill.globallyEnabled !== false);
   const libraryMcpEntries = value.mcpRefs ?? [];
   const mcpState = getMcpResources(configText, configLanguage, preview);
   const hasResources =
@@ -294,12 +296,15 @@ export const SkillsEditor = ({
   const attachedSkillIds = new Set(librarySkillEntries.map((entry) => entry.libraryId));
   const attachedMcpIds = new Set(libraryMcpEntries.map((entry) => entry.libraryId));
   const enabledLibrarySkillCount = librarySkillEntries.filter(
-    (entry) => entry.enabled !== false
+    (entry) =>
+      entry.enabled !== false &&
+      librarySkills.find((skill) => skill.id === entry.libraryId)?.globallyEnabled !== false
   ).length;
   const checkableSkillIds = librarySkillEntries
     .filter((entry) => entry.enabled !== false)
     .map((entry) => librarySkills.find((skill) => skill.id === entry.libraryId))
     .filter((skill): skill is SkillLibraryEntry => Boolean(skill))
+    .filter((skill) => skill.globallyEnabled !== false)
     .filter((skill) => skill.updatePolicy === "tracked")
     .map((skill) => skill.id);
 
@@ -611,9 +616,15 @@ export const SkillsEditor = ({
           {librarySkillEntries.map((entry, index) => {
             const skill = librarySkills.find((item) => item.id === entry.libraryId);
             const update = skillUpdates.find((item) => item.id === entry.libraryId);
-            const enabled = entry.enabled !== false;
+            const profileEnabled = entry.enabled !== false;
+            const globallyEnabled = skill?.globallyEnabled !== false;
+            const enabled = profileEnabled && globallyEnabled;
             const status = !skill
               ? "Missing"
+              : !globallyEnabled
+                ? "Disabled in Library"
+              : !profileEnabled
+                ? "Disabled in Profile"
               : update?.error
                 ? "Check failed"
                 : update?.updateAvailable
@@ -652,7 +663,7 @@ export const SkillsEditor = ({
                 </div>
                 <span
                   className={`profile-skill-state${update?.updateAvailable ? " is-update" : ""}${update?.error || !skill ? " is-error" : ""}`}
-                  title={update?.error}
+                  title={update?.error ?? t(status)}
                 >
                   {t(status)}
                 </span>
@@ -665,17 +676,27 @@ export const SkillsEditor = ({
                     {t("Update")}
                   </button>
                 ) : null}
-                <button
-                  className={`profile-skill-switch${enabled ? " is-on" : ""}`}
-                  type="button"
-                  role="switch"
-                  aria-checked={enabled}
-                  aria-label={t(enabled ? "Disable {{name}}" : "Enable {{name}}", { name: skill?.name ?? entry.targetName })}
-                  title={t(enabled ? "Disable in this profile" : "Enable in this profile")}
+                <Switch
+                  checked={enabled}
+                  className="profile-skill-switch"
+                  disabled={!globallyEnabled}
+                  label={t(
+                    !globallyEnabled
+                      ? "{{name}} is disabled in Library"
+                      : profileEnabled
+                        ? "Disable {{name}}"
+                        : "Enable {{name}}",
+                    { name: skill?.name ?? entry.targetName }
+                  )}
+                  title={t(
+                    !globallyEnabled
+                      ? "Enable this skill in Library first"
+                      : profileEnabled
+                        ? "Disable in this profile"
+                        : "Enable in this profile"
+                  )}
                   onClick={() => toggleSkillRef(index)}
-                >
-                  <span aria-hidden="true" />
-                </button>
+                />
                 <button
                   className="icon-action"
                   type="button"
@@ -805,10 +826,10 @@ export const SkillsEditor = ({
                 <div className="section-title">{t("Add library skills")}</div>
               </header>
               <div className="resource-picker-list">
-                {librarySkills.length === 0 ? (
+                {availableLibrarySkills.length === 0 ? (
                   <div className="inline-state">{t("No library skills available")}</div>
                 ) : null}
-                {librarySkills.map((skill) => {
+                {availableLibrarySkills.map((skill) => {
                   const isAttached = attachedSkillIds.has(skill.id);
                   return (
                     <label className="resource-picker-option" key={skill.id}>
@@ -1144,13 +1165,13 @@ export const SkillsEditor = ({
               </div>
             </header>
             <div className="resource-picker-list">
-              {librarySkills.length === 0 ? (
+              {availableLibrarySkills.length === 0 ? (
                 <div className="inline-state">
                   <span className="inline-state__icon" aria-hidden="true" />
                   <span>{t("No library skills available")}</span>
                 </div>
               ) : null}
-              {librarySkills.map((skill) => {
+              {availableLibrarySkills.map((skill) => {
                 const isAttached = attachedSkillIds.has(skill.id);
                 return (
                   <label className="resource-picker-option" key={skill.id}>
@@ -1169,8 +1190,8 @@ export const SkillsEditor = ({
                   </label>
                 );
               })}
-              {librarySkills.length > 0 &&
-              librarySkills.every((skill) => attachedSkillIds.has(skill.id)) ? (
+              {availableLibrarySkills.length > 0 &&
+              availableLibrarySkills.every((skill) => attachedSkillIds.has(skill.id)) ? (
                 <p className="muted">{t("All library skills are already attached.")}</p>
               ) : null}
             </div>

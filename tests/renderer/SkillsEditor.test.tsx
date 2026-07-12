@@ -291,6 +291,35 @@ describe("SkillsEditor", () => {
     });
   });
 
+  it("locks Profile controls for a globally disabled Library skill", () => {
+    const onChange = vi.fn();
+    render(
+      <SkillsEditor
+        mode="skills"
+        value={mixedPolicy}
+        configText="{}"
+        librarySkills={librarySkills.map((skill) => ({ ...skill, globallyEnabled: false }))}
+        onChange={onChange}
+      />
+    );
+
+    const row = screen.getByRole("listitem", {
+      name: "Profile skill agentenv-shared-reviewer"
+    });
+    expect(row).toHaveTextContent("Disabled in Library");
+    expect(
+      within(row).getByRole("switch", { name: "Shared Reviewer is disabled in Library" })
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Check profile skill updates" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Add library skill" }));
+    expect(screen.queryByLabelText("Shared Reviewer")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("GitHub Reviewer")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Add library skills" })).toHaveTextContent(
+      "No library skills available"
+    );
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it("renders only MCP resources in mcp mode", () => {
     const onChange = vi.fn();
     render(

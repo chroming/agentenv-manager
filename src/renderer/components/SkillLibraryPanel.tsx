@@ -15,6 +15,7 @@ import {
   Link2,
   Link2Off,
   MoreHorizontal,
+  Power,
   RefreshCw,
   RotateCcw,
   Search,
@@ -35,6 +36,7 @@ import type {
   ManageTargetSkillInput,
   SkillCleanupBackupSummary,
   SkillCleanupRequest,
+  SkillAvailabilityInput,
   SkillInventoryEntry,
   SkillIconInput,
   SkillLibraryEntry,
@@ -58,6 +60,7 @@ import {
   type SkillCleanupGroupState
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
+import { Switch } from "./ui";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -87,6 +90,7 @@ interface SkillLibraryPanelProps {
   onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<void>;
   onSetUpdateSource(input: SkillUpdateSourceInput): void;
   onSetUpdatePolicy(input: SkillUpdatePolicyInput): void;
+  onSetAvailability(input: SkillAvailabilityInput): void;
   onSetIcon(input: SkillIconInput): void;
   onPreviewLibrarySkillUpdate(id: string): void;
   onCloseUpdatePreview(): void;
@@ -188,6 +192,7 @@ export const SkillLibraryPanel = ({
   onAutoConsolidateSkillGroups,
   onSetUpdateSource,
   onSetUpdatePolicy,
+  onSetAvailability,
   onSetIcon,
   onPreviewLibrarySkillUpdate,
   onCloseUpdatePreview,
@@ -226,6 +231,7 @@ export const SkillLibraryPanel = ({
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
+  const [disableCandidate, setDisableCandidate] = useState<SkillLibraryEntry>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
   const [cleanupDraft, setCleanupDraft] = useState<{
     skillKey: string;
@@ -246,8 +252,12 @@ export const SkillLibraryPanel = ({
   const modalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const modalFallbackFocusRef = useRef<HTMLElement>(null);
   const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
+  const enabledSkillIds = new Set(
+    librarySkills.filter((skill) => skill.globallyEnabled !== false).map((skill) => skill.id)
+  );
   const updateableSkillIds = skillUpdates
     .filter((update) => update.updateAvailable && !update.error)
+    .filter((update) => enabledSkillIds.has(update.id))
     .map((update) => update.id);
   const availableUpdateCount = updateableSkillIds.length;
   const githubReadyCandidateIds = githubScanResult?.candidates
@@ -266,6 +276,8 @@ export const SkillLibraryPanel = ({
       onCloseUpdatePreview();
     } else if (deleteCandidate) {
       setDeleteCandidate(undefined);
+    } else if (disableCandidate) {
+      setDisableCandidate(undefined);
     } else if (cleanupDetailsKey) {
       setCleanupDetailsKey(undefined);
     } else if (bulkUpdatePlans) {
@@ -279,6 +291,7 @@ export const SkillLibraryPanel = ({
   const modalOpen = Boolean(
     (selectedUpdatePlan && selectedUpdatePlan.changes.length > 0) ||
       deleteCandidate ||
+      disableCandidate ||
       bulkUpdatePlans ||
       externalImport ||
       cleanupDetailsKey ||
@@ -814,7 +827,10 @@ export const SkillLibraryPanel = ({
             };
             const hasUpdateSource = Boolean(skill.source);
             const isTracked = skill.updatePolicy === "tracked";
-            const updateLabel = !isTracked
+            const globallyEnabled = skill.globallyEnabled !== false;
+            const updateLabel = !globallyEnabled
+              ? "Disabled"
+              : !isTracked
               ? "Not tracked"
               : updateInfo?.error
                 ? "Check failed"
@@ -825,8 +841,8 @@ export const SkillLibraryPanel = ({
                     : hasUpdateSource
                       ? "Not checked"
                       : "Library only";
-            const hasUpdate = isTracked && Boolean(updateInfo?.updateAvailable);
-            const hasError = isTracked && Boolean(updateInfo?.error);
+            const hasUpdate = globallyEnabled && isTracked && Boolean(updateInfo?.updateAvailable);
+            const hasError = globallyEnabled && isTracked && Boolean(updateInfo?.error);
             const updateAction = hasUpdate ? "update" : hasError ? "retry" : undefined;
             const usageCount = (skillUsage[skill.id] ?? []).length;
             const revisionLabel = shortRevision(skill);
@@ -841,7 +857,7 @@ export const SkillLibraryPanel = ({
             return (
               <div
                 aria-label={`Library item ${skill.id}`}
-                className="library-table-row"
+                className={`library-table-row${globallyEnabled ? "" : " is-globally-disabled"}`}
                 key={skill.id}
                 role="group"
               >
@@ -853,7 +869,12 @@ export const SkillLibraryPanel = ({
                     onChange={(iconKey) => onSetIcon({ id: skill.id, iconKey })}
                   />
                   <div className="skill-title-stack">
-                    <strong className="skill-title">{skill.name}</strong>
+                    <span className="skill-title-line">
+                      <strong className="skill-title">{skill.name}</strong>
+                      {!globallyEnabled ? (
+                        <span className="library-global-state">{t("Disabled")}</span>
+                      ) : null}
+                    </span>
                     <PreviewText className="skill-description" text={skill.description || skill.id} />
                   </div>
                 </div>
@@ -917,7 +938,9 @@ export const SkillLibraryPanel = ({
                       aria-label={updateLabel}
                       className="resource-status"
                     >
-                      {!isTracked ? (
+                      {!globallyEnabled ? (
+                        <Power size={13} strokeWidth={2.2} />
+                      ) : !isTracked ? (
                         <Link2Off size={13} strokeWidth={2.2} />
                       ) : !hasUpdateSource ? (
                         <Folder size={13} strokeWidth={2.2} />
@@ -1043,6 +1066,34 @@ export const SkillLibraryPanel = ({
                               </span>
                             </button>
                           ) : null}
+                          <button
+                            className="row-action-item"
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              if (globallyEnabled) {
+                                modalFallbackFocusRef.current = document.querySelector(
+                                  `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
+                                );
+                                setDisableCandidate(skill);
+                              } else {
+                                onSetAvailability({ id: skill.id, enabled: true });
+                              }
+                              setOpenAction(undefined);
+                            }}
+                          >
+                            <Power size={14} strokeWidth={2.2} />
+                            <span>
+                              <strong>{t(globallyEnabled ? "Disable globally" : "Enable globally")}</strong>
+                              <small>
+                                {t(
+                                  globallyEnabled
+                                    ? "Exclude from every Profile without deleting it."
+                                    : "Allow Profiles to apply this skill again."
+                                )}
+                              </small>
+                            </span>
+                          </button>
                           <div className="row-action-source">
                             <div className="row-action-source-title">
                               <Settings2 size={14} strokeWidth={2.2} />
@@ -1060,13 +1111,10 @@ export const SkillLibraryPanel = ({
                                       : t("Add an update source before tracking.")}
                                 </small>
                               </span>
-                              <button
-                                aria-checked={isTracked}
-                                aria-label={t("Track updates for {{id}}", { id: skill.id })}
-                                className={`settings-switch${isTracked ? " is-on" : ""}`}
+                              <Switch
+                                checked={isTracked}
                                 disabled={!hasUpdateSource}
-                                role="switch"
-                                type="button"
+                                label={t("Track updates for {{id}}", { id: skill.id })}
                                 onClick={() => {
                                   onSetUpdatePolicy({
                                     id: skill.id,
@@ -1075,11 +1123,8 @@ export const SkillLibraryPanel = ({
                                   setOpenAction(undefined);
                                 }}
                               >
-                                <span className="settings-switch__track" aria-hidden="true">
-                                  <span />
-                                </span>
                                 <strong>{t(isTracked ? "On" : "Off")}</strong>
-                              </button>
+                              </Switch>
                             </div>
                             <div className="library-source-editor row-action-source-editor">
                               <select
@@ -1237,6 +1282,57 @@ export const SkillLibraryPanel = ({
                     : t("Remove skill")}
                 </button>
               )}
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
+      {disableCandidate ? (
+        <div className="preview-modal-backdrop" onClick={() => setDisableCandidate(undefined)}>
+          <section
+            ref={modalDialogRef}
+            className="profile-form-dialog profile-form-dialog--compact"
+            role="dialog"
+            aria-label={t("Disable library skill")}
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">
+                  {t("Disable {{name}} globally?", { name: disableCandidate.name })}
+                </div>
+                <p className="muted">
+                  {(skillUsage[disableCandidate.id] ?? []).length > 0
+                    ? t(
+                        (skillUsage[disableCandidate.id] ?? []).length === 1
+                          ? "This skill stays in Library and in 1 Profile, but it will be excluded from Apply. Its managed Target installs are removed the next time that Profile is applied."
+                          : "This skill stays in Library and in {{count}} Profiles, but it will be excluded from Apply. Managed Target installs are removed the next time each Profile is applied.",
+                        { count: (skillUsage[disableCandidate.id] ?? []).length }
+                      )
+                    : t("This skill stays in Library but cannot be added to or applied by Profiles until it is enabled again.")}
+                </p>
+              </div>
+            </header>
+            <footer className="preview-actions">
+              <button
+                ref={modalInitialFocusRef}
+                className="secondary-action"
+                type="button"
+                onClick={() => setDisableCandidate(undefined)}
+              >
+                {t("Cancel")}
+              </button>
+              <button
+                className="primary-action"
+                type="button"
+                onClick={() => {
+                  onSetAvailability({ id: disableCandidate.id, enabled: false });
+                  setDisableCandidate(undefined);
+                }}
+              >
+                {t("Disable globally")}
+              </button>
             </footer>
           </section>
         </div>

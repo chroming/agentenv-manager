@@ -737,7 +737,10 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Identical second Preview produces no changes and no Apply action.
 - Dirty Profile blocks Preview and preserves draft.
 - Active Profile is selected and pinned for the chosen Target; a single installed Target is static context.
-- Disabling a referenced Library Skill preserves the Profile reference, requires Save, previews a remove operation, removes only the managed Target copy on Apply, and can be re-enabled later.
+- Disabling a Skill in Library preserves its content and every existing Profile reference, hides it from every Add Skill picker, excludes it from update checks and effective Apply payloads, and leaves it visible but locked in Profiles until globally enabled again.
+- A globally disabled Skill is removed from managed Target installs on the next Apply of each affected Profile; global disable itself MUST NOT silently rewrite Target environments.
+- Disabling a referenced Library Skill in a Profile is a normal Profile edit: it preserves the reference, marks the whole Profile dirty, and MUST require the same Save, Preview, and Apply flow as adding or removing a Skill.
+- Applying a disabled Profile Skill previews and removes only its managed Target copy; re-enabling previews and restores it. The switch MUST NOT write to a Target before Apply succeeds.
 - Profile-scoped update Check excludes disabled and untracked references while a Library update discloses cross-Profile and Copy versus Live link impact.
 - Missing executable and missing directory are distinguished.
 - Copy mode keeps Library updates pending; Live link mode visibly propagates them immediately.
@@ -767,6 +770,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Local import survives deletion of original folder.
 - GitHub direct-Skill, containing-directory, and repository scan; candidate selection; partial import; rate limit; sign-in remediation; update check; Preview; and update.
 - Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
+- Library global disable persistence, update-check exclusion, Add Skill picker filtering, existing-reference visibility, and Apply-time managed-copy removal.
 - In-place toolbar and `Cmd/Ctrl+R` Refresh preserve current Skill view state and do not contact update sources.
 - Skill source-default and custom icons persist across refresh and content update; Profile icon changes remain dirty until whole-Profile Save.
 - Skills CLI v3 lock detection, corrupt and unsupported lock fallback, directory and broken symlink discovery, independent external import, lock preservation, and external Apply conflicts.
@@ -818,7 +822,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-15 against the current `main` tree at the time of this snapshot.
 
-- `353` automated tests passed across `48` test files; the `69`-test Electron UI suite and `76` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `357` automated tests passed across `48` test files; the `70`-test Electron UI suite and `77` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `37` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
@@ -829,6 +833,7 @@ Last verified: 2026-07-15 against the current `main` tree at the time of this sn
 - Library deletion isolates the selected Skill from invalid neighboring content, and global feedback provides a non-blocking copy action.
 - Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
 - In-place Skill Refresh, GitHub directory candidate selection, partial batch import behavior, source-default Skill icons, custom Skill icon persistence, and draft-gated Profile icons passed Store, renderer, and Electron E2E coverage.
+- Library Skill disable, picker exclusion, update-check isolation, re-enable, and Apply-time Target removal and restoration passed Store, renderer, and Electron E2E coverage; Profile Skill switches use the same Save and Apply contract as Add and Remove.
 - Skill table headers, mixed-action rows, two-line metadata, empty install states, and update labels passed coordinate and overflow assertions at both supported viewports.
 - Target-local import now creates a transactional managed install, shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
