@@ -373,7 +373,7 @@ export interface TargetCaptureResource {
   name: string;
   sourcePath?: string;
   libraryId?: string;
-  action: "include" | "reuse" | "import" | "consolidate" | "exclude";
+  action: "include" | "reuse" | "import" | "exclude";
   detail?: string;
 }
 
@@ -384,7 +384,6 @@ export interface TargetCapturePreview {
   suggestedName: string;
   createdAt: string;
   resources: TargetCaptureResource[];
-  cleanupPaths: string[];
   warnings: string[];
   errors: string[];
 }
@@ -392,10 +391,8 @@ export interface TargetCapturePreview {
 export interface TargetCaptureResult {
   profile: ProfileDetail;
   targetId: string;
-  backupId: string;
   importedSkillCount: number;
   importedMcpCount: number;
-  cleanedPathCount: number;
   warnings: string[];
 }
 

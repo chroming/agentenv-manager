@@ -1228,7 +1228,7 @@ const AppContent = ({
         setSelectedProfileId(saved.id);
         setDraftProfile(saved);
         if (profileCreateSource === "target") {
-          setProfileCaptureStatus(t("{{name}} created and applied", { name: saved.manifest.name }));
+          setProfileCaptureStatus(t("{{name}} created. Target unchanged.", { name: saved.manifest.name }));
         }
       } else if (draftProfile) {
         const updatedProfile: ProfileDetail = {

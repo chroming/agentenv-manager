@@ -57,15 +57,7 @@ const resourceActionLabels: Record<TargetCaptureResource["action"], string> = {
   include: "Add to profile",
   reuse: "Use Library copy",
   import: "Import to Library",
-  consolidate: "Consolidate",
   exclude: "Leave untouched"
-};
-
-const friendlyResourceDetail = (resource: TargetCaptureResource, compatibilityCopyLabel: string) => {
-  if (resource.detail?.includes("compatibility copy preserved")) {
-    return compatibilityCopyLabel;
-  }
-  return resource.detail;
 };
 
 export const TargetCaptureDialog = ({
@@ -92,12 +84,7 @@ export const TargetCaptureDialog = ({
   const isBusy = activity !== "idle";
   const targetIcon = target ? targetIconFor(target) : undefined;
   const includedResources = preview?.resources.filter((resource) => resource.action !== "exclude") ?? [];
-  const importedResources = preview?.resources.filter(
-    (resource) => resource.action === "import" || resource.action === "consolidate"
-  ) ?? [];
-  const preservedCopies = preview?.resources.filter((resource) =>
-    resource.detail?.includes("compatibility copy preserved")
-  ).length ?? 0;
+  const importedResources = preview?.resources.filter((resource) => resource.action === "import") ?? [];
   const groupedResources = resourceKindOrder
     .map((kind) => ({
       kind,
@@ -113,18 +100,18 @@ export const TargetCaptureDialog = ({
         role="dialog"
         aria-modal="true"
         aria-label={isReview
-          ? t("Review {{name}} takeover", { name: target?.name ?? t("Target") })
+          ? t("Review {{name}} capture", { name: target?.name ?? t("Target") })
           : t("Create profile from {{name}}", { name: target?.name ?? t("Target") })}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="capture-dialog__header">
           <div>
             <span className="capture-dialog__eyebrow">{t(isReview ? "Step 2 of 2" : "Step 1 of 2")}</span>
-            <h2>{isReview ? t("Review takeover") : t("Create profile from {{name}}", { name: target?.name ?? t("Target") })}</h2>
+            <h2>{isReview ? t("Review captured Profile") : t("Create profile from {{name}}", { name: target?.name ?? t("Target") })}</h2>
             <p>
               {isReview
-                ? t("Confirm what AgentEnv will capture and manage for {{name}}.", { name: target?.name ?? t("this Target") })
-                : t("Capture the current environment as a reusable Profile before AgentEnv takes it over.")}
+                ? t("Confirm what AgentEnv will save from {{name}}.", { name: target?.name ?? t("this Target") })
+                : t("Save the current environment as a reusable Profile without changing the Target.")}
             </p>
           </div>
         </header>
@@ -179,8 +166,8 @@ export const TargetCaptureDialog = ({
               <div className="capture-safety-note">
                 <ShieldCheck size={18} strokeWidth={2.1} aria-hidden="true" />
                 <span>
-                  <strong>{t("Safe takeover")}</strong>
-                  <small>{t("AgentEnv reviews the current files first and creates a recovery backup before changing the Target.")}</small>
+                  <strong>{t("Non-invasive capture")}</strong>
+                  <small>{t("AgentEnv reads the current files and saves copies to Library and Profile. Source files stay unchanged.")}</small>
                 </span>
               </div>
             </div>
@@ -194,17 +181,16 @@ export const TargetCaptureDialog = ({
                 <span><small>{t("New Profile")}</small><strong>{name}</strong></span>
               </div>
 
-              <div className="capture-review__summary" aria-label={t("Takeover summary")}>
+              <div className="capture-review__summary" aria-label={t("Capture summary")}>
                 <span><strong>{includedResources.length}</strong><small>{t("Profile resources")}</small></span>
                 <span><strong>{importedResources.length}</strong><small>{t("Library imports")}</small></span>
-                <span><strong>{preservedCopies}</strong><small>{t("Copies preserved")}</small></span>
-                <span><strong>{preview?.cleanupPaths.length ?? 0}</strong><small>{t("Copies removed")}</small></span>
+                <span><strong>0</strong><small>{t("Source changes")}</small></span>
               </div>
 
               {preview && preview.errors.length > 0 ? (
                 <div className="capture-errors" role="alert">
                   <TriangleAlert size={16} aria-hidden="true" />
-                  <span><strong>{t("Takeover is blocked")}</strong>{preview.errors.map((error) => <small key={error}>{error}</small>)}</span>
+                  <span><strong>{t("Capture is blocked")}</strong>{preview.errors.map((error) => <small key={error}>{error}</small>)}</span>
                 </div>
               ) : null}
 
@@ -221,8 +207,8 @@ export const TargetCaptureDialog = ({
               <div className="capture-safety-note">
                 <ShieldCheck size={18} strokeWidth={2.1} aria-hidden="true" />
                 <span>
-                  <strong>{t("Recovery included")}</strong>
-                  <small>{t("A backup is created before changes. If takeover fails after Apply, AgentEnv restores the previous environment automatically.")}</small>
+                  <strong>{t("Target stays unchanged")}</strong>
+                  <small>{t("After saving, review the Profile and use Apply when you are ready to take over this Target.")}</small>
                 </span>
               </div>
 
@@ -231,7 +217,10 @@ export const TargetCaptureDialog = ({
                   <section className="capture-resource-group" aria-label={t(resourceKindLabels[group.kind])} key={group.kind}>
                     <header><strong>{t(resourceKindLabels[group.kind])}</strong><span>{group.resources.length}</span></header>
                     {group.resources.map((resource) => {
-                      const detail = friendlyResourceDetail(resource, t("A shared copy will remain in its current location"));
+                      const sourceCopyMatch = resource.detail?.match(/^(\d+) source copies stay unchanged$/);
+                      const detail = sourceCopyMatch
+                        ? t("{{count}} source copies stay unchanged", { count: sourceCopyMatch[1] })
+                        : resource.detail;
                       const fullDetail = [resource.sourcePath, resource.detail].filter(Boolean).join(" · ");
                       return (
                         <div className={`capture-resource capture-resource--${resource.action}`} key={`${resource.kind}:${resource.id}`}>
@@ -278,7 +267,7 @@ export const TargetCaptureDialog = ({
                 {isBusy ? <LoaderCircle size={15} /> : null}
               </span>
               <span aria-live="polite">
-                {t(activity === "reviewing" ? "Reviewing..." : activity === "creating" ? "Creating..." : isReview ? "Create and take over" : "Review")}
+                {t(activity === "reviewing" ? "Reviewing..." : activity === "creating" ? "Creating..." : isReview ? "Save Profile" : "Review")}
               </span>
             </button>
           </div>

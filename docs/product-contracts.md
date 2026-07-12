@@ -80,7 +80,7 @@ Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data ro
 - Apply MUST deploy Skills to the selected Target's dedicated managed directory.
 - Applying an OpenCode Profile MUST NOT change Codex or Claude Code Skill directories, and equivalent isolation applies to every Target pair.
 - Compatibility copies MAY be captured into a Profile, but MUST remain in place while any installed consumer lacks an equivalent managed Target-specific copy.
-- Once every installed consumer has an equivalent managed copy, the compatibility copy MAY be removed automatically after Preview, backup, and successful Apply.
+- A compatibility copy is removed only through an explicit Scan local cleanup after Preview and backup; Capture never removes it as a side effect.
 - A compatibility copy with conflicting content blocks automatic consolidation.
 - External manager metadata, including Skills CLI lock files, is read-only evidence. AgentEnv MUST NOT silently edit or delete another manager's lock data.
 - Importing an externally managed Skill creates an independent Library copy and MUST NOT imply that AgentEnv has taken ownership of the external installation.
@@ -180,7 +180,7 @@ It MUST include enough information to distinguish:
 | Preview | Compute a fresh, complete deployment plan against current Profile, Library, and Target state. It does not write. |
 | Apply | Transactionally replace the AgentEnv-managed Target environment with the selected saved Profile after Preview, using compensating rollback when a multi-path write fails. |
 | Take over | First Apply to an unmanaged Target. It establishes ownership after previewing existing content. |
-| Create from Target | Capture a Target's portable environment as a new Profile, import reusable resources into Library, apply the resulting Profile, and consolidate redundant runtime copies in one reviewed transaction. |
+| Create from Target | Read a Target's portable environment into a new saved Profile and import reusable resources into Library without changing or taking over the Target. |
 | Stop managing | End AgentEnv ownership through an explicit keep-current or restore-pre-takeover path. |
 | Remove from Profile | Remove a reference from the Profile draft. It does not delete Library content. |
 | Remove from Library | Delete canonical Library content only after references are resolved; managed installs are included explicitly. |
@@ -556,32 +556,30 @@ Status: local and recursive GitHub import, in-place Refresh, per-Skill update po
 
 Status: reusable references, immutable identity, deletion protection, portable stdio environment references, and remote URL validation are `Implemented`; richer remote authentication and broad secret masking are `Partial`.
 
-## 18. Create From Target And Consolidation Contract
+## 18. Create From Target Contract
 
-Create from Target turns an existing native environment into a managed Profile without requiring manual filesystem cleanup.
+Create from Target gives an existing native environment a reusable Profile representation before the user decides whether AgentEnv should manage it.
 
 - Capture MUST read only paths declared by the selected Target adapter.
 - A Target-row capture command MUST keep the invoking Targets workspace visible until the user confirms. Cancel and Escape return focus to that exact command without changing workspace.
 - Profiles may offer a general `From Target` entry, but a Target-row entry MUST bind the source Target directly and MUST NOT ask the user to choose Blank versus From Target again.
-- Capture uses two explicit steps: setup and takeover review. Review provides Back without losing the Profile name or selected Target.
-- Preview MUST list portable resources to include or reuse, new Library imports, excluded resources, conflicts, and old copies that will be removed.
-- Takeover review MUST summarize Profile resources, Library imports, preserved copies, and removed copies before the detailed resource list.
-- Blocking errors, preserved-copy advisories, and backup behavior MUST appear before long resource details. Repeated compatibility warnings MUST be aggregated with expandable details.
-- Review and Create expose local working and error states. Review MUST enter a visible animated busy state immediately, keep the action geometry stable, expose `aria-busy`, and block duplicate submission until the preview resolves. A stale or failed review remains in the dialog and offers `Refresh review`.
+- Capture uses two explicit steps: setup and capture review. Review provides Back without losing the Profile name or selected Target.
+- Preview MUST list portable resources to include or reuse, new Library imports, excluded resources, and conflicts.
+- Capture review MUST summarize Profile resources, Library imports, and zero source changes before the detailed resource list.
+- Blocking errors and excluded-resource advisories MUST appear before long resource details. Repeated warnings MUST be aggregated with expandable details.
+- Review and Save expose local working and error states. Review MUST enter a visible animated busy state immediately, keep the action geometry stable, expose `aria-busy`, and block duplicate submission until the preview resolves. A stale or failed review remains in the dialog and offers `Refresh review`.
 - Profile Instructions and Advanced configuration remain in the source Target's native format. Reusable Skills and supported MCP definitions become Library references.
 - Existing Library content is reused only when its comparable content hash or semantic MCP definition matches exactly.
 - Sensitive values, credentials, caches, history, runtime state, and unsupported native fields MUST remain Target-owned and MUST be named as excluded.
-- Ignored Skills remain in place, are excluded from the new Profile, and MUST NOT be removed by consolidation.
-- Duplicate active runtime copies with identical content MAY be consolidated. Same-name copies with different content block the operation.
-- The preferred runtime copy is established by Apply. Alternate copies are removed only after Apply succeeds and only when they were listed in Preview.
-- Apply backup MUST include every path scheduled for consolidation cleanup.
-- Skills are deployed to the selected Target's dedicated directory. Compatibility copies are removed only after every installed consumer has an equivalent managed copy.
+- Ignored Skills remain in place and are excluded from the new Profile.
+- Duplicate active runtime copies with identical content MAY be represented by one Library reference, but every source copy remains unchanged. Same-name copies with different content block capture because the canonical content is ambiguous.
 - Preview becomes stale when any captured source path changes before confirmation.
-- Failure before Apply removes newly created Profile and Library resources. Failure after Apply MUST restore the Target and cleanup paths before those new canonical resources are removed.
-- If automatic restoration fails, the new Profile, Library resources, and recovery backup MUST be preserved and the operation MUST enter an explicit recovery-required outcome.
-- A content-identical unmanaged Target MAY still be taken over to establish ownership and deployment state; this is not treated as an ordinary no-op.
+- Saving a captured Profile MUST NOT invoke Apply, create a Target Backup or deployment state, add ownership markers, delete a source path, or write Target history.
+- A successful capture opens the new Profile in `Saved, never applied` state. The user may inspect or edit it before using the standard Preview and Apply contract.
+- Takeover, backup, Target-specific deployment, and managed-resource replacement occur only during the later explicit Apply. Local duplicate cleanup remains an explicit Scan local workflow.
+- Failure while saving MUST remove the partially created Profile and newly imported Library resources while leaving the Target unchanged.
 
-Status: OpenCode, Codex, and Claude Code adapter capture, Target-specific deployment, compatibility-copy preservation and eventual cleanup, reviewed import, stale protection, and rollback are `Implemented`.
+Status: OpenCode, Codex, and Claude Code adapter capture, reviewed Library import, stale protection, source preservation, and saved-never-applied handoff are `Implemented`.
 
 ## 19. Profile Deletion Contract
 
@@ -746,10 +744,10 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Profile-scoped update Check excludes disabled and untracked references while a Library update discloses cross-Profile and Copy versus Live link impact.
 - Missing executable and missing directory are distinguished.
 - Copy mode keeps Library updates pending; Live link mode visibly propagates them immediately.
-- Create from Target captures portable resources, reuses exact Library matches, applies the resulting Profile, and removes only reviewed redundant copies.
+- Create from Target captures portable resources, reuses exact Library matches, and leaves Target files and deployment state unchanged.
 - Ignored resources and unsupported native data remain Target-owned after Create from Target.
 - Applying the same Library Skill to OpenCode, Codex, and Claude Code creates isolated Target-specific runtime copies.
-- A shared compatibility copy remains until all installed consumers have equivalent managed copies, then is removed automatically.
+- Shared compatibility copies remain unchanged during capture; later removal requires the explicit reviewed Scan local cleanup workflow.
 
 ### Cross-Target
 
@@ -824,14 +822,14 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-15 against the current `main` tree at the time of this snapshot.
 
-- `357` automated tests passed across `48` test files; the `70`-test Electron UI suite and `77` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `358` automated tests passed across `48` test files; the `70`-test Electron UI suite and `77` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `37` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
-- Target-row capture preserves the Targets workspace until confirmation; setup, Back, local failure recovery, grouped takeover review, and a 30-resource minimum-viewport stress case keep the action footer visible with one scrolling body.
+- Target-row capture preserves the Targets workspace until confirmation; setup, Back, local failure recovery, grouped capture review, and a 30-resource minimum-viewport stress case keep the action footer visible with one scrolling body.
 - Library deletion isolates the selected Skill from invalid neighboring content, and global feedback provides a non-blocking copy action.
 - Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
 - In-place Skill Refresh, GitHub directory candidate selection, partial batch import behavior, source-default Skill icons, custom Skill icon persistence, and draft-gated Profile icons passed Store, renderer, and Electron E2E coverage.

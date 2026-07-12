@@ -259,7 +259,6 @@ const createServices = async () => {
     profileStore,
     skillLibraryStore,
     mcpLibraryStore,
-    activationService,
     targetDiscoveryService
   });
 

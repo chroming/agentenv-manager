@@ -8,7 +8,6 @@ import type {
   TargetCaptureResource,
   TargetCaptureResult
 } from "../shared/types";
-import type { ActivationService } from "./activationService";
 import { pathExists } from "./fileUtils";
 import type { McpLibraryStore } from "./mcpLibraryStore";
 import type { AgentEnvPaths } from "./paths";
@@ -61,7 +60,6 @@ interface TargetCaptureServiceOptions {
   profileStore: ProfileStore;
   skillLibraryStore: SkillLibraryStore;
   mcpLibraryStore: McpLibraryStore;
-  activationService: ActivationService;
   targetDiscoveryService: TargetDiscoveryService;
 }
 
@@ -109,7 +107,6 @@ export const createTargetCaptureService = ({
   profileStore,
   skillLibraryStore,
   mcpLibraryStore,
-  activationService,
   targetDiscoveryService
 }: TargetCaptureServiceOptions): TargetCaptureService => {
   const previews = new Map<string, InternalCapture>();
@@ -126,11 +123,10 @@ export const createTargetCaptureService = ({
       fakeHomeRoot: paths.fakeHomeRoot
     });
     const captured = await adapter.captureProfile(targetPaths);
-    const [librarySkills, libraryMcp, inventory, targetStates] = await Promise.all([
+    const [librarySkills, libraryMcp, inventory] = await Promise.all([
       skillLibraryStore.listSkills(),
       mcpLibraryStore.listServers(),
-      skillLibraryStore.scanInventory([targetPaths]),
-      activationService.listTargetStates()
+      skillLibraryStore.scanInventory([targetPaths])
     ]);
     const runtimeLocations = (targetPaths.skillLocations ?? [
       ...(targetPaths.skillsDir
@@ -196,84 +192,8 @@ export const createTargetCaptureService = ({
         sourcePath,
         libraryId,
         action: existing ? "reuse" : "import",
-        detail: sourcePaths.length > 1 ? `${sourcePaths.length} copies will be consolidated` : undefined
+        detail: sourcePaths.length > 1 ? `${sourcePaths.length} source copies stay unchanged` : undefined
       });
-    }
-
-    const stateByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
-    const installedTargetIds = new Set(
-      discoveredTargets.filter((item) => item.health.executableFound).map((item) => item.id)
-    );
-    const compatibilityCleanupIsSafe = async (
-      sourceRoot: string,
-      skill: CapturedSkill
-    ) => {
-      const consumers = targetRegistry.listAdapters().filter((consumer) => {
-        if (consumer.descriptor.id === targetId || !installedTargetIds.has(consumer.descriptor.id)) {
-          return false;
-        }
-        const consumerPaths = consumer.createTargetPaths({
-          homeDir: paths.homeDir,
-          fakeHomeRoot: paths.fakeHomeRoot
-        });
-        return (consumerPaths.skillLocations ?? []).some((location) => location.path === sourceRoot);
-      });
-      for (const consumer of consumers) {
-        const activeProfileId = stateByTarget.get(consumer.descriptor.id)?.activeProfileId;
-        if (!activeProfileId) return false;
-        try {
-          const activeProfile = await profileStore.readProfile(activeProfileId);
-          const hasEquivalentReference = (activeProfile.assetPolicy.skillRefs ?? []).some(
-            (reference) =>
-              reference.enabled !== false &&
-              reference.targetName === skill.targetName &&
-              reference.libraryId === skill.libraryId
-          );
-          if (!hasEquivalentReference) return false;
-        } catch {
-          return false;
-        }
-      }
-      return true;
-    };
-
-    const cleanupPaths: string[] = [];
-    for (const skill of skills) {
-      let preservedCompatibilityCopies = 0;
-      for (const sourcePath of skill.sourcePaths) {
-        const sourceRoot = dirname(sourcePath);
-        const location = runtimeLocations.find((item) => item.path === sourceRoot);
-        if (!location || location.role === "preferred-runtime") continue;
-        if (location.role === "alternate-runtime" && !location.shared) {
-          cleanupPaths.push(sourcePath);
-          continue;
-        }
-        if (
-          location.role === "compatibility-runtime" &&
-          await compatibilityCleanupIsSafe(sourceRoot, skill)
-        ) {
-          cleanupPaths.push(sourcePath);
-          continue;
-        }
-        preservedCompatibilityCopies += 1;
-      }
-      const resource = resources.find(
-        (item) => item.kind === "skill" && item.id === skill.targetName
-      );
-      if (resource) {
-        const removedCopies = skill.sourcePaths.filter((path) => cleanupPaths.includes(path)).length;
-        resource.detail = [
-          removedCopies > 0 ? `${removedCopies} redundant ${removedCopies === 1 ? "copy" : "copies"} removed` : "",
-          preservedCompatibilityCopies > 0
-            ? `${preservedCompatibilityCopies} compatibility ${preservedCompatibilityCopies === 1 ? "copy" : "copies"} preserved`
-            : ""
-        ].filter(Boolean).join("; ") || undefined;
-      }
-      if (preservedCompatibilityCopies > 0) {
-        warnings.push(
-          `${skill.targetName}: compatibility copies stay in place until every installed consumer has an equivalent managed Skill`
-        );
-      }
     }
 
     const reservedMcpIds = new Set(libraryMcp.map((server) => server.id));
@@ -368,7 +288,6 @@ export const createTargetCaptureService = ({
       suggestedName: `${adapter.descriptor.name} Current`,
       createdAt: new Date().toISOString(),
       resources,
-      cleanupPaths: [...new Set(cleanupPaths)].sort(),
       warnings,
       errors
     };
@@ -400,7 +319,6 @@ export const createTargetCaptureService = ({
     const importedSkillPaths: string[] = [];
     const importedMcpIds: string[] = [];
     let profileId: string | undefined;
-    let applyBackupId: string | undefined;
     try {
       for (const skill of capture.skills.filter((item) => !item.existing)) {
         const imported = await skillLibraryStore.importSkill({
@@ -461,55 +379,20 @@ export const createTargetCaptureService = ({
           disabledSkillPaths: capture.captured.disabledSkillPaths
         }
       });
-      const applyPreview = await activationService.previewProfile(saved.id, capture.preview.targetId);
-      if (applyPreview.errors.length > 0) {
-        throw new Error(applyPreview.errors.join("; "));
-      }
-      const applied = await activationService.applyProfile(saved.id, applyPreview.id, {
-        additionalBackupPaths: capture.preview.cleanupPaths
-      });
-      if (!applied.ok) throw new Error(applied.errors.join("; "));
-      applyBackupId = applied.backupId;
-      for (const path of capture.preview.cleanupPaths) {
-        await rm(path, { recursive: true, force: true });
-      }
       previews.delete(input.previewId);
       return {
         profile: await profileStore.readProfile(saved.id),
         targetId: capture.preview.targetId,
-        backupId: applied.backupId,
         importedSkillCount: importedSkillPaths.length,
         importedMcpCount: importedMcpIds.length,
-        cleanedPathCount: capture.preview.cleanupPaths.length,
         warnings: capture.preview.warnings
       };
     } catch (error) {
-      let rollbackFailure: string | undefined;
-      if (applyBackupId) {
-        try {
-          const rollbackPreview = await activationService.previewRollback(applyBackupId);
-          if (rollbackPreview.errors.length > 0) {
-            rollbackFailure = rollbackPreview.errors.join("; ");
-          } else {
-            const rollback = await activationService.rollback(applyBackupId);
-            if (!rollback.ok) rollbackFailure = rollback.errors.join("; ");
-          }
-        } catch (rollbackError) {
-          rollbackFailure = rollbackError instanceof Error
-            ? rollbackError.message
-            : String(rollbackError);
-        }
-      }
-      if (rollbackFailure) {
-        throw new Error(
-          `Create from Target failed and automatic rollback also failed. Recovery backup ${applyBackupId} and the new Profile were preserved: ${rollbackFailure}`
-        );
-      }
       if (profileId) await profileStore.deleteProfile(profileId);
       for (const id of importedMcpIds) await mcpLibraryStore.removeServer(id);
       for (const path of importedSkillPaths) await rm(path, { recursive: true, force: true });
       throw new Error(
-        `Create from Target failed${applyBackupId ? " and was rolled back" : ""}: ${
+        `Create from Target failed: ${
           error instanceof Error ? error.message : String(error)
         }`
       );

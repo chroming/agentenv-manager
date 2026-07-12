@@ -2024,7 +2024,7 @@ describe("App", () => {
             name: "review-workflow",
             libraryId: "review-workflow",
             action: "import",
-            detail: "1 compatibility copy preserved"
+            detail: "2 source copies stay unchanged"
           },
           {
             kind: "instructions",
@@ -2033,17 +2033,14 @@ describe("App", () => {
             action: "include"
           }
         ],
-        cleanupPaths: ["/tmp/home/.config/opencode/skills/review-workflow"],
         warnings: [],
         errors: []
       }),
       createProfileFromTarget: vi.fn().mockResolvedValue({
         profile: capturedProfile,
         targetId: "opencode",
-        backupId: "capture-backup",
         importedSkillCount: 1,
         importedMcpCount: 0,
-        cleanedPathCount: 1,
         warnings: []
       })
     });
@@ -2057,16 +2054,16 @@ describe("App", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
 
     await waitFor(() => expect(api.previewCreateProfileFromTarget).toHaveBeenCalledWith("opencode"));
-    dialog = screen.getByRole("dialog", { name: "Review OpenCode takeover" });
+    dialog = screen.getByRole("dialog", { name: "Review OpenCode capture" });
     const impact = within(dialog).getByRole("region", { name: "Capture impact" });
-    expect(within(impact).getByLabelText("Takeover summary")).toHaveTextContent("1Copies removed");
-    expect(within(dialog).getByText("A shared copy will remain in its current location")).toBeInTheDocument();
+    expect(within(impact).getByLabelText("Capture summary")).toHaveTextContent("0Source changes");
+    expect(within(dialog).getByText("2 source copies stay unchanged")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
     dialog = screen.getByRole("dialog", { name: "Create profile from OpenCode" });
     expect(within(dialog).getByLabelText("Profile name")).toHaveValue("OpenCode Current");
     fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
-    dialog = await screen.findByRole("dialog", { name: "Review OpenCode takeover" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Create and take over" }));
+    dialog = await screen.findByRole("dialog", { name: "Review OpenCode capture" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save Profile" }));
 
     await waitFor(() =>
       expect(api.createProfileFromTarget).toHaveBeenCalledWith({
@@ -2074,7 +2071,9 @@ describe("App", () => {
         name: "OpenCode Current"
       })
     );
-    expect(await screen.findByText("OpenCode Current created and applied")).toBeInTheDocument();
+    expect(await screen.findByText("OpenCode Current created. Target unchanged.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
   });
 
   it("keeps the Targets workspace and restores context when capture is cancelled", async () => {
@@ -2107,7 +2106,6 @@ describe("App", () => {
           suggestedName: "OpenCode Current",
           createdAt: "2026-07-14T00:00:00.000Z",
           resources: [],
-          cleanupPaths: [],
           warnings: [],
           errors: []
         })
@@ -2125,7 +2123,7 @@ describe("App", () => {
     expect(screen.queryByText("Action failed")).not.toBeInTheDocument();
     fireEvent.click(within(localError).getByRole("button", { name: "Refresh review" }));
 
-    dialog = await screen.findByRole("dialog", { name: "Review OpenCode takeover" });
+    dialog = await screen.findByRole("dialog", { name: "Review OpenCode capture" });
     expect(api.previewCreateProfileFromTarget).toHaveBeenCalledTimes(2);
     expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
   });

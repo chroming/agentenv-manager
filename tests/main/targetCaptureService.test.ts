@@ -35,21 +35,12 @@ describe("target capture service", () => {
     const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
     const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
     const mcpLibraryStore = createMcpLibraryStore(paths);
-    const activationService = createActivationService({
-      paths,
-      profileStore,
-      targetRegistry,
-      settingsStore,
-      skillLibraryStore,
-      mcpLibraryStore
-    });
     const service = createTargetCaptureService({
       paths,
       profileStore,
       targetRegistry,
       skillLibraryStore,
       mcpLibraryStore,
-      activationService,
       targetDiscoveryService: {
         listTargets: async () => [
           { id: "opencode", health: { executableFound: false } } as TargetInfo
@@ -61,7 +52,7 @@ describe("target capture service", () => {
     await expect(profileStore.listProfiles()).resolves.toEqual([]);
   });
 
-  it("creates and manages an OpenCode profile while consolidating private skills", async () => {
+  it("captures an OpenCode profile without changing the Target", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-capture-"));
     const homeDir = join(root, "home");
     const appDataRoot = join(root, "app-data");
@@ -85,7 +76,6 @@ describe("target capture service", () => {
       targetRegistry,
       skillLibraryStore,
       mcpLibraryStore,
-      activationService,
       targetDiscoveryService: installedTargetDiscovery()
     });
 
@@ -118,7 +108,6 @@ describe("target capture service", () => {
 
     const preview = await service.previewTarget("opencode");
     expect(preview.errors).toEqual([]);
-    expect(preview.cleanupPaths).toEqual([]);
     expect(preview.resources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: "skill", id: "review-workflow", action: "import" }),
@@ -133,7 +122,6 @@ describe("target capture service", () => {
     });
     expect(result.importedSkillCount).toBe(1);
     expect(result.importedMcpCount).toBe(1);
-    expect(result.cleanedPathCount).toBe(0);
     expect(result.profile.assetPolicy.skillRefs).toEqual([
       { libraryId: "review-workflow", targetName: "review-workflow" }
     ]);
@@ -142,18 +130,12 @@ describe("target capture service", () => {
     ]);
     await expect(readFile(join(privateSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
     await expect(readFile(join(privateSkill, ".agentenv-owner.json"), "utf8"))
-      .resolves.toContain('"targetId": "opencode"');
+      .rejects.toThrow();
     await expect(
       readFile(join(paths.skillsLibraryDir, "review-workflow", "SKILL.md"), "utf8")
     ).resolves.toContain("# Review");
     await expect(readFile(join(agentDir, "agent.md"), "utf8")).resolves.toContain("Reviewer");
-    await expect(activationService.listTargetStates()).resolves.toEqual([
-      expect.objectContaining({
-        targetId: "opencode",
-        activeProfileId: result.profile.id,
-        lifecycleStatus: "applied"
-      })
-    ]);
+    await expect(activationService.listTargetStates()).resolves.toEqual([]);
   });
 
   it("rejects stale capture previews without importing resources", async () => {
@@ -166,21 +148,12 @@ describe("target capture service", () => {
     const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
     const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
     const mcpLibraryStore = createMcpLibraryStore(paths);
-    const activationService = createActivationService({
-      paths,
-      profileStore,
-      targetRegistry,
-      settingsStore,
-      skillLibraryStore,
-      mcpLibraryStore
-    });
     const service = createTargetCaptureService({
       paths,
       profileStore,
       targetRegistry,
       skillLibraryStore,
       mcpLibraryStore,
-      activationService,
       targetDiscoveryService: installedTargetDiscovery()
     });
     const targetDir = join(homeDir, ".config", "opencode");
@@ -206,21 +179,12 @@ describe("target capture service", () => {
     const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
     const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
     const mcpLibraryStore = createMcpLibraryStore(paths);
-    const activationService = createActivationService({
-      paths,
-      profileStore,
-      targetRegistry,
-      settingsStore,
-      skillLibraryStore,
-      mcpLibraryStore
-    });
     const service = createTargetCaptureService({
       paths,
       profileStore,
       targetRegistry,
       skillLibraryStore,
       mcpLibraryStore,
-      activationService,
       targetDiscoveryService: installedTargetDiscovery()
     });
     const targetDir = join(homeDir, ".config", "opencode");
@@ -233,7 +197,6 @@ describe("target capture service", () => {
     await skillLibraryStore.ignoreSkillGroup("private-local");
 
     const preview = await service.previewTarget("opencode");
-    expect(preview.cleanupPaths).not.toContain(ignoredDir);
     expect(preview.resources).toContainEqual(
       expect.objectContaining({
         kind: "skill",
@@ -248,7 +211,7 @@ describe("target capture service", () => {
     await expect(readFile(join(ignoredDir, "SKILL.md"), "utf8")).resolves.toContain("Private Local");
   });
 
-  it("preserves a compatibility Skill until every installed consumer has a managed copy", async () => {
+  it("leaves duplicate source Skills unchanged across Target captures", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-capture-compatibility-"));
     const homeDir = join(root, "home");
     const appDataRoot = join(root, "app-data");
@@ -258,14 +221,6 @@ describe("target capture service", () => {
     const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
     const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
     const mcpLibraryStore = createMcpLibraryStore(paths);
-    const activationService = createActivationService({
-      paths,
-      profileStore,
-      targetRegistry,
-      settingsStore,
-      skillLibraryStore,
-      mcpLibraryStore
-    });
     const targetDiscoveryService: TargetDiscoveryService = {
       listTargets: async () => [
         { id: "opencode", health: { executableFound: true } } as TargetInfo,
@@ -278,7 +233,6 @@ describe("target capture service", () => {
       targetRegistry,
       skillLibraryStore,
       mcpLibraryStore,
-      activationService,
       targetDiscoveryService
     });
     const sharedSkill = join(paths.userSkillsDir, "shared-review");
@@ -296,25 +250,27 @@ describe("target capture service", () => {
     await writeFile(paths.codexConfigPath, "");
 
     const openCodePreview = await service.previewTarget("opencode");
-    expect(openCodePreview.cleanupPaths).toEqual([]);
-    expect(openCodePreview.warnings.join("\n")).toContain("compatibility copies stay in place");
+    expect(openCodePreview.resources).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      id: "shared-review",
+      action: "import"
+    }));
     await service.createFromTarget({ previewId: openCodePreview.id, name: "OpenCode Imported" });
     await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Shared");
     await expect(
       readFile(join(openCodeDir, "skills", "shared-review", "SKILL.md"), "utf8")
-    ).resolves.toContain("# Shared");
+    ).rejects.toThrow();
 
     const codexPreview = await service.previewTarget("codex");
-    expect(codexPreview.cleanupPaths).toEqual([sharedSkill]);
     await service.createFromTarget({ previewId: codexPreview.id, name: "Codex Imported" });
 
-    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Shared");
     await expect(
       readFile(join(paths.codexHome, "skills", "shared-review", "SKILL.md"), "utf8")
-    ).resolves.toContain("# Shared");
+    ).rejects.toThrow();
     await expect(
       readFile(join(openCodeDir, "skills", "shared-review", "SKILL.md"), "utf8")
-    ).resolves.toContain("# Shared");
+    ).rejects.toThrow();
   });
 
   it("keeps Target-specific Skill deployments isolated", async () => {

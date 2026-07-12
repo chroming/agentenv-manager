@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createActivationService } from "../../src/main/activationService";
-import { createBackupStore } from "../../src/main/backupStore";
 import { createMcpLibraryStore } from "../../src/main/mcpLibraryStore";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
@@ -22,7 +21,7 @@ afterEach(async () => {
 });
 
 describe("OpenCode Create from Target e2e", () => {
-  it("captures the live environment and automatically consolidates old private skills", async () => {
+  it("captures the live environment without modifying source files or deployment state", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-capture-e2e-"));
     const homeDir = join(root, "home");
     const appDataRoot = join(root, "app-data");
@@ -46,7 +45,6 @@ describe("OpenCode Create from Target e2e", () => {
       targetRegistry,
       skillLibraryStore,
       mcpLibraryStore,
-      activationService,
       targetDiscoveryService: {
         listTargets: async () => [
           { id: "opencode", health: { executableFound: true } } as TargetInfo
@@ -79,9 +77,13 @@ describe("OpenCode Create from Target e2e", () => {
 
     const preview = await captureService.previewTarget("opencode");
     expect(preview.errors).toEqual([]);
-    expect(preview.cleanupPaths).toEqual([sharedSkill]);
     expect(preview.resources).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "skill", id: "reviewer", action: "import" }),
+      expect.objectContaining({
+        kind: "skill",
+        id: "reviewer",
+        action: "import",
+        detail: "2 source copies stay unchanged"
+      }),
       expect.objectContaining({ kind: "mcp", id: "docs", action: "import" })
     ]));
 
@@ -89,13 +91,12 @@ describe("OpenCode Create from Target e2e", () => {
       previewId: preview.id,
       name: "Imported OpenCode"
     });
-    expect(result.cleanedPathCount).toBe(1);
     await expect(readFile(join(oldPrivateSkill, "SKILL.md"), "utf8")).resolves.toContain("# Reviewer");
-    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Reviewer");
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
       .resolves.toContain("# Reviewer");
     await expect(readFile(join(oldPrivateSkill, ".agentenv-owner.json"), "utf8"))
-      .resolves.toContain('"targetId": "opencode"');
+      .rejects.toThrow();
     await expect(profileStore.readProfile(result.profile.id)).resolves.toMatchObject({
       instructions: "# Existing OpenCode\n",
       assetPolicy: {
@@ -103,14 +104,6 @@ describe("OpenCode Create from Target e2e", () => {
         mcpRefs: [{ libraryId: "docs", targetName: "docs" }]
       }
     });
-    const backup = await createBackupStore(paths).readBackup(result.backupId);
-    expect(backup.entries.map((entry) => entry.sourcePath)).toContain(sharedSkill);
-    await expect(activationService.listTargetStates()).resolves.toEqual([
-      expect.objectContaining({
-        targetId: "opencode",
-        activeProfileId: result.profile.id,
-        lifecycleStatus: "applied"
-      })
-    ]);
+    await expect(activationService.listTargetStates()).resolves.toEqual([]);
   });
 });

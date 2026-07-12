@@ -1051,7 +1051,7 @@ h2 {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
 }
 
@@ -1277,16 +1277,7 @@ h2 {
   }
 
   .capture-review__summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .capture-review__summary > span:nth-child(3) {
-    border-left: 0;
-    border-top: 1px solid var(--border-subtle);
-  }
-
-  .capture-review__summary > span:nth-child(4) {
-    border-top: 1px solid var(--border-subtle);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

@@ -3425,7 +3425,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(canonicalSkillMd)).resolves.toBe(true);
   }, 30_000);
 
-  it("creates and applies a managed Profile from the live OpenCode Target", async () => {
+  it("captures a Profile from the live OpenCode Target without taking it over", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
     await resizeAppWindow(page, 920, 620);
     await page.getByRole("button", { name: "Targets", exact: true }).click();
@@ -3444,7 +3444,7 @@ describe("Electron UI profile switching e2e", () => {
     dialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
     await dialog.getByRole("button", { name: "Review" }).click();
 
-    dialog = page.getByRole("dialog", { name: "Review OpenCode takeover" });
+    dialog = page.getByRole("dialog", { name: "Review OpenCode capture" });
     const impact = dialog.getByRole("region", { name: "Capture impact" });
     await expect.poll(() => impact.textContent()).toContain("target-only-reviewer");
     const captureGeometry = await dialog.evaluate((element) => {
@@ -3473,10 +3473,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(captureGeometry.confirmBottom).toBeLessThanOrEqual(captureGeometry.bottom);
     expect(captureGeometry.dialogOverflow).toBe("hidden");
     expect(captureGeometry.bodyOverflow).toBe("auto");
-    await dialog.getByRole("button", { name: "Create and take over" }).click();
+    await dialog.getByRole("button", { name: "Save Profile" }).click();
     await dialog.waitFor({ state: "hidden" });
     await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
-      "OpenCode Current created and applied"
+      "OpenCode Current created. Target unchanged."
     );
 
     await expect(
@@ -3484,7 +3484,7 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toContain("Migrate me into the shared library.");
     await expect(
       readFile(join(opencodeDir, "skills", "target-only-reviewer", ".agentenv-owner.json"), "utf8")
-    ).resolves.toContain('"targetId": "opencode"');
+    ).rejects.toThrow();
     const manifests = await Promise.all(
       (await readdir(join(appDataRoot, "profiles"), { withFileTypes: true }))
         .filter((entry) => entry.isDirectory())
@@ -3492,8 +3492,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     const captured = manifests.find((manifest) => manifest.name === "OpenCode Current");
     expect(captured?.id).toBeTruthy();
-    await expect(readJson<{ activeProfileId: string }>(join(appDataRoot, "target-states", "opencode.json")))
-      .resolves.toMatchObject({ activeProfileId: captured?.id });
+    await expect(fileExists(join(appDataRoot, "target-states", "opencode.json"))).resolves.toBe(false);
   }, 30_000);
 
   it("keeps capture actions visible with long, high-density review content", async () => {
@@ -3514,10 +3513,9 @@ describe("Electron UI profile switching e2e", () => {
             name: `dense-capture-resource-${index + 1}-with-a-long-name`,
             action: index === 0 ? "include" : "import",
             detail: index > 0 && index < 7
-              ? "1 compatibility copy preserved"
+              ? "Source copy stays unchanged"
               : "A deliberately long path and description used to verify compact window containment"
           })),
-          cleanupPaths: Array.from({ length: 4 }, (_, index) => `/tmp/old-copy-${index + 1}`),
           warnings: Array.from(
             { length: 6 },
             (_, index) => `dense-capture-resource-${index + 1}: compatibility copies stay in place until every installed consumer has an equivalent managed Skill`
@@ -3553,7 +3551,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(workingState.height).toBe(idleButtonBox?.height);
     expect(workingState.animationName).toBe("spin");
 
-    const dialog = page.getByRole("dialog", { name: "Review OpenCode takeover" });
+    const dialog = page.getByRole("dialog", { name: "Review OpenCode capture" });
     const impact = dialog.getByRole("region", { name: "Capture impact" });
     await expect.poll(() => impact.textContent()).toContain("dense-capture-resource-30");
     await expect.poll(() => impact.textContent()).toContain("6 items will remain outside AgentEnv");
