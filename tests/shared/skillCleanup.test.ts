@@ -137,4 +137,91 @@ describe("skill cleanup groups", () => {
     expect(group).toMatchObject({ state: "managed", resolution: "resolved" });
     expect(automaticSkillCleanupRequest(group)).toBeUndefined();
   });
+
+  it("tracks a shared compatibility copy through import and Target migration", () => {
+    const sharedCopy = inventoryItem({
+      path: "/tmp/home/.agents/skills/reviewer",
+      foundIn: ["opencode", "codex"],
+      status: "library",
+      libraryId: "reviewer",
+      contentMatchesLibrary: true,
+      locationRole: "compatibility-runtime",
+      sharedLocation: true
+    });
+    const openCodeCopy = inventoryItem({
+      path: "/tmp/home/.config/opencode/skills/reviewer",
+      foundIn: ["opencode"],
+      status: "managed",
+      libraryId: "reviewer",
+      contentMatchesLibrary: true
+    });
+    const codexCopy = inventoryItem({
+      path: "/tmp/home/.codex/skills/reviewer",
+      foundIn: ["codex"],
+      status: "managed",
+      libraryId: "reviewer",
+      contentMatchesLibrary: true
+    });
+
+    const [waiting] = buildSkillCleanupGroups([sharedCopy, openCodeCopy], {
+      installedTargetIds: ["opencode", "codex"],
+      managedTargetIds: ["opencode"]
+    });
+    expect(waiting.sharedMigration).toEqual({
+      state: "waiting",
+      consumers: ["codex", "opencode"],
+      pendingConsumers: ["codex"],
+      paths: ["/tmp/home/.agents/skills/reviewer"],
+      libraryId: "reviewer"
+    });
+    expect(automaticSkillCleanupRequest(waiting)).toBeUndefined();
+
+    const [ready] = buildSkillCleanupGroups([sharedCopy, openCodeCopy, codexCopy], {
+      installedTargetIds: ["opencode", "codex"],
+      managedTargetIds: ["opencode", "codex"]
+    });
+    expect(ready.sharedMigration).toMatchObject({ state: "ready", pendingConsumers: [] });
+  });
+
+  it("distinguishes unimported, retained, external, and conflicting shared copies", () => {
+    const shared = {
+      path: "/tmp/home/.agents/skills/reviewer",
+      foundIn: ["opencode", "codex"],
+      locationRole: "compatibility-runtime" as const,
+      sharedLocation: true
+    };
+    const groups = buildSkillCleanupGroups([
+      inventoryItem({ ...shared }),
+      inventoryItem({
+        ...shared,
+        id: "kept",
+        skillKey: "kept",
+        status: "ignored",
+        ignoreReason: "keep-shared"
+      }),
+      inventoryItem({
+        ...shared,
+        id: "external",
+        skillKey: "external",
+        status: "external"
+      }),
+      inventoryItem({
+        ...shared,
+        id: "conflict",
+        skillKey: "conflict",
+        status: "library",
+        libraryId: "conflict",
+        contentMatchesLibrary: false
+      })
+    ]);
+
+    expect(groups.find((group) => group.skillKey === "reviewer")?.sharedMigration?.state)
+      .toBe("not-imported");
+    expect(groups.find((group) => group.skillKey === "kept")?.sharedMigration?.state)
+      .toBe("kept");
+    expect(groups.find((group) => group.skillKey === "external")?.sharedMigration?.state)
+      .toBe("external");
+    expect(groups.find((group) => group.skillKey === "conflict")?.sharedMigration?.state)
+      .toBe("conflict");
+  });
 });

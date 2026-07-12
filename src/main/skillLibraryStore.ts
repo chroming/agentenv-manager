@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { SafeIdSchema } from "../shared/schemas";
 import type {
   AgentEnvSettings,
@@ -28,7 +28,8 @@ import type {
   SkillUpdatePlan,
   SkillUpdateSourceInput,
   TargetPaths,
-  UnmanagedSkillEntry
+  UnmanagedSkillEntry,
+  SharedSkillRetentionInput
 } from "../shared/types";
 import { createUnifiedDiff } from "./diff";
 import { pathExists } from "./fileUtils";
@@ -61,7 +62,7 @@ interface SkillCleanupBackupManifest {
   libraryRemoved?: boolean;
   libraryBackupPath?: string;
   createdAt: string;
-  operation?: "cleanup" | "remove";
+  operation?: "cleanup" | "remove" | "retire";
   entries: Array<{ sourcePath: string; backupPath: string }>;
 }
 
@@ -97,6 +98,8 @@ export interface SkillLibraryStore {
   removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   consolidateSkillGroup(input: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult>;
+  setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
+  retireSharedSkill(libraryId: string, paths: string[]): Promise<SkillCleanupResult>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
   checkUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
@@ -493,6 +496,35 @@ export const createSkillLibraryStore = (
     await writeIgnoreRules(
       rules.filter((rule) => !(rule.scope === "group" && rule.skillKey === normalized))
     );
+  };
+
+  const setSharedSkillRetention = async ({
+    skillKey,
+    paths: retainedPaths,
+    retained
+  }: SharedSkillRetentionInput): Promise<void> => {
+    const normalized = normalizeSkillKey(skillKey);
+    const pathsToUpdate = new Set(retainedPaths);
+    const rules = await readIgnoreRules();
+    const nextRules = rules.filter(
+      (rule) =>
+        !(rule.scope === "location" && rule.path && pathsToUpdate.has(rule.path) && rule.reason === "keep-shared")
+    );
+    if (retained) {
+      const now = new Date().toISOString();
+      for (const path of pathsToUpdate) {
+        nextRules.push({
+          id: `keep-shared-${normalized}-${createHash("sha256").update(path).digest("hex").slice(0, 10)}`,
+          scope: "location",
+          skillKey: normalized,
+          path,
+          reason: "keep-shared",
+          createdAt: now,
+          updatedAt: now
+        });
+      }
+    }
+    await writeIgnoreRules(nextRules);
   };
 
   const githubRequestInit = async (): Promise<RequestInit | undefined> => {
@@ -909,6 +941,13 @@ export const createSkillLibraryStore = (
           continue;
         }
         const entries = await readdir(scanRoot, { withFileTypes: true });
+        const resolvedScanRoot = resolve(scanRoot);
+        const location = target.skillLocations?.find(
+          (item) => resolve(item.path) === resolvedScanRoot
+        ) ??
+          (target.skillsDir && resolve(target.skillsDir) === resolvedScanRoot
+            ? { path: scanRoot, role: "preferred-runtime" as const, shared: false }
+            : undefined);
         for (const entry of entries) {
           if ((!entry.isDirectory() && !entry.isSymbolicLink()) || entry.name.startsWith(".")) {
             continue;
@@ -938,6 +977,9 @@ export const createSkillLibraryStore = (
                 skillKey,
                 contentHash: "",
                 ignoreRuleId: ignoreRule?.id,
+                ignoreReason: ignoreRule?.reason,
+                locationRole: location?.role,
+                sharedLocation: location?.shared,
                 externalOwnership
               });
               continue;
@@ -998,13 +1040,16 @@ export const createSkillLibraryStore = (
             skillKey,
             contentHash,
             ignoreRuleId: ignoreRule?.id,
+            ignoreReason: ignoreRule?.reason,
             installMethod: markerId ? (skillFileStats.isSymbolicLink() ? "linked" : "copied") : undefined,
             contentMatchesLibrary: markerId
               ? libraryById.get(markerId)?.contentHash === contentHash
               : libraryId
                 ? libraryById.get(libraryId)?.contentHash === contentHash
                 : undefined,
-            externalOwnership
+            externalOwnership,
+            locationRole: location?.role,
+            sharedLocation: location?.shared
           });
         }
       }
@@ -1456,6 +1501,62 @@ export const createSkillLibraryStore = (
     }
   };
 
+  const retireSharedSkill = async (
+    libraryId: string,
+    retiredPaths: string[]
+  ): Promise<SkillCleanupResult> => {
+    const safeLibraryId = SafeIdSchema.parse(libraryId);
+    if (!(await pathExists(join(await libraryDir(), safeLibraryId, "SKILL.md")))) {
+      throw new Error(`Library skill does not exist: ${safeLibraryId}`);
+    }
+    const uniquePaths = [...new Set(retiredPaths)];
+    for (const sourcePath of uniquePaths) {
+      if (!(await pathExists(join(sourcePath, "SKILL.md")))) {
+        throw new Error(`Shared Skill location is missing SKILL.md: ${sourcePath}`);
+      }
+    }
+    const backupId = `retire-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const backupDir = join(cleanupBackupRoot(), backupId);
+    const entries: SkillCleanupBackupManifest["entries"] = [];
+    await mkdir(backupDir, { recursive: true });
+
+    for (const [index, sourcePath] of uniquePaths.entries()) {
+      const backupPath = join(backupDir, "locations", `${index}-${basename(sourcePath)}`);
+      await mkdir(dirname(backupPath), { recursive: true });
+      await cp(sourcePath, backupPath, { recursive: true, dereference: false });
+      entries.push({ sourcePath, backupPath });
+    }
+
+    const manifest: SkillCleanupBackupManifest = {
+      id: backupId,
+      libraryId: safeLibraryId,
+      libraryCreated: false,
+      operation: "retire",
+      createdAt: new Date().toISOString(),
+      entries
+    };
+    await writeFile(join(backupDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    try {
+      for (const sourcePath of uniquePaths) {
+        await rm(sourcePath, { recursive: true, force: true });
+      }
+      return {
+        backupId,
+        libraryId: safeLibraryId,
+        managedLocations: uniquePaths,
+        operation: "retire"
+      };
+    } catch (error) {
+      await restoreCleanupBackup(manifest);
+      throw new Error(
+        `Retiring shared Skill ${safeLibraryId} failed and was rolled back: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  };
+
   const rollbackSkillCleanup = async (backupId: string): Promise<void> => {
     const { backupDir, manifest } = await readCleanupBackup(backupId);
     await restoreCleanupBackup(manifest);
@@ -1813,6 +1914,8 @@ export const createSkillLibraryStore = (
     removeSkill,
     manageTargetSkill,
     consolidateSkillGroup,
+    setSharedSkillRetention,
+    retireSharedSkill,
     rollbackSkillCleanup,
     checkUpdates,
     setUpdateSource,

@@ -12,6 +12,22 @@ export type SkillCleanupGroupState =
 
 export type SkillCleanupResolution = "automatic" | "manual" | "resolved";
 
+export type SharedSkillMigrationState =
+  | "not-imported"
+  | "waiting"
+  | "ready"
+  | "kept"
+  | "external"
+  | "conflict";
+
+export interface SharedSkillMigration {
+  state: SharedSkillMigrationState;
+  consumers: string[];
+  pendingConsumers: string[];
+  paths: string[];
+  libraryId?: string;
+}
+
 export interface SkillCleanupGroup {
   skillKey: string;
   items: SkillInventoryEntry[];
@@ -20,10 +36,15 @@ export interface SkillCleanupGroup {
   state: SkillCleanupGroupState;
   resolution: SkillCleanupResolution;
   resolutionReason: string;
+  sharedMigration?: SharedSkillMigration;
 }
 
 export const buildSkillCleanupGroups = (
-  skillInventory: SkillInventoryEntry[]
+  skillInventory: SkillInventoryEntry[],
+  options: {
+    installedTargetIds?: readonly string[];
+    managedTargetIds?: readonly string[];
+  } = {}
 ): SkillCleanupGroup[] => {
   const byKey = new Map<string, SkillInventoryEntry[]>();
   for (const skill of skillInventory) {
@@ -52,6 +73,59 @@ export const buildSkillCleanupGroups = (
       const missingTarget = activeItems.some(
         (item) => item.status !== "managed" && item.foundIn.length === 0
       );
+      const sharedItems = items.filter((item) => item.sharedLocation);
+      const installedTargets = options.installedTargetIds
+        ? new Set(options.installedTargetIds)
+        : undefined;
+      const consumers = [...new Set(sharedItems.flatMap((item) => item.foundIn))]
+        .filter((targetId) => !installedTargets || installedTargets.has(targetId))
+        .sort();
+      const managedTargets = new Set(options.managedTargetIds ?? []);
+      const sharedLibraryItem = sharedItems.find(
+        (item) => item.libraryId && item.contentMatchesLibrary === true
+      );
+      const migratedTargets = new Set(
+        items
+          .filter(
+            (item) =>
+              !item.sharedLocation &&
+              item.status === "managed" &&
+              item.libraryId === sharedLibraryItem?.libraryId &&
+              item.contentMatchesLibrary === true
+          )
+          .flatMap((item) => item.foundIn)
+      );
+      const pendingConsumers = consumers.filter(
+        (targetId) => !managedTargets.has(targetId) || !migratedTargets.has(targetId)
+      );
+      const sharedKept =
+        sharedItems.length > 0 &&
+        sharedItems.every(
+          (item) => item.status === "ignored" && item.ignoreReason === "keep-shared"
+        );
+      const sharedConflict =
+        sharedItems.some(
+          (item) => item.libraryId && item.contentMatchesLibrary === false
+        ) || hashes.size > 1;
+      const sharedMigration: SharedSkillMigration | undefined = sharedItems.length === 0
+        ? undefined
+        : {
+            state: sharedKept
+              ? "kept"
+              : sharedItems.some((item) => item.status === "external")
+                ? "external"
+                : sharedConflict
+                  ? "conflict"
+                  : !sharedLibraryItem
+                    ? "not-imported"
+                    : pendingConsumers.length > 0
+                      ? "waiting"
+                      : "ready",
+            consumers,
+            pendingConsumers,
+            paths: [...new Set(sharedItems.map((item) => item.path))].sort(),
+            libraryId: sharedLibraryItem?.libraryId
+          };
 
       const state: SkillCleanupGroupState = allIgnored
         ? "ignored"
@@ -103,7 +177,8 @@ export const buildSkillCleanupGroups = (
         primary: activeItems[0] ?? items[0],
         state,
         resolution,
-        resolutionReason
+        resolutionReason,
+        sharedMigration
       };
     })
     .sort((left, right) =>
@@ -121,6 +196,7 @@ export const automaticSkillCleanupRequest = (
   }
   const locations = group.activeItems.filter(
     (item) =>
+      !item.sharedLocation &&
       item.status !== "ignored" &&
       item.status !== "external" &&
       (item.status !== "managed" || item.contentMatchesLibrary === false)

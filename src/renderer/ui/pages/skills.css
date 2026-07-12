@@ -483,11 +483,23 @@
 }
 
 .skill-library-panel .cleanup-group-row {
-  grid-template-columns: 104px minmax(0, 1fr) auto;
+  align-items: start;
+  grid-template-columns: 104px minmax(0, 1fr);
 }
 
-.skill-library-panel .cleanup-group-actions {
+.skill-library-panel .cleanup-group-row > .cleanup-group-actions {
+  grid-column: 2;
+  justify-self: end;
+  max-width: none;
   min-width: 0;
+}
+
+.skill-library-panel .cleanup-group-actions .primary-action,
+.skill-library-panel .cleanup-group-actions .secondary-action {
+  flex: 0 0 auto;
+  height: 36px;
+  min-height: 36px;
+  width: auto;
 }
 
 .local-import-impact {
@@ -580,6 +592,59 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cleanup-shared-progress {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 4px 0;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.cleanup-shared-progress > span {
+  min-width: 0;
+  padding-inline: 7px;
+  white-space: nowrap;
+}
+
+.cleanup-shared-progress > span:first-child {
+  color: #52617a;
+  font-weight: 680;
+  padding-left: 0;
+}
+
+.cleanup-shared-progress > span + span {
+  border-left: 1px solid var(--border);
+}
+
+.cleanup-retire-action {
+  color: var(--danger);
+}
+
+.cleanup-retire-summary {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cleanup-retire-summary > div {
+  display: grid;
+  gap: 3px;
+}
+
+.cleanup-retire-summary strong {
+  font-size: 12px;
+}
+
+.cleanup-retire-summary span,
+.cleanup-retire-summary small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .external-skill-dialog {

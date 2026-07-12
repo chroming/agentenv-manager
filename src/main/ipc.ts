@@ -15,6 +15,8 @@ import type {
   CreateProfileFromTargetInput,
   GitHubSkillImportInput,
   ManageTargetSkillInput,
+  RetireSharedSkillInput,
+  SharedSkillRetentionInput,
   SkillCleanupRequest,
   SkillImportInput,
   SkillIconInput,
@@ -84,6 +86,26 @@ export const registerIpcHandlers = ({
         (state.__agentEnvBackgroundOperations ?? 1) - 1
       );
     }
+  };
+  const resolveSharedSkillPaths = async (values: unknown) => {
+    if (!Array.isArray(values) || values.length === 0) {
+      throw new Error("At least one shared Skill path is required");
+    }
+    const targets = await targetDiscoveryService.listTargets();
+    const sharedRoots = new Set(
+      targets.flatMap((target) =>
+        (target.paths.skillLocations ?? [])
+          .filter((location) => location.shared && location.role === "compatibility-runtime")
+          .map((location) => resolve(location.path))
+      )
+    );
+    return [...new Set(values.map((value) => resolve(String(value))))].map((path) => {
+      const root = dirname(path);
+      if (!sharedRoots.has(root) || !basename(path)) {
+        throw new Error(`Skill path is not a shared compatibility location: ${path}`);
+      }
+      return path;
+    });
   };
 
   ipcMain.handle("clipboard:write-text", (_event, text: unknown) => {
@@ -166,6 +188,7 @@ export const registerIpcHandlers = ({
 
     const canTakeOwnership =
       localInstall &&
+      !localInstall.sharedLocation &&
       localInstall.status !== "external" &&
       localInstall.status !== "ignored" &&
       input.provenance?.externalManager !== "skills-cli";
@@ -284,6 +307,77 @@ export const registerIpcHandlers = ({
       canonicalPath: resolve(String(input.canonicalPath)),
       locations
     });
+  });
+  ipcMain.handle(
+    "skills:set-shared-retention",
+    async (_event, input: SharedSkillRetentionInput) => {
+      const skillKey = parseId(input?.skillKey, "skill key");
+      const sharedPaths = await resolveSharedSkillPaths(input?.paths);
+      await skillLibraryStore.setSharedSkillRetention({
+        skillKey,
+        paths: sharedPaths,
+        retained: Boolean(input?.retained)
+      });
+    }
+  );
+  ipcMain.handle("skills:retire-shared", async (_event, input: RetireSharedSkillInput) => {
+    const skillKey = parseId(input?.skillKey, "skill key");
+    const libraryId = parseId(input?.libraryId, "skill library id");
+    const sharedPaths = await resolveSharedSkillPaths(input?.paths);
+    const targets = await targetDiscoveryService.listTargets();
+    const inventory = await skillLibraryStore.scanInventory(
+      targets.map((target) => target.paths)
+    );
+    const sharedPathSet = new Set(sharedPaths);
+    const sharedEntries = inventory.filter(
+      (item) =>
+        item.skillKey === skillKey &&
+        item.sharedLocation === true &&
+        sharedPathSet.has(resolve(item.path))
+    );
+    const matchedPaths = new Set(sharedEntries.map((item) => resolve(item.path)));
+    if (
+      matchedPaths.size !== sharedPathSet.size ||
+      sharedEntries.some(
+        (item) => item.libraryId !== libraryId || item.contentMatchesLibrary !== true
+      )
+    ) {
+      throw new Error(
+        `${skillKey} cannot remove its shared copy until the exact Library version is available.`
+      );
+    }
+    const installedTargetIds = new Set(
+      targets.filter((target) => target.health.executableFound).map((target) => target.id)
+    );
+    const consumerTargetIds = new Set(
+      sharedEntries.flatMap((item) => item.foundIn).filter((id) => installedTargetIds.has(id))
+    );
+    const managedTargetIds = new Set(
+      (await activationService.listTargetStates())
+        .filter((state) => state.status === "managed")
+        .map((state) => state.targetId)
+    );
+    const migratedTargetIds = new Set(
+      inventory
+        .filter(
+          (item) =>
+            item.skillKey === skillKey &&
+            item.sharedLocation !== true &&
+            item.status === "managed" &&
+            item.libraryId === libraryId &&
+            item.contentMatchesLibrary === true
+        )
+        .flatMap((item) => item.foundIn)
+    );
+    const pendingConsumers = [...consumerTargetIds].filter(
+      (id) => !managedTargetIds.has(id) || !migratedTargetIds.has(id)
+    );
+    if (pendingConsumers.length > 0) {
+      throw new Error(
+        `${skillKey} is still used from the shared location by: ${pendingConsumers.join(", ")}. Apply a managed Profile to those Targets first.`
+      );
+    }
+    return skillLibraryStore.retireSharedSkill(libraryId, sharedPaths);
   });
   ipcMain.handle("skills:rollback-cleanup", (_event, backupId: unknown) =>
     skillLibraryStore.rollbackSkillCleanup(parseId(backupId, "cleanup backup id"))

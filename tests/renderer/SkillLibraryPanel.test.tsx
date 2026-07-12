@@ -65,6 +65,8 @@ describe("SkillLibraryPanel", () => {
     const onAutoConsolidateSkillGroups = vi.fn().mockResolvedValue(undefined);
     const onIgnoreSkillGroup = vi.fn();
     const onUnignoreSkillGroup = vi.fn();
+    const onSetSharedSkillRetention = vi.fn().mockResolvedValue(true);
+    const onRetireSharedSkill = vi.fn().mockResolvedValue(true);
     const onRestoreCleanup = vi.fn();
     const onCloseTool = vi.fn();
     const onRefreshInventory = vi.fn().mockResolvedValue(undefined);
@@ -135,6 +137,48 @@ describe("SkillLibraryPanel", () => {
             contentHash: "shared-hash",
             installMethod: "linked",
             contentMatchesLibrary: true
+          },
+          {
+            id: "compat-reviewer",
+            name: "Compatibility Reviewer",
+            description: "Shared migration source",
+            path: "/tmp/home/.agents/skills/compat-reviewer",
+            foundIn: ["opencode", "codex"],
+            status: "library",
+            libraryId: "compat-reviewer",
+            skillKey: "compat-reviewer",
+            contentHash: "compat-hash",
+            contentMatchesLibrary: true,
+            locationRole: "compatibility-runtime",
+            sharedLocation: true
+          },
+          {
+            id: "compat-reviewer",
+            name: "Compatibility Reviewer",
+            description: "Managed OpenCode copy",
+            path: "/tmp/opencode/skills/compat-reviewer",
+            foundIn: ["opencode"],
+            status: "managed",
+            libraryId: "compat-reviewer",
+            skillKey: "compat-reviewer",
+            contentHash: "compat-hash",
+            contentMatchesLibrary: true,
+            locationRole: "preferred-runtime",
+            sharedLocation: false
+          },
+          {
+            id: "compat-reviewer",
+            name: "Compatibility Reviewer",
+            description: "Managed Codex copy",
+            path: "/tmp/codex/skills/compat-reviewer",
+            foundIn: ["codex"],
+            status: "managed",
+            libraryId: "compat-reviewer",
+            skillKey: "compat-reviewer",
+            contentHash: "compat-hash",
+            contentMatchesLibrary: true,
+            locationRole: "preferred-runtime",
+            sharedLocation: false
           },
           {
             id: "copied-local",
@@ -291,6 +335,8 @@ describe("SkillLibraryPanel", () => {
         } : undefined}
         bulkUpdatePlans={bulkUpdatePlans}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
+        installedTargetIds={["opencode", "codex"]}
+        managedTargetIds={["opencode", "codex"]}
         activeTool={activeTool}
         isRefreshingInventory={false}
         onCloseTool={onCloseTool}
@@ -320,6 +366,8 @@ describe("SkillLibraryPanel", () => {
         onAutoConsolidateSkillGroups={onAutoConsolidateSkillGroups}
         onIgnoreSkillGroup={onIgnoreSkillGroup}
         onUnignoreSkillGroup={onUnignoreSkillGroup}
+        onSetSharedSkillRetention={onSetSharedSkillRetention}
+        onRetireSharedSkill={onRetireSharedSkill}
         onRestoreCleanup={onRestoreCleanup}
         updateCheckStatus={{ state: "success", message: "2 updates available" }}
         viewState={{ ...defaultSkillLibraryViewState, scrollTop: 180 }}
@@ -548,6 +596,35 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Auto-ready");
     expect(discoveries).toHaveTextContent("Review");
     expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
+    const sharedMigrationGroup = screen.getByRole("group", {
+      name: "Cleanup group compat-reviewer"
+    });
+    expect(sharedMigrationGroup).toHaveTextContent("Ready to remove");
+    expect(sharedMigrationGroup).toHaveTextContent("Shared compatibility location");
+    expect(sharedMigrationGroup).toHaveTextContent("OpenCode: Migrated");
+    expect(sharedMigrationGroup).toHaveTextContent("Codex: Migrated");
+    fireEvent.click(
+      within(sharedMigrationGroup).getByRole("button", { name: "Keep shared compat-reviewer" })
+    );
+    expect(onSetSharedSkillRetention).toHaveBeenCalledWith({
+      skillKey: "compat-reviewer",
+      paths: ["/tmp/home/.agents/skills/compat-reviewer"],
+      retained: true
+    });
+    const removeSharedButton = within(sharedMigrationGroup).getByRole("button", {
+      name: "Remove shared copy compat-reviewer"
+    });
+    await waitFor(() => expect(removeSharedButton).toBeEnabled());
+    fireEvent.click(removeSharedButton);
+    const retireDialog = screen.getByRole("dialog", { name: "Remove shared Skill copy" });
+    expect(retireDialog).toHaveTextContent("The Library copy is kept");
+    expect(retireDialog).toHaveTextContent("/tmp/home/.agents/skills/compat-reviewer");
+    fireEvent.click(within(retireDialog).getByRole("button", { name: "Remove shared copy" }));
+    await waitFor(() => expect(onRetireSharedSkill).toHaveBeenCalledWith({
+      skillKey: "compat-reviewer",
+      libraryId: "compat-reviewer",
+      paths: ["/tmp/home/.agents/skills/compat-reviewer"]
+    }));
     let resolveAutoCleanup: (() => void) | undefined;
     onAutoConsolidateSkillGroups.mockImplementationOnce(
       () => new Promise<void>((resolve) => {

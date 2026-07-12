@@ -51,6 +51,8 @@ import type {
   GitHubSkillScanResult,
   LibraryResourceVersions,
   ManageTargetSkillInput,
+  RetireSharedSkillInput,
+  SharedSkillRetentionInput,
   McpLibraryEntry,
   SaveMcpServerInput,
   SkillInventoryEntry,
@@ -2153,6 +2155,41 @@ const AppContent = ({
     }
   };
 
+  const setSharedSkillRetention = async (input: SharedSkillRetentionInput) => {
+    setError(undefined);
+    try {
+      await window.agentEnv.setSharedSkillRetention(input);
+      setSkillInventory(await window.agentEnv.scanSkillInventory());
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: input.retained
+          ? `${input.skillKey} will remain in the shared compatibility directory`
+          : `${input.skillKey} is back in migration review`
+      });
+      return true;
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
+    }
+  };
+
+  const retireSharedSkill = async (input: RetireSharedSkillInput) => {
+    setError(undefined);
+    try {
+      const result = await window.agentEnv.retireSharedSkill(input);
+      setSkillCleanupResult(result);
+      await refreshProfiles({ checkSkillUpdates: false });
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: `Removed ${input.skillKey} from the shared compatibility directory`
+      });
+      return true;
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
+    }
+  };
+
   const scanGitHubSkills = (url: string): Promise<GitHubSkillScanResult> =>
     window.agentEnv.scanGitHubSkills(url);
 
@@ -2978,6 +3015,12 @@ const AppContent = ({
                 selectedUpdatePlan={selectedSkillUpdatePlan}
                 bulkUpdatePlans={bulkSkillUpdatePlans}
                 skillUsage={skillUsage}
+                installedTargetIds={targets
+                  .filter((target) => target.health.executableFound)
+                  .map((target) => target.id)}
+                managedTargetIds={targetStates
+                  .filter((target) => target.status === "managed")
+                  .map((target) => target.targetId)}
                 activeTool={skillLibraryTool}
                 isRefreshingInventory={skillInventoryRefreshing}
                 onCloseTool={() => setSkillLibraryTool(undefined)}
@@ -3015,6 +3058,8 @@ const AppContent = ({
                 onUnignoreSkillGroup={(skillKey) => {
                   void unignoreSkillGroup(skillKey);
                 }}
+                onSetSharedSkillRetention={setSharedSkillRetention}
+                onRetireSharedSkill={retireSharedSkill}
                 onRestoreCleanup={(backupId) => void undoSkillCleanup(backupId)}
                 updateCheckStatus={skillUpdateCheckStatus}
                 viewState={skillLibraryViewState}

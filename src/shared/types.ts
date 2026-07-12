@@ -35,6 +35,8 @@ export interface AgentEnvApi {
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
   consolidateSkillGroup(input: SkillCleanupRequest): Promise<SkillCleanupResult>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
+  setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
+  retireSharedSkill(input: RetireSharedSkillInput): Promise<SkillCleanupResult>;
   checkSkillLibraryUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   setSkillUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
@@ -237,6 +239,9 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   installMethod?: "linked" | "copied";
   contentMatchesLibrary?: boolean;
   externalOwnership?: SkillExternalOwnership;
+  locationRole?: TargetSkillLocationRole;
+  sharedLocation?: boolean;
+  ignoreReason?: string;
 }
 
 export interface SkillCleanupLocationInput {
@@ -251,11 +256,23 @@ export interface SkillCleanupRequest {
   locations: SkillCleanupLocationInput[];
 }
 
+export interface SharedSkillRetentionInput {
+  skillKey: string;
+  paths: string[];
+  retained: boolean;
+}
+
+export interface RetireSharedSkillInput {
+  skillKey: string;
+  libraryId: string;
+  paths: string[];
+}
+
 export interface SkillCleanupResult {
   backupId: string;
   libraryId: string;
   managedLocations: string[];
-  operation?: "cleanup" | "remove";
+  operation?: "cleanup" | "remove" | "retire";
 }
 
 export interface SkillCleanupBackupSummary {
@@ -263,7 +280,7 @@ export interface SkillCleanupBackupSummary {
   libraryId: string;
   createdAt: string;
   locationCount: number;
-  operation?: "cleanup" | "remove";
+  operation?: "cleanup" | "remove" | "retire";
 }
 
 export interface UnmanagedSkillEntry {

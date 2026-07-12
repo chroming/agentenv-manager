@@ -80,7 +80,10 @@ Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data ro
 - Apply MUST deploy Skills to the selected Target's dedicated managed directory.
 - Applying an OpenCode Profile MUST NOT change Codex or Claude Code Skill directories, and equivalent isolation applies to every Target pair.
 - Compatibility copies MAY be captured into a Profile, but MUST remain in place while any installed consumer lacks an equivalent managed Target-specific copy.
-- A compatibility copy is removed only through an explicit Scan local cleanup after Preview and backup; Capture never removes it as a side effect.
+- Importing a compatibility copy creates an independent Library copy and MUST NOT replace, link, or remove the compatibility location.
+- A compatibility copy is removed only through an explicit Scan local migration action after every installed consumer Target is managed; Capture never removes it as a side effect.
+- Removing a compatibility copy MUST create a restorable backup, retain the Library copy, and remove only the reviewed shared paths.
+- `Keep shared` is a path-scoped migration decision. It MUST NOT ignore or alter same-name copies in Target-specific directories.
 - A compatibility copy with conflicting content blocks automatic consolidation.
 - External manager metadata, including Skills CLI lock files, is read-only evidence. AgentEnv MUST NOT silently edit or delete another manager's lock data.
 - Importing an externally managed Skill creates an independent Library copy and MUST NOT imply that AgentEnv has taken ownership of the external installation.
@@ -483,12 +486,23 @@ Resolution contract:
 - Groups are classified as `Auto-ready`, `Review`, or resolved. Needs attention counts unresolved groups, not raw paths, and excludes managed and ignored groups.
 - A single unmanaged copy, identical unmanaged duplicates, a local copy that exactly matches Library, and stale managed copies MAY be handled automatically because no content choice is required.
 - Differing content, a local copy that differs from an existing Library version, external-manager ownership, and missing Target identity MUST remain in manual Review.
-- `Take over` is an immediate, mutating action: it backs up the affected locations, creates or reuses the Library copy, and replaces every eligible detected copy with an AgentEnv-owned installation. `Review` opens a decision dialog and MUST NOT mutate files by itself. `Details` is read-only and remains available for every group.
+- `Take over` is an immediate, mutating action for Target-specific locations: it backs up the affected locations, creates or reuses the Library copy, and replaces every eligible detected copy with an AgentEnv-owned installation. It MUST NOT replace a shared compatibility location. `Review` opens a decision dialog and MUST NOT mutate files by itself. `Details` is read-only and remains available for every group.
 - `Take over all` backs up and processes every currently auto-ready group. A failure in one group MUST NOT undo successful independent groups, and the result MUST report both completed and remaining groups.
 - `Take over all` is shown only when at least one group is currently eligible. While it is running, the initiating control exposes a local working state and conflicting cleanup actions are disabled until the refreshed result is available.
 - After a successful takeover, every selected location MUST rescan as current and `Managed`; the group MUST NOT retain `Duplicate`, `Auto-ready`, or another takeover action. A managed group may remain visible for inspection through `Details`, but it is not pending work.
 - AgentEnv ownership is attached to the physical managed installation. A shared compatibility path scanned by multiple Targets MUST appear as one managed location rather than a duplicate caused by Target-specific scanning.
 - A physical location shared by multiple Target adapters MUST be labelled as shared in cleanup review instead of presenting the Target names as separate copies.
+
+Shared compatibility migration contract:
+
+- A shared compatibility group has one of six explicit states: `Shared source`, `Waiting for Targets`, `Ready to remove`, `Kept shared`, `External`, or `Conflict`.
+- The group shows Library import status and every installed consumer Target as either `Uses shared copy` or `Migrated`.
+- `Import copy` is non-destructive: it copies the selected shared content into Library and leaves the shared path untouched.
+- `Waiting for Targets` remains until every installed adapter-declared consumer is managed and has an exact AgentEnv-owned copy in its Target-specific directory. Merely having a Profile, Library reference, or globally managed Target is insufficient.
+- `Ready to remove` requires an exact Library copy and an equivalent current managed installation for every installed consumer. The same prerequisites MUST be enforced in the main process, not only by renderer state.
+- `Remove shared copy` requires confirmation, creates a cleanup backup, retains Library content, removes only the reviewed compatibility paths, and exposes the result in Cleanup history with Restore.
+- `Keep shared` records a path-scoped decision and resolves the group without changing files. `Review again` removes only that decision.
+- Shared compatibility groups MUST NOT participate in `Take over all` or generic duplicate cleanup.
 
 Cleanup review contract:
 
@@ -748,6 +762,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Ignored resources and unsupported native data remain Target-owned after Create from Target.
 - Applying the same Library Skill to OpenCode, Codex, and Claude Code creates isolated Target-specific runtime copies.
 - Shared compatibility copies remain unchanged during capture; later removal requires the explicit reviewed Scan local cleanup workflow.
+- Importing a shared compatibility Skill leaves the source untouched; removal is blocked until every installed consumer has an exact managed Target-specific copy, then creates a restorable backup without deleting Library content.
 
 ### Cross-Target
 
@@ -822,7 +837,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-15 against the current `main` tree at the time of this snapshot.
 
-- `358` automated tests passed across `48` test files; the `70`-test Electron UI suite and `77` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `364` automated tests passed across `48` test files; the `72`-test Electron UI suite and `79` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `37` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
@@ -836,6 +851,7 @@ Last verified: 2026-07-15 against the current `main` tree at the time of this sn
 - Library Skill disable, picker exclusion, update-check isolation, re-enable, and Apply-time Target removal and restoration passed Store, renderer, and Electron E2E coverage; Profile Skill switches use the same Save and Apply contract as Add and Remove.
 - Skill table headers, mixed-action rows, two-line metadata, empty install states, and update labels passed coordinate and overflow assertions at both supported viewports.
 - Target-local import now creates a transactional managed install, shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
+- Shared compatibility migration now distinguishes imported, waiting, ready, retained, external, and conflict states; Electron E2E verifies non-destructive import, main-process early-removal blocking, per-Target managed copies, explicit retirement, backup history, and restore.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards.
 - Production dependency audit reported zero known vulnerabilities.
