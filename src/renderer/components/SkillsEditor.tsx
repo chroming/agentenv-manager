@@ -630,15 +630,24 @@ export const SkillsEditor = ({
                 : update?.updateAvailable
                   ? "Update available"
                   : skill.updatePolicy === "untracked"
-                    ? "Not tracked"
+                    ? "Library copy"
                     : update
                       ? "Up to date"
                       : "Tracked";
             const iconKey = skill?.iconKey ?? (skill?.sourceType === "github" ? "github" : "folder");
-            const revision = skill?.remoteRevision?.slice(0, 7);
+            const libraryRevision = skill?.contentHash.slice(0, 7);
+            const installDetail = skill && entry.targetName !== skill.id
+              ? ` · ${t("installs as {{name}}", { name: entry.targetName })}`
+              : "";
             const detail = skill
-              ? `${skill.sourceType === "github" ? "GitHub" : t("Local")}${revision ? ` · ${revision}` : ""} · ${skill.path}${entry.targetName !== skill.id ? ` · ${t("installs as {{name}}", { name: entry.targetName })}` : ""}`
+              ? `${t("Library revision")} ${libraryRevision} · ${skill.path}${installDetail}`
               : t("Library skill {{id}} is missing", { id: entry.libraryId });
+            const fullDetail = skill
+              ? `${t("Library revision")} ${skill.contentHash} · ${skill.path}${installDetail}`
+              : t("Library skill {{id}} is missing", { id: entry.libraryId });
+            const statusTitle = skill?.updatePolicy === "untracked" && !update?.error
+              ? `${t(status)} · ${t("No update source")}`
+              : update?.error ?? t(status);
             return (
               <div
                 className={`profile-skill-row${enabled ? "" : " is-disabled"}`}
@@ -657,13 +666,14 @@ export const SkillsEditor = ({
                   />
                   <OverflowTooltip
                     className="profile-skill-detail"
-                    text={detail}
+                    displayText={detail}
+                    text={fullDetail}
                     ariaLabel={t("Full skill detail {{id}}", { id: entry.targetName })}
                   />
                 </div>
                 <span
                   className={`profile-skill-state${update?.updateAvailable ? " is-update" : ""}${update?.error || !skill ? " is-error" : ""}`}
-                  title={update?.error ?? t(status)}
+                  title={statusTitle}
                 >
                   {t(status)}
                 </span>

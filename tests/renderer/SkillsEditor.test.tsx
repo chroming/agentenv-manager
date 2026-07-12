@@ -320,6 +320,43 @@ describe("SkillsEditor", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("distinguishes an AgentEnv Library copy from update-source tracking", () => {
+    render(
+      <SkillsEditor
+        mode="skills"
+        value={{
+          ...emptyPolicy,
+          skillRefs: [{ libraryId: "captured-reviewer", targetName: "captured-reviewer" }]
+        }}
+        configText="{}"
+        librarySkills={[
+          {
+            id: "captured-reviewer",
+            name: "Captured Reviewer",
+            description: "Captured from a Target",
+            path: "/tmp/agentenv/skills-library/captured-reviewer",
+            sourceType: "local",
+            updatePolicy: "untracked",
+            contentHash: "78f06085a49a5f46",
+            updatedAt: "2026-07-16T00:00:00.000Z"
+          }
+        ]}
+        onChange={vi.fn()}
+      />
+    );
+
+    const row = screen.getByRole("listitem", { name: "Profile skill captured-reviewer" });
+    expect(row).toHaveTextContent("Library copy");
+    expect(row).toHaveTextContent("Library revision 78f0608");
+    expect(row).toHaveTextContent("/tmp/agentenv/skills-library/captured-reviewer");
+    expect(row).not.toHaveTextContent("Not tracked");
+    expect(within(row).getByTitle("Library copy · No update source")).toBeInTheDocument();
+    fireEvent.focus(within(row).getByLabelText("Full skill detail captured-reviewer"));
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "Library revision 78f06085a49a5f46 · /tmp/agentenv/skills-library/captured-reviewer"
+    );
+  });
+
   it("renders only MCP resources in mcp mode", () => {
     const onChange = vi.fn();
     render(

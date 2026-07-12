@@ -240,6 +240,7 @@ Object.assign(zhCN, {
   "Open GitHub source for {{id}}": "打开 {{id}} 的 GitHub 来源",
   "Library copy": "资源库副本",
   "Tracked source": "跟踪的来源",
+  "No update source": "没有更新来源",
   "Source retained": "已保留来源",
   "Library revision": "资源库版本",
   "Not tracked": "不跟踪更新",

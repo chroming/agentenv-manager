@@ -4126,6 +4126,9 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"), "utf8")
     ).resolves.toContain("Migrate me into the shared library.");
+    const capturedSkillMetadata = await readJson<{ contentHash: string }>(
+      join(appDataRoot, "skills-library", "target-only-reviewer", ".agentenv-skill.json")
+    );
     await expect(
       readFile(join(opencodeDir, "skills", "target-only-reviewer", ".agentenv-owner.json"), "utf8")
     ).rejects.toThrow();
@@ -4137,6 +4140,18 @@ describe("Electron UI profile switching e2e", () => {
     const captured = manifests.find((manifest) => manifest.name === "OpenCode Current");
     expect(captured?.id).toBeTruthy();
     await expect(fileExists(join(appDataRoot, "target-states", "opencode.json"))).resolves.toBe(false);
+
+    await page.getByRole("button", { name: "Profiles", exact: true }).click();
+    await selectProfile(page, "OpenCode Current");
+    await expandComposerSection(page, "Skills");
+    const capturedSkillRow = page.getByRole("listitem", {
+      name: "Profile skill target-only-reviewer"
+    });
+    await expect.poll(() => capturedSkillRow.textContent()).toContain("Library copy");
+    await expect.poll(() => capturedSkillRow.textContent()).toContain(
+      `Library revision ${capturedSkillMetadata.contentHash.slice(0, 7)}`
+    );
+    await expect.poll(() => capturedSkillRow.textContent()).not.toContain("Not tracked");
   }, 30_000);
 
   it("keeps capture actions visible with long, high-density review content", async () => {
