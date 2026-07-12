@@ -804,6 +804,50 @@ Object.assign(zhCN, {
   "{{target}} will be restored to its pre-takeover environment.": "{{target}} 将恢复到接管前的环境。"
 });
 
+Object.assign(zhCN, {
+  "Message copied": "消息已复制",
+  "Copy message": "复制消息",
+  "Import source": "导入来源",
+  "Choose a skill folder": "选择技能文件夹",
+  "Scan GitHub": "扫描 GitHub",
+  "Update settings": "更新设置",
+  "Update settings for {{id}}": "{{id}} 的更新设置",
+  "Source type": "来源类型",
+  "Source changes are saved independently from update tracking.": "来源修改与更新跟踪设置会分别保存。",
+  "Review preserved items": "查看保留项目",
+  "Install": "安装",
+  "Remove": "移除",
+  "Full preserved path": "完整保留路径",
+  "Full resource path {{name}}": "{{name}} 的完整资源路径",
+  "Full profile description {{id}}": "{{id}} 的完整配置方案描述",
+  "Library item {{id}}": "资源库项目 {{id}}",
+  "Full source for {{id}}": "{{id}} 的完整来源",
+  "Full shared path {{path}}": "完整共享路径 {{path}}",
+  "Full external source path {{path}}": "完整外部来源路径 {{path}}",
+  "Full detail path {{path}}": "完整详情路径 {{path}}",
+  "Full source path {{path}}": "完整来源路径 {{path}}",
+  "Full description for {{path}}": "{{path}} 的完整描述",
+  "Full managed path {{path}}": "完整托管路径 {{path}}",
+  "Full skill name {{id}}": "{{id}} 的完整技能名称",
+  "Full skill source {{id}}": "{{id}} 的完整技能来源",
+  "Full skill detail {{id}}": "{{id}} 的完整技能详情",
+  "Full cleanup summary {{id}}": "{{id}} 的完整整理摘要",
+  "Full cleanup locations {{id}}": "{{id}} 的完整整理位置",
+  "Full cleanup history name {{id}}": "{{id}} 的完整整理历史名称",
+  "Full cleanup history details {{id}}": "{{id}} 的完整整理历史详情",
+  "Full GitHub path {{id}}": "{{id}} 的完整 GitHub 路径",
+  "Formatted diff for {{path}}": "{{path}} 的格式化差异",
+  "MCP {{name}}": "MCP {{name}}",
+  "{{action}} {{id}}": "{{action}} {{id}}",
+  "This Target copy is already managed by AgentEnv and is present in Library.": "此目标副本已由 AgentEnv 托管，并已存在于资源库中。",
+  "This group is ignored. Restore it in Scan local before managing it.": "此组已被忽略；请先在扫描本地技能中恢复，再进行管理。",
+  "This folder differs from the existing Library version. Use Scan local to review the conflict.": "此文件夹与资源库中的现有版本不同；请使用扫描本地技能查看冲突。",
+  "This installation is owned by Skills CLI. AgentEnv will import an independent Library copy and leave it unchanged.": "此安装由 Skills CLI 管理；AgentEnv 会导入独立的资源库副本，并保持原安装不变。",
+  "AgentEnv will back up this Target copy, import it to Library, then replace the folder with a managed copy.": "AgentEnv 会备份此目标副本，将其导入资源库，再用托管副本替换该文件夹。",
+  "Updates the shared Library copy used by {{profiles}}. Copied Target installs remain unchanged until their Profiles are applied.": "更新被 {{profiles}} 使用的共享资源库副本；复制到目标的安装会保持不变，直到再次应用对应配置方案。",
+  "Updates the shared Library copy used by {{profiles}}. Linked Target installs may change immediately after this update.": "更新被 {{profiles}} 使用的共享资源库副本；使用链接的目标安装可能会立即变化。"
+});
+
 const toTraditionalChinese = (value: string) => {
   const phrases: Array<[string, string]> = [
     ["配置方案", "設定檔"],

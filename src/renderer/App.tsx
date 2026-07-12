@@ -11,7 +11,6 @@ import {
   GitFork,
   HardDrive,
   Monitor,
-  MonitorCheck,
   MoreHorizontal,
   Network,
   Pencil,
@@ -78,6 +77,7 @@ import {
 import { AgentsEditor } from "./components/AgentsEditor";
 import { HistoryView } from "./components/HistoryView";
 import { InfoTip } from "./components/InfoTip";
+import { OverflowTooltip } from "./components/OverflowTooltip";
 import { McpEditor } from "./components/McpEditor";
 import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
@@ -280,8 +280,8 @@ export const AppFeedback = ({
       <div className="app-feedback__controls">
         <button
           type="button"
-          aria-label={copied ? "Message copied" : "Copy message"}
-          title={copied ? "Copied" : "Copy message"}
+          aria-label={t(copied ? "Message copied" : "Copy message")}
+          title={t(copied ? "Copied" : "Copy message")}
           onClick={() => void copyFeedback()}
         >
           {copied ? (
@@ -298,16 +298,6 @@ export const AppFeedback = ({
       </div>
     </div>
   );
-};
-
-const formatShortDate = (value?: string) => {
-  if (!value) {
-    return "No activity";
-  }
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric"
-  }).format(new Date(value));
 };
 
 const isGitHubRateLimitError = (message: string) =>
@@ -1558,14 +1548,14 @@ const AppContent = ({
   );
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
   const selectedSkillUpdateImpact = selectedSkillUpdatePlan
-    ? `Updates the shared Library copy used by ${plural(
-        skillUsage[selectedSkillUpdatePlan.id]?.length ?? 0,
-        "profile"
-      )}. ${
+    ? t(
         skillSettings.skillSyncMethod === "copy"
-          ? "Copied Target installs remain unchanged until their Profiles are applied."
-          : "Linked Target installs may change immediately after this update."
-      }`
+          ? "Updates the shared Library copy used by {{profiles}}. Copied Target installs remain unchanged until their Profiles are applied."
+          : "Updates the shared Library copy used by {{profiles}}. Linked Target installs may change immediately after this update.",
+        {
+          profiles: plural(skillUsage[selectedSkillUpdatePlan.id]?.length ?? 0, "profile")
+        }
+      )
     : undefined;
   const isSelectedProfileActive = Boolean(
     selectedProfileId && targetStates.some((state) => state.activeProfileId === selectedProfileId)
@@ -1672,10 +1662,6 @@ const AppContent = ({
       !rollbackPreview &&
       (selectedTarget?.health.canWrite ?? false)
   );
-
-  const readyTargetCount = targets.filter(
-    (target) => target.health.status === "ready" && target.health.canWrite
-  ).length;
 
   const previewSelectedProfile = async () => {
     setError(undefined);
@@ -2970,10 +2956,9 @@ const AppContent = ({
         {activeWorkspace === "library" ? (
           <>
             <header className="page-header library-page-header">
-              <div>
-                <h2 aria-label={`${t("Library")}/${t(activeLibraryTab === "skills" ? "Skills" : "MCP Servers")}`}>
-                  <span>{t("Library")}</span>
-                  <span className="breadcrumb-separator">/</span>
+              <div className="library-page-title">
+                <span className="page-eyebrow">{t("Library")}</span>
+                <h2 aria-label={t(activeLibraryTab === "skills" ? "Skills" : "MCP Servers")}>
                   <span>{t(activeLibraryTab === "skills" ? "Skills" : "MCP Servers")}</span>
                   <InfoTip label={t("Library is the shared resource layer. Profiles reference these skills and MCP servers instead of duplicating files in every profile.")} />
                 </h2>
@@ -3030,31 +3015,6 @@ const AppContent = ({
                 )}
               </div>
             </header>
-            {activeLibraryTab === "mcp" ? (
-              <section
-                className="metric-strip metric-strip--compact metric-strip--mcp"
-                aria-label={t("Library summary")}
-              >
-                <div className="metric-tile">
-                  <span className="metric-icon metric-icon--purple" aria-hidden="true">
-                    <Network size={21} strokeWidth={2.2} />
-                  </span>
-                  <div>
-                    <strong>{mcpServers.length}</strong>
-                    <small>{t("MCP Servers")}</small>
-                    <span>{t("Shared across profiles")}</span>
-                  </div>
-                </div>
-                <div className="metric-tile">
-                  <span className="metric-icon metric-icon--amber" aria-hidden="true"><FolderKanban size={21} strokeWidth={2.2} /></span>
-                  <div><strong>{Object.keys(mcpUsage).length}</strong><small>{t("In use")}</small><span>{t("Across {{count}} profiles", { count: profiles.length })}</span></div>
-                </div>
-                <div className="metric-tile">
-                  <span className="metric-icon metric-icon--blue" aria-hidden="true"><MonitorCheck size={21} strokeWidth={2.2} /></span>
-                  <div><strong>{readyTargetCount}</strong><small>{t("Ready targets")}</small><span>{t("{{ready}}/{{total}} available", { ready: readyTargetCount, total: targets.length || 0 })}</span></div>
-                </div>
-              </section>
-            ) : null}
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
                 isLoading={isLoading}
@@ -3225,9 +3185,12 @@ const AppContent = ({
                             <strong className="profile-row__current">{t("Current")}</strong>
                           ) : null}
                         </span>
-                        <small title={profile.description || t("No description")}>
-                          {profile.description || t("No description")}
-                        </small>
+                        <OverflowTooltip
+                          ariaLabel={t("Full profile description {{id}}", { id: profile.id })}
+                          className="profile-row__description"
+                          focusable={false}
+                          text={profile.description || t("No description")}
+                        />
                         <span className="profile-row__stats">
                           <span>{t("{{count}} skills", { count: counts?.skills.count ?? 0 })}</span>
                           <span>{counts?.mcp.count ?? 0} MCP</span>
@@ -3332,7 +3295,7 @@ const AppContent = ({
                           {draftProfile.manifest.description || t("No description")}
                         </p>
                         <div className="profile-hero__meta">
-                          <span className="success-pill">
+                          <span className="native-target-pill">
                             {t("Native: {{name}}", { name: profileTarget?.name ?? draftProfile.manifest.targetId })}
                           </span>
                           {selectedTarget && selectedTarget.id !== profileTarget?.id ? (

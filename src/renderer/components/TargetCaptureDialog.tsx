@@ -226,7 +226,7 @@ export const TargetCaptureDialog = ({
                         <div className={`capture-resource capture-resource--${resource.action}`} key={`${resource.kind}:${resource.id}`}>
                           <CheckCircle2 size={15} strokeWidth={2.1} aria-hidden="true" />
                           <span title={fullDetail || undefined}><strong>{resource.name}</strong>{detail ? <small>{detail}</small> : null}</span>
-                          <em>{t(resourceActionLabels[resource.action])}</em>
+                          <em className="capture-resource__status">{t(resourceActionLabels[resource.action])}</em>
                         </div>
                       );
                     })}

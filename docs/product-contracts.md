@@ -310,6 +310,8 @@ Preview MUST:
 7. Indicate whether the Target is being taken over or switched.
 8. Leave the Target unchanged.
 
+Preview hierarchy MUST put concrete resource identities and actions before secondary filesystem detail. Preserve counts stay in the summary; long preserved paths live in a compact expandable detail section. Resource paths remain available through selectable overflow detail rather than dominating the primary scan path.
+
 A Preview becomes stale when any of these changes:
 
 - Saved Profile content.
@@ -438,6 +440,7 @@ Status: Apply and cleanup rollback plus stale rollback conflict handling are `Im
 ### 16.1 Import
 
 - Import from a local folder copies canonical content into the Library.
+- Import presents `Local folder` and `GitHub` as mutually exclusive source modes. Only the active mode is rendered, and the footer exposes one primary action for that mode; a second import workflow MUST NOT compete inside the same dialog body.
 - When the selected local folder is an adapter-declared Target Skill location, Import MUST back it up and replace it with a managed link or copy in the same transaction. A successfully managed source MUST NOT remain in Needs attention as a duplicate.
 - Local folders outside supported Target locations remain independent provenance sources and are not modified.
 - Normal use MUST continue if the original folder is later deleted.
@@ -449,6 +452,7 @@ Status: Apply and cleanup rollback plus stale rollback conflict handling are `Im
 - Scan results MUST appear in a confirmation dialog, select all importable candidates by default, allow individual candidates to be excluded, and identify already-imported or duplicate candidates without selecting them. The bulk-selection control MUST expose all, mixed, and none states while keeping its label and selected count aligned without overlap at the minimum supported viewport.
 - A batch import MUST preserve successful candidates when another candidate fails and MUST report each failure against its source.
 - Every Skill has an independent `Tracked` or `Untracked` update policy. `Untracked` excludes that Skill from manual, startup, and scheduled checks without reading its local source or contacting GitHub.
+- A Skill row overflow is a compact command menu. Update source and tracking fields live in a focused `Update settings` dialog and MUST NOT turn the row menu into a scrolling form.
 - The UI status for this durable policy is `Not tracked`; temporary wording such as `Checks off` and source-type wording such as `Fixed copy` MUST NOT substitute for the policy.
 - The global auto-check setting controls scheduling only; it never overrides a per-Skill `Untracked` policy.
 - Legacy metadata without an explicit policy defaults to `Untracked` for local sources and `Tracked` for GitHub sources.
@@ -565,6 +569,7 @@ Status: local and recursive GitHub import, in-place Refresh, per-Skill update po
 - Unsupported transport or fields block Apply unless omission is explicitly accepted.
 - Updating an MCP definition marks affected deployments `Changes pending` but does not deploy.
 - An MCP used by any Profile MUST NOT be deleted.
+- MCP rows use compact list density. Edit MAY remain a visible row command; destructive delete belongs in the row overflow and always requires confirmation. Aggregate count cards MUST NOT repeat information already visible in the Library list without enabling a distinct decision.
 - Environment values that appear secret MUST be masked in UI, Preview, logs, and diagnostics.
 - Backups containing secrets MUST remain local and use restrictive filesystem permissions.
 
@@ -581,6 +586,7 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Capture uses two explicit steps: setup and capture review. Review provides Back without losing the Profile name or selected Target.
 - Preview MUST list portable resources to include or reuse, new Library imports, excluded resources, and conflicts.
 - Capture review MUST summarize Profile resources, Library imports, and zero source changes before the detailed resource list.
+- Capture resource outcomes such as `Import to Library` and `Use Library copy` are neutral status badges, not link-colored commands.
 - Blocking errors and excluded-resource advisories MUST appear before long resource details. Repeated warnings MUST be aggregated with expandable details.
 - Review and Save expose local working and error states. Review MUST enter a visible animated busy state immediately, keep the action geometry stable, expose `aria-busy`, and block duplicate submission until the preview resolves. A stale or failed review remains in the dialog and offers `Refresh review`.
 - Profile Instructions and Advanced configuration remain in the source Target's native format. Reusable Skills and supported MCP definitions become Library references.
@@ -641,6 +647,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Switching workspaces MUST NOT resize or reposition global chrome. Sidebar, brand lockup, navigation rows, status card, page gutter, first-level page titles, and page-header control height use shared geometry at a given viewport.
 - Workspace-specific content MAY use its own density only inside the stable page content region.
 - Page-level creation and import commands remain in the page header. A resource list MUST NOT repeat the page title and primary command inside a nested header.
+- Library pages use the resource name as the interactive page title (`Skills` or `MCP Servers`); `Library` is neutral scope text and MUST NOT resemble a clickable breadcrumb.
 - Comparable actions in one command group use the same control height; Profile Save and Apply also reserve the same width so lifecycle state changes do not shift surrounding content.
 - A related command group MAY move below its heading at narrower supported widths, but its individual controls MUST remain together rather than orphan-wrapping one control onto another line.
 - Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.
@@ -664,6 +671,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Escape closes dismissible layers; safe outside click closes them; focus returns to the trigger or the next logical surviving control.
 - Primary workflows work with keyboard only.
 - Status is never communicated through color alone.
+- Dynamic visible copy and accessible labels use the active locale. Truncated Profile descriptions use the shared selectable overflow detail instead of native browser title tooltips.
 - Renderer styling follows one ordered cascade contract: accessibility, tokens, base, frozen legacy, primitives, shell, pages, and overlays.
 - New page behavior MUST be owned by its page stylesheet or a shared primitive; the frozen legacy stylesheet MUST NOT grow and the retired product-level override file MUST NOT return.
 - Skills and Profiles respond to their actual content containers, not only the outer window width.
@@ -844,11 +852,11 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 ### 25.1 Verification Snapshot
 
-Last verified: 2026-07-15 against the current `main` tree at the time of this snapshot.
+Last verified: 2026-07-16 against the current `main` tree at the time of this snapshot.
 
-- `382` automated tests passed across `49` test files; the `75`-test Electron UI suite and `82` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `384` automated tests passed across `49` test files; the `75`-test Electron UI suite and `82` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
-- All `39` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
+- All `45` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including disabled, empty, Chinese locale, source-specific Import, and focused update-setting states.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
@@ -857,6 +865,7 @@ Last verified: 2026-07-15 against the current `main` tree at the time of this sn
 - Library deletion isolates the selected Skill from invalid neighboring content, and global feedback provides a non-blocking copy action.
 - Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
 - In-place Skill Refresh, GitHub directory candidate selection, partial batch import behavior, source-default Skill icons, custom Skill icon persistence, and draft-gated Profile icons passed Store, renderer, and Electron E2E coverage.
+- Skill Import source modes, compact row command menus, focused update settings, compact MCP rows, overflow-only MCP deletion, resource-first Apply Preview, and neutral Capture outcomes passed renderer, Electron E2E, and visual capture coverage.
 - Library Skill disable, picker exclusion, update-check isolation, re-enable, and Apply-time Target removal and restoration passed Store, renderer, and Electron E2E coverage; Profile Skill switches use the same Save and Apply contract as Add and Remove.
 - Skill table headers, mixed-action rows, two-line metadata, empty install states, and update labels passed coordinate and overflow assertions at both supported viewports.
 - Target-local import now creates a transactional managed install, shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.

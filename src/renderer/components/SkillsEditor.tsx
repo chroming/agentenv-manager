@@ -587,12 +587,12 @@ export const SkillsEditor = ({
                 <OverflowTooltip
                   className="profile-skill-name"
                   text={asset.targetName}
-                  ariaLabel={`Full skill name ${asset.targetName}`}
+                  ariaLabel={t("Full skill name {{id}}", { id: asset.targetName })}
                 />
                 <OverflowTooltip
                   className="profile-skill-detail"
                   text={`${t("Profile-owned")} · ${asset.source}`}
-                  ariaLabel={`Full skill source ${asset.targetName}`}
+                  ariaLabel={t("Full skill source {{id}}", { id: asset.targetName })}
                 />
               </div>
               <span className="profile-skill-state">{t("Profile-owned")}</span>
@@ -653,12 +653,12 @@ export const SkillsEditor = ({
                   <OverflowTooltip
                     className="profile-skill-name"
                     text={skill?.name ?? entry.targetName}
-                    ariaLabel={`Full skill name ${entry.targetName}`}
+                    ariaLabel={t("Full skill name {{id}}", { id: entry.targetName })}
                   />
                   <OverflowTooltip
                     className="profile-skill-detail"
                     text={detail}
-                    ariaLabel={`Full skill detail ${entry.targetName}`}
+                    ariaLabel={t("Full skill detail {{id}}", { id: entry.targetName })}
                   />
                 </div>
                 <span
@@ -1083,7 +1083,7 @@ export const SkillsEditor = ({
                   );
                   return (
                     <div
-                      aria-label={`MCP ${asset.targetName}`}
+                      aria-label={t("MCP {{name}}", { name: asset.targetName })}
                       className="resource-row"
                       key={`${asset.libraryId}:${asset.targetName}:${index}`}
                       role="group"
@@ -1118,7 +1118,7 @@ export const SkillsEditor = ({
             {showsMcp
               ? mcpState.resources.map((resource) => (
                   <div
-                    aria-label={`MCP ${resource.name}`}
+                    aria-label={t("MCP {{name}}", { name: resource.name })}
                     className="resource-row"
                     key={resource.name}
                     role="group"

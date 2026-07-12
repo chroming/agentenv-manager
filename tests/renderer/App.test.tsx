@@ -688,7 +688,7 @@ describe("App", () => {
 
     expect(await screen.findByRole("group", { name: "Library item github-reviewer" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Library/Skills" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Skills" })).toBeInTheDocument();
     expect(
       within(screen.getByRole("group", { name: "Library item github-reviewer" }))
         .getByRole("button", { name: "Review update github-reviewer" })
@@ -961,7 +961,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "MCP Servers" }));
 
     expect(screen.getByRole("region", { name: "MCP library" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Library/MCP Servers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "MCP Servers" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     const context7Row = screen.getByRole("group", { name: "MCP library item context7" });
     expect(context7Row).toBeInTheDocument();
@@ -997,10 +997,12 @@ describe("App", () => {
       })
     );
 
-    fireEvent.click(within(context7Row).getByRole("button", { name: "Remove context7" }));
+    fireEvent.click(within(context7Row).getByRole("button", { name: "More actions for context7" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove context7" }));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Delete MCP server" })).not.toBeInTheDocument();
-    fireEvent.click(within(context7Row).getByRole("button", { name: "Remove context7" }));
+    fireEvent.click(within(context7Row).getByRole("button", { name: "More actions for context7" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove context7" }));
     const deleteDialog = screen.getByRole("dialog", { name: "Delete MCP server" });
     expect(deleteDialog).toHaveTextContent("Context7");
     fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete server" }));

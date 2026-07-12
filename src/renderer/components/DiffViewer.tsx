@@ -6,6 +6,7 @@ import {
   type SyntaxLine,
   type SyntaxToken
 } from "../syntaxHighlighter";
+import { useI18n } from "../i18n";
 
 type DiffRowKind = "file" | "hunk" | "addition" | "deletion" | "context";
 
@@ -125,6 +126,7 @@ const tokenStyle = (token: SyntaxToken) => ({
 });
 
 export const DiffViewer = ({ path, diff }: DiffViewerProps) => {
+  const { t } = useI18n();
   const parsedRows = useMemo(() => parseDiff(diff), [diff]);
   const fallbackTokens = useMemo(
     () => highlightCodeFallback(parsedRows.map((row) => row.content).join("\n")),
@@ -151,7 +153,7 @@ export const DiffViewer = ({ path, diff }: DiffViewerProps) => {
     <div className="diff-viewer">
       <div className="diff-language">{languageForPath(path)}</div>
       <div className="diff-table-wrap">
-        <table className="diff-table" aria-label={`Formatted diff for ${path}`}>
+        <table className="diff-table" aria-label={t("Formatted diff for {{path}}", { path })}>
           <tbody>
             {rows.map((row) => (
               <tr className={`diff-row diff-row--${row.kind}`} key={row.id}>

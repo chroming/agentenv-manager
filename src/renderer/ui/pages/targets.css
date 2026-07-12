@@ -259,6 +259,20 @@
   display: none;
 }
 
+.capture-resource .capture-resource__status {
+  background: var(--surface-muted);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  color: var(--muted-strong);
+  line-height: 20px;
+  padding: 0 7px;
+}
+
+.capture-resource--exclude .capture-resource__status {
+  background: #f3f5f8;
+  color: var(--muted);
+}
+
 .target-recovery-dialog .history-view {
   display: grid;
   gap: 0;

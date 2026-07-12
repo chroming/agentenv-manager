@@ -73,7 +73,8 @@ describe("McpLibraryPanel", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove context7" }));
+    fireEvent.click(screen.getByRole("button", { name: "More actions for context7" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove context7" }));
     const dialog = screen.getByRole("dialog", { name: "Delete MCP server" });
     expect(dialog).toHaveTextContent("used by Daily Coding");
     fireEvent.click(screen.getByRole("button", { name: "Review profiles" }));

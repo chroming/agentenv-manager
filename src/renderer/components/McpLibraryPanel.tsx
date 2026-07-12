@@ -1,5 +1,6 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import { Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import type { McpLibraryEntry, McpTransport, SaveMcpServerInput } from "../../shared/types";
 import {
   type McpLibraryViewState,
@@ -98,6 +99,11 @@ export const McpLibraryPanel = ({
   const [argsText, setArgsText] = useState("");
   const [envText, setEnvText] = useState("");
   const [deleteCandidate, setDeleteCandidate] = useState<McpLibraryEntry>();
+  const [openAction, setOpenAction] = useState<{
+    id: string;
+    left: number;
+    top: number;
+  }>();
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { search } = viewState;
@@ -118,6 +124,27 @@ export const McpLibraryPanel = ({
     fallbackFocusRef: deleteTriggerRef,
     onDismiss: () => setDeleteCandidate(undefined)
   });
+
+  useEffect(() => {
+    if (!openAction) {
+      return undefined;
+    }
+    const dismissMenu = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent) {
+        if (event.key === "Escape") setOpenAction(undefined);
+        return;
+      }
+      if (!(event.target instanceof Element) || !event.target.closest(".mcp-row-action-menu")) {
+        setOpenAction(undefined);
+      }
+    };
+    document.addEventListener("mousedown", dismissMenu);
+    document.addEventListener("keydown", dismissMenu);
+    return () => {
+      document.removeEventListener("mousedown", dismissMenu);
+      document.removeEventListener("keydown", dismissMenu);
+    };
+  }, [openAction]);
 
   useEffect(() => {
     if (isEditorOpen) {
@@ -344,16 +371,53 @@ export const McpLibraryPanel = ({
                   <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
                 </button>
                 <button
-                  className="icon-action danger-icon-action"
+                  className="icon-action"
                   type="button"
-                  aria-label={t("Remove {{name}}", { name: server.id })}
+                  aria-label={t("More actions for {{id}}", { id: server.id })}
+                  aria-expanded={openAction?.id === server.id}
                   onClick={(event) => {
-                    deleteTriggerRef.current = event.currentTarget;
-                    setDeleteCandidate(server);
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const width = 196;
+                    setOpenAction((current) =>
+                      current?.id === server.id
+                        ? undefined
+                        : {
+                            id: server.id,
+                            left: Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12)),
+                            top: Math.min(rect.bottom + 6, window.innerHeight - 58)
+                          }
+                    );
                   }}
                 >
-                  <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                  <MoreHorizontal size={16} strokeWidth={2.2} aria-hidden="true" />
                 </button>
+                {openAction?.id === server.id
+                  ? createPortal(
+                      <div
+                        className="mcp-row-action-menu"
+                        role="menu"
+                        aria-label={t("Actions for {{id}}", { id: server.id })}
+                        style={{ left: openAction.left, top: openAction.top }}
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          aria-label={t("Remove {{name}}", { name: server.id })}
+                          onClick={() => {
+                            deleteTriggerRef.current = document.querySelector(
+                              `[aria-label="${CSS.escape(t("More actions for {{id}}", { id: server.id }))}"]`
+                            );
+                            setDeleteCandidate(server);
+                            setOpenAction(undefined);
+                          }}
+                        >
+                          <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />
+                          {t("Delete server")}
+                        </button>
+                      </div>,
+                      document.body
+                    )
+                  : null}
               </div>
             </div>
           ))}

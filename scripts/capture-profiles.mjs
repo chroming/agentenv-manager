@@ -140,6 +140,11 @@ const writeLibrary = async (appDataRoot) => {
         contentHash: "7ce3f08",
         updatedAt: "2026-07-12T00:00:00.000Z"
       });
+    } else if (id === "python-type-hints") {
+      await writeJson(join(skillDir, ".agentenv-skill.json"), {
+        globallyEnabled: false,
+        updateCheckEnabled: false
+      });
     }
   }
 
@@ -418,6 +423,13 @@ try {
   await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-920x620.png"));
+  await page.getByRole("tab", { name: /Disabled/ }).click();
+  await capturePage(page, join(outputDir, "skills-disabled-920x620.png"));
+  await page.getByRole("tab", { name: /All/ }).click();
+  const skillSearch = page.getByRole("textbox", { name: "Search skills" });
+  await skillSearch.fill("no-such-skill");
+  await capturePage(page, join(outputDir, "skills-empty-920x620.png"));
+  await skillSearch.fill("");
   const githubSource = page.getByLabel("Full source for react-best-practices");
   await githubSource.scrollIntoViewIfNeeded();
   await githubSource.hover();
@@ -439,6 +451,8 @@ try {
   await capturePage(page, join(outputDir, "skills-import-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-import-920x620.png"));
+  await importDialog.getByRole("tab", { name: "GitHub" }).click();
+  await capturePage(page, join(outputDir, "skills-import-github-920x620.png"));
   await importDialog.getByRole("button", { name: "Close import" }).click();
   await importDialog.waitFor({ state: "hidden" });
 
@@ -450,6 +464,12 @@ try {
     state: "visible"
   });
   await capturePage(page, join(outputDir, "skills-actions-920x620.png"));
+  await page.getByRole("menuitem", { name: "Update settings" }).click();
+  const updateSettingsDialog = page.getByRole("dialog", {
+    name: "Update settings for react-best-practices"
+  });
+  await updateSettingsDialog.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-update-settings-920x620.png"));
   await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Scan local" }).click();
@@ -503,6 +523,12 @@ try {
     "mcp-servers",
     () => page.getByRole("region", { name: "MCP library" })
   );
+  const mcpActionsButton = page
+    .getByRole("group", { name: "MCP library item shared-docs" })
+    .getByRole("button", { name: "More actions for shared-docs" });
+  await mcpActionsButton.click();
+  await capturePage(page, join(outputDir, "mcp-actions-920x620.png"));
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Add MCP server" }).click();
   const mcpEditor = page.getByRole("dialog", { name: "MCP server editor" });
   await mcpEditor.waitFor({ state: "visible" });
@@ -591,6 +617,11 @@ try {
     "settings",
     () => page.getByRole("region", { name: "Settings", exact: true })
   );
+  await page.getByLabel("Interface language").selectOption("zh_CN");
+  await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "settings-zh-cn-920x620.png"));
+  await page.getByLabel("界面语言").selectOption("en");
+  await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible" });
 
   await setWindowSize(page, windowHandle, 1536, 1024);
   await page.getByRole("button", { name: "Profiles" }).click();

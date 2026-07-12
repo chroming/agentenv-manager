@@ -69,7 +69,7 @@ describe("PreviewDialog", () => {
     );
 
     const plan = screen.getByRole("region", { name: "Resource changes" });
-    expect(plan).toHaveTextContent("3 resources");
+    expect(plan).toHaveTextContent("1 install · 1 replace · 1 remove");
     expect(plan).toHaveTextContent("new-skill");
     expect(plan).toHaveTextContent("shared");
     expect(plan).toHaveTextContent("old.md");

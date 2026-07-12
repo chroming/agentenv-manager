@@ -20,6 +20,7 @@ interface OverflowTooltipProps {
   ariaLabel?: string;
   className: string;
   displayText?: string;
+  focusable?: boolean;
   text: string;
   tooltipClassName?: string;
 }
@@ -32,6 +33,7 @@ export const OverflowTooltip = ({
   ariaLabel,
   className,
   displayText,
+  focusable = true,
   text,
   tooltipClassName = ""
 }: OverflowTooltipProps) => {
@@ -132,7 +134,7 @@ export const OverflowTooltip = ({
         aria-describedby={isOpen ? tooltipId : undefined}
         className={className}
         ref={triggerRef}
-        tabIndex={0}
+        tabIndex={focusable ? 0 : undefined}
         onBlur={scheduleClose}
         onFocus={openTooltip}
         onMouseEnter={openTooltip}

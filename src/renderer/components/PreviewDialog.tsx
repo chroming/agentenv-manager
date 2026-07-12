@@ -5,6 +5,7 @@ import type {
   StopManagingPreview
 } from "../../shared/types";
 import { DiffViewer } from "./DiffViewer";
+import { OverflowTooltip } from "./OverflowTooltip";
 import { useI18n, type TranslationValues } from "../i18n";
 
 interface PreviewDialogProps {
@@ -210,7 +211,6 @@ export const PreviewDialog = ({
   const replaceChanges = resourceChanges.filter((change) => change.action === "replace");
   const removeChanges = resourceChanges.filter((change) => change.action === "remove");
   const fileCountLabel = plural(preview.changes.length, "file");
-  const resourceCountLabel = plural(resourceChanges.length, "resource");
   const payload = isActivationPreview ? preview.effectivePayload : undefined;
   const sharedPreparations = isActivationPreview
     ? (preview.sharedSkillPreparations ?? [])
@@ -236,6 +236,42 @@ export const PreviewDialog = ({
         ? t("{{target}} files will stay in place and AgentEnv ownership will be removed.", { target: targetName })
         : t("{{target}} will be restored to its pre-takeover environment.", { target: targetName })
       : t("{{files}} reviewed before restore.", { files: fileCountLabel });
+  const resourcePlan = resourceChanges.length > 0 ? (
+    <section className="preview-resource-plan" aria-label={t("Resource changes")}>
+      <header>
+        <strong>{t("Resource changes")}</strong>
+        <span>{t("{{install}} install · {{replace}} replace · {{remove}} remove", {
+          install: installChanges.length,
+          replace: replaceChanges.length,
+          remove: removeChanges.length
+        })}</span>
+      </header>
+      <div>
+        {resourceChanges.map((change) => (
+          <article key={`${change.action}:${change.path}`}>
+            <span className={`change-kind change-kind--${change.action}`}>
+              {t(
+                change.action === "install"
+                  ? "Install"
+                  : change.action === "replace"
+                    ? "Replace"
+                    : "Remove"
+              )}
+            </span>
+            <span className="preview-resource-plan__identity">
+              <strong>{change.name}</strong>
+              <OverflowTooltip
+                ariaLabel={t("Full resource path {{name}}", { name: change.name })}
+                className="preview-resource-plan__path"
+                text={change.path}
+              />
+            </span>
+            <span className="preview-resource-plan__kind">{change.kind}</span>
+          </article>
+        ))}
+      </div>
+    </section>
+  ) : null;
 
   const content = (
     <section
@@ -253,6 +289,7 @@ export const PreviewDialog = ({
         </div>
         <time dateTime={preview.createdAt}>{formatDate(preview.createdAt)}</time>
       </header>
+      {resourcePlan}
       <section className="preview-summary-grid" aria-label={t("Apply summary")}>
         {blockedItems.length > 0 ? (
           <section className="preview-summary-card is-blocked">
@@ -270,28 +307,12 @@ export const PreviewDialog = ({
           <section className="preview-summary-card">
             <strong>{t("Will preserve")}</strong>
             <span>{plural(keepItems.length, "unmanaged item")}</span>
-            {keepItems.map((item) => (
-              <p className="warning" key={`${item.title}${item.detail ?? ""}`}>
-                {item.title}
-                {item.detail ? <small>{item.detail}</small> : null}
-              </p>
-            ))}
           </section>
         ) : null}
         {preview.changes.length > 0 ? (
           <section className="preview-summary-card">
             <strong>{t("Configuration changes")}</strong>
             <span>{t("{{files}} changed", { files: fileCountLabel })}</span>
-          </section>
-        ) : null}
-        {resourceChanges.length > 0 ? (
-          <section className="preview-summary-card">
-            <strong>{t("Resource changes")}</strong>
-            <span>{t("{{install}} install · {{replace}} replace · {{remove}} remove", {
-              install: installChanges.length,
-              replace: replaceChanges.length,
-              remove: removeChanges.length
-            })}</span>
           </section>
         ) : null}
         {sharedPreparationChanged ? (
@@ -311,6 +332,28 @@ export const PreviewDialog = ({
           </section>
         ) : null}
       </section>
+      {keepItems.length > 0 ? (
+        <details className="preview-preserve-details">
+          <summary>
+            <span>{t("Review preserved items")}</span>
+            <strong>{keepItems.length}</strong>
+          </summary>
+          <div>
+            {keepItems.map((item) => (
+              <p className="warning" key={`${item.title}${item.detail ?? ""}`}>
+                <span>{item.title}</span>
+                {item.detail ? (
+                  <OverflowTooltip
+                    ariaLabel={t("Full preserved path")}
+                    className="preview-preserve-path"
+                    text={item.detail}
+                  />
+                ) : null}
+              </p>
+            ))}
+          </div>
+        </details>
+      ) : null}
       {managedDriftErrors.length > 0 && onManagedDriftAcknowledgedChange ? (
         <section className="preview-drift-recovery" aria-label={t("External change recovery")}>
           <div>
@@ -363,28 +406,6 @@ export const PreviewDialog = ({
               {t("I understand these resources will not be applied to {{target}}", { target: targetName })}
             </label>
           ) : null}
-        </section>
-      ) : null}
-      {resourceChanges.length > 0 ? (
-        <section className="preview-resource-plan" aria-label={t("Resource changes")}>
-          <header>
-            <strong>{t("Resource changes")}</strong>
-            <span>{resourceCountLabel}</span>
-          </header>
-          <div>
-            {resourceChanges.map((change) => (
-              <article key={`${change.action}:${change.path}`}>
-                <span className={`change-kind change-kind--${change.action}`}>
-                  {t(change.action)}
-                </span>
-                <span className="preview-resource-plan__identity">
-                  <strong>{change.name}</strong>
-                  <small title={change.path}>{change.path}</small>
-                </span>
-                <span className="preview-resource-plan__kind">{change.kind}</span>
-              </article>
-            ))}
-          </div>
         </section>
       ) : null}
       <div className="diff-list">

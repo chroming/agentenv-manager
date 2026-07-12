@@ -96,8 +96,7 @@ h2 {
   min-width: 0;
 }
 
-.sidebar,
-.activation-panel {
+.sidebar {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -111,18 +110,6 @@ h2 {
   flex-direction: column;
   gap: 14px;
   overflow: hidden;
-}
-
-.activation-panel {
-  align-content: start;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr);
-  overflow: auto;
-}
-
-.activation-panel > * {
-  min-width: 0;
 }
 
 .sidebar__header,
@@ -1366,16 +1353,6 @@ textarea[aria-label="opencode.jsonc"] {
   min-height: 280px;
 }
 
-.activation-header {
-  display: grid;
-  gap: 3px;
-  padding-bottom: 2px;
-}
-
-.activation-header h2 {
-  font-size: 21px;
-}
-
 .status-card,
 .history-row,
 .owned-skill,
@@ -1460,18 +1437,6 @@ textarea[aria-label="opencode.jsonc"] {
   background: #eef2f7;
   border-color: var(--border);
   color: #98a2b3;
-}
-
-.activation-panel .secondary-action {
-  min-height: 42px;
-  width: 100%;
-}
-
-.will-touch,
-.safety-checks {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
 }
 
 .path-list,
@@ -2348,8 +2313,7 @@ summary {
   padding: 0;
 }
 
-.sidebar,
-.activation-panel {
+.sidebar {
   border-radius: 0;
   box-shadow: none;
 }
@@ -4080,36 +4044,6 @@ summary {
   line-height: 1.45;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.library-summary-panel {
-  background: #f7f9fd;
-  border-left: 1px solid #dfe7f2;
-  border-right: 0;
-  padding: 20px 18px;
-}
-
-.library-summary-panel .activation-header {
-  border-bottom: 1px solid #e7edf6;
-  padding-bottom: 14px;
-}
-
-.library-summary-panel .section-title {
-  color: #667085;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-}
-
-.library-summary-panel .safety-checks {
-  gap: 9px;
-}
-
-.library-summary-panel .check-row {
-  background: #ffffff;
-  border-color: #dfe7f2;
-  box-shadow: 0 10px 24px rgba(41, 72, 120, 0.05);
-  min-height: 40px;
-  padding: 9px 11px;
 }
 
 /* Icon polish pass */

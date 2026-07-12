@@ -455,6 +455,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(
       within(copiedLocalRow).getByRole("button", { name: "More actions for copied-local" })
     );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Update settings" }));
     expect(screen.getByLabelText("Update source for copied-local")).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -476,6 +477,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByLabelText("Update source for shared-reviewer")).not.toBeInTheDocument();
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Update settings" }));
     fireEvent.change(screen.getByLabelText("Update source for shared-reviewer"), {
       target: { value: "/tmp/source/shared-reviewer" }
     });
@@ -487,6 +489,7 @@ describe("SkillLibraryPanel", () => {
     });
 
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Update settings" }));
     const updateCheckSwitch = screen.getByRole("switch", {
       name: "Track updates for shared-reviewer"
     });
@@ -496,6 +499,7 @@ describe("SkillLibraryPanel", () => {
       id: "shared-reviewer",
       policy: "untracked"
     });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Review update shared-reviewer" }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("shared-reviewer");
@@ -566,6 +570,7 @@ describe("SkillLibraryPanel", () => {
       "/tmp/opencode/skills/target-only-reviewer"
     );
 
+    fireEvent.click(screen.getByRole("tab", { name: "GitHub" }));
     fireEvent.change(screen.getByLabelText("GitHub skill URL"), {
       target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
     });

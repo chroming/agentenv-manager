@@ -601,6 +601,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("tablist", { name: "Profile sections" }).count()).toBe(0);
 
     await page.getByRole("button", { name: "Import skills" }).click();
+    expect(await page.getByLabel("Local skill folder path").count()).toBe(1);
+    expect(await page.getByLabel("GitHub skill URL").count()).toBe(0);
+    await page.getByRole("tab", { name: "GitHub" }).click();
+    expect(await page.getByLabel("Local skill folder path").count()).toBe(0);
     await page
       .getByLabel("GitHub skill URL")
       .fill("https://github.com/acme/agent-skills/tree/main/skills/reviewer");
@@ -877,7 +881,11 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Escape");
 
     const sharedMcp = page.getByRole("group", { name: "MCP library item shared-docs" });
-    await sharedMcp.getByRole("button", { name: "Remove shared-docs" }).click();
+    await sharedMcp.getByRole("button", { name: "More actions for shared-docs" }).click();
+    const mcpMenu = page.getByRole("menu", { name: "Actions for shared-docs" });
+    await expectInViewport(page, mcpMenu);
+    await expectTopmost(mcpMenu);
+    await mcpMenu.getByRole("menuitem", { name: "Remove shared-docs" }).click();
     const mcpDelete = page.getByRole("dialog", { name: "Delete MCP server" });
     await expectFocusInside(mcpDelete);
     await expectFocusTrapped(mcpDelete);
@@ -889,7 +897,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() =>
         sharedMcp
-          .getByRole("button", { name: "Remove shared-docs" })
+          .getByRole("button", { name: "More actions for shared-docs" })
           .evaluate((element) => document.activeElement === element)
       )
       .toBe(true);
@@ -1628,7 +1636,14 @@ describe("Electron UI profile switching e2e", () => {
     await rowMenu.waitFor({ state: "visible" });
     await expectInViewport(page, rowMenu);
     await expectTopmost(rowMenu);
-    await rowMenu.locator(".info-tip").hover();
+    await rowMenu.getByRole("menuitem", { name: "Update settings" }).click();
+    const updateSettings = page.getByRole("dialog", {
+      name: "Update settings for shared-reviewer"
+    });
+    await updateSettings.waitFor({ state: "visible" });
+    await expectInViewport(page, updateSettings);
+    await expectTopmost(updateSettings);
+    await updateSettings.locator(".info-tip").hover();
     const rowTip = page.getByRole("tooltip");
     await rowTip.waitFor({ state: "visible" });
     await expectInViewport(page, rowTip);
@@ -2171,10 +2186,10 @@ describe("Electron UI profile switching e2e", () => {
     ]) {
       await page.setViewportSize(viewport);
       await skillsButton.click();
-      const skillsGeometry = await readGeometry("Library/Skills", "Import skills");
+      const skillsGeometry = await readGeometry("Skills", "Import skills");
 
       const workspaces = [
-        { button: "MCP Servers", heading: "Library/MCP Servers", action: "Add MCP server" },
+        { button: "MCP Servers", heading: "MCP Servers", action: "Add MCP server" },
         { button: "Profiles", heading: "Profiles", action: "New Profile" },
         { button: "Targets", heading: "Targets", action: "Refresh" },
         { button: "Settings", heading: "Settings", action: "Sign in with GitHub" }
@@ -2607,7 +2622,7 @@ describe("Electron UI profile switching e2e", () => {
     guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
     await guard.waitFor({ state: "visible", timeout: 5_000 });
     await guard.getByRole("button", { name: "Save and continue" }).click();
-    await page.getByRole("heading", { name: "Library/Skills" }).waitFor({
+    await page.getByRole("heading", { name: "Skills" }).waitFor({
       state: "visible",
       timeout: 5_000
     });
@@ -2677,8 +2692,13 @@ describe("Electron UI profile switching e2e", () => {
     guard = page.getByRole("dialog", { name: "Unsaved profile changes" });
     await guard.waitFor({ state: "visible" });
     const closed = page.waitForEvent("close");
-    await guard.getByRole("button", { name: "Discard changes" }).click();
-    await closed;
+    const discardClick = guard
+      .getByRole("button", { name: "Discard changes" })
+      .click()
+      .catch((error) => {
+        if (!page.isClosed()) throw error;
+      });
+    await Promise.all([discardClick, closed]);
 
     await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
   }, 30_000);
@@ -3406,7 +3426,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("button", { name: "Save MCP server" }).isDisabled()).toBe(true);
     await page.keyboard.press("Escape");
 
-    await localSearch.getByRole("button", { name: "Remove local-search" }).click();
+    await localSearch.getByRole("button", { name: "More actions for local-search" }).click();
+    await page.getByRole("menuitem", { name: "Remove local-search" }).click();
     const deleteDialog = page.getByRole("dialog", { name: "Delete MCP server" });
     await deleteDialog.waitFor({ state: "visible" });
     await expect.poll(() => deleteDialog.textContent()).toContain("Local Search");
@@ -4407,6 +4428,7 @@ describe("Electron UI profile switching e2e", () => {
     const sourceUrl = "https://github.com/acme/agent-skills/tree/main/skills/reviewer";
 
     await page.getByRole("button", { name: "Import skills" }).click();
+    await page.getByRole("tab", { name: "GitHub" }).click();
     await page.getByLabel("GitHub skill URL").fill(sourceUrl);
     await page.getByRole("button", { name: "Scan", exact: true }).click();
     const githubReviewer = page.getByRole("checkbox", { name: "Select GitHub Reviewer" });
@@ -4456,11 +4478,13 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe("# Guide v1\n");
 
     await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
+    await page.getByRole("menuitem", { name: "Update settings" }).click();
     const updateCheckSwitch = page.getByRole("switch", {
       name: "Track updates for github-reviewer"
     });
     await expect.poll(() => updateCheckSwitch.getAttribute("aria-checked")).toBe("true");
     await updateCheckSwitch.click();
+    await page.getByRole("button", { name: "Close" }).click();
     await expect.poll(() => githubRow.textContent()).toContain("Not tracked");
     await expect
       .poll(async () =>
@@ -4476,7 +4500,9 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => githubRow.getByRole("button", { name: "Review update github-reviewer" }).count())
       .toBe(0);
     await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
+    await page.getByRole("menuitem", { name: "Update settings" }).click();
     await page.getByRole("switch", { name: "Track updates for github-reviewer" }).click();
+    await page.getByRole("button", { name: "Close" }).click();
     await expect
       .poll(async () =>
         (await readJson<{ updateCheckEnabled?: boolean }>(
@@ -4529,6 +4555,7 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
 
     await page.getByRole("button", { name: "Import skills" }).click();
+    await page.getByRole("tab", { name: "GitHub" }).click();
     await page
       .getByLabel("GitHub skill URL")
       .fill("https://github.com/acme/agent-skills/tree/main/skills/engineering");
@@ -4639,6 +4666,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByRole("button", { name: "More actions for shared-reviewer" })
       .click();
+    await page.getByRole("menuitem", { name: "Update settings" }).click();
     await page.getByLabel("Update source for shared-reviewer").fill(newSourceDir);
     await page.getByRole("button", { name: "Save source" }).click();
     await page
