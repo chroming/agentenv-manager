@@ -442,7 +442,7 @@ Status: Apply and cleanup rollback plus stale rollback conflict handling are `Im
 - GitHub import MUST store repository, ref, directory, and resolved revision.
 - GitHub imports default to the `Tracked` update policy.
 - A GitHub URL MAY identify a Skill directory, a containing directory, or a repository. Containing-directory and repository imports MUST scan recursively for valid top-level Skill roots before any Library write.
-- Scan results MUST appear in a confirmation dialog, select all importable candidates by default, allow individual candidates to be excluded, and identify already-imported or duplicate candidates without selecting them.
+- Scan results MUST appear in a confirmation dialog, select all importable candidates by default, allow individual candidates to be excluded, and identify already-imported or duplicate candidates without selecting them. The bulk-selection control MUST expose all, mixed, and none states while keeping its label and selected count aligned without overlap at the minimum supported viewport.
 - A batch import MUST preserve successful candidates when another candidate fails and MUST report each failure against its source.
 - Every Skill has an independent `Tracked` or `Untracked` update policy. `Untracked` excludes that Skill from manual, startup, and scheduled checks without reading its local source or contacting GitHub.
 - The UI status for this durable policy is `Not tracked`; temporary wording such as `Checks off` and source-type wording such as `Fixed copy` MUST NOT substitute for the policy.
@@ -567,7 +567,7 @@ Create from Target turns an existing native environment into a managed Profile w
 - Preview MUST list portable resources to include or reuse, new Library imports, excluded resources, conflicts, and old copies that will be removed.
 - Takeover review MUST summarize Profile resources, Library imports, preserved copies, and removed copies before the detailed resource list.
 - Blocking errors, preserved-copy advisories, and backup behavior MUST appear before long resource details. Repeated compatibility warnings MUST be aggregated with expandable details.
-- Review and Create expose local working and error states. A stale or failed review remains in the dialog and offers `Refresh review`.
+- Review and Create expose local working and error states. Review MUST enter a visible animated busy state immediately, keep the action geometry stable, expose `aria-busy`, and block duplicate submission until the preview resolves. A stale or failed review remains in the dialog and offers `Refresh review`.
 - Profile Instructions and Advanced configuration remain in the source Target's native format. Reusable Skills and supported MCP definitions become Library references.
 - Existing Library content is reused only when its comparable content hash or semantic MCP definition matches exactly.
 - Sensitive values, credentials, caches, history, runtime state, and unsupported native fields MUST remain Target-owned and MUST be named as excluded.

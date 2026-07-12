@@ -3454,28 +3454,31 @@ describe("Electron UI profile switching e2e", () => {
     const { app: electronApp, page } = await launchApp();
     await electronApp.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler("profiles:preview-create-from-target");
-      ipcMain.handle("profiles:preview-create-from-target", () => ({
-        id: "dense-capture-preview",
-        targetId: "opencode",
-        targetName: "OpenCode",
-        suggestedName: "OpenCode Current",
-        createdAt: "2026-07-14T00:00:00.000Z",
-        resources: Array.from({ length: 30 }, (_, index) => ({
-          kind: index === 0 ? "instructions" : "skill",
-          id: `dense-capture-resource-${index + 1}`,
-          name: `dense-capture-resource-${index + 1}-with-a-long-name`,
-          action: index === 0 ? "include" : "import",
-          detail: index > 0 && index < 7
-            ? "1 compatibility copy preserved"
-            : "A deliberately long path and description used to verify compact window containment"
-        })),
-        cleanupPaths: Array.from({ length: 4 }, (_, index) => `/tmp/old-copy-${index + 1}`),
-        warnings: Array.from(
-          { length: 6 },
-          (_, index) => `dense-capture-resource-${index + 1}: compatibility copies stay in place until every installed consumer has an equivalent managed Skill`
-        ),
-        errors: []
-      }));
+      ipcMain.handle("profiles:preview-create-from-target", async () => {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return {
+          id: "dense-capture-preview",
+          targetId: "opencode",
+          targetName: "OpenCode",
+          suggestedName: "OpenCode Current",
+          createdAt: "2026-07-14T00:00:00.000Z",
+          resources: Array.from({ length: 30 }, (_, index) => ({
+            kind: index === 0 ? "instructions" : "skill",
+            id: `dense-capture-resource-${index + 1}`,
+            name: `dense-capture-resource-${index + 1}-with-a-long-name`,
+            action: index === 0 ? "include" : "import",
+            detail: index > 0 && index < 7
+              ? "1 compatibility copy preserved"
+              : "A deliberately long path and description used to verify compact window containment"
+          })),
+          cleanupPaths: Array.from({ length: 4 }, (_, index) => `/tmp/old-copy-${index + 1}`),
+          warnings: Array.from(
+            { length: 6 },
+            (_, index) => `dense-capture-resource-${index + 1}: compatibility copies stay in place until every installed consumer has an equivalent managed Skill`
+          ),
+          errors: []
+        };
+      });
     });
     await resizeAppWindow(page, 920, 620);
     await page.getByRole("button", { name: "Targets", exact: true }).click();
@@ -3483,9 +3486,26 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("article", { name: "Target OpenCode" })
       .getByRole("button", { name: "Create profile from OpenCode" })
       .click();
-    await page.getByRole("dialog", { name: "Create profile from OpenCode" })
-      .getByRole("button", { name: "Review" })
-      .click();
+    const setupDialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
+    const reviewButton = setupDialog.getByRole("button", { name: "Review" });
+    const idleButtonBox = await reviewButton.boundingBox();
+    await reviewButton.click();
+    const reviewingButton = setupDialog.getByRole("button", { name: "Reviewing..." });
+    await reviewingButton.waitFor({ state: "visible" });
+    expect(await reviewingButton.getAttribute("aria-busy")).toBe("true");
+    expect(await reviewingButton.isDisabled()).toBe(true);
+    const workingState = await reviewingButton.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const spinner = element.querySelector("svg");
+      return {
+        width: rect.width,
+        height: rect.height,
+        animationName: spinner ? getComputedStyle(spinner).animationName : ""
+      };
+    });
+    expect(workingState.width).toBe(idleButtonBox?.width);
+    expect(workingState.height).toBe(idleButtonBox?.height);
+    expect(workingState.animationName).toBe("spin");
 
     const dialog = page.getByRole("dialog", { name: "Review OpenCode takeover" });
     const impact = dialog.getByRole("region", { name: "Capture impact" });
@@ -3951,6 +3971,7 @@ describe("Electron UI profile switching e2e", () => {
   it("scans a GitHub directory and imports only the selected skills", async () => {
     const { appDataRoot, githubFixtureRoot, page } = await launchApp();
     await writeGitHubFixtureDirectory(githubFixtureRoot);
+    await resizeAppWindow(page, 920, 620);
 
     await page.getByRole("button", { name: "Import skills" }).click();
     await page
@@ -3963,7 +3984,40 @@ describe("Electron UI profile switching e2e", () => {
     await apiDesign.waitFor({ state: "visible" });
     expect(await apiDesign.isChecked()).toBe(true);
     expect(await releaseCheck.isChecked()).toBe(true);
+    const selectAll = page.getByRole("checkbox", { name: "Select all discovered skills" });
+    expect(await selectAll.isChecked()).toBe(true);
+    const selectionGeometry = await page.locator(".github-selection-bar").evaluate((element) => {
+      const bar = element.getBoundingClientRect();
+      const label = element.querySelector("label")?.getBoundingClientRect();
+      const checkbox = element.querySelector("input")?.getBoundingClientRect();
+      const count = element.querySelector(".github-selection-count")?.getBoundingClientRect();
+      return {
+        barLeft: bar.left,
+        barRight: bar.right,
+        barTop: bar.top,
+        barBottom: bar.bottom,
+        labelLeft: label?.left ?? 0,
+        labelRight: label?.right ?? 0,
+        labelCenter: label ? label.top + label.height / 2 : 0,
+        checkboxLeft: checkbox?.left ?? 0,
+        checkboxRight: checkbox?.right ?? 0,
+        countLeft: count?.left ?? 0,
+        countRight: count?.right ?? 0,
+        countCenter: count ? count.top + count.height / 2 : 0
+      };
+    });
+    expect(selectionGeometry.labelLeft).toBeGreaterThanOrEqual(selectionGeometry.barLeft);
+    expect(selectionGeometry.checkboxLeft).toBeGreaterThanOrEqual(selectionGeometry.labelLeft);
+    expect(selectionGeometry.checkboxRight).toBeLessThanOrEqual(selectionGeometry.labelRight);
+    expect(selectionGeometry.labelRight).toBeLessThan(selectionGeometry.countLeft);
+    expect(selectionGeometry.countRight).toBeLessThanOrEqual(selectionGeometry.barRight);
+    expect(Math.abs(selectionGeometry.labelCenter - selectionGeometry.countCenter)).toBeLessThanOrEqual(1);
+    expect(selectionGeometry.labelCenter).toBeGreaterThanOrEqual(selectionGeometry.barTop);
+    expect(selectionGeometry.labelCenter).toBeLessThanOrEqual(selectionGeometry.barBottom);
     await releaseCheck.uncheck();
+    expect(await selectAll.isChecked()).toBe(false);
+    expect(await selectAll.evaluate((element) => (element as HTMLInputElement).indeterminate)).toBe(true);
+    await expect.poll(() => page.locator(".github-selection-count").textContent()).toContain("1 selected");
     await page.getByRole("button", { name: "Import 1" }).click();
 
     await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });

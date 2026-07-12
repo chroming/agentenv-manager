@@ -268,13 +268,18 @@ export const TargetCaptureDialog = ({
           <div>
             <button ref={initialFocusRef} className="secondary-action" type="button" disabled={isBusy} onClick={onCancel}>{t("Cancel")}</button>
             <button
-              className="primary-action"
+              className={`primary-action capture-dialog__submit${isBusy ? " is-working" : ""}`}
               type="button"
+              aria-busy={isBusy}
               disabled={isBusy || !target?.health.executableFound || !name.trim() || Boolean(preview?.errors.length)}
               onClick={isReview ? onCreate : onReview}
             >
-              {isBusy ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" /> : null}
-              {t(activity === "reviewing" ? "Reviewing..." : activity === "creating" ? "Creating..." : isReview ? "Create and take over" : "Review")}
+              <span className="capture-dialog__submit-icon" aria-hidden="true">
+                {isBusy ? <LoaderCircle size={15} /> : null}
+              </span>
+              <span aria-live="polite">
+                {t(activity === "reviewing" ? "Reviewing..." : activity === "creating" ? "Creating..." : isReview ? "Create and take over" : "Review")}
+              </span>
             </button>
           </div>
         </footer>

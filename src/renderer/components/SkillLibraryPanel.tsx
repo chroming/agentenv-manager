@@ -250,6 +250,17 @@ export const SkillLibraryPanel = ({
     .filter((update) => update.updateAvailable && !update.error)
     .map((update) => update.id);
   const availableUpdateCount = updateableSkillIds.length;
+  const githubReadyCandidateIds = githubScanResult?.candidates
+    .filter((candidate) => candidate.status === "ready")
+    .map((candidate) => candidate.id) ?? [];
+  const githubSelectedReadyCount = githubReadyCandidateIds.filter((candidateId) =>
+    githubSelectedIds.includes(candidateId)
+  ).length;
+  const githubAllReadySelected =
+    githubReadyCandidateIds.length > 0 &&
+    githubSelectedReadyCount === githubReadyCandidateIds.length;
+  const githubSomeReadySelected =
+    githubSelectedReadyCount > 0 && !githubAllReadySelected;
   const dismissModal = () => {
     if (selectedUpdatePlan) {
       onCloseUpdatePreview();
@@ -1946,29 +1957,30 @@ export const SkillLibraryPanel = ({
                         {t("Results are incomplete. GitHub truncated this repository tree.")}
                       </div>
                     ) : null}
-                    <label className="github-select-all">
-                      <input
-                        type="checkbox"
-                        aria-label={t("Select all discovered skills")}
-                        checked={
-                          githubScanResult.candidates.some((candidate) => candidate.status === "ready") &&
-                          githubScanResult.candidates
-                            .filter((candidate) => candidate.status === "ready")
-                            .every((candidate) => githubSelectedIds.includes(candidate.id))
-                        }
-                        onChange={(event) =>
-                          setGithubSelectedIds(
-                            event.currentTarget.checked
-                              ? githubScanResult.candidates
-                                  .filter((candidate) => candidate.status === "ready")
-                                  .map((candidate) => candidate.id)
-                              : []
-                          )
-                        }
-                      />
-                      <span>{t("Select all")}</span>
-                      <strong>{t("{{count}} selected", { count: githubSelectedIds.length })}</strong>
-                    </label>
+                    <div className="github-selection-bar">
+                      <label className="github-select-all">
+                        <input
+                          type="checkbox"
+                          aria-label={t("Select all discovered skills")}
+                          checked={githubAllReadySelected}
+                          disabled={githubReadyCandidateIds.length === 0 || Boolean(githubOperation)}
+                          ref={(checkbox) => {
+                            if (checkbox) {
+                              checkbox.indeterminate = githubSomeReadySelected;
+                            }
+                          }}
+                          onChange={(event) =>
+                            setGithubSelectedIds(
+                              event.currentTarget.checked ? githubReadyCandidateIds : []
+                            )
+                          }
+                        />
+                        <span>{t("Select all")}</span>
+                      </label>
+                      <span className="github-selection-count" role="status">
+                        {t("{{count}} selected", { count: githubSelectedIds.length })}
+                      </span>
+                    </div>
                     <div className="github-candidate-list">
                       {githubScanResult.candidates.length === 0 ? (
                         <div className="inline-state">{t("No skills found")}</div>

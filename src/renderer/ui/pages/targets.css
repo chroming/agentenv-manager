@@ -330,3 +330,41 @@
   color: var(--muted);
   line-height: 1.4;
 }
+
+.capture-dialog__submit {
+  align-items: center;
+  display: inline-flex;
+  gap: 7px;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.capture-dialog__submit-icon {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 16px;
+  justify-content: center;
+  width: 16px;
+}
+
+.capture-dialog__submit-icon:empty {
+  display: none;
+}
+
+.capture-dialog__submit.is-working:disabled {
+  background: #eaf1ff;
+  border-color: #bfd0f5;
+  color: var(--accent);
+  cursor: progress;
+  opacity: 1;
+}
+
+.capture-dialog__submit.is-working svg {
+  animation: spin 0.8s linear infinite;
+}

@@ -27,6 +27,16 @@ describe("SkillLibraryPanel", () => {
           ref: "main",
           revision: "revision-1",
           status: "ready"
+        },
+        {
+          id: "release-check",
+          name: "Release Check",
+          description: "Check a release from GitHub",
+          remotePath: "skills/release-check",
+          sourceUrl: "https://github.com/acme/agent-skills/tree/main/skills/release-check",
+          ref: "main",
+          revision: "revision-1",
+          status: "ready"
         }
       ]
     });
@@ -481,7 +491,17 @@ describe("SkillLibraryPanel", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^Scan$/ }));
     await screen.findByRole("checkbox", { name: "Select GitHub Reviewer" });
+    const selectAllGitHub = screen.getByRole("checkbox", {
+      name: "Select all discovered skills"
+    }) as HTMLInputElement;
     expect(screen.getByRole("checkbox", { name: "Select GitHub Reviewer" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select Release Check" })).toBeChecked();
+    expect(selectAllGitHub).toBeChecked();
+    expect(screen.getByRole("status")).toHaveTextContent("2 selected");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Release Check" }));
+    expect(selectAllGitHub).not.toBeChecked();
+    expect(selectAllGitHub.indeterminate).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent("1 selected");
     fireEvent.click(screen.getByRole("button", { name: "Import 1" }));
     await waitFor(() =>
       expect(onImportGitHubSkills).toHaveBeenCalledWith([

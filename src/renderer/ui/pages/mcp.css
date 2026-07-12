@@ -77,8 +77,7 @@
   margin-top: 10px;
 }
 
-.github-scan-summary,
-.github-select-all {
+.github-scan-summary {
   align-items: center;
   display: flex;
   gap: 10px;
@@ -102,16 +101,40 @@
   font-size: 12px;
 }
 
-.github-select-all {
+.github-selection-bar {
+  align-items: center;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
   min-height: 42px;
   padding: 0 16px;
 }
 
-.github-select-all strong {
+.github-select-all {
+  align-items: center;
+  color: var(--text);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 8px;
+  line-height: 1.2;
+  min-height: 32px;
+}
+
+.github-select-all input {
+  flex: 0 0 auto;
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.github-selection-count {
   color: var(--muted);
   font-size: 12px;
-  margin-left: auto;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .github-candidate-list {
