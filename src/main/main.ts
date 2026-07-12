@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, safeStorage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -21,6 +21,7 @@ import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetCaptureService } from "./targetCaptureService";
 import { createTargetRegistry } from "./targets/registry";
 import { preloadScriptName, windowBackgroundColor } from "./windowConfig";
+import { recoverPendingReplacementsInDirectory } from "./fileUtils";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -156,6 +157,21 @@ const createGitHubFixtureFetch = (fixtureRoot: string) => {
 };
 
 const approvedWindowCloses = new WeakSet<BrowserWindow>();
+const guardedWindowCloses = new WeakSet<BrowserWindow>();
+let appQuitRequested = false;
+let servicesInitialized = false;
+
+ipcMain.on("window:set-close-guard", (event, enabled: unknown) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) {
+    return;
+  }
+  if (enabled === true) {
+    guardedWindowCloses.add(win);
+  } else {
+    guardedWindowCloses.delete(win);
+  }
+});
 
 ipcMain.on("window:confirm-close", (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -163,7 +179,15 @@ ipcMain.on("window:confirm-close", (event) => {
     return;
   }
   approvedWindowCloses.add(win);
-  win.close();
+  if (appQuitRequested) {
+    app.quit();
+  } else {
+    win.close();
+  }
+});
+
+ipcMain.on("window:cancel-close", () => {
+  appQuitRequested = false;
 });
 
 const createWindow = () => {
@@ -185,12 +209,23 @@ const createWindow = () => {
   win.on("close", (event) => {
     if (
       approvedWindowCloses.has(win) ||
-      process.env.AGENTENV_AUTOMATION === "1"
+      (process.env.AGENTENV_AUTOMATION === "1" &&
+        process.env.AGENTENV_TEST_CLOSE_GUARD !== "1") ||
+      !guardedWindowCloses.has(win) ||
+      win.webContents.isDestroyed() ||
+      win.webContents.isCrashed()
     ) {
       return;
     }
     event.preventDefault();
     win.webContents.send("window:close-requested");
+  });
+
+  win.webContents.on("did-start-loading", () => {
+    guardedWindowCloses.delete(win);
+  });
+  win.webContents.on("render-process-gone", () => {
+    guardedWindowCloses.delete(win);
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -205,6 +240,7 @@ const createServices = async () => {
     homeDir: app.getPath("home"),
     userDataDir: app.getPath("userData")
   });
+  await recoverPendingReplacementsInDirectory(join(appDataRoot, ".."));
   if (!process.env.AGENTENV_DATA_ROOT) {
     await migrateLegacyAppDataRoot({
       legacyRoot: legacyElectronAppDataRoot(app.getPath("userData")),
@@ -217,6 +253,20 @@ const createServices = async () => {
     fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });
   const targetRegistry = createTargetRegistry();
+  const replacementRoots = new Set([paths.profilesDir, paths.skillsLibraryDir]);
+  for (const adapter of targetRegistry.listAdapters()) {
+    const targetPaths = adapter.createTargetPaths({
+      homeDir: paths.homeDir,
+      fakeHomeRoot: paths.fakeHomeRoot
+    });
+    if (targetPaths.skillsDir) replacementRoots.add(targetPaths.skillsDir);
+    if (targetPaths.agentsDir) replacementRoots.add(targetPaths.agentsDir);
+    for (const scanDir of targetPaths.skillScanDirs ?? []) replacementRoots.add(scanDir);
+    for (const location of targetPaths.skillLocations ?? []) replacementRoots.add(location.path);
+  }
+  for (const root of replacementRoots) {
+    await recoverPendingReplacementsInDirectory(root);
+  }
   const settingsStore = createSettingsStore(paths);
   const githubAuthService = createGitHubAuthService({
     tokenStore: createFileGitHubTokenStore(paths, {
@@ -280,16 +330,29 @@ const createServices = async () => {
 };
 
 void app.whenReady().then(() => {
-  void createServices().then((services) => {
-    registerIpcHandlers(services);
-    createWindow();
-  });
+  void createServices()
+    .then((services) => {
+      registerIpcHandlers(services);
+      servicesInitialized = true;
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    })
+    .catch((error) => {
+      dialog.showErrorBox(
+        "AgentEnv Manager could not start",
+        error instanceof Error ? error.message : String(error)
+      );
+      app.quit();
+    });
 });
 
 app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  if (servicesInitialized && BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+
+app.on("before-quit", () => {
+  appQuitRequested = true;
 });
 
 app.on("window-all-closed", () => {

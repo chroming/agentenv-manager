@@ -269,7 +269,9 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     onWindowCloseRequested: vi.fn().mockReturnValue(() => undefined),
+    setWindowCloseGuard: vi.fn(),
     confirmWindowClose: vi.fn(),
+    cancelWindowClose: vi.fn(),
     copyText: vi.fn().mockResolvedValue(undefined),
     selectSkillFolder: vi.fn().mockResolvedValue(undefined),
     listTargets: vi.fn().mockResolvedValue([target]),
@@ -2221,12 +2223,40 @@ describe("App", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
       target: { value: "# Unsaved before close\n" }
     });
+    await waitFor(() => expect(api.setWindowCloseGuard).toHaveBeenLastCalledWith(true));
     act(() => requestClose());
 
     const guard = await screen.findByRole("dialog", { name: "Unsaved profile changes" });
     expect(guard).toHaveTextContent("close AgentEnv Manager");
     fireEvent.click(within(guard).getByRole("button", { name: "Discard changes" }));
     expect(api.confirmWindowClose).toHaveBeenCalledOnce();
+  });
+
+  it("cancels an operating-system quit request when the dirty guard is dismissed", async () => {
+    let requestClose = () => undefined;
+    const api = installApi({
+      onWindowCloseRequested: vi.fn().mockImplementation((callback) => {
+        requestClose = callback;
+        return () => undefined;
+      })
+    });
+    render(<App />);
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "AGENTS.md" }), {
+      target: { value: "# Keep this draft open\n" }
+    });
+    act(() => requestClose());
+    fireEvent.click(
+      within(await screen.findByRole("dialog", { name: "Unsaved profile changes" })).getByRole(
+        "button",
+        { name: "Cancel" }
+      )
+    );
+
+    expect(api.cancelWindowClose).toHaveBeenCalledOnce();
+    expect(api.confirmWindowClose).not.toHaveBeenCalled();
   });
 
   it("previews and restores a backup from history", async () => {

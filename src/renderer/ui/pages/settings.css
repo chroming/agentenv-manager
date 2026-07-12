@@ -139,15 +139,30 @@
   display: grid;
   gap: 16px;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) 138px auto;
+  grid-template-columns: minmax(0, 1fr) 138px;
   min-height: 70px;
   padding-top: 12px;
+}
+
+.settings-auto-check-main {
+  display: block;
+  min-width: 0;
 }
 
 .settings-auto-check-copy {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.settings-auto-check-title {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.settings-auto-check-title > .ui-switch {
+  flex: 0 0 auto;
 }
 
 .settings-auto-check-copy strong,
@@ -189,11 +204,6 @@
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-}
-
-.settings-auto-check-row > .ui-switch {
-  justify-self: end;
-  min-height: 36px;
 }
 
 .github-settings-section {

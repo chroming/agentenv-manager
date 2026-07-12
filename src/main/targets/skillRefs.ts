@@ -1,42 +1,13 @@
-import { cp, mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { TargetPaths } from "../../shared/types";
-import { pathExists } from "../fileUtils";
+import { pathEntryExists, pathExists } from "../fileUtils";
 import { hashComparableResource } from "../resourceHash";
 import {
   createOwnerMarkerContent,
-  isAgentEnvOwnedDir,
-  markerPathFor
+  isAgentEnvOwnedDir
 } from "../ownershipMarkers";
+import { deploySkillDirectory } from "../skillDeployment";
 import type { TargetAssetInput } from "./types";
-
-const removeIfExists = async (path: string) => {
-  await rm(path, { recursive: true, force: true });
-};
-
-const copyEntries = async (sourceDir: string, targetDir: string) => {
-  const entries = await readdir(sourceDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name === ".agentenv-skill.json") {
-      continue;
-    }
-    const sourcePath = join(sourceDir, entry.name);
-    const targetPath = join(targetDir, entry.name);
-    await cp(sourcePath, targetPath, { recursive: true, dereference: true });
-  }
-};
-
-const symlinkEntries = async (sourceDir: string, targetDir: string) => {
-  const entries = await readdir(sourceDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name === ".agentenv-skill.json") {
-      continue;
-    }
-    const sourcePath = join(sourceDir, entry.name);
-    const targetPath = join(targetDir, entry.name);
-    await symlink(sourcePath, targetPath, entry.isDirectory() ? "dir" : "file");
-  }
-};
 
 const librarySourceFor = (skillLibraryDir: string, libraryId: string) =>
   join(skillLibraryDir, libraryId);
@@ -130,6 +101,7 @@ export const addSkillRefBackupPaths = (
     (reference) => reference.enabled !== false
   )) {
     paths.add(join(targetPaths.skillsDir, skillRef.targetName));
+    paths.add(`${join(targetPaths.skillsDir, skillRef.targetName)}.agentenv-owner.json`);
   }
 };
 
@@ -149,35 +121,26 @@ export const applySkillRefs = async ({
   )) {
     const sourceDir = librarySourceFor(skillLibraryDir, skillRef.libraryId);
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
-
-    const owned = await isOwnedSkillDir(targetDir, targetPaths);
-    if (owned || (allowMatchingUnmanagedSkills && await contentMatches(sourceDir, targetDir))) {
-      await removeIfExists(targetDir);
+    const targetExists = await pathEntryExists(targetDir);
+    const owned = targetExists && await isOwnedSkillDir(targetDir, targetPaths);
+    const matchingUnmanaged =
+      targetExists && allowMatchingUnmanagedSkills && await contentMatches(sourceDir, targetDir);
+    if (targetExists && !owned && !matchingUnmanaged) {
+      throw new Error(
+        `Skill target changed after preview and is not AgentEnv-owned: ${targetDir}`
+      );
     }
 
-    await mkdir(targetDir, { recursive: true });
-    if (skillSyncMethod === "copy") {
-      await copyEntries(sourceDir, targetDir);
-    } else if (skillSyncMethod === "auto") {
-      try {
-        await symlinkEntries(sourceDir, targetDir);
-      } catch {
-        await removeIfExists(targetDir);
-        await mkdir(targetDir, { recursive: true });
-        await copyEntries(sourceDir, targetDir);
-      }
-    } else {
-      await symlinkEntries(sourceDir, targetDir);
-    }
-    await writeFile(
-      markerPathFor(targetDir),
-      createOwnerMarkerContent({
+    await deploySkillDirectory({
+      sourceDir,
+      targetDir,
+      syncMethod: skillSyncMethod,
+      markerContent: createOwnerMarkerContent({
         profileId: profile.id,
         targetId: targetPaths.targetId,
         kind: "skill",
         source: `skills-library/${skillRef.libraryId}`
-      }),
-      "utf8"
-    );
+      })
+    });
   }
 };

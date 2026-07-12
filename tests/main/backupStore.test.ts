@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -100,5 +100,41 @@ describe("backup store", () => {
         fileCount: 0
       }
     ]);
+  });
+
+  it("rejects a tampered manifest that expands rollback outside a safe id", async () => {
+    const paths = await makePaths();
+    const store = createBackupStore(paths, {
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+    const manifest = await store.createBackup([], {
+      profileId: "daily-coding",
+      targetId: "opencode"
+    });
+    const manifestPath = join(paths.backupsDir, manifest.id, "manifest.json");
+    const tampered = JSON.parse(await readFile(manifestPath, "utf8"));
+    tampered.profileId = "../../outside";
+    await writeFile(manifestPath, `${JSON.stringify(tampered, null, 2)}\n`, "utf8");
+
+    await expect(store.readBackup(manifest.id)).rejects.toThrow();
+  });
+
+  it("rejects a backup file replaced by a symbolic link", async () => {
+    const paths = await makePaths();
+    const source = paths.globalAgentsPath;
+    const unrelated = join(root, "unrelated.txt");
+    await writeFile(source, "# Agent\n", "utf8");
+    await writeFile(unrelated, "do not restore me\n", "utf8");
+    const store = createBackupStore(paths, {
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+    const manifest = await store.createBackup([source]);
+    const backupPath = manifest.entries[0]?.backupPath ?? "";
+    await rm(backupPath);
+    await symlink(unrelated, backupPath);
+
+    await expect(store.readBackup(manifest.id)).rejects.toThrow(
+      "backup content does not match its manifest"
+    );
   });
 });

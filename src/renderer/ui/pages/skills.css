@@ -2,6 +2,35 @@
 .skill-library-panel {
   container-name: skill-library;
   container-type: inline-size;
+  flex: 1 1 auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.app-shell--library .editor-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-shell--library .library-page-header,
+.app-shell--library .metric-strip {
+  flex: 0 0 auto;
+}
+
+.skill-library-panel .library-table {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.skill-library-panel .library-table__body {
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .skill-library-panel .library-table,
@@ -9,8 +38,21 @@
 .skill-library-panel .library-table-row,
 .skill-library-panel .library-table__head {
   min-width: 0;
-  overflow: visible;
   width: 100%;
+}
+
+.skill-library-panel .library-table {
+  overflow: hidden;
+}
+
+.skill-library-panel .library-table__body {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.skill-library-panel .library-table-row,
+.skill-library-panel .library-table__head {
+  overflow: visible;
 }
 
 .skill-library-panel .library-table-row,
@@ -39,13 +81,31 @@
   row-gap: 3px;
 }
 
-.skill-library-panel .library-table-row.is-globally-disabled {
-  background: #fafbfc;
+.skill-library-panel .library-table-row.is-globally-disabled,
+.skill-library-panel .library-table-row.is-globally-disabled:hover {
+  background: #f3f5f8;
+  box-shadow: inset 3px 0 #9aa6b7;
 }
 
 .skill-library-panel .library-table-row.is-globally-disabled .resource-avatar,
 .skill-library-panel .library-table-row.is-globally-disabled .skill-description {
-  opacity: 0.58;
+  filter: grayscale(1);
+  opacity: 0.52;
+}
+
+.skill-library-panel .library-table-row.is-globally-disabled .skill-title,
+.skill-library-panel .library-table-row.is-globally-disabled .library-source-cell,
+.skill-library-panel .library-table-row.is-globally-disabled .library-version-cell,
+.skill-library-panel .library-table-row.is-globally-disabled .library-update-cell,
+.skill-library-panel .library-table-row.is-globally-disabled .library-usage-cell,
+.skill-library-panel .library-table-row.is-globally-disabled .library-installs-cell {
+  color: #697586;
+  opacity: 0.72;
+}
+
+.skill-library-panel .library-table-row.is-globally-disabled .library-global-state {
+  background: #dfe4eb;
+  color: #445064;
 }
 
 .skill-title-line {

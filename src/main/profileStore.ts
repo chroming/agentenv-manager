@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import {
   ProfileManifestSchema,
@@ -14,6 +14,7 @@ import { createPaths, type PathOverrides } from "./paths";
 import { createProfileContentHash } from "./profileFingerprint";
 import { targetProfile } from "./profileTargeting";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
+import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils";
 
 export interface ProfileStore {
   listProfiles(): Promise<ProfileSummary[]>;
@@ -52,6 +53,10 @@ export const createProfileStore = (
     }
 
     const profileDir = join(paths.profilesDir, parsedId.data);
+    const profileStats = await lstat(profileDir);
+    if (!profileStats.isDirectory() || profileStats.isSymbolicLink()) {
+      throw new Error(`Profile storage must be a real directory: ${parsedId.data}`);
+    }
     const manifest = ProfileManifestSchema.parse(
       await readJson(join(profileDir, "profile.json"))
     );
@@ -74,7 +79,9 @@ export const createProfileStore = (
   const listProfiles = async (): Promise<ProfileSummary[]> => {
     let entries: string[];
     try {
-      entries = await readdir(paths.profilesDir);
+      entries = (await readdir(paths.profilesDir)).filter(
+        (entry) => !entry.includes(".agentenv-")
+      );
     } catch (error) {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
         return [];
@@ -113,13 +120,27 @@ export const createProfileStore = (
       assetPolicy: input.assetPolicy
     };
 
-    await mkdir(profileDir, { recursive: true });
-    await writeFile(
-      join(profileDir, "profile.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      "utf8"
-    );
-    await adapter.writeProfileFiles(profileDir, profile);
+    if (await pathEntryExists(profileDir)) {
+      const currentStats = await lstat(profileDir);
+      if (!currentStats.isDirectory() || currentStats.isSymbolicLink()) {
+        throw new Error(`Profile storage must be a real directory: ${manifest.id}`);
+      }
+    }
+
+    await replacePathAtomically(profileDir, async (stagingDir) => {
+      if (await pathEntryExists(profileDir)) {
+        await cp(profileDir, stagingDir, { recursive: true, dereference: false });
+      } else {
+        await mkdir(stagingDir, { recursive: true });
+      }
+      const stagedProfile = { ...profile, profileDir: stagingDir };
+      await writeAtomic(
+        join(stagingDir, "profile.json"),
+        `${JSON.stringify(manifest, null, 2)}\n`
+      );
+      await adapter.writeProfileFiles(stagingDir, stagedProfile);
+      await adapter.readProfileFiles(stagingDir, manifest);
+    });
 
     return readProfile(manifest.id);
   };
@@ -152,19 +173,26 @@ export const createProfileStore = (
       name: `${profile.manifest.name} Copy`
     };
 
-    await cp(sourceDir, targetDir, { recursive: true });
-    await writeFile(
-      join(targetDir, "profile.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      "utf8"
-    );
+    await replacePathAtomically(targetDir, async (stagingDir) => {
+      await cp(sourceDir, stagingDir, { recursive: true, dereference: false });
+      await writeAtomic(
+        join(stagingDir, "profile.json"),
+        `${JSON.stringify(manifest, null, 2)}\n`
+      );
+    });
 
     return readProfile(duplicateId);
   };
 
   const deleteProfile = async (id: string): Promise<void> => {
     const parsedId = SafeIdSchema.parse(id);
-    await rm(join(paths.profilesDir, parsedId), { recursive: true, force: true });
+    const profileDir = join(paths.profilesDir, parsedId);
+    if (!(await pathEntryExists(profileDir))) {
+      return;
+    }
+    const trashDir = join(paths.appDataRoot, "trash", "profiles");
+    await mkdir(trashDir, { recursive: true, mode: 0o700 });
+    await rename(profileDir, join(trashDir, `${parsedId}-${Date.now()}`));
   };
 
   return { listProfiles, readProfile, saveProfile, createProfile, duplicateProfile, deleteProfile };

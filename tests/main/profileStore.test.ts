@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -114,5 +114,26 @@ describe("profile store", () => {
 
     await expect(store.listProfiles()).resolves.toEqual([]);
     await expect(store.readProfile("daily-coding")).rejects.toThrow();
+    await expect(readdir(join(root, "trash", "profiles"))).resolves.toEqual([
+      expect.stringMatching(/^daily-coding-/)
+    ]);
+  });
+
+  it("refuses to follow a profile directory symlink outside app data", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-"));
+    const outsideDir = join(root, "outside");
+    const profileRoot = join(root, "profiles");
+    await mkdir(outsideDir, { recursive: true });
+    await mkdir(profileRoot, { recursive: true });
+    await writeFile(join(outsideDir, "profile.json"), "keep me\n", "utf8");
+    await symlink(outsideDir, join(profileRoot, "daily-coding"), "dir");
+    const store = createProfileStore({ appDataRoot: root });
+
+    await expect(store.readProfile("daily-coding")).rejects.toThrow(
+      "Profile storage must be a real directory"
+    );
+    await expect(readFile(join(outsideDir, "profile.json"), "utf8")).resolves.toBe(
+      "keep me\n"
+    );
   });
 });

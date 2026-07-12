@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { SafeIdSchema } from "../shared/schemas";
@@ -32,12 +32,13 @@ import type {
   SharedSkillRetentionInput
 } from "../shared/types";
 import { createUnifiedDiff } from "./diff";
-import { pathExists } from "./fileUtils";
-import { createOwnerMarkerContent, markerPathFor } from "./ownershipMarkers";
+import { pathEntryExists, pathExists, replacePathAtomically, replacePathWithCopy, writeAtomic } from "./fileUtils";
+import { createOwnerMarkerContent, markerPathFor, markerPathForFile } from "./ownershipMarkers";
 import type { AgentEnvPaths } from "./paths";
 import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
+import { deploySkillDirectory, removeSkillDeployment } from "./skillDeployment";
 
 interface SkillMetadataFile {
   sourceType?: SkillSourceType;
@@ -62,7 +63,7 @@ interface SkillCleanupBackupManifest {
   libraryRemoved?: boolean;
   libraryBackupPath?: string;
   createdAt: string;
-  operation?: "cleanup" | "remove" | "retire";
+  operation?: "cleanup" | "remove" | "retire" | "update";
   entries: Array<{ sourcePath: string; backupPath: string }>;
 }
 
@@ -321,37 +322,10 @@ const createSkillChanges = async (currentDir: string, nextDir: string): Promise<
 };
 
 const removeAndCopy = async (source: string, destination: string) => {
-  await rm(destination, { recursive: true, force: true });
-  await mkdir(destination, { recursive: true });
-  await cp(source, destination, { recursive: true, dereference: true });
-  await rm(join(destination, ".agentenv-owner.json"), { force: true });
-};
-
-const copySkillEntries = async (sourceDir: string, targetDir: string) => {
-  const entries = await readdir(sourceDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name === ".agentenv-skill.json") {
-      continue;
-    }
-    await cp(join(sourceDir, entry.name), join(targetDir, entry.name), {
-      recursive: true,
-      dereference: true
-    });
-  }
-};
-
-const symlinkSkillEntries = async (sourceDir: string, targetDir: string) => {
-  const entries = await readdir(sourceDir, { withFileTypes: true });
-  for (const entry of entries) {
-    if (entry.name === ".agentenv-skill.json") {
-      continue;
-    }
-    await symlink(
-      join(sourceDir, entry.name),
-      join(targetDir, entry.name),
-      entry.isDirectory() ? "dir" : "file"
-    );
-  }
+  await replacePathAtomically(destination, async (stagingPath) => {
+    await cp(source, stagingPath, { recursive: true, dereference: true });
+    await rm(join(stagingPath, ".agentenv-owner.json"), { force: true });
+  });
 };
 
 const parseGitHubLocation = (rawUrl: string): ParsedGitHubLocation => {
@@ -472,8 +446,7 @@ export const createSkillLibraryStore = (
     ) ?? [];
 
   const writeIgnoreRules = async (rules: SkillCleanupIgnoreRule[]) => {
-    await mkdir(dirname(ignoreRulesPath), { recursive: true });
-    await writeFile(ignoreRulesPath, `${JSON.stringify(rules, null, 2)}\n`, "utf8");
+    await writeAtomic(ignoreRulesPath, `${JSON.stringify(rules, null, 2)}\n`);
   };
 
   const findIgnoreRule = (
@@ -685,7 +658,7 @@ export const createSkillLibraryStore = (
         }
         const filePath = join(writeRoot, ...relativePath.split("/"));
         await mkdir(dirname(filePath), { recursive: true });
-        await writeFile(filePath, await fetchGitHubText(item.download_url), "utf8");
+        await writeAtomic(filePath, await fetchGitHubText(item.download_url));
       }
     };
 
@@ -744,7 +717,7 @@ export const createSkillLibraryStore = (
     const current = await readLibraryMetadata(skillDir);
     const sourceType = metadata.sourceType ?? "local";
     const contentHash = await computeContentHash(skillDir);
-    await writeFile(
+    await writeAtomic(
       join(skillDir, ".agentenv-skill.json"),
       `${JSON.stringify(
         {
@@ -784,8 +757,7 @@ export const createSkillLibraryStore = (
         },
         null,
         2
-      )}\n`,
-      "utf8"
+      )}\n`
     );
   };
 
@@ -931,7 +903,10 @@ export const createSkillLibraryStore = (
   };
 
   const ownedLibraryId = async (skillDir: string) => {
-    const marker = await readJsonIfExists<Record<string, unknown>>(markerPathFor(skillDir));
+    const skillStats = await lstat(skillDir).catch(() => undefined);
+    const marker = await readJsonIfExists<Record<string, unknown>>(
+      skillStats?.isSymbolicLink() ? markerPathForFile(skillDir) : markerPathFor(skillDir)
+    );
     if (
       marker?.owner === "agentenv-manager" &&
       marker.kind === "skill" &&
@@ -1046,6 +1021,7 @@ export const createSkillLibraryStore = (
             continue;
           }
           const contentHash = await computeContentHash(skillDir);
+          const skillDirStats = await lstat(skillDir);
           const skillFileStats = await lstat(join(skillDir, "SKILL.md"));
           byKey.set(key, {
             id: entry.name,
@@ -1059,7 +1035,11 @@ export const createSkillLibraryStore = (
             contentHash,
             ignoreRuleId: ignoreRule?.id,
             ignoreReason: ignoreRule?.reason,
-            installMethod: markerId ? (skillFileStats.isSymbolicLink() ? "linked" : "copied") : undefined,
+            installMethod: markerId
+              ? skillDirStats.isSymbolicLink() || skillFileStats.isSymbolicLink()
+                ? "linked"
+                : "copied"
+              : undefined,
             contentMatchesLibrary: markerId
               ? libraryById.get(markerId)?.contentHash === contentHash
               : libraryId
@@ -1164,6 +1144,52 @@ export const createSkillLibraryStore = (
     const manifest = JSON.parse(
       await readFile(join(backupDir, "manifest.json"), "utf8")
     ) as SkillCleanupBackupManifest;
+    const safeLibraryId = SafeIdSchema.parse(manifest.libraryId);
+    if (manifest.id !== safeId || !Array.isArray(manifest.entries)) {
+      throw new Error(`Invalid Skill cleanup backup: ${safeId}`);
+    }
+    const allowedRoots = [
+      paths.userSkillsDir,
+      join(paths.homeDir, ".codex", "skills"),
+      join(paths.homeDir, ".claude", "skills"),
+      join(paths.homeDir, ".config", "opencode", "skills"),
+      join(paths.homeDir, ".config", "opencode", "skill")
+    ].map((path) => resolve(path));
+    const backupLocationsRoot = resolve(backupDir, "locations");
+    const seenBackupPaths = new Set<string>();
+    for (const entry of manifest.entries) {
+      if (
+        !entry ||
+        typeof entry.sourcePath !== "string" ||
+        typeof entry.backupPath !== "string"
+      ) {
+        throw new Error(`Invalid Skill cleanup backup entry: ${safeId}`);
+      }
+      const sourcePath = resolve(entry.sourcePath);
+      const backupPath = resolve(entry.backupPath);
+      const sourceAllowed = allowedRoots.some(
+        (root) => dirname(sourcePath) === root && relative(root, sourcePath).length > 0
+      );
+      const backupAllowed = relative(backupLocationsRoot, backupPath);
+      const backupNameMatch = basename(backupPath).match(/^\d+-(.+)$/);
+      if (
+        !sourceAllowed ||
+        dirname(backupPath) !== backupLocationsRoot ||
+        backupNameMatch?.[1] !== basename(sourcePath) ||
+        seenBackupPaths.has(backupPath) ||
+        backupAllowed.startsWith("..") ||
+        backupAllowed.includes("/../")
+      ) {
+        throw new Error(`Skill cleanup backup contains an unsafe path: ${safeId}`);
+      }
+      seenBackupPaths.add(backupPath);
+    }
+    if (manifest.libraryBackupPath) {
+      const expected = resolve(backupDir, "library", safeLibraryId);
+      if (resolve(manifest.libraryBackupPath) !== expected) {
+        throw new Error(`Skill cleanup backup contains an unsafe Library path: ${safeId}`);
+      }
+    }
     return { backupDir, manifest };
   };
 
@@ -1186,7 +1212,12 @@ export const createSkillLibraryStore = (
             id: manifest.id,
             libraryId: manifest.libraryId,
             createdAt: manifest.createdAt,
-            locationCount: manifest.entries.length,
+            locationCount:
+              manifest.operation === "update"
+                ? 1
+                : manifest.entries.filter(
+                    (item) => !item.sourcePath.endsWith(".agentenv-owner.json")
+                  ).length,
             operation: manifest.operation
           };
         } catch (error) {
@@ -1204,20 +1235,25 @@ export const createSkillLibraryStore = (
   };
 
   const restoreCleanupBackup = async (manifest: SkillCleanupBackupManifest) => {
+    const backedUpPaths = new Set(manifest.entries.map((entry) => resolve(entry.sourcePath)));
     for (const entry of manifest.entries) {
-      await rm(entry.sourcePath, { recursive: true, force: true });
-      await mkdir(dirname(entry.sourcePath), { recursive: true });
-      await cp(entry.backupPath, entry.sourcePath, { recursive: true, dereference: false });
+      if (entry.sourcePath.endsWith(".agentenv-owner.json")) continue;
+      const markerPath = markerPathForFile(entry.sourcePath);
+      if (!backedUpPaths.has(resolve(markerPath))) {
+        await rm(markerPath, { force: true });
+      }
+    }
+    for (const entry of manifest.entries) {
+      await replacePathWithCopy(entry.backupPath, entry.sourcePath, {
+        dereference: false
+      });
     }
     if (manifest.libraryCreated) {
       await rm(join(await libraryDir(), manifest.libraryId), { recursive: true, force: true });
     }
     if (manifest.libraryRemoved && manifest.libraryBackupPath) {
       const targetLibraryDir = join(await libraryDir(), manifest.libraryId);
-      await rm(targetLibraryDir, { recursive: true, force: true });
-      await mkdir(dirname(targetLibraryDir), { recursive: true });
-      await cp(manifest.libraryBackupPath, targetLibraryDir, {
-        recursive: true,
+      await replacePathWithCopy(manifest.libraryBackupPath, targetLibraryDir, {
         dereference: false
       });
     }
@@ -1237,12 +1273,16 @@ export const createSkillLibraryStore = (
     const backupDir = join(cleanupBackupRoot(), backupId);
     const libraryBackupPath = join(backupDir, "library", safeId);
     const uniqueInstallPaths = [...new Set(managedInstallPaths)];
+    const protectedInstallPaths = uniqueInstallPaths.flatMap((sourcePath) => [
+      sourcePath,
+      markerPathForFile(sourcePath)
+    ]);
     const entries: SkillCleanupBackupManifest["entries"] = [];
     await mkdir(dirname(libraryBackupPath), { recursive: true });
     await cp(targetLibraryDir, libraryBackupPath, { recursive: true, dereference: false });
 
-    for (const [index, sourcePath] of uniqueInstallPaths.entries()) {
-      if (!(await pathExists(sourcePath))) {
+    for (const [index, sourcePath] of protectedInstallPaths.entries()) {
+      if (!(await pathEntryExists(sourcePath))) {
         continue;
       }
       const backupPath = join(backupDir, "locations", `${index}-${basename(sourcePath)}`);
@@ -1261,15 +1301,14 @@ export const createSkillLibraryStore = (
       createdAt: new Date().toISOString(),
       entries
     };
-    await writeFile(
+    await writeAtomic(
       join(backupDir, "manifest.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      "utf8"
+      `${JSON.stringify(manifest, null, 2)}\n`
     );
 
     try {
       for (const sourcePath of uniqueInstallPaths) {
-        await rm(sourcePath, { recursive: true, force: true });
+        await removeSkillDeployment(sourcePath);
       }
       await rm(targetLibraryDir, { recursive: true, force: true });
       return {
@@ -1371,31 +1410,17 @@ export const createSkillLibraryStore = (
 
     const targetDir = join(targetPaths.skillsDir, targetName);
     const settings = await readSettings();
-    await rm(targetDir, { recursive: true, force: true });
-    await mkdir(targetDir, { recursive: true });
-    if (settings.skillSyncMethod === "copy") {
-      await copySkillEntries(sourceDir, targetDir);
-    } else if (settings.skillSyncMethod === "auto") {
-      try {
-        await symlinkSkillEntries(sourceDir, targetDir);
-      } catch {
-        await rm(targetDir, { recursive: true, force: true });
-        await mkdir(targetDir, { recursive: true });
-        await copySkillEntries(sourceDir, targetDir);
-      }
-    } else {
-      await symlinkSkillEntries(sourceDir, targetDir);
-    }
-    await writeFile(
-      markerPathFor(targetDir),
-      createOwnerMarkerContent({
+    await deploySkillDirectory({
+      sourceDir,
+      targetDir,
+      syncMethod: settings.skillSyncMethod,
+      markerContent: createOwnerMarkerContent({
         profileId,
         targetId: targetPaths.targetId,
         kind: "skill",
         source: `skills-library/${safeLibraryId}`
-      }),
-      "utf8"
-    );
+      })
+    });
   };
 
   const manageTargetSkill = async (input: ManageTargetSkillStoreInput): Promise<void> => {
@@ -1405,7 +1430,34 @@ export const createSkillLibraryStore = (
     if (!targetDir || !(await pathExists(join(targetDir, "SKILL.md")))) {
       throw new Error(`Target skill does not exist: ${targetDir}`);
     }
-    await deployLibrarySkill({ ...input, profileId: "library-management" });
+    const backupId = `cleanup-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const backupDir = join(cleanupBackupRoot(), backupId);
+    const entries: SkillCleanupBackupManifest["entries"] = [];
+    for (const [index, sourcePath] of [targetDir, markerPathForFile(targetDir)].entries()) {
+      if (!(await pathEntryExists(sourcePath))) continue;
+      const backupPath = join(backupDir, "locations", `${index}-${basename(sourcePath)}`);
+      await mkdir(dirname(backupPath), { recursive: true });
+      await cp(sourcePath, backupPath, { recursive: true, dereference: false });
+      entries.push({ sourcePath, backupPath });
+    }
+    const manifest: SkillCleanupBackupManifest = {
+      id: backupId,
+      libraryId: SafeIdSchema.parse(input.libraryId),
+      libraryCreated: false,
+      operation: "cleanup",
+      createdAt: new Date().toISOString(),
+      entries
+    };
+    await writeAtomic(
+      join(backupDir, "manifest.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`
+    );
+    try {
+      await deployLibrarySkill({ ...input, profileId: "library-management" });
+    } catch (error) {
+      await restoreCleanupBackup(manifest);
+      throw error;
+    }
   };
 
   const replaceTargetSkill = async ({
@@ -1419,31 +1471,17 @@ export const createSkillLibraryStore = (
   }) => {
     const sourceDir = join(await libraryDir(), libraryId);
     const settings = await readSettings();
-    await rm(targetDir, { recursive: true, force: true });
-    await mkdir(targetDir, { recursive: true });
-    if (settings.skillSyncMethod === "copy") {
-      await copySkillEntries(sourceDir, targetDir);
-    } else if (settings.skillSyncMethod === "auto") {
-      try {
-        await symlinkSkillEntries(sourceDir, targetDir);
-      } catch {
-        await rm(targetDir, { recursive: true, force: true });
-        await mkdir(targetDir, { recursive: true });
-        await copySkillEntries(sourceDir, targetDir);
-      }
-    } else {
-      await symlinkSkillEntries(sourceDir, targetDir);
-    }
-    await writeFile(
-      markerPathFor(targetDir),
-      createOwnerMarkerContent({
+    await deploySkillDirectory({
+      sourceDir,
+      targetDir,
+      syncMethod: settings.skillSyncMethod,
+      markerContent: createOwnerMarkerContent({
         profileId: "library-cleanup",
         targetId,
         kind: "skill",
         source: `skills-library/${libraryId}`
-      }),
-      "utf8"
-    );
+      })
+    });
   };
 
   const consolidateSkillGroup = async ({
@@ -1489,6 +1527,12 @@ export const createSkillLibraryStore = (
       await mkdir(dirname(backupPath), { recursive: true });
       await cp(location.targetDir, backupPath, { recursive: true, dereference: false });
       entries.push({ sourcePath: location.targetDir, backupPath });
+      const markerPath = markerPathForFile(location.targetDir);
+      if (await pathEntryExists(markerPath)) {
+        const markerBackupPath = `${backupPath}.agentenv-owner.json`;
+        await cp(markerPath, markerBackupPath, { dereference: false });
+        entries.push({ sourcePath: markerPath, backupPath: markerBackupPath });
+      }
     }
 
     const manifest: SkillCleanupBackupManifest = {
@@ -1501,7 +1545,10 @@ export const createSkillLibraryStore = (
       operation: "cleanup",
       entries
     };
-    await writeFile(join(backupDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    await writeAtomic(
+      join(backupDir, "manifest.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`
+    );
 
     try {
       if (libraryCreated || replaceLibrary) {
@@ -1587,6 +1634,12 @@ export const createSkillLibraryStore = (
       await mkdir(dirname(backupPath), { recursive: true });
       await cp(sourcePath, backupPath, { recursive: true, dereference: false });
       entries.push({ sourcePath, backupPath });
+      const markerPath = markerPathForFile(sourcePath);
+      if (await pathEntryExists(markerPath)) {
+        const markerBackupPath = `${backupPath}.agentenv-owner.json`;
+        await cp(markerPath, markerBackupPath, { dereference: false });
+        entries.push({ sourcePath: markerPath, backupPath: markerBackupPath });
+      }
     }
 
     const manifest: SkillCleanupBackupManifest = {
@@ -1599,10 +1652,9 @@ export const createSkillLibraryStore = (
       operation: "cleanup",
       entries
     };
-    await writeFile(
+    await writeAtomic(
       join(backupDir, "manifest.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      "utf8"
+      `${JSON.stringify(manifest, null, 2)}\n`
     );
 
     try {
@@ -1620,9 +1672,10 @@ export const createSkillLibraryStore = (
         await removeAndCopy(targetLibraryDir, sharedPath);
         await rm(join(sharedPath, ".agentenv-skill.json"), { force: true });
         await rm(join(sharedPath, ".agentenv-owner.json"), { force: true });
+        await rm(markerPathForFile(sharedPath), { force: true });
       }
       for (const duplicatePath of uniqueDuplicatePaths) {
-        await rm(duplicatePath, { recursive: true, force: true });
+        await removeSkillDeployment(duplicatePath);
       }
       return {
         backupId,
@@ -1644,7 +1697,9 @@ export const createSkillLibraryStore = (
   const rollbackSkillCleanup = async (backupId: string): Promise<void> => {
     const { backupDir, manifest } = await readCleanupBackup(backupId);
     await restoreCleanupBackup(manifest);
-    await rm(backupDir, { recursive: true, force: true });
+    const archiveRoot = join(paths.backupsDir, "skill-cleanup-restored");
+    await mkdir(archiveRoot, { recursive: true });
+    await rename(backupDir, join(archiveRoot, `${manifest.id}-${Date.now()}`));
   };
 
   const checkUpdates = async (ids?: string[]): Promise<SkillUpdateInfo[]> => {
@@ -1924,6 +1979,35 @@ export const createSkillLibraryStore = (
     };
   };
 
+  const createLibraryUpdateBackup = async (
+    libraryId: string,
+    targetLibraryDir: string
+  ): Promise<SkillCleanupBackupManifest> => {
+    const backupId = `update-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const backupDir = join(cleanupBackupRoot(), backupId);
+    const libraryBackupPath = join(backupDir, "library", libraryId);
+    await mkdir(dirname(libraryBackupPath), { recursive: true });
+    await cp(targetLibraryDir, libraryBackupPath, {
+      recursive: true,
+      dereference: false
+    });
+    const manifest: SkillCleanupBackupManifest = {
+      id: backupId,
+      libraryId,
+      libraryCreated: false,
+      libraryRemoved: true,
+      libraryBackupPath,
+      operation: "update",
+      createdAt: new Date().toISOString(),
+      entries: []
+    };
+    await writeAtomic(
+      join(backupDir, "manifest.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`
+    );
+    return manifest;
+  };
+
   const updateSkill = async (id: string): Promise<SkillLibraryEntry> => {
     const safeId = SafeIdSchema.parse(id);
     const targetDir = join(await libraryDir(), safeId);
@@ -1942,24 +2026,34 @@ export const createSkillLibraryStore = (
         if (!hasSkillMd) {
           throw new Error(`GitHub skill source is missing SKILL.md: ${metadata.source}`);
         }
-        await removeAndCopy(tempDir, targetDir);
-        await writeMetadata(targetDir, {
-          sourceType: "github",
-          source: metadata.source,
-          remoteRef: source.ref,
-          remotePath: source.remotePath,
-          remoteRevision: revision,
-          updatePolicy: "tracked",
-          iconKey: metadata.iconKey,
-          upstream: {
-            kind: "github",
-            locator: metadata.source,
-            ref: source.ref,
-            subpath: source.remotePath,
-            revision
-          },
-          provenance: metadata.provenance
-        });
+        const backup = await createLibraryUpdateBackup(safeId, targetDir);
+        try {
+          await removeAndCopy(tempDir, targetDir);
+          await writeMetadata(targetDir, {
+            sourceType: "github",
+            source: metadata.source,
+            remoteRef: source.ref,
+            remotePath: source.remotePath,
+            remoteRevision: revision,
+            updatePolicy: "tracked",
+            iconKey: metadata.iconKey,
+            upstream: {
+              kind: "github",
+              locator: metadata.source,
+              ref: source.ref,
+              subpath: source.remotePath,
+              revision
+            },
+            provenance: metadata.provenance
+          });
+        } catch (error) {
+          await restoreCleanupBackup(backup);
+          throw new Error(
+            `Updating ${safeId} failed and restored the previous Library version: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
         return entryFor(safeId, targetDir);
       } finally {
         await rm(tempDir, { recursive: true, force: true });
@@ -1971,15 +2065,25 @@ export const createSkillLibraryStore = (
     if (!(await pathExists(join(metadata.source, "SKILL.md")))) {
       throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
     }
-    await removeAndCopy(metadata.source, targetDir);
-    await writeMetadata(targetDir, {
-      sourceType: "local",
-      source: metadata.source,
-      updatePolicy: "tracked",
-      iconKey: metadata.iconKey,
-      upstream: metadata.upstream ?? { kind: "local", locator: metadata.source },
-      provenance: metadata.provenance
-    });
+    const backup = await createLibraryUpdateBackup(safeId, targetDir);
+    try {
+      await removeAndCopy(metadata.source, targetDir);
+      await writeMetadata(targetDir, {
+        sourceType: "local",
+        source: metadata.source,
+        updatePolicy: "tracked",
+        iconKey: metadata.iconKey,
+        upstream: metadata.upstream ?? { kind: "local", locator: metadata.source },
+        provenance: metadata.provenance
+      });
+    } catch (error) {
+      await restoreCleanupBackup(backup);
+      throw new Error(
+        `Updating ${safeId} failed and restored the previous Library version: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
     return entryFor(safeId, targetDir);
   };
 

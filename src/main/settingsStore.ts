@@ -1,9 +1,10 @@
-import { cp, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { cp, mkdir, readdir, readFile, rename } from "node:fs/promises";
+import { join } from "node:path";
 import { z } from "zod";
 import type { AgentEnvSettings } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
 import { hashComparableResource } from "./resourceHash";
+import { writeAtomic } from "./fileUtils";
 
 const SettingsSchema = z.object({
   locale: z.enum(["system", "en", "zh_CN", "zh_TW"]).default("system"),
@@ -104,7 +105,7 @@ export const createSettingsStore = (paths: AgentEnvPaths): SettingsStore => {
       if (current.skillStorageLocation !== "agents") return current;
       const next = { ...current, skillStorageLocation: "appData" as const };
       await migrateSkillStorage(paths, current, next);
-      await writeFile(settingsPathFor(paths), `${JSON.stringify(next, null, 2)}\n`, "utf8");
+      await writeAtomic(settingsPathFor(paths), `${JSON.stringify(next, null, 2)}\n`);
       return next;
     } catch (error) {
       if (isMissingFileError(error)) {
@@ -124,8 +125,7 @@ export const createSettingsStore = (paths: AgentEnvPaths): SettingsStore => {
     const next = SettingsSchema.parse({ ...current, ...input, skillStorageLocation: "appData" });
     await migrateSkillStorage(paths, current, next);
     const settingsPath = settingsPathFor(paths);
-    await mkdir(dirname(settingsPath), { recursive: true });
-    await writeFile(settingsPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+    await writeAtomic(settingsPath, `${JSON.stringify(next, null, 2)}\n`);
     return next;
   };
 

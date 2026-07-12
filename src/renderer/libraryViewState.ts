@@ -48,11 +48,11 @@ export const matchesSkillStatusFilter = (
   update?: SkillUpdateInfo
 ) => {
   if (statusFilter === "all") return true;
+  if (statusFilter === "disabled") return skill.globallyEnabled === false;
+  if (skill.globallyEnabled === false) return false;
   if (statusFilter === "referenced") return referenced;
   if (statusFilter === "unreferenced") return !referenced;
-  if (statusFilter === "disabled") return skill.globallyEnabled === false;
   return (
-    skill.globallyEnabled !== false &&
     skill.updatePolicy === "tracked" &&
     Boolean(update?.updateAvailable) &&
     !update?.error

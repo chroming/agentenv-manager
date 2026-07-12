@@ -717,6 +717,48 @@
   min-width: 22px;
 }
 
+.profile-composer-section[data-profile-composer-id="instructions"]
+  .profile-composer-section__panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-composer-section[data-profile-composer-id="instructions"]
+  .profile-composer-section__panel > .field-block {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.profile-composer-section[data-profile-composer-id="instructions"] textarea {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 104px;
+}
+
+.profile-composer-section[data-profile-composer-id="mcp"] .skills-editor {
+  align-content: start;
+  align-self: start;
+  width: 100%;
+}
+
+.profile-composer-section[data-profile-composer-id="mcp"] .resource-row {
+  min-height: 46px;
+  padding-block: 6px;
+}
+
+.asset-editor-header--compact {
+  justify-content: flex-end;
+  min-height: 32px;
+}
+
+.asset-editor-header--compact .secondary-action {
+  height: 32px;
+  min-height: 32px;
+}
+
 /* Apply preview keeps readable rows and one stable footer while content scrolls. */
 .preview-modal-backdrop {
   padding: 24px;
@@ -1153,12 +1195,17 @@
   box-shadow: 0 12px 28px rgba(26, 38, 59, 0.16);
   padding: 5px;
   position: fixed;
-  width: 190px;
+  width: 220px;
   z-index: var(--z-popover);
 }
 
 .profile-skill-menu .row-action-item {
   min-height: 38px;
+}
+
+.profile-skill-menu .row-action-item span {
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .profile-owned-skill-dialog {

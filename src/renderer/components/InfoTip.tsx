@@ -24,6 +24,7 @@ interface TipPosition {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
+const tooltipOpenEvent = "agentenv:tooltip-open";
 
 export const InfoTip = ({ label }: InfoTipProps) => {
   const tooltipId = useId();
@@ -31,6 +32,25 @@ export const InfoTip = ({ label }: InfoTipProps) => {
   const bubbleRef = useRef<HTMLSpanElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<TipPosition>();
+  const closeTimerRef = useRef<number | undefined>(undefined);
+
+  const cancelClose = () => {
+    if (closeTimerRef.current !== undefined) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = undefined;
+    }
+  };
+
+  const openTip = () => {
+    cancelClose();
+    document.dispatchEvent(new CustomEvent(tooltipOpenEvent, { detail: tooltipId }));
+    setIsOpen(true);
+  };
+
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimerRef.current = window.setTimeout(() => setIsOpen(false), 160);
+  };
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -90,6 +110,18 @@ export const InfoTip = ({ label }: InfoTipProps) => {
     };
   }, [isOpen, updatePosition]);
 
+  useEffect(() => () => cancelClose(), []);
+
+  useEffect(() => {
+    const closeForAnotherTooltip = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === tooltipId) return;
+      cancelClose();
+      setIsOpen(false);
+    };
+    document.addEventListener(tooltipOpenEvent, closeForAnotherTooltip);
+    return () => document.removeEventListener(tooltipOpenEvent, closeForAnotherTooltip);
+  }, [tooltipId]);
+
   const tooltipStyle = {
     "--tip-arrow-left": `${position?.arrowLeft ?? 24}px`,
     left: position?.left ?? -9999,
@@ -105,10 +137,10 @@ export const InfoTip = ({ label }: InfoTipProps) => {
         tabIndex={0}
         aria-describedby={isOpen ? tooltipId : undefined}
         aria-label={label}
-        onBlur={() => setIsOpen(false)}
-        onFocus={() => setIsOpen(true)}
-        onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
+        onBlur={scheduleClose}
+        onFocus={openTip}
+        onMouseEnter={openTip}
+        onMouseLeave={scheduleClose}
       >
         <Info size={14} strokeWidth={2.2} aria-hidden="true" />
       </span>
@@ -120,6 +152,8 @@ export const InfoTip = ({ label }: InfoTipProps) => {
               ref={bubbleRef}
               role="tooltip"
               style={tooltipStyle}
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
             >
               {label}
             </span>,

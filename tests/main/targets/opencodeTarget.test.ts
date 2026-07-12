@@ -269,11 +269,9 @@ describe("OpenCode target adapter", () => {
     await expect(readFile(join(targetDir, "references", "guide.md"), "utf8")).resolves.toBe(
       "# Guide\n"
     );
-    expect((await lstat(join(targetDir, "SKILL.md"))).isSymbolicLink()).toBe(true);
-    await expect(readlink(join(targetDir, "SKILL.md"))).resolves.toBe(
-      join(librarySkillDir, "SKILL.md")
-    );
-    await expect(readFile(join(targetDir, ".agentenv-owner.json"), "utf8")).resolves.toContain(
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(targetDir)).resolves.toBe(librarySkillDir);
+    await expect(readFile(`${targetDir}.agentenv-owner.json`, "utf8")).resolves.toContain(
       '"source": "skills-library/shared-reviewer"'
     );
   });

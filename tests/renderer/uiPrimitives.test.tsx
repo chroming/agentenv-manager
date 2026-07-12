@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { RefreshCw } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Badge, Button, ControlGroup, IconButton, ModalFrame, Switch } from "../../src/renderer/components/ui";
+import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 
 afterEach(cleanup);
 
@@ -70,5 +71,27 @@ describe("renderer UI primitives", () => {
 
     fireEvent.click(screen.getByRole("dialog", { name: "Busy modal" }).parentElement!);
     expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("keeps long text open while the pointer moves into the selectable tooltip", () => {
+    vi.useFakeTimers();
+    render(
+      <OverflowTooltip
+        className="description"
+        displayText="Truncated"
+        text="A complete long value that the user needs to copy"
+      />
+    );
+
+    const trigger = screen.getByText("Truncated");
+    fireEvent.mouseEnter(trigger);
+    const tooltip = screen.getByRole("tooltip");
+    fireEvent.mouseLeave(trigger);
+    fireEvent.mouseEnter(tooltip);
+    act(() => vi.advanceTimersByTime(200));
+
+    expect(tooltip).toBeInTheDocument();
+    expect(tooltip).toHaveTextContent("A complete long value that the user needs to copy");
+    vi.useRealTimers();
   });
 });

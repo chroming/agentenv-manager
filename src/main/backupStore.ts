@@ -6,16 +6,19 @@ import {
   lstat,
   mkdir,
   readFile,
+  readlink,
   readdir,
-  writeFile
+  symlink,
 } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import type {
   BackupEntry,
   BackupManifest,
   BackupSummary
 } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
+import { writeAtomic } from "./fileUtils";
+import { SafeIdSchema } from "../shared/schemas";
 
 export interface BackupStoreOptions {
   now?: () => Date;
@@ -58,8 +61,44 @@ export const createBackupStore = (
   const now = options.now ?? (() => new Date());
 
   const readBackup = async (id: string): Promise<BackupManifest> => {
-    const content = await readFile(join(paths.backupsDir, id, "manifest.json"), "utf8");
-    return JSON.parse(content) as BackupManifest;
+    const safeId = SafeIdSchema.parse(id);
+    const backupDir = join(paths.backupsDir, safeId);
+    const content = await readFile(join(backupDir, "manifest.json"), "utf8");
+    const manifest = JSON.parse(content) as BackupManifest;
+    if (manifest.id !== safeId || !Array.isArray(manifest.entries)) {
+      throw new Error(`Invalid AgentEnv backup manifest: ${safeId}`);
+    }
+    if (manifest.targetId) SafeIdSchema.parse(manifest.targetId);
+    if (manifest.profileId) SafeIdSchema.parse(manifest.profileId);
+    for (const targetId of manifest.targetIds ?? []) SafeIdSchema.parse(targetId);
+    for (const entry of manifest.entries) {
+      if (!entry || typeof entry.sourcePath !== "string" || !isAbsolute(entry.sourcePath)) {
+        throw new Error(`Invalid AgentEnv backup source path: ${safeId}`);
+      }
+      if (entry.missing) {
+        if (entry.backupPath !== undefined) {
+          throw new Error(`Invalid missing-file backup entry: ${safeId}`);
+        }
+        continue;
+      }
+      const expectedBackupPath = resolve(backupDir, "files", encodePath(entry.sourcePath));
+      if (
+        (entry.kind !== "file" && entry.kind !== "directory" && entry.kind !== "symlink") ||
+        !entry.backupPath ||
+        resolve(entry.backupPath) !== expectedBackupPath
+      ) {
+        throw new Error(`Invalid AgentEnv backup file mapping: ${safeId}`);
+      }
+      const backupStats = await lstat(entry.backupPath);
+      if (
+        (entry.kind === "file" && !backupStats.isFile()) ||
+        (entry.kind === "directory" && !backupStats.isDirectory()) ||
+        (entry.kind === "symlink" && !backupStats.isSymbolicLink())
+      ) {
+        throw new Error(`AgentEnv backup content does not match its manifest: ${safeId}`);
+      }
+    }
+    return manifest;
   };
 
   const createBackup = async (
@@ -94,7 +133,15 @@ export const createBackupStore = (
         const sourceStats = await lstat(sourcePath);
         const backupPath = join(filesDir, encodePath(sourcePath));
 
-        if (sourceStats.isDirectory()) {
+        if (sourceStats.isSymbolicLink()) {
+          await symlink(await readlink(sourcePath), backupPath);
+          entries.push({
+            sourcePath,
+            backupPath,
+            missing: false,
+            kind: "symlink"
+          });
+        } else if (sourceStats.isDirectory()) {
           await cp(sourcePath, backupPath, { recursive: true });
           entries.push({
             sourcePath,
@@ -129,10 +176,9 @@ export const createBackupStore = (
       entries
     };
 
-    await writeFile(
+    await writeAtomic(
       join(backupDir, "manifest.json"),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      "utf8"
+      `${JSON.stringify(manifest, null, 2)}\n`
     );
     return manifest;
   };

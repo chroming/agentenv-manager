@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -801,7 +801,9 @@ description: >
     await expect(readFile(join(targetDir, "SKILL.md"), "utf8")).resolves.toContain(
       "# From Library"
     );
-    await expect(readFile(join(targetDir, ".agentenv-owner.json"), "utf8")).resolves.toContain(
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(targetDir)).resolves.toBe(join(paths.skillsLibraryDir, "legacy"));
+    await expect(readFile(`${targetDir}.agentenv-owner.json`, "utf8")).resolves.toContain(
       '"source": "skills-library/legacy"'
     );
 
@@ -1079,7 +1081,9 @@ description: >
     await expect(readFile(join(targetCopy, "SKILL.md"), "utf8")).resolves.toBe(
       "# Library source\n"
     );
-    await expect(readFile(join(targetCopy, ".agentenv-owner.json"), "utf8")).resolves.toContain(
+    expect((await lstat(targetCopy)).isSymbolicLink()).toBe(true);
+    await expect(readlink(targetCopy)).resolves.toBe(join(paths.skillsLibraryDir, "reviewer"));
+    await expect(readFile(`${targetCopy}.agentenv-owner.json`, "utf8")).resolves.toContain(
       '"source": "skills-library/reviewer"'
     );
   });

@@ -515,6 +515,8 @@ const AppContent = ({
   const githubLoginPollingRef = useRef(false);
   const githubCopyResetRef = useRef<number | undefined>(undefined);
   const pendingProfileActionRef = useRef<(() => void | Promise<void>) | null>(null);
+  const pendingWindowCloseRef = useRef(false);
+  const isProfileDirtyRef = useRef(false);
   const [pendingProfileAction, setPendingProfileAction] = useState<PendingProfileAction>();
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
   const [mcpUsage, setMcpUsage] = useState<Record<string, string[]>>({});
@@ -1329,6 +1331,10 @@ const AppContent = ({
   };
 
   const cancelPendingProfileAction = () => {
+    if (pendingWindowCloseRef.current) {
+      pendingWindowCloseRef.current = false;
+      window.agentEnv.cancelWindowClose();
+    }
     pendingProfileActionRef.current = null;
     setPendingProfileAction(undefined);
   };
@@ -1417,6 +1423,7 @@ const AppContent = ({
         setProfileSaveStatus("");
       }
       pendingProfileActionRef.current = null;
+      pendingWindowCloseRef.current = false;
       setPendingProfileAction(undefined);
       await action();
     } catch (unknownError) {
@@ -1426,14 +1433,23 @@ const AppContent = ({
     }
   };
 
+  useEffect(() => {
+    isProfileDirtyRef.current = isProfileDirty;
+    window.agentEnv.setWindowCloseGuard(isProfileDirty);
+  }, [isProfileDirty]);
+
   useEffect(
     () =>
       window.agentEnv.onWindowCloseRequested(() => {
-        guardProfileAction("close AgentEnv Manager", () =>
-          window.agentEnv.confirmWindowClose()
-        );
+        if (!isProfileDirtyRef.current) {
+          window.agentEnv.confirmWindowClose();
+          return;
+        }
+        pendingWindowCloseRef.current = true;
+        pendingProfileActionRef.current = () => window.agentEnv.confirmWindowClose();
+        setPendingProfileAction({ label: "close AgentEnv Manager" });
       }),
-    [isProfileDirty]
+    []
   );
 
   useEffect(() => {
@@ -2941,7 +2957,6 @@ const AppContent = ({
       />
 
       <section
-        ref={libraryScroll.setScrollOwner}
         className="editor-panel"
         aria-label={
           activeWorkspace === "library"
@@ -3102,6 +3117,7 @@ const AppContent = ({
                   setSkillLibraryViewState(next);
                 }}
                 searchInputRef={skillSearchInputRef}
+                scrollOwnerRef={libraryScroll.setScrollOwner}
               />
             ) : (
               <McpLibraryPanel
@@ -3115,6 +3131,7 @@ const AppContent = ({
                   setMcpLibraryViewState(next);
                 }}
                 searchInputRef={mcpSearchInputRef}
+                scrollOwnerRef={libraryScroll.setScrollOwner}
                 onSave={saveMcpServer}
                 onRemove={removeMcpServer}
                 onReviewUsage={reviewMcpUsage}
@@ -3338,6 +3355,7 @@ const AppContent = ({
                               ref={saveButtonRef}
                               className={`save-button${isProfileDirty ? " is-primary" : ""}`}
                               type="button"
+                              aria-busy={isProfileSaving}
                               disabled={busy || !isProfileDirty}
                               onClick={saveSelectedProfile}
                             >
@@ -3929,10 +3947,24 @@ const AppContent = ({
                   </div>
                 </label>
                 <div className="settings-auto-check-row">
-                  <span className="settings-auto-check-copy">
-                    <strong>{t("Auto-check")}</strong>
-                    <small>{t("Checks only skills that have per-skill update checks enabled.")}</small>
-                  </span>
+                  <div className="settings-auto-check-main">
+                    <span className="settings-auto-check-copy">
+                      <span className="settings-auto-check-title">
+                        <strong>{t("Auto-check")}</strong>
+                        <Switch
+                          checked={skillSettings.skillAutoCheckEnabled}
+                          label={t("Skill auto update check")}
+                          disabled={busy}
+                          onClick={() =>
+                            updateSkillSettings({
+                              skillAutoCheckEnabled: !skillSettings.skillAutoCheckEnabled
+                            })
+                          }
+                        />
+                      </span>
+                      <small>{t("Checks only skills that have per-skill update checks enabled.")}</small>
+                    </span>
+                  </div>
                   <label className="settings-interval-field">
                     <span>{t("Check interval")}</span>
                     <span className="settings-interval-control">
@@ -3953,16 +3985,6 @@ const AppContent = ({
                       <span aria-hidden="true">{t("min")}</span>
                     </span>
                   </label>
-                  <Switch
-                    checked={skillSettings.skillAutoCheckEnabled}
-                    label={t("Skill auto update check")}
-                    disabled={busy}
-                    onClick={() =>
-                      updateSkillSettings({
-                        skillAutoCheckEnabled: !skillSettings.skillAutoCheckEnabled
-                      })
-                    }
-                  />
                 </div>
               </div>
             </section>

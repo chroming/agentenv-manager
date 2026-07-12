@@ -511,7 +511,7 @@ export const SkillsEditor = ({
     button: HTMLButtonElement
   ) => {
     const rect = button.getBoundingClientRect();
-    const width = 190;
+    const width = 220;
     const height = kind === "owned" ? 92 : 52;
     profileSkillMenuTriggerRef.current = button;
     setProfileSkillMenu({
@@ -637,7 +637,7 @@ export const SkillsEditor = ({
             const iconKey = skill?.iconKey ?? (skill?.sourceType === "github" ? "github" : "folder");
             const revision = skill?.remoteRevision?.slice(0, 7);
             const detail = skill
-              ? `${skill.sourceType === "github" ? "GitHub" : t("Local")}${revision ? ` · ${revision}` : ""}${entry.targetName !== skill.id ? ` · ${t("installs as {{name}}", { name: entry.targetName })}` : ""}`
+              ? `${skill.sourceType === "github" ? "GitHub" : t("Local")}${revision ? ` · ${revision}` : ""} · ${skill.path}${entry.targetName !== skill.id ? ` · ${t("installs as {{name}}", { name: entry.targetName })}` : ""}`
               : t("Library skill {{id}} is missing", { id: entry.libraryId });
             return (
               <div
@@ -880,19 +880,15 @@ export const SkillsEditor = ({
   return (
     <section className="skills-editor" aria-label={t("Resources")}>
       {mode !== "advanced" ? (
-        <div className="asset-editor-header">
-          <div>
-            <div className="section-title">
-              {t(mode === "all" ? "Resources" : "MCP servers")}
-              <InfoTip
-                label={
-                  mode === "all"
-                    ? t("Attach shared library skills and MCP servers to this profile. Preview before apply verifies target paths and ownership.")
-                    : t("Attach shared library MCP servers and review raw-config MCP servers.")
-                }
-              />
+        <div className={`asset-editor-header${mode === "mcp" ? " asset-editor-header--compact" : ""}`}>
+          {mode === "all" ? (
+            <div>
+              <div className="section-title">
+                {t("Resources")}
+                <InfoTip label={t("Attach shared library skills and MCP servers to this profile. Preview before apply verifies target paths and ownership.")} />
+              </div>
             </div>
-          </div>
+          ) : null}
           <div className="asset-editor-actions">
             {showsSkills ? (
               <button

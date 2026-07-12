@@ -40,6 +40,7 @@ try {
     env: {
       ...process.env,
       AGENTENV_AUTOMATION: "1",
+      AGENTENV_TEST_CLOSE_GUARD: "1",
       AGENTENV_DATA_ROOT: appDataRoot,
       AGENTENV_FAKE_HOME: fakeHomeRoot,
       AGENTENV_HOME: homeDir,
@@ -68,6 +69,10 @@ try {
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     true
   );
+  const windowHandle = await application.browserWindow(page);
+  const closed = page.waitForEvent("close");
+  await windowHandle.evaluate((browserWindow) => browserWindow.close());
+  await closed;
   process.stdout.write("Packaged macOS primary workflow passed\n");
 } finally {
   await application?.close();

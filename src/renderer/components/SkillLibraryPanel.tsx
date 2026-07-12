@@ -125,6 +125,7 @@ interface SkillLibraryPanelProps {
   viewState: SkillLibraryViewState;
   onViewStateChange(next: SkillLibraryViewState): void;
   searchInputRef?: RefObject<HTMLInputElement | null>;
+  scrollOwnerRef?(node: HTMLDivElement | null): void;
 }
 
 const sourceLabel = (skill: SkillLibraryEntry) => {
@@ -260,7 +261,8 @@ export const SkillLibraryPanel = ({
   updateCheckStatus,
   viewState,
   onViewStateChange,
-  searchInputRef
+  searchInputRef,
+  scrollOwnerRef
 }: SkillLibraryPanelProps) => {
   const { formatDate, t } = useI18n();
   const [githubUrl, setGithubUrl] = useState("");
@@ -533,10 +535,11 @@ export const SkillLibraryPanel = ({
     sourceFilter !== "all" ||
     statusFilter !== "all" ||
     targetFilter !== "all";
-  const referencedSkillCount = librarySkills.filter(
+  const enabledSkills = librarySkills.filter((skill) => skill.globallyEnabled !== false);
+  const referencedSkillCount = enabledSkills.filter(
     (skill) => (skillUsage[skill.id] ?? []).length > 0
   ).length;
-  const unreferencedSkillCount = Math.max(librarySkills.length - referencedSkillCount, 0);
+  const unreferencedSkillCount = Math.max(enabledSkills.length - referencedSkillCount, 0);
   const disabledSkillCount = librarySkills.filter(
     (skill) => skill.globallyEnabled === false
   ).length;
@@ -967,7 +970,7 @@ export const SkillLibraryPanel = ({
           </span>
           <span>{t("Actions")}</span>
         </div>
-        <div className="library-table__body">
+        <div className="library-table__body" ref={scrollOwnerRef}>
           {isLoading && librarySkills.length === 0 ? (
             <div className="inline-state inline-state--loading library-empty" role="status">
               <span className="inline-state__icon" aria-hidden="true" />
@@ -2353,8 +2356,8 @@ export const SkillLibraryPanel = ({
                         <PreviewText
                           ariaLabel={`Full cleanup history details ${backup.libraryId}`}
                           className="cleanup-history-details"
-                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
-                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : backup.operation === "update" ? "Update" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : backup.operation === "update" ? "Update" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
                         />
                       </div>
                       <div className="cleanup-group-actions">

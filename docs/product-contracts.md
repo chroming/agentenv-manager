@@ -221,7 +221,7 @@ Rules:
 - Applying a Profile MUST NOT change its native Target format.
 - When exactly one installed Target is available, Profiles MUST show it as stable context instead of an option menu. When multiple installed Targets are available, Target selection remains available.
 - On entry, Profiles SHOULD select the chosen Target's active Profile, pin it first in the list, mark it Current, and open its Skills section for the common single-Target workflow.
-- Profile Skills MUST expose enabled and disabled Library references in one compact list. Check checks only enabled tracked references in that Profile; Add selects Library references; Remove detaches a reference from the Profile without deleting Library content.
+- Profile Skills MUST expose enabled and disabled Library references in one compact list. Each row shows its display name, Library path, source or revision, install name when different, and current state without forcing a details dialog. Check checks only enabled tracked references in that Profile; Add selects Library references; Remove detaches a reference from the Profile without deleting Library content. Row menus MUST fit their longest localized command at the minimum viewport.
 - Updating from Profile Skills still updates the global Library copy. The update confirmation MUST disclose how many Profiles reference it and whether Copy or Live link mode changes installed Targets immediately.
 
 Status: whole-Profile Save, dirty protection, per-Target applied hashes, active-Profile focus, and Profile-scoped Skill enablement are `Implemented`. Adopting native live Instructions is `Implemented`; adoption of other compatible surfaces is `Partial`.
@@ -508,7 +508,7 @@ Cleanup review contract:
 - If the Skill is not yet in Library, the user chooses the local version whose content will be preserved as the Library source of truth.
 - The chosen source location is always included in the cleanup and cannot be deselected accidentally.
 - If the Skill already exists in Library, `Review differences` first asks whether to keep the current Library version or use a reviewed local version. Local version selection appears only after the latter choice. Replacing Library content backs up the previous canonical copy and changes its provenance to local/untracked.
-- Every truncated Skill name, description, path, and history detail in the cleanup workflow exposes its full value on pointer hover and keyboard focus.
+- Every truncated Skill name, description, path, and history detail in the cleanup workflow exposes its full value on pointer hover and keyboard focus. The detail layer remains open while the pointer moves into it, and its text is selectable so paths and errors can be copied directly.
 - Cleanup groups and Cleanup history use the same row hierarchy, control scale, overflow behavior, and restore vocabulary.
 - Cleanup history is a secondary group inside the Local Skill Cleanup surface, not a separate framed panel.
 
@@ -539,6 +539,7 @@ External ownership contract:
 - Applying a Library update changes canonical content.
 - In optional Copy mode, Profiles remain saved and their deployed Targets become `Changes pending`; copied installs require explicit synchronization or Profile Apply.
 - In default Live link mode, linked Target content changes immediately. The UI MUST disclose this behavior and MUST NOT represent the linked deployment as an immutable applied snapshot.
+- Live link installs link the complete Target Skill directory to the canonical Library directory. They MUST NOT construct a shadow directory made from per-file links. The ownership marker lives beside the directory link so Library contents remain clean and replacing or removing the link cannot touch the canonical directory.
 - Local imports without an explicit tracked source MUST NOT produce repeated update failures.
 - A Profile-scoped Check MUST inspect only enabled tracked Skills referenced by that Profile. Disabled, missing, and untracked references remain visible but MUST NOT trigger network or filesystem checks.
 
@@ -646,7 +647,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Profile list icons use one consistent compact slot and icon family. Decorative per-row icon colors MUST NOT imply unsupported categories or state.
 - Profile icons MAY use the shared built-in icon set. Changing a Profile icon modifies the Profile draft, follows dirty-navigation protection, and is persisted only by whole-Profile Save.
 - Icon pickers MUST use one shared component, expose the selected state without color alone, remain topmost inside the viewport, and close on selection, Escape, or safe outside click.
-- Lists and expanded editors own intentional internal scrolling.
+- Lists and expanded editors own intentional internal scrolling. In Library/Skills, page chrome, metrics, tabs, filters, and table header stay fixed; only the Skill table body scrolls, with no document or editor-panel scrolling.
 - Expanding a Profile Composer section MUST expose a practically editable panel at the minimum viewport; presence of a clipped panel alone does not satisfy the interaction contract.
 - Collapsed Profile Composer rows stay content-sized and compact; they MUST NOT expand merely to fill unused editor height. The resource rows themselves provide sufficient context, so the Composer MUST NOT add a redundant visible title block above them.
 - Target recovery history is a low-frequency safety workflow. Targets exposes it through a page-level Recovery command and a focused modal, rather than permanently consuming the primary Target list viewport.
@@ -656,6 +657,9 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Apply Preview keeps its header and footer stable while summary, resources, and diffs own bounded internal scrolling.
 - Create from Target keeps its step header and action footer visible at both supported viewports. Only the dialog body scrolls; resource groups MUST NOT introduce a second nested scroll region.
 - Menus, tooltips, and dialogs remain above rows and inside the visible viewport.
+- Peer actions with equal consequence use the same neutral treatment. Accent fill is reserved for the current primary commit or flow-advance action; Target `Capture` and `Profiles` are neutral peers.
+- Settings switches sit beside the setting label they control, with supporting copy on the following line; they MUST NOT float as visually detached controls at the far edge of a wide row.
+- Hover/focus tooltips are mutually exclusive. Long-text tooltips allow pointer entry and native text selection for copying, then close after the pointer leaves both trigger and tooltip.
 - Modal dialogs trap keyboard focus until they close.
 - Escape closes dismissible layers; safe outside click closes them; focus returns to the trigger or the next logical surviving control.
 - Primary workflows work with keyboard only.
@@ -708,6 +712,10 @@ Registration MUST occur in the Target registry. Renderer components MUST NOT req
 - GitHub credentials remain encrypted for the originating Mac and MUST NOT be presented as portable plaintext.
 - Corrupt or unsupported future data MUST fail closed with recovery guidance rather than being partially loaded.
 - A restore/import flow MUST create a safety backup before replacing current canonical data, reject unsafe links or unsupported formats, and refresh all visible canonical state after success.
+- Canonical JSON/text writes use same-directory temporary files and atomic rename. Directory replacement prepares a complete sibling staging path, records a recovery journal, preserves the previous path until the swap succeeds, and repairs interrupted swaps at startup.
+- Profile deletion moves the Profile into AgentEnv's private trash area rather than permanently removing it immediately. Skill cleanup, update, and deletion retain restorable backup data.
+- Backup manifests and IDs are validated before restore, and restore paths are limited to adapter-declared Target locations and AgentEnv-owned canonical locations. A malformed or tampered backup fails closed before any destination is modified.
+- A clean application window closes without waiting for renderer acknowledgement. Only an unsaved Profile draft enables the close guard; Cancel keeps the window and draft intact, while Save or Discard completes the pending close explicitly.
 
 ## 23.2 First-Run Workflow
 
@@ -750,7 +758,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Dirty Profile blocks Preview and preserves draft.
 - Active Profile is selected and pinned for the chosen Target; a single installed Target is static context.
 - Disabling a Skill in Library preserves its content and every existing Profile reference, hides it from every Add Skill picker, excludes it from update checks and effective Apply payloads, and leaves it visible but locked in Profiles until globally enabled again.
-- Library status views are mutually exclusive. `Updates` includes only enabled, tracked Skills with a confirmed available update; `Referenced` and `Unreferenced` describe Profile references without claiming deployment state; `Disabled` is the durable management entry for globally unavailable Skills.
+- Library status views are mutually exclusive. `Updates` includes only enabled, tracked Skills with a confirmed available update; `Referenced` and `Unreferenced` describe only enabled Skills and Profile references without claiming deployment state; globally disabled Skills appear only in `All` and `Disabled`. Disabled rows MUST differ from active rows through surface, edge, icon treatment, and state text rather than a badge alone.
 - Enabling or disabling a Library Skill MUST expose row-local working feedback, lock duplicate availability commands, and update both the visible row and persisted metadata before reporting success.
 - A globally disabled Skill is removed from managed Target installs on the next Apply of each affected Profile; global disable itself MUST NOT silently rewrite Target environments.
 - Disabling a referenced Library Skill in a Profile is a normal Profile edit: it preserves the reference, marks the whole Profile dirty, and MUST require the same Save, Preview, and Apply flow as adding or removing a Skill.
@@ -838,7 +846,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-15 against the current `main` tree at the time of this snapshot.
 
-- `366` automated tests passed across `48` test files; the `72`-test Electron UI suite and `79` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `382` automated tests passed across `49` test files; the `75`-test Electron UI suite and `82` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `39` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.

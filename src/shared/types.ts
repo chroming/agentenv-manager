@@ -13,7 +13,9 @@ import type { AssetPolicy, ProfileManifest, ResourceIconKey } from "./schemas";
 
 export interface AgentEnvApi {
   onWindowCloseRequested(callback: () => void): () => void;
+  setWindowCloseGuard(enabled: boolean): void;
   confirmWindowClose(): void;
+  cancelWindowClose(): void;
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
   listTargets(): Promise<TargetInfo[]>;
@@ -276,7 +278,7 @@ export interface SkillCleanupResult {
   backupId: string;
   libraryId: string;
   managedLocations: string[];
-  operation?: "cleanup" | "remove" | "retire";
+  operation?: "cleanup" | "remove" | "retire" | "update";
   libraryCreated?: boolean;
 }
 
@@ -285,7 +287,7 @@ export interface SkillCleanupBackupSummary {
   libraryId: string;
   createdAt: string;
   locationCount: number;
-  operation?: "cleanup" | "remove" | "retire";
+  operation?: "cleanup" | "remove" | "retire" | "update";
 }
 
 export interface UnmanagedSkillEntry {
@@ -654,7 +656,7 @@ export interface BackupEntry {
   backupPath?: string;
   sha256?: string;
   missing: boolean;
-  kind?: "file" | "directory";
+  kind?: "file" | "directory" | "symlink";
 }
 
 export interface BackupManifest {

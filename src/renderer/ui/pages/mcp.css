@@ -18,6 +18,12 @@
   width: 100%;
 }
 
+.skill-library-panel > .resource-section {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
 .mcp-editor-drawer .mcp-server-form {
   padding: 16px;
 }

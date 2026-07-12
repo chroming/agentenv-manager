@@ -17,13 +17,22 @@ import type {
   TargetState
 } from "../../shared/types";
 import { createUnifiedDiff } from "../diff";
-import { isMissingFileError, pathExists, readTextIfExists } from "../fileUtils";
+import {
+  isMissingFileError,
+  pathEntryExists,
+  pathExists,
+  readTextIfExists,
+  replacePathAtomically,
+  writeAtomic
+} from "../fileUtils";
 import { hashComparableResource } from "../resourceHash";
 import {
   createOwnerMarkerContent,
   isAgentEnvOwnedDir,
-  markerPathFor
+  markerPathFor,
+  markerPathForFile
 } from "../ownershipMarkers";
+import { removeSkillDeployment } from "../skillDeployment";
 import { findSecretWarnings } from "../secretWarnings";
 import {
   addSkillRefBackupPaths,
@@ -291,7 +300,7 @@ const removeStaleOwnedDirs = async (input: TargetAssetInput) => {
 
     const entries = await readdir(root.path, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isDirectory()) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) {
         continue;
       }
 
@@ -301,7 +310,11 @@ const removeStaleOwnedDirs = async (input: TargetAssetInput) => {
         !desired.has(key) &&
         (await isOwnedTargetDir(targetDir, targetPaths, root.kind))
       ) {
-        await rm(targetDir, { recursive: true, force: true });
+        if (root.kind === "skill") {
+          await removeSkillDeployment(targetDir);
+        } else {
+          await rm(targetDir, { recursive: true, force: true });
+        }
       }
     }
   }
@@ -333,7 +346,7 @@ const getAssetBackupPaths = async (input: TargetAssetInput) => {
 
     const entries = await readdir(root.path, { withFileTypes: true });
     for (const entry of entries) {
-      if (!entry.isDirectory()) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) {
         continue;
       }
 
@@ -344,6 +357,7 @@ const getAssetBackupPaths = async (input: TargetAssetInput) => {
         (await isOwnedTargetDir(targetDir, targetPaths, root.kind))
       ) {
         paths.add(targetDir);
+        if (root.kind === "skill") paths.add(markerPathForFile(targetDir));
       }
     }
   }
@@ -365,22 +379,25 @@ const applyAssets = async (input: TargetAssetInput) => {
       await pathExists(sourceDir) &&
       await pathExists(targetDir) &&
       (await hashComparableResource(sourceDir)) === (await hashComparableResource(targetDir));
-    if (owned || matching) {
-      await rm(targetDir, { recursive: true, force: true });
+    if ((await pathEntryExists(targetDir)) && !owned && !matching) {
+      throw new Error(
+        `${ownedDir.kind} target changed after preview and is not AgentEnv-owned: ${targetDir}`
+      );
     }
 
     await mkdir(targetDirFor(targetPaths, ownedDir.kind, "."), { recursive: true });
-    await cp(sourceDir, targetDir, { recursive: true });
-    await writeFile(
-      markerPathFor(targetDir),
-      createOwnerMarkerContent({
-        profileId: profile.id,
-        targetId: targetPaths.targetId,
-        kind: ownedDir.kind,
-        source: ownedDir.source
-      }),
-      "utf8"
-    );
+    await replacePathAtomically(targetDir, async (stagingPath) => {
+      await cp(sourceDir, stagingPath, { recursive: true });
+      await writeAtomic(
+        markerPathFor(stagingPath),
+        createOwnerMarkerContent({
+          profileId: profile.id,
+          targetId: targetPaths.targetId,
+          kind: ownedDir.kind,
+          source: ownedDir.source
+        })
+      );
+    });
   }
   await applySkillRefs(input);
 };

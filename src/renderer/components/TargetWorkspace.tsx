@@ -180,7 +180,7 @@ export const TargetWorkspace = ({
                 </span>
                 <span className="target-workflow-actions">
                   <button
-                    className={isManaged ? "secondary-action" : "primary-inline-action"}
+                    className="secondary-action"
                     type="button"
                     aria-label={t("Create profile from {{name}}", { name: target.name })}
                     disabled={busy || !target.health.executableFound}
@@ -191,7 +191,7 @@ export const TargetWorkspace = ({
                     {t("Capture")}
                   </button>
                   <button
-                    className={isManaged ? "primary-inline-action" : "secondary-action"}
+                    className="secondary-action"
                     type="button"
                     aria-label={t("Open {{name}} in Profiles", { name: target.name })}
                     onClick={() => onManageTarget(target.id)}

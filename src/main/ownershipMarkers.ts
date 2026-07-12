@@ -1,3 +1,4 @@
+import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { readTextIfExists } from "./fileUtils";
 
@@ -55,7 +56,16 @@ const isAgentEnvOwnedMarker = async (
 export const isAgentEnvOwnedDir = async (
   targetDir: string,
   expected: OwnedDirExpectation
-) => isAgentEnvOwnedMarker(markerPathFor(targetDir), expected);
+) => {
+  const stats = await lstat(targetDir).catch(() => undefined);
+  if (stats?.isSymbolicLink()) {
+    return isAgentEnvOwnedMarker(markerPathForFile(targetDir), expected);
+  }
+  return (
+    (await isAgentEnvOwnedMarker(markerPathFor(targetDir), expected)) ||
+    (await isAgentEnvOwnedMarker(markerPathForFile(targetDir), expected))
+  );
+};
 
 export const isAgentEnvOwnedFile = async (
   targetFile: string,

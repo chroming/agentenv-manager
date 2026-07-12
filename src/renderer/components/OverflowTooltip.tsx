@@ -26,6 +26,7 @@ interface OverflowTooltipProps {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
+const tooltipOpenEvent = "agentenv:tooltip-open";
 
 export const OverflowTooltip = ({
   ariaLabel,
@@ -39,6 +40,25 @@ export const OverflowTooltip = ({
   const [position, setPosition] = useState<TooltipPosition>();
   const triggerRef = useRef<HTMLSpanElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<number | undefined>(undefined);
+
+  const cancelClose = () => {
+    if (closeTimerRef.current !== undefined) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = undefined;
+    }
+  };
+
+  const openTooltip = () => {
+    cancelClose();
+    document.dispatchEvent(new CustomEvent(tooltipOpenEvent, { detail: tooltipId }));
+    setIsOpen(true);
+  };
+
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimerRef.current = window.setTimeout(() => setIsOpen(false), 160);
+  };
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -87,6 +107,18 @@ export const OverflowTooltip = ({
     };
   }, [isOpen, updatePosition]);
 
+  useEffect(() => () => cancelClose(), []);
+
+  useEffect(() => {
+    const closeForAnotherTooltip = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === tooltipId) return;
+      cancelClose();
+      setIsOpen(false);
+    };
+    document.addEventListener(tooltipOpenEvent, closeForAnotherTooltip);
+    return () => document.removeEventListener(tooltipOpenEvent, closeForAnotherTooltip);
+  }, [tooltipId]);
+
   const tooltipStyle = {
     left: position?.left ?? -9999,
     maxWidth: position?.maxWidth ?? 420,
@@ -101,10 +133,10 @@ export const OverflowTooltip = ({
         className={className}
         ref={triggerRef}
         tabIndex={0}
-        onBlur={() => setIsOpen(false)}
-        onFocus={() => setIsOpen(true)}
-        onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
+        onBlur={scheduleClose}
+        onFocus={openTooltip}
+        onMouseEnter={openTooltip}
+        onMouseLeave={scheduleClose}
       >
         {displayText ?? text}
       </span>
@@ -116,6 +148,8 @@ export const OverflowTooltip = ({
               ref={tooltipRef}
               role="tooltip"
               style={tooltipStyle}
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
             >
               {text}
             </div>,

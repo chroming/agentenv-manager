@@ -317,19 +317,21 @@ describe("OpenCode profile switching e2e", () => {
     });
 
     await expectApplyOk(activationService, alpha.id);
-    const alphaSkillMd = join(skillsDir, "agentenv-alpha-shared", "SKILL.md");
+    const alphaSkillDir = join(skillsDir, "agentenv-alpha-shared");
+    const alphaSkillMd = join(alphaSkillDir, "SKILL.md");
     await expect(readFile(alphaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
-    expect((await lstat(alphaSkillMd)).isSymbolicLink()).toBe(true);
-    await expect(readlink(alphaSkillMd)).resolves.toBe(join(librarySkillDir, "SKILL.md"));
+    expect((await lstat(alphaSkillDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(alphaSkillDir)).resolves.toBe(librarySkillDir);
 
     await expectApplyOk(activationService, beta.id);
     await expect(fileExists(join(skillsDir, "agentenv-alpha-shared"))).resolves.toBe(
       false
     );
-    const betaSkillMd = join(skillsDir, "agentenv-beta-shared", "SKILL.md");
+    const betaSkillDir = join(skillsDir, "agentenv-beta-shared");
+    const betaSkillMd = join(betaSkillDir, "SKILL.md");
     await expect(readFile(betaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
-    expect((await lstat(betaSkillMd)).isSymbolicLink()).toBe(true);
-    await expect(readlink(betaSkillMd)).resolves.toBe(join(librarySkillDir, "SKILL.md"));
+    expect((await lstat(betaSkillDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(betaSkillDir)).resolves.toBe(librarySkillDir);
     await expect(readFile(join(librarySkillDir, "SKILL.md"), "utf8")).resolves.toContain(
       "name: shared-reviewer"
     );

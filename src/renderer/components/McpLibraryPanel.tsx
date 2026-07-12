@@ -17,6 +17,7 @@ interface McpLibraryPanelProps {
   viewState: McpLibraryViewState;
   onViewStateChange(next: McpLibraryViewState): void;
   searchInputRef?: RefObject<HTMLInputElement | null>;
+  scrollOwnerRef?(node: HTMLElement | null): void;
   onSave(input: SaveMcpServerInput): Promise<void>;
   onRemove(id: string): void;
   onReviewUsage(id: string): void;
@@ -86,6 +87,7 @@ export const McpLibraryPanel = ({
   viewState,
   onViewStateChange,
   searchInputRef,
+  scrollOwnerRef,
   onSave,
   onRemove,
   onReviewUsage
@@ -284,7 +286,11 @@ export const McpLibraryPanel = ({
         />
       </label>
 
-      <section className="resource-section" aria-label={t("MCP servers")}>
+      <section
+        className="resource-section"
+        aria-label={t("MCP servers")}
+        ref={scrollOwnerRef}
+      >
         <div className="resource-list library-list">
           {visibleServers.map((server) => (
             <div

@@ -1,9 +1,9 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { SafeIdSchema } from "../shared/schemas";
 import type { AgentEnvPaths } from "./paths";
 import type { McpLibraryEntry, SaveMcpServerInput } from "../shared/types";
+import { writeAtomic } from "./fileUtils";
 
 const McpServerSchema = z
   .object({
@@ -67,15 +67,13 @@ const readServers = async (path: string): Promise<McpLibraryEntry[]> => {
 };
 
 const writeServers = async (path: string, servers: McpLibraryEntry[]) => {
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  await writeFile(
+  await writeAtomic(
     path,
     `${JSON.stringify(
       servers.sort((a, b) => a.name.localeCompare(b.name)),
       null,
       2
     )}\n`,
-    "utf8"
   );
 };
 

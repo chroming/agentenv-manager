@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
-import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rename, rm, stat } from "node:fs/promises";
+import { appendFile, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat, symlink } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createBackupStore } from "./backupStore";
 import { createUnifiedDiff } from "./diff";
 import {
+  pathEntryExists,
   pathExists,
   readTextIfExists,
+  replacePathAtomically,
+  replacePathWithCopy,
   writeAtomic
 } from "./fileUtils";
 import type { AgentEnvPaths } from "./paths";
@@ -65,6 +68,7 @@ import {
   markerPathFor,
   markerPathForFile
 } from "./ownershipMarkers";
+import { removeSkillDeployment } from "./skillDeployment";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -284,6 +288,18 @@ const normalizeTargetState = (value: unknown): TargetState => {
 const createRollbackChange = async (
   entry: BackupManifest["entries"][number]
 ): Promise<PlannedFileChange> => {
+  if (entry.kind === "symlink") {
+    const before = (await pathExists(entry.sourcePath))
+      ? `[link] ${await readlink(entry.sourcePath)}\n`
+      : "";
+    const after = entry.missing ? "" : `[link] ${await readlink(entry.backupPath ?? "")}\n`;
+    return {
+      path: entry.sourcePath,
+      before,
+      after,
+      diff: createUnifiedDiff(entry.sourcePath, before, after)
+    };
+  }
   if (entry.kind === "directory") {
     const before = (await pathExists(entry.sourcePath)) ? "[directory]\n" : "";
     const after = entry.missing ? "" : "[directory]\n";
@@ -315,9 +331,17 @@ const restoreBackupEntries = async (backup: BackupManifest) => {
     }
 
     if (entry.kind === "directory") {
-      await rm(entry.sourcePath, { recursive: true, force: true });
-      await mkdir(dirname(entry.sourcePath), { recursive: true });
-      await cp(entry.backupPath ?? "", entry.sourcePath, { recursive: true });
+      await replacePathWithCopy(entry.backupPath ?? "", entry.sourcePath, {
+        dereference: false
+      });
+      continue;
+    }
+
+    if (entry.kind === "symlink") {
+      const linkTarget = await readlink(entry.backupPath ?? "");
+      await replacePathAtomically(entry.sourcePath, (stagingPath) =>
+        symlink(linkTarget, stagingPath, "dir")
+      );
       continue;
     }
 
@@ -410,6 +434,47 @@ export const createActivationService = ({
 
   const statePathFor = (targetId: string) =>
     join(paths.targetStatesDir, `${targetId}.json`);
+
+  const restoreBackupSafely = async (backup: BackupManifest) => {
+    const exactPaths = new Set<string>();
+    const resourceRoots = new Set<string>();
+    const targetIds = [...new Set([backup.targetId, ...(backup.targetIds ?? [])])].filter(
+      (id): id is string => Boolean(id)
+    );
+    for (const targetId of targetIds) {
+      const targetPaths = targetRegistry.get(targetId).createTargetPaths({
+        homeDir: paths.homeDir,
+        fakeHomeRoot: paths.fakeHomeRoot
+      });
+      exactPaths.add(resolve(targetPaths.instructionsPath));
+      exactPaths.add(resolve(targetPaths.configPath));
+      exactPaths.add(resolve(statePathFor(targetId)));
+      if (targetPaths.mcpConfigPath) exactPaths.add(resolve(targetPaths.mcpConfigPath));
+      for (const root of [
+        targetPaths.skillsDir,
+        targetPaths.agentsDir,
+        ...(targetPaths.skillScanDirs ?? []),
+        ...(targetPaths.skillLocations ?? []).map((location) => location.path)
+      ]) {
+        if (root) resourceRoots.add(resolve(root));
+      }
+    }
+    if (backup.profileId) {
+      exactPaths.add(resolve(paths.profilesDir, backup.profileId));
+    }
+
+    for (const entry of backup.entries) {
+      const sourcePath = resolve(entry.sourcePath);
+      const allowedResource = [...resourceRoots].some((root) => {
+        const child = relative(root, sourcePath);
+        return child.length > 0 && !child.startsWith("..") && !child.includes("/../") && dirname(sourcePath) === root;
+      });
+      if (!exactPaths.has(sourcePath) && !allowedResource) {
+        throw new Error(`Backup contains a path outside AgentEnv-managed locations: ${entry.sourcePath}`);
+      }
+    }
+    await restoreBackupEntries(backup);
+  };
 
   const readTargetStateFile = async (targetId: string) => {
     const path = statePathFor(targetId);
@@ -1226,6 +1291,17 @@ export const createActivationService = ({
       }
     );
 
+    const preOperationState = (await readTargetStateFile(preview.targetId)).state;
+    await writeTargetState(preview.targetId, {
+      ...preOperationState,
+      recoveryRequired: {
+        operation: "apply",
+        error: "Profile Apply was interrupted before completion",
+        backupId: backup.id,
+        occurredAt: new Date().toISOString()
+      }
+    });
+
     try {
       for (const change of preview.changes) {
         await writeAtomic(change.path, change.after);
@@ -1262,7 +1338,7 @@ export const createActivationService = ({
       });
     } catch (error) {
       try {
-        await restoreBackupEntries(backup);
+        await restoreBackupSafely(backup);
       } catch (restoreError) {
         const recoveryError = `Apply failed: ${errorMessage(error)}; automatic restore failed: ${errorMessage(restoreError)}`;
         try {
@@ -1444,7 +1520,11 @@ export const createActivationService = ({
       const backup = await backupStore.createBackup(
         [
           ...normalizedSharedPaths,
-          ...contexts.flatMap((context) => [context.targetPath, context.statePath])
+          ...contexts.flatMap((context) => [
+            context.targetPath,
+            markerPathForFile(context.targetPath),
+            context.statePath
+          ])
         ].filter((path, index, all) => all.indexOf(path) === index),
         {
           operation: "shared-skill-migration",
@@ -1455,6 +1535,19 @@ export const createActivationService = ({
       const installedPaths: string[] = [];
 
       try {
+        await Promise.all(
+          contexts.map((context) =>
+            writeTargetState(context.targetId, {
+              ...context.state,
+              recoveryRequired: {
+                operation: "apply",
+                error: "Shared Skill migration was interrupted before completion",
+                backupId: backup.id,
+                occurredAt: new Date().toISOString()
+              }
+            })
+          )
+        );
         for (const sharedPath of normalizedSharedPaths) {
           await rm(sharedPath, { recursive: true, force: true });
         }
@@ -1468,7 +1561,7 @@ export const createActivationService = ({
             });
             installedPaths.push(context.targetPath);
           } else {
-            await rm(context.targetPath, { recursive: true, force: true });
+            await removeSkillDeployment(context.targetPath);
           }
 
           const retainedResources = (context.state.managedResources ?? []).filter(
@@ -1497,11 +1590,17 @@ export const createActivationService = ({
           if ((await pathExists(join(context.targetPath, "SKILL.md"))) !== shouldExist) {
             throw new Error(`Target Skill verification failed: ${context.targetPath}`);
           }
+          const targetStats = shouldExist
+            ? await lstat(context.targetPath).catch(() => undefined)
+            : undefined;
+          const ownershipMarkerPath = targetStats?.isSymbolicLink()
+            ? markerPathForFile(context.targetPath)
+            : markerPathFor(context.targetPath);
           if (
             shouldExist &&
             ((await hashComparablePath(context.targetPath)) !==
               (await hashComparablePath(librarySkill.path)) ||
-              (await readTextIfExists(markerPathFor(context.targetPath))) !==
+              (await readTextIfExists(ownershipMarkerPath)) !==
                 createOwnerMarkerContent({
                   profileId: context.preparation.profileId,
                   targetId: context.targetId,
@@ -1521,7 +1620,7 @@ export const createActivationService = ({
         });
       } catch (error) {
         try {
-          await restoreBackupEntries(backup);
+          await restoreBackupSafely(backup);
         } catch (restoreError) {
           const recoveryError = `Shared Skill migration failed: ${errorMessage(error)}; automatic restore failed: ${errorMessage(restoreError)}`;
           await Promise.all(
@@ -1585,13 +1684,12 @@ export const createActivationService = ({
     }
     targetIds.forEach((targetId) => activeTargetOperations.add(targetId));
     try {
-      await restoreBackupEntries(backup);
+      await restoreBackupSafely(backup);
       await appendHistory(paths, {
         type: "rollback-shared-skill-migration",
         backupId,
         targetIds
       });
-      await rm(join(paths.backupsDir, backupId), { recursive: true, force: true });
     } finally {
       targetIds.forEach((targetId) => activeTargetOperations.delete(targetId));
     }
@@ -1642,7 +1740,19 @@ export const createActivationService = ({
     }
 
     try {
-      await restoreBackupEntries(backup);
+      if (operationTargetId) {
+        const currentState = (await readTargetStateFile(operationTargetId)).state;
+        await writeTargetState(operationTargetId, {
+          ...currentState,
+          recoveryRequired: {
+            operation: "rollback",
+            error: "Rollback was interrupted before completion",
+            backupId,
+            occurredAt: new Date().toISOString()
+          }
+        });
+      }
+      await restoreBackupSafely(backup);
 
       await appendHistory(paths, {
         type: "rollback",
@@ -1678,15 +1788,15 @@ export const createActivationService = ({
   };
 
   const materializeManagedResource = async (path: string) => {
-    if (!(await pathExists(path))) {
+    if (!(await pathEntryExists(path))) {
       return;
     }
     const stats = await lstat(path);
-    if (stats.isDirectory()) {
-      const temporaryPath = `${path}.agentenv-detach-${randomUUID().slice(0, 8)}`;
-      await cp(path, temporaryPath, { recursive: true, dereference: true });
-      await rm(path, { recursive: true, force: true });
-      await rename(temporaryPath, path);
+    const resolvedStats = stats.isSymbolicLink() ? await stat(path) : stats;
+    if (resolvedStats.isDirectory()) {
+      await replacePathAtomically(path, (stagingPath) =>
+        cp(path, stagingPath, { recursive: true, dereference: true })
+      );
       const removeMarkers = async (directory: string): Promise<void> => {
         const entries = await readdir(directory, { withFileTypes: true });
         for (const entry of entries) {
@@ -1699,13 +1809,10 @@ export const createActivationService = ({
         }
       };
       await removeMarkers(path);
-      return;
-    }
-    if (stats.isSymbolicLink()) {
-      const temporaryPath = `${path}.agentenv-detach-${randomUUID().slice(0, 8)}`;
-      await cp(path, temporaryPath, { dereference: true });
-      await rm(path, { force: true });
-      await rename(temporaryPath, path);
+    } else if (stats.isSymbolicLink()) {
+      await replacePathAtomically(path, (stagingPath) =>
+        cp(path, stagingPath, { dereference: true })
+      );
     }
     await rm(markerPathForFile(path), { force: true });
   };
@@ -1782,8 +1889,17 @@ export const createActivationService = ({
         }
       );
       try {
+        await writeTargetState(preview.targetId, {
+          ...stateFile.state,
+          recoveryRequired: {
+            operation: "rollback",
+            error: "Stop managing was interrupted before completion",
+            backupId: safetyBackup.id,
+            occurredAt: new Date().toISOString()
+          }
+        });
         if (preview.mode === "restore-pre-takeover" && preview.takeoverBackupId) {
-          await restoreBackupEntries(await backupStore.readBackup(preview.takeoverBackupId));
+          await restoreBackupSafely(await backupStore.readBackup(preview.takeoverBackupId));
         } else {
           for (const path of managedPaths) {
             await materializeManagedResource(path);
@@ -1792,7 +1908,7 @@ export const createActivationService = ({
         }
       } catch (error) {
         try {
-          await restoreBackupEntries(safetyBackup);
+          await restoreBackupSafely(safetyBackup);
         } catch (restoreError) {
           const recoveryError = `Stop managing failed: ${errorMessage(error)}; restore failed: ${errorMessage(restoreError)}`;
           await writeTargetState(preview.targetId, {

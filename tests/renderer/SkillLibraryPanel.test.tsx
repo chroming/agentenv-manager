@@ -413,9 +413,14 @@ describe("SkillLibraryPanel", () => {
     const sharedDescription = screen.getByText("Review code");
     expect(sharedDescription).not.toHaveAttribute("title");
     fireEvent.mouseEnter(sharedDescription);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Review code");
+    const descriptionTooltip = screen.getByRole("tooltip");
+    expect(descriptionTooltip).toHaveTextContent("Review code");
     fireEvent.mouseLeave(sharedDescription);
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.mouseEnter(descriptionTooltip);
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Review code");
+    fireEvent.mouseLeave(descriptionTooltip);
+    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
     expect(
       within(githubRow).getByRole("button", { name: "Review update github-reviewer" })

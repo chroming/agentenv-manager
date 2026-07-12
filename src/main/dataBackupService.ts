@@ -1,6 +1,7 @@
-import { chmod, cp, lstat, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, readFile, readdir } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import type { AgentEnvPaths } from "./paths";
+import { replacePathWithCopy, writeAtomic } from "./fileUtils";
 
 export interface DataBackupResult {
   path: string;
@@ -36,14 +37,13 @@ export const createDataBackup = async (
     recursive: true,
     dereference: false
   });
-  await writeFile(
+  await writeAtomic(
     join(destination, "agentenv-backup.json"),
     `${JSON.stringify(
       { formatVersion: 1, createdAt, sourceDirectoryName: basename(paths.appDataRoot) },
       null,
       2
     )}\n`,
-    { encoding: "utf8", mode: 0o600 }
   );
   await chmod(destination, 0o700);
   return { path: destination, createdAt };
@@ -87,19 +87,6 @@ export const inspectDataBackup = async (path: string): Promise<DataRestorePrevie
   };
 };
 
-const replaceDirectoryContents = async (source: string, destination: string) => {
-  await mkdir(destination, { recursive: true, mode: 0o700 });
-  for (const entry of await readdir(destination)) {
-    await rm(join(destination, entry), { recursive: true, force: true });
-  }
-  for (const entry of await readdir(source)) {
-    await cp(join(source, entry), join(destination, entry), {
-      recursive: true,
-      dereference: false
-    });
-  }
-};
-
 export const restoreDataBackup = async (
   paths: AgentEnvPaths,
   backupPath: string
@@ -114,11 +101,8 @@ export const restoreDataBackup = async (
   const safetyRoot = join(dirname(paths.appDataRoot), "agentenv-import-safety");
   await mkdir(safetyRoot, { recursive: true, mode: 0o700 });
   const safetyBackup = await createDataBackup(paths, safetyRoot);
-  try {
-    await replaceDirectoryContents(join(backupPath, "data"), paths.appDataRoot);
-  } catch (error) {
-    await replaceDirectoryContents(join(safetyBackup.path, "data"), paths.appDataRoot);
-    throw error;
-  }
+  await replacePathWithCopy(join(backupPath, "data"), paths.appDataRoot, {
+    dereference: false
+  });
   return { safetyBackupPath: safetyBackup.path };
 };

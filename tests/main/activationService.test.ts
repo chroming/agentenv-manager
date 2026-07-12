@@ -1,8 +1,11 @@
 import {
+  cp,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
   rm,
+  symlink,
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -740,6 +743,38 @@ describe("activation service", () => {
     await expect(service.listTargetStates()).resolves.toEqual([]);
   });
 
+  it("materializes a whole-directory Skill link when stopping management", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Before takeover\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+    const applyPreview = await service.previewProfile("daily-coding");
+    expect((await service.applyProfile("daily-coding", applyPreview.id)).ok).toBe(true);
+
+    const targetSkill = join(
+      paths.codexHome,
+      "skills",
+      "agentenv-daily-coding-example-skill"
+    );
+    const canonicalSkill = join(paths.appDataRoot, "test-library", "example-skill");
+    await mkdir(dirname(canonicalSkill), { recursive: true });
+    await cp(targetSkill, canonicalSkill, { recursive: true });
+    const marker = await readFile(join(targetSkill, ".agentenv-owner.json"), "utf8");
+    await rm(targetSkill, { recursive: true, force: true });
+    await symlink(canonicalSkill, targetSkill, "dir");
+    await writeFile(`${targetSkill}.agentenv-owner.json`, marker, "utf8");
+
+    const stopPreview = await service.previewStopManaging("codex", "keep-current");
+    expect((await service.stopManaging(stopPreview.id)).ok).toBe(true);
+
+    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(false);
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).resolves.toContain(
+      "name: example"
+    );
+    await expect(readFile(`${targetSkill}.agentenv-owner.json`, "utf8")).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+  });
+
   it("stops managing by restoring the Target environment captured before takeover", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Before takeover\n");
@@ -787,6 +822,7 @@ describe("activation service", () => {
       codexHome: paths.codexHome,
       userSkillsDir: paths.userSkillsDir
     });
+    let recoveryMarkerWasVisible = false;
     const failingAdapter: AgentTargetAdapter = {
       descriptor: {
         id: "codex",
@@ -842,6 +878,12 @@ describe("activation service", () => {
         join(paths.userSkillsDir, "agentenv-daily-coding-example-skill")
       ],
       applyAssets: async () => {
+        const state = JSON.parse(
+          await readFile(join(paths.targetStatesDir, "codex.json"), "utf8")
+        );
+        recoveryMarkerWasVisible =
+          state.recoveryRequired?.operation === "apply" &&
+          typeof state.recoveryRequired?.backupId === "string";
         throw new Error("asset copy exploded");
       }
     };
@@ -858,6 +900,7 @@ describe("activation service", () => {
       ok: false,
       errors: ["Failed to apply profile; restored backup: asset copy exploded"]
     });
+    expect(recoveryMarkerWasVisible).toBe(true);
     await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe(
       "# Old agents\n"
     );
