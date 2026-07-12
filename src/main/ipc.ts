@@ -63,6 +63,28 @@ export const registerIpcHandlers = ({
   targetCaptureService,
   paths
 }: IpcServices) => {
+  const automationBackgroundDelayMs =
+    process.env.AGENTENV_AUTOMATION === "1"
+      ? Math.max(0, Number(process.env.AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS ?? 0))
+      : 0;
+  const waitForAutomationBackgroundDelay = async () => {
+    if (!Number.isFinite(automationBackgroundDelayMs) || automationBackgroundDelayMs <= 0) {
+      return;
+    }
+    const state = globalThis as typeof globalThis & {
+      __agentEnvBackgroundOperations?: number;
+    };
+    state.__agentEnvBackgroundOperations = (state.__agentEnvBackgroundOperations ?? 0) + 1;
+    try {
+      await new Promise((resolve) => setTimeout(resolve, automationBackgroundDelayMs));
+    } finally {
+      state.__agentEnvBackgroundOperations = Math.max(
+        0,
+        (state.__agentEnvBackgroundOperations ?? 1) - 1
+      );
+    }
+  };
+
   ipcMain.handle("clipboard:write-text", (_event, text: unknown) => {
     clipboard.writeText(String(text));
   });
@@ -81,11 +103,11 @@ export const registerIpcHandlers = ({
   ipcMain.handle("targets:list", () => targetDiscoveryService.listTargets());
   ipcMain.handle("targets:list-states", () => activationService.listTargetStates());
   ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
-  ipcMain.handle("skills:scan-inventory", () =>
-    targetDiscoveryService
-      .listTargets()
-      .then((targets) => skillLibraryStore.scanInventory(targets.map((target) => target.paths)))
-  );
+  ipcMain.handle("skills:scan-inventory", async () => {
+    await waitForAutomationBackgroundDelay();
+    const targets = await targetDiscoveryService.listTargets();
+    return skillLibraryStore.scanInventory(targets.map((target) => target.paths));
+  });
   ipcMain.handle("skills:list-cleanup-backups", () =>
     skillLibraryStore.listCleanupBackups()
   );
@@ -265,11 +287,12 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:rollback-cleanup", (_event, backupId: unknown) =>
     skillLibraryStore.rollbackSkillCleanup(parseId(backupId, "cleanup backup id"))
   );
-  ipcMain.handle("skills:check-updates", (_event, ids: unknown) =>
-    skillLibraryStore.checkUpdates(
+  ipcMain.handle("skills:check-updates", async (_event, ids: unknown) => {
+    await waitForAutomationBackgroundDelay();
+    return skillLibraryStore.checkUpdates(
       Array.isArray(ids) ? ids.map((id) => parseId(id, "skill id")) : undefined
-    )
-  );
+    );
+  });
   ipcMain.handle("skills:set-update-source", (_event, input: SkillUpdateSourceInput) =>
     skillLibraryStore.setUpdateSource(input)
   );

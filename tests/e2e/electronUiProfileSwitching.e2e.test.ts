@@ -364,6 +364,7 @@ const launchApp = async (
   options: {
     openCodeAlphaLibrarySkillCount?: number;
     mcpLibraryCount?: number;
+    backgroundStartupDelayMs?: number;
   } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
@@ -419,6 +420,7 @@ const launchApp = async (
       ...process.env,
       AGENTENV_AUTOMATION: "1",
       AGENTENV_DATA_ROOT: appDataRoot,
+      AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS: String(options.backgroundStartupDelayMs ?? 0),
       AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
       AGENTENV_FAKE_HOME: fakeHomeRoot,
       AGENTENV_HOME: homeDir,
@@ -527,6 +529,50 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("keeps every workspace usable while startup enrichment is still running", async () => {
+    const { app: electronApp, page } = await launchApp({ backgroundStartupDelayMs: 10_000 });
+
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .waitFor({ state: "visible" });
+    await expect.poll(() =>
+      electronApp.evaluate(() => {
+        const state = globalThis as typeof globalThis & {
+          __agentEnvBackgroundOperations?: number;
+        };
+        return state.__agentEnvBackgroundOperations ?? 0;
+      })
+    ).toBeGreaterThan(0);
+
+    await page.getByRole("button", { name: "MCP Servers", exact: true }).click();
+    await page
+      .getByRole("group", { name: "MCP library item shared-docs" })
+      .waitFor({ state: "visible" });
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await page.getByRole("region", { name: "Profile composer" }).waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: "Targets", exact: true }).click();
+    await page.getByRole("article", { name: "Target OpenCode" }).waitFor({ state: "visible" });
+
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator(".settings-page").waitFor({ state: "visible" });
+    await page.getByLabel("Language").waitFor({ state: "visible" });
+
+    await openSkillLibrary(page);
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .waitFor({ state: "visible" });
+    expect(
+      await electronApp.evaluate(() => {
+        const state = globalThis as typeof globalThis & {
+          __agentEnvBackgroundOperations?: number;
+        };
+        return state.__agentEnvBackgroundOperations ?? 0;
+      })
+    ).toBeGreaterThan(0);
+  }, 30_000);
+
   it("opens the Library workspace as the global app area", async () => {
     const { page } = await launchApp();
 
