@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronDown,
+  Clock3,
   Copy,
   Database,
   BookOpenText,
@@ -10,6 +11,7 @@ import {
   FolderKanban,
   GitFork,
   HardDrive,
+  History,
   Monitor,
   MoreHorizontal,
   Network,
@@ -42,6 +44,7 @@ import type {
   SaveProfileInput,
   AgentEnvSettings,
   AppLocale,
+  BackupRetentionDays,
   GitHubAuthStatus,
   GitHubDeviceLogin,
   GitHubDeviceLoginResult,
@@ -50,6 +53,8 @@ import type {
   GitHubSkillScanResult,
   LibraryResourceVersions,
   ManageTargetSkillInput,
+  ManagedBackupInventory,
+  ManagedBackupItem,
   RetireSharedSkillInput,
   SharedSkillRetentionInput,
   McpLibraryEntry,
@@ -135,7 +140,44 @@ interface PendingProfileAction {
   label: string;
 }
 
+interface BackupManagerNotice {
+  kind: "success" | "error";
+  message: string;
+}
+
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
+
+const formatBytes = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = units[0];
+  for (let index = 1; index < units.length && value >= 1024; index += 1) {
+    value /= 1024;
+    unit = units[index];
+  }
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
+};
+
+const managedBackupTitle = (item: ManagedBackupItem, t: Translate): string =>
+  item.kind === "skill-cleanup"
+    ? t(item.restored ? "Restored skill cleanup · {{name}}" : "Skill cleanup · {{name}}", {
+        name: item.libraryId ?? item.id
+      })
+    : item.profileName
+      ? t("{{profile}} · {{target}}", {
+          profile: item.profileName,
+          target: item.targetId ?? t("Target")
+        })
+      : t("Target recovery · {{target}}", { target: item.targetId ?? t("Unknown Target") });
+
+const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate): string => {
+  if (item.requiredReason === "recovery-required") return t("Required for recovery");
+  if (item.requiredReason === "takeover-baseline") return t("Takeover baseline");
+  if (item.cleanupStatus === "retained") return t("Latest recovery point");
+  if (item.cleanupStatus === "eligible") return t("Ready to clean");
+  return t("Kept by policy");
+};
 
 type Translate = (message: string, values?: TranslationValues) => string;
 
@@ -493,7 +535,8 @@ const AppContent = ({
     skillSyncMethod: "symlink",
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: true,
-    skillAutoCheckIntervalMinutes: 60
+    skillAutoCheckIntervalMinutes: 60,
+    backupRetentionDays: null
   });
   const [githubAuthStatus, setGithubAuthStatus] = useState<GitHubAuthStatus>({
     state: "signed-out"
@@ -539,6 +582,12 @@ const AppContent = ({
   const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
   const [dataBackupStatus, setDataBackupStatus] = useState("");
   const [dataRestorePreview, setDataRestorePreview] = useState<DataRestorePreview>();
+  const [managedBackups, setManagedBackups] = useState<ManagedBackupInventory>();
+  const [managedBackupsLoading, setManagedBackupsLoading] = useState(false);
+  const [backupManagerOpen, setBackupManagerOpen] = useState(false);
+  const [backupDeleteCandidate, setBackupDeleteCandidate] = useState<ManagedBackupItem>();
+  const [backupCleanupConfirm, setBackupCleanupConfirm] = useState(false);
+  const [backupManagerNotice, setBackupManagerNotice] = useState<BackupManagerNotice>();
   const [targetRefreshStatus, setTargetRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [skillRefreshStatus, setSkillRefreshStatus] = useState<"refreshing" | "refreshed">();
   const [profileSearch, setProfileSearch] = useState("");
@@ -579,10 +628,21 @@ const AppContent = ({
   const saveInFlightRef = useRef(false);
   const rollbackReturnFocusRef = useRef<HTMLElement | null>(null);
   const dataRestoreReturnFocusRef = useRef<HTMLElement | null>(null);
+  const backupManagerReturnFocusRef = useRef<HTMLElement | null>(null);
   const appModalDialogRef = useRef<HTMLElement>(null);
   const appModalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const appModalFallbackFocusRef = useRef<HTMLElement>(null);
   const activeLibraryView = activeWorkspace === "library" ? activeLibraryTab : undefined;
+  const refreshManagedBackups = useCallback(async () => {
+    setManagedBackupsLoading(true);
+    try {
+      setManagedBackups(await window.agentEnv.listManagedBackups());
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setManagedBackupsLoading(false);
+    }
+  }, []);
   const libraryScroll = useLibraryScrollRestoration({
     activeView: activeLibraryView,
     scrollTop:
@@ -605,6 +665,11 @@ const AppContent = ({
       }
     }
   });
+
+  useEffect(() => {
+    if (activeWorkspace !== "settings") return;
+    void refreshManagedBackups();
+  }, [activeWorkspace, refreshManagedBackups]);
 
   useEffect(() => {
     if (rollbackPreview || busy) {
@@ -1341,10 +1406,12 @@ const AppContent = ({
   };
 
   const appModalOpen = Boolean(
-    pendingProfileAction || profileDialogMode || deleteProfileDialogOpen || dataRestorePreview
+    pendingProfileAction || profileDialogMode || deleteProfileDialogOpen || dataRestorePreview || backupManagerOpen
   );
   const dismissAppModal = () => {
-    if (dataRestorePreview) {
+    if (backupManagerOpen) {
+      closeBackupManager();
+    } else if (dataRestorePreview) {
       setDataRestorePreview(undefined);
     } else if (pendingProfileAction) {
       cancelPendingProfileAction();
@@ -1356,15 +1423,27 @@ const AppContent = ({
     open: appModalOpen,
     dialogRef: appModalDialogRef,
     initialFocusRef: appModalInitialFocusRef,
-    fallbackFocusRef: dataRestorePreview
-      ? dataRestoreReturnFocusRef
-      : appModalFallbackFocusRef,
+    fallbackFocusRef: backupManagerOpen
+      ? backupManagerReturnFocusRef
+      : dataRestorePreview
+        ? dataRestoreReturnFocusRef
+        : appModalFallbackFocusRef,
     onDismiss: dismissAppModal,
     dismissDisabled: busy,
     focusKey:
       profileDialogMode === "create" && profileCreateSource === "target"
         ? `target-capture:${targetCapturePreview ? "review" : "setup"}`
-        : profileDialogMode ?? (deleteProfileDialogOpen ? "delete" : dataRestorePreview ? "restore" : "guard")
+        : profileDialogMode ?? (deleteProfileDialogOpen
+            ? "delete"
+            : dataRestorePreview
+              ? "restore"
+              : backupDeleteCandidate
+                ? "delete-backup"
+                : backupCleanupConfirm
+                  ? "cleanup-backups"
+                  : backupManagerOpen
+                    ? "manage-backups"
+                    : "guard")
   });
 
   const selectTargetNow = (targetId: string) => {
@@ -2475,6 +2554,7 @@ const AppContent = ({
       setSkillSettings(nextSettings);
       onLocalePreferenceChange(nextSettings.locale);
       await refreshProfiles({ settingsOverride: nextSettings });
+      if ("backupRetentionDays" in input) await refreshManagedBackups();
       setSettingsSaveStatus("Settings saved");
     } catch (unknownError) {
       setSettingsSaveStatus("");
@@ -2484,13 +2564,93 @@ const AppContent = ({
     }
   };
 
+  const openBackupManager = () => {
+    backupManagerReturnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setBackupDeleteCandidate(undefined);
+    setBackupCleanupConfirm(false);
+    setBackupManagerNotice(undefined);
+    setBackupManagerOpen(true);
+    void refreshManagedBackups();
+  };
+
+  const closeBackupManager = () => {
+    if (backupDeleteCandidate) {
+      setBackupDeleteCandidate(undefined);
+      return;
+    }
+    if (backupCleanupConfirm) {
+      setBackupCleanupConfirm(false);
+      return;
+    }
+    setBackupManagerOpen(false);
+    setBackupManagerNotice(undefined);
+  };
+
+  const deleteSelectedManagedBackup = async () => {
+    if (!backupDeleteCandidate) return;
+    setBusy(true);
+    setBackupManagerNotice(undefined);
+    try {
+      const result = await window.agentEnv.deleteManagedBackup({
+        id: backupDeleteCandidate.id,
+        kind: backupDeleteCandidate.kind
+      });
+      setBackupDeleteCandidate(undefined);
+      setBackupManagerNotice({
+        kind: "success",
+        message: t("Deleted {{count}} backup · Freed {{size}}", {
+          count: result.deletedCount,
+          size: formatBytes(result.freedBytes)
+        })
+      });
+      await refreshManagedBackups();
+    } catch (unknownError) {
+      setBackupManagerNotice({
+        kind: "error",
+        message: unknownError instanceof Error ? unknownError.message : String(unknownError)
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cleanupManagedBackups = async () => {
+    setBusy(true);
+    setBackupManagerNotice(undefined);
+    try {
+      const result = await window.agentEnv.cleanupManagedBackups();
+      setBackupCleanupConfirm(false);
+      setBackupManagerNotice({
+        kind: result.failures.length > 0 ? "error" : "success",
+        message: result.failures.length > 0
+          ? t("Deleted {{count}} backups; {{failed}} failed", {
+              count: result.deletedCount,
+              failed: result.failures.length
+            })
+          : t("Deleted {{count}} backups · Freed {{size}}", {
+              count: result.deletedCount,
+              size: formatBytes(result.freedBytes)
+            })
+      });
+      await refreshManagedBackups();
+    } catch (unknownError) {
+      setBackupManagerNotice({
+        kind: "error",
+        message: unknownError instanceof Error ? unknownError.message : String(unknownError)
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const createAgentEnvDataBackup = async () => {
     setBusy(true);
     setError(undefined);
-    setDataBackupStatus("Creating data backup");
+    setDataBackupStatus("Creating data export");
     try {
       const result = await window.agentEnv.createDataBackup();
-      setDataBackupStatus(result ? `Data backup created at ${result.path}` : "");
+      setDataBackupStatus(result ? t("Data export created at {{path}}", { path: result.path }) : "");
     } catch (unknownError) {
       setDataBackupStatus("");
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -2822,7 +2982,7 @@ const AppContent = ({
           }
         : dataBackupStatus
           ? {
-              kind: dataBackupStatus === "Creating data backup" ? "loading" : "success",
+              kind: dataBackupStatus === "Creating data export" ? "loading" : "success",
               title: dataBackupStatus
             }
         : settingsSaveStatus
@@ -3954,26 +4114,77 @@ const AppContent = ({
             <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">
               <div className="settings-section-header settings-data-header">
                 <div>
-                  <div className="resource-heading" id="agentenv-data-heading">{t("AgentEnv data")}</div>
-                  <p className="settings-muted">{t("Profiles, Library resources, deployment state, and recovery backups.")}</p>
+                  <div className="resource-heading" id="agentenv-data-heading">{t("Data & Backups")}</div>
+                  <p className="settings-muted">{t("AgentEnv data and the recovery points created before local changes.")}</p>
                 </div>
                 <div className="settings-data-actions">
                   <button className="secondary-action" type="button" disabled={busy} onClick={() => void window.agentEnv.openDataFolder()}>
                     <FolderKanban size={15} strokeWidth={2.2} aria-hidden="true" />
                     {t("Open folder")}
                   </button>
-                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void createAgentEnvDataBackup()}>
-                    <HardDrive size={15} strokeWidth={2.2} aria-hidden="true" />
-                    {t("Create backup")}
-                  </button>
-                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void selectAgentEnvDataRestore()}>
-                    <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
-                    {t("Restore backup")}
-                  </button>
                 </div>
               </div>
               <code className="settings-data-path">~/.config/agentenv-manager</code>
-              <p className="settings-field-note">{t("Backups are private directory snapshots. GitHub credentials remain encrypted for this Mac.")}</p>
+              <div className="backup-settings-list">
+                <div className="backup-settings-row">
+                  <span className="backup-settings-icon" aria-hidden="true">
+                    <History size={18} strokeWidth={2} />
+                  </span>
+                  <span className="backup-settings-copy">
+                    <strong>{t("Recovery storage")}</strong>
+                    <small>
+                      {managedBackupsLoading && !managedBackups
+                        ? t("Calculating storage...")
+                        : t("{{count}} backups · {{size}}", {
+                            count: managedBackups?.items.length ?? 0,
+                            size: formatBytes(managedBackups?.totalBytes ?? 0)
+                          })}
+                    </small>
+                  </span>
+                  <button type="button" className="secondary-action" disabled={busy} onClick={openBackupManager}>
+                    {t("Manage")}
+                  </button>
+                </div>
+                <label className="backup-settings-row" htmlFor="backup-retention-days">
+                  <span className="backup-settings-icon" aria-hidden="true">
+                    <Clock3 size={18} strokeWidth={2} />
+                  </span>
+                  <span className="backup-settings-copy">
+                    <strong>{t("Automatic cleanup")}</strong>
+                    <small>{t("Applies only to managed recovery backups.")}</small>
+                  </span>
+                  <select
+                    id="backup-retention-days"
+                    aria-label={t("Backup retention")}
+                    disabled={busy}
+                    value={skillSettings.backupRetentionDays ?? "never"}
+                    onChange={(event) => {
+                      const value = event.currentTarget.value;
+                      void updateSkillSettings({
+                        backupRetentionDays: value === "never" ? null : Number(value) as BackupRetentionDays
+                      });
+                    }}
+                  >
+                    <option value="never">{t("Never")}</option>
+                    <option value="7">{t("Keep for 7 days")}</option>
+                    <option value="30">{t("Keep for 30 days")}</option>
+                    <option value="90">{t("Keep for 90 days")}</option>
+                  </select>
+                </label>
+              </div>
+              <div className="settings-data-footer">
+                <span className="settings-field-note">{t("Data exports are stored outside AgentEnv and are never cleaned automatically.")}</span>
+                <div className="settings-data-actions">
+                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void createAgentEnvDataBackup()}>
+                    <HardDrive size={15} strokeWidth={2.2} aria-hidden="true" />
+                    {t("Export data")}
+                  </button>
+                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void selectAgentEnvDataRestore()}>
+                    <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
+                    {t("Restore data")}
+                  </button>
+                </div>
+              </div>
             </section>
             <section
               className="resource-section github-settings-section"
@@ -4072,6 +4283,148 @@ const AppContent = ({
                 </div>
               ) : null}
             </section>
+            {backupManagerOpen ? (
+              <div className="preview-modal-backdrop" onClick={busy ? undefined : closeBackupManager}>
+                <section
+                  ref={appModalDialogRef}
+                  className="profile-form-dialog backup-manager-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={t("Manage Backups")}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {backupDeleteCandidate ? (
+                    <>
+                      <header className="profile-dialog-header">
+                        <div>
+                          <div className="section-title">{t("Delete backup?")}</div>
+                          <p className="muted">{managedBackupTitle(backupDeleteCandidate, t)}</p>
+                        </div>
+                      </header>
+                      <div className="backup-confirm-summary">
+                        <strong>{formatBytes(backupDeleteCandidate.sizeBytes)}</strong>
+                        <p>{t("This recovery point cannot be restored after deletion. Profiles, Library resources, and current Target files are unchanged.")}</p>
+                      </div>
+                      <footer className="preview-actions">
+                        <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setBackupDeleteCandidate(undefined)}>
+                          {t("Cancel")}
+                        </button>
+                        <button className="danger-action" type="button" disabled={busy} onClick={() => void deleteSelectedManagedBackup()}>
+                          {t("Delete backup")}
+                        </button>
+                      </footer>
+                    </>
+                  ) : backupCleanupConfirm ? (
+                    <>
+                      <header className="profile-dialog-header">
+                        <div>
+                          <div className="section-title">{t("Clean up backups?")}</div>
+                          <p className="muted">
+                            {t("Delete {{count}} backups and free approximately {{size}}.", {
+                              count: managedBackups?.eligibleCount ?? 0,
+                              size: formatBytes(managedBackups?.eligibleBytes ?? 0)
+                            })}
+                          </p>
+                        </div>
+                      </header>
+                      <div className="backup-confirm-summary">
+                        <p>{t("Only recovery points outside the retention period are removed. Required recovery and takeover backups stay available.")}</p>
+                      </div>
+                      <footer className="preview-actions">
+                        <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setBackupCleanupConfirm(false)}>
+                          {t("Cancel")}
+                        </button>
+                        <button className="danger-action" type="button" disabled={busy} onClick={() => void cleanupManagedBackups()}>
+                          {t("Clean up {{count}} backups", { count: managedBackups?.eligibleCount ?? 0 })}
+                        </button>
+                      </footer>
+                    </>
+                  ) : (
+                    <>
+                      <header className="profile-dialog-header backup-manager-header">
+                        <div>
+                          <div className="section-title">{t("Manage Backups")}</div>
+                          <p className="muted">
+                            {t("{{count}} backups · {{size}}", {
+                              count: managedBackups?.items.length ?? 0,
+                              size: formatBytes(managedBackups?.totalBytes ?? 0)
+                            })}
+                          </p>
+                        </div>
+                      </header>
+                      {backupManagerNotice ? (
+                        <div className={`backup-manager-notice is-${backupManagerNotice.kind}`} role={backupManagerNotice.kind === "error" ? "alert" : "status"}>
+                          {backupManagerNotice.message}
+                        </div>
+                      ) : null}
+                      <div className="backup-manager-list" aria-busy={managedBackupsLoading}>
+                        {managedBackupsLoading && !managedBackups ? (
+                          <div className="backup-manager-empty">{t("Calculating storage...")}</div>
+                        ) : managedBackups?.items.length ? (
+                          managedBackups.items.map((item) => (
+                            <article className="backup-manager-row" key={`${item.kind}:${item.id}`}>
+                              <span className={`backup-kind-icon is-${item.kind}`} aria-hidden="true">
+                                {item.kind === "skill-cleanup" ? <Database size={17} /> : <History size={17} />}
+                              </span>
+                              <span className="backup-row-copy">
+                                <strong title={managedBackupTitle(item, t)}>{managedBackupTitle(item, t)}</strong>
+                                <small>
+                                  {formatDate(item.createdAt)} · {t("{{count}} files", { count: item.fileCount })} · {formatBytes(item.sizeBytes)}
+                                </small>
+                              </span>
+                              <span className={`backup-status is-${item.cleanupStatus}`} title={managedBackupStatusLabel(item, t)}>
+                                {managedBackupStatusLabel(item, t)}
+                              </span>
+                              {item.deletable ? (
+                                <button
+                                  className="backup-row-delete"
+                                  type="button"
+                                  disabled={busy}
+                                  aria-label={t("Delete backup {{name}}", { name: managedBackupTitle(item, t) })}
+                                  onClick={() => setBackupDeleteCandidate(item)}
+                                >
+                                  <Trash2 size={15} aria-hidden="true" />
+                                  {t("Delete")}
+                                </button>
+                              ) : (
+                                <span className="backup-required-lock" title={managedBackupStatusLabel(item, t)}>{t("Required")}</span>
+                              )}
+                            </article>
+                          ))
+                        ) : (
+                          <div className="backup-manager-empty">
+                            <History size={22} aria-hidden="true" />
+                            <strong>{t("No managed backups")}</strong>
+                            <span>{t("Recovery points will appear here after AgentEnv changes local environments.")}</span>
+                          </div>
+                        )}
+                      </div>
+                      <footer className="preview-actions backup-manager-actions">
+                        <span>
+                          {managedBackups?.eligibleCount
+                            ? t("{{count}} eligible · {{size}}", {
+                                count: managedBackups.eligibleCount,
+                                size: formatBytes(managedBackups.eligibleBytes)
+                              })
+                            : t("Nothing to clean")}
+                        </span>
+                        <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeBackupManager}>
+                          {t("Close")}
+                        </button>
+                        <button
+                          className="danger-action"
+                          type="button"
+                          disabled={busy || !managedBackups?.eligibleCount}
+                          onClick={() => setBackupCleanupConfirm(true)}
+                        >
+                          {t("Clean up now")}
+                        </button>
+                      </footer>
+                    </>
+                  )}
+                </section>
+              </div>
+            ) : null}
             {dataRestorePreview ? (
               <div className="preview-modal-backdrop" onClick={() => {
                 if (!busy) setDataRestorePreview(undefined);

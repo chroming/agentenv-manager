@@ -119,6 +119,7 @@ export interface SkillLibraryStore {
   ): Promise<SkillCleanupResult>;
   setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
+  deleteCleanupBackup(backupId: string): Promise<void>;
   checkUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   setUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
@@ -195,7 +196,8 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   skillSyncMethod: "symlink",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
-  skillAutoCheckIntervalMinutes: 60
+  skillAutoCheckIntervalMinutes: 60,
+  backupRetentionDays: null
 };
 
 const updatePolicyFor = (metadata: SkillMetadataFile): SkillUpdatePolicy => {
@@ -1702,6 +1704,11 @@ export const createSkillLibraryStore = (
     await rename(backupDir, join(archiveRoot, `${manifest.id}-${Date.now()}`));
   };
 
+  const deleteCleanupBackup = async (backupId: string): Promise<void> => {
+    const { backupDir } = await readCleanupBackup(backupId);
+    await rm(backupDir, { recursive: true, force: true });
+  };
+
   const checkUpdates = async (ids?: string[]): Promise<SkillUpdateInfo[]> => {
     const skills = await listSkills();
     const selectedIds = ids ? new Set(ids.map((id) => SafeIdSchema.parse(id))) : undefined;
@@ -2106,6 +2113,7 @@ export const createSkillLibraryStore = (
     consolidateSharedSkillGroup,
     setSharedSkillRetention,
     rollbackSkillCleanup,
+    deleteCleanupBackup,
     checkUpdates,
     setUpdateSource,
     setUpdatePolicy,

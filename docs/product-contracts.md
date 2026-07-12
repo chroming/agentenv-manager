@@ -128,6 +128,7 @@ A Backup is an immutable pre-operation snapshot used for recovery.
 - Backup belongs to one operation and records its Profile and Target when applicable.
 - Backup is not a Profile and MUST NOT silently become canonical content.
 - A no-op MUST NOT create a Backup.
+- A complete user-selected copy stored outside AgentEnv data is a Data Export, not a managed recovery Backup, and MUST NOT be removed by automatic retention.
 
 ### 4.6 Deployment State
 
@@ -431,9 +432,16 @@ Status: active Profile deletion is blocked; both Stop Managing paths, safety bac
 - A Rollback Preview becomes stale when any affected live path changes after Preview. Rollback MUST reject the stale plan without writing and require a fresh Preview.
 - A successful rollback MUST refresh Target lifecycle and active Profile metadata.
 - Backups MUST be retained until explicitly removed by the user or a documented retention policy.
+- Settings owns the global managed-backup inventory, storage usage, retention policy, explicit deletion, and policy cleanup entry points. Contextual Target and Skill surfaces continue to own Restore.
+- Automatic retention applies only to managed Target recovery and Skill cleanup Backups. `Never`, `7 days`, `30 days`, and `90 days` are the supported policies.
+- A Backup referenced by `Recovery required` and the earliest Apply Backup for every currently managed Target are required recovery state and MUST NOT be deleted manually or automatically.
+- The latest Target recovery point MUST be retained from automatic cleanup, but MAY be explicitly deleted after impact confirmation when it is not otherwise required.
+- Changing the retention policy saves future cleanup behavior and MUST NOT silently delete data in the same interaction. `Clean up now` previews the eligible count and size before deletion.
+- Deleting or cleaning Backups MUST NOT modify Profiles, Library resources, current Target files, or external Data Exports. Partial cleanup reports both deleted and failed items.
+- Backup storage measurement and deletion MUST NOT follow symbolic links outside managed backup roots.
 - A failed rollback enters `Recovery required`.
 
-Status: Apply and cleanup rollback plus stale rollback conflict handling are `Implemented`; retention controls are `Required`.
+Status: Apply and cleanup rollback, stale rollback conflict handling, managed storage inventory, explicit deletion, protected recovery points, and retention cleanup are `Implemented`.
 
 ## 16. Skill Library Contract
 

@@ -69,6 +69,9 @@ export interface AgentEnvApi {
     options?: ApplyProfileOptions
   ): Promise<ApplyResult>;
   listBackups(): Promise<BackupSummary[]>;
+  listManagedBackups(): Promise<ManagedBackupInventory>;
+  deleteManagedBackup(input: DeleteManagedBackupInput): Promise<ManagedBackupDeleteResult>;
+  cleanupManagedBackups(): Promise<ManagedBackupCleanupResult>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
   rollback(backupId: string): Promise<RollbackResult>;
   previewStopManaging(targetId: string, mode: StopManagingMode): Promise<StopManagingPreview>;
@@ -342,6 +345,55 @@ export interface AgentEnvSettings {
   skillStorageLocation: SkillStorageLocation;
   skillAutoCheckEnabled: boolean;
   skillAutoCheckIntervalMinutes: number;
+  backupRetentionDays: BackupRetentionDays;
+}
+
+export type BackupRetentionDays = 7 | 30 | 90 | null;
+
+export type ManagedBackupKind = "target-recovery" | "skill-cleanup";
+export type ManagedBackupCleanupStatus = "required" | "retained" | "kept" | "eligible";
+export type ManagedBackupRequiredReason = "recovery-required" | "takeover-baseline";
+
+export interface ManagedBackupItem {
+  id: string;
+  kind: ManagedBackupKind;
+  createdAt: string;
+  sizeBytes: number;
+  fileCount: number;
+  operation?: BackupManifest["operation"] | SkillCleanupBackupSummary["operation"];
+  targetId?: string;
+  profileName?: string;
+  libraryId?: string;
+  restored?: boolean;
+  cleanupStatus: ManagedBackupCleanupStatus;
+  requiredReason?: ManagedBackupRequiredReason;
+  deletable: boolean;
+}
+
+export interface ManagedBackupInventory {
+  items: ManagedBackupItem[];
+  totalBytes: number;
+  eligibleBytes: number;
+  eligibleCount: number;
+  retentionDays: BackupRetentionDays;
+}
+
+export interface DeleteManagedBackupInput {
+  id: string;
+  kind: ManagedBackupKind;
+}
+
+export interface ManagedBackupDeleteResult {
+  deletedCount: number;
+  freedBytes: number;
+}
+
+export interface ManagedBackupCleanupFailure extends DeleteManagedBackupInput {
+  message: string;
+}
+
+export interface ManagedBackupCleanupResult extends ManagedBackupDeleteResult {
+  failures: ManagedBackupCleanupFailure[];
 }
 
 export type AppLocale = "system" | "en" | "zh_CN" | "zh_TW";

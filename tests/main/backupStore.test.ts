@@ -137,4 +137,17 @@ describe("backup store", () => {
       "backup content does not match its manifest"
     );
   });
+
+  it("deletes only the validated backup directory", async () => {
+    const paths = await makePaths();
+    const store = createBackupStore(paths, {
+      now: () => new Date("2026-06-30T00:00:00.000Z")
+    });
+    const manifest = await store.createBackup([]);
+
+    await store.deleteBackup(manifest.id);
+
+    await expect(store.listBackups()).resolves.toEqual([]);
+    await expect(store.deleteBackup("../../outside")).rejects.toThrow();
+  });
 });

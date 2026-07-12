@@ -25,7 +25,8 @@ describe("settings store", () => {
       skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
-      skillAutoCheckIntervalMinutes: 60
+      skillAutoCheckIntervalMinutes: 60,
+      backupRetentionDays: null
     });
 
     await store.updateSettings({
@@ -33,7 +34,8 @@ describe("settings store", () => {
       skillSyncMethod: "copy",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
-      skillAutoCheckIntervalMinutes: 120
+      skillAutoCheckIntervalMinutes: 120,
+      backupRetentionDays: 30
     });
 
     expect(await store.readSettings()).toEqual({
@@ -41,7 +43,8 @@ describe("settings store", () => {
       skillSyncMethod: "copy",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
-      skillAutoCheckIntervalMinutes: 120
+      skillAutoCheckIntervalMinutes: 120,
+      backupRetentionDays: 30
     });
     expect(resolveSkillsLibraryDir(paths, await store.readSettings())).toBe(
       join(root, "app-data", "skills-library")

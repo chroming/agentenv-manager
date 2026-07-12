@@ -9,6 +9,7 @@ import {
   resolveAppDataRoot
 } from "./appDataRoot";
 import { createBackupStore } from "./backupStore";
+import { createBackupMaintenanceService } from "./backupMaintenanceService";
 import { createFileGitHubTokenStore, createGitHubAuthService } from "./githubAuthService";
 import { createMcpLibraryStore } from "./mcpLibraryStore";
 import { registerIpcHandlers } from "./ipc";
@@ -290,6 +291,12 @@ const createServices = async () => {
         : {})
     }
   );
+  const backupMaintenanceService = createBackupMaintenanceService(
+    paths,
+    backupStore,
+    skillLibraryStore,
+    settingsStore
+  );
   const mcpLibraryStore = createMcpLibraryStore(paths);
   const activationService = createActivationService({
     paths,
@@ -318,6 +325,7 @@ const createServices = async () => {
     paths,
     profileStore,
     backupStore,
+    backupMaintenanceService,
     githubAuthService,
     settingsStore,
     skillLibraryStore,
@@ -333,6 +341,23 @@ void app.whenReady().then(() => {
   void createServices()
     .then((services) => {
       registerIpcHandlers(services);
+      if (process.env.AGENTENV_AUTOMATION !== "1") {
+        const runBackupCleanup = async () => {
+          const settings = await services.settingsStore.readSettings();
+          if (settings.backupRetentionDays !== null) {
+            await services.backupMaintenanceService.cleanup();
+          }
+        };
+        void runBackupCleanup().catch((error) => {
+          console.error("Automatic backup cleanup failed", error);
+        });
+        const timer = setInterval(() => {
+          void runBackupCleanup().catch((error) => {
+            console.error("Automatic backup cleanup failed", error);
+          });
+        }, 24 * 60 * 60 * 1000);
+        timer.unref();
+      }
       servicesInitialized = true;
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     })

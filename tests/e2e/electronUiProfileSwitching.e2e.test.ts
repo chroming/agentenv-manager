@@ -2237,8 +2237,14 @@ describe("Electron UI profile switching e2e", () => {
           const dataSectionRight = await page
             .locator('[aria-labelledby="agentenv-data-heading"]')
             .evaluate((element) => Math.round(element.getBoundingClientRect().right));
-          expect(new Set(actionGeometry.map((box) => box.y)).size).toBe(1);
           expect(new Set(actionGeometry.map((box) => box.height)).size).toBe(1);
+          const actionGroups = page.locator('[aria-labelledby="agentenv-data-heading"] .settings-data-actions');
+          for (let index = 0; index < await actionGroups.count(); index += 1) {
+            const groupRows = await actionGroups.nth(index).locator("button").evaluateAll((buttons) =>
+              buttons.map((button) => Math.round(button.getBoundingClientRect().y))
+            );
+            expect(new Set(groupRows).size).toBe(1);
+          }
           expect(Math.max(...actionGeometry.map((box) => box.right))).toBeLessThanOrEqual(
             dataSectionRight
           );
@@ -3747,9 +3753,9 @@ describe("Electron UI profile switching e2e", () => {
       backupRoot
     );
     await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByRole("button", { name: "Create backup" }).click();
+    await page.getByRole("button", { name: "Export data" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain(
-      "Data backup created"
+      "Data export created"
     );
 
     const backupEntries = await readdir(backupRoot);
@@ -3770,7 +3776,7 @@ describe("Electron UI profile switching e2e", () => {
       },
       backupPath
     );
-    await page.getByRole("button", { name: "Restore backup" }).click();
+    await page.getByRole("button", { name: "Restore data" }).click();
     const restoreDialog = page.getByRole("dialog", { name: "Restore AgentEnv data" });
     await restoreDialog.waitFor({ state: "visible" });
     await expect.poll(() => restoreDialog.textContent()).toContain("Version 1");
@@ -3784,6 +3790,66 @@ describe("Electron UI profile switching e2e", () => {
     );
     const safetyRoot = join(root, "agentenv-import-safety");
     expect((await readdir(safetyRoot)).length).toBeGreaterThan(0);
+  }, 30_000);
+
+  it("shows backup usage and deletes individual or retention-eligible recovery points", async () => {
+    const { appDataRoot, page } = await launchApp();
+    const backupsRoot = join(appDataRoot, "backups");
+    const writeBackup = async (id: string, createdAt: string, profileName: string) => {
+      const backupDir = join(backupsRoot, id);
+      await mkdir(backupDir, { recursive: true });
+      await writeFile(join(backupDir, "manifest.json"), JSON.stringify({
+        id,
+        createdAt,
+        operation: "apply",
+        targetId: "cleanup-target",
+        profileId: "daily-coding",
+        profileName,
+        entries: []
+      }));
+      return backupDir;
+    };
+    const manualDeleteDir = await writeBackup(
+      "2025-01-01T00-00-00-000Z",
+      "2025-01-01T00:00:00.000Z",
+      "Old Manual"
+    );
+    const policyDeleteDir = await writeBackup(
+      "2025-02-01T00-00-00-000Z",
+      "2025-02-01T00:00:00.000Z",
+      "Old Cleanup"
+    );
+    const retainedDir = await writeBackup(
+      "2099-01-01T00-00-00-000Z",
+      "2099-01-01T00:00:00.000Z",
+      "Latest Recovery"
+    );
+
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByLabel("Backup retention").selectOption("30");
+    await expect.poll(() => page.getByLabel("Backup retention").inputValue()).toBe("30");
+    await page.getByRole("button", { name: "Manage", exact: true }).click();
+    const manager = page.getByRole("dialog", { name: "Manage Backups" });
+    await manager.waitFor({ state: "visible" });
+    await expectInViewport(page, manager);
+    await expectNoHorizontalOverflow(page, [".backup-manager-dialog"]);
+    await expectTextFits(manager.getByRole("button", { name: "Clean up now" }));
+    await page.setViewportSize({ width: 920, height: 620 });
+    await expectInViewport(page, manager);
+    await expectNoHorizontalOverflow(page, [".backup-manager-dialog"]);
+    await expectTextFits(manager.getByRole("button", { name: "Clean up now" }));
+    await expect.poll(() => manager.textContent()).toContain("3 backups");
+    await manager.getByRole("button", {
+      name: "Delete backup Old Manual · cleanup-target"
+    }).click();
+    await manager.getByRole("button", { name: "Delete backup", exact: true }).click();
+    await expect.poll(() => fileExists(manualDeleteDir)).toBe(false);
+
+    await manager.getByRole("button", { name: "Clean up now" }).click();
+    await manager.getByRole("button", { name: "Clean up 1 backups" }).click();
+    await expect.poll(() => fileExists(policyDeleteDir)).toBe(false);
+    await expect(fileExists(retainedDir)).resolves.toBe(true);
+    await expect.poll(() => manager.textContent()).toContain("1 backups");
   }, 30_000);
 
   it("installs library skills using copy mode from Settings", async () => {

@@ -8,6 +8,7 @@ import {
   readFile,
   readlink,
   readdir,
+  rm,
   symlink,
 } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
@@ -31,6 +32,7 @@ export interface BackupStore {
   ): Promise<BackupManifest>;
   listBackups(): Promise<BackupSummary[]>;
   readBackup(id: string): Promise<BackupManifest>;
+  deleteBackup(id: string): Promise<void>;
 }
 
 const isMissingFileError = (error: unknown) =>
@@ -222,9 +224,16 @@ export const createBackupStore = (
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   };
 
+  const deleteBackup = async (id: string): Promise<void> => {
+    const safeId = SafeIdSchema.parse(id);
+    await readBackup(safeId);
+    await rm(join(paths.backupsDir, safeId), { recursive: true, force: true });
+  };
+
   return {
     createBackup,
     listBackups,
-    readBackup
+    readBackup,
+    deleteBackup
   };
 };

@@ -11,7 +11,8 @@ const SettingsSchema = z.object({
   skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("symlink"),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
-  skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60)
+  skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
+  backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null)
 });
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
@@ -19,7 +20,8 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   skillSyncMethod: "symlink",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,
-  skillAutoCheckIntervalMinutes: 60
+  skillAutoCheckIntervalMinutes: 60,
+  backupRetentionDays: null
 };
 
 export interface SettingsStore {

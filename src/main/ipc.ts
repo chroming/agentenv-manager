@@ -1,6 +1,7 @@
 import { BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
 import { basename, dirname, relative, resolve } from "node:path";
 import type { ActivationService } from "./activationService";
+import type { BackupMaintenanceService } from "./backupMaintenanceService";
 import type { BackupStore } from "./backupStore";
 import type { GitHubAuthService } from "./githubAuthService";
 import type { McpLibraryStore } from "./mcpLibraryStore";
@@ -13,6 +14,7 @@ import { ResourceIconKeySchema, SafeIdSchema } from "../shared/schemas";
 import type {
   CreateProfileInput,
   CreateProfileFromTargetInput,
+  DeleteManagedBackupInput,
   GitHubSkillImportInput,
   ManageTargetSkillInput,
   RetireSharedSkillInput,
@@ -35,6 +37,7 @@ export interface IpcServices {
   profileStore: ProfileStore;
   activationService: ActivationService;
   backupStore: BackupStore;
+  backupMaintenanceService: BackupMaintenanceService;
   githubAuthService: GitHubAuthService;
   settingsStore: SettingsStore;
   skillLibraryStore: SkillLibraryStore;
@@ -53,10 +56,20 @@ const parseId = (value: unknown, label: string): string => {
   return parsed.data;
 };
 
+const parseManagedBackupInput = (value: unknown): DeleteManagedBackupInput => {
+  if (!value || typeof value !== "object") throw new Error("Invalid backup selection");
+  const input = value as { id?: unknown; kind?: unknown };
+  if (input.kind !== "target-recovery" && input.kind !== "skill-cleanup") {
+    throw new Error("Invalid backup kind");
+  }
+  return { id: parseId(input.id, "backup id"), kind: input.kind };
+};
+
 export const registerIpcHandlers = ({
   profileStore,
   activationService,
   backupStore,
+  backupMaintenanceService,
   githubAuthService,
   settingsStore,
   skillLibraryStore,
@@ -548,6 +561,11 @@ export const registerIpcHandlers = ({
       )
   );
   ipcMain.handle("backups:list", () => backupStore.listBackups());
+  ipcMain.handle("backups:list-managed", () => backupMaintenanceService.listInventory());
+  ipcMain.handle("backups:delete-managed", (_event, input: unknown) =>
+    backupMaintenanceService.deleteBackup(parseManagedBackupInput(input))
+  );
+  ipcMain.handle("backups:cleanup-managed", () => backupMaintenanceService.cleanup());
   ipcMain.handle("rollback:preview", (_event, backupId: unknown) =>
     activationService.previewRollback(String(backupId))
   );

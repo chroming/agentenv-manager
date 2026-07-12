@@ -415,14 +415,16 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
-      skillAutoCheckIntervalMinutes: 60
+      skillAutoCheckIntervalMinutes: 60,
+      backupRetentionDays: null
     }),
     updateSettings: vi.fn().mockImplementation(async (input) => ({
       locale: input.locale ?? "system",
       skillSyncMethod: input.skillSyncMethod ?? "symlink",
       skillStorageLocation: input.skillStorageLocation ?? "appData",
       skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
-      skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60
+      skillAutoCheckIntervalMinutes: input.skillAutoCheckIntervalMinutes ?? 60,
+      backupRetentionDays: input.backupRetentionDays ?? null
     })),
     readGitHubAuthStatus: vi.fn().mockResolvedValue({
       state: "configured",
@@ -497,6 +499,19 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     previewApply: vi.fn().mockResolvedValue(preview),
     applyProfile: vi.fn().mockResolvedValue({ ok: true, backupId: "backup-1" }),
     listBackups: vi.fn().mockResolvedValue([]),
+    listManagedBackups: vi.fn().mockResolvedValue({
+      items: [],
+      totalBytes: 0,
+      eligibleBytes: 0,
+      eligibleCount: 0,
+      retentionDays: null
+    }),
+    deleteManagedBackup: vi.fn().mockResolvedValue({ deletedCount: 1, freedBytes: 0 }),
+    cleanupManagedBackups: vi.fn().mockResolvedValue({
+      deletedCount: 0,
+      freedBytes: 0,
+      failures: []
+    }),
     previewRollback: vi.fn().mockResolvedValue(rollbackPreview),
     rollback: vi.fn().mockResolvedValue({ ok: true }),
     previewStopManaging: vi.fn().mockResolvedValue({
@@ -1926,7 +1941,7 @@ describe("App", () => {
 
     await screen.findByRole("region", { name: "Library workspace" });
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    const restoreTrigger = screen.getByRole("button", { name: "Restore backup" });
+    const restoreTrigger = screen.getByRole("button", { name: "Restore data" });
     restoreTrigger.focus();
     fireEvent.click(restoreTrigger);
     const dialog = await screen.findByRole("dialog", { name: "Restore AgentEnv data" });
@@ -1937,13 +1952,82 @@ describe("App", () => {
     expect(screen.queryByRole("dialog", { name: "Restore AgentEnv data" })).not.toBeInTheDocument();
     expect(restoreTrigger).toHaveFocus();
 
-    fireEvent.click(screen.getByRole("button", { name: "Restore backup" }));
+    fireEvent.click(screen.getByRole("button", { name: "Restore data" }));
     const confirmDialog = await screen.findByRole("dialog", { name: "Restore AgentEnv data" });
     fireEvent.click(within(confirmDialog).getByRole("button", { name: "Restore data" }));
     await waitFor(() =>
       expect(api.restoreDataBackup).toHaveBeenCalledWith("/tmp/AgentEnv-Backup")
     );
     expect(await screen.findByText(/AgentEnv data restored; safety backup created/)).toBeInTheDocument();
+  });
+
+  it("manages backup retention, protected recovery points, deletion, and cleanup from Settings", async () => {
+    const requiredBackup = {
+      id: "required-backup",
+      kind: "target-recovery" as const,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      sizeBytes: 4096,
+      fileCount: 2,
+      operation: "apply" as const,
+      targetId: "opencode",
+      profileName: "Daily Coding",
+      cleanupStatus: "required" as const,
+      requiredReason: "takeover-baseline" as const,
+      deletable: false
+    };
+    const eligibleBackup = {
+      id: "cleanup-old",
+      kind: "skill-cleanup" as const,
+      createdAt: "2026-01-02T00:00:00.000Z",
+      sizeBytes: 2048,
+      fileCount: 1,
+      operation: "cleanup" as const,
+      libraryId: "reviewer",
+      cleanupStatus: "eligible" as const,
+      deletable: true
+    };
+    const listManagedBackups = vi.fn().mockResolvedValue({
+      items: [requiredBackup, eligibleBackup],
+      totalBytes: 6144,
+      eligibleBytes: 2048,
+      eligibleCount: 1,
+      retentionDays: 30
+    });
+    const api = installApi({
+      listManagedBackups,
+      readSettings: vi.fn().mockResolvedValue({
+        locale: "system",
+        skillSyncMethod: "symlink",
+        skillStorageLocation: "appData",
+        skillAutoCheckEnabled: true,
+        skillAutoCheckIntervalMinutes: 60,
+        backupRetentionDays: 30
+      })
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(await screen.findByText("2 backups · 6.0 KB")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Backup retention"), { target: { value: "90" } });
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ backupRetentionDays: 90 }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Manage$/ }));
+    const manager = await screen.findByRole("dialog", { name: "Manage Backups" });
+    expect(within(manager).getByText("Takeover baseline")).toBeInTheDocument();
+    expect(within(manager).getByText("Required")).toBeInTheDocument();
+    expect(within(manager).queryByRole("button", { name: /Delete backup Daily Coding/ })).not.toBeInTheDocument();
+
+    fireEvent.click(within(manager).getByRole("button", { name: /Delete backup Skill cleanup/ }));
+    expect(within(manager).getByText("Delete backup?")).toBeInTheDocument();
+    fireEvent.click(within(manager).getByRole("button", { name: "Cancel" }));
+    expect(within(manager).getByText("Manage Backups")).toBeInTheDocument();
+
+    fireEvent.click(within(manager).getByRole("button", { name: "Clean up now" }));
+    expect(within(manager).getByText("Clean up backups?")).toBeInTheDocument();
+    fireEvent.click(within(manager).getByRole("button", { name: "Clean up 1 backups" }));
+    await waitFor(() => expect(api.cleanupManagedBackups).toHaveBeenCalledOnce());
+    expect(await within(manager).findByText("Deleted 0 backups · Freed 0 B")).toBeInTheDocument();
   });
 
   it("creates, edits, duplicates, and deletes profiles from the profile workspace", async () => {
