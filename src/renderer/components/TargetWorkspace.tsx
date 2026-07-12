@@ -1,4 +1,5 @@
 import {
+  ArchiveRestore,
   ArrowRight,
   ChevronDown,
   ChevronUp,
@@ -88,11 +89,15 @@ export const TargetWorkspace = ({
 }: TargetWorkspaceProps) => {
   const { localeTag, t } = useI18n();
   const [expandedTargetId, setExpandedTargetId] = useState<string>();
+  const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
   const [stopManagingTargetId, setStopManagingTargetId] = useState<string>();
   const [stopManagingMode, setStopManagingMode] = useState<StopManagingMode>("keep-current");
   const stopManagingReturnFocusRef = useRef<HTMLElement | null>(null);
   const stopManagingDialogRef = useRef<HTMLElement>(null);
   const stopManagingCancelRef = useRef<HTMLButtonElement>(null);
+  const recoveryTriggerRef = useRef<HTMLButtonElement>(null);
+  const recoveryDialogRef = useRef<HTMLElement>(null);
+  const recoveryCloseRef = useRef<HTMLButtonElement>(null);
   const statesByTarget = new Map(targetStates.map((state) => [state.targetId, state]));
 
   useModalDialog({
@@ -101,6 +106,15 @@ export const TargetWorkspace = ({
     initialFocusRef: stopManagingCancelRef,
     fallbackFocusRef: stopManagingReturnFocusRef,
     onDismiss: () => setStopManagingTargetId(undefined),
+    dismissDisabled: busy
+  });
+
+  useModalDialog({
+    open: isRecoveryOpen,
+    dialogRef: recoveryDialogRef,
+    initialFocusRef: recoveryCloseRef,
+    fallbackFocusRef: recoveryTriggerRef,
+    onDismiss: () => setIsRecoveryOpen(false),
     dismissDisabled: busy
   });
 
@@ -114,15 +128,29 @@ export const TargetWorkspace = ({
           </h2>
           <p>{t("Inspect local agent runtimes, management state, and recovery points.")}</p>
         </div>
-        <button
-          className="secondary-action"
-          type="button"
-          disabled={busy}
-          onClick={() => { void onRefresh(); }}
-        >
-          <RefreshCw size={15} strokeWidth={2.2} />
-          {busy ? t("Refreshing...") : t("Refresh")}
-        </button>
+        <div className="target-page-actions">
+          <button
+            ref={recoveryTriggerRef}
+            className="secondary-action target-recovery-trigger"
+            type="button"
+            aria-haspopup="dialog"
+            disabled={busy}
+            onClick={() => setIsRecoveryOpen(true)}
+          >
+            <ArchiveRestore size={15} strokeWidth={2.2} />
+            {t("Recovery")}
+            <span aria-label={t("{{count}} backups", { count: backups.length })}>{backups.length}</span>
+          </button>
+          <button
+            className="secondary-action"
+            type="button"
+            disabled={busy}
+            onClick={() => { void onRefresh(); }}
+          >
+            <RefreshCw size={15} strokeWidth={2.2} />
+            {busy ? t("Refreshing...") : t("Refresh")}
+          </button>
+        </div>
       </header>
 
       <div className="target-list">
@@ -238,19 +266,49 @@ export const TargetWorkspace = ({
         })}
       </div>
 
-      <section className="target-recovery" aria-label={t("Recovery")}>
-        <div className="target-recovery__header">
-          <div><strong>{t("Recovery")}</strong><small>{t("Backups created before managed applies.")}</small></div>
-          <span>{t("{{count}} backups", { count: backups.length })}</span>
+      {isRecoveryOpen ? (
+        <div className="preview-modal-backdrop" onClick={busy ? undefined : () => setIsRecoveryOpen(false)}>
+          <section
+            ref={recoveryDialogRef}
+            className="profile-form-dialog target-recovery-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("Recovery")}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header target-recovery-dialog__header">
+              <div>
+                <div className="section-title">{t("Recovery")}</div>
+                <p className="muted">{t("Backups created before managed applies.")}</p>
+              </div>
+              <span>{t("{{count}} backups", { count: backups.length })}</span>
+            </header>
+            <div className="target-recovery-dialog__body">
+              <HistoryView
+                backups={backups}
+                busy={busy}
+                rollbackPreview={undefined}
+                onPreviewRollback={(backupId) => {
+                  setIsRecoveryOpen(false);
+                  onPreviewRollback(backupId);
+                }}
+                onRestoreRollback={onRestoreRollback}
+              />
+            </div>
+            <footer className="preview-actions">
+              <button
+                ref={recoveryCloseRef}
+                className="secondary-action"
+                type="button"
+                disabled={busy}
+                onClick={() => setIsRecoveryOpen(false)}
+              >
+                {t("Close")}
+              </button>
+            </footer>
+          </section>
         </div>
-        <HistoryView
-          backups={backups}
-          busy={busy}
-          rollbackPreview={undefined}
-          onPreviewRollback={onPreviewRollback}
-          onRestoreRollback={onRestoreRollback}
-        />
-      </section>
+      ) : null}
       {rollbackPreview ? (
         <PreviewDialog
           preview={rollbackPreview}

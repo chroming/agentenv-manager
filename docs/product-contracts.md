@@ -633,6 +633,8 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Icon pickers MUST use one shared component, expose the selected state without color alone, remain topmost inside the viewport, and close on selection, Escape, or safe outside click.
 - Lists and expanded editors own intentional internal scrolling.
 - Expanding a Profile Composer section MUST expose a practically editable panel at the minimum viewport; presence of a clipped panel alone does not satisfy the interaction contract.
+- Collapsed Profile Composer rows stay content-sized and compact; they MUST NOT expand merely to fill unused editor height. The resource rows themselves provide sufficient context, so the Composer MUST NOT add a redundant visible title block above them.
+- Target recovery history is a low-frequency safety workflow. Targets exposes it through a page-level Recovery command and a focused modal, rather than permanently consuming the primary Target list viewport.
 - Profile Save and Apply remain visible while the selected Profile's Composer owns internal scrolling.
 - Buttons do not wrap at supported desktop widths.
 - Text line boxes, icon boxes, and control padding MUST fit inside their controls without vertical clipping.

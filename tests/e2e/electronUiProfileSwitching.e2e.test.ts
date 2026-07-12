@@ -1582,6 +1582,19 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, header);
     await expectInViewport(page, workbench);
 
+    const compactProfileGeometry = await page.evaluate(() => ({
+      profileRows: [...document.querySelectorAll<HTMLElement>(".profile-row")].map(
+        (row) => Math.round(row.getBoundingClientRect().height)
+      ),
+      composerRows: [...document.querySelectorAll<HTMLElement>(
+        ".profile-composer-section__trigger"
+      )].map((row) => Math.round(row.getBoundingClientRect().height)),
+      composerTitleCount: document.querySelectorAll(".profile-composer__header").length
+    }));
+    expect(compactProfileGeometry.profileRows.every((height) => height <= 92)).toBe(true);
+    expect(compactProfileGeometry.composerRows.every((height) => height <= 54)).toBe(true);
+    expect(compactProfileGeometry.composerTitleCount).toBe(0);
+
     const shellMetrics = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
       viewportWidth: document.documentElement.clientWidth,
@@ -1838,12 +1851,14 @@ describe("Electron UI profile switching e2e", () => {
           descriptionDisplay: description ? getComputedStyle(description).display : "missing",
           gap: iconBox && contentBox ? contentBox.left - iconBox.right : Number.NaN,
           iconHeight: iconBox?.height ?? 0,
+          rowHeight: rowBox.height,
           statsOverflow: stats ? stats.scrollWidth - stats.clientWidth : Number.POSITIVE_INFINITY
         };
       });
       expect(profileGeometry.childrenFit).toBe(true);
       expect(profileGeometry.descriptionDisplay).not.toBe("none");
       expect(profileGeometry.iconHeight).toBeLessThanOrEqual(30);
+      expect(profileGeometry.rowHeight).toBeLessThanOrEqual(92);
       expect(profileGeometry.gap).toBeGreaterThanOrEqual(6);
       expect(profileGeometry.gap).toBeLessThanOrEqual(10);
       expect(profileGeometry.statsOverflow).toBeLessThanOrEqual(1);
@@ -1890,6 +1905,11 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(profileContainment.documentWidth).toBe(profileContainment.viewportWidth);
     expect(profileContainment.overflowingComposerChildren).toEqual([]);
+    expect(
+      await page.locator(".profile-composer-section__trigger").evaluateAll((triggers) =>
+        triggers.every((trigger) => trigger.getBoundingClientRect().height <= 54)
+      )
+    ).toBe(true);
     await moreButton.click();
     const profileActionsMenu = page.getByRole("menu", { name: "Profile actions" });
     await expectInViewport(page, profileActionsMenu);
@@ -1912,7 +1932,8 @@ describe("Electron UI profile switching e2e", () => {
     for (const targetName of ["OpenCode", "Claude Code", "Codex"]) {
       await expectInViewport(page, page.getByRole("article", { name: `Target ${targetName}` }));
     }
-    await expectInViewport(page, page.getByRole("region", { name: "Recovery" }));
+    await expectInViewport(page, page.getByRole("button", { name: /Recovery/ }));
+    expect(await page.getByRole("dialog", { name: "Recovery" }).count()).toBe(0);
 
     const dimensions = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
@@ -2213,7 +2234,14 @@ describe("Electron UI profile switching e2e", () => {
     });
 
     expect(await page.getByRole("button", { name: "Activity", exact: true }).count()).toBe(0);
-    await page.getByRole("region", { name: "Recovery" }).waitFor({ state: "visible" });
+    const recoveryTrigger = page.getByRole("button", { name: /Recovery/ });
+    await recoveryTrigger.click();
+    const recoveryDialog = page.getByRole("dialog", { name: "Recovery" });
+    await recoveryDialog.waitFor({ state: "visible" });
+    await expectInViewport(page, recoveryDialog);
+    await page.keyboard.press("Escape");
+    await recoveryDialog.waitFor({ state: "hidden" });
+    expect(await recoveryTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
 
     const codexCard = page.getByRole("article", { name: "Target Codex" });
     await codexCard.getByRole("button", { name: "Open Codex in Profiles" }).click();

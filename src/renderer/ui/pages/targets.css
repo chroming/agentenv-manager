@@ -6,6 +6,31 @@
   overflow: auto;
 }
 
+.workspace-page-header > .target-page-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.target-page-actions .secondary-action {
+  height: 40px;
+  min-height: 40px;
+}
+
+.target-recovery-trigger > span {
+  align-items: center;
+  background: #eef2f7;
+  border-radius: 999px;
+  color: #526176;
+  display: inline-flex;
+  font-size: 10px;
+  font-weight: 760;
+  height: 18px;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 5px;
+}
+
 .target-summary {
   align-items: center;
   background: #fff;
@@ -189,51 +214,57 @@
   white-space: nowrap;
 }
 
-.target-recovery {
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  display: grid;
-  gap: 0;
+.target-recovery-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: min(620px, calc(100vh - 64px));
+  max-width: 720px;
   overflow: hidden;
+  width: min(720px, calc(100vw - 64px));
 }
 
-.target-recovery__header {
+.target-recovery-dialog__header {
   align-items: center;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
-  padding: 11px 14px;
 }
 
-.target-recovery__header > div {
+.target-recovery-dialog__header > div {
   display: grid;
   gap: 2px;
 }
 
-.target-recovery__header small,
-.target-recovery__header > span {
+.target-recovery-dialog__header > span {
   color: var(--muted);
   font-size: 11px;
+  white-space: nowrap;
 }
 
-.target-recovery > .history-view {
+.target-recovery-dialog__body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 4px 16px;
+}
+
+.target-recovery-dialog__body > .history-view {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  padding: 10px 14px;
+  padding: 0;
 }
 
-.target-recovery > .history-view > .section-title {
+.target-recovery-dialog__body > .history-view > .section-title {
   display: none;
 }
 
-.target-recovery .history-view {
+.target-recovery-dialog .history-view {
   display: grid;
   gap: 0;
 }
 
-.target-recovery .history-row {
+.target-recovery-dialog .history-row {
   align-items: center;
   border: 0;
   border-radius: 0;
@@ -242,22 +273,22 @@
   padding: 10px 0;
 }
 
-.target-recovery .history-row + .history-row {
+.target-recovery-dialog .history-row + .history-row {
   border-top: 1px solid var(--border);
 }
 
-.target-recovery .history-actions {
+.target-recovery-dialog .history-actions {
   display: flex;
   grid-column: 2;
 }
 
-.target-recovery .history-action,
-.target-recovery .restore-action {
+.target-recovery-dialog .history-action,
+.target-recovery-dialog .restore-action {
   min-height: 30px;
   width: auto;
 }
 
-.target-recovery .history-status {
+.target-recovery-dialog .history-status {
   grid-column: 1 / -1;
 }
 

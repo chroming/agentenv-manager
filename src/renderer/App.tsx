@@ -3239,12 +3239,6 @@ const AppContent = ({
                       </div>
                     </header>
             <section className="profile-composer" aria-label={t("Profile composer")}>
-              <header className="profile-composer__header">
-                <div>
-                  <h3>{t("Profile Composer")}</h3>
-                  <p>{t("Combine instructions, reusable skills, and MCP servers.")}</p>
-                </div>
-              </header>
               <ProfileComposerSection
                 id="instructions"
                 icon={<BookOpenText size={18} strokeWidth={2.2} />}

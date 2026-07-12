@@ -232,11 +232,11 @@
 }
 
 .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section {
-  flex: 1 1 0;
+  flex: 0 0 auto;
 }
 
 .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
-  height: 100%;
+  height: 52px;
 }
 
 /* Profiles owns one control and density contract across its supported window sizes. */
@@ -356,8 +356,8 @@
   border-radius: 0;
   gap: 9px;
   grid-template-columns: var(--profile-icon-slot) minmax(0, 1fr);
-  min-height: 112px;
-  padding: 11px 9px;
+  min-height: 88px;
+  padding: 8px 9px;
 }
 
 .profile-row:first-child {
@@ -388,7 +388,7 @@
 }
 
 .profile-row__content {
-  gap: 2px;
+  gap: 1px;
 }
 
 .profile-row__title {
@@ -396,7 +396,7 @@
   display: flex;
   font-size: 13px;
   gap: 6px;
-  line-height: 18px;
+  line-height: 17px;
   min-width: 0;
 }
 
@@ -422,15 +422,15 @@
 .profile-row__content > small {
   display: block;
   font-size: 11px;
-  line-height: 16px;
-  min-height: 16px;
+  line-height: 15px;
+  min-height: 15px;
 }
 
 .profile-row__stats {
   flex-wrap: nowrap;
   font-size: 11px;
   gap: 0;
-  line-height: 16px;
+  line-height: 15px;
   overflow: hidden;
   white-space: nowrap;
 }
@@ -447,12 +447,12 @@
 
 .profile-row__deployments {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   font-size: 10px;
   gap: 4px;
-  line-height: 16px;
-  max-height: 40px;
-  min-height: 18px;
+  line-height: 17px;
+  max-height: 18px;
+  min-height: 17px;
   overflow: hidden;
 }
 
@@ -516,10 +516,6 @@
 
 .profile-composer:has(.profile-composer-section.is-expanded) {
   min-height: 0;
-}
-
-.profile-composer:has(.profile-composer-section.is-expanded) .profile-composer__header {
-  display: none;
 }
 
 .profile-composer:has(.profile-composer-section.is-expanded)
@@ -689,35 +685,21 @@
   color: #a86b14;
 }
 
-.profile-composer__header {
-  flex-basis: 52px;
-  min-height: 52px;
-  padding: 9px 14px;
-}
-
-.profile-composer__header h3 {
-  line-height: 20px;
-}
-
-.profile-composer__header p {
-  line-height: 17px;
-}
-
 .profile-composer-section__trigger,
 .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
   gap: 10px;
-  grid-template-columns: 34px minmax(140px, 1fr) auto minmax(0, 1fr) 18px;
-  min-height: 64px;
-  padding: 8px 12px;
+  grid-template-columns: 30px minmax(140px, 1fr) auto minmax(0, 1fr) 18px;
+  min-height: 52px;
+  padding: 6px 12px;
 }
 
 .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
-  height: 100%;
+  height: 52px;
 }
 
 .profile-composer-section__icon {
-  height: 34px;
-  width: 34px;
+  height: 30px;
+  width: 30px;
 }
 
 .profile-composer-section__title {
@@ -731,8 +713,8 @@
 }
 
 .profile-composer-section__count {
-  line-height: 24px;
-  min-width: 24px;
+  line-height: 22px;
+  min-width: 22px;
 }
 
 /* Apply preview keeps readable rows and one stable footer while content scrolls. */
@@ -875,8 +857,8 @@
 
   .profile-row {
     gap: 8px;
-    min-height: 112px;
-    padding: 10px 8px;
+    min-height: 88px;
+    padding: 8px;
   }
 
   .profile-row__content > small {
@@ -964,11 +946,6 @@
     display: none;
   }
 
-  .profile-composer__header {
-    flex-basis: 46px;
-    min-height: 46px;
-    padding-block: 7px;
-  }
 }
 
 .profile-row__content {

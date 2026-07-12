@@ -556,7 +556,7 @@ describe("App", () => {
     expect(brandIcon).toBeInTheDocument();
     expect(brandIcon?.getAttribute("src")).toContain("app-icon");
     const composer = await screen.findByRole("region", { name: "Profile composer" });
-    expect(within(composer).getByRole("heading", { name: "Profile Composer" })).toBeInTheDocument();
+    expect(within(composer).queryByRole("heading", { name: "Profile Composer" })).not.toBeInTheDocument();
     expect(screen.getByText("Compose reusable environments and apply them safely to local agent targets.")).toBeInTheDocument();
     expect(screen.queryByRole("status", { name: "Safe apply" })).not.toBeInTheDocument();
     expect(document.querySelector(".profile-readiness-strip")).toBeNull();
@@ -2196,12 +2196,17 @@ describe("App", () => {
 
     await screen.findByRole("region", { name: "Skill library" });
     fireEvent.click(screen.getByRole("button", { name: "Targets" }));
-    const history = await screen.findByRole("region", { name: "History" });
+    expect(screen.queryByRole("region", { name: "History" })).not.toBeInTheDocument();
+    const recoveryTrigger = screen.getByRole("button", { name: /Recovery/ });
+    fireEvent.click(recoveryTrigger);
+    const recoveryDialog = await screen.findByRole("dialog", { name: "Recovery" });
+    const history = within(recoveryDialog).getByRole("region", { name: "History" });
     fireEvent.click(
       within(history).getByRole("button", { name: "Preview restore Daily Coding" })
     );
 
     await waitFor(() => expect(api.previewRollback).toHaveBeenCalledWith(backup.id));
+    expect(screen.queryByRole("dialog", { name: "Recovery" })).not.toBeInTheDocument();
     const rollbackDialog = screen.getByRole("dialog", { name: "Preview" });
     expect(within(rollbackDialog).getByText("Rollback preview")).toBeInTheDocument();
     expect(within(history).queryByRole("button", { name: "Restore backup" })).not.toBeInTheDocument();

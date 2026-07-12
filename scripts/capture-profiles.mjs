@@ -559,6 +559,14 @@ try {
     "targets",
     () => page.getByRole("region", { name: "Targets", exact: true })
   );
+  await page.getByRole("button", { name: /Recovery/ }).click();
+  const recoveryDialog = page.getByRole("dialog", { name: "Recovery" });
+  await recoveryDialog.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "target-recovery-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "target-recovery-1180x728.png"));
+  await recoveryDialog.getByRole("button", { name: "Close" }).click();
+  await recoveryDialog.waitFor({ state: "hidden" });
   await page
     .getByRole("article", { name: "Target OpenCode" })
     .getByRole("button", { name: "Create profile from OpenCode" })
