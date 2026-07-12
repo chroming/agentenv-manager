@@ -6,6 +6,7 @@ import {
   readFile,
   readlink,
   rm,
+  symlink,
   writeFile
 } from "node:fs/promises";
 import { constants } from "node:fs";
@@ -335,6 +336,89 @@ describe("OpenCode profile switching e2e", () => {
     await expect(readFile(join(librarySkillDir, "SKILL.md"), "utf8")).resolves.toContain(
       "name: shared-reviewer"
     );
+  });
+
+  it("migrates a legacy file-linked Skill to a directory link and can roll it back", async () => {
+    const { paths, profileStore, activationService } = await makeEnv();
+    const targetDir = join(paths.homeDir, ".config", "opencode");
+    const legacySkillDir = join(targetDir, "skills", "shared-reviewer");
+    const librarySkillDir = join(paths.skillsLibraryDir, "shared-reviewer");
+    const librarySkillFile = join(librarySkillDir, "SKILL.md");
+    const libraryReferenceFile = join(librarySkillDir, "reference.md");
+    await mkdir(librarySkillDir, { recursive: true });
+    await writeFile(
+      librarySkillFile,
+      "---\nname: shared-reviewer\ndescription: Shared reviewer skill.\n---\n\n# Shared reviewer\n",
+      "utf8"
+    );
+    await writeFile(libraryReferenceFile, "# Review reference\n", "utf8");
+
+    await mkdir(legacySkillDir, { recursive: true });
+    await symlink(librarySkillFile, join(legacySkillDir, "SKILL.md"));
+    await symlink(libraryReferenceFile, join(legacySkillDir, "reference.md"));
+    await writeFile(
+      join(legacySkillDir, ".agentenv-owner.json"),
+      `${JSON.stringify(
+        {
+          owner: "agentenv-manager",
+          profileId: "legacy-profile",
+          targetId: "opencode",
+          kind: "skill",
+          source: "skills-library/shared-reviewer"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const profile = await profileStore.saveProfile({
+      manifest: {
+        id: "opencode-legacy-skill-migration",
+        targetId: "opencode",
+        name: "OpenCode Legacy Skill Migration",
+        description: "Migrates a legacy file-linked Skill",
+        version: 1,
+        managed: { instructions: true, config: true, assets: true }
+      },
+      instructions: "# Legacy Skill Migration\n",
+      configText: "{}\n",
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [{ libraryId: "shared-reviewer", targetName: "shared-reviewer" }],
+        mcpRefs: [],
+        disabledSkillPaths: []
+      }
+    });
+
+    const applyResult = await expectApplyOk(activationService, profile.id);
+    if (!applyResult.ok) {
+      throw new Error("Expected legacy Skill migration to succeed");
+    }
+
+    expect((await lstat(legacySkillDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(legacySkillDir)).resolves.toBe(librarySkillDir);
+    await expect(readFile(join(legacySkillDir, "reference.md"), "utf8")).resolves.toBe(
+      "# Review reference\n"
+    );
+    await expect(
+      readFile(`${legacySkillDir}.agentenv-owner.json`, "utf8")
+    ).resolves.toContain('"source": "skills-library/shared-reviewer"');
+
+    const rollbackPreview = await activationService.previewRollback(applyResult.backupId);
+    expect(rollbackPreview.errors).toEqual([]);
+    expect(rollbackPreview.changes.map((change) => change.path)).toContain(legacySkillDir);
+    expect((await activationService.rollback(applyResult.backupId)).ok).toBe(true);
+
+    expect((await lstat(legacySkillDir)).isSymbolicLink()).toBe(false);
+    expect((await lstat(join(legacySkillDir, "SKILL.md"))).isSymbolicLink()).toBe(true);
+    expect((await lstat(join(legacySkillDir, "reference.md"))).isSymbolicLink()).toBe(true);
+    await expect(readlink(join(legacySkillDir, "SKILL.md"))).resolves.toBe(librarySkillFile);
+    await expect(
+      readFile(join(legacySkillDir, ".agentenv-owner.json"), "utf8")
+    ).resolves.toContain('"profileId": "legacy-profile"');
+    await expect(fileExists(`${legacySkillDir}.agentenv-owner.json`)).resolves.toBe(false);
   });
 
   it("blocks a profile switch when the target has an unmanaged MCP conflict", async () => {
