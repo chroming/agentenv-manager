@@ -306,11 +306,14 @@ export interface SaveMcpServerInput {
 }
 
 export interface AgentEnvSettings {
+  locale: AppLocale;
   skillSyncMethod: SkillSyncMethod;
   skillStorageLocation: SkillStorageLocation;
   skillAutoCheckEnabled: boolean;
   skillAutoCheckIntervalMinutes: number;
 }
+
+export type AppLocale = "system" | "en" | "zh_CN" | "zh_TW";
 
 export interface GitHubAuthUser {
   login: string;

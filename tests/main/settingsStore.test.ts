@@ -21,6 +21,7 @@ describe("settings store", () => {
     const store = createSettingsStore(paths);
 
     expect(await store.readSettings()).toEqual({
+      locale: "system",
       skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
@@ -28,6 +29,7 @@ describe("settings store", () => {
     });
 
     await store.updateSettings({
+      locale: "zh_TW",
       skillSyncMethod: "copy",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
@@ -35,6 +37,7 @@ describe("settings store", () => {
     });
 
     expect(await store.readSettings()).toEqual({
+      locale: "zh_TW",
       skillSyncMethod: "copy",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,

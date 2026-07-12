@@ -59,6 +59,11 @@
       "out/**/*",
       "package.json"
     ],
+    "electronLanguages": [
+      "en",
+      "zh_CN",
+      "zh_TW"
+    ],
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",

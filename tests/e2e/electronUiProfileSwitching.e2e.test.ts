@@ -3522,6 +3522,45 @@ describe("Electron UI profile switching e2e", () => {
       });
   }, 30_000);
 
+  it("switches, persists, and contains all supported interface languages", async () => {
+    const { appDataRoot, page } = await launchApp();
+
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByTestId("locale-select").selectOption("zh_CN");
+    await page.getByRole("heading", { name: "设置", exact: true }).waitFor();
+    await expect
+      .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
+      .toMatchObject({ locale: "zh_CN" });
+
+    await page.reload();
+    await page.getByRole("button", { name: "设置", exact: true }).waitFor();
+    expect(await page.locator("html").getAttribute("lang")).toBe("zh-CN");
+
+    await page.getByRole("button", { name: "设置", exact: true }).click();
+    await page.getByTestId("locale-select").selectOption("zh_TW");
+    await page.getByRole("heading", { name: "設定", exact: true }).waitFor();
+    expect(await page.locator("html").getAttribute("lang")).toBe("zh-TW");
+
+    await resizeAppWindow(page, 920, 620);
+    for (const workspace of ["技能", "設定檔", "目標", "設定"]) {
+      await page.getByRole("button", { name: workspace, exact: true }).click();
+      const containment = await page.evaluate(() => ({
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+        documentHeight: document.documentElement.scrollHeight,
+        viewportHeight: document.documentElement.clientHeight
+      }));
+      expect(containment.documentWidth).toBe(containment.viewportWidth);
+      expect(containment.documentHeight).toBe(containment.viewportHeight);
+    }
+
+    await page.getByTestId("locale-select").selectOption("en");
+    await page.getByRole("heading", { name: "Settings", exact: true }).waitFor();
+    await expect
+      .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
+      .toMatchObject({ locale: "en" });
+  }, 30_000);
+
   it("routes a rate-limited GitHub update check to account connection", async () => {
     const { app: electronApp, page } = await launchApp();
     await electronApp.evaluate(({ ipcMain }) => {

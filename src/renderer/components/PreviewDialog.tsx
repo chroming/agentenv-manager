@@ -5,6 +5,7 @@ import type {
   StopManagingPreview
 } from "../../shared/types";
 import { DiffViewer } from "./DiffViewer";
+import { useI18n, type TranslationValues } from "../i18n";
 
 interface PreviewDialogProps {
   preview?: ActivationPreview | RollbackPreview | StopManagingPreview;
@@ -34,8 +35,6 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])"
 ].join(",");
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
-
 const targetLabel = (targetId?: string) => {
   if (targetId === "opencode") return "OpenCode";
   if (targetId === "codex") return "Codex";
@@ -43,14 +42,18 @@ const targetLabel = (targetId?: string) => {
   return "Target";
 };
 
-const prettifyIssue = (message: string, targetName: string) => {
+const prettifyIssue = (
+  message: string,
+  targetName: string,
+  t: (message: string, values?: TranslationValues) => string
+) => {
   const driftMatch = message.match(
     /^External changes detected in AgentEnv-managed ([^ ]+) [^:]+: (.+)$/
   );
   if (driftMatch) {
     const kind = driftMatch[1] === "instructions" ? "instructions" : driftMatch[1];
     return {
-      title: `${targetName} ${kind} changed outside AgentEnv`,
+      title: t("{{target}} {{kind}} changed outside AgentEnv", { target: targetName, kind }),
       detail: driftMatch[2]
     };
   }
@@ -58,7 +61,7 @@ const prettifyIssue = (message: string, targetName: string) => {
   const keptMatch = message.match(/^(Unmanaged|Ignored) local skill kept: (.+)$/);
   if (keptMatch) {
     return {
-      title: `${keptMatch[1]} local skill kept`,
+      title: t("{{status}} local skill kept", { status: t(keptMatch[1]) }),
       detail: keptMatch[2]
     };
   }
@@ -100,6 +103,9 @@ export const PreviewDialog = ({
   onCancel,
   onConfirm
 }: PreviewDialogProps) => {
+  const { t, formatDate } = useI18n();
+  const plural = (count: number, noun: string) =>
+    t(`{{count}} ${noun}${count === 1 ? "" : "s"}`, { count });
   const hasActions = Boolean(onCancel || onConfirm);
   const isModalOpen = Boolean(preview && hasActions);
   const dialogRef = useRef<HTMLElement>(null);
@@ -189,7 +195,7 @@ export const PreviewDialog = ({
         ? targetLabel(preview.targetId)
         : "Target";
   const isActivationPreview = "profileId" in preview;
-  const blockedItems = preview.errors.map((error) => prettifyIssue(error, targetName));
+  const blockedItems = preview.errors.map((error) => prettifyIssue(error, targetName, t));
   const managedDriftErrors = preview.errors.filter((error) =>
     error.startsWith("External changes detected in AgentEnv-managed")
   );
@@ -198,7 +204,7 @@ export const PreviewDialog = ({
   );
   const keepItems = preview.warnings
     .filter((warning) => !omissionReasons.has(warning))
-    .map((warning) => prettifyIssue(warning, targetName));
+    .map((warning) => prettifyIssue(warning, targetName, t));
   const resourceChanges = "resourceChanges" in preview ? preview.resourceChanges : [];
   const installChanges = resourceChanges.filter((change) => change.action === "install");
   const replaceChanges = resourceChanges.filter((change) => change.action === "replace");
@@ -217,34 +223,34 @@ export const PreviewDialog = ({
     : [];
   const outcomeText = isActivationPreview
     ? payloadParts.length > 0
-      ? `${targetName} will receive ${payloadParts.join(", ")}.`
-      : `${targetName} has no effective Profile payload.`
+      ? t("{{target}} will receive {{payload}}.", { target: targetName, payload: payloadParts.join(", ") })
+      : t("{{target}} has no effective Profile payload.", { target: targetName })
     : "mode" in preview
       ? preview.mode === "keep-current"
-        ? `${targetName} files will stay in place and AgentEnv ownership will be removed.`
-        : `${targetName} will be restored to its pre-takeover environment.`
-      : `${fileCountLabel} reviewed before restore.`;
+        ? t("{{target}} files will stay in place and AgentEnv ownership will be removed.", { target: targetName })
+        : t("{{target}} will be restored to its pre-takeover environment.", { target: targetName })
+      : t("{{files}} reviewed before restore.", { files: fileCountLabel });
 
   const content = (
     <section
       ref={dialogRef}
       className={`preview-dialog${hasActions ? " preview-dialog--modal" : ""}`}
       role={hasActions ? "dialog" : undefined}
-      aria-label="Preview"
+      aria-label={t("Preview")}
       aria-modal={hasActions ? true : undefined}
       onClick={(event) => event.stopPropagation()}
     >
       <header className="preview-header">
         <div>
-          <div className="section-title">{title}</div>
+          <div className="section-title">{t(title)}</div>
           <p className="preview-outcome">{outcomeText}</p>
         </div>
-        <time dateTime={preview.createdAt}>{new Date(preview.createdAt).toLocaleString()}</time>
+        <time dateTime={preview.createdAt}>{formatDate(preview.createdAt)}</time>
       </header>
-      <section className="preview-summary-grid" aria-label="Apply summary">
+      <section className="preview-summary-grid" aria-label={t("Apply summary")}>
         {blockedItems.length > 0 ? (
           <section className="preview-summary-card is-blocked">
-            <strong>Blocking issues</strong>
+            <strong>{t("Blocking issues")}</strong>
             <span>{plural(blockedItems.length, "issue")}</span>
             {blockedItems.map((item) => (
               <p className="error" key={`${item.title}${item.detail ?? ""}`}>
@@ -256,7 +262,7 @@ export const PreviewDialog = ({
         ) : null}
         {keepItems.length > 0 ? (
           <section className="preview-summary-card">
-            <strong>Will preserve</strong>
+            <strong>{t("Will preserve")}</strong>
             <span>{plural(keepItems.length, "unmanaged item")}</span>
             {keepItems.map((item) => (
               <p className="warning" key={`${item.title}${item.detail ?? ""}`}>
@@ -268,25 +274,26 @@ export const PreviewDialog = ({
         ) : null}
         {preview.changes.length > 0 ? (
           <section className="preview-summary-card">
-            <strong>Configuration changes</strong>
-            <span>{`${fileCountLabel} changed`}</span>
+            <strong>{t("Configuration changes")}</strong>
+            <span>{t("{{files}} changed", { files: fileCountLabel })}</span>
           </section>
         ) : null}
         {resourceChanges.length > 0 ? (
           <section className="preview-summary-card">
-            <strong>Resource changes</strong>
-            <span>{`${installChanges.length} install · ${replaceChanges.length} replace · ${removeChanges.length} remove`}</span>
+            <strong>{t("Resource changes")}</strong>
+            <span>{t("{{install}} install · {{replace}} replace · {{remove}} remove", {
+              install: installChanges.length,
+              replace: replaceChanges.length,
+              remove: removeChanges.length
+            })}</span>
           </section>
         ) : null}
       </section>
       {managedDriftErrors.length > 0 && onManagedDriftAcknowledgedChange ? (
-        <section className="preview-drift-recovery" aria-label="External change recovery">
+        <section className="preview-drift-recovery" aria-label={t("External change recovery")}>
           <div>
-            <strong>External changes are protected</strong>
-            <p>
-              Cancel keeps the target unchanged. Continuing creates a backup, then replaces the
-              managed resources shown above.
-            </p>
+            <strong>{t("External changes are protected")}</strong>
+            <p>{t("Cancel keeps the target unchanged. Continuing creates a backup, then replaces the managed resources shown above.")}</p>
           </div>
           <label>
             <input
@@ -294,27 +301,27 @@ export const PreviewDialog = ({
               checked={managedDriftAcknowledged}
               onChange={(event) => onManagedDriftAcknowledgedChange(event.currentTarget.checked)}
             />
-            I understand; back up and replace these changes
+            {t("I understand; back up and replace these changes")}
           </label>
           {onOpenRecovery ? (
             <div className="preview-drift-actions">
               {onAdoptInstructions ? (
                 <button className="secondary-action" type="button" onClick={onAdoptInstructions}>
-                  Adopt live instructions
+                  {t("Adopt live instructions")}
                 </button>
               ) : null}
               <button className="secondary-action" type="button" onClick={onOpenRecovery}>
-                Open recovery history
+                {t("Open recovery history")}
               </button>
             </div>
           ) : null}
         </section>
       ) : null}
       {preview && "omissions" in preview && (preview.omissions?.length ?? 0) > 0 ? (
-        <section className="preview-drift-recovery preview-omission-review" aria-label="Cross-target omissions">
+        <section className="preview-drift-recovery preview-omission-review" aria-label={t("Cross-target omissions")}>
           <div>
-            <strong>Not included for {targetName}</strong>
-            <p>These native Profile resources are not compatible with the selected Target.</p>
+            <strong>{t("Not included for {{target}}", { target: targetName })}</strong>
+            <p>{t("These native Profile resources are not compatible with the selected Target.")}</p>
           </div>
           <ul>
             {preview.omissions?.map((omission) => (
@@ -331,22 +338,22 @@ export const PreviewDialog = ({
                 checked={omissionsAcknowledged}
                 onChange={(event) => onOmissionsAcknowledgedChange(event.currentTarget.checked)}
               />
-              I understand these resources will not be applied to {targetName}
+              {t("I understand these resources will not be applied to {{target}}", { target: targetName })}
             </label>
           ) : null}
         </section>
       ) : null}
       {resourceChanges.length > 0 ? (
-        <section className="preview-resource-plan" aria-label="Resource changes">
+        <section className="preview-resource-plan" aria-label={t("Resource changes")}>
           <header>
-            <strong>Resource changes</strong>
+            <strong>{t("Resource changes")}</strong>
             <span>{resourceCountLabel}</span>
           </header>
           <div>
             {resourceChanges.map((change) => (
               <article key={`${change.action}:${change.path}`}>
                 <span className={`change-kind change-kind--${change.action}`}>
-                  {change.action}
+                  {t(change.action)}
                 </span>
                 <span className="preview-resource-plan__identity">
                   <strong>{change.name}</strong>
@@ -364,12 +371,12 @@ export const PreviewDialog = ({
             <summary>
               <span>{change.path}</span>
               <strong className={`change-kind change-kind--${changeKind(change).toLowerCase()}`}>
-                {changeKind(change)}
+                {t(changeKind(change))}
               </strong>
             </summary>
             <div className="diff-file-meta">
-              <span>{plural(lineCount(change.before), "line")} before</span>
-              <span>{plural(lineCount(change.after), "line")} after</span>
+              <span>{t("{{lines}} before", { lines: plural(lineCount(change.before), "line") })}</span>
+              <span>{t("{{lines}} after", { lines: plural(lineCount(change.after), "line") })}</span>
             </div>
             <DiffViewer path={change.path} diff={change.diff} />
           </details>
@@ -389,7 +396,7 @@ export const PreviewDialog = ({
             disabled={cancelDisabled}
             onClick={onCancel}
           >
-            {cancelLabel}
+            {t(cancelLabel)}
           </button>
           <button
             className="primary-action"
@@ -397,7 +404,7 @@ export const PreviewDialog = ({
             disabled={confirmDisabled}
             onClick={onConfirm}
           >
-            {confirmLabel}
+            {t(confirmLabel)}
           </button>
         </footer>
       ) : null}

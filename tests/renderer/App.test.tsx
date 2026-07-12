@@ -391,12 +391,14 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       updatedAt: "2026-07-02T00:00:00.000Z"
     }),
     readSettings: vi.fn().mockResolvedValue({
+      locale: "system",
       skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
       skillAutoCheckIntervalMinutes: 60
     }),
     updateSettings: vi.fn().mockImplementation(async (input) => ({
+      locale: input.locale ?? "system",
       skillSyncMethod: input.skillSyncMethod ?? "symlink",
       skillStorageLocation: input.skillStorageLocation ?? "appData",
       skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
@@ -768,6 +770,7 @@ describe("App", () => {
     });
     const api = installApi({
       readSettings: vi.fn().mockResolvedValue({
+        locale: "system",
         skillSyncMethod: "symlink",
         skillStorageLocation: "appData",
         skillAutoCheckEnabled: true,
@@ -844,6 +847,28 @@ describe("App", () => {
     expect(
       within(syncMethod).getByRole("option", { name: "Live link (recommended)" })
     ).toBeInTheDocument();
+  });
+
+  it("switches and persists the interface language from Settings", async () => {
+    const api = installApi();
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+
+    const languageSelect = screen.getByTestId("locale-select");
+    fireEvent.change(languageSelect, { target: { value: "zh_CN" } });
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ locale: "zh_CN" }));
+    expect(await screen.findByRole("button", { name: "配置方案" })).toBeInTheDocument();
+    expect(document.documentElement.lang).toBe("zh-CN");
+
+    fireEvent.change(screen.getByTestId("locale-select"), { target: { value: "zh_TW" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "設定檔" })).toBeInTheDocument());
+    expect(document.documentElement.lang).toBe("zh-TW");
+
+    fireEvent.change(screen.getByTestId("locale-select"), { target: { value: "en" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Profiles" })).toBeInTheDocument());
+    expect(document.documentElement.lang).toBe("en-US");
   });
 
   it("opens the MCP library and saves reusable MCP servers", async () => {

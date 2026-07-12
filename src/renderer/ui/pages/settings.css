@@ -356,3 +356,6 @@
 .github-login-result--error {
   color: var(--danger);
 }
+.resource-settings-grid--single {
+  grid-template-columns: minmax(240px, 420px);
+}

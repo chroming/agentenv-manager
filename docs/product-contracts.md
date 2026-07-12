@@ -706,6 +706,19 @@ The first useful journey is:
 
 The product MAY use contextual empty states for this journey; it MUST NOT require a marketing-style onboarding page.
 
+## 23.3 Localization Contract
+
+AgentEnv Manager supports English (`en`), Simplified Chinese (`zh_CN`), and Traditional Chinese (`zh_TW`).
+
+- A new or migrated installation MUST default to the system language. Unsupported system languages fall back to English.
+- `zh-Hant`, `zh-TW`, `zh-HK`, and `zh-MO` system locales resolve to Traditional Chinese; other Chinese locales resolve to Simplified Chinese.
+- Settings MUST expose a persistent choice between System default and each supported language. Changing it updates the interface immediately without restarting the application.
+- Navigation, commands, lifecycle states, validation, feedback, dialogs, tooltips, empty states, and accessibility labels MUST use the selected interface language.
+- User-authored names, descriptions, instructions, paths, source URLs, command output, and third-party error details MUST remain unchanged.
+- Dates and numbers MUST use the resolved locale. Product identity, Target names, protocol names, file names, and code tokens MAY remain untranslated.
+- Missing translations MUST fall back to the English source message and MUST NOT render an empty label or localization key.
+- Packaged builds MUST retain only the Electron locale bundles required by the supported interface languages.
+
 ## 24. Required Acceptance Matrix
 
 Every release that changes Profile, Library, Target, or Apply behavior MUST verify these scenarios:
@@ -774,6 +787,8 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - First and last row menus are topmost and in viewport.
 - Escape, outside click, keyboard focus, and focus restoration.
 - Working, success, warning, error, no-op, drift, destructive, and recovery states are inspected visually.
+- System locale detection, explicit `en`/`zh_CN`/`zh_TW` switching, persisted reload, and unsupported-locale fallback.
+- Default and minimum viewport containment in all supported interface languages, including long Traditional Chinese labels.
 
 E2E assertions MUST verify persisted files and state, not only successful clicks.
 
@@ -798,7 +813,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-15 against the current `main` tree at the time of this snapshot.
 
-- `343` automated tests passed across `47` test files; the `67`-test Electron E2E suite covers native Target, cross-Target, Create from Target, real Electron UI, persistence, stale Preview, rollback, and recovery scenarios.
+- `350` automated tests passed across `48` test files; the `68`-test Electron UI suite and `75` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `37` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.

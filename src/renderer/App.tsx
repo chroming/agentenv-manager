@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -42,6 +42,7 @@ import type {
   StopManagingPreview,
   SaveProfileInput,
   AgentEnvSettings,
+  AppLocale,
   GitHubAuthStatus,
   GitHubDeviceLogin,
   GitHubDeviceLoginResult,
@@ -66,6 +67,7 @@ import type {
   TargetCapturePreview,
   TargetManagementState
 } from "../shared/types";
+import { I18nProvider, useI18n, type TranslationValues } from "./i18n";
 import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
@@ -130,7 +132,12 @@ interface PendingProfileAction {
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
-const summarizeSkillUpdateChecks = (skillUpdateItems: SkillUpdateInfo[]): SkillUpdateCheckStatus => {
+type Translate = (message: string, values?: TranslationValues) => string;
+
+const summarizeSkillUpdateChecks = (
+  skillUpdateItems: SkillUpdateInfo[],
+  t: Translate
+): SkillUpdateCheckStatus => {
   const failedChecks = skillUpdateItems.filter((update) => update.error).length;
   const availableUpdates = skillUpdateItems.filter(
     (update) => update.updateAvailable && !update.error
@@ -139,14 +146,16 @@ const summarizeSkillUpdateChecks = (skillUpdateItems: SkillUpdateInfo[]): SkillU
   if (failedChecks > 0) {
     return {
       state: "error",
-      message: `${plural(failedChecks, "check")} failed`
+      message: t(failedChecks === 1 ? "{{count}} check failed" : "{{count}} checks failed", {
+        count: failedChecks
+      })
     };
   }
 
   if (skillUpdateItems.length === 0) {
     return {
       state: "info",
-      message: "No skills have update checks enabled"
+      message: t("No skills have update checks enabled")
     };
   }
 
@@ -154,14 +163,17 @@ const summarizeSkillUpdateChecks = (skillUpdateItems: SkillUpdateInfo[]): SkillU
     state: "success",
     message:
       availableUpdates > 0
-        ? `${plural(availableUpdates, "update")} available`
-        : "All tracked skills are up to date"
+        ? t(availableUpdates === 1 ? "{{count}} update available" : "{{count}} updates available", {
+            count: availableUpdates
+          })
+        : t("All tracked skills are up to date")
   };
 };
 
 const summarizeSkillUpdateResult = (
   skillId: string,
-  skillUpdateItems: SkillUpdateInfo[]
+  skillUpdateItems: SkillUpdateInfo[],
+  t: Translate
 ): SkillUpdateCheckStatus => {
   const remainingUpdates = skillUpdateItems.filter(
     (update) => update.updateAvailable && !update.error
@@ -171,8 +183,11 @@ const summarizeSkillUpdateResult = (
     state: "success",
     message:
       remainingUpdates > 0
-        ? `Updated ${skillId} · ${plural(remainingUpdates, "update")} remain`
-        : `Updated ${skillId} · All tracked skills are up to date`
+        ? t("Updated {{id}} · {{count}} updates remain", {
+            id: skillId,
+            count: remainingUpdates
+          })
+        : t("Updated {{id}} · All tracked skills are up to date", { id: skillId })
   };
 };
 
@@ -202,6 +217,7 @@ export const AppFeedback = ({
   feedback?: AppFeedbackMessage;
   onDismiss(): void;
 }) => {
+  const { t } = useI18n();
   const onDismissRef = useRef(onDismiss);
   const [copied, setCopied] = useState(false);
   onDismissRef.current = onDismiss;
@@ -248,11 +264,11 @@ export const AppFeedback = ({
     >
       <Icon size={15} strokeWidth={2.2} aria-hidden="true" />
       <div>
-        <strong>{feedback.title}</strong>
-        {feedback.message ? <span>{feedback.message}</span> : null}
+          <strong>{t(feedback.title)}</strong>
+          {feedback.message ? <span>{t(feedback.message)}</span> : null}
         {feedback.action ? (
           <button className="app-feedback__action" type="button" onClick={feedback.action.onClick}>
-            {feedback.action.label}
+            {t(feedback.action.label)}
           </button>
         ) : null}
       </div>
@@ -270,7 +286,7 @@ export const AppFeedback = ({
           )}
         </button>
         {feedback.kind === "error" ? (
-          <button type="button" aria-label="Dismiss message" onClick={onDismiss}>
+          <button type="button" aria-label={t("Dismiss message")} onClick={onDismiss}>
             <X size={14} strokeWidth={2.2} aria-hidden="true" />
           </button>
         ) : null}
@@ -453,7 +469,12 @@ const createValidationRows = (
   ];
 };
 
-export const App = () => {
+const AppContent = ({
+  onLocalePreferenceChange
+}: {
+  onLocalePreferenceChange(locale: AppLocale): void;
+}) => {
+  const { t, formatDate, formatNumber } = useI18n();
   const [targets, setTargets] = useState<TargetInfo[]>([]);
   const [targetStates, setTargetStates] = useState<TargetManagementState[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
@@ -473,6 +494,7 @@ export const App = () => {
     Record<string, LibraryResourceVersions>
   >({});
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
+    locale: "system",
     skillSyncMethod: "symlink",
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: true,
@@ -645,7 +667,13 @@ export const App = () => {
     }
   };
 
-  const refreshProfiles = async ({ checkSkillUpdates = true } = {}) => {
+  const refreshProfiles = async ({
+    checkSkillUpdates = true,
+    settingsOverride
+  }: {
+    checkSkillUpdates?: boolean;
+    settingsOverride?: AgentEnvSettings;
+  } = {}) => {
     const [
       targetItems,
       targetStateItems,
@@ -663,7 +691,7 @@ export const App = () => {
       window.agentEnv.listSkillLibrary(),
       window.agentEnv.listSkillCleanupBackups(),
       window.agentEnv.listMcpLibrary(),
-      window.agentEnv.readSettings()
+      settingsOverride ?? window.agentEnv.readSettings()
     ]);
     const [skillUpdatesResult, skillInventoryResult, githubStatusResult] =
       await Promise.allSettled([
@@ -731,6 +759,7 @@ export const App = () => {
     setSkillUpdates(skillUpdateItems);
     setSkillInventory(skillInventoryItems);
     setSkillSettings(settings);
+    onLocalePreferenceChange(settings.locale);
     setGithubAuthStatus(githubStatus);
     setSkillUsage(usage);
     setMcpUsage(nextMcpUsage);
@@ -1123,7 +1152,7 @@ export const App = () => {
         setSelectedProfileId(saved.id);
         setDraftProfile(saved);
         if (profileCreateSource === "target") {
-          setProfileCaptureStatus(`${saved.manifest.name} created and applied`);
+          setProfileCaptureStatus(t("{{name}} created and applied", { name: saved.manifest.name }));
         }
       } else if (draftProfile) {
         const updatedProfile: ProfileDetail = {
@@ -1473,35 +1502,36 @@ export const App = () => {
         ? RefreshCw
         : TriangleAlert;
   const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
+  const readinessTargetName = selectedTarget?.name ?? t("Target");
   const readinessActionText =
     readiness.status === "applied"
-      ? `Up to date on ${selectedTarget?.name ?? "Target"}`
+      ? t("Up to date on {{name}}", { name: readinessTargetName })
       : readiness.status === "apply-pending"
-        ? `Apply pending on ${selectedTarget?.name ?? "Target"}`
+        ? t("Apply pending on {{name}}", { name: readinessTargetName })
         : readiness.status === "unmanaged"
-          ? `Ready to take over ${selectedTarget?.name ?? "Target"}`
+          ? t("Ready to take over {{name}}", { name: readinessTargetName })
           : readiness.status === "ready"
-            ? `Ready for ${selectedTarget?.name ?? "Target"}`
+            ? t("Ready for {{name}}", { name: readinessTargetName })
             : readiness.status === "dirty"
-              ? "Save changes to continue"
+              ? t("Save changes to continue")
               : readiness.status === "target-unavailable"
-                ? `${selectedTarget?.name ?? "Target"} unavailable`
+                ? t("{{name}} unavailable", { name: readinessTargetName })
                 : readiness.status === "validation-error"
-                  ? "Review profile configuration"
+                  ? t("Review profile configuration")
                   : readiness.status === "preview-error"
-                    ? "Review blocking issues"
+                    ? t("Review blocking issues")
                     : readiness.status === "no-target"
-                      ? "Select a Target"
-                      : readiness.message;
+                      ? t("Select a Target")
+                      : t(readiness.message);
   const applyDisabled =
     !draftProfile || !selectedTarget || busy || isProfileDirty || readiness.status === "applied";
   const applyDescription = !draftProfile
-    ? "Select a profile before previewing changes"
+    ? t("Select a profile before previewing changes")
     : !selectedTarget
-      ? "Select a target before previewing changes"
+      ? t("Select a target before previewing changes")
       : busy
-        ? "An action is in progress"
-        : readiness.message;
+        ? t("An action is in progress")
+        : t(readiness.message);
   const previewHasOnlyManagedDrift = Boolean(
     preview &&
       preview.errors.length > 0 &&
@@ -1785,7 +1815,7 @@ export const App = () => {
       await window.agentEnv.updateLibrarySkill(id);
       setSelectedSkillUpdatePlan(undefined);
       const { skillUpdateItems } = await refreshProfiles();
-      setSkillUpdateCheckStatus(summarizeSkillUpdateResult(id, skillUpdateItems));
+      setSkillUpdateCheckStatus(summarizeSkillUpdateResult(id, skillUpdateItems, t));
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -1928,7 +1958,7 @@ export const App = () => {
     setSkillUpdateCheckStatus({ state: "checking", message: "Checking library updates..." });
     try {
       const { skillUpdateItems } = await refreshProfiles();
-      setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(skillUpdateItems));
+      setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(skillUpdateItems, t));
       const checkError = skillUpdateItems.find((item) => item.error)?.error;
       if (checkError) {
         setError(checkError);
@@ -1956,7 +1986,7 @@ export const App = () => {
         ...current.filter((update) => !selectedIds.has(update.id)),
         ...updates
       ]);
-      setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(updates));
+      setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(updates, t));
       const checkError = updates.find((item) => item.error)?.error;
       if (checkError) {
         setError(checkError);
@@ -2252,14 +2282,14 @@ export const App = () => {
         setSkillUpdateCheckStatus({
           state: "success",
           message: updatePlan.updateAvailable
-            ? `1 update available for ${id}`
-            : `${id} source is current`
+            ? t("1 update available for {{id}}", { id })
+            : t("{{id}} source is current", { id })
         });
       }
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);
-      setSkillUpdateCheckStatus({ state: "error", message: `${id} check failed` });
+      setSkillUpdateCheckStatus({ state: "error", message: t("{{id}} check failed", { id }) });
     } finally {
       setBusy(false);
     }
@@ -2272,7 +2302,8 @@ export const App = () => {
     try {
       const nextSettings = await window.agentEnv.updateSettings(input);
       setSkillSettings(nextSettings);
-      await refreshProfiles();
+      onLocalePreferenceChange(nextSettings.locale);
+      await refreshProfiles({ settingsOverride: nextSettings });
       setSettingsSaveStatus("Settings saved");
     } catch (unknownError) {
       setSettingsSaveStatus("");
@@ -2570,14 +2601,18 @@ export const App = () => {
           kind: "success",
           title:
             skillCleanupResult.operation === "remove"
-              ? `Removed ${skillCleanupResult.libraryId}`
-              : `Took over ${skillCleanupResult.libraryId}`,
+              ? t("Removed {{id}}", { id: skillCleanupResult.libraryId })
+              : t("Took over {{id}}", { id: skillCleanupResult.libraryId }),
           message:
             skillCleanupResult.operation === "remove"
               ? skillCleanupResult.managedLocations.length === 0
-                ? "Removed from the Library. No Target installs were affected."
-                : `Removed from the Library and ${plural(skillCleanupResult.managedLocations.length, "managed Target install")}.`
-              : `${plural(skillCleanupResult.managedLocations.length, "location")} now use the managed library copy.`,
+                ? t("Removed from the Library. No Target installs were affected.")
+                : t("Removed from the Library and {{count}} managed Target installs.", {
+                    count: skillCleanupResult.managedLocations.length
+                  })
+              : t("{{count}} locations now use the managed library copy.", {
+                  count: skillCleanupResult.managedLocations.length
+                }),
           action: {
             label: skillCleanupResult.operation === "remove" ? "Undo removal" : "Undo cleanup",
             onClick: () => void undoSkillCleanup()
@@ -2627,7 +2662,7 @@ export const App = () => {
         className="profile-apply-button"
         type="button"
         aria-describedby="profile-apply-description"
-        title={applyActionLabel}
+        title={t(applyActionLabel)}
         disabled={applyDisabled}
         onClick={previewSelectedProfile}
       >
@@ -2641,7 +2676,7 @@ export const App = () => {
           <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
         )}
         <strong>
-          Apply
+          {t("Apply")}
         </strong>
       </button>
       <span id="profile-apply-description" hidden>{applyDescription}</span>
@@ -2650,7 +2685,7 @@ export const App = () => {
   const targetWorkspaceControl = installedTargets.length === 1 && selectedTarget ? (
     <div
       className="profile-target-workspace-button is-static"
-      aria-label={`Current target ${selectedTarget.name}`}
+      aria-label={t("Current target {{name}}", { name: selectedTarget.name })}
     >
       {selectedTargetIcon?.assetUrl ? (
         <img
@@ -2661,7 +2696,7 @@ export const App = () => {
       ) : (
         <Monitor size={16} aria-hidden="true" />
       )}
-      <span>Target: {selectedTarget.name}</span>
+      <span>{t("Target: {{name}}", { name: selectedTarget.name })}</span>
     </div>
   ) : (
     <div className="profile-target-workspace-control">
@@ -2671,19 +2706,19 @@ export const App = () => {
         type="button"
         aria-expanded={isTargetMenuOpen}
         aria-haspopup="menu"
-        aria-label="Select apply target"
-        title="Select apply target"
+        aria-label={t("Select apply target")}
+        title={t("Select apply target")}
         onClick={() => {
           setIsProfileActionsOpen(false);
           setIsTargetMenuOpen((current) => !current);
         }}
       >
         {selectedTargetIcon?.assetUrl ? <img className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`} src={selectedTargetIcon.assetUrl} alt="" /> : <Monitor size={16} aria-hidden="true" />}
-        <span>Target: {selectedTarget?.name ?? "Select"}</span>
+        <span>{t("Target: {{name}}", { name: selectedTarget?.name ?? t("Select") })}</span>
         <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
       </button>
       {isTargetMenuOpen ? (
-        <div className="profile-target-menu" role="menu" aria-label="Apply targets">
+        <div className="profile-target-menu" role="menu" aria-label={t("Apply targets")}>
           {targets.map((target) => {
             const targetIcon = targetIconFor(target);
             return (
@@ -2737,10 +2772,10 @@ export const App = () => {
         className="editor-panel"
         aria-label={
           activeWorkspace === "library"
-            ? "Library workspace"
+            ? t("Library workspace")
             : activeWorkspace === "profiles"
-              ? "Profile editor"
-              : `${activeWorkspace} workspace`
+              ? t("Profile editor")
+              : t("{{name}} workspace", { name: activeWorkspace })
         }
       >
         <AppFeedback feedback={appFeedback} onDismiss={dismissAppFeedback} />
@@ -2748,11 +2783,11 @@ export const App = () => {
           <>
             <header className="page-header library-page-header">
               <div>
-                <h2 aria-label={`Library/${activeLibraryTab === "skills" ? "Skills" : "MCP Servers"}`}>
-                  <span>Library</span>
+                <h2 aria-label={`${t("Library")}/${t(activeLibraryTab === "skills" ? "Skills" : "MCP Servers")}`}>
+                  <span>{t("Library")}</span>
                   <span className="breadcrumb-separator">/</span>
-                  <span>{activeLibraryTab === "skills" ? "Skills" : "MCP Servers"}</span>
-                  <InfoTip label="Library is the shared resource layer. Profiles reference these skills and MCP servers instead of duplicating files in every profile." />
+                  <span>{t(activeLibraryTab === "skills" ? "Skills" : "MCP Servers")}</span>
+                  <InfoTip label={t("Library is the shared resource layer. Profiles reference these skills and MCP servers instead of duplicating files in every profile.")} />
                 </h2>
               </div>
               <div className="page-actions">
@@ -2761,11 +2796,11 @@ export const App = () => {
                     <button
                       className="primary-inline-action"
                       type="button"
-                      aria-label="Import skills"
+                      aria-label={t("Import skills")}
                       onClick={() => setSkillLibraryTool("import")}
                     >
                       <Plus size={16} strokeWidth={2.4} />
-                      Import
+                      {t("Import")}
                     </button>
                     <button
                       className="secondary-action"
@@ -2775,12 +2810,12 @@ export const App = () => {
                       }}
                     >
                       <ScanLine size={15} strokeWidth={2.2} />
-                      Scan local
+                      {t("Scan local")}
                     </button>
                     <button
                       className="secondary-action"
                       type="button"
-                      aria-label="Refresh skills"
+                      aria-label={t("Refresh skills")}
                       disabled={skillRefreshStatus === "refreshing"}
                       onClick={() => {
                         void refreshSkills();
@@ -2791,7 +2826,7 @@ export const App = () => {
                         size={15}
                         strokeWidth={2.2}
                       />
-                      Refresh
+                      {t("Refresh")}
                     </button>
                   </>
                 ) : (
@@ -2802,7 +2837,7 @@ export const App = () => {
                     onClick={() => setMcpCreateRequest((current) => current + 1)}
                   >
                     <Plus size={16} strokeWidth={2.4} />
-                    Add MCP server
+                    {t("Add MCP server")}
                   </button>
                 )}
               </div>
@@ -2810,7 +2845,7 @@ export const App = () => {
             {activeLibraryTab === "mcp" ? (
               <section
                 className="metric-strip metric-strip--compact metric-strip--mcp"
-                aria-label="Library summary"
+                aria-label={t("Library summary")}
               >
                 <div className="metric-tile">
                   <span className="metric-icon metric-icon--purple" aria-hidden="true">
@@ -2818,17 +2853,17 @@ export const App = () => {
                   </span>
                   <div>
                     <strong>{mcpServers.length}</strong>
-                    <small>MCP Servers</small>
-                    <span>Shared across profiles</span>
+                    <small>{t("MCP Servers")}</small>
+                    <span>{t("Shared across profiles")}</span>
                   </div>
                 </div>
                 <div className="metric-tile">
                   <span className="metric-icon metric-icon--amber" aria-hidden="true"><FolderKanban size={21} strokeWidth={2.2} /></span>
-                  <div><strong>{Object.keys(mcpUsage).length}</strong><small>In use</small><span>Across {profiles.length} profiles</span></div>
+                  <div><strong>{Object.keys(mcpUsage).length}</strong><small>{t("In use")}</small><span>{t("Across {{count}} profiles", { count: profiles.length })}</span></div>
                 </div>
                 <div className="metric-tile">
                   <span className="metric-icon metric-icon--blue" aria-hidden="true"><MonitorCheck size={21} strokeWidth={2.2} /></span>
-                  <div><strong>{readyTargetCount}</strong><small>Ready targets</small><span>{readyTargetCount}/{targets.length || 0} available</span></div>
+                  <div><strong>{readyTargetCount}</strong><small>{t("Ready targets")}</small><span>{t("{{ready}}/{{total}} available", { ready: readyTargetCount, total: targets.length || 0 })}</span></div>
                 </div>
               </section>
             ) : null}
@@ -2909,8 +2944,8 @@ export const App = () => {
           <>
             <header className="page-header profile-page-header">
               <div className="profile-page-heading">
-                <h2 aria-label="Profiles">Profiles</h2>
-                <p>Compose reusable environments and apply them safely to local agent targets.</p>
+                <h2 aria-label={t("Profiles")}>{t("Profiles")}</h2>
+                <p>{t("Compose reusable environments and apply them safely to local agent targets.")}</p>
               </div>
               <div className="profile-page-actions" ref={profilePageActionsRef}>
                 {targetWorkspaceControl}
@@ -2920,19 +2955,19 @@ export const App = () => {
                   onClick={openCreateProfileDialog}
                 >
                   <Plus size={15} strokeWidth={2.3} aria-hidden="true" />
-                  New Profile
+                  {t("New Profile")}
                 </button>
               </div>
             </header>
-            <section className="profile-workbench" aria-label="Profiles">
-              <aside className="profile-index" aria-label="Profile list">
+            <section className="profile-workbench" aria-label={t("Profiles")}>
+              <aside className="profile-index" aria-label={t("Profile list")}>
                 <div className="profile-list-toolbar">
                   <label className="profile-search">
                     <Search size={15} strokeWidth={2.2} aria-hidden="true" />
                     <input
                       ref={profileSearchInputRef}
-                      aria-label="Search profiles"
-                      placeholder="Search Profile name..."
+                      aria-label={t("Search profiles")}
+                      placeholder={t("Search Profile name...")}
                       value={profileSearch}
                       onChange={(event) => setProfileSearch(event.currentTarget.value)}
                     />
@@ -2942,7 +2977,7 @@ export const App = () => {
                   {isLoading ? (
                     <div className="inline-state inline-state--loading" role="status">
                       <span className="inline-state__icon" aria-hidden="true" />
-                      <span>Loading profiles</span>
+                      <span>{t("Loading profiles")}</span>
                     </div>
                   ) : null}
                   {!isLoading && visibleProfiles.length === 0 ? (
@@ -2950,7 +2985,7 @@ export const App = () => {
                       <span className="inline-state__icon" aria-hidden="true">
                         <Search size={15} strokeWidth={2.2} />
                       </span>
-                      <span>No profiles match this view</span>
+                      <span>{t("No profiles match this view")}</span>
                     </div>
                   ) : null}
                   {visibleProfiles.map((profile) => {
@@ -2970,13 +3005,13 @@ export const App = () => {
                         className={`profile-row${isSelected ? " is-active" : ""}`}
                         key={profile.id}
                         role="group"
-                        aria-label={`Profile ${profile.name}`}
+                        aria-label={t("Profile {{name}}", { name: profile.name })}
                       >
                       <ResourceIconPicker
                         className="profile-row__icon"
                         iconKey={profileIconKey}
                         label={profile.name}
-                        triggerLabel={`Change icon for profile ${profile.id}`}
+                        triggerLabel={t("Change icon for profile {{id}}", { id: profile.id })}
                         onChange={(iconKey) => changeProfileIcon(profile.id, iconKey)}
                       />
                       <button
@@ -2987,29 +3022,29 @@ export const App = () => {
                       >
                         <span className="profile-row__title">
                           <span className="profile-row__name">{profile.name}</span>
-                          {isSelected && isProfileDirty ? <strong>Unsaved</strong> : null}
+                          {isSelected && isProfileDirty ? <strong>{t("Unsaved")}</strong> : null}
                           {profile.id === currentProfileId && !(isSelected && isProfileDirty) ? (
-                            <strong className="profile-row__current">Current</strong>
+                            <strong className="profile-row__current">{t("Current")}</strong>
                           ) : null}
                         </span>
-                        <small title={profile.description || "No description"}>
-                          {profile.description || "No description"}
+                        <small title={profile.description || t("No description")}>
+                          {profile.description || t("No description")}
                         </small>
                         <span className="profile-row__stats">
-                          <span>{counts?.skills.count ?? 0} skills</span>
+                          <span>{t("{{count}} skills", { count: counts?.skills.count ?? 0 })}</span>
                           <span>{counts?.mcp.count ?? 0} MCP</span>
-                          <span>{plural(counts?.instructions.count ?? 0, "file")}</span>
+                          <span>{t("{{count}} files", { count: counts?.instructions.count ?? 0 })}</span>
                         </span>
                         <span
                           className={`profile-row__deployments${profileApplications.length === 0 ? " profile-row__deployments--empty" : ""}`}
                           aria-label={
                             profileApplications.length > 0
-                              ? `Active on: ${profileApplications.map((application) => application.target?.name ?? application.state.targetId).join(", ")}`
-                              : "Not active"
+                              ? t("Active on: {{targets}}", { targets: profileApplications.map((application) => application.target?.name ?? application.state.targetId).join(", ") })
+                              : t("Not active")
                           }
                         >
                           {profileApplications.length === 0 ? (
-                            <span>Not active</span>
+                            <span>{t("Not active")}</span>
                           ) : profileApplications.map((application) => {
                             const targetName = application.target?.name ?? application.state.targetId;
                             const targetIcon = application.target
@@ -3036,10 +3071,10 @@ export const App = () => {
                                 ? "current"
                                 : "pending";
                             const deploymentTitle = needsAttention
-                              ? `${targetName} needs attention`
+                              ? t("{{name}} needs attention", { name: targetName })
                               : isCurrent
-                                ? `${targetName} is up to date`
-                                : `${targetName} uses this profile; changes are pending`;
+                                ? t("{{name}} is up to date", { name: targetName })
+                                : t("{{name}} uses this profile; changes are pending", { name: targetName });
                             return (
                               <span
                                 className={`profile-target-chip profile-target-chip--${deploymentState}`}
@@ -3074,7 +3109,7 @@ export const App = () => {
                         className="profile-hero__icon"
                         iconKey={draftProfile.manifest.iconKey ?? "folder"}
                         label={draftProfile.manifest.name}
-                        triggerLabel={`Change icon for profile ${draftProfile.id}`}
+                        triggerLabel={t("Change icon for profile {{id}}", { id: draftProfile.id })}
                         onChange={(iconKey) =>
                           updateDraftProfile({
                             ...draftProfile,
@@ -3088,24 +3123,24 @@ export const App = () => {
                           <button
                             className="icon-action"
                             type="button"
-                            aria-label="Edit profile"
-                            title="Edit profile"
+                            aria-label={t("Edit profile")}
+                            title={t("Edit profile")}
                             onClick={openEditProfileDialog}
                           >
                             <Pencil size={15} strokeWidth={2.2} />
                           </button>
                         </div>
                         <p className="profile-description">
-                          {draftProfile.manifest.description || "No description"}
+                          {draftProfile.manifest.description || t("No description")}
                         </p>
                         <div className="profile-hero__meta">
                           <span className="success-pill">
-                            Native: {profileTarget?.name ?? draftProfile.manifest.targetId}
+                            {t("Native: {{name}}", { name: profileTarget?.name ?? draftProfile.manifest.targetId })}
                           </span>
                           {selectedTarget && selectedTarget.id !== profileTarget?.id ? (
                             <span className="profile-hero__destination">
                               <ArrowRight size={13} strokeWidth={2.2} aria-hidden="true" />
-                              Deploying to {selectedTarget.name}
+                              {t("Deploying to {{name}}", { name: selectedTarget.name })}
                             </span>
                           ) : null}
                         </div>
@@ -3115,7 +3150,7 @@ export const App = () => {
                           className="profile-commit-actions"
                           ref={profileObjectActionsRef}
                           role="group"
-                          aria-label="Selected profile actions"
+                          aria-label={t("Selected profile actions")}
                         >
                           <div className="profile-save-control">
                             <button
@@ -3125,7 +3160,7 @@ export const App = () => {
                               disabled={busy || !isProfileDirty}
                               onClick={saveSelectedProfile}
                             >
-                              Save
+                              {t("Save")}
                             </button>
                           </div>
                           {profileApplyControl}
@@ -3135,8 +3170,8 @@ export const App = () => {
                             type="button"
                             aria-expanded={isProfileActionsOpen}
                             aria-haspopup="menu"
-                            aria-label="More profile actions"
-                            title="More profile actions"
+                            aria-label={t("More profile actions")}
+                            title={t("More profile actions")}
                             onClick={() => {
                               setIsTargetMenuOpen(false);
                               setIsProfileActionsOpen((current) => !current);
@@ -3145,7 +3180,7 @@ export const App = () => {
                             <MoreHorizontal size={16} strokeWidth={2.2} />
                           </button>
                           {isProfileActionsOpen ? (
-                            <div className="profile-actions-menu" role="menu" aria-label="Profile actions">
+                            <div className="profile-actions-menu" role="menu" aria-label={t("Profile actions")}>
                               <button
                                 type="button"
                                 role="menuitem"
@@ -3155,11 +3190,11 @@ export const App = () => {
                                 }}
                               >
                                 <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
-                                <span>Edit profile</span>
+                                <span>{t("Edit profile")}</span>
                               </button>
                               <button type="button" role="menuitem" onClick={duplicateSelectedProfile}>
                                 <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
-                                <span>Duplicate profile</span>
+                                <span>{t("Duplicate profile")}</span>
                               </button>
                               <button
                                 className="is-danger"
@@ -3171,7 +3206,7 @@ export const App = () => {
                                 }}
                               >
                                 <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                                <span>Delete profile</span>
+                                <span>{t("Delete profile")}</span>
                               </button>
                             </div>
                           ) : null}
@@ -3182,18 +3217,18 @@ export const App = () => {
                           <span
                             className="profile-action-status__copy"
                             role="status"
-                            aria-label="Profile readiness"
-                            title={readiness.message}
+                            aria-label={t("Profile readiness")}
+                            title={t(readiness.message)}
                           >
                             <ReadinessIcon size={13} strokeWidth={2.3} aria-hidden="true" />
-                            <span>{readinessActionText}</span>
+                            <span>{t(readinessActionText)}</span>
                           </span>
                           {readiness.remediationLabel && readiness.remediationLabel !== "Save now" ? (
                             <button
                               className="profile-action-status__action"
                               type="button"
-                              aria-label={readiness.remediationLabel}
-                              title={readiness.remediationLabel}
+                              aria-label={t(readiness.remediationLabel)}
+                              title={t(readiness.remediationLabel)}
                               disabled={busy}
                               onClick={runReadinessRemediation}
                             >
@@ -3203,29 +3238,29 @@ export const App = () => {
                         </div>
                       </div>
                     </header>
-            <section className="profile-composer" aria-label="Profile composer">
+            <section className="profile-composer" aria-label={t("Profile composer")}>
               <header className="profile-composer__header">
                 <div>
-                  <h3>Profile Composer</h3>
-                  <p>Combine instructions, reusable skills, and MCP servers.</p>
+                  <h3>{t("Profile Composer")}</h3>
+                  <p>{t("Combine instructions, reusable skills, and MCP servers.")}</p>
                 </div>
               </header>
               <ProfileComposerSection
                 id="instructions"
                 icon={<BookOpenText size={18} strokeWidth={2.2} />}
-                title="Instructions"
-                description="Agent instructions and rule files"
+                title={t("Instructions")}
+                description={t("Agent instructions and rule files")}
                 count={resourceSummary?.instructions.count ?? 0}
                 chipNames={
                   resourceSummary?.instructions.count
-                    ? [profileTarget?.instructionsLabel ?? "Instructions"]
+                    ? [profileTarget?.instructionsLabel ?? t("Instructions")]
                     : []
                 }
                 expanded={activeComposerSection === "instructions"}
                 onToggle={() => toggleComposerSection("instructions")}
               >
                 <AgentsEditor
-                  label={profileTarget?.instructionsLabel ?? "Instructions"}
+                  label={profileTarget?.instructionsLabel ?? t("Instructions")}
                   value={draftProfile.instructions}
                   onChange={(instructions) => {
                     updateDraftProfile({ ...draftProfile, instructions });
@@ -3235,8 +3270,8 @@ export const App = () => {
               <ProfileComposerSection
                 id="skills"
                 icon={<Database size={18} strokeWidth={2.2} />}
-                title="Skills"
-                description="Reusable skills and workflows"
+                title={t("Skills")}
+                description={t("Reusable skills and workflows")}
                 count={resourceSummary?.skills.count ?? 0}
                 chipNames={resourceSummary?.skills.names ?? []}
                 expanded={activeComposerSection === "skills"}
@@ -3262,8 +3297,8 @@ export const App = () => {
               <ProfileComposerSection
                 id="mcp"
                 icon={<Network size={18} strokeWidth={2.2} />}
-                title="MCP Servers"
-                description="External tools and service connections"
+                title={t("MCP Servers")}
+                description={t("External tools and service connections")}
                 count={resourceSummary?.mcp.count ?? 0}
                 chipNames={resourceSummary?.mcp.names ?? []}
                 expanded={activeComposerSection === "mcp"}
@@ -3285,8 +3320,8 @@ export const App = () => {
               <ProfileComposerSection
                 id="advanced"
                 icon={<Settings2 size={18} strokeWidth={2.2} />}
-                title="Advanced"
-                description="Raw config, overrides, validation, and history"
+                title={t("Advanced")}
+                description={t("Raw config, overrides, validation, and history")}
                 count={draftProfile.assetPolicy.disabledSkillPaths.length}
                 chipNames={draftProfile.assetPolicy.disabledSkillPaths}
                 expanded={activeComposerSection === "advanced"}
@@ -3294,12 +3329,12 @@ export const App = () => {
               >
                 {selectedTarget && profileTarget && selectedTarget.id !== profileTarget.id ? (
                   <div className="native-config-notice" role="note">
-                    <strong>{profileTarget.name}-only configuration</strong>
-                    <span>This section is saved with the Profile but omitted when applying to {selectedTarget.name}.</span>
+                    <strong>{t("{{name}}-only configuration", { name: profileTarget.name })}</strong>
+                    <span>{t("This section is saved with the Profile but omitted when applying to {{name}}.", { name: selectedTarget.name })}</span>
                   </div>
                 ) : null}
                 <McpEditor
-                  label={`${profileTarget?.name ?? "Native"}-only ${profileTarget?.configLabel ?? "config"}`}
+                  label={t("{{name}}-only {{config}}", { name: profileTarget?.name ?? t("Native"), config: profileTarget?.configLabel ?? t("config") })}
                   value={draftProfile.configText}
                   onChange={(configText) => {
                     updateDraftProfile({ ...draftProfile, configText });
@@ -3317,16 +3352,16 @@ export const App = () => {
                     updateDraftProfile({ ...draftProfile, assetPolicy });
                   }}
                 />
-                <section className="validation-panel" aria-label="Validation">
-                  <div className="section-title">Validation</div>
+                <section className="validation-panel" aria-label={t("Validation")}>
+                  <div className="section-title">{t("Validation")}</div>
                   <div className="validation-grid">
                     {validationRows.map((row) => (
                       <div className={`check-row check-row--${row.level}`} key={row.label}>
                         <span>
-                          {row.label}
-                          {row.detail ? <small>{row.detail}</small> : null}
+                          {t(row.label)}
+                          {row.detail ? <small>{t(row.detail)}</small> : null}
                         </span>
-                        <strong>{row.value}</strong>
+                        <strong>{t(row.value)}</strong>
                       </div>
                     ))}
                   </div>
@@ -3357,8 +3392,8 @@ export const App = () => {
             {rollbackPreview ? (
               <PreviewDialog
                 preview={rollbackPreview}
-                title="Rollback preview"
-                confirmLabel="Restore backup"
+                title={t("Rollback preview")}
+                confirmLabel={t("Restore backup")}
                 confirmDisabled={busy || rollbackPreview.errors.length > 0}
                 cancelDisabled={busy}
                 errorMessage={rollbackError}
@@ -3374,8 +3409,8 @@ export const App = () => {
             {preview ? (
               <PreviewDialog
                 preview={preview}
-                title={`Apply preview for ${activeTargetName}`}
-                confirmLabel={replaceManagedDrift ? "Back up and replace" : "Apply profile"}
+                title={t("Apply preview for {{name}}", { name: activeTargetName })}
+                confirmLabel={t(replaceManagedDrift ? "Back up and replace" : "Apply profile")}
                 confirmDisabled={!canApply || busy}
                 managedDriftAcknowledged={replaceManagedDrift}
                 onManagedDriftAcknowledgedChange={setReplaceManagedDrift}
@@ -3409,8 +3444,8 @@ export const App = () => {
                 ) : (
                   <div className="profile-empty-surface">
                     <div className="empty-state">
-                      <h2>No profile selected</h2>
-                      <p className="muted">Choose a profile or create one.</p>
+                      <h2>{t("No profile selected")}</h2>
+                      <p className="muted">{t("Choose a profile or create one.")}</p>
                     </div>
                     {profileApplyControl}
                   </div>
@@ -3422,27 +3457,27 @@ export const App = () => {
                     ref={appModalDialogRef}
                     className="profile-form-dialog profile-form-dialog--compact"
                     role="dialog"
-                    aria-label="Unsaved profile changes"
+                    aria-label={t("Unsaved profile changes")}
                     aria-modal="true"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <header className="profile-dialog-header">
                       <div>
-                        <div className="section-title">Save profile changes?</div>
+                        <div className="section-title">{t("Save profile changes?")}</div>
                         <p className="muted">
-                          Save before you {pendingProfileAction.label}, or discard the current draft.
+                          {t("Save before you {{action}}, or discard the current draft.", { action: t(pendingProfileAction.label) })}
                         </p>
                       </div>
                     </header>
                     <footer className="preview-actions profile-dirty-actions">
                       <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={cancelPendingProfileAction}>
-                        Cancel
+                        {t("Cancel")}
                       </button>
                       <button className="secondary-action" type="button" disabled={busy} onClick={() => void continuePendingProfileAction(false)}>
-                        Discard changes
+                        {t("Discard changes")}
                       </button>
                       <button className="primary-action" type="button" disabled={busy} onClick={() => void continuePendingProfileAction(true)}>
-                        Save and continue
+                        {t("Save and continue")}
                       </button>
                     </footer>
                   </section>
@@ -3454,19 +3489,19 @@ export const App = () => {
                     ref={appModalDialogRef}
                     className="profile-form-dialog"
                     role="dialog"
-                    aria-label={profileDialogMode === "create" ? "New profile" : "Edit profile"}
+                    aria-label={t(profileDialogMode === "create" ? "New profile" : "Edit profile")}
                     aria-modal="true"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <header className="profile-dialog-header">
                       <div>
                         <div className="section-title">
-                          {profileDialogMode === "create" ? "New profile" : "Edit profile"}
+                          {t(profileDialogMode === "create" ? "New profile" : "Edit profile")}
                         </div>
                         <p className="muted">
                           {profileDialogMode === "create"
-                            ? "Start blank or capture an existing local agent environment."
-                            : "Update the profile name and description."}
+                            ? t("Start blank or capture an existing local agent environment.")
+                            : t("Update the profile name and description.")}
                         </p>
                       </div>
                     </header>
@@ -3474,13 +3509,13 @@ export const App = () => {
                       {profileDialogMode === "create" ? (
                         <>
                           {!targetCapturePreview ? (
-                            <div className="profile-source-choice" role="group" aria-label="Profile source">
+                            <div className="profile-source-choice" role="group" aria-label={t("Profile source")}>
                               <button
                                 className={profileCreateSource === "blank" ? "is-selected" : ""}
                                 type="button"
                                 onClick={() => setProfileCreateSource("blank")}
                               >
-                                Blank
+                                {t("Blank")}
                               </button>
                               <button
                                 className={profileCreateSource === "target" ? "is-selected" : ""}
@@ -3502,14 +3537,14 @@ export const App = () => {
                                   }
                                 }}
                               >
-                                From Target
+                                {t("From Target")}
                               </button>
                             </div>
                           ) : null}
                           <label>
-                            <span>Native Target</span>
+                            <span>{t("Native Target")}</span>
                             <select
-                              aria-label="Profile target"
+                              aria-label={t("Profile target")}
                               value={profileForm.targetId}
                               onChange={(event) => {
                                 setProfileForm({ ...profileForm, targetId: event.currentTarget.value });
@@ -3523,9 +3558,9 @@ export const App = () => {
                         </>
                       ) : null}
                       <label>
-                        <span>Profile name</span>
+                        <span>{t("Profile name")}</span>
                         <input
-                          aria-label="Profile name"
+                          aria-label={t("Profile name")}
                           aria-invalid={Boolean(profileFormError)}
                           aria-describedby={profileFormError ? "profile-name-error" : undefined}
                           value={profileForm.name}
@@ -3542,9 +3577,9 @@ export const App = () => {
                       </label>
                       {profileDialogMode === "edit" || profileCreateSource === "blank" ? (
                         <label>
-                          <span>Description</span>
+                          <span>{t("Description")}</span>
                           <textarea
-                            aria-label="Description"
+                            aria-label={t("Description")}
                             rows={3}
                             value={profileForm.description}
                             onChange={(event) =>
@@ -3556,7 +3591,7 @@ export const App = () => {
                     </div>
                     <footer className="preview-actions">
                       <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
-                        Cancel
+                        {t("Cancel")}
                       </button>
                       <button
                         className="primary-action"
@@ -3567,7 +3602,7 @@ export const App = () => {
                         }
                         onClick={submitProfileDialog}
                       >
-                        {profileDialogMode === "edit" ? "Done" : "Create"}
+                        {t(profileDialogMode === "edit" ? "Done" : "Create")}
                       </button>
                     </footer>
                   </section>
@@ -3579,27 +3614,27 @@ export const App = () => {
                     ref={appModalDialogRef}
                     className="profile-form-dialog profile-form-dialog--compact"
                     role="dialog"
-                    aria-label="Delete profile"
+                    aria-label={t("Delete profile")}
                     aria-modal="true"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <header className="profile-dialog-header">
                       <div>
-                        <div className="section-title">Delete profile</div>
+                        <div className="section-title">{t("Delete profile")}</div>
                         <p className="muted">
                           {isSelectedProfileActive
-                            ? `${draftProfile.manifest.name} is active on ${selectedProfileActiveTargets.join(", ")}. Apply another profile or stop managing each Target before removing it.`
-                            : `Remove ${draftProfile.manifest.name}? Applied target files and backups are not removed.`}
+                            ? t("{{name}} is active on {{targets}}. Apply another profile or stop managing each Target before removing it.", { name: draftProfile.manifest.name, targets: selectedProfileActiveTargets.join(", ") })
+                            : t("Remove {{name}}? Applied target files and backups are not removed.", { name: draftProfile.manifest.name })}
                         </p>
                       </div>
                     </header>
                     <footer className="preview-actions">
                       <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
-                        Cancel
+                        {t("Cancel")}
                       </button>
                       {!isSelectedProfileActive ? (
                         <button className="danger-action" type="button" disabled={busy} onClick={deleteSelectedProfile}>
-                          Remove profile
+                          {t("Remove profile")}
                         </button>
                       ) : (
                         <button
@@ -3610,7 +3645,7 @@ export const App = () => {
                             setActiveWorkspace("targets");
                           }}
                         >
-                          Open Targets
+                          {t("Open Targets")}
                         </button>
                       )}
                     </footer>
@@ -3645,25 +3680,54 @@ export const App = () => {
             onStopManaging={confirmStopManaging}
           />
         ) : activeWorkspace === "settings" ? (
-          <section className="settings-page" aria-label="Settings">
+          <section className="settings-page" aria-label={t("Settings")}>
             <header className="page-header">
               <div>
-                <h2 aria-label="Settings">Settings</h2>
-                <p>Local defaults and connected services.</p>
+                <h2 aria-label={t("Settings")}>{t("Settings")}</h2>
+                <p>{t("Local defaults and connected services.")}</p>
               </div>
             </header>
+            <section className="resource-section settings-section" aria-labelledby="appearance-heading">
+              <div className="settings-section-title">
+                <div>
+                  <div className="resource-heading" id="appearance-heading">{t("Appearance")}</div>
+                  <p className="settings-muted">{t("Choose how AgentEnv Manager displays its interface.")}</p>
+                </div>
+              </div>
+              <div className="resource-settings-grid resource-settings-grid--single">
+                <label>
+                  <span>{t("Language")}</span>
+                  <select
+                    data-testid="locale-select"
+                    aria-label={t("Interface language")}
+                    value={skillSettings.locale}
+                    onChange={(event) =>
+                      updateSkillSettings({ locale: event.currentTarget.value as AppLocale })
+                    }
+                  >
+                    <option value="system">{t("System default")}</option>
+                    <option value="en">{t("English")}</option>
+                    <option value="zh_CN">{t("Simplified Chinese")}</option>
+                    <option value="zh_TW">{t("Traditional Chinese")}</option>
+                  </select>
+                  <small className="settings-field-note">
+                    {t("Uses your system language until you choose another language.")}
+                  </small>
+                </label>
+              </div>
+            </section>
             <section className="resource-section settings-section" aria-labelledby="library-defaults-heading">
               <div className="settings-section-title">
                 <div>
-                  <div className="resource-heading" id="library-defaults-heading">Skills library</div>
-                  <p className="settings-muted">Defaults used when installing managed skills.</p>
+                  <div className="resource-heading" id="library-defaults-heading">{t("Skills library")}</div>
+                  <p className="settings-muted">{t("Defaults used when installing managed skills.")}</p>
                 </div>
               </div>
               <div className="resource-settings-grid">
                 <label>
-                  <span>Sync</span>
+                  <span>{t("Sync")}</span>
                   <select
-                    aria-label="Global skill sync method"
+                    aria-label={t("Global skill sync method")}
                     value={skillSettings.skillSyncMethod}
                     onChange={(event) =>
                       updateSkillSettings({
@@ -3671,32 +3735,32 @@ export const App = () => {
                       })
                     }
                   >
-                    <option value="symlink">Live link (recommended)</option>
-                    <option value="copy">Copy (apply-gated updates)</option>
-                    <option value="auto">Auto (live link when possible)</option>
+                    <option value="symlink">{t("Live link (recommended)")}</option>
+                    <option value="copy">{t("Copy (apply-gated updates)")}</option>
+                    <option value="auto">{t("Auto (live link when possible)")}</option>
                   </select>
                   <small className="settings-field-note">
                     {skillSettings.skillSyncMethod === "copy"
-                      ? "Library updates stay pending until installs are explicitly synchronized."
+                      ? t("Library updates stay pending until installs are explicitly synchronized.")
                       : skillSettings.skillSyncMethod === "auto"
-                        ? "Uses live links when supported and falls back to copied installs."
-                        : "Library updates immediately change linked Target skills without another Apply preview."}
+                        ? t("Uses live links when supported and falls back to copied installs.")
+                        : t("Library updates immediately change linked Target skills without another Apply preview.")}
                   </small>
                 </label>
                 <label>
-                  <span>Storage</span>
-                  <div className="settings-readonly-value" aria-label="Global skill storage location">
-                    AgentEnv data
+                  <span>{t("Storage")}</span>
+                  <div className="settings-readonly-value" aria-label={t("Global skill storage location")}>
+                    {t("AgentEnv data")}
                   </div>
                 </label>
                 <div className="settings-toggle-field">
-                  <span>Auto-check</span>
+                  <span>{t("Auto-check")}</span>
                   <button
                     className={`settings-switch${skillSettings.skillAutoCheckEnabled ? " is-on" : ""}`}
                     type="button"
                     role="switch"
                     aria-checked={skillSettings.skillAutoCheckEnabled}
-                    aria-label="Skill auto update check"
+                    aria-label={t("Skill auto update check")}
                     disabled={busy}
                     onClick={() =>
                       updateSkillSettings({
@@ -3707,16 +3771,16 @@ export const App = () => {
                     <span className="settings-switch__track" aria-hidden="true">
                       <span />
                     </span>
-                    <strong>{skillSettings.skillAutoCheckEnabled ? "Enabled" : "Disabled"}</strong>
+                    <strong>{skillSettings.skillAutoCheckEnabled ? t("Enabled") : t("Disabled")}</strong>
                   </button>
                   <small className="settings-field-note">
-                    Checks only skills that have per-skill update checks enabled.
+                    {t("Checks only skills that have per-skill update checks enabled.")}
                   </small>
                 </div>
                 <label>
-                  <span>Check interval</span>
+                  <span>{t("Check interval")}</span>
                   <input
-                    aria-label="Skill auto check interval minutes"
+                    aria-label={t("Skill auto check interval minutes")}
                     min={5}
                     max={1440}
                     step={5}
@@ -3735,32 +3799,32 @@ export const App = () => {
             <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">
               <div className="settings-section-header settings-data-header">
                 <div>
-                  <div className="resource-heading" id="agentenv-data-heading">AgentEnv data</div>
-                  <p className="settings-muted">Profiles, Library resources, deployment state, and recovery backups.</p>
+                  <div className="resource-heading" id="agentenv-data-heading">{t("AgentEnv data")}</div>
+                  <p className="settings-muted">{t("Profiles, Library resources, deployment state, and recovery backups.")}</p>
                 </div>
                 <div className="settings-data-actions">
                   <button className="secondary-action" type="button" disabled={busy} onClick={() => void window.agentEnv.openDataFolder()}>
                     <FolderKanban size={15} strokeWidth={2.2} aria-hidden="true" />
-                    Open folder
+                    {t("Open folder")}
                   </button>
                   <button className="secondary-action" type="button" disabled={busy} onClick={() => void createAgentEnvDataBackup()}>
                     <HardDrive size={15} strokeWidth={2.2} aria-hidden="true" />
-                    Create backup
+                    {t("Create backup")}
                   </button>
                   <button className="secondary-action" type="button" disabled={busy} onClick={() => void selectAgentEnvDataRestore()}>
                     <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
-                    Restore backup
+                    {t("Restore backup")}
                   </button>
                 </div>
               </div>
               <code className="settings-data-path">~/.config/agentenv-manager</code>
-              <p className="settings-field-note">Backups are private directory snapshots. GitHub credentials remain encrypted for this Mac.</p>
+              <p className="settings-field-note">{t("Backups are private directory snapshots. GitHub credentials remain encrypted for this Mac.")}</p>
             </section>
             <section
               className="resource-section github-settings-section"
               id="github-connection-settings"
               tabIndex={-1}
-              aria-label="GitHub OAuth settings"
+              aria-label={t("GitHub OAuth settings")}
             >
               <div className="settings-section-header github-account-header">
                 <div className="github-account-identity">
@@ -3771,17 +3835,17 @@ export const App = () => {
                     <div className="resource-heading">GitHub</div>
                     <p className="settings-muted">
                       {githubAuthStatus.state === "signed-in" && githubAuthStatus.user
-                        ? `Connected as ${githubAuthStatus.user.login}`
+                        ? t("Connected as {{login}}", { login: githubAuthStatus.user.login })
                         : githubDeviceLogin
-                          ? "Authorize AgentEnv Manager in your browser"
-                          : "Connect for reliable GitHub imports and update checks"}
+                          ? t("Authorize AgentEnv Manager in your browser")
+                          : t("Connect for reliable GitHub imports and update checks")}
                     </p>
                   </div>
                 </div>
                 <div className="github-settings-actions">
                   {githubAuthStatus.state === "signed-in" ? (
                     <button disabled={busy || githubLoginChecking} onClick={signOutGitHub} type="button">
-                      Sign out
+                      {t("Sign out")}
                     </button>
                   ) : !githubDeviceLogin ? (
                     <button
@@ -3791,7 +3855,7 @@ export const App = () => {
                       type="button"
                     >
                       <GitFork size={15} strokeWidth={2.2} aria-hidden="true" />
-                      {githubLoginChecking ? "Connecting..." : "Sign in with GitHub"}
+                      {githubLoginChecking ? t("Connecting...") : t("Sign in with GitHub")}
                     </button>
                   ) : null}
                 </div>
@@ -3801,19 +3865,19 @@ export const App = () => {
                   <button
                     className={`github-device-code${githubCodeCopied ? " is-copied" : ""}`}
                     type="button"
-                    aria-label={`Copy GitHub device code ${githubDeviceLogin.userCode}`}
+                    aria-label={t("Copy GitHub device code {{code}}", { code: githubDeviceLogin.userCode })}
                     onClick={copyGitHubDeviceCode}
                   >
-                    <span>Device code</span>
+                    <span>{t("Device code")}</span>
                     <strong>{githubDeviceLogin.userCode}</strong>
                     <span className="github-device-copy-state">
                       {githubCodeCopied ? <CheckCircle2 size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-                      {githubCodeCopied ? "Copied" : "Copy"}
+                      {githubCodeCopied ? t("Copied") : t("Copy")}
                     </span>
                   </button>
                   <div className="github-device-status" role="status" aria-live="polite">
                     <RefreshCw className={githubLoginChecking ? "is-spinning" : ""} size={15} aria-hidden="true" />
-                    <span>{githubLoginMessage || "Waiting for authorization. This page updates automatically."}</span>
+                    <span>{githubLoginMessage || t("Waiting for authorization. This page updates automatically.")}</span>
                   </div>
                   <div className="github-device-actions">
                     <button
@@ -3822,10 +3886,10 @@ export const App = () => {
                       type="button"
                     >
                       <ExternalLink size={15} aria-hidden="true" />
-                      Open GitHub
+                      {t("Open GitHub")}
                     </button>
                     <button disabled={githubLoginChecking} onClick={() => void pollGitHubLogin()} type="button">
-                      Check now
+                      {t("Check now")}
                     </button>
                   </div>
                 </div>
@@ -3833,10 +3897,14 @@ export const App = () => {
               {githubAuthStatus.state === "signed-in" ? (
                 <div className="github-connected-row" role="status">
                   <span className="github-connected-indicator" aria-hidden="true" />
-                  <strong>Connected</strong>
+                  <strong>{t("Connected")}</strong>
                   {githubAuthStatus.rateLimit ? (
                     <span>
-                      {githubAuthStatus.rateLimit.remaining.toLocaleString()} of {githubAuthStatus.rateLimit.limit.toLocaleString()} API requests remaining · resets {formatShortDate(githubAuthStatus.rateLimit.resetAt)}
+                      {t("{{remaining}} of {{limit}} API requests remaining · resets {{time}}", {
+                        remaining: formatNumber(githubAuthStatus.rateLimit.remaining),
+                        limit: formatNumber(githubAuthStatus.rateLimit.limit),
+                        time: formatDate(githubAuthStatus.rateLimit.resetAt)
+                      })}
                     </span>
                   ) : null}
                 </div>
@@ -3853,33 +3921,33 @@ export const App = () => {
               <div className="preview-modal-backdrop" onClick={() => {
                 if (!busy) setDataRestorePreview(undefined);
               }}>
-                <section ref={appModalDialogRef} className="profile-form-dialog profile-form-dialog--compact" role="dialog" aria-modal="true" aria-label="Restore AgentEnv data" onClick={(event) => event.stopPropagation()}>
+                <section ref={appModalDialogRef} className="profile-form-dialog profile-form-dialog--compact" role="dialog" aria-modal="true" aria-label={t("Restore AgentEnv data")} onClick={(event) => event.stopPropagation()}>
                   <header className="profile-dialog-header">
                     <div>
-                      <div className="section-title">Restore AgentEnv data</div>
-                      <p className="muted">Replace current Profiles, Library resources, settings, deployment state, and recovery history.</p>
+                      <div className="section-title">{t("Restore AgentEnv data")}</div>
+                      <p className="muted">{t("Replace current Profiles, Library resources, settings, deployment state, and recovery history.")}</p>
                     </div>
                   </header>
                   <div className="data-restore-summary">
-                    <span><strong>Created</strong>{new Date(dataRestorePreview.createdAt).toLocaleString()}</span>
-                    <span><strong>Format</strong>Version {dataRestorePreview.formatVersion}</span>
-                    <span><strong>Contents</strong>{dataRestorePreview.topLevelItemCount} top-level items</span>
+                    <span><strong>{t("Created")}</strong>{formatDate(dataRestorePreview.createdAt)}</span>
+                    <span><strong>{t("Format")}</strong>{t("Version {{version}}", { version: dataRestorePreview.formatVersion })}</span>
+                    <span><strong>{t("Contents")}</strong>{t("{{count}} top-level items", { count: dataRestorePreview.topLevelItemCount })}</span>
                     <code title={dataRestorePreview.path}>{dataRestorePreview.path}</code>
-                    <p>A safety backup of the current data will be created before replacement.</p>
+                    <p>{t("A safety backup of the current data will be created before replacement.")}</p>
                   </div>
                   <footer className="preview-actions">
-                    <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setDataRestorePreview(undefined)}>Cancel</button>
-                    <button className="danger-action" type="button" disabled={busy} onClick={() => void restoreAgentEnvData()}>Restore data</button>
+                    <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setDataRestorePreview(undefined)}>{t("Cancel")}</button>
+                    <button className="danger-action" type="button" disabled={busy} onClick={() => void restoreAgentEnvData()}>{t("Restore data")}</button>
                   </footer>
                 </section>
               </div>
             ) : null}
           </section>
         ) : rollbackPreview ? (
-          <PreviewDialog preview={rollbackPreview} title="Rollback preview" />
+          <PreviewDialog preview={rollbackPreview} title={t("Rollback preview")} />
         ) : (
           <div className="empty-state">
-            <h2>No profile selected</h2>
+            <h2>{t("No profile selected")}</h2>
           </div>
         )}
         {profileDialogMode === "create" && profileCreateSource === "target" ? (
@@ -3922,5 +3990,38 @@ export const App = () => {
       </section>
 
     </main>
+  );
+};
+
+export const App = () => {
+  const [localePreference, setLocalePreference] = useState<AppLocale>(() => {
+    if (/jsdom/i.test(window.navigator.userAgent)) {
+      return "system";
+    }
+    try {
+      const cached = window.localStorage.getItem("agentenv.locale");
+      return cached === "en" || cached === "zh_CN" || cached === "zh_TW" || cached === "system"
+        ? cached
+        : "system";
+    } catch {
+      return "system";
+    }
+  });
+  const updateLocalePreference = useCallback((locale: AppLocale) => {
+    setLocalePreference(locale);
+    if (/jsdom/i.test(window.navigator.userAgent)) {
+      return;
+    }
+    try {
+      window.localStorage.setItem("agentenv.locale", locale);
+    } catch {
+      // The settings store remains authoritative if renderer storage is unavailable.
+    }
+  }, []);
+
+  return (
+    <I18nProvider preference={localePreference}>
+      <AppContent onLocalePreferenceChange={updateLocalePreference} />
+    </I18nProvider>
   );
 };

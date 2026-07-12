@@ -7,6 +7,7 @@ import {
 } from "../libraryViewState";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
+import { useI18n } from "../i18n";
 
 interface McpLibraryPanelProps {
   mcpServers: McpLibraryEntry[];
@@ -89,6 +90,7 @@ export const McpLibraryPanel = ({
   onRemove,
   onReviewUsage
 }: McpLibraryPanelProps) => {
+  const { t } = useI18n();
   const [draft, setDraft] = useState<SaveMcpServerInput>(defaultDraft);
   const [editingId, setEditingId] = useState<string>();
   const [argsText, setArgsText] = useState("");
@@ -243,18 +245,19 @@ export const McpLibraryPanel = ({
   const idError = !normalizedId
     ? undefined
     : !SAFE_ID_PATTERN.test(normalizedId)
-      ? "Use letters, numbers, hyphens, or underscores; start with a letter or number."
+      ? t("Use letters, numbers, hyphens, or underscores; start with a letter or number.")
       : !editingId && mcpServers.some((server) => server.id === normalizedId)
-        ? "This ID already exists. Choose a unique ID."
+        ? t("This ID already exists. Choose a unique ID.")
         : undefined;
   const envError = parsedEnv.aliasName
-    ? "Environment aliases are not portable. Use one matching variable name per line."
+    ? t("Environment aliases are not portable. Use one matching variable name per line.")
     : parsedEnv.invalidName
-      ? `${parsedEnv.invalidName} is not a valid environment variable name.`
+      ? t("{{name}} is not a valid environment variable name.", { name: parsedEnv.invalidName })
     : parsedEnv.duplicateName
-      ? `${parsedEnv.duplicateName} is listed more than once.`
+      ? t("{{name}} is listed more than once.", { name: parsedEnv.duplicateName })
       : undefined;
-  const urlError = draft.transport === "stdio" ? undefined : remoteUrlError(draft.url ?? "");
+  const rawUrlError = draft.transport === "stdio" ? undefined : remoteUrlError(draft.url ?? "");
+  const urlError = rawUrlError ? t(rawUrlError) : undefined;
   const isDraftComplete = Boolean(
     draft.id.trim() &&
       draft.name.trim() &&
@@ -265,13 +268,13 @@ export const McpLibraryPanel = ({
   );
 
   return (
-    <section className="skill-library-panel" aria-label="MCP library">
+    <section className="skill-library-panel" aria-label={t("MCP library")}>
       <label className="mcp-library-search">
         <Search size={15} strokeWidth={2.2} aria-hidden="true" />
         <input
           ref={searchInputRef}
-          aria-label="Search MCP servers"
-          placeholder="Search MCP servers..."
+          aria-label={t("Search MCP servers")}
+          placeholder={t("Search MCP servers...")}
           value={search}
           onChange={(event) =>
             onViewStateChange(
@@ -281,11 +284,11 @@ export const McpLibraryPanel = ({
         />
       </label>
 
-      <section className="resource-section" aria-label="MCP servers">
+      <section className="resource-section" aria-label={t("MCP servers")}>
         <div className="resource-list library-list">
           {visibleServers.map((server) => (
             <div
-              aria-label={`MCP library item ${server.id}`}
+              aria-label={t("MCP library item {{id}}", { id: server.id })}
               className="resource-row library-row"
               key={server.id}
               role="group"
@@ -293,13 +296,13 @@ export const McpLibraryPanel = ({
               <span className="resource-chip">MCP</span>
               <div className="resource-row__main">
                 <OverflowTooltip
-                  ariaLabel={`Full MCP name ${server.id}`}
+                  ariaLabel={t("Full MCP name {{id}}", { id: server.id })}
                   className="mcp-row-name"
                   text={server.name}
                 />
                 <small>
                   <OverflowTooltip
-                    ariaLabel={`Full MCP endpoint ${server.id}`}
+                    ariaLabel={t("Full MCP endpoint {{id}}", { id: server.id })}
                     className="mcp-row-endpoint"
                     text={`${server.transport} · ${commandLabel(server)}`}
                     tooltipClassName="library-source-tooltip"
@@ -307,20 +310,18 @@ export const McpLibraryPanel = ({
                 </small>
                 <small className="mcp-row-meta">
                   <OverflowTooltip
-                    ariaLabel={`Environment summary for ${server.id}`}
+                    ariaLabel={t("Environment summary for {{id}}", { id: server.id })}
                     className="mcp-row-meta-item"
                     text={Object.keys(server.env ?? {}).length > 0
-                      ? `${Object.keys(server.env ?? {}).length} env variable${
-                          Object.keys(server.env ?? {}).length === 1 ? "" : "s"
-                        }`
-                      : "No env variables"}
+                      ? t("{{count}} env variables", { count: Object.keys(server.env ?? {}).length })
+                      : t("No env variables")}
                   />
                   <OverflowTooltip
-                    ariaLabel={`Full MCP usage ${server.id}`}
+                    ariaLabel={t("Full MCP usage {{id}}", { id: server.id })}
                     className="mcp-row-meta-item"
                     text={(mcpUsage[server.id] ?? []).length > 0
-                      ? `Used by ${(mcpUsage[server.id] ?? []).join(", ")}`
-                      : "Not used by any profile"}
+                      ? t("Used by {{profiles}}", { profiles: (mcpUsage[server.id] ?? []).join(", ") })
+                      : t("Not used by any profile")}
                   />
                 </small>
               </div>
@@ -328,7 +329,7 @@ export const McpLibraryPanel = ({
                 <button
                   className="icon-action"
                   type="button"
-                  aria-label={`Edit ${server.id}`}
+                  aria-label={t("Edit {{name}}", { name: server.id })}
                   onClick={(event) => {
                     editorTriggerRef.current = event.currentTarget;
                     editServer(server);
@@ -339,7 +340,7 @@ export const McpLibraryPanel = ({
                 <button
                   className="icon-action danger-icon-action"
                   type="button"
-                  aria-label={`Remove ${server.id}`}
+                  aria-label={t("Remove {{name}}", { name: server.id })}
                   onClick={(event) => {
                     deleteTriggerRef.current = event.currentTarget;
                     setDeleteCandidate(server);
@@ -352,7 +353,7 @@ export const McpLibraryPanel = ({
           ))}
           {visibleServers.length === 0 ? (
             <div className="inline-state inline-state--panel library-empty-state">
-              <span>{mcpServers.length === 0 ? "No MCP servers yet" : "No matching MCP servers"}</span>
+              <span>{t(mcpServers.length === 0 ? "No MCP servers yet" : "No matching MCP servers")}</span>
               {mcpServers.length === 0 ? (
                 <button
                   className="primary-inline-action"
@@ -363,7 +364,7 @@ export const McpLibraryPanel = ({
                   }}
                 >
                   <Plus size={15} strokeWidth={2.3} />
-                  Add first MCP server
+                  {t("Add first MCP server")}
                 </button>
               ) : null}
             </div>
@@ -382,23 +383,23 @@ export const McpLibraryPanel = ({
             ref={editorDialogRef}
             className="library-drawer mcp-editor-drawer"
             role="dialog"
-            aria-label="MCP server editor"
+            aria-label={t("MCP server editor")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="library-drawer__header">
               <div>
-                <strong>{editingId ? `Edit ${draft.name || editingId}` : "Add MCP server"}</strong>
+                <strong>{editingId ? t("Edit {{name}}", { name: draft.name || editingId }) : t("Add MCP server")}</strong>
                 <p className="muted">
                   {draft.transport === "stdio"
-                    ? "Reference environment variables without storing secret values."
-                    : "Remote credentials are configured in the Target after Apply."}
+                    ? t("Reference environment variables without storing secret values.")
+                    : t("Remote credentials are configured in the Target after Apply.")}
                 </p>
               </div>
               <button
                 className="icon-action"
                 type="button"
-                aria-label="Close MCP server editor"
+                aria-label={t("Close MCP server editor")}
                 disabled={isSaving}
                 onClick={() => setIsEditorOpen(false)}
               >
@@ -410,7 +411,7 @@ export const McpLibraryPanel = ({
                 <span>ID</span>
                 <input
                   ref={editorIdFieldRef}
-                  aria-label="MCP library id"
+                    aria-label={t("MCP library id")}
                   placeholder="context7"
                   value={draft.id}
                   disabled={Boolean(editingId)}
@@ -419,7 +420,7 @@ export const McpLibraryPanel = ({
                 />
                 {editingId ? (
                   <small className="field-help" id="mcp-id-help">
-                    ID is fixed because Profiles reference it.
+                    {t("ID is fixed because Profiles reference it.")}
                   </small>
                 ) : idError ? (
                   <small className="field-error" id="mcp-id-error" role="alert">
@@ -428,19 +429,19 @@ export const McpLibraryPanel = ({
                 ) : null}
               </label>
               <label>
-                <span>Name</span>
+                <span>{t("Name")}</span>
                 <input
                   ref={editorNameFieldRef}
-                  aria-label="MCP library name"
+                  aria-label={t("MCP library name")}
                   placeholder="Context7"
                   value={draft.name}
                   onChange={(event) => setDraft({ ...draft, name: event.currentTarget.value })}
                 />
               </label>
               <label>
-                <span>Transport</span>
+                <span>{t("Transport")}</span>
                 <select
-                  aria-label="MCP transport"
+                  aria-label={t("MCP transport")}
                   value={draft.transport}
                   onChange={(event) =>
                     setDraft({ ...draft, transport: event.currentTarget.value as McpTransport })
@@ -454,9 +455,9 @@ export const McpLibraryPanel = ({
               {draft.transport === "stdio" ? (
                 <>
                   <label>
-                    <span>Command</span>
+                    <span>{t("Command")}</span>
                     <input
-                      aria-label="MCP command"
+                      aria-label={t("MCP command")}
                       placeholder="npx"
                       value={draft.command ?? ""}
                       onChange={(event) =>
@@ -465,9 +466,9 @@ export const McpLibraryPanel = ({
                     />
                   </label>
                   <label className="mcp-server-form__wide">
-                    <span>Args</span>
+                    <span>{t("Args")}</span>
                     <textarea
-                      aria-label="MCP args"
+                      aria-label={t("MCP args")}
                       placeholder="-y&#10;@upstash/context7-mcp"
                       value={argsText}
                       onChange={(event) => setArgsText(event.currentTarget.value)}
@@ -476,9 +477,9 @@ export const McpLibraryPanel = ({
                 </>
               ) : (
                 <label className="mcp-server-form__wide">
-                  <span>URL</span>
+                  <span>{t("URL")}</span>
                   <input
-                    aria-label="MCP URL"
+                    aria-label={t("MCP URL")}
                     aria-describedby={urlError ? "mcp-url-error" : undefined}
                     placeholder="https://example.com/mcp"
                     value={draft.url ?? ""}
@@ -493,9 +494,9 @@ export const McpLibraryPanel = ({
               )}
               {draft.transport === "stdio" ? (
                 <label className="mcp-server-form__wide">
-                  <span>Environment variable references</span>
+                  <span>{t("Environment variable references")}</span>
                   <textarea
-                    aria-label="MCP env"
+                    aria-label={t("MCP env")}
                     aria-describedby={envError ? "mcp-env-error" : "mcp-env-help"}
                     placeholder="GITHUB_TOKEN&#10;DOCS_TOKEN"
                     value={envText}
@@ -507,7 +508,7 @@ export const McpLibraryPanel = ({
                     </small>
                   ) : (
                     <small className="field-help" id="mcp-env-help">
-                      One variable name per line. Values stay in your shell environment.
+                      {t("One variable name per line. Values stay in your shell environment.")}
                     </small>
                   )}
                 </label>
@@ -518,7 +519,7 @@ export const McpLibraryPanel = ({
                 disabled={!isDraftComplete || isSaving}
                 onClick={() => { void saveDraft(); }}
               >
-                {isSaving ? "Saving MCP server" : "Save MCP server"}
+                {t(isSaving ? "Saving MCP server" : "Save MCP server")}
               </button>
             </div>
           </section>
@@ -531,17 +532,20 @@ export const McpLibraryPanel = ({
             ref={deleteDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
-            aria-label="Delete MCP server"
+            aria-label={t("Delete MCP server")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">Delete MCP server</div>
+                <div className="section-title">{t("Delete MCP server")}</div>
                 <p className="muted">
                   {(mcpUsage[deleteCandidate.id] ?? []).length > 0
-                    ? `${deleteCandidate.name} is used by ${(mcpUsage[deleteCandidate.id] ?? []).join(", ")}. Remove it from those profiles first.`
-                    : `Delete ${deleteCandidate.name} from the shared MCP library?`}
+                    ? t("{{name}} is used by {{profiles}}. Remove it from those profiles first.", {
+                        name: deleteCandidate.name,
+                        profiles: (mcpUsage[deleteCandidate.id] ?? []).join(", ")
+                      })
+                    : t("Delete {{name}} from the shared MCP library?", { name: deleteCandidate.name })}
                 </p>
               </div>
             </header>
@@ -552,7 +556,7 @@ export const McpLibraryPanel = ({
                 type="button"
                 onClick={() => setDeleteCandidate(undefined)}
               >
-                Cancel
+                {t("Cancel")}
               </button>
               {(mcpUsage[deleteCandidate.id] ?? []).length > 0 ? (
                 <button
@@ -563,7 +567,7 @@ export const McpLibraryPanel = ({
                     setDeleteCandidate(undefined);
                   }}
                 >
-                  Review profiles
+                  {t("Review profiles")}
                 </button>
               ) : (
                 <button
@@ -574,7 +578,7 @@ export const McpLibraryPanel = ({
                     setDeleteCandidate(undefined);
                   }}
                 >
-                  Delete server
+                  {t("Delete server")}
                 </button>
               )}
             </footer>

@@ -18,6 +18,7 @@ import { InfoTip } from "./InfoTip";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIcon } from "./ResourceIconPicker";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { useI18n } from "../i18n";
 
 interface SkillsEditorProps {
   mode?: "skills" | "mcp" | "advanced";
@@ -243,6 +244,7 @@ export const SkillsEditor = ({
   onPreviewSkillUpdate,
   onChange
 }: SkillsEditorProps) => {
+  const { t } = useI18n();
   const mode = requestedMode ?? "all";
   const showsSkills = mode === "skills" || mode === "all";
   const showsMcp = mode === "mcp" || mode === "all";
@@ -520,14 +522,14 @@ export const SkillsEditor = ({
 
   if (mode === "skills") {
     return (
-      <section className="profile-skill-manager" aria-label="Profile skills">
+      <section className="profile-skill-manager" aria-label={t("Profile skills")}>
         <header className="profile-skill-toolbar">
           <div className="profile-skill-summary">
-            <strong>Skills</strong>
+            <strong>{t("Skills")}</strong>
             <span>
-              {enabledLibrarySkillCount} on
+              {t("{{count}} on", { count: enabledLibrarySkillCount })}
               {librarySkillEntries.length > enabledLibrarySkillCount
-                ? ` · ${librarySkillEntries.length - enabledLibrarySkillCount} off`
+                ? ` · ${t("{{count}} off", { count: librarySkillEntries.length - enabledLibrarySkillCount })}`
                 : ""}
             </span>
           </div>
@@ -535,11 +537,11 @@ export const SkillsEditor = ({
             <button
               className="secondary-action profile-skill-check"
               type="button"
-              aria-label="Check profile skill updates"
+              aria-label={t("Check profile skill updates")}
               title={
                 checkableSkillIds.length > 0
-                  ? "Check updates for enabled tracked skills"
-                  : "No enabled tracked skills"
+                  ? t("Check updates for enabled tracked skills")
+                  : t("No enabled tracked skills")
               }
               disabled={checkingSkillUpdates || checkableSkillIds.length === 0}
               onClick={() => onCheckSkillUpdates?.(checkableSkillIds)}
@@ -550,17 +552,17 @@ export const SkillsEditor = ({
                 strokeWidth={2.2}
                 aria-hidden="true"
               />
-              {checkingSkillUpdates ? "Checking" : "Check"}
+              {t(checkingSkillUpdates ? "Checking" : "Check")}
             </button>
             <button
               className="secondary-action"
               ref={skillPickerButtonRef}
               type="button"
-              aria-label="Add library skill"
+              aria-label={t("Add library skill")}
               onClick={openSkillPicker}
             >
               <Plus size={14} strokeWidth={2.2} aria-hidden="true" />
-              Add
+              {t("Add")}
             </button>
           </div>
         </header>
@@ -571,7 +573,7 @@ export const SkillsEditor = ({
               className="profile-skill-row profile-skill-row--owned"
               key={`${asset.source}:${asset.targetName}:${index}`}
               role="listitem"
-              aria-label={`Profile-owned skill ${asset.targetName}`}
+              aria-label={t("Profile-owned skill {{name}}", { name: asset.targetName })}
             >
               <span className="profile-skill-icon" aria-hidden="true">
                 <ResourceIcon iconKey="folder" size={16} />
@@ -584,15 +586,15 @@ export const SkillsEditor = ({
                 />
                 <OverflowTooltip
                   className="profile-skill-detail"
-                  text={`Profile-owned · ${asset.source}`}
+                  text={`${t("Profile-owned")} · ${asset.source}`}
                   ariaLabel={`Full skill source ${asset.targetName}`}
                 />
               </div>
-              <span className="profile-skill-state">Profile-owned</span>
+              <span className="profile-skill-state">{t("Profile-owned")}</span>
               <button
                 className="icon-action"
                 type="button"
-                aria-label={`More actions for profile-owned skill ${asset.targetName}`}
+                aria-label={t("More actions for profile-owned skill {{name}}", { name: asset.targetName })}
                 aria-expanded={
                   profileSkillMenu?.kind === "owned" && profileSkillMenu.index === index
                 }
@@ -624,14 +626,14 @@ export const SkillsEditor = ({
             const iconKey = skill?.iconKey ?? (skill?.sourceType === "github" ? "github" : "folder");
             const revision = skill?.remoteRevision?.slice(0, 7);
             const detail = skill
-              ? `${skill.sourceType === "github" ? "GitHub" : "Local"}${revision ? ` · ${revision}` : ""}${entry.targetName !== skill.id ? ` · installs as ${entry.targetName}` : ""}`
-              : `Library skill ${entry.libraryId} is missing`;
+              ? `${skill.sourceType === "github" ? "GitHub" : t("Local")}${revision ? ` · ${revision}` : ""}${entry.targetName !== skill.id ? ` · ${t("installs as {{name}}", { name: entry.targetName })}` : ""}`
+              : t("Library skill {{id}} is missing", { id: entry.libraryId });
             return (
               <div
                 className={`profile-skill-row${enabled ? "" : " is-disabled"}`}
                 key={`${entry.libraryId}:${entry.targetName}:${index}`}
                 role="listitem"
-                aria-label={`Profile skill ${entry.targetName}`}
+                aria-label={t("Profile skill {{name}}", { name: entry.targetName })}
               >
                 <span className="profile-skill-icon" aria-hidden="true">
                   <ResourceIcon iconKey={iconKey} size={16} />
@@ -652,7 +654,7 @@ export const SkillsEditor = ({
                   className={`profile-skill-state${update?.updateAvailable ? " is-update" : ""}${update?.error || !skill ? " is-error" : ""}`}
                   title={update?.error}
                 >
-                  {status}
+                  {t(status)}
                 </span>
                 {enabled && update?.updateAvailable ? (
                   <button
@@ -660,7 +662,7 @@ export const SkillsEditor = ({
                     type="button"
                     onClick={() => onPreviewSkillUpdate?.(entry.libraryId)}
                   >
-                    Update
+                    {t("Update")}
                   </button>
                 ) : null}
                 <button
@@ -668,8 +670,8 @@ export const SkillsEditor = ({
                   type="button"
                   role="switch"
                   aria-checked={enabled}
-                  aria-label={`${enabled ? "Disable" : "Enable"} ${skill?.name ?? entry.targetName}`}
-                  title={enabled ? "Disable in this profile" : "Enable in this profile"}
+                  aria-label={t(enabled ? "Disable {{name}}" : "Enable {{name}}", { name: skill?.name ?? entry.targetName })}
+                  title={t(enabled ? "Disable in this profile" : "Enable in this profile")}
                   onClick={() => toggleSkillRef(index)}
                 >
                   <span aria-hidden="true" />
@@ -677,7 +679,7 @@ export const SkillsEditor = ({
                 <button
                   className="icon-action"
                   type="button"
-                  aria-label={`More actions for profile skill ${entry.targetName}`}
+                  aria-label={t("More actions for profile skill {{name}}", { name: entry.targetName })}
                   aria-expanded={
                     profileSkillMenu?.kind === "library" && profileSkillMenu.index === index
                   }
@@ -694,8 +696,8 @@ export const SkillsEditor = ({
 
           {!hasResources ? (
             <div className="profile-skill-empty">
-              <strong>No skills in this profile</strong>
-              <span>Add reusable skills from Library.</span>
+              <strong>{t("No skills in this profile")}</strong>
+              <span>{t("Add reusable skills from Library.")}</span>
             </div>
           ) : null}
         </div>
@@ -705,7 +707,7 @@ export const SkillsEditor = ({
               <div
                 className="row-action-menu profile-skill-menu"
                 role="menu"
-                aria-label="Profile skill actions"
+                aria-label={t("Profile skill actions")}
                 style={{ left: profileSkillMenu.left, top: profileSkillMenu.top }}
                 onMouseDown={(event) => event.stopPropagation()}
               >
@@ -722,7 +724,7 @@ export const SkillsEditor = ({
                     }}
                   >
                     <Pencil size={14} strokeWidth={2.2} aria-hidden="true" />
-                    <span>Edit install name</span>
+                    <span>{t("Edit install name")}</span>
                   </button>
                 ) : null}
                 <button
@@ -739,7 +741,7 @@ export const SkillsEditor = ({
                   }}
                 >
                   <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />
-                  <span>Remove from profile</span>
+                  <span>{t("Remove from profile")}</span>
                 </button>
               </div>,
               document.body
@@ -753,14 +755,14 @@ export const SkillsEditor = ({
               className="profile-form-dialog profile-form-dialog--compact profile-owned-skill-dialog"
               role="dialog"
               aria-modal="true"
-              aria-label="Edit profile-owned skill"
+              aria-label={t("Edit profile-owned skill")}
               onClick={(event) => event.stopPropagation()}
             >
               <header className="profile-dialog-header">
-                <div className="section-title">Edit install name</div>
+                <div className="section-title">{t("Edit install name")}</div>
               </header>
               <label className="field-block">
-                <span>Target name</span>
+                <span>{t("Target name")}</span>
                 <input
                   ref={ownedSkillInputRef}
                   value={editingOwnedSkillTarget}
@@ -769,7 +771,7 @@ export const SkillsEditor = ({
               </label>
               <footer className="preview-actions">
                 <button className="secondary-action" type="button" onClick={closeOwnedSkillDialog}>
-                  Cancel
+                  {t("Cancel")}
                 </button>
                 <button
                   className="primary-action"
@@ -782,7 +784,7 @@ export const SkillsEditor = ({
                     closeOwnedSkillDialog();
                   }}
                 >
-                  Save
+                  {t("Save")}
                 </button>
               </footer>
             </section>
@@ -792,7 +794,7 @@ export const SkillsEditor = ({
         {activePicker === "skills" ? (
           <div className="preview-modal-backdrop" onClick={closePicker}>
             <section
-              aria-label="Add library skills"
+              aria-label={t("Add library skills")}
               aria-modal="true"
               className="profile-form-dialog resource-picker-dialog"
               ref={pickerDialogRef}
@@ -800,11 +802,11 @@ export const SkillsEditor = ({
               onClick={(event) => event.stopPropagation()}
             >
               <header className="profile-dialog-header">
-                <div className="section-title">Add library skills</div>
+                <div className="section-title">{t("Add library skills")}</div>
               </header>
               <div className="resource-picker-list">
                 {librarySkills.length === 0 ? (
-                  <div className="inline-state">No library skills available</div>
+                  <div className="inline-state">{t("No library skills available")}</div>
                 ) : null}
                 {librarySkills.map((skill) => {
                   const isAttached = attachedSkillIds.has(skill.id);
@@ -821,7 +823,7 @@ export const SkillsEditor = ({
                         <strong>{skill.name}</strong>
                         <small>{skill.description || skill.id}</small>
                       </span>
-                      {isAttached ? <em>Already added</em> : null}
+                      {isAttached ? <em>{t("Already added")}</em> : null}
                     </label>
                   );
                 })}
@@ -833,16 +835,18 @@ export const SkillsEditor = ({
                   type="button"
                   onClick={closePicker}
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
                 <button
                   className="primary-action"
                   type="button"
-                  aria-label="Add selected skills"
+                  aria-label={t("Add selected skills")}
                   disabled={selectedLibrarySkillIds.length === 0}
                   onClick={addSelectedLibrarySkills}
                 >
-                  Add {selectedLibrarySkillIds.length || "selected"}
+                  {selectedLibrarySkillIds.length > 0
+                    ? t("Add {{count}}", { count: selectedLibrarySkillIds.length })
+                    : t("Add selected")}
                 </button>
               </footer>
             </section>
@@ -853,17 +857,17 @@ export const SkillsEditor = ({
   }
 
   return (
-    <section className="skills-editor" aria-label="Resources">
+    <section className="skills-editor" aria-label={t("Resources")}>
       {mode !== "advanced" ? (
         <div className="asset-editor-header">
           <div>
             <div className="section-title">
-              {mode === "all" ? "Resources" : "MCP servers"}
+              {t(mode === "all" ? "Resources" : "MCP servers")}
               <InfoTip
                 label={
                   mode === "all"
-                    ? "Attach shared library skills and MCP servers to this profile. Preview before apply verifies target paths and ownership."
-                    : "Attach shared library MCP servers and review raw-config MCP servers."
+                    ? t("Attach shared library skills and MCP servers to this profile. Preview before apply verifies target paths and ownership.")
+                    : t("Attach shared library MCP servers and review raw-config MCP servers.")
                 }
               />
             </div>
@@ -876,7 +880,7 @@ export const SkillsEditor = ({
                 type="button"
                 onClick={openSkillPicker}
               >
-                Add library skill
+                {t("Add library skill")}
               </button>
             ) : null}
             {showsMcp ? (
@@ -886,7 +890,7 @@ export const SkillsEditor = ({
                 type="button"
                 onClick={openMcpPicker}
               >
-                Add library MCP
+                {t("Add library MCP")}
               </button>
             ) : null}
             {mode === "all" ? (
@@ -897,7 +901,7 @@ export const SkillsEditor = ({
                 type="button"
                 onClick={() => setAdvancedOpen((current) => !current)}
               >
-                {advancedOpen ? "Hide advanced" : "Advanced"}
+                {t(advancedOpen ? "Hide advanced" : "Advanced")}
               </button>
             ) : null}
           </div>
@@ -906,20 +910,20 @@ export const SkillsEditor = ({
 
       {mode === "advanced" || (mode === "all" && advancedOpen) ? (
         <section
-          aria-label="Advanced resource settings"
+          aria-label={t("Advanced resource settings")}
           className="resource-section resource-section--advanced"
           id="advanced-resource-settings"
         >
           <div>
             <div className="resource-heading">
-              Advanced resource settings
-              <InfoTip label="Use absolute target paths here to disable skills that should be ignored when this profile is applied." />
+              {t("Advanced resource settings")}
+              <InfoTip label={t("Use absolute target paths here to disable skills that should be ignored when this profile is applied.")} />
             </div>
           </div>
           <label className="field-block">
-            <span>Disabled Skill Paths</span>
+            <span>{t("Disabled Skill Paths")}</span>
             <textarea
-              aria-label="Disabled Skill Paths"
+              aria-label={t("Disabled Skill Paths")}
               spellCheck={false}
               value={value.disabledSkillPaths.join("\n")}
               onChange={(event) =>
@@ -937,48 +941,48 @@ export const SkillsEditor = ({
       ) : null}
 
       {mode !== "advanced" ? (
-        <section className="resource-section" aria-label="Resource inventory">
+        <section className="resource-section" aria-label={t("Resource inventory")}>
           <div>
             <div className="resource-heading">
-              Inventory
-              <InfoTip label="This list shows profile-owned resources, shared library references, and MCP servers that will be considered during preview and apply." />
+              {t("Inventory")}
+              <InfoTip label={t("This list shows profile-owned resources, shared library references, and MCP servers that will be considered during preview and apply.")} />
             </div>
           </div>
           <div className="resource-table-head" aria-hidden="true">
-            <span>Type</span>
-            <span>Name and source</span>
-            <span>Status</span>
+            <span>{t("Type")}</span>
+            <span>{t("Name and source")}</span>
+            <span>{t("Status")}</span>
           </div>
           <div className="resource-list">
             {showsMcp && mcpState.error ? (
-              <p className="warning">Config parse error: {mcpState.error}</p>
+              <p className="warning">{t("Config parse error: {{error}}", { error: mcpState.error })}</p>
             ) : null}
             {showsMcp && mcpState.note ? <p className="muted">{mcpState.note}</p> : null}
             {!(showsMcp && mcpState.error) && !(showsMcp && mcpState.note) && !hasResources ? (
-              <p className="muted">No resources configured</p>
+              <p className="muted">{t("No resources configured")}</p>
             ) : null}
             {showsSkills && skillEntries.length > 0
               ? skillEntries.map(({ ownedDir: asset, index }) => (
                   <fieldset
                     className="owned-skill resource-item"
-                    aria-label={`Skill ${asset.targetName}`}
+                    aria-label={t("Skill {{name}}", { name: asset.targetName })}
                     key={`${asset.kind}:${asset.source}:${asset.targetName}:${index}`}
                   >
-                    <legend className="resource-legend">Skill</legend>
+                    <legend className="resource-legend">{t("Skill")}</legend>
                     <div className="resource-row resource-row--editable">
-                      <span className="resource-chip">Skill</span>
+                      <span className="resource-chip">{t("Skill")}</span>
                       <div className="resource-row__main">
                         <span>{asset.targetName}</span>
-                        <small>Profile-owned</small>
+                        <small>{t("Profile-owned")}</small>
                         <small>{asset.source}</small>
                       </div>
-                      <strong className="resource-status">Configured</strong>
+                      <strong className="resource-status">{t("Configured")}</strong>
                     </div>
                     <div className="resource-edit-grid">
                       <label>
-                        <span>Source</span>
+                        <span>{t("Source")}</span>
                         <input
-                          aria-label="Source"
+                          aria-label={t("Source")}
                           value={asset.source}
                           onChange={(event) =>
                             updateOwnedDir(index, { source: event.currentTarget.value })
@@ -986,9 +990,9 @@ export const SkillsEditor = ({
                         />
                       </label>
                       <label>
-                        <span>Target name</span>
+                        <span>{t("Target name")}</span>
                         <input
-                          aria-label="Target name"
+                          aria-label={t("Target name")}
                           value={asset.targetName}
                           onChange={(event) =>
                             updateOwnedDir(index, { targetName: event.currentTarget.value })
@@ -996,7 +1000,7 @@ export const SkillsEditor = ({
                         />
                       </label>
                       <button type="button" onClick={() => removeOwnedDir(index)}>
-                        Remove profile skill
+                        {t("Remove profile skill")}
                       </button>
                     </div>
                   </fieldset>
@@ -1005,18 +1009,18 @@ export const SkillsEditor = ({
             {mode === "all"
               ? agentFileEntries.map((asset, index) => (
                   <div
-                    aria-label={`Agent ${asset.targetName}`}
+                    aria-label={t("Agent {{name}}", { name: asset.targetName })}
                     className="resource-row"
                     key={`${asset.kind}:${asset.source}:${asset.targetName}:${index}`}
                     role="group"
                   >
-                    <span className="resource-chip">Agent</span>
+                    <span className="resource-chip">{t("Agent")}</span>
                     <div className="resource-row__main">
                       <span>{asset.targetName}</span>
-                      <small>Profile-owned</small>
+                      <small>{t("Profile-owned")}</small>
                       <small>{asset.source}</small>
                     </div>
-                    <strong className="resource-status">Configured</strong>
+                    <strong className="resource-status">{t("Configured")}</strong>
                   </div>
                 ))
               : null}
@@ -1027,28 +1031,28 @@ export const SkillsEditor = ({
                   );
                   return (
                     <div
-                      aria-label={`Library skill ${asset.targetName}`}
+                      aria-label={t("Library skill {{name}}", { name: asset.targetName })}
                       className="resource-row"
                       key={`${asset.libraryId}:${asset.targetName}:${index}`}
                       role="group"
                     >
-                      <span className="resource-chip">Skill</span>
+                      <span className="resource-chip">{t("Skill")}</span>
                       <div className="resource-row__main">
                         <span>{asset.targetName}</span>
-                        <small>Library</small>
+                        <small>{t("Library")}</small>
                         <small>{librarySkill?.name ?? asset.libraryId}</small>
                         <small>
                           {librarySkill?.path ?? `skills-library/${asset.libraryId}`}
                         </small>
                       </div>
                       <div className="resource-row__actions">
-                        <strong className="resource-status">Configured</strong>
+                        <strong className="resource-status">{t("Configured")}</strong>
                         <button
                           className="secondary-action"
                           type="button"
                           onClick={() => removeSkillRef(index)}
                         >
-                          Remove from profile
+                          {t("Remove from profile")}
                         </button>
                       </div>
                     </div>
@@ -1070,7 +1074,7 @@ export const SkillsEditor = ({
                       <span className="resource-chip">MCP</span>
                       <div className="resource-row__main">
                         <span>{asset.targetName}</span>
-                        <small>Library</small>
+                        <small>{t("Library")}</small>
                         <small>{mcpServer?.name ?? asset.libraryId}</small>
                         <small>
                           {mcpServer?.transport === "stdio"
@@ -1081,13 +1085,13 @@ export const SkillsEditor = ({
                         </small>
                       </div>
                       <div className="resource-row__actions">
-                        <strong className="resource-status">Configured</strong>
+                        <strong className="resource-status">{t("Configured")}</strong>
                         <button
                           className="secondary-action"
                           type="button"
                           onClick={() => removeMcpRef(index)}
                         >
-                          Remove from profile
+                          {t("Remove from profile")}
                         </button>
                       </div>
                     </div>
@@ -1105,14 +1109,14 @@ export const SkillsEditor = ({
                     <span className="resource-chip">MCP</span>
                     <div className="resource-row__main">
                       <span>{resource.name}</span>
-                      <small>Raw config</small>
+                      <small>{t("Raw config")}</small>
                       <small>{resource.type}</small>
                       <small>{resource.detail}</small>
                     </div>
                     <strong
                       className={`resource-status resource-status--${resource.status.toLowerCase()}`}
                     >
-                      {resource.status}
+                      {t(resource.status)}
                     </strong>
                   </div>
                 ))
@@ -1124,7 +1128,7 @@ export const SkillsEditor = ({
       {showsSkills && activePicker === "skills" ? (
         <div className="preview-modal-backdrop" onClick={closePicker}>
           <section
-            aria-label="Add library skills"
+            aria-label={t("Add library skills")}
             aria-modal="true"
             className="profile-form-dialog resource-picker-dialog"
             ref={pickerDialogRef}
@@ -1134,8 +1138,8 @@ export const SkillsEditor = ({
             <header className="profile-dialog-header">
               <div>
                 <div className="section-title">
-                  Add library skills
-                  <InfoTip label="Select shared skills from the global library. Already attached skills stay disabled." />
+                  {t("Add library skills")}
+                  <InfoTip label={t("Select shared skills from the global library. Already attached skills stay disabled.")} />
                 </div>
               </div>
             </header>
@@ -1143,7 +1147,7 @@ export const SkillsEditor = ({
               {librarySkills.length === 0 ? (
                 <div className="inline-state">
                   <span className="inline-state__icon" aria-hidden="true" />
-                  <span>No library skills available</span>
+                  <span>{t("No library skills available")}</span>
                 </div>
               ) : null}
               {librarySkills.map((skill) => {
@@ -1161,13 +1165,13 @@ export const SkillsEditor = ({
                       <strong>{skill.name}</strong>
                       <small>{skill.description || skill.id}</small>
                     </span>
-                    {isAttached ? <em>Already added</em> : null}
+                    {isAttached ? <em>{t("Already added")}</em> : null}
                   </label>
                 );
               })}
               {librarySkills.length > 0 &&
               librarySkills.every((skill) => attachedSkillIds.has(skill.id)) ? (
-                <p className="muted">All library skills are already attached.</p>
+                <p className="muted">{t("All library skills are already attached.")}</p>
               ) : null}
             </div>
             <footer className="preview-actions">
@@ -1177,7 +1181,7 @@ export const SkillsEditor = ({
                 type="button"
                 onClick={closePicker}
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 className="primary-action"
@@ -1185,7 +1189,7 @@ export const SkillsEditor = ({
                 disabled={selectedLibrarySkillIds.length === 0}
                 onClick={addSelectedLibrarySkills}
               >
-                Add selected skills
+                {t("Add selected skills")}
               </button>
             </footer>
           </section>
@@ -1195,7 +1199,7 @@ export const SkillsEditor = ({
       {showsMcp && activePicker === "mcp" ? (
         <div className="preview-modal-backdrop" onClick={closePicker}>
           <section
-            aria-label="Add library MCP servers"
+            aria-label={t("Add library MCP servers")}
             aria-modal="true"
             className="profile-form-dialog resource-picker-dialog"
             ref={pickerDialogRef}
@@ -1205,8 +1209,8 @@ export const SkillsEditor = ({
             <header className="profile-dialog-header">
               <div>
                 <div className="section-title">
-                  Add library MCP servers
-                  <InfoTip label="Select reusable MCP server definitions from the global MCP library. Already attached servers stay disabled." />
+                  {t("Add library MCP servers")}
+                  <InfoTip label={t("Select reusable MCP server definitions from the global MCP library. Already attached servers stay disabled.")} />
                 </div>
               </div>
             </header>
@@ -1214,7 +1218,7 @@ export const SkillsEditor = ({
               {mcpServers.length === 0 ? (
                 <div className="inline-state">
                   <span className="inline-state__icon" aria-hidden="true" />
-                  <span>No library MCP servers available</span>
+                  <span>{t("No library MCP servers available")}</span>
                 </div>
               ) : null}
               {mcpServers.map((server) => {
@@ -1236,12 +1240,12 @@ export const SkillsEditor = ({
                       <strong>{server.name}</strong>
                       <small>{detail || server.id}</small>
                     </span>
-                    {isAttached ? <em>Already added</em> : null}
+                    {isAttached ? <em>{t("Already added")}</em> : null}
                   </label>
                 );
               })}
               {mcpServers.length > 0 && mcpServers.every((server) => attachedMcpIds.has(server.id)) ? (
-                <p className="muted">All library MCP servers are already attached.</p>
+                <p className="muted">{t("All library MCP servers are already attached.")}</p>
               ) : null}
             </div>
             <footer className="preview-actions">
@@ -1251,7 +1255,7 @@ export const SkillsEditor = ({
                 type="button"
                 onClick={closePicker}
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 className="primary-action"
@@ -1259,7 +1263,7 @@ export const SkillsEditor = ({
                 disabled={selectedMcpIds.length === 0}
                 onClick={addSelectedMcpServers}
               >
-                Add selected MCP servers
+                {t("Add selected MCP servers")}
               </button>
             </footer>
           </section>

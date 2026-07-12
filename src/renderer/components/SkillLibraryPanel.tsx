@@ -57,6 +57,7 @@ import {
   buildSkillCleanupGroups,
   type SkillCleanupGroupState
 } from "../../shared/skillCleanup";
+import { useI18n } from "../i18n";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -207,6 +208,7 @@ export const SkillLibraryPanel = ({
   onViewStateChange,
   searchInputRef
 }: SkillLibraryPanelProps) => {
+  const { formatDate, t } = useI18n();
   const [githubUrl, setGithubUrl] = useState("");
   const [githubScanResult, setGithubScanResult] = useState<GitHubSkillScanResult>();
   const [githubSelectedIds, setGithubSelectedIds] = useState<string[]>([]);
@@ -646,9 +648,9 @@ export const SkillLibraryPanel = ({
   };
 
   return (
-    <section className="skill-library-panel" aria-label="Skill library">
+    <section className="skill-library-panel" aria-label={t("Skill library")}>
       <div className="library-control-deck">
-        <div className="library-quick-tabs" role="tablist" aria-label="Skill status filters">
+        <div className="library-quick-tabs" role="tablist" aria-label={t("Skill status filters")}>
           <button
             className={`library-quick-tab${updateFilter === "all" && usageFilter === "all" ? " is-active" : ""}`}
             type="button"
@@ -658,7 +660,7 @@ export const SkillLibraryPanel = ({
               updateControls({ updateFilter: "all", usageFilter: "all" });
             }}
           >
-            All <strong>{librarySkills.length}</strong>
+            {t("All")} <strong>{librarySkills.length}</strong>
           </button>
           <button
             className={`library-quick-tab${updateFilter === "updates" ? " is-active" : ""}`}
@@ -667,7 +669,7 @@ export const SkillLibraryPanel = ({
             aria-selected={updateFilter === "updates"}
             onClick={() => updateControls({ updateFilter: "updates" })}
           >
-            Updates <strong>{availableUpdateCount}</strong>
+            {t("Updates")} <strong>{availableUpdateCount}</strong>
           </button>
           <button
             className={`library-quick-tab${usageFilter === "used" ? " is-active" : ""}`}
@@ -678,7 +680,7 @@ export const SkillLibraryPanel = ({
               updateControls({ usageFilter: "used", updateFilter: "all" });
             }}
           >
-            In use <strong>{usedSkillCount}</strong>
+            {t("In use")} <strong>{usedSkillCount}</strong>
           </button>
           <button
             className={`library-quick-tab${usageFilter === "unused" ? " is-active" : ""}`}
@@ -689,17 +691,17 @@ export const SkillLibraryPanel = ({
               updateControls({ usageFilter: "unused", updateFilter: "all" });
             }}
           >
-            Unused <strong>{unusedSkillCount}</strong>
+            {t("Unused")} <strong>{unusedSkillCount}</strong>
           </button>
         </div>
         <div className="library-toolbar">
           <label className="library-search">
-            <span>Search</span>
+            <span>{t("Search")}</span>
             <Search size={16} strokeWidth={2.1} aria-hidden="true" />
             <input
               ref={searchInputRef}
-              aria-label="Search skills"
-              placeholder="Search skill name or description..."
+              aria-label={t("Search skills")}
+              placeholder={t("Search skill name or description...")}
               value={search}
               onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
@@ -707,87 +709,87 @@ export const SkillLibraryPanel = ({
           {hasActiveFilters ? (
             <button className="secondary-action" type="button" onClick={resetFilters}>
               <RotateCcw size={15} strokeWidth={2.2} />
-              Reset filters
+              {t("Reset filters")}
             </button>
           ) : null}
           <select
-            aria-label="Skill source filter"
+            aria-label={t("Skill source filter")}
             value={sourceFilter}
             onChange={(event) =>
               updateControls({ sourceFilter: event.currentTarget.value as typeof sourceFilter })
             }
           >
-            <option value="all">Source: All</option>
+            <option value="all">{t("Source: All")}</option>
             <option value="github">GitHub</option>
-            <option value="local">Local</option>
+            <option value="local">{t("Local")}</option>
           </select>
           <select
-            aria-label="Skill target filter"
+            aria-label={t("Skill target filter")}
             value={targetFilter}
             onChange={(event) =>
               updateControls({ targetFilter: event.currentTarget.value as typeof targetFilter })
             }
           >
-            <option value="all">Target: All</option>
-            <option value="managed">Managed</option>
-            <option value="library">Imported</option>
-            <option value="unmanaged">Unmanaged</option>
-            <option value="ignored">Ignored</option>
-            <option value="not-installed">Not installed</option>
+            <option value="all">{t("Target: All")}</option>
+            <option value="managed">{t("Managed")}</option>
+            <option value="library">{t("Imported")}</option>
+            <option value="unmanaged">{t("Unmanaged")}</option>
+            <option value="ignored">{t("Ignored")}</option>
+            <option value="not-installed">{t("Not installed")}</option>
           </select>
           <button
             className="secondary-action library-toolbar-action"
             type="button"
-            aria-label="Check updates"
-            title="Check skill updates"
+            aria-label={t("Check updates")}
+            title={t("Check skill updates")}
             disabled={updateCheckStatus?.state === "checking"}
             onClick={onCheckUpdates}
           >
             <RefreshCw size={15} strokeWidth={2.2} />
-            <span>{updateCheckStatus?.state === "checking" ? "Checking..." : "Check updates"}</span>
+            <span>{t(updateCheckStatus?.state === "checking" ? "Checking..." : "Check updates")}</span>
           </button>
           <button
             className="secondary-action library-toolbar-action"
             type="button"
-            aria-label="Update all skills"
-            title="Update all skills"
+            aria-label={t("Update all skills")}
+            title={t("Update all skills")}
             disabled={updateableSkillIds.length === 0}
             onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
           >
             <Sparkles size={15} strokeWidth={2.2} />
-            <span>Update all</span>
+            <span>{t("Update all")}</span>
           </button>
         </div>
       </div>
 
-      <section className="library-table" aria-label="Library skills">
+      <section className="library-table" aria-label={t("Library skills")}>
         <div className="library-table__head">
-          <span>Skill</span>
-          <span>Source</span>
-          <span>Version</span>
+          <span>{t("Skill")}</span>
+          <span>{t("Source")}</span>
+          <span>{t("Version")}</span>
           <span className="library-column-label">
-            Updates
-            <InfoTip label="Shows whether this skill tracks its source and whether an update is available." />
+            {t("Updates")}
+            <InfoTip label={t("Shows whether this skill tracks its source and whether an update is available.")} />
           </span>
-          <span>Usage</span>
+          <span>{t("Usage")}</span>
           <span className="library-column-label">
-            Installs
-            <InfoTip label="Shows whether each Target install matches the Library copy. This is separate from source updates." />
+            {t("Installs")}
+            <InfoTip label={t("Shows whether each Target install matches the Library copy. This is separate from source updates.")} />
           </span>
-          <span>Actions</span>
+          <span>{t("Actions")}</span>
         </div>
         <div className="library-table__body">
           {isLoading && librarySkills.length === 0 ? (
             <div className="inline-state inline-state--loading library-empty" role="status">
               <span className="inline-state__icon" aria-hidden="true" />
-              <span>Loading skills</span>
+              <span>{t("Loading skills")}</span>
             </div>
           ) : null}
           {!isLoading && librarySkills.length === 0 ? (
-            <p className="muted library-empty">Import a skill from a folder or GitHub to start the library.</p>
+            <p className="muted library-empty">{t("Import a skill from a folder or GitHub to start the library.")}</p>
           ) : null}
           {librarySkills.length > 0 && filteredSkills.length === 0 ? (
-            <p className="muted library-empty">No skills match the current filters.</p>
+            <p className="muted library-empty">{t("No skills match the current filters.")}</p>
           ) : null}
           {filteredSkills.map((skill) => {
             const updateInfo = updatesById.get(skill.id);
@@ -849,7 +851,7 @@ export const SkillLibraryPanel = ({
                     <button
                       className="resource-chip resource-chip--github library-source-open"
                       type="button"
-                      aria-label={`Open GitHub source for ${skill.id}`}
+                      aria-label={t("Open GitHub source for {{id}}", { id: skill.id })}
                       onClick={() => onOpenSource(skill.source!)}
                     >
                       <GitBranch size={13} strokeWidth={2.2} />
@@ -859,20 +861,20 @@ export const SkillLibraryPanel = ({
                   ) : (
                     <span className={`resource-chip resource-chip--${skill.sourceType}`}>
                       <Folder size={13} strokeWidth={2.2} />
-                      {skill.sourceType === "github" ? "GitHub" : "Local"}
+                      {skill.sourceType === "github" ? "GitHub" : t("Local")}
                     </span>
                   )}
                   <PreviewText
                     ariaLabel={`Full source for ${skill.id}`}
                     className="library-source-address"
-                    displayText={sourceName(skill)}
+                    displayText={t(sourceName(skill))}
                     text={sourceLabel(skill)}
                     tooltipClassName="library-source-tooltip"
                   />
                 </div>
                 <div className="library-version-cell">
                   <strong>{versionLabel}</strong>
-                  <small>{versionDetail}</small>
+                  <small>{t(versionDetail)}</small>
                 </div>
                 <div className="library-update-cell">
                   {updateAction ? (
@@ -883,8 +885,8 @@ export const SkillLibraryPanel = ({
                       type="button"
                       aria-label={
                         updateAction === "update"
-                          ? `Review update ${skill.id}`
-                          : `Retry update check ${skill.id}`
+                          ? t("Review update {{id}}", { id: skill.id })
+                          : t("Retry update check {{id}}", { id: skill.id })
                       }
                       disabled={updateCheckStatus?.state === "checking"}
                       onClick={(event) => {
@@ -897,7 +899,7 @@ export const SkillLibraryPanel = ({
                       ) : (
                         <TriangleAlert size={14} strokeWidth={2.2} />
                       )}
-                      <span>{updateAction === "update" ? "Update" : "Retry"}</span>
+                      <span>{t(updateAction === "update" ? "Update" : "Retry")}</span>
                     </button>
                   ) : (
                     <strong
@@ -911,26 +913,26 @@ export const SkillLibraryPanel = ({
                       ) : (
                         <CheckCircle2 size={13} strokeWidth={2.2} />
                       )}
-                      <span>{updateLabel}</span>
+                      <span>{t(updateLabel)}</span>
                     </strong>
                   )}
                   {updateInfo?.latestRevision ? (
                     <small>
-                      {updateInfo.latestRevision.slice(0, 7)} {hasUpdate ? "available" : "current"}
+                      {updateInfo.latestRevision.slice(0, 7)} {t(hasUpdate ? "available" : "current")}
                     </small>
                   ) : hasError ? (
-                    <small>Source check failed</small>
+                    <small>{t("Source check failed")}</small>
                   ) : null}
                 </div>
                 <div className="library-usage-cell">
                   <strong className="usage-summary">
                     <Users size={13} strokeWidth={2.2} />
-                    {usageCount} {usageCount === 1 ? "profile" : "profiles"}
+                    {t(usageCount === 1 ? "{{count}} profile" : "{{count}} profiles", { count: usageCount })}
                   </strong>
                   <small>
                     {(skillUsage[skill.id] ?? []).length > 0
                       ? (skillUsage[skill.id] ?? []).join(", ")
-                      : "Not used"}
+                      : t("Not used")}
                   </small>
                 </div>
                 <div className="library-installs-cell">
@@ -939,16 +941,21 @@ export const SkillLibraryPanel = ({
                       <button
                         className="library-row-inline-action"
                         type="button"
-                        aria-label={`Sync ${staleCopies.length === 1 ? "install" : `${staleCopies.length} installs`} of ${skill.id}`}
+                        aria-label={t(
+                          staleCopies.length === 1
+                            ? "Sync install of {{id}}"
+                            : "Sync {{count}} installs of {{id}}",
+                          { count: staleCopies.length, id: skill.id }
+                        )}
                         onClick={() => onSyncSkillInstalls(skill.id)}
                       >
                         <RefreshCw size={14} strokeWidth={2.2} />
-                        <span>Sync</span>
+                        <span>{t("Sync")}</span>
                       </button>
-                      <small>{staleCopies.length} out of sync</small>
+                      <small>{t("{{count}} out of sync", { count: staleCopies.length })}</small>
                     </>
                   ) : null}
-                  {installs.length === 0 ? <strong className="library-install-empty">Not installed</strong> : null}
+                  {installs.length === 0 ? <strong className="library-install-empty">{t("Not installed")}</strong> : null}
                   {staleCopies.length === 0 ? installs.slice(0, 1).map((install) => (
                     <span className="library-install-entry" key={install.path}>
                       <span title={install.foundIn.map(targetName).join(", ")}>
@@ -967,15 +974,15 @@ export const SkillLibraryPanel = ({
                         )}
                         {install.status === "managed"
                           ? install.installMethod === "linked"
-                            ? "Live link"
+                            ? t("Live link")
                             : install.contentMatchesLibrary === false
-                              ? "Needs sync"
-                              : "Synced"
+                              ? t("Needs sync")
+                              : t("Synced")
                           : install.status === "library"
-                            ? "Imported"
+                            ? t("Imported")
                             : install.status === "ignored"
-                              ? "Ignored"
-                              : "Unmanaged"}
+                              ? t("Ignored")
+                              : t("Unmanaged")}
                       </strong>
                     </span>
                   )) : null}
@@ -985,7 +992,7 @@ export const SkillLibraryPanel = ({
                     <button
                       className="icon-action"
                       type="button"
-                      aria-label={`More actions for ${skill.id}`}
+                      aria-label={t("More actions for {{id}}", { id: skill.id })}
                       aria-expanded={openActionId === skill.id}
                       onClick={(event) => toggleActionMenu(skill.id, event.currentTarget)}
                     >
@@ -998,7 +1005,7 @@ export const SkillLibraryPanel = ({
                           className="row-action-popover"
                           data-skill-action-popover={skill.id}
                           role="menu"
-                          aria-label={`Actions for ${skill.id}`}
+                          aria-label={t("Actions for {{id}}", { id: skill.id })}
                           style={{ left: openAction.left, top: openAction.top }}
                         >
                           {hasUpdateSource && isTracked ? (
@@ -1016,11 +1023,11 @@ export const SkillLibraryPanel = ({
                             >
                               <RefreshCw size={14} strokeWidth={2.2} />
                               <span>
-                                <strong>{hasUpdate ? "Preview update" : "Check update"}</strong>
+                                <strong>{t(hasUpdate ? "Preview update" : "Check update")}</strong>
                                 <small>
                                   {hasUpdate
-                                    ? "Review changes before updating."
-                                    : "Preview changes from the tracked source."}
+                                    ? t("Review changes before updating.")
+                                    : t("Preview changes from the tracked source.")}
                                 </small>
                               </span>
                             </button>
@@ -1028,23 +1035,23 @@ export const SkillLibraryPanel = ({
                           <div className="row-action-source">
                             <div className="row-action-source-title">
                               <Settings2 size={14} strokeWidth={2.2} />
-                              Update source
-                              <InfoTip label="Use a local skill folder or a GitHub tree directory. The library stores the source path, not duplicated skill copies per profile." />
+                              {t("Update source")}
+                              <InfoTip label={t("Use a local skill folder or a GitHub tree directory. The library stores the source path, not duplicated skill copies per profile.")} />
                             </div>
                             <div className="row-action-update-policy">
                               <span>
-                                <strong>Track updates</strong>
+                                <strong>{t("Track updates")}</strong>
                                 <small>
                                   {isTracked
-                                    ? "Include in manual and automatic checks."
+                                    ? t("Include in manual and automatic checks.")
                                     : hasUpdateSource
-                                      ? "Excluded from all update checks."
-                                      : "Add an update source before tracking."}
+                                      ? t("Excluded from all update checks.")
+                                      : t("Add an update source before tracking.")}
                                 </small>
                               </span>
                               <button
                                 aria-checked={isTracked}
-                                aria-label={`Track updates for ${skill.id}`}
+                                aria-label={t("Track updates for {{id}}", { id: skill.id })}
                                 className={`settings-switch${isTracked ? " is-on" : ""}`}
                                 disabled={!hasUpdateSource}
                                 role="switch"
@@ -1060,12 +1067,12 @@ export const SkillLibraryPanel = ({
                                 <span className="settings-switch__track" aria-hidden="true">
                                   <span />
                                 </span>
-                                <strong>{isTracked ? "On" : "Off"}</strong>
+                                <strong>{t(isTracked ? "On" : "Off")}</strong>
                               </button>
                             </div>
                             <div className="library-source-editor row-action-source-editor">
                               <select
-                                aria-label={`Update source type for ${skill.id}`}
+                                aria-label={t("Update source type for {{id}}", { id: skill.id })}
                                 value={sourceDraft.sourceType}
                                 onChange={(event) =>
                                   setSourceDrafts({
@@ -1077,11 +1084,11 @@ export const SkillLibraryPanel = ({
                                   })
                                 }
                               >
-                                <option value="local">Local folder</option>
-                                <option value="github">GitHub directory</option>
+                                <option value="local">{t("Local folder")}</option>
+                                <option value="github">{t("GitHub directory")}</option>
                               </select>
                               <input
-                                aria-label={`Update source for ${skill.id}`}
+                                aria-label={t("Update source for {{id}}", { id: skill.id })}
                                 placeholder={
                                   sourceDraft.sourceType === "github"
                                     ? "https://github.com/owner/repo/tree/main/path/to/skill"
@@ -1111,7 +1118,7 @@ export const SkillLibraryPanel = ({
                                   setOpenAction(undefined);
                                 }}
                               >
-                                Save source
+                                {t("Save source")}
                               </button>
                             </div>
                           </div>
@@ -1129,8 +1136,8 @@ export const SkillLibraryPanel = ({
                           >
                             <Trash2 size={14} strokeWidth={2.2} />
                             <span>
-                              <strong>Remove from library</strong>
-                              <small>Remove the shared library copy only.</small>
+                              <strong>{t("Remove from library")}</strong>
+                              <small>{t("Remove the shared library copy only.")}</small>
                             </span>
                           </button>
                         </div>,
@@ -1156,23 +1163,31 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
-            aria-label="Delete library skill"
+            aria-label={t("Delete library skill")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">Remove from library</div>
+                <div className="section-title">{t("Remove from library")}</div>
                 <p className="muted">
                   {(skillUsage[deleteCandidate.id] ?? []).length > 0
-                    ? `${deleteCandidate.name} is used by ${(skillUsage[deleteCandidate.id] ?? []).join(", ")}. Remove it from those profiles first.`
+                    ? t("{{name}} is used by {{profiles}}. Remove it from those profiles first.", {
+                        name: deleteCandidate.name,
+                        profiles: (skillUsage[deleteCandidate.id] ?? []).join(", ")
+                      })
                     : (() => {
                         const installCount = installsFor(deleteCandidate.id).filter(
                           (item) => item.status === "managed"
                         ).length;
                         return installCount > 0
-                          ? `Remove ${deleteCandidate.name} and ${installCount} managed target ${installCount === 1 ? "install" : "installs"}? Unmanaged copies are kept.`
-                          : `Remove ${deleteCandidate.name} from the shared library?`;
+                          ? t(
+                              installCount === 1
+                                ? "Remove {{name}} and 1 managed target install? Unmanaged copies are kept."
+                                : "Remove {{name}} and {{count}} managed target installs? Unmanaged copies are kept.",
+                              { name: deleteCandidate.name, count: installCount }
+                            )
+                          : t("Remove {{name}} from the shared library?", { name: deleteCandidate.name });
                       })()}
                 </p>
               </div>
@@ -1184,7 +1199,7 @@ export const SkillLibraryPanel = ({
                 type="button"
                 onClick={() => setDeleteCandidate(undefined)}
               >
-                Cancel
+                {t("Cancel")}
               </button>
               {(skillUsage[deleteCandidate.id] ?? []).length > 0 ? (
                 <button
@@ -1195,7 +1210,7 @@ export const SkillLibraryPanel = ({
                     setDeleteCandidate(undefined);
                   }}
                 >
-                  Review profiles
+                  {t("Review profiles")}
                 </button>
               ) : (
                 <button
@@ -1207,8 +1222,8 @@ export const SkillLibraryPanel = ({
                   }}
                 >
                   {installsFor(deleteCandidate.id).some((item) => item.status === "managed")
-                    ? "Remove skill and installs"
-                    : "Remove skill"}
+                    ? t("Remove skill and installs")
+                    : t("Remove skill")}
                 </button>
               )}
             </footer>
@@ -1222,14 +1237,14 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog bulk-update-dialog"
             role="dialog"
-            aria-label="Review all skill updates"
+            aria-label={t("Review all skill updates")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">Review all skill updates</div>
-                <p className="muted">Review every tracked change before updating the shared library.</p>
+                <div className="section-title">{t("Review all skill updates")}</div>
+                <p className="muted">{t("Review every tracked change before updating the shared library.")}</p>
               </div>
             </header>
             <div className="bulk-update-list">
@@ -1237,7 +1252,7 @@ export const SkillLibraryPanel = ({
                 <details key={plan.id} open={plan.errors.length > 0}>
                   <summary>
                     <strong>{plan.name}</strong>
-                    <span>{plan.errors.length > 0 ? "Blocked" : `${plan.changes.length} file changes`}</span>
+                    <span>{plan.errors.length > 0 ? t("Blocked") : t("{{count}} file changes", { count: plan.changes.length })}</span>
                   </summary>
                   {plan.errors.map((error) => <p className="error" key={error}>{error}</p>)}
                   {plan.changes.map((change) => <code key={change.path}>{change.path}</code>)}
@@ -1245,14 +1260,14 @@ export const SkillLibraryPanel = ({
               ))}
             </div>
             <footer className="preview-actions">
-              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={onCloseBulkUpdatePreview}>Cancel</button>
+              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={onCloseBulkUpdatePreview}>{t("Cancel")}</button>
               <button
                 className="primary-action"
                 type="button"
                 disabled={bulkUpdatePlans.every((plan) => plan.errors.length > 0 || plan.changes.length === 0)}
                 onClick={() => onUpdateAllLibrarySkills(bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).map((plan) => plan.id))}
               >
-                Apply {bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).length} updates
+                {t("Apply {{count}} updates", { count: bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).length })}
               </button>
             </footer>
           </section>
@@ -1266,21 +1281,21 @@ export const SkillLibraryPanel = ({
             className="profile-form-dialog profile-form-dialog--compact external-skill-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="Import external skill"
+            aria-label={t("Import external skill")}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
                 <div className="section-title">
-                  Import {externalImportGroup.primary?.name ?? externalImport.skillKey}
+                  {t("Import {{name}}", { name: externalImportGroup.primary?.name ?? externalImport.skillKey })}
                 </div>
                 <p className="muted">
-                  Create an independent Library copy. Skills CLI files and lock data stay unchanged.
+                  {t("Create an independent Library copy. Skills CLI files and lock data stay unchanged.")}
                 </p>
               </div>
             </header>
             <fieldset className="cleanup-review-group external-source-group">
-              <legend>Source copy</legend>
+              <legend>{t("Source copy")}</legend>
               {externalImportItems.map((item) => (
                 <label className="cleanup-review-option" key={`external-${item.path}`}>
                   <input
@@ -1296,7 +1311,7 @@ export const SkillLibraryPanel = ({
                     }
                   />
                   <span>
-                    <strong>{cleanupLocationLabel(item)}</strong>
+                    <strong>{t(cleanupLocationLabel(item))}</strong>
                     <PreviewText
                       ariaLabel={`Full external source path ${item.path}`}
                       className="cleanup-option-path"
@@ -1306,8 +1321,8 @@ export const SkillLibraryPanel = ({
                   </span>
                   <em>
                     {item.externalOwnership?.state === "broken-link"
-                      ? "Missing"
-                      : `Content ${item.contentHash.slice(0, 7)}`}
+                      ? t("Missing")
+                      : t("Content {{hash}}", { hash: item.contentHash.slice(0, 7) })}
                   </em>
                 </label>
               ))}
@@ -1320,7 +1335,7 @@ export const SkillLibraryPanel = ({
                 disabled={localImportOperation}
                 onClick={() => setExternalImport(undefined)}
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 className="primary-action"
@@ -1332,7 +1347,7 @@ export const SkillLibraryPanel = ({
                 )}
                 onClick={() => void importSelectedExternalSkill()}
               >
-                {localImportOperation ? "Importing..." : "Import copy"}
+                {t(localImportOperation ? "Importing..." : "Import copy")}
               </button>
             </footer>
           </section>
@@ -1345,7 +1360,7 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact cleanup-details-dialog"
             role="dialog"
-            aria-label={`Skill details ${cleanupDetails.skillKey}`}
+            aria-label={t("Skill details {{id}}", { id: cleanupDetails.skillKey })}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
@@ -1355,20 +1370,20 @@ export const SkillLibraryPanel = ({
                   {cleanupDetails.primary?.name ?? cleanupDetails.skillKey}
                 </div>
                 <p className="muted">
-                  {cleanupDetails.primary?.description || "Local Skill details and detected locations."}
+                  {cleanupDetails.primary?.description || t("Local Skill details and detected locations.")}
                 </p>
               </div>
               <span className={`resource-chip resource-chip--${cleanupDetails.state}`}>
-                {cleanupStateLabel(cleanupDetails.state)}
+                {t(cleanupStateLabel(cleanupDetails.state))}
               </span>
             </header>
             <div className="cleanup-details-list">
               {cleanupDetails.items.map((item) => (
                 <div className="cleanup-details-location" key={`${item.status}-${item.path}`}>
                   <div>
-                    <strong>{cleanupLocationLabel(item)}</strong>
+                    <strong>{t(cleanupLocationLabel(item))}</strong>
                     <span className={`resource-chip resource-chip--${item.status}`}>
-                      {inventoryStatusLabel(item.status)}
+                      {t(inventoryStatusLabel(item.status))}
                     </span>
                   </div>
                   <PreviewText
@@ -1378,8 +1393,8 @@ export const SkillLibraryPanel = ({
                     tooltipClassName="library-source-tooltip"
                   />
                   <small>
-                    {item.libraryId ? `Library: ${item.libraryId} · ` : ""}
-                    Content {item.contentHash ? item.contentHash.slice(0, 7) : "unavailable"}
+                    {item.libraryId ? `${t("Library")}: ${item.libraryId} · ` : ""}
+                    {t("Content {{hash}}", { hash: item.contentHash ? item.contentHash.slice(0, 7) : t("unavailable") })}
                   </small>
                 </div>
               ))}
@@ -1391,7 +1406,7 @@ export const SkillLibraryPanel = ({
                 type="button"
                 onClick={() => setCleanupDetailsKey(undefined)}
               >
-                Close
+                {t("Close")}
               </button>
             </footer>
           </section>
@@ -1404,17 +1419,17 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog cleanup-review-dialog"
             role="dialog"
-            aria-label="Review skill cleanup"
+            aria-label={t("Review skill cleanup")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">Review {cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</div>
+                <div className="section-title">{t("Review {{name}}", { name: cleanupCandidate.primary?.name ?? cleanupDraft.skillKey })}</div>
                 <p className="muted">
                   {cleanupUsesExistingLibrary
-                    ? "Use the existing Library version and choose which local copies it should manage."
-                    : "Choose the local copy to keep in Library, then choose where to install that managed version."}
+                    ? t("Use the existing Library version and choose which local copies it should manage.")
+                    : t("Choose the local copy to keep in Library, then choose where to install that managed version.")}
                 </p>
               </div>
             </header>
@@ -1425,15 +1440,15 @@ export const SkillLibraryPanel = ({
                     <BookOpenText size={16} strokeWidth={2.2} />
                   </span>
                   <span>
-                    <strong>Existing Library version</strong>
-                    <small>The shared Library copy remains the source of truth.</small>
+                    <strong>{t("Existing Library version")}</strong>
+                    <small>{t("The shared Library copy remains the source of truth.")}</small>
                   </span>
                 </div>
               ) : (
                 <fieldset className="cleanup-review-group">
                   <legend>
-                    Version to keep in Library
-                    <small>Choose the copy whose contents you want to preserve.</small>
+                    {t("Version to keep in Library")}
+                    <small>{t("Choose the copy whose contents you want to preserve.")}</small>
                   </legend>
                   {cleanupCandidate.items
                     .filter((item) => item.status !== "managed" && item.status !== "ignored")
@@ -1454,7 +1469,7 @@ export const SkillLibraryPanel = ({
                           }
                         />
                         <span>
-                          <strong>{cleanupLocationLabel(item)}</strong>
+                          <strong>{t(cleanupLocationLabel(item))}</strong>
                           <PreviewText
                             ariaLabel={`Full source path ${item.path}`}
                             className="cleanup-option-path"
@@ -1469,15 +1484,15 @@ export const SkillLibraryPanel = ({
                             />
                           ) : null}
                         </span>
-                        <code>Content {item.contentHash.slice(0, 7)}</code>
+                        <code>{t("Content {{hash}}", { hash: item.contentHash.slice(0, 7) })}</code>
                       </label>
                     ))}
                 </fieldset>
               )}
               <fieldset className="cleanup-review-group">
                 <legend>
-                  Locations to manage
-                  <small>Selected copies are backed up, then replaced by the Library version.</small>
+                  {t("Locations to manage")}
+                  <small>{t("Selected copies are backed up, then replaced by the Library version.")}</small>
                 </legend>
                 {cleanupCandidate.items.map((item) => (
                   <label className="cleanup-review-option" key={`location-${item.path}`}>
@@ -1497,7 +1512,7 @@ export const SkillLibraryPanel = ({
                       })}
                     />
                     <span>
-                      <strong>{cleanupLocationLabel(item)}</strong>
+                      <strong>{t(cleanupLocationLabel(item))}</strong>
                       <PreviewText
                         ariaLabel={`Full managed path ${item.path}`}
                         className="cleanup-option-path"
@@ -1507,23 +1522,23 @@ export const SkillLibraryPanel = ({
                     </span>
                     <em>
                       {item.status === "managed"
-                        ? "Already managed"
+                        ? t("Already managed")
                         : item.status === "ignored"
-                          ? "Ignored"
+                          ? t("Ignored")
                           : !cleanupUsesExistingLibrary && cleanupDraft.canonicalPath === item.path
-                            ? "Source copy"
-                            : "Replace"}
+                            ? t("Source copy")
+                            : t("Replace")}
                     </em>
                   </label>
                 ))}
               </fieldset>
               <p className="cleanup-safety-note">
-                <strong>{cleanupDraft.selectedPaths.length} {cleanupDraft.selectedPaths.length === 1 ? "location" : "locations"}</strong>
-                {" "}will use <strong>{cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</strong> from Library. Originals are backed up first.
+                <strong>{t("{{count}} locations", { count: cleanupDraft.selectedPaths.length })}</strong>
+                {" "}{t("will use")} <strong>{cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</strong> {t("from Library. Originals are backed up first.")}
               </p>
             </div>
             <footer className="preview-actions">
-              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={() => setCleanupDraft(undefined)}>Cancel</button>
+              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={() => setCleanupDraft(undefined)}>{t("Cancel")}</button>
               <button
                 className="primary-action"
                 type="button"
@@ -1540,7 +1555,7 @@ export const SkillLibraryPanel = ({
                   setCleanupDraft(undefined);
                 }}
               >
-                Back up and take over
+                {t("Back up and take over")}
               </button>
             </footer>
           </section>
@@ -1548,19 +1563,19 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {activeTool === "discoveries" ? (
-        <section className="library-drawer" aria-label="Environment skills">
+        <section className="library-drawer" aria-label={t("Environment skills")}>
           <div className="library-drawer__header">
             <div>
               <strong>
-                Local Skill Cleanup
-                <InfoTip label="Scans supported local targets for skills that can be imported into the shared library, ignored, or kept outside AgentEnv management." />
+                {t("Local Skill Cleanup")}
+                <InfoTip label={t("Scans supported local targets for skills that can be imported into the shared library, ignored, or kept outside AgentEnv management.")} />
               </strong>
             </div>
             <div className="library-drawer__actions">
               <button
                 className="secondary-action library-drawer__refresh"
                 type="button"
-                aria-label="Refresh local skills"
+                aria-label={t("Refresh local skills")}
                 disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
                 onClick={() => void onRefreshInventory()}
               >
@@ -1569,12 +1584,12 @@ export const SkillLibraryPanel = ({
                   size={14}
                   strokeWidth={2.2}
                 />
-                <span>{isRefreshingInventory ? "Refreshing" : "Refresh"}</span>
+                <span>{t(isRefreshingInventory ? "Refreshing" : "Refresh")}</span>
               </button>
               <button
                 className="icon-action"
                 type="button"
-                aria-label="Close library tool"
+                aria-label={t("Close library tool")}
                 disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
                 onClick={onCloseTool}
               >
@@ -1586,19 +1601,19 @@ export const SkillLibraryPanel = ({
             <div className="cleanup-section-heading">
               <div>
                 <div className="resource-heading">
-                  Cleanup groups
-                  <InfoTip label="Each group represents one skill found across local agent folders. Safe groups can be managed automatically; content conflicts and external ownership require review." />
+                  {t("Cleanup groups")}
+                  <InfoTip label={t("Each group represents one skill found across local agent folders. Safe groups can be managed automatically; content conflicts and external ownership require review.")} />
                 </div>
                 <small>
-                  {automaticCleanupRequests.length} auto-ready
-                  {manualCleanupCount > 0 ? ` · ${manualCleanupCount} need review` : ""}
+                  {t("{{count}} auto-ready", { count: automaticCleanupRequests.length })}
+                  {manualCleanupCount > 0 ? ` · ${t("{{count}} need review", { count: manualCleanupCount })}` : ""}
                 </small>
               </div>
               {automaticCleanupRequests.length > 0 ? (
                 <button
                   className="primary-action cleanup-auto-action"
                   type="button"
-                  aria-label={`Take over ${automaticCleanupRequests.length} skills`}
+                  aria-label={t("Take over {{count}} skills", { count: automaticCleanupRequests.length })}
                   disabled={Boolean(automaticCleanupKey)}
                   onClick={() => void runAutomaticCleanup("all", automaticCleanupRequests)}
                 >
@@ -1608,14 +1623,14 @@ export const SkillLibraryPanel = ({
                     strokeWidth={2.2}
                     aria-hidden="true"
                   />
-                  {automaticCleanupKey === "all" ? "Taking over..." : "Take over all"}
+                  {t(automaticCleanupKey === "all" ? "Taking over..." : "Take over all")}
                 </button>
               ) : null}
             </div>
             <div className="resource-list resource-list--unmanaged">
               {cleanupGroups.length === 0 ? (
                 <p className="muted library-empty">
-                  No target skills detected. Install skills into a supported target and scan again.
+                  {t("No target skills detected. Install skills into a supported target and scan again.")}
                 </p>
               ) : null}
               {cleanupGroups.map((group) => {
@@ -1623,12 +1638,12 @@ export const SkillLibraryPanel = ({
                 const allIgnored = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
                 const automaticRequest = automaticSkillCleanupRequest(group);
-                const chipLabel = cleanupStateLabel(group.state);
-                const actionLabel = group.state === "conflict" ? "Resolve conflict" : "Review";
+                const chipLabel = t(cleanupStateLabel(group.state));
+                const actionLabel = t(group.state === "conflict" ? "Resolve conflict" : "Review");
 
                 return (
                   <div
-                    aria-label={`Cleanup group ${group.skillKey}`}
+                    aria-label={t("Cleanup group {{id}}", { id: group.skillKey })}
                     className="resource-row cleanup-group-row"
                     key={group.skillKey}
                     role="group"
@@ -1642,7 +1657,7 @@ export const SkillLibraryPanel = ({
                           <span
                             className={`cleanup-resolution cleanup-resolution--${group.resolution}`}
                           >
-                            {group.resolution === "automatic" ? "Auto-ready" : "Review"}
+                            {t(group.resolution === "automatic" ? "Auto-ready" : "Review")}
                           </span>
                           <InfoTip label={group.resolutionReason} />
                         </span>
@@ -1673,7 +1688,7 @@ export const SkillLibraryPanel = ({
                       />
                       {group.state === "external" ? (
                         <span className="cleanup-group-owner">
-                          Managed externally by Skills CLI
+                          {t("Managed externally by Skills CLI")}
                         </span>
                       ) : null}
                     </div>
@@ -1681,27 +1696,27 @@ export const SkillLibraryPanel = ({
                       <button
                         className="secondary-action"
                         type="button"
-                        aria-label={`View details ${group.skillKey}`}
+                        aria-label={t("View details {{id}}", { id: group.skillKey })}
                         disabled={Boolean(automaticCleanupKey)}
                         onClick={() => setCleanupDetailsKey(group.skillKey)}
                       >
-                        Details
+                        {t("Details")}
                       </button>
                       {automaticRequest ? (
                         <button
                           className="secondary-action"
                           type="button"
-                          aria-label={`Take over ${group.skillKey}`}
+                          aria-label={t("Take over {{id}}", { id: group.skillKey })}
                           disabled={Boolean(automaticCleanupKey)}
                           onClick={() => void runAutomaticCleanup(group.skillKey, [automaticRequest])}
                         >
-                          {automaticCleanupKey === group.skillKey ? "Taking over..." : "Take over"}
+                          {t(automaticCleanupKey === group.skillKey ? "Taking over..." : "Take over")}
                         </button>
                       ) : group.state === "external" && !group.items.some((item) => item.libraryId) ? (
                         <button
                           className="secondary-action"
                           type="button"
-                          aria-label={`Import copy ${group.skillKey}`}
+                          aria-label={t("Import copy {{id}}", { id: group.skillKey })}
                           disabled={Boolean(automaticCleanupKey) || !group.activeItems.some(
                             (item) =>
                               item.status === "external" &&
@@ -1721,7 +1736,7 @@ export const SkillLibraryPanel = ({
                             }
                           }}
                         >
-                          Import copy
+                          {t("Import copy")}
                         </button>
                       ) : group.resolution === "manual" && group.state !== "external" ? (
                         <button
@@ -1738,22 +1753,22 @@ export const SkillLibraryPanel = ({
                         <button
                           className="secondary-action"
                           type="button"
-                          aria-label={`Ignore group ${group.skillKey}`}
+                          aria-label={t("Ignore group {{id}}", { id: group.skillKey })}
                           disabled={Boolean(automaticCleanupKey)}
                           onClick={() => onIgnoreSkillGroup(group.skillKey)}
                         >
-                          Ignore
+                          {t("Ignore")}
                         </button>
                       ) : null}
                       {hasIgnored ? (
                         <button
                           className="secondary-action"
                           type="button"
-                          aria-label={`Unignore group ${group.skillKey}`}
+                          aria-label={t("Unignore group {{id}}", { id: group.skillKey })}
                           disabled={Boolean(automaticCleanupKey)}
                           onClick={() => onUnignoreSkillGroup(group.skillKey)}
                         >
-                          {allIgnored ? "Unignore" : "Restore ignored"}
+                          {t(allIgnored ? "Unignore" : "Restore ignored")}
                         </button>
                       ) : null}
                     </div>
@@ -1761,18 +1776,18 @@ export const SkillLibraryPanel = ({
                 );
               })}
             </div>
-            <section className="cleanup-history-section" aria-label="Cleanup history">
+            <section className="cleanup-history-section" aria-label={t("Cleanup history")}>
               <div className="resource-heading">
-                Cleanup history
-                <InfoTip label="Every cleanup creates a restorable backup. Restoring returns the affected local copies to their state before cleanup." />
+                {t("Cleanup history")}
+                <InfoTip label={t("Every cleanup creates a restorable backup. Restoring returns the affected local copies to their state before cleanup.")} />
               </div>
               {cleanupBackups.length === 0 ? (
-                <p className="muted library-empty">No cleanup backups yet.</p>
+                <p className="muted library-empty">{t("No cleanup backups yet.")}</p>
               ) : (
                 <div className="resource-list resource-list--unmanaged cleanup-history-list">
                   {cleanupBackups.map((backup) => (
                     <div className="resource-row cleanup-history-row" key={backup.id}>
-                      <span className="resource-chip resource-chip--managed">Backup</span>
+                      <span className="resource-chip resource-chip--managed">{t("Backup")}</span>
                       <div className="resource-row__main">
                         <PreviewText
                           ariaLabel={`Full cleanup history name ${backup.libraryId}`}
@@ -1782,20 +1797,20 @@ export const SkillLibraryPanel = ({
                         <PreviewText
                           ariaLabel={`Full cleanup history details ${backup.libraryId}`}
                           className="cleanup-history-details"
-                          displayText={`${backup.operation === "remove" ? "Removal" : "Cleanup"} · ${backup.locationCount} ${backup.locationCount === 1 ? "location" : "locations"} · ${new Date(backup.createdAt).toLocaleString()}`}
-                          text={`${backup.operation === "remove" ? "Removal" : "Cleanup"} · ${backup.locationCount} ${backup.locationCount === 1 ? "location" : "locations"} · ${new Date(backup.createdAt).toLocaleString()}`}
+                          displayText={`${t(backup.operation === "remove" ? "Removal" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          text={`${t(backup.operation === "remove" ? "Removal" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
                         />
                       </div>
                       <div className="cleanup-group-actions">
                         <button
                           className="secondary-action"
                           type="button"
-                          aria-label={`Restore cleanup ${backup.libraryId}`}
+                          aria-label={t("Restore cleanup {{id}}", { id: backup.libraryId })}
                           disabled={Boolean(automaticCleanupKey)}
                           onClick={() => onRestoreCleanup(backup.id)}
                         >
                           <RotateCcw size={14} aria-hidden="true" />
-                          Restore
+                          {t("Restore")}
                         </button>
                       </div>
                     </div>
@@ -1814,16 +1829,16 @@ export const SkillLibraryPanel = ({
                 ref={importDialogRef}
                 className="library-drawer library-import-dialog"
                 role="dialog"
-                aria-label="Import skills"
+                aria-label={t("Import skills")}
                 aria-modal="true"
                 tabIndex={-1}
               >
                 <div className="library-drawer__header">
-                  <strong>Import skills</strong>
+                  <strong>{t("Import skills")}</strong>
                   <button
                     className="icon-action"
                     type="button"
-                    aria-label="Close import"
+                    aria-label={t("Close import")}
                     disabled={Boolean(githubOperation) || localImportOperation}
                     onClick={onCloseTool}
                   >
@@ -1834,27 +1849,27 @@ export const SkillLibraryPanel = ({
                 {!githubScanResult ? (
                   <div className="library-import-content">
                     <section className="resource-section library-import-panel">
-                      <div className="resource-heading">Local folder</div>
+                      <div className="resource-heading">{t("Local folder")}</div>
                       <div className="library-import-grid">
                         <label>
-                          <span>Selected folder</span>
+                          <span>{t("Selected folder")}</span>
                           <input
-                            aria-label="Local skill folder path"
-                            placeholder="No folder selected"
+                            aria-label={t("Local skill folder path")}
+                            placeholder={t("No folder selected")}
                             readOnly
                             value={localSkillPath}
                           />
                         </label>
                         <button
                           className="secondary-action"
-                          aria-label="Choose local skill folder"
+                          aria-label={t("Choose local skill folder")}
                           type="button"
                           disabled={localImportOperation || Boolean(githubOperation)}
                           onClick={() => {
                             void selectLocalSkillFolder();
                           }}
                         >
-                          Choose folder
+                          {t("Choose folder")}
                         </button>
                         <button
                           className="primary-action library-import-action"
@@ -1867,7 +1882,7 @@ export const SkillLibraryPanel = ({
                           }
                           onClick={() => void importLocalSkill()}
                         >
-                          {localImportOperation ? "Importing..." : localImportLabel}
+                          {localImportOperation ? t("Importing...") : t(localImportLabel)}
                         </button>
                       </div>
                       {localImportImpact ? (
@@ -1891,12 +1906,12 @@ export const SkillLibraryPanel = ({
                     <section className="resource-section library-import-panel">
                       <div className="resource-heading">
                         GitHub
-                        <InfoTip label="Paste a skill, directory, or repository URL." />
+                        <InfoTip label={t("Paste a skill, directory, or repository URL.")} />
                       </div>
                       <label className="github-scan-field">
-                        <span>GitHub URL</span>
+                        <span>{t("GitHub URL")}</span>
                         <input
-                          aria-label="GitHub skill URL"
+                          aria-label={t("GitHub skill URL")}
                           placeholder="https://github.com/owner/repo"
                           disabled={localImportOperation}
                           value={githubUrl}
@@ -1909,7 +1924,7 @@ export const SkillLibraryPanel = ({
                   <div className="github-scan-results">
                     <div className="github-scan-summary">
                       <div>
-                        <strong>{githubScanResult.candidates.length} found</strong>
+                        <strong>{t("{{count}} found", { count: githubScanResult.candidates.length })}</strong>
                         <span>{githubScanResult.owner}/{githubScanResult.repo} · {githubScanResult.ref}</span>
                       </div>
                       <button
@@ -1922,19 +1937,19 @@ export const SkillLibraryPanel = ({
                           setGithubOperationError("");
                         }}
                       >
-                        Change
+                        {t("Change")}
                       </button>
                     </div>
                     {githubScanResult.truncated ? (
                       <div className="inline-state inline-state--warning" role="status">
                         <TriangleAlert size={15} aria-hidden="true" />
-                        Results are incomplete. GitHub truncated this repository tree.
+                        {t("Results are incomplete. GitHub truncated this repository tree.")}
                       </div>
                     ) : null}
                     <label className="github-select-all">
                       <input
                         type="checkbox"
-                        aria-label="Select all discovered skills"
+                        aria-label={t("Select all discovered skills")}
                         checked={
                           githubScanResult.candidates.some((candidate) => candidate.status === "ready") &&
                           githubScanResult.candidates
@@ -1951,12 +1966,12 @@ export const SkillLibraryPanel = ({
                           )
                         }
                       />
-                      <span>Select all</span>
-                      <strong>{githubSelectedIds.length} selected</strong>
+                      <span>{t("Select all")}</span>
+                      <strong>{t("{{count}} selected", { count: githubSelectedIds.length })}</strong>
                     </label>
                     <div className="github-candidate-list">
                       {githubScanResult.candidates.length === 0 ? (
-                        <div className="inline-state">No skills found</div>
+                        <div className="inline-state">{t("No skills found")}</div>
                       ) : null}
                       {githubScanResult.candidates.map((candidate) => {
                         const selectable = candidate.status === "ready";
@@ -1971,7 +1986,7 @@ export const SkillLibraryPanel = ({
                           >
                             <input
                               type="checkbox"
-                              aria-label={`Select ${candidate.name}`}
+                              aria-label={t("Select {{name}}", { name: candidate.name })}
                               disabled={!selectable || Boolean(githubOperation)}
                               checked={checked}
                               onChange={(event) => {
@@ -2000,7 +2015,7 @@ export const SkillLibraryPanel = ({
                             {selectable ? (
                               <input
                                 className="github-candidate-id"
-                                aria-label={`Library ID for ${candidate.name}`}
+                                aria-label={t("Library ID for {{name}}", { name: candidate.name })}
                                 disabled={Boolean(githubOperation)}
                                 value={githubCandidateIds[candidate.id] ?? candidate.id}
                                 onChange={(event) => {
@@ -2013,7 +2028,7 @@ export const SkillLibraryPanel = ({
                               />
                             ) : (
                               <span className="resource-chip resource-chip--managed">
-                                {candidate.status === "duplicate" ? "Duplicate" : "Imported"}
+                                {t(candidate.status === "duplicate" ? "Duplicate" : "Imported")}
                               </span>
                             )}
                           </div>
@@ -2036,7 +2051,7 @@ export const SkillLibraryPanel = ({
                     disabled={Boolean(githubOperation) || localImportOperation}
                     onClick={onCloseTool}
                   >
-                    Cancel
+                    {t("Cancel")}
                   </button>
                   {!githubScanResult ? (
                     <button
@@ -2047,7 +2062,7 @@ export const SkillLibraryPanel = ({
                         void scanGitHub();
                       }}
                     >
-                      {githubOperation === "scanning" ? "Scanning..." : "Scan"}
+                      {t(githubOperation === "scanning" ? "Scanning..." : "Scan")}
                     </button>
                   ) : (
                     <button
@@ -2058,7 +2073,7 @@ export const SkillLibraryPanel = ({
                         void importSelectedGitHubSkills();
                       }}
                     >
-                      {githubOperation === "importing" ? "Importing..." : `Import ${githubSelectedIds.length}`}
+                      {githubOperation === "importing" ? t("Importing...") : t("Import {{count}}", { count: githubSelectedIds.length })}
                     </button>
                   )}
                 </footer>

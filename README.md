@@ -57,6 +57,12 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 
 新增 agent 的理想方式是写一个独立 target adapter，然后注册到 `src/main/targets/registry.ts`。核心切换流程不应该为了新增 agent 大改。
 
+### 界面语言
+
+- 支持 English、简体中文和繁體中文。
+- 首次运行默认跟随 macOS 系统语言；不支持的系统语言回退为 English。
+- 可在 Settings > Appearance > Language 中即时切换，选择会持久化，无需重启应用。
+
 ## 技术栈
 
 - Electron

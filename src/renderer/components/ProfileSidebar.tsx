@@ -7,6 +7,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import type { ProfileSummary, TargetHealthStatus, TargetInfo } from "../../shared/types";
+import { useI18n } from "../i18n";
 
 const appIconUrl = new URL("../assets/app-icon.png", import.meta.url).href;
 const claudeIconUrl = new URL("../assets/target-icons/claude.svg", import.meta.url).href;
@@ -25,13 +26,6 @@ interface ProfileSidebarProps {
   onWorkspaceSelect(workspace: AppWorkspace): void;
   onLibraryTabSelect(tab: LibraryTab): void;
 }
-
-const targetStatusLabel: Record<TargetHealthStatus, string> = {
-  ready: "Ready",
-  "needs-setup": "Needs setup",
-  missing: "Missing",
-  guarded: "Guarded"
-};
 
 type TargetIconFlavor = "opencode" | "codex" | "claude" | "generic";
 
@@ -83,6 +77,7 @@ export const ProfileSidebar = ({
   onWorkspaceSelect,
   onLibraryTabSelect
 }: ProfileSidebarProps) => {
+  const { t } = useI18n();
   const readyTargets = targets.filter((target) => target.health.status === "ready").length;
   const statusTargets = [...targets]
     .sort((left, right) => targetDisplayRank(left) - targetDisplayRank(right))
@@ -94,8 +89,8 @@ export const ProfileSidebar = ({
     detail: string;
     icon: LucideIcon;
   }> = [
-    { id: "skills", label: "Skills", detail: "Skill library", icon: BookOpen },
-    { id: "mcp", label: "MCP Servers", detail: "Shared servers", icon: Network }
+    { id: "skills", label: t("Skills"), detail: t("Skill library"), icon: BookOpen },
+    { id: "mcp", label: t("MCP Servers"), detail: t("Shared servers"), icon: Network }
   ];
   const workspaceItems: Array<{
     id: AppWorkspace;
@@ -103,12 +98,12 @@ export const ProfileSidebar = ({
     detail: string;
     icon: LucideIcon;
   }> = [
-    { id: "profiles", label: "Profiles", detail: "Compose environments", icon: Boxes },
-    { id: "targets", label: "Targets", detail: "Local agent runtimes", icon: Monitor }
+    { id: "profiles", label: t("Profiles"), detail: t("Compose environments"), icon: Boxes },
+    { id: "targets", label: t("Targets"), detail: t("Local agent runtimes"), icon: Monitor }
   ];
 
   return (
-    <aside className="sidebar global-sidebar" aria-label="Global navigation">
+    <aside className="sidebar global-sidebar" aria-label={t("Global navigation")}>
       <div className="sidebar__header">
         <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true">
@@ -120,8 +115,8 @@ export const ProfileSidebar = ({
           </div>
         </div>
       </div>
-      <nav className="workspace-nav" aria-label="Workspace">
-        <div className="nav-section-label">Library</div>
+      <nav className="workspace-nav" aria-label={t("Workspace")}>
+        <div className="nav-section-label">{t("Library")}</div>
         {libraryItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -142,7 +137,7 @@ export const ProfileSidebar = ({
             </button>
           );
         })}
-        <div className="nav-section-label">Workspace</div>
+        <div className="nav-section-label">{t("Workspace")}</div>
         {workspaceItems.map((item) => {
           const Icon = item.icon;
           return (
@@ -161,9 +156,9 @@ export const ProfileSidebar = ({
             </button>
           );
         })}
-        <div className="nav-section-label">Settings</div>
+        <div className="nav-section-label">{t("Settings")}</div>
         <button
-          aria-label="Settings"
+          aria-label={t("Settings")}
           className={`workspace-button${activeWorkspace === "settings" ? " is-active" : ""}`}
           type="button"
           onClick={() => onWorkspaceSelect("settings")}
@@ -171,26 +166,41 @@ export const ProfileSidebar = ({
           <span className="workspace-button__icon" aria-hidden="true">
             <Settings size={16} strokeWidth={2.2} />
           </span>
-          <span>Settings</span>
-          <small>Storage and safety</small>
+          <span>{t("Settings")}</span>
+          <small>{t("Storage and safety")}</small>
         </button>
       </nav>
-      <section className="system-status-card" aria-label="System status">
+      <section className="system-status-card" aria-label={t("System status")}>
         <div>
           <span className="status-dot is-ready" />
-          <strong>Local agents</strong>
+          <strong>{t("Local agents")}</strong>
         </div>
         <small>
-          {readyTargets}/{targets.length} targets · {isLoading ? "Loading" : `${profiles.length} profiles`}
+          {t("{{ready}}/{{total}} targets · {{profiles}}", {
+            ready: readyTargets,
+            total: targets.length,
+            profiles: isLoading
+              ? t("Loading")
+              : t(profiles.length === 1 ? "{{count}} profile" : "{{count}} profiles", {
+                  count: profiles.length
+                })
+          })}
         </small>
-        <div className="agent-chip-row" aria-label="Connected targets">
+        <div className="agent-chip-row" aria-label={t("Connected targets")}>
           {statusTargets.map((target) => {
             const targetIcon = targetIconFor(target);
 
             return (
               <span
                 className={`agent-chip agent-chip--${target.health.status} agent-chip--${targetIcon.flavor}`}
-                title={`${target.name} · ${targetStatusLabel[target.health.status]}`}
+                title={`${target.name} · ${t(
+                  ({
+                    ready: "Ready",
+                    "needs-setup": "Needs setup",
+                    missing: "Missing",
+                    guarded: "Guarded"
+                  } satisfies Record<TargetHealthStatus, string>)[target.health.status]
+                )}`}
                 key={target.id}
               >
                 {targetIcon.assetUrl ? (

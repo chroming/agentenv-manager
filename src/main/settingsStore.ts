@@ -6,6 +6,7 @@ import type { AgentEnvPaths } from "./paths";
 import { hashComparableResource } from "./resourceHash";
 
 const SettingsSchema = z.object({
+  locale: z.enum(["system", "en", "zh_CN", "zh_TW"]).default("system"),
   skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("symlink"),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
@@ -13,6 +14,7 @@ const SettingsSchema = z.object({
 });
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
+  locale: "system",
   skillSyncMethod: "symlink",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,

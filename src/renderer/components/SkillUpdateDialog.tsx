@@ -3,6 +3,7 @@ import type { SkillUpdatePlan } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffViewer } from "./DiffViewer";
 import { Button, ModalFrame } from "./ui";
+import { useI18n } from "../i18n";
 
 interface SkillUpdateDialogProps {
   plan?: SkillUpdatePlan;
@@ -19,6 +20,7 @@ export const SkillUpdateDialog = ({
   onClose,
   onConfirm
 }: SkillUpdateDialogProps) => {
+  const { t } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const initialFocusRef = useRef<HTMLButtonElement>(null);
 
@@ -37,7 +39,7 @@ export const SkillUpdateDialog = ({
 
   return (
     <ModalFrame
-      ariaLabel={`Update preview for ${plan.id}`}
+      ariaLabel={t("Update preview for {{id}}", { id: plan.id })}
       className="skill-update-dialog"
       dialogRef={dialogRef}
       dismissDisabled={busy}
@@ -45,9 +47,9 @@ export const SkillUpdateDialog = ({
     >
         <header className="profile-dialog-header">
           <div>
-            <div className="section-title">Update {plan.name}</div>
+            <div className="section-title">{t("Update {{name}}", { name: plan.name })}</div>
             <p className="muted">
-              {plan.changes.length} file {plan.changes.length === 1 ? "change" : "changes"}
+              {t("{{count}} file changes", { count: plan.changes.length })}
               {plan.latestRevision
                 ? ` · ${(plan.currentRevision ?? "current").slice(0, 7)} → ${plan.latestRevision.slice(0, 7)}`
                 : ""}
@@ -70,16 +72,16 @@ export const SkillUpdateDialog = ({
             size="prominent"
             onClick={onClose}
           >
-            Cancel
+            {t("Cancel")}
           </Button>
           <Button
-            aria-label={`Apply update ${plan.id}`}
+            aria-label={t("Apply update {{id}}", { id: plan.id })}
             disabled={busy}
             size="prominent"
             variant="primary"
             onClick={() => onConfirm(plan.id)}
           >
-            {busy ? "Updating..." : "Update skill"}
+            {t(busy ? "Updating..." : "Update skill")}
           </Button>
         </footer>
     </ModalFrame>

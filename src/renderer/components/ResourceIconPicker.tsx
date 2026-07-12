@@ -14,6 +14,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import type { ResourceIconKey } from "../../shared/types";
+import { useI18n } from "../i18n";
 
 const iconOptions: Array<{ key: ResourceIconKey; label: string; icon: LucideIcon }> = [
   { key: "github", label: "GitHub", icon: GitBranch },
@@ -54,6 +55,7 @@ export const ResourceIconPicker = ({
   triggerLabel?: string;
   className?: string;
 }) => {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<CSSProperties>();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -120,10 +122,10 @@ export const ResourceIconPicker = ({
         className={`resource-icon-trigger ${className}`.trim()}
         data-icon={iconKey}
         type="button"
-        aria-label={triggerLabel ?? `Change icon for ${label}`}
+        aria-label={triggerLabel ?? t("Change icon for {{name}}", { name: label })}
         aria-expanded={open}
         aria-haspopup="menu"
-        title={`Change icon for ${label}`}
+        title={t("Change icon for {{name}}", { name: label })}
         onClick={toggle}
       >
         <ResourceIcon iconKey={iconKey} />
@@ -134,7 +136,7 @@ export const ResourceIconPicker = ({
               ref={menuRef}
               className="resource-icon-menu"
               role="menu"
-              aria-label={`Icons for ${label}`}
+              aria-label={t("Icons for {{name}}", { name: label })}
               style={position}
             >
               {iconOptions.map((option) => (
@@ -145,8 +147,8 @@ export const ResourceIconPicker = ({
                   type="button"
                   role="menuitemradio"
                   aria-checked={option.key === iconKey}
-                  aria-label={option.label}
-                  title={option.label}
+                  aria-label={t(option.label)}
+                  title={t(option.label)}
                   key={option.key}
                   onClick={() => {
                     onChange(option.key);
