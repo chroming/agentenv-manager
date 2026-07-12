@@ -3849,8 +3849,31 @@ const AppContent = ({
                     {t("AgentEnv data")}
                   </div>
                 </label>
-                <div className="settings-toggle-field">
-                  <span>{t("Auto-check")}</span>
+                <div className="settings-auto-check-row">
+                  <span className="settings-auto-check-copy">
+                    <strong>{t("Auto-check")}</strong>
+                    <small>{t("Checks only skills that have per-skill update checks enabled.")}</small>
+                  </span>
+                  <label className="settings-interval-field">
+                    <span>{t("Check interval")}</span>
+                    <span className="settings-interval-control">
+                      <input
+                        aria-label={t("Skill auto check interval minutes")}
+                        min={5}
+                        max={1440}
+                        step={5}
+                        type="number"
+                        disabled={!skillSettings.skillAutoCheckEnabled || busy}
+                        value={skillSettings.skillAutoCheckIntervalMinutes}
+                        onChange={(event) =>
+                          updateSkillSettings({
+                            skillAutoCheckIntervalMinutes: Number(event.currentTarget.value)
+                          })
+                        }
+                      />
+                      <span aria-hidden="true">{t("min")}</span>
+                    </span>
+                  </label>
                   <Switch
                     checked={skillSettings.skillAutoCheckEnabled}
                     label={t("Skill auto update check")}
@@ -3860,30 +3883,8 @@ const AppContent = ({
                         skillAutoCheckEnabled: !skillSettings.skillAutoCheckEnabled
                       })
                     }
-                  >
-                    <strong>{skillSettings.skillAutoCheckEnabled ? t("Enabled") : t("Disabled")}</strong>
-                  </Switch>
-                  <small className="settings-field-note">
-                    {t("Checks only skills that have per-skill update checks enabled.")}
-                  </small>
-                </div>
-                <label>
-                  <span>{t("Check interval")}</span>
-                  <input
-                    aria-label={t("Skill auto check interval minutes")}
-                    min={5}
-                    max={1440}
-                    step={5}
-                    type="number"
-                    disabled={!skillSettings.skillAutoCheckEnabled || busy}
-                    value={skillSettings.skillAutoCheckIntervalMinutes}
-                    onChange={(event) =>
-                      updateSkillSettings({
-                        skillAutoCheckIntervalMinutes: Number(event.currentTarget.value)
-                      })
-                    }
                   />
-                </label>
+                </div>
               </div>
             </section>
             <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">

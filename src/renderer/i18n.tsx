@@ -82,6 +82,7 @@ const zhCN: Record<string, string> = {
   "Checks only skills that have per-skill update checks enabled.": "仅检查已单独启用更新检查的技能。",
   "Check interval": "检查间隔",
   "Skill auto check interval minutes": "技能自动检查间隔（分钟）",
+  "min": "分钟",
   "Profiles, Library resources, deployment state, and recovery backups.": "配置方案、资源库、部署状态与恢复备份。",
   "Open folder": "打开文件夹",
   "Create backup": "创建备份",

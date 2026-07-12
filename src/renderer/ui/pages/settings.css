@@ -70,15 +70,13 @@
   justify-content: space-between;
 }
 
-.settings-page .resource-settings-grid > label,
-.settings-page .settings-toggle-field {
+.settings-page .resource-settings-grid > label {
   align-content: start;
   display: grid;
   gap: 6px;
 }
 
-.settings-page .resource-settings-grid > label > span,
-.settings-page .settings-toggle-field > span {
+.settings-page .resource-settings-grid > label > span {
   color: var(--text);
   font-size: 13px;
   font-weight: 650;
@@ -135,60 +133,67 @@
   font-size: 20px;
 }
 
-.settings-toggle-field {
-  display: grid;
-  gap: 6px;
-}
-
-.settings-switch {
+.settings-auto-check-row {
   align-items: center;
-  align-self: start;
-  background: transparent;
-  border: 0;
-  color: var(--muted);
-  display: inline-flex;
-  gap: 8px;
-  justify-content: flex-start;
-  min-height: 32px;
-  padding: 0;
-  width: auto;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 16px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) 138px auto;
+  min-height: 70px;
+  padding-top: 12px;
 }
 
-.settings-page .settings-switch {
-  min-height: 36px;
+.settings-auto-check-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
-.settings-switch__track {
-  background: #cbd5e1;
-  border-radius: 999px;
-  display: inline-flex;
-  height: 22px;
-  padding: 2px;
-  transition: background-color var(--motion-standard);
-  width: 38px;
-}
-
-.settings-switch__track > span {
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
-  height: 18px;
-  transform: translateX(0);
-  transition: transform var(--motion-standard);
-  width: 18px;
-}
-
-.settings-switch.is-on .settings-switch__track {
-  background: var(--accent);
-}
-
-.settings-switch.is-on .settings-switch__track > span {
-  transform: translateX(16px);
-}
-
-.settings-switch strong {
+.settings-auto-check-copy strong,
+.settings-interval-field > span:first-child {
   color: var(--text);
   font-size: 13px;
+  font-weight: 650;
+  line-height: 18px;
+}
+
+.settings-auto-check-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.settings-interval-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.settings-interval-control {
+  display: block;
+  position: relative;
+}
+
+.settings-interval-control input {
+  min-height: 36px;
+  padding-right: 42px;
+  width: 100%;
+}
+
+.settings-interval-control > span {
+  color: var(--muted);
+  font-size: 11px;
+  pointer-events: none;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.settings-auto-check-row > .ui-switch {
+  justify-self: end;
+  min-height: 36px;
 }
 
 .github-settings-section {

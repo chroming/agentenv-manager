@@ -3598,6 +3598,33 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Settings" }).click();
     const autoCheck = page.getByRole("switch", { name: "Skill auto update check" });
     const interval = page.getByLabel("Skill auto check interval minutes");
+    const assertAutoCheckLayout = async () => {
+      const geometry = await page.locator(".settings-auto-check-row").evaluate((row) => {
+        const intervalField = row.querySelector<HTMLElement>(".settings-interval-field")!;
+        const switchControl = row.querySelector<HTMLElement>('.ui-switch[role="switch"]')!;
+        const rowRect = row.getBoundingClientRect();
+        const intervalRect = intervalField.getBoundingClientRect();
+        const switchRect = switchControl.getBoundingClientRect();
+        return {
+          rowRight: rowRect.right,
+          rowTop: rowRect.top,
+          rowBottom: rowRect.bottom,
+          intervalRight: intervalRect.right,
+          switchLeft: switchRect.left,
+          switchRight: switchRect.right,
+          switchTop: switchRect.top,
+          switchBottom: switchRect.bottom
+        };
+      });
+      expect(geometry.switchLeft).toBeGreaterThanOrEqual(geometry.intervalRight + 8);
+      expect(geometry.switchRight).toBeLessThanOrEqual(geometry.rowRight);
+      expect(geometry.switchTop).toBeGreaterThanOrEqual(geometry.rowTop);
+      expect(geometry.switchBottom).toBeLessThanOrEqual(geometry.rowBottom);
+    };
+    await assertAutoCheckLayout();
+    await page.setViewportSize({ width: 920, height: 620 });
+    await assertAutoCheckLayout();
+    await expectNoHorizontalOverflow(page, [".app-shell", ".editor-panel", ".settings-page"]);
     await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("true");
     await autoCheck.click();
     await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("false");
