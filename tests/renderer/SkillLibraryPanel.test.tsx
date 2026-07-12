@@ -67,7 +67,7 @@ describe("SkillLibraryPanel", () => {
     const onUnignoreSkillGroup = vi.fn();
     const onSetSharedSkillRetention = vi.fn().mockResolvedValue(true);
     const onRetireSharedSkill = vi.fn().mockResolvedValue(true);
-    const onOpenProfilesForTarget = vi.fn();
+    const onOpenProfiles = vi.fn();
     const onRestoreCleanup = vi.fn();
     const onCloseTool = vi.fn();
     const onRefreshInventory = vi.fn().mockResolvedValue(undefined);
@@ -374,7 +374,7 @@ describe("SkillLibraryPanel", () => {
         onUnignoreSkillGroup={onUnignoreSkillGroup}
         onSetSharedSkillRetention={onSetSharedSkillRetention}
         onRetireSharedSkill={onRetireSharedSkill}
-        onOpenProfilesForTarget={onOpenProfilesForTarget}
+        onOpenProfiles={onOpenProfiles}
         onRestoreCleanup={onRestoreCleanup}
         updateCheckStatus={{ state: "success", message: "2 updates available" }}
         viewState={{ ...defaultSkillLibraryViewState, scrollTop: 180 }}
@@ -598,42 +598,60 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseDown(document.body);
     expect(onCloseTool).toHaveBeenCalledTimes(3);
     expect(discoveries).toHaveTextContent("Managed");
-    expect(discoveries).toHaveTextContent("Imported");
-    expect(discoveries).toHaveTextContent("Restore ignored");
-    expect(discoveries).toHaveTextContent("Auto-ready");
-    expect(discoveries).toHaveTextContent("Review");
+    expect(discoveries).toHaveTextContent("Not in Library");
+    expect(discoveries).toHaveTextContent("Multiple versions");
+    expect(discoveries).toHaveTextContent("Managed elsewhere");
     expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
     const sharedMigrationGroup = screen.getByRole("group", {
       name: "Cleanup group compat-reviewer"
     });
-    expect(sharedMigrationGroup).toHaveTextContent("Ready to switch");
-    expect(sharedMigrationGroup).toHaveTextContent("Shared compatibility location");
-    expect(sharedMigrationGroup).toHaveTextContent("OpenCode: Prepared");
-    expect(sharedMigrationGroup).toHaveTextContent("Codex: Prepared");
+    expect(sharedMigrationGroup).toHaveTextContent("Shared copy can be replaced");
+    expect(sharedMigrationGroup).toHaveTextContent("Shared compatibility copy");
+    expect(sharedMigrationGroup).toHaveTextContent("All consumer Targets are ready");
     fireEvent.click(
-      within(sharedMigrationGroup).getByRole("button", { name: "Keep shared compat-reviewer" })
+      within(sharedMigrationGroup).getByRole("button", {
+        name: "More cleanup actions for compat-reviewer"
+      })
     );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Keep shared" }));
     expect(onSetSharedSkillRetention).toHaveBeenCalledWith({
       skillKey: "compat-reviewer",
       paths: ["/tmp/home/.agents/skills/compat-reviewer"],
       retained: true
     });
     const removeSharedButton = within(sharedMigrationGroup).getByRole("button", {
-      name: "Complete migration compat-reviewer"
+      name: "Review replacement compat-reviewer"
     });
     await waitFor(() => expect(removeSharedButton).toBeEnabled());
     fireEvent.click(removeSharedButton);
-    const retireDialog = screen.getByRole("dialog", { name: "Complete shared Skill migration" });
+    const retireDialog = screen.getByRole("dialog", { name: "Replace shared Skill copy" });
     expect(retireDialog).toHaveTextContent("The Library copy is kept");
     expect(retireDialog).toHaveTextContent("OpenCodeInstall as compat-reviewer");
     expect(retireDialog).toHaveTextContent("CodexDo not install");
     expect(retireDialog).toHaveTextContent("/tmp/home/.agents/skills/compat-reviewer");
-    fireEvent.click(within(retireDialog).getByRole("button", { name: "Complete migration" }));
+    fireEvent.click(within(retireDialog).getByRole("button", { name: "Replace shared copy" }));
     await waitFor(() => expect(onRetireSharedSkill).toHaveBeenCalledWith({
       skillKey: "compat-reviewer",
       libraryId: "compat-reviewer",
       paths: ["/tmp/home/.agents/skills/compat-reviewer"]
     }));
+    const changedManagedGroup = screen.getByRole("group", {
+      name: "Cleanup group copied-local"
+    });
+    fireEvent.click(
+      within(changedManagedGroup).getByRole("button", { name: "Review drift copied-local" })
+    );
+    const differencesDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
+    expect(differencesDialog).toHaveTextContent("Keep Library version");
+    expect(differencesDialog).toHaveTextContent("Use a local version");
+    fireEvent.click(within(differencesDialog).getByRole("radio", { name: /Use a local version/ }));
+    fireEvent.click(within(differencesDialog).getByRole("button", { name: "Apply cleanup" }));
+    expect(onConsolidateSkillGroup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skillKey: "copied-local",
+        libraryAction: "replace"
+      })
+    );
     let resolveAutoCleanup: (() => void) | undefined;
     onAutoConsolidateSkillGroups.mockImplementationOnce(
       () => new Promise<void>((resolve) => {
@@ -641,9 +659,15 @@ describe("SkillLibraryPanel", () => {
       })
     );
     const takeOverAllButton = within(discoveries).getByRole("button", {
-      name: "Take over 3 skills"
+      name: "Manage 3 ready skills"
     });
     fireEvent.click(takeOverAllButton);
+    const bulkCleanupDialog = screen.getByRole("dialog", { name: "Manage ready copies" });
+    expect(bulkCleanupDialog).toHaveTextContent("Copied Local");
+    expect(bulkCleanupDialog).toHaveTextContent("Legacy Reviewer");
+    fireEvent.click(
+      within(bulkCleanupDialog).getByRole("button", { name: "Manage 3 skills" })
+    );
     expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ skillKey: "copied-local" }),
@@ -651,21 +675,20 @@ describe("SkillLibraryPanel", () => {
         expect.objectContaining({ skillKey: "target-only-reviewer" })
       ])
     );
-    expect(takeOverAllButton).toHaveTextContent("Taking over...");
+    expect(takeOverAllButton).toHaveTextContent("Managing...");
     expect(screen.getByRole("button", { name: "Close library tool" })).toBeDisabled();
     resolveAutoCleanup?.();
     const externalGroup = screen.getByRole("group", {
       name: "Cleanup group external-reviewer"
     });
-    expect(externalGroup).toHaveTextContent("External");
-    expect(externalGroup).toHaveTextContent("Managed externally by Skills CLI");
+    expect(externalGroup).toHaveTextContent("Managed elsewhere");
     await waitFor(() =>
       expect(
-        within(externalGroup).getByRole("button", { name: "Import copy external-reviewer" })
+        within(externalGroup).getByRole("button", { name: "Review ownership external-reviewer" })
       ).toBeEnabled()
     );
     fireEvent.click(
-      within(externalGroup).getByRole("button", { name: "Import copy external-reviewer" })
+      within(externalGroup).getByRole("button", { name: "Review ownership external-reviewer" })
     );
     let externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
     expect(externalDialog).toHaveTextContent("Skills CLI files and lock data stay unchanged");
@@ -674,7 +697,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Import external skill" })).not.toBeInTheDocument();
     fireEvent.click(
-      within(externalGroup).getByRole("button", { name: "Import copy external-reviewer" })
+      within(externalGroup).getByRole("button", { name: "Review ownership external-reviewer" })
     );
     externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
     fireEvent.click(within(externalDialog).getByRole("button", { name: "Import copy" }));
@@ -696,14 +719,17 @@ describe("SkillLibraryPanel", () => {
       "2 locations"
     );
     const mixedGroup = screen.getByRole("group", { name: "Cleanup group target-only-reviewer" });
-    expect(mixedGroup).toHaveTextContent("Unmanaged");
+    expect(mixedGroup).toHaveTextContent("Not in Library");
     expect(within(mixedGroup).queryByText("Ignored", { exact: true })).not.toBeInTheDocument();
     expect(
-      within(mixedGroup).getByRole("button", { name: "Take over target-only-reviewer" })
+      within(mixedGroup).getByRole("button", { name: "Add to Library target-only-reviewer" })
     ).toBeInTheDocument();
     fireEvent.click(
-      within(mixedGroup).getByRole("button", { name: "View details target-only-reviewer" })
+      within(mixedGroup).getByRole("button", {
+        name: "More cleanup actions for target-only-reviewer"
+      })
     );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Details" }));
     const detailsDialog = screen.getByRole("dialog", {
       name: "Skill details target-only-reviewer"
     });
@@ -713,36 +739,25 @@ describe("SkillLibraryPanel", () => {
     expect(
       screen.queryByRole("dialog", { name: "Skill details target-only-reviewer" })
     ).not.toBeInTheDocument();
-    expect(
-      within(mixedGroup).queryByRole("button", { name: "Ignore group target-only-reviewer" })
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Unignore group target-only-reviewer" }));
-    expect(onUnignoreSkillGroup).toHaveBeenCalledWith("target-only-reviewer");
     fireEvent.click(
-      within(screen.getByRole("group", { name: "Cleanup group legacy-reviewer" })).getByRole(
-        "button",
-        { name: "Take over legacy-reviewer" }
-      )
+      within(mixedGroup).getByRole("button", {
+        name: "More cleanup actions for target-only-reviewer"
+      })
     );
-    expect(onAutoConsolidateSkillGroups).toHaveBeenLastCalledWith([
-      {
-        skillKey: "legacy-reviewer",
-        libraryId: "legacy-reviewer",
-        canonicalPath: "/tmp/opencode/skills/legacy-reviewer",
-        locations: [
-          { targetId: "opencode", path: "/tmp/opencode/skills/legacy-reviewer" }
-        ]
-      }
-    ]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Restore ignored" }));
+    expect(onUnignoreSkillGroup).toHaveBeenCalledWith("target-only-reviewer");
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Close library tool" })).toBeEnabled()
     );
 
     const conflictGroup = screen.getByRole("group", { name: "Cleanup group conflict-reviewer" });
-    expect(conflictGroup).toHaveTextContent("Conflict");
+    expect(conflictGroup).toHaveTextContent("Multiple versions");
     fireEvent.click(
-      within(conflictGroup).getByRole("button", { name: "Ignore group conflict-reviewer" })
+      within(conflictGroup).getByRole("button", {
+        name: "More cleanup actions for conflict-reviewer"
+      })
     );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Ignore" }));
     expect(onIgnoreSkillGroup).toHaveBeenCalledWith("conflict-reviewer");
     fireEvent.focus(
       within(conflictGroup).getByLabelText("Full cleanup locations conflict-reviewer")
@@ -754,7 +769,7 @@ describe("SkillLibraryPanel", () => {
       within(conflictGroup).getByLabelText("Full cleanup locations conflict-reviewer")
     );
     fireEvent.click(
-      within(conflictGroup).getByRole("button", { name: "Resolve conflict conflict-reviewer" })
+      within(conflictGroup).getByRole("button", { name: "Add to Library conflict-reviewer" })
     );
     let conflictDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
     expect(conflictDialog).toHaveTextContent("Version to keep in Library");
@@ -763,7 +778,7 @@ describe("SkillLibraryPanel", () => {
     expect(screen.queryByRole("dialog", { name: "Review skill cleanup" })).not.toBeInTheDocument();
     expect(onCloseTool).toHaveBeenCalledTimes(3);
     fireEvent.click(
-      within(conflictGroup).getByRole("button", { name: "Resolve conflict conflict-reviewer" })
+      within(conflictGroup).getByRole("button", { name: "Add to Library conflict-reviewer" })
     );
     conflictDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
     const codexVersion = within(conflictDialog).getByRole("radio", { name: /Codex/ });
@@ -780,20 +795,25 @@ describe("SkillLibraryPanel", () => {
       "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
     );
     fireEvent.click(
-      within(conflictDialog).getByRole("button", { name: "Back up and take over" })
+      within(conflictDialog).getByRole("button", { name: "Add to Library" })
     );
     expect(onConsolidateSkillGroup).toHaveBeenCalledWith({
       skillKey: "conflict-reviewer",
       libraryId: "conflict-reviewer",
       canonicalPath: "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer",
+      libraryAction: "create",
+      mode: "target-copies",
+      sharedLocations: undefined,
       locations: [
         {
           targetId: "opencode",
-          path: "/tmp/opencode/skills/a-very-long-parent-directory/conflict-reviewer"
+          path: "/tmp/opencode/skills/a-very-long-parent-directory/conflict-reviewer",
+          contentHash: "opencode-conflict-hash"
         },
         {
           targetId: "codex",
-          path: "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
+          path: "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer",
+          contentHash: "codex-conflict-hash"
         }
       ]
     });

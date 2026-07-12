@@ -49,6 +49,16 @@ describe("skill cleanup groups", () => {
         { targetId: "codex", path: "/tmp/codex/skills/formatter" }
       ]
     });
+    expect(groups.map(({ skillKey, presentation }) => ({ skillKey, presentation }))).toEqual([
+      {
+        skillKey: "formatter",
+        presentation: { state: "duplicate-copies", action: "add-to-library" }
+      },
+      {
+        skillKey: "reviewer",
+        presentation: { state: "not-in-library", action: "add-to-library" }
+      }
+    ]);
   });
 
   it("requires review for differing copies, Library conflicts, and external ownership", () => {
@@ -78,6 +88,18 @@ describe("skill cleanup groups", () => {
         expect.objectContaining({ skillKey: "external", state: "external", resolution: "manual" })
       ])
     );
+    expect(groups.find((group) => group.skillKey === "reviewer")?.presentation).toEqual({
+      state: "multiple-versions",
+      action: "add-to-library"
+    });
+    expect(groups.find((group) => group.skillKey === "library-copy")?.presentation).toEqual({
+      state: "local-changes-found",
+      action: "review-differences"
+    });
+    expect(groups.find((group) => group.skillKey === "external")?.presentation).toEqual({
+      state: "managed-elsewhere",
+      action: "review-ownership"
+    });
     expect(groups.map(automaticSkillCleanupRequest)).toEqual([undefined, undefined, undefined]);
   });
 
@@ -107,7 +129,8 @@ describe("skill cleanup groups", () => {
 
     expect(groups.find((group) => group.skillKey === "reviewer")).toMatchObject({
       state: "stale",
-      resolution: "automatic"
+      resolution: "automatic",
+      presentation: { state: "managed-copy-changed", action: "review-drift" }
     });
     expect(
       automaticSkillCleanupRequest(groups.find((group) => group.skillKey === "reviewer")!)
@@ -135,6 +158,7 @@ describe("skill cleanup groups", () => {
     ]);
 
     expect(group).toMatchObject({ state: "managed", resolution: "resolved" });
+    expect(group.presentation).toEqual({ state: "managed", action: "none" });
     expect(automaticSkillCleanupRequest(group)).toBeUndefined();
   });
 
@@ -174,6 +198,10 @@ describe("skill cleanup groups", () => {
       paths: ["/tmp/home/.agents/skills/reviewer"],
       libraryId: "reviewer"
     });
+    expect(waiting.presentation).toEqual({
+      state: "shared-copy-in-use",
+      action: "open-profiles"
+    });
     expect(automaticSkillCleanupRequest(waiting)).toBeUndefined();
 
     const [ready] = buildSkillCleanupGroups([sharedCopy, openCodeCopy, codexCopy], {
@@ -181,6 +209,10 @@ describe("skill cleanup groups", () => {
       preparedTargetIdsBySkill: { reviewer: ["opencode", "codex"] }
     });
     expect(ready.sharedMigration).toMatchObject({ state: "ready", pendingConsumers: [] });
+    expect(ready.presentation).toEqual({
+      state: "shared-copy-replaceable",
+      action: "review-replacement"
+    });
   });
 
   it("distinguishes unimported, retained, external, and conflicting shared copies", () => {
@@ -217,11 +249,76 @@ describe("skill cleanup groups", () => {
 
     expect(groups.find((group) => group.skillKey === "reviewer")?.sharedMigration?.state)
       .toBe("not-imported");
+    expect(
+      automaticSkillCleanupRequest(groups.find((group) => group.skillKey === "reviewer")!)
+    ).toBeUndefined();
     expect(groups.find((group) => group.skillKey === "kept")?.sharedMigration?.state)
       .toBe("kept");
     expect(groups.find((group) => group.skillKey === "external")?.sharedMigration?.state)
       .toBe("external");
     expect(groups.find((group) => group.skillKey === "conflict")?.sharedMigration?.state)
       .toBe("conflict");
+    expect(groups.find((group) => group.skillKey === "reviewer")?.presentation).toEqual({
+      state: "not-in-library",
+      action: "add-to-library"
+    });
+    expect(groups.find((group) => group.skillKey === "kept")?.presentation).toEqual({
+      state: "kept-shared",
+      action: "none"
+    });
+    expect(groups.find((group) => group.skillKey === "external")?.presentation).toEqual({
+      state: "managed-elsewhere",
+      action: "review-ownership"
+    });
+    expect(groups.find((group) => group.skillKey === "conflict")?.presentation).toEqual({
+      state: "local-changes-found",
+      action: "review-differences"
+    });
+  });
+
+  it("keeps version choice inside Add to Library for conflicting shared and Target copies", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        path: "/tmp/home/.agents/skills/reviewer",
+        foundIn: ["opencode", "codex"],
+        contentHash: "shared-version",
+        locationRole: "compatibility-runtime",
+        sharedLocation: true
+      }),
+      inventoryItem({
+        path: "/tmp/home/.codex/skills/reviewer",
+        foundIn: ["codex"],
+        contentHash: "codex-version"
+      })
+    ], { installedTargetIds: ["opencode", "codex"] });
+
+    expect(group.sharedMigration?.state).toBe("conflict");
+    expect(group.presentation).toEqual({
+      state: "multiple-versions",
+      action: "add-to-library"
+    });
+  });
+
+  it("never sends shared compatibility groups through generic automatic cleanup", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        path: "/tmp/home/.agents/skills/reviewer",
+        foundIn: ["opencode", "codex"],
+        locationRole: "compatibility-runtime",
+        sharedLocation: true
+      }),
+      inventoryItem({
+        path: "/tmp/opencode/skills/reviewer",
+        foundIn: ["opencode"],
+        locationRole: "preferred-runtime",
+        sharedLocation: false
+      })
+    ]);
+
+    expect(group.presentation).toEqual({
+      state: "duplicate-copies",
+      action: "add-to-library"
+    });
+    expect(automaticSkillCleanupRequest(group)).toBeUndefined();
   });
 });

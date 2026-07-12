@@ -12,6 +12,35 @@ export type SkillCleanupGroupState =
 
 export type SkillCleanupResolution = "automatic" | "manual" | "resolved";
 
+export type SkillCleanupDisplayState =
+  | "not-in-library"
+  | "duplicate-copies"
+  | "multiple-versions"
+  | "copies-not-managed"
+  | "local-changes-found"
+  | "managed-copy-changed"
+  | "managed-elsewhere"
+  | "shared-copy-in-use"
+  | "shared-copy-replaceable"
+  | "kept-shared"
+  | "managed"
+  | "ignored";
+
+export type SkillCleanupRecommendedAction =
+  | "add-to-library"
+  | "manage-copies"
+  | "review-differences"
+  | "review-drift"
+  | "review-ownership"
+  | "open-profiles"
+  | "review-replacement"
+  | "none";
+
+export interface SkillCleanupPresentation {
+  state: SkillCleanupDisplayState;
+  action: SkillCleanupRecommendedAction;
+}
+
 export type SharedSkillMigrationState =
   | "not-imported"
   | "waiting"
@@ -36,6 +65,7 @@ export interface SkillCleanupGroup {
   state: SkillCleanupGroupState;
   resolution: SkillCleanupResolution;
   resolutionReason: string;
+  presentation: SkillCleanupPresentation;
   sharedMigration?: SharedSkillMigration;
 }
 
@@ -115,6 +145,7 @@ export const buildSkillCleanupGroups = (
             paths: [...new Set(sharedItems.map((item) => item.path))].sort(),
             libraryId: sharedLibraryItem?.libraryId
           };
+      const hasLibraryCopy = activeItems.some((item) => Boolean(item.libraryId));
 
       const state: SkillCleanupGroupState = allIgnored
         ? "ignored"
@@ -159,6 +190,42 @@ export const buildSkillCleanupGroups = (
                 ? "A destination Target could not be identified."
                 : "Detected copies differ and require a version choice.";
 
+      const presentation: SkillCleanupPresentation = allIgnored
+        ? sharedKept
+          ? { state: "kept-shared", action: "none" }
+          : { state: "ignored", action: "none" }
+        : hasExternal
+          ? { state: "managed-elsewhere", action: "review-ownership" }
+          : sharedMigration?.state === "ready"
+            ? { state: "shared-copy-replaceable", action: "review-replacement" }
+            : sharedMigration?.state === "waiting"
+              ? { state: "shared-copy-in-use", action: "open-profiles" }
+              : sharedMigration?.state === "kept"
+                ? { state: "kept-shared", action: "none" }
+                : sharedMigration?.state === "external"
+                  ? { state: "managed-elsewhere", action: "review-ownership" }
+                  : sharedMigration
+                    ? hasLibraryCopy
+                      ? { state: "local-changes-found", action: "review-differences" }
+                      : hashes.size > 1
+                        ? { state: "multiple-versions", action: "add-to-library" }
+                        : activeItems.length > 1
+                          ? { state: "duplicate-copies", action: "add-to-library" }
+                          : { state: "not-in-library", action: "add-to-library" }
+                    : !hasLibraryCopy
+                      ? hashes.size > 1
+                        ? { state: "multiple-versions", action: "add-to-library" }
+                        : activeItems.length > 1
+                          ? { state: "duplicate-copies", action: "add-to-library" }
+                          : { state: "not-in-library", action: "add-to-library" }
+                      : staleManaged
+                        ? { state: "managed-copy-changed", action: "review-drift" }
+                        : allManaged
+                          ? { state: "managed", action: "none" }
+                          : state === "conflict"
+                            ? { state: "local-changes-found", action: "review-differences" }
+                            : { state: "copies-not-managed", action: "manage-copies" };
+
       return {
         skillKey,
         items,
@@ -167,6 +234,7 @@ export const buildSkillCleanupGroups = (
         state,
         resolution,
         resolutionReason,
+        presentation,
         sharedMigration
       };
     })
@@ -180,7 +248,7 @@ export const buildSkillCleanupGroups = (
 export const automaticSkillCleanupRequest = (
   group: SkillCleanupGroup
 ): SkillCleanupRequest | undefined => {
-  if (group.resolution !== "automatic") {
+  if (group.sharedMigration || group.resolution !== "automatic") {
     return undefined;
   }
   const locations = group.activeItems.filter(
@@ -201,7 +269,8 @@ export const automaticSkillCleanupRequest = (
     canonicalPath: locations[0].path,
     locations: locations.map((item) => ({
       targetId: item.foundIn[0],
-      path: item.path
+      path: item.path,
+      contentHash: item.contentHash
     }))
   };
 };

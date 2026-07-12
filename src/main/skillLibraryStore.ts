@@ -84,7 +84,17 @@ export interface ConsolidateSkillGroupStoreInput {
   skillKey: string;
   libraryId: string;
   canonicalPath: string;
+  replaceLibrary?: boolean;
   locations: Array<{ targetPaths: TargetPaths; targetDir: string }>;
+}
+
+export interface ConsolidateSharedSkillGroupStoreInput {
+  skillKey: string;
+  libraryId: string;
+  canonicalPath: string;
+  replaceLibrary?: boolean;
+  sharedPaths: string[];
+  duplicatePaths: string[];
 }
 
 export interface SkillLibraryStore {
@@ -103,6 +113,9 @@ export interface SkillLibraryStore {
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   deployLibrarySkill(input: DeployLibrarySkillStoreInput): Promise<void>;
   consolidateSkillGroup(input: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult>;
+  consolidateSharedSkillGroup(
+    input: ConsolidateSharedSkillGroupStoreInput
+  ): Promise<SkillCleanupResult>;
   setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
   checkUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
@@ -311,6 +324,7 @@ const removeAndCopy = async (source: string, destination: string) => {
   await rm(destination, { recursive: true, force: true });
   await mkdir(destination, { recursive: true });
   await cp(source, destination, { recursive: true, dereference: true });
+  await rm(join(destination, ".agentenv-owner.json"), { force: true });
 };
 
 const copySkillEntries = async (sourceDir: string, targetDir: string) => {
@@ -1436,19 +1450,20 @@ export const createSkillLibraryStore = (
     skillKey,
     libraryId,
     canonicalPath,
+    replaceLibrary = false,
     locations
   }: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult> => {
     const safeSkillKey = SafeIdSchema.parse(skillKey);
     const safeLibraryId = SafeIdSchema.parse(libraryId);
     const targetLibraryDir = join(await libraryDir(), safeLibraryId);
     const libraryCreated = !(await pathExists(join(targetLibraryDir, "SKILL.md")));
-    if (libraryCreated && !locations.some((location) => location.targetDir === canonicalPath)) {
+    if ((libraryCreated || replaceLibrary) && !locations.some((location) => location.targetDir === canonicalPath)) {
       throw new Error("Source skill must be one of the selected cleanup locations");
     }
-    if (libraryCreated && !(await pathExists(join(canonicalPath, "SKILL.md")))) {
+    if ((libraryCreated || replaceLibrary) && !(await pathExists(join(canonicalPath, "SKILL.md")))) {
       throw new Error(`Source skill is missing SKILL.md: ${canonicalPath}`);
     }
-    if (libraryCreated) {
+    if (libraryCreated || replaceLibrary) {
       await validateSkillFrontmatter(canonicalPath);
     }
 
@@ -1456,7 +1471,15 @@ export const createSkillLibraryStore = (
     const backupId = `cleanup-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const backupDir = join(cleanupBackupRoot(), backupId);
     const entries: SkillCleanupBackupManifest["entries"] = [];
+    const libraryBackupPath = replaceLibrary
+      ? join(backupDir, "library", safeLibraryId)
+      : undefined;
     await mkdir(backupDir, { recursive: true });
+
+    if (libraryBackupPath) {
+      await mkdir(dirname(libraryBackupPath), { recursive: true });
+      await cp(targetLibraryDir, libraryBackupPath, { recursive: true, dereference: false });
+    }
 
     for (const [index, location] of uniqueLocations.entries()) {
       if (!(await pathExists(join(location.targetDir, "SKILL.md")))) {
@@ -1472,6 +1495,8 @@ export const createSkillLibraryStore = (
       id: backupId,
       libraryId: safeLibraryId,
       libraryCreated,
+      libraryRemoved: replaceLibrary,
+      libraryBackupPath,
       createdAt: new Date().toISOString(),
       operation: "cleanup",
       entries
@@ -1479,7 +1504,7 @@ export const createSkillLibraryStore = (
     await writeFile(join(backupDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
     try {
-      if (libraryCreated) {
+      if (libraryCreated || replaceLibrary) {
         await removeAndCopy(canonicalPath, targetLibraryDir);
         await writeMetadata(targetLibraryDir, {
           sourceType: "local",
@@ -1500,12 +1525,116 @@ export const createSkillLibraryStore = (
         backupId,
         libraryId: safeLibraryId,
         managedLocations: uniqueLocations.map((location) => location.targetDir),
-        operation: "cleanup"
+        operation: "cleanup",
+        libraryCreated
       };
     } catch (error) {
       await restoreCleanupBackup(manifest);
       throw new Error(
         `Skill cleanup ${safeSkillKey} failed and was rolled back: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  };
+
+  const consolidateSharedSkillGroup = async ({
+    skillKey,
+    libraryId,
+    canonicalPath,
+    replaceLibrary = false,
+    sharedPaths,
+    duplicatePaths
+  }: ConsolidateSharedSkillGroupStoreInput): Promise<SkillCleanupResult> => {
+    const safeSkillKey = SafeIdSchema.parse(skillKey);
+    const safeLibraryId = SafeIdSchema.parse(libraryId);
+    const uniqueSharedPaths = [...new Set(sharedPaths)];
+    const uniqueDuplicatePaths = [...new Set(duplicatePaths)].filter(
+      (path) => !uniqueSharedPaths.includes(path)
+    );
+    const affectedPaths = [...uniqueSharedPaths, ...uniqueDuplicatePaths];
+    if (!affectedPaths.includes(canonicalPath)) {
+      throw new Error("Source skill must be one of the selected cleanup locations");
+    }
+    if (uniqueSharedPaths.length === 0) {
+      throw new Error("Shared skill cleanup requires a compatibility location");
+    }
+    for (const path of affectedPaths) {
+      if (!(await pathExists(join(path, "SKILL.md")))) {
+        throw new Error(`Skill cleanup location is missing SKILL.md: ${path}`);
+      }
+    }
+    const targetLibraryDir = join(await libraryDir(), safeLibraryId);
+    const libraryCreated = !(await pathExists(join(targetLibraryDir, "SKILL.md")));
+    if (libraryCreated || replaceLibrary) {
+      await validateSkillFrontmatter(canonicalPath);
+    }
+    const backupId = `cleanup-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const backupDir = join(cleanupBackupRoot(), backupId);
+    const entries: SkillCleanupBackupManifest["entries"] = [];
+    const libraryBackupPath = replaceLibrary
+      ? join(backupDir, "library", safeLibraryId)
+      : undefined;
+    await mkdir(backupDir, { recursive: true });
+
+    if (libraryBackupPath) {
+      await mkdir(dirname(libraryBackupPath), { recursive: true });
+      await cp(targetLibraryDir, libraryBackupPath, { recursive: true, dereference: false });
+    }
+
+    for (const [index, sourcePath] of affectedPaths.entries()) {
+      const backupPath = join(backupDir, "locations", `${index}-${basename(sourcePath)}`);
+      await mkdir(dirname(backupPath), { recursive: true });
+      await cp(sourcePath, backupPath, { recursive: true, dereference: false });
+      entries.push({ sourcePath, backupPath });
+    }
+
+    const manifest: SkillCleanupBackupManifest = {
+      id: backupId,
+      libraryId: safeLibraryId,
+      libraryCreated,
+      libraryRemoved: replaceLibrary,
+      libraryBackupPath,
+      createdAt: new Date().toISOString(),
+      operation: "cleanup",
+      entries
+    };
+    await writeFile(
+      join(backupDir, "manifest.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      "utf8"
+    );
+
+    try {
+      if (libraryCreated || replaceLibrary) {
+        await removeAndCopy(canonicalPath, targetLibraryDir);
+        await writeMetadata(targetLibraryDir, {
+          sourceType: "local",
+          source: canonicalPath,
+          updatePolicy: "untracked",
+          upstream: { kind: "local", locator: canonicalPath },
+          provenance: { importedVia: "local-scan" }
+        });
+      }
+      for (const sharedPath of uniqueSharedPaths) {
+        await removeAndCopy(targetLibraryDir, sharedPath);
+        await rm(join(sharedPath, ".agentenv-skill.json"), { force: true });
+        await rm(join(sharedPath, ".agentenv-owner.json"), { force: true });
+      }
+      for (const duplicatePath of uniqueDuplicatePaths) {
+        await rm(duplicatePath, { recursive: true, force: true });
+      }
+      return {
+        backupId,
+        libraryId: safeLibraryId,
+        managedLocations: uniqueSharedPaths,
+        operation: "cleanup",
+        libraryCreated
+      };
+    } catch (error) {
+      await restoreCleanupBackup(manifest);
+      throw new Error(
+        `Shared skill cleanup ${safeSkillKey} failed and was rolled back: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
@@ -1870,6 +1999,7 @@ export const createSkillLibraryStore = (
     manageTargetSkill,
     deployLibrarySkill,
     consolidateSkillGroup,
+    consolidateSharedSkillGroup,
     setSharedSkillRetention,
     rollbackSkillCleanup,
     checkUpdates,

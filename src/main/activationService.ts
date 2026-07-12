@@ -607,8 +607,8 @@ export const createActivationService = ({
       });
       warnings.push(
         reference
-          ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory until Complete migration installs the Target-specific copy.`
-          : `Shared Skill ${shared.skillKey} stays active until Complete migration removes the compatibility copy; this Profile will omit it afterward.`
+          ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory until Replace shared copy installs the Target-specific copy.`
+          : `Shared Skill ${shared.skillKey} stays active until Replace shared copy removes the compatibility copy; this Profile will omit it afterward.`
       );
     }
 

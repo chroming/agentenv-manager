@@ -247,13 +247,17 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
 export interface SkillCleanupLocationInput {
   targetId: string;
   path: string;
+  contentHash: string;
 }
 
 export interface SkillCleanupRequest {
   skillKey: string;
   libraryId: string;
   canonicalPath: string;
+  libraryAction?: "create" | "keep" | "replace";
   locations: SkillCleanupLocationInput[];
+  mode?: "target-copies" | "shared-compatibility";
+  sharedLocations?: Array<{ path: string; contentHash: string }>;
 }
 
 export interface SharedSkillRetentionInput {
@@ -273,6 +277,7 @@ export interface SkillCleanupResult {
   libraryId: string;
   managedLocations: string[];
   operation?: "cleanup" | "remove" | "retire";
+  libraryCreated?: boolean;
 }
 
 export interface SkillCleanupBackupSummary {

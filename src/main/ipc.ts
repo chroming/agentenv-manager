@@ -286,7 +286,25 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:consolidate-group", async (_event, input: SkillCleanupRequest) => {
     const libraryId = parseId(input.libraryId, "skill library id");
     const skillKey = parseId(input.skillKey, "skill key");
+    if (
+      input.libraryAction !== undefined &&
+      !["create", "keep", "replace"].includes(input.libraryAction)
+    ) {
+      throw new Error("Invalid Library cleanup action");
+    }
+    if (
+      input.mode !== undefined &&
+      !["target-copies", "shared-compatibility"].includes(input.mode)
+    ) {
+      throw new Error("Invalid Skill cleanup mode");
+    }
     const targets = await targetDiscoveryService.listTargets();
+    const inventory = await skillLibraryStore.scanInventory(
+      targets.map((target) => target.paths)
+    );
+    const inventoryByPath = new Map(
+      inventory.map((item) => [resolve(item.path), item])
+    );
     const locations = input.locations.map((location) => {
       const targetId = parseId(location.targetId, "target id");
       const target = targets.find((item) => item.id === targetId);
@@ -304,12 +322,58 @@ export const registerIpcHandlers = ({
       if (!isAllowed || !basename(targetDir)) {
         throw new Error(`Skill cleanup path is outside ${target.name}: ${targetDir}`);
       }
+      const current = inventoryByPath.get(targetDir);
+      if (
+        !current ||
+        current.skillKey !== skillKey ||
+        current.contentHash !== location.contentHash
+      ) {
+        throw new Error(
+          `${skillKey} changed after the cleanup preview. Refresh and review it again.`
+        );
+      }
       return { targetPaths: target.paths, targetDir };
     });
+    if (input.mode === "shared-compatibility") {
+      const requestedShared = input.sharedLocations ?? [];
+      const sharedPaths = await resolveSharedSkillPaths(
+        requestedShared.map((location) => location.path)
+      );
+      for (const sharedPath of sharedPaths) {
+        const expected = requestedShared.find(
+          (location) => resolve(location.path) === sharedPath
+        );
+        const current = inventoryByPath.get(sharedPath);
+        if (
+          !expected ||
+          !current ||
+          current.skillKey !== skillKey ||
+          current.sharedLocation !== true ||
+          current.contentHash !== expected.contentHash
+        ) {
+          throw new Error(
+            `${skillKey} changed after the cleanup preview. Refresh and review it again.`
+          );
+        }
+      }
+      const canonicalPath = resolve(String(input.canonicalPath));
+      if (![...sharedPaths, ...locations.map((item) => item.targetDir)].includes(canonicalPath)) {
+        throw new Error("Source skill must be one of the reviewed cleanup locations");
+      }
+      return skillLibraryStore.consolidateSharedSkillGroup({
+        skillKey,
+        libraryId,
+        canonicalPath,
+        replaceLibrary: input.libraryAction === "replace",
+        sharedPaths,
+        duplicatePaths: locations.map((item) => item.targetDir)
+      });
+    }
     return skillLibraryStore.consolidateSkillGroup({
       skillKey,
       libraryId,
       canonicalPath: resolve(String(input.canonicalPath)),
+      replaceLibrary: input.libraryAction === "replace",
       locations
     });
   });

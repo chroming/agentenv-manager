@@ -961,6 +961,86 @@ description: >
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("adds a chosen shared version to Library without assigning Target ownership", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sharedCopy = join(paths.homeDir, ".agents", "skills", "reviewer");
+    const openCodeCopy = join(paths.homeDir, ".config", "opencode", "skills", "reviewer");
+    const codexCopy = join(paths.homeDir, ".codex", "skills", "reviewer");
+    for (const path of [sharedCopy, openCodeCopy, codexCopy]) {
+      await mkdir(path, { recursive: true });
+    }
+    await writeFile(join(sharedCopy, "SKILL.md"), "# Shared current\n", "utf8");
+    await writeFile(join(openCodeCopy, "SKILL.md"), "# OpenCode older\n", "utf8");
+    await writeFile(join(codexCopy, "SKILL.md"), "# Chosen version\n", "utf8");
+    const store = createSkillLibraryStore(paths);
+
+    const result = await store.consolidateSharedSkillGroup({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      canonicalPath: codexCopy,
+      sharedPaths: [sharedCopy],
+      duplicatePaths: [openCodeCopy, codexCopy]
+    });
+
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toBe("# Chosen version\n");
+    await expect(readFile(join(sharedCopy, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Chosen version\n");
+    await expect(readFile(join(sharedCopy, ".agentenv-owner.json"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(openCodeCopy, "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(codexCopy, "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    expect(result.managedLocations).toEqual([sharedCopy]);
+
+    await store.rollbackSkillCleanup(result.backupId);
+    await expect(readFile(join(sharedCopy, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Shared current\n");
+    await expect(readFile(join(openCodeCopy, "SKILL.md"), "utf8"))
+      .resolves.toBe("# OpenCode older\n");
+    await expect(readFile(join(codexCopy, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Chosen version\n");
+  });
+
+  it("keeps an existing Library version while normalizing shared copies", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const librarySource = join(root, "source", "reviewer");
+    const sharedCopy = join(paths.homeDir, ".agents", "skills", "reviewer");
+    const duplicateCopy = join(paths.homeDir, ".config", "opencode", "skills", "reviewer");
+    for (const path of [librarySource, sharedCopy, duplicateCopy]) {
+      await mkdir(path, { recursive: true });
+    }
+    await writeFile(join(librarySource, "SKILL.md"), "# Library canonical\n", "utf8");
+    await writeFile(join(sharedCopy, "SKILL.md"), "# Shared drift\n", "utf8");
+    await writeFile(join(duplicateCopy, "SKILL.md"), "# Target drift\n", "utf8");
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: librarySource, id: "reviewer", sourceType: "local" });
+
+    const result = await store.consolidateSharedSkillGroup({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      canonicalPath: sharedCopy,
+      sharedPaths: [sharedCopy],
+      duplicatePaths: [duplicateCopy]
+    });
+
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toBe("# Library canonical\n");
+    await expect(readFile(join(sharedCopy, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Library canonical\n");
+    await expect(readFile(join(duplicateCopy, "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+
+    await store.rollbackSkillCleanup(result.backupId);
+    await expect(readFile(join(sharedCopy, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Shared drift\n");
+    await expect(readFile(join(duplicateCopy, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Target drift\n");
+  });
+
   it("uses an existing Library version without requiring a selected canonical location", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
@@ -1002,6 +1082,50 @@ description: >
     await expect(readFile(join(targetCopy, ".agentenv-owner.json"), "utf8")).resolves.toContain(
       '"source": "skills-library/reviewer"'
     );
+  });
+
+  it("backs up an existing Library version before replacing it with reviewed local content", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const librarySource = join(root, "source", "reviewer");
+    const targetSkillsDir = join(root, "home", ".config", "opencode", "skills");
+    const targetCopy = join(targetSkillsDir, "reviewer");
+    await mkdir(librarySource, { recursive: true });
+    await mkdir(targetCopy, { recursive: true });
+    await writeFile(join(librarySource, "SKILL.md"), "# Library source\n", "utf8");
+    await writeFile(join(targetCopy, "SKILL.md"), "# Reviewed local version\n", "utf8");
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: librarySource, id: "reviewer", sourceType: "local" });
+
+    const result = await store.consolidateSkillGroup({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      canonicalPath: targetCopy,
+      replaceLibrary: true,
+      locations: [
+        {
+          targetPaths: {
+            targetId: "opencode",
+            configDir: dirname(targetSkillsDir),
+            instructionsPath: "",
+            configPath: "",
+            skillsDir: targetSkillsDir
+          },
+          targetDir: targetCopy
+        }
+      ]
+    });
+
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toBe("# Reviewed local version\n");
+    await expect(readFile(join(targetCopy, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Reviewed local version\n");
+
+    await store.rollbackSkillCleanup(result.backupId);
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toBe("# Library source\n");
+    await expect(readFile(join(targetCopy, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Reviewed local version\n");
   });
 
   it("saves an update source for an existing library skill", async () => {

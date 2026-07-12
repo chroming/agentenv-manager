@@ -474,7 +474,7 @@ try {
   await page.mouse.move(2, 2);
   await cleanupGroup
     .getByRole("button", {
-      name: "Resolve conflict cross-agent-review-workflow-with-a-long-name"
+      name: "Add to Library cross-agent-review-workflow-with-a-long-name"
     })
     .click();
   const cleanupDialog = page.getByRole("dialog", { name: "Review skill cleanup" });

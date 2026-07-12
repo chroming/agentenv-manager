@@ -4619,11 +4619,11 @@ button svg,
   box-shadow: 0 24px 60px rgba(41, 72, 120, 0.14);
   display: grid;
   gap: 0;
-  max-height: min(640px, calc(100vh - 112px));
+  max-height: min(656px, calc(100vh - 88px));
   overflow: auto;
   position: fixed;
   right: 24px;
-  top: 88px;
+  top: 72px;
   width: min(620px, calc(100vw - 280px));
   z-index: var(--z-drawer);
 }

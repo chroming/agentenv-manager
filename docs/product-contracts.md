@@ -475,43 +475,39 @@ The Local Skill Cleanup surface owns unresolved local-state counts and group det
 
 Scan MAY read supported versions of `$XDG_STATE_HOME/skills/.skill-lock.json` and `~/.agents/.skill-lock.json` to identify Skills CLI ownership and recover upstream provenance. Unsupported or corrupt lock data MUST degrade to ordinary filesystem scanning and MUST NOT block unrelated Skills.
 
-Each group can be:
+The surface owns only filesystem-copy normalization into Library. It does not edit Profiles or orchestrate Apply. Each row exposes one current action; read-only details, ignore, shared retention, and restore-to-review controls live in the overflow menu.
 
-- Consolidated into the Library.
-- Linked or copied back to selected Targets.
-- Left unmanaged.
-- Ignored.
+User-facing state and action contract:
 
-Resolution contract:
-
-- Groups are classified as `Auto-ready`, `Review`, or resolved. Needs attention counts unresolved groups, not raw paths, and excludes managed and ignored groups.
-- A single unmanaged copy, identical unmanaged duplicates, a local copy that exactly matches Library, and stale managed copies MAY be handled automatically because no content choice is required.
-- Differing content, a local copy that differs from an existing Library version, external-manager ownership, and missing Target identity MUST remain in manual Review.
-- `Take over` is an immediate, mutating action for Target-specific locations: it backs up the affected locations, creates or reuses the Library copy, and replaces every eligible detected copy with an AgentEnv-owned installation. It MUST NOT replace a shared compatibility location. `Review` opens a decision dialog and MUST NOT mutate files by itself. `Details` is read-only and remains available for every group.
-- `Take over all` backs up and processes every currently auto-ready group. A failure in one group MUST NOT undo successful independent groups, and the result MUST report both completed and remaining groups.
-- `Take over all` is shown only when at least one group is currently eligible. While it is running, the initiating control exposes a local working state and conflicting cleanup actions are disabled until the refreshed result is available.
-- After a successful takeover, every selected location MUST rescan as current and `Managed`; the group MUST NOT retain `Duplicate`, `Auto-ready`, or another takeover action. A managed group may remain visible for inspection through `Details`, but it is not pending work.
+- A Skill absent from Library is `Not in Library`, `Duplicate copies`, or `Multiple versions`; its current action is always `Add to Library`.
+- Version selection is a conditional field inside `Add to Library`, never a separate `Choose version` action. It appears only when detected contents differ.
+- A Skill already in Library uses `Copies not managed` / `Manage copies`, `Local changes found` / `Review differences`, or `Managed copy changed` / `Review drift`.
+- External ownership uses `Managed elsewhere` / `Review ownership`. Internal states such as `Conflict`, `Auto-ready`, `Take over`, and `Resolve conflict` MUST NOT be presented as user actions.
+- `Add to Library`, `Manage copies`, and every review action open a preview dialog before mutation. Row actions use lightweight styling; filled emphasis is reserved for the dialog commit and an intentional bulk command.
+- `Manage ready copies` opens a bulk confirmation listing every eligible Skill and the independent-backup behavior before it starts. A failure in one Skill does not roll back completed independent Skills, and the result reports both completed and remaining groups.
+- The main process MUST rescan and compare the reviewed content hashes immediately before mutation. Stale previews fail without modifying Library or local copies.
+- Every mutating cleanup backs up all affected locations first. A failure after mutation begins restores Library and every affected location.
+- After successful cleanup, selected Target-specific copies rescan as current and `Managed`; the group MUST NOT retain a duplicate or pending action.
 - AgentEnv ownership is attached to the physical managed installation. A shared compatibility path scanned by multiple Targets MUST appear as one managed location rather than a duplicate caused by Target-specific scanning.
 - A physical location shared by multiple Target adapters MUST be labelled as shared in cleanup review instead of presenting the Target names as separate copies.
 
 Shared compatibility migration contract:
 
-- A shared compatibility group has one of six explicit states: `Shared source`, `Preparing Targets`, `Ready to switch`, `Kept shared`, `External`, or `Conflict`.
-- The group shows Library import status and every installed consumer Target as either `Needs Apply` or `Prepared`.
-- Every `Needs Apply` Target is an action, not a passive badge. It MUST open Profiles with that Target selected and, when the Target has an active Profile, open that Profile's Skills section so the required migration decision can be saved and applied.
-- `Import copy` is non-destructive: it copies the selected shared content into Library and leaves the shared path untouched.
-- `Preparing Targets` remains until every installed adapter-declared consumer has applied a current Profile that records whether the Skill will be installed or omitted after cutover. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
-- `Ready to switch` requires an exact Library copy and a non-stale preparation for every installed consumer. Current Profile hashes and Library versions MUST be revalidated in the main process, not only by renderer state.
-- `Complete migration` requires confirmation that lists each prepared Target's final `Install as <name>` or `Do not install` decision. It executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
+- A shared Skill not yet in Library follows the same `Add to Library` intent as every other local Skill. If multiple versions exist, the dialog adds a version choice.
+- Adding a shared Skill to Library is one transaction: back up all copies, create the Library canonical copy, keep exactly one shared compatibility copy active, and remove redundant Target-specific copies. The shared copy MUST NOT receive a Target ownership marker.
+- Once Library is ready, Cleanup shows `Shared copy still in use` and one neutral `Open Profiles` handoff. It MUST NOT show per-Target `Needs Apply` chips or pretend Profile Apply is a Cleanup step.
+- Profiles independently save and apply each Target's install-or-omit decision. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
+- When every installed consumer has a current preparation, Cleanup shows `Shared copy can be replaced` / `Review replacement`.
+- `Replace shared copy` requires confirmation that lists each prepared Target's final `Install as <name>` or `Do not install` decision. It executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
 - Cleanup history exposes the completed shared migration as one restorable operation. Restore returns shared paths, Target paths, and preparation state to their pre-migration state.
 - `Keep shared` records a path-scoped decision and resolves the group without changing files. `Review again` removes only that decision.
-- Shared compatibility groups MUST NOT participate in `Take over all` or generic duplicate cleanup.
+- Shared compatibility groups MUST NOT participate in generic Target-copy bulk cleanup.
 
 Cleanup review contract:
 
 - If the Skill is not yet in Library, the user chooses the local version whose content will be preserved as the Library source of truth.
 - The chosen source location is always included in the cleanup and cannot be deselected accidentally.
-- If the Skill already exists in Library, cleanup MUST state that the existing Library version remains authoritative and MUST NOT ask for a meaningless local canonical choice.
+- If the Skill already exists in Library, `Review differences` first asks whether to keep the current Library version or use a reviewed local version. Local version selection appears only after the latter choice. Replacing Library content backs up the previous canonical copy and changes its provenance to local/untracked.
 - Every truncated Skill name, description, path, and history detail in the cleanup workflow exposes its full value on pointer hover and keyboard focus.
 - Cleanup groups and Cleanup history use the same row hierarchy, control scale, overflow behavior, and restore vocabulary.
 - Cleanup history is a secondary group inside the Local Skill Cleanup surface, not a separate framed panel.
@@ -766,7 +762,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Ignored resources and unsupported native data remain Target-owned after Create from Target.
 - Applying the same Library Skill to OpenCode, Codex, and Claude Code creates isolated Target-specific runtime copies.
 - Shared compatibility copies remain unchanged during capture; later removal requires the explicit reviewed Scan local cleanup workflow.
-- Importing a shared compatibility Skill leaves the source untouched. Apply prepares each installed consumer without creating duplicate runtime copies; Complete migration then performs one backed-up, verified cross-Target switch without deleting Library content.
+- Adding a shared compatibility Skill to Library keeps one shared runtime copy active and removes redundant Target-specific copies. Apply prepares each installed consumer without creating duplicate runtime copies; Replace shared copy then performs one backed-up, verified cross-Target switch without deleting Library content.
 
 ### Cross-Target
 

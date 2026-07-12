@@ -1392,18 +1392,9 @@ const AppContent = ({
     guardProfileAction(`apply to ${targetName}`, () => selectTargetNow(targetId));
   };
 
-  const openProfilesForMigrationTarget = (targetId: string) => {
-    const targetName = targets.find((target) => target.id === targetId)?.name ?? "target";
-    const activeProfileId = targetStates.find(
-      (state) => state.targetId === targetId
-    )?.activeProfileId;
-    guardProfileAction(`prepare ${targetName}`, async () => {
+  const openProfilesForSharedSkill = () => {
+    guardProfileAction("open Profiles", () => {
       setSkillLibraryTool(undefined);
-      setSelectedTargetId(targetId);
-      if (activeProfileId) {
-        await selectProfileNow(activeProfileId, "skills");
-        return;
-      }
       setActiveComposerSection("skills");
       setActiveWorkspace("profiles");
     });
@@ -2063,7 +2054,8 @@ const AppContent = ({
       canonicalPath: staleCopies[0].path,
       locations: staleCopies.map((item) => ({
         targetId: item.foundIn[0] ?? "",
-        path: item.path
+        path: item.path,
+        contentHash: item.contentHash
       }))
     });
   };
@@ -2299,7 +2291,7 @@ const AppContent = ({
     setSkillCleanupResult(undefined);
     setSkillUpdateCheckStatus({
       state: "checking",
-      message: `Taking over ${plural(inputs.length, "skill")}...`
+      message: `Managing ${plural(inputs.length, "skill")}...`
     });
     const completed: SkillCleanupResult[] = [];
     const failures: string[] = [];
@@ -2321,7 +2313,7 @@ const AppContent = ({
         } else {
           setSkillUpdateCheckStatus({
             state: "success",
-            message: `Took over ${plural(completed.length, "local skill")} · Backups are available in cleanup history`
+            message: `Managed ${plural(completed.length, "local skill")} · Backups are available in History`
           });
         }
       } else {
@@ -2779,7 +2771,11 @@ const AppContent = ({
           title:
             skillCleanupResult.operation === "remove"
               ? t("Removed {{id}}", { id: skillCleanupResult.libraryId })
-              : t("Took over {{id}}", { id: skillCleanupResult.libraryId }),
+              : skillCleanupResult.operation === "retire"
+                ? t("Replaced shared copy for {{id}}", { id: skillCleanupResult.libraryId })
+                : skillCleanupResult.libraryCreated
+                  ? t("Added {{id}} to Library", { id: skillCleanupResult.libraryId })
+                  : t("Managed copies for {{id}}", { id: skillCleanupResult.libraryId }),
           message:
             skillCleanupResult.operation === "remove"
               ? skillCleanupResult.managedLocations.length === 0
@@ -2787,7 +2783,7 @@ const AppContent = ({
                 : t("Removed from the Library and {{count}} managed Target installs.", {
                     count: skillCleanupResult.managedLocations.length
                   })
-              : t("{{count}} locations now use the managed library copy.", {
+              : t("{{count}} local copies were updated. A restorable backup is available in History.", {
                   count: skillCleanupResult.managedLocations.length
                 }),
           action: {
@@ -3097,7 +3093,7 @@ const AppContent = ({
                 }}
                 onSetSharedSkillRetention={setSharedSkillRetention}
                 onRetireSharedSkill={retireSharedSkill}
-                onOpenProfilesForTarget={openProfilesForMigrationTarget}
+                onOpenProfiles={openProfilesForSharedSkill}
                 onRestoreCleanup={(backupId) => void undoSkillCleanup(backupId)}
                 updateCheckStatus={skillUpdateCheckStatus}
                 viewState={skillLibraryViewState}

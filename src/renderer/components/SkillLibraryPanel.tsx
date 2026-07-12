@@ -7,8 +7,6 @@ import {
   useState
 } from "react";
 import {
-  BookOpenText,
-  ArrowRight,
   CheckCircle2,
   ExternalLink,
   Folder,
@@ -62,8 +60,8 @@ import {
 import {
   automaticSkillCleanupRequest,
   buildSkillCleanupGroups,
-  type SkillCleanupGroupState,
-  type SharedSkillMigrationState
+  type SkillCleanupDisplayState,
+  type SkillCleanupRecommendedAction
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
 import { Switch } from "./ui";
@@ -121,7 +119,7 @@ interface SkillLibraryPanelProps {
   onUnignoreSkillGroup(skillKey: string): void;
   onSetSharedSkillRetention(input: SharedSkillRetentionInput): Promise<boolean>;
   onRetireSharedSkill(input: RetireSharedSkillInput): Promise<boolean>;
-  onOpenProfilesForTarget(targetId: string): void;
+  onOpenProfiles(): void;
   onRestoreCleanup(backupId: string): void;
   updateCheckStatus?: SkillUpdateCheckStatus;
   viewState: SkillLibraryViewState;
@@ -176,27 +174,40 @@ const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
   return "Managed";
 };
 
-const cleanupStateLabel = (state: SkillCleanupGroupState) => {
-  if (state === "duplicate") return "Duplicate";
-  if (state === "conflict") return "Conflict";
-  if (state === "stale") return "Out of sync";
-  return inventoryStatusLabel(state);
+const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
+  if (state === "not-in-library") return "Not in Library";
+  if (state === "duplicate-copies") return "Duplicate copies";
+  if (state === "multiple-versions") return "Multiple versions";
+  if (state === "copies-not-managed") return "Copies not managed";
+  if (state === "local-changes-found") return "Local changes found";
+  if (state === "managed-copy-changed") return "Managed copy changed";
+  if (state === "managed-elsewhere") return "Managed elsewhere";
+  if (state === "shared-copy-in-use") return "Shared copy still in use";
+  if (state === "shared-copy-replaceable") return "Shared copy can be replaced";
+  if (state === "kept-shared") return "Kept shared";
+  if (state === "ignored") return "Ignored";
+  return "Managed";
 };
 
-const sharedMigrationLabel = (state: SharedSkillMigrationState) => {
-  if (state === "not-imported") return "Shared source";
-  if (state === "waiting") return "Preparing Targets";
-  if (state === "ready") return "Ready to switch";
-  if (state === "kept") return "Kept shared";
-  if (state === "external") return "External";
-  return "Conflict";
+const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) => {
+  if (state === "managed" || state === "shared-copy-replaceable") return "managed";
+  if (state === "ignored" || state === "kept-shared") return "ignored";
+  if (state === "managed-elsewhere") return "external";
+  if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
+  if (state === "managed-copy-changed") return "stale";
+  if (state === "shared-copy-in-use" || state === "duplicate-copies") return "library";
+  return "unmanaged";
 };
 
-const sharedMigrationChipClass = (state: SharedSkillMigrationState) => {
-  if (state === "ready") return "managed";
-  if (state === "kept") return "ignored";
-  if (state === "waiting") return "library";
-  return state === "not-imported" ? "unmanaged" : state;
+const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
+  if (action === "add-to-library") return "Add to Library";
+  if (action === "manage-copies") return "Manage copies";
+  if (action === "review-differences") return "Review differences";
+  if (action === "review-drift") return "Review drift";
+  if (action === "review-ownership") return "Review ownership";
+  if (action === "open-profiles") return "Open Profiles";
+  if (action === "review-replacement") return "Review replacement";
+  return "";
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -244,7 +255,7 @@ export const SkillLibraryPanel = ({
   onUnignoreSkillGroup,
   onSetSharedSkillRetention,
   onRetireSharedSkill,
-  onOpenProfilesForTarget,
+  onOpenProfiles,
   onRestoreCleanup,
   updateCheckStatus,
   viewState,
@@ -260,9 +271,10 @@ export const SkillLibraryPanel = ({
   const [githubOperation, setGithubOperation] = useState<"scanning" | "importing">();
   const [localImportOperation, setLocalImportOperation] = useState(false);
   const [automaticCleanupKey, setAutomaticCleanupKey] = useState<string>();
+  const [autoCleanupReviewOpen, setAutoCleanupReviewOpen] = useState(false);
   const [sharedOperation, setSharedOperation] = useState<{
     skillKey: string;
-    action: "import" | "keep" | "review" | "retire";
+    action: "keep" | "review" | "retire";
   }>();
   const [githubOperationError, setGithubOperationError] = useState("");
   const [localSkillPath, setLocalSkillPath] = useState("");
@@ -281,6 +293,7 @@ export const SkillLibraryPanel = ({
     skillKey: string;
     libraryId: string;
     canonicalPath: string;
+    libraryAction: "create" | "keep" | "replace";
     selectedPaths: string[];
   }>();
   const [externalImport, setExternalImport] = useState<{
@@ -328,6 +341,8 @@ export const SkillLibraryPanel = ({
       setCleanupDetailsKey(undefined);
     } else if (sharedRetireKey) {
       setSharedRetireKey(undefined);
+    } else if (autoCleanupReviewOpen) {
+      setAutoCleanupReviewOpen(false);
     } else if (bulkUpdatePlans) {
       onCloseBulkUpdatePreview();
     } else if (externalImport) {
@@ -344,6 +359,7 @@ export const SkillLibraryPanel = ({
       externalImport ||
       cleanupDetailsKey ||
       sharedRetireKey ||
+      autoCleanupReviewOpen ||
       cleanupDraft
   );
   useLayoutEffect(() => {
@@ -434,7 +450,8 @@ export const SkillLibraryPanel = ({
         activeTool &&
         !githubOperation &&
         !modalOpen &&
-        !target.closest(".library-drawer")
+        !target.closest(".library-drawer") &&
+        !target.closest(".row-action-popover")
       ) {
         onCloseTool?.();
       }
@@ -555,31 +572,14 @@ export const SkillLibraryPanel = ({
     [cleanupGroups]
   );
   const manualCleanupCount = cleanupGroups.filter(
-    (group) => !group.sharedMigration && group.resolution === "manual"
-  ).length;
-  const sharedReadyCount = cleanupGroups.filter(
-    (group) => group.sharedMigration?.state === "ready"
-  ).length;
-  const sharedImportCount = cleanupGroups.filter(
-    (group) => group.sharedMigration?.state === "not-imported"
+    (group) => group.presentation.action !== "none"
   ).length;
   const sharedWaitingCount = cleanupGroups.filter(
-    (group) => group.sharedMigration?.state === "waiting"
+    (group) => group.presentation.state === "shared-copy-in-use"
   ).length;
-  const sharedReviewCount = cleanupGroups.filter(
-    (group) =>
-      group.sharedMigration?.state === "external" ||
-      group.sharedMigration?.state === "conflict"
-  ).length;
-  const reviewCount = manualCleanupCount + sharedReviewCount;
   const migrationSummary = [
-    sharedImportCount > 0 ? t("{{count}} ready to import", { count: sharedImportCount }) : "",
-    sharedReadyCount > 0 ? t("{{count}} ready to switch", { count: sharedReadyCount }) : "",
-    sharedWaitingCount > 0 ? t("{{count}} Targets need Apply", { count: sharedWaitingCount }) : "",
-    automaticCleanupRequests.length > 0
-      ? t("{{count}} local copies ready", { count: automaticCleanupRequests.length })
-      : "",
-    reviewCount > 0 ? t("{{count}} need review", { count: reviewCount }) : ""
+    manualCleanupCount > 0 ? t("{{count}} need action", { count: manualCleanupCount }) : "",
+    sharedWaitingCount > 0 ? t("{{count}} waiting on Profiles", { count: sharedWaitingCount }) : ""
   ].filter(Boolean).join(" · ");
   const normalizedLocalSkillPath = localSkillPath.trim().replace(/\/+$/, "");
   const selectedLocalInventory = skillInventory.find(
@@ -640,7 +640,9 @@ export const SkillLibraryPanel = ({
 
   const openCleanupReview = (group: (typeof cleanupGroups)[number]) => {
     const libraryId = group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey;
-    const manageableItems = group.activeItems.filter((item) => item.status !== "managed");
+    const manageableItems = group.activeItems.filter(
+      (item) => item.status !== "ignored" && item.status !== "external"
+    );
     const canonical =
       manageableItems.find((item) => item.status === "library") ?? manageableItems[0];
     if (!canonical) {
@@ -650,6 +652,9 @@ export const SkillLibraryPanel = ({
       skillKey: group.skillKey,
       libraryId,
       canonicalPath: canonical.path,
+      libraryAction: librarySkills.some((skill) => skill.id === libraryId)
+        ? "keep"
+        : "create",
       selectedPaths: manageableItems.map((item) => item.path)
     });
   };
@@ -764,23 +769,11 @@ export const SkillLibraryPanel = ({
       return;
     }
     setAutomaticCleanupKey(key);
+    setAutoCleanupReviewOpen(false);
     try {
       await onAutoConsolidateSkillGroups(requests);
     } finally {
       setAutomaticCleanupKey(undefined);
-    }
-  };
-
-  const importSharedCopy = async (group: (typeof cleanupGroups)[number]) => {
-    const source = group.items.find(
-      (item) => item.sharedLocation && item.status !== "ignored" && item.status !== "external"
-    );
-    if (!source || sharedOperation) return;
-    setSharedOperation({ skillKey: group.skillKey, action: "import" });
-    try {
-      await onImportUnmanaged(source.path);
-    } finally {
-      setSharedOperation(undefined);
     }
   };
 
@@ -1475,6 +1468,53 @@ export const SkillLibraryPanel = ({
         </div>
       ) : null}
 
+      {autoCleanupReviewOpen ? (
+        <div className="preview-modal-backdrop" onClick={() => setAutoCleanupReviewOpen(false)}>
+          <section
+            ref={modalDialogRef}
+            className="profile-form-dialog profile-form-dialog--compact"
+            role="dialog"
+            aria-label={t("Manage ready copies")}
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">{t("Manage ready copies")}</div>
+                <p className="muted">
+                  {t("These Skills have one clear canonical version. AgentEnv will add or reuse Library content and normalize the detected Target copies.")}
+                </p>
+              </div>
+            </header>
+            <div className="cleanup-bulk-review-list">
+              {automaticCleanupRequests.map((request) => (
+                <span key={request.skillKey}>
+                  {cleanupGroups.find((group) => group.skillKey === request.skillKey)?.primary?.name ?? request.skillKey}
+                </span>
+              ))}
+              <small>{t("Each Skill is backed up independently. A failure does not undo completed Skills.")}</small>
+            </div>
+            <footer className="preview-actions">
+              <button
+                ref={modalInitialFocusRef}
+                className="secondary-action"
+                type="button"
+                onClick={() => setAutoCleanupReviewOpen(false)}
+              >
+                {t("Cancel")}
+              </button>
+              <button
+                className="primary-action"
+                type="button"
+                onClick={() => void runAutomaticCleanup("all", automaticCleanupRequests)}
+              >
+                {t("Manage {{count}} skills", { count: automaticCleanupRequests.length })}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+
       {sharedRetireCandidate?.sharedMigration ? (
         <div
           className="preview-modal-backdrop"
@@ -1484,15 +1524,15 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
-            aria-label={t("Complete shared Skill migration")}
+            aria-label={t("Replace shared Skill copy")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">{t("Complete migration")}</div>
+                <div className="section-title">{t("Replace shared copy")}</div>
                 <p className="muted">
-                  {t("Every installed consumer is prepared. Switch {{name}} from the shared directory to each Target's saved Profile?", {
+                  {t("Every installed consumer is ready. Replace the shared {{name}} copy with each Target's saved Profile?", {
                     name: sharedRetireCandidate.primary?.name ?? sharedRetireCandidate.skillKey
                   })}
                 </p>
@@ -1547,7 +1587,7 @@ export const SkillLibraryPanel = ({
                 disabled={Boolean(sharedOperation)}
                 onClick={() => void retireSharedCopy()}
               >
-                {t(sharedOperation?.action === "retire" ? "Switching..." : "Complete migration")}
+                  {t(sharedOperation?.action === "retire" ? "Replacing..." : "Replace shared copy")}
               </button>
             </footer>
           </section>
@@ -1753,13 +1793,9 @@ export const SkillLibraryPanel = ({
                 </p>
               </div>
               <span className={`resource-chip resource-chip--${
-                cleanupDetails.sharedMigration
-                  ? sharedMigrationChipClass(cleanupDetails.sharedMigration.state)
-                  : cleanupDetails.state
+                cleanupPresentationChipClass(cleanupDetails.presentation.state)
               }`}>
-                {t(cleanupDetails.sharedMigration
-                  ? sharedMigrationLabel(cleanupDetails.sharedMigration.state)
-                  : cleanupStateLabel(cleanupDetails.state))}
+                {t(cleanupPresentationLabel(cleanupDetails.presentation.state))}
               </span>
             </header>
             <div className="cleanup-details-list">
@@ -1811,25 +1847,80 @@ export const SkillLibraryPanel = ({
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">{t("Review {{name}}", { name: cleanupCandidate.primary?.name ?? cleanupDraft.skillKey })}</div>
+                <div className="section-title">
+                  {t(cleanupCandidate.presentation.action === "add-to-library" ? "Add {{name}} to Library" : "Review {{name}}", {
+                    name: cleanupCandidate.primary?.name ?? cleanupDraft.skillKey
+                  })}
+                </div>
                 <p className="muted">
                   {cleanupUsesExistingLibrary
-                    ? t("Use the existing Library version and choose which local copies it should manage.")
-                    : t("Choose the local copy to keep in Library, then choose where to install that managed version.")}
+                    ? t("Review the differences, choose the canonical Library version, then confirm which local copies to normalize.")
+                    : cleanupCandidate.sharedMigration
+                      ? t("Choose the version to keep. AgentEnv will add it to Library, keep one shared copy active, and remove redundant Target copies after backup.")
+                      : t("Choose the local copy to keep in Library, then choose which copies become managed deployments.")}
                 </p>
               </div>
             </header>
             <div className="cleanup-review-content">
               {cleanupUsesExistingLibrary ? (
-                <div className="cleanup-library-source" role="status">
-                  <span className="resource-avatar" aria-hidden="true">
-                    <BookOpenText size={16} strokeWidth={2.2} />
-                  </span>
-                  <span>
-                    <strong>{t("Existing Library version")}</strong>
-                    <small>{t("The shared Library copy remains the source of truth.")}</small>
-                  </span>
-                </div>
+                <fieldset className="cleanup-review-group">
+                  <legend>
+                    {t("Library version")}
+                    <small>{t("Choose whether Library or a reviewed local copy should become canonical.")}</small>
+                  </legend>
+                  <label className="cleanup-review-option">
+                    <input
+                      type="radio"
+                      name="library-version-action"
+                      checked={cleanupDraft.libraryAction === "keep"}
+                      onChange={() => setCleanupDraft({ ...cleanupDraft, libraryAction: "keep" })}
+                    />
+                    <span>
+                      <strong>{t("Keep Library version")}</strong>
+                      <small>{t("Replace local copies with the current canonical content.")}</small>
+                    </span>
+                  </label>
+                  <label className="cleanup-review-option">
+                    <input
+                      type="radio"
+                      name="library-version-action"
+                      checked={cleanupDraft.libraryAction === "replace"}
+                      onChange={() => setCleanupDraft({ ...cleanupDraft, libraryAction: "replace" })}
+                    />
+                    <span>
+                      <strong>{t("Use a local version")}</strong>
+                      <small>{t("Back up Library, then replace it with the selected local content.")}</small>
+                    </span>
+                  </label>
+                  {cleanupDraft.libraryAction === "replace" ? cleanupCandidate.activeItems
+                    .filter((item) => item.status !== "ignored" && item.status !== "external")
+                    .map((item) => (
+                      <label className="cleanup-review-option cleanup-review-option--nested" key={`canonical-${item.path}`}>
+                        <input
+                          type="radio"
+                          name="canonical-skill-copy"
+                          checked={cleanupDraft.canonicalPath === item.path}
+                          onChange={() => setCleanupDraft({
+                            ...cleanupDraft,
+                            canonicalPath: item.path,
+                            selectedPaths: cleanupDraft.selectedPaths.includes(item.path)
+                              ? cleanupDraft.selectedPaths
+                              : cleanupDraft.selectedPaths.concat(item.path)
+                          })}
+                        />
+                        <span>
+                          <strong>{t(cleanupLocationLabel(item))}</strong>
+                          <PreviewText
+                            ariaLabel={`Full source path ${item.path}`}
+                            className="cleanup-option-path"
+                            text={item.path}
+                            tooltipClassName="library-source-tooltip"
+                          />
+                        </span>
+                        <code>{t("Content {{hash}}", { hash: item.contentHash.slice(0, 7) })}</code>
+                      </label>
+                    )) : null}
+                </fieldset>
               ) : (
                 <fieldset className="cleanup-review-group">
                   <legend>
@@ -1877,8 +1968,12 @@ export const SkillLibraryPanel = ({
               )}
               <fieldset className="cleanup-review-group">
                 <legend>
-                  {t("Locations to manage")}
-                  <small>{t("Selected copies are backed up, then replaced by the Library version.")}</small>
+                  {t(cleanupCandidate.sharedMigration ? "Copies to clean up" : "Locations to manage")}
+                  <small>
+                    {t(cleanupCandidate.sharedMigration
+                      ? "The shared copy stays active until Profiles are ready. Redundant Target copies are removed."
+                      : "Selected copies are backed up, then replaced by the Library version.")}
+                  </small>
                 </legend>
                 {cleanupCandidate.items.map((item) => (
                   <label className="cleanup-review-option" key={`location-${item.path}`}>
@@ -1888,7 +1983,8 @@ export const SkillLibraryPanel = ({
                       disabled={
                         item.status === "managed" ||
                         item.status === "ignored" ||
-                        (!cleanupUsesExistingLibrary && cleanupDraft.canonicalPath === item.path)
+                        Boolean(cleanupCandidate.sharedMigration) ||
+                        (cleanupDraft.libraryAction !== "keep" && cleanupDraft.canonicalPath === item.path)
                       }
                       onChange={() => setCleanupDraft({
                         ...cleanupDraft,
@@ -1911,6 +2007,10 @@ export const SkillLibraryPanel = ({
                         ? t("Already managed")
                         : item.status === "ignored"
                           ? t("Ignored")
+                          : cleanupCandidate.sharedMigration && item.sharedLocation
+                            ? t("Keep active")
+                            : cleanupCandidate.sharedMigration
+                              ? t("Remove duplicate")
                           : !cleanupUsesExistingLibrary && cleanupDraft.canonicalPath === item.path
                             ? t("Source copy")
                             : t("Replace")}
@@ -1919,8 +2019,8 @@ export const SkillLibraryPanel = ({
                 ))}
               </fieldset>
               <p className="cleanup-safety-note">
-                <strong>{t("{{count}} locations", { count: cleanupDraft.selectedPaths.length })}</strong>
-                {" "}{t("will use")} <strong>{cleanupCandidate.primary?.name ?? cleanupDraft.skillKey}</strong> {t("from Library. Originals are backed up first.")}
+                <strong>{t("Backup included")}</strong>
+                {" "}{t("All selected copies can be restored from History.")}
               </p>
             </div>
             <footer className="preview-actions">
@@ -1934,14 +2034,31 @@ export const SkillLibraryPanel = ({
                     skillKey: cleanupDraft.skillKey,
                     libraryId: cleanupDraft.libraryId,
                     canonicalPath: cleanupDraft.canonicalPath,
+                    libraryAction: cleanupDraft.libraryAction,
+                    mode: cleanupCandidate.sharedMigration
+                      ? "shared-compatibility"
+                      : "target-copies",
+                    sharedLocations: cleanupCandidate.sharedMigration
+                      ? cleanupCandidate.items
+                          .filter((item) => item.sharedLocation)
+                          .map((item) => ({ path: item.path, contentHash: item.contentHash }))
+                      : undefined,
                     locations: cleanupCandidate.items
-                      .filter((item) => cleanupDraft.selectedPaths.includes(item.path))
-                      .map((item) => ({ targetId: item.foundIn[0] ?? "", path: item.path }))
+                      .filter(
+                        (item) =>
+                          cleanupDraft.selectedPaths.includes(item.path) &&
+                          !item.sharedLocation
+                      )
+                      .map((item) => ({
+                        targetId: item.foundIn[0] ?? "",
+                        path: item.path,
+                        contentHash: item.contentHash
+                      }))
                   });
                   setCleanupDraft(undefined);
                 }}
               >
-                {t("Back up and take over")}
+                {t(cleanupCandidate.presentation.action === "add-to-library" ? "Add to Library" : "Apply cleanup")}
               </button>
             </footer>
           </section>
@@ -1953,8 +2070,8 @@ export const SkillLibraryPanel = ({
           <div className="library-drawer__header">
             <div>
               <strong>
-                {t("Local Skill Migration")}
-                <InfoTip label={t("Library keeps the canonical copy. Target-specific folders are deployments. Shared compatibility folders are preserved until every installed consumer is managed.")} />
+                {t("Local Skill Cleanup")}
+                <InfoTip label={t("Review local Skill copies, add a canonical version to Library, and remove redundant copies with a restorable backup.")} />
               </strong>
             </div>
             <div className="library-drawer__actions">
@@ -1987,8 +2104,8 @@ export const SkillLibraryPanel = ({
             <div className="cleanup-section-heading">
               <div>
                 <div className="resource-heading">
-                  {t("Migration groups")}
-                  <InfoTip label={t("Each group shows where a Skill lives, which Targets may consume a shared copy, and the next safe migration action.")} />
+                  {t("Skills on this Mac")}
+                  <InfoTip label={t("Each group shows one Skill, its detected copies, and the next safe cleanup action.")} />
                 </div>
                 <small>{migrationSummary || t("No migration actions needed")}</small>
               </div>
@@ -1996,9 +2113,9 @@ export const SkillLibraryPanel = ({
                 <button
                   className="primary-action cleanup-auto-action"
                   type="button"
-                  aria-label={t("Take over {{count}} skills", { count: automaticCleanupRequests.length })}
+                  aria-label={t("Manage {{count}} ready skills", { count: automaticCleanupRequests.length })}
                   disabled={Boolean(automaticCleanupKey)}
-                  onClick={() => void runAutomaticCleanup("all", automaticCleanupRequests)}
+                  onClick={() => setAutoCleanupReviewOpen(true)}
                 >
                   <Sparkles
                     className={automaticCleanupKey === "all" ? "is-spinning" : undefined}
@@ -2006,7 +2123,7 @@ export const SkillLibraryPanel = ({
                     strokeWidth={2.2}
                     aria-hidden="true"
                   />
-                  {t(automaticCleanupKey === "all" ? "Taking over..." : "Take over all")}
+                  {t(automaticCleanupKey === "all" ? "Managing..." : "Manage ready copies")}
                 </button>
               ) : null}
             </div>
@@ -2020,16 +2137,43 @@ export const SkillLibraryPanel = ({
                 const hasIgnored = group.items.some((skill) => skill.status === "ignored");
                 const allIgnored = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
-                const automaticRequest = automaticSkillCleanupRequest(group);
                 const sharedMigration = group.sharedMigration;
-                const chipLabel = t(sharedMigration
-                  ? sharedMigrationLabel(sharedMigration.state)
-                  : cleanupStateLabel(group.state));
-                const chipClass = sharedMigration
-                  ? sharedMigrationChipClass(sharedMigration.state)
-                  : group.state;
-                const actionLabel = t(group.state === "conflict" ? "Resolve conflict" : "Review");
+                const chipLabel = t(cleanupPresentationLabel(group.presentation.state));
+                const chipClass = cleanupPresentationChipClass(group.presentation.state);
+                const actionLabel = t(cleanupActionLabel(group.presentation.action));
                 const groupIsWorking = sharedOperation?.skillKey === group.skillKey;
+                const cleanupActionId = `cleanup:${group.skillKey}`;
+                const runPrimaryAction = () => {
+                  if (
+                    group.presentation.action === "add-to-library" ||
+                    group.presentation.action === "manage-copies" ||
+                    group.presentation.action === "review-differences" ||
+                    group.presentation.action === "review-drift"
+                  ) {
+                    openCleanupReview(group);
+                    return;
+                  }
+                  if (group.presentation.action === "review-ownership") {
+                    const source = group.activeItems.find(
+                      (item) =>
+                        item.status === "external" &&
+                        item.externalOwnership?.state !== "broken-link"
+                    );
+                    if (source) {
+                      setExternalImport({ skillKey: group.skillKey, sourcePath: source.path });
+                    } else {
+                      setCleanupDetailsKey(group.skillKey);
+                    }
+                    return;
+                  }
+                  if (group.presentation.action === "open-profiles") {
+                    onOpenProfiles();
+                    return;
+                  }
+                  if (group.presentation.action === "review-replacement") {
+                    setSharedRetireKey(group.skillKey);
+                  }
+                };
 
                 return (
                   <div
@@ -2042,16 +2186,6 @@ export const SkillLibraryPanel = ({
                       <span className={`resource-chip resource-chip--${chipClass}`}>
                         {chipLabel}
                       </span>
-                      {!sharedMigration && group.resolution !== "resolved" ? (
-                        <span className="cleanup-resolution-detail">
-                          <span
-                            className={`cleanup-resolution cleanup-resolution--${group.resolution}`}
-                          >
-                            {t(group.resolution === "automatic" ? "Auto-ready" : "Review")}
-                          </span>
-                          <InfoTip label={group.resolutionReason} />
-                        </span>
-                      ) : null}
                     </div>
                     <div className="resource-row__main">
                       <PreviewText
@@ -2061,30 +2195,16 @@ export const SkillLibraryPanel = ({
                       />
                       {sharedMigration ? (
                         <div className="cleanup-shared-progress">
-                          <span>{t("Shared compatibility location")}</span>
-                          <span>
-                            {sharedMigration.libraryId
-                              ? `${t("Library")}: ${t("Imported")}`
-                              : `${t("Library")}: ${t("Not imported")}`}
-                          </span>
-                          {sharedMigration.consumers.length > 0 ? sharedMigration.consumers.map((targetId) =>
-                            sharedMigration.pendingConsumers.includes(targetId) ? (
-                              <button
-                                className="cleanup-migration-target"
-                                type="button"
-                                aria-label={t("Prepare {{name}} in Profiles", { name: targetName(targetId) })}
-                                key={targetId}
-                                onClick={() => onOpenProfilesForTarget(targetId)}
-                              >
-                                {targetName(targetId)}: {t("Needs Apply")}
-                                <ArrowRight size={12} strokeWidth={2.2} aria-hidden="true" />
-                              </button>
-                            ) : (
-                              <span key={targetId}>
-                                {targetName(targetId)}: {t("Prepared")}
-                              </span>
-                            )
-                          ) : <span>{t("No installed consumers detected")}</span>}
+                          <span>{t("Shared compatibility copy")}</span>
+                          {sharedMigration.state === "waiting" ? (
+                            <span>
+                              {t("Library ready · {{count}} Targets still use this copy", {
+                                count: sharedMigration.pendingConsumers.length
+                              })}
+                            </span>
+                          ) : sharedMigration.state === "ready" ? (
+                            <span>{t("All consumer Targets are ready")}</span>
+                          ) : null}
                         </div>
                       ) : null}
                       <PreviewText
@@ -2093,146 +2213,120 @@ export const SkillLibraryPanel = ({
                         displayText={`${group.primary?.description || group.skillKey} · ${group.items.length} ${group.items.length === 1 ? "location" : "locations"}`}
                         text={`${group.primary?.description || group.skillKey} · ${group.items.length} ${group.items.length === 1 ? "location" : "locations"}`}
                       />
-                      {!sharedMigration ? (
-                        <PreviewText
-                          ariaLabel={`Full cleanup locations ${group.skillKey}`}
-                          className="cleanup-group-locations"
-                          displayText={group.items
-                            .map((skill) => `${cleanupLocationLabel(skill)} · ${skill.path}`)
-                            .join(" | ")}
-                          text={group.items
-                            .map((skill) => `${cleanupLocationLabel(skill)} · ${skill.path}`)
-                            .join("\n")}
-                          tooltipClassName="library-source-tooltip"
-                        />
-                      ) : null}
-                      {group.state === "external" ? (
-                        <span className="cleanup-group-owner">
-                          {t("Managed externally by Skills CLI")}
-                        </span>
-                      ) : null}
+                      <PreviewText
+                        ariaLabel={`Full cleanup locations ${group.skillKey}`}
+                        className="cleanup-group-locations"
+                        displayText={group.items
+                          .map((skill) => `${cleanupLocationLabel(skill)} · ${skill.path}`)
+                          .join(" | ")}
+                        text={group.items
+                          .map((skill) => `${cleanupLocationLabel(skill)} · ${skill.path}`)
+                          .join("\n")}
+                        tooltipClassName="library-source-tooltip"
+                      />
                     </div>
                     <div className="cleanup-group-actions">
-                      <button
-                        className="secondary-action"
-                        type="button"
-                        aria-label={t("View details {{id}}", { id: group.skillKey })}
-                        disabled={Boolean(automaticCleanupKey) || groupIsWorking}
-                        onClick={() => setCleanupDetailsKey(group.skillKey)}
-                      >
-                        {t("Details")}
-                      </button>
-                      {sharedMigration?.state === "not-imported" ? (
+                      {group.presentation.action !== "none" ? (
                         <button
-                          className="primary-action"
-                          type="button"
-                          aria-label={t("Import shared copy {{id}}", { id: group.skillKey })}
-                          disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}
-                          onClick={() => void importSharedCopy(group)}
-                        >
-                          {t(groupIsWorking && sharedOperation?.action === "import" ? "Importing..." : "Import copy")}
-                        </button>
-                      ) : sharedMigration?.state === "ready" ? (
-                        <button
-                          className="primary-action cleanup-migration-action"
-                          type="button"
-                          aria-label={t("Complete migration {{id}}", { id: group.skillKey })}
-                          disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}
-                          onClick={() => setSharedRetireKey(group.skillKey)}
-                        >
-                          {t("Complete migration")}
-                        </button>
-                      ) : null}
-                      {automaticRequest ? (
-                        <button
-                          className="secondary-action"
-                          type="button"
-                          aria-label={t("Take over {{id}}", { id: group.skillKey })}
-                          disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}
-                          onClick={() => void runAutomaticCleanup(group.skillKey, [automaticRequest])}
-                        >
-                          {t(automaticCleanupKey === group.skillKey ? "Taking over..." : "Take over")}
-                        </button>
-                      ) : group.state === "external" && !group.items.some((item) => item.libraryId) ? (
-                        <button
-                          className="secondary-action"
-                          type="button"
-                          aria-label={t("Import copy {{id}}", { id: group.skillKey })}
-                          disabled={Boolean(automaticCleanupKey) || !group.activeItems.some(
-                            (item) =>
-                              item.status === "external" &&
-                              item.externalOwnership?.state !== "broken-link"
-                          )}
-                          onClick={() => {
-                            const source = group.activeItems.find(
-                              (item) =>
-                                item.status === "external" &&
-                                item.externalOwnership?.state !== "broken-link"
-                            );
-                            if (source) {
-                              setExternalImport({
-                                skillKey: group.skillKey,
-                                sourcePath: source.path
-                              });
-                            }
-                          }}
-                        >
-                          {t("Import copy")}
-                        </button>
-                      ) : !sharedMigration && group.resolution === "manual" && group.state !== "external" ? (
-                        <button
-                          className="secondary-action"
+                          className="secondary-action cleanup-current-action"
                           type="button"
                           aria-label={`${actionLabel} ${group.skillKey}`}
-                          disabled={Boolean(automaticCleanupKey)}
-                          onClick={() => openCleanupReview(group)}
+                          disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}
+                          onClick={runPrimaryAction}
                         >
                           {actionLabel}
                         </button>
                       ) : null}
-                      {sharedMigration && sharedMigration.state !== "external" && sharedMigration.state !== "kept" ? (
-                        <button
-                          className="secondary-action"
-                          type="button"
-                          aria-label={t("Keep shared {{id}}", { id: group.skillKey })}
-                          disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}
-                          onClick={() => void changeSharedRetention(group, true)}
-                        >
-                          {t(groupIsWorking && sharedOperation?.action === "keep" ? "Keeping..." : "Keep shared")}
-                        </button>
-                      ) : sharedMigration?.state === "kept" ? (
-                        <button
-                          className="secondary-action"
-                          type="button"
-                          aria-label={t("Review shared {{id}}", { id: group.skillKey })}
-                          disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}
-                          onClick={() => void changeSharedRetention(group, false)}
-                        >
-                          {t(groupIsWorking && sharedOperation?.action === "review" ? "Restoring..." : "Review again")}
-                        </button>
-                      ) : null}
-                      {!sharedMigration && canIgnore && !hasIgnored ? (
-                        <button
-                          className="secondary-action"
-                          type="button"
-                          aria-label={t("Ignore group {{id}}", { id: group.skillKey })}
-                          disabled={Boolean(automaticCleanupKey)}
-                          onClick={() => onIgnoreSkillGroup(group.skillKey)}
-                        >
-                          {t("Ignore")}
-                        </button>
-                      ) : null}
-                      {!sharedMigration && hasIgnored ? (
-                        <button
-                          className="secondary-action"
-                          type="button"
-                          aria-label={t("Unignore group {{id}}", { id: group.skillKey })}
-                          disabled={Boolean(automaticCleanupKey)}
-                          onClick={() => onUnignoreSkillGroup(group.skillKey)}
-                        >
-                          {t(allIgnored ? "Unignore" : "Restore ignored")}
-                        </button>
-                      ) : null}
+                      <button
+                        className="icon-action"
+                        type="button"
+                        aria-label={t("More cleanup actions for {{id}}", { id: group.skillKey })}
+                        aria-expanded={openActionId === cleanupActionId}
+                        disabled={Boolean(automaticCleanupKey) || groupIsWorking}
+                        onClick={(event) => toggleActionMenu(cleanupActionId, event.currentTarget)}
+                      >
+                        <MoreHorizontal size={16} strokeWidth={2.2} />
+                      </button>
+                      {openActionId === cleanupActionId && openAction
+                        ? createPortal(
+                            <div
+                              className="row-action-popover cleanup-action-popover"
+                              data-skill-action-popover={cleanupActionId}
+                              role="menu"
+                              aria-label={t("Cleanup actions for {{id}}", { id: group.skillKey })}
+                              style={{ left: openAction.left, top: openAction.top }}
+                            >
+                              <button
+                                className="row-action-item"
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setCleanupDetailsKey(group.skillKey);
+                                  setOpenAction(undefined);
+                                }}
+                              >
+                                <Search size={14} strokeWidth={2.2} />
+                                <span><strong>{t("Details")}</strong></span>
+                              </button>
+                              {sharedMigration && sharedMigration.state !== "external" && sharedMigration.state !== "kept" ? (
+                                <button
+                                  className="row-action-item"
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    void changeSharedRetention(group, true);
+                                    setOpenAction(undefined);
+                                  }}
+                                >
+                                  <Link2Off size={14} strokeWidth={2.2} />
+                                  <span><strong>{t("Keep shared")}</strong></span>
+                                </button>
+                              ) : sharedMigration?.state === "kept" ? (
+                                <button
+                                  className="row-action-item"
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    void changeSharedRetention(group, false);
+                                    setOpenAction(undefined);
+                                  }}
+                                >
+                                  <RefreshCw size={14} strokeWidth={2.2} />
+                                  <span><strong>{t("Review again")}</strong></span>
+                                </button>
+                              ) : null}
+                              {!sharedMigration && canIgnore && !hasIgnored ? (
+                                <button
+                                  className="row-action-item"
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    onIgnoreSkillGroup(group.skillKey);
+                                    setOpenAction(undefined);
+                                  }}
+                                >
+                                  <Link2Off size={14} strokeWidth={2.2} />
+                                  <span><strong>{t("Ignore")}</strong></span>
+                                </button>
+                              ) : null}
+                              {!sharedMigration && hasIgnored ? (
+                                <button
+                                  className="row-action-item"
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    onUnignoreSkillGroup(group.skillKey);
+                                    setOpenAction(undefined);
+                                  }}
+                                >
+                                  <RotateCcw size={14} strokeWidth={2.2} />
+                                  <span><strong>{t(allIgnored ? "Unignore" : "Restore ignored")}</strong></span>
+                                </button>
+                              ) : null}
+                            </div>,
+                            document.body
+                          )
+                        : null}
                     </div>
                   </div>
                 );
@@ -2240,7 +2334,7 @@ export const SkillLibraryPanel = ({
             </div>
             <section className="cleanup-history-section" aria-label={t("Cleanup history")}>
               <div className="resource-heading">
-                {t("Cleanup history")}
+                {t("History")}
                 <InfoTip label={t("Every cleanup creates a restorable backup. Restoring returns the affected local copies to their state before cleanup.")} />
               </div>
               {cleanupBackups.length === 0 ? (
