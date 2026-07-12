@@ -336,7 +336,7 @@ describe("SkillLibraryPanel", () => {
         bulkUpdatePlans={bulkUpdatePlans}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         installedTargetIds={["opencode", "codex"]}
-        managedTargetIds={["opencode", "codex"]}
+        preparedTargetIdsBySkill={{ "compat-reviewer": ["opencode", "codex"] }}
         activeTool={activeTool}
         isRefreshingInventory={false}
         onCloseTool={onCloseTool}
@@ -599,10 +599,10 @@ describe("SkillLibraryPanel", () => {
     const sharedMigrationGroup = screen.getByRole("group", {
       name: "Cleanup group compat-reviewer"
     });
-    expect(sharedMigrationGroup).toHaveTextContent("Ready to remove");
+    expect(sharedMigrationGroup).toHaveTextContent("Ready to switch");
     expect(sharedMigrationGroup).toHaveTextContent("Shared compatibility location");
-    expect(sharedMigrationGroup).toHaveTextContent("OpenCode: Migrated");
-    expect(sharedMigrationGroup).toHaveTextContent("Codex: Migrated");
+    expect(sharedMigrationGroup).toHaveTextContent("OpenCode: Prepared");
+    expect(sharedMigrationGroup).toHaveTextContent("Codex: Prepared");
     fireEvent.click(
       within(sharedMigrationGroup).getByRole("button", { name: "Keep shared compat-reviewer" })
     );
@@ -612,14 +612,14 @@ describe("SkillLibraryPanel", () => {
       retained: true
     });
     const removeSharedButton = within(sharedMigrationGroup).getByRole("button", {
-      name: "Remove shared copy compat-reviewer"
+      name: "Complete migration compat-reviewer"
     });
     await waitFor(() => expect(removeSharedButton).toBeEnabled());
     fireEvent.click(removeSharedButton);
-    const retireDialog = screen.getByRole("dialog", { name: "Remove shared Skill copy" });
+    const retireDialog = screen.getByRole("dialog", { name: "Complete shared Skill migration" });
     expect(retireDialog).toHaveTextContent("The Library copy is kept");
     expect(retireDialog).toHaveTextContent("/tmp/home/.agents/skills/compat-reviewer");
-    fireEvent.click(within(retireDialog).getByRole("button", { name: "Remove shared copy" }));
+    fireEvent.click(within(retireDialog).getByRole("button", { name: "Complete migration" }));
     await waitFor(() => expect(onRetireSharedSkill).toHaveBeenCalledWith({
       skillKey: "compat-reviewer",
       libraryId: "compat-reviewer",

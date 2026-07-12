@@ -77,12 +77,13 @@ Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data ro
 `~/.agents/skills` and other cross-tool compatibility paths MAY be consumed by more than one Target. They are migration sources, not canonical Library storage or AgentEnv's default deployment destination.
 
 - Canonical Skill content MUST remain under AgentEnv data.
-- Apply MUST deploy Skills to the selected Target's dedicated managed directory.
+- Apply normally deploys Skills to the selected Target's dedicated managed directory. While an equivalent shared compatibility copy is active, Apply MUST record that Target's current `install` or `omit` intent without creating a duplicate dedicated copy.
 - Applying an OpenCode Profile MUST NOT change Codex or Claude Code Skill directories, and equivalent isolation applies to every Target pair.
-- Compatibility copies MAY be captured into a Profile, but MUST remain in place while any installed consumer lacks an equivalent managed Target-specific copy.
+- Compatibility copies MAY be captured into a Profile, but MUST remain in place while any installed consumer lacks a current prepared Profile intent.
 - Importing a compatibility copy creates an independent Library copy and MUST NOT replace, link, or remove the compatibility location.
-- A compatibility copy is removed only through an explicit Scan local migration action after every installed consumer Target is managed; Capture never removes it as a side effect.
-- Removing a compatibility copy MUST create a restorable backup, retain the Library copy, and remove only the reviewed shared paths.
+- A compatibility copy is switched only through an explicit Scan local migration action after every installed consumer Target has applied a current preparation; Capture never removes it as a side effect.
+- Completing migration MUST create one restorable backup for the shared paths, every affected Target path, and every affected Target state. It removes the shared paths first, deploys or omits the Skill according to each prepared Profile, verifies the result, and restores the whole transaction on any failure.
+- AgentEnv MUST NOT edit per-Agent configuration to suppress duplicate discovery during this migration.
 - `Keep shared` is a path-scoped migration decision. It MUST NOT ignore or alter same-name copies in Target-specific directories.
 - A compatibility copy with conflicting content blocks automatic consolidation.
 - External manager metadata, including Skills CLI lock files, is read-only evidence. AgentEnv MUST NOT silently edit or delete another manager's lock data.
@@ -495,12 +496,13 @@ Resolution contract:
 
 Shared compatibility migration contract:
 
-- A shared compatibility group has one of six explicit states: `Shared source`, `Waiting for Targets`, `Ready to remove`, `Kept shared`, `External`, or `Conflict`.
-- The group shows Library import status and every installed consumer Target as either `Uses shared copy` or `Migrated`.
+- A shared compatibility group has one of six explicit states: `Shared source`, `Preparing Targets`, `Ready to switch`, `Kept shared`, `External`, or `Conflict`.
+- The group shows Library import status and every installed consumer Target as either `Needs Apply` or `Prepared`.
 - `Import copy` is non-destructive: it copies the selected shared content into Library and leaves the shared path untouched.
-- `Waiting for Targets` remains until every installed adapter-declared consumer is managed and has an exact AgentEnv-owned copy in its Target-specific directory. Merely having a Profile, Library reference, or globally managed Target is insufficient.
-- `Ready to remove` requires an exact Library copy and an equivalent current managed installation for every installed consumer. The same prerequisites MUST be enforced in the main process, not only by renderer state.
-- `Remove shared copy` requires confirmation, creates a cleanup backup, retains Library content, removes only the reviewed compatibility paths, and exposes the result in Cleanup history with Restore.
+- `Preparing Targets` remains until every installed adapter-declared consumer has applied a current Profile that records whether the Skill will be installed or omitted after cutover. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
+- `Ready to switch` requires an exact Library copy and a non-stale preparation for every installed consumer. Current Profile hashes and Library versions MUST be revalidated in the main process, not only by renderer state.
+- `Complete migration` requires confirmation and executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
+- Cleanup history exposes the completed shared migration as one restorable operation. Restore returns shared paths, Target paths, and preparation state to their pre-migration state.
 - `Keep shared` records a path-scoped decision and resolves the group without changing files. `Review again` removes only that decision.
 - Shared compatibility groups MUST NOT participate in `Take over all` or generic duplicate cleanup.
 
@@ -762,7 +764,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Ignored resources and unsupported native data remain Target-owned after Create from Target.
 - Applying the same Library Skill to OpenCode, Codex, and Claude Code creates isolated Target-specific runtime copies.
 - Shared compatibility copies remain unchanged during capture; later removal requires the explicit reviewed Scan local cleanup workflow.
-- Importing a shared compatibility Skill leaves the source untouched; removal is blocked until every installed consumer has an exact managed Target-specific copy, then creates a restorable backup without deleting Library content.
+- Importing a shared compatibility Skill leaves the source untouched. Apply prepares each installed consumer without creating duplicate runtime copies; Complete migration then performs one backed-up, verified cross-Target switch without deleting Library content.
 
 ### Cross-Target
 
@@ -837,7 +839,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-15 against the current `main` tree at the time of this snapshot.
 
-- `364` automated tests passed across `48` test files; the `72`-test Electron UI suite and `79` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `366` automated tests passed across `48` test files; the `72`-test Electron UI suite and `79` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `37` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
@@ -851,7 +853,7 @@ Last verified: 2026-07-15 against the current `main` tree at the time of this sn
 - Library Skill disable, picker exclusion, update-check isolation, re-enable, and Apply-time Target removal and restoration passed Store, renderer, and Electron E2E coverage; Profile Skill switches use the same Save and Apply contract as Add and Remove.
 - Skill table headers, mixed-action rows, two-line metadata, empty install states, and update labels passed coordinate and overflow assertions at both supported viewports.
 - Target-local import now creates a transactional managed install, shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
-- Shared compatibility migration now distinguishes imported, waiting, ready, retained, external, and conflict states; Electron E2E verifies non-destructive import, main-process early-removal blocking, per-Target managed copies, explicit retirement, backup history, and restore.
+- Shared compatibility migration now distinguishes imported, preparing, ready, retained, external, and conflict states; Apply records per-Target install or omit intent without duplicate runtime copies, and Electron E2E verifies early-switch blocking, transactional cutover, backup history, and full restore.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards.
 - Production dependency audit reported zero known vulnerabilities.

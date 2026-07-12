@@ -165,7 +165,7 @@ describe("skill cleanup groups", () => {
 
     const [waiting] = buildSkillCleanupGroups([sharedCopy, openCodeCopy], {
       installedTargetIds: ["opencode", "codex"],
-      managedTargetIds: ["opencode"]
+      preparedTargetIdsBySkill: { reviewer: ["opencode"] }
     });
     expect(waiting.sharedMigration).toEqual({
       state: "waiting",
@@ -178,7 +178,7 @@ describe("skill cleanup groups", () => {
 
     const [ready] = buildSkillCleanupGroups([sharedCopy, openCodeCopy, codexCopy], {
       installedTargetIds: ["opencode", "codex"],
-      managedTargetIds: ["opencode", "codex"]
+      preparedTargetIdsBySkill: { reviewer: ["opencode", "codex"] }
     });
     expect(ready.sharedMigration).toMatchObject({ state: "ready", pendingConsumers: [] });
   });

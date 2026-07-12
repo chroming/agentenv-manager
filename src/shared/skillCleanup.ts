@@ -43,7 +43,7 @@ export const buildSkillCleanupGroups = (
   skillInventory: SkillInventoryEntry[],
   options: {
     installedTargetIds?: readonly string[];
-    managedTargetIds?: readonly string[];
+    preparedTargetIdsBySkill?: Readonly<Record<string, readonly string[]>>;
   } = {}
 ): SkillCleanupGroup[] => {
   const byKey = new Map<string, SkillInventoryEntry[]>();
@@ -80,23 +80,12 @@ export const buildSkillCleanupGroups = (
       const consumers = [...new Set(sharedItems.flatMap((item) => item.foundIn))]
         .filter((targetId) => !installedTargets || installedTargets.has(targetId))
         .sort();
-      const managedTargets = new Set(options.managedTargetIds ?? []);
       const sharedLibraryItem = sharedItems.find(
         (item) => item.libraryId && item.contentMatchesLibrary === true
       );
-      const migratedTargets = new Set(
-        items
-          .filter(
-            (item) =>
-              !item.sharedLocation &&
-              item.status === "managed" &&
-              item.libraryId === sharedLibraryItem?.libraryId &&
-              item.contentMatchesLibrary === true
-          )
-          .flatMap((item) => item.foundIn)
-      );
+      const preparedTargets = new Set(options.preparedTargetIdsBySkill?.[skillKey] ?? []);
       const pendingConsumers = consumers.filter(
-        (targetId) => !managedTargets.has(targetId) || !migratedTargets.has(targetId)
+        (targetId) => !preparedTargets.has(targetId)
       );
       const sharedKept =
         sharedItems.length > 0 &&

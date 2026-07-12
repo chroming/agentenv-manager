@@ -76,6 +76,10 @@ export interface ManageTargetSkillStoreInput {
   libraryId: string;
 }
 
+export interface DeployLibrarySkillStoreInput extends ManageTargetSkillStoreInput {
+  profileId: string;
+}
+
 export interface ConsolidateSkillGroupStoreInput {
   skillKey: string;
   libraryId: string;
@@ -97,9 +101,9 @@ export interface SkillLibraryStore {
   importGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
   removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
+  deployLibrarySkill(input: DeployLibrarySkillStoreInput): Promise<void>;
   consolidateSkillGroup(input: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult>;
   setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
-  retireSharedSkill(libraryId: string, paths: string[]): Promise<SkillCleanupResult>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
   checkUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
@@ -1332,11 +1336,12 @@ export const createSkillLibraryStore = (
     return { imported, failed };
   };
 
-  const manageTargetSkill = async ({
+  const deployLibrarySkill = async ({
     targetPaths,
     targetName,
-    libraryId
-  }: ManageTargetSkillStoreInput): Promise<void> => {
+    libraryId,
+    profileId
+  }: DeployLibrarySkillStoreInput): Promise<void> => {
     if (!targetPaths.skillsDir) {
       throw new Error("Target does not expose a skills directory");
     }
@@ -1351,10 +1356,6 @@ export const createSkillLibraryStore = (
     }
 
     const targetDir = join(targetPaths.skillsDir, targetName);
-    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
-      throw new Error(`Target skill does not exist: ${targetDir}`);
-    }
-
     const settings = await readSettings();
     await rm(targetDir, { recursive: true, force: true });
     await mkdir(targetDir, { recursive: true });
@@ -1374,13 +1375,23 @@ export const createSkillLibraryStore = (
     await writeFile(
       markerPathFor(targetDir),
       createOwnerMarkerContent({
-        profileId: "library-management",
+        profileId,
         targetId: targetPaths.targetId,
         kind: "skill",
         source: `skills-library/${safeLibraryId}`
       }),
       "utf8"
     );
+  };
+
+  const manageTargetSkill = async (input: ManageTargetSkillStoreInput): Promise<void> => {
+    const targetDir = input.targetPaths.skillsDir
+      ? join(input.targetPaths.skillsDir, input.targetName)
+      : "";
+    if (!targetDir || !(await pathExists(join(targetDir, "SKILL.md")))) {
+      throw new Error(`Target skill does not exist: ${targetDir}`);
+    }
+    await deployLibrarySkill({ ...input, profileId: "library-management" });
   };
 
   const replaceTargetSkill = async ({
@@ -1495,62 +1506,6 @@ export const createSkillLibraryStore = (
       await restoreCleanupBackup(manifest);
       throw new Error(
         `Skill cleanup ${safeSkillKey} failed and was rolled back: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  };
-
-  const retireSharedSkill = async (
-    libraryId: string,
-    retiredPaths: string[]
-  ): Promise<SkillCleanupResult> => {
-    const safeLibraryId = SafeIdSchema.parse(libraryId);
-    if (!(await pathExists(join(await libraryDir(), safeLibraryId, "SKILL.md")))) {
-      throw new Error(`Library skill does not exist: ${safeLibraryId}`);
-    }
-    const uniquePaths = [...new Set(retiredPaths)];
-    for (const sourcePath of uniquePaths) {
-      if (!(await pathExists(join(sourcePath, "SKILL.md")))) {
-        throw new Error(`Shared Skill location is missing SKILL.md: ${sourcePath}`);
-      }
-    }
-    const backupId = `retire-${Date.now()}-${randomUUID().slice(0, 8)}`;
-    const backupDir = join(cleanupBackupRoot(), backupId);
-    const entries: SkillCleanupBackupManifest["entries"] = [];
-    await mkdir(backupDir, { recursive: true });
-
-    for (const [index, sourcePath] of uniquePaths.entries()) {
-      const backupPath = join(backupDir, "locations", `${index}-${basename(sourcePath)}`);
-      await mkdir(dirname(backupPath), { recursive: true });
-      await cp(sourcePath, backupPath, { recursive: true, dereference: false });
-      entries.push({ sourcePath, backupPath });
-    }
-
-    const manifest: SkillCleanupBackupManifest = {
-      id: backupId,
-      libraryId: safeLibraryId,
-      libraryCreated: false,
-      operation: "retire",
-      createdAt: new Date().toISOString(),
-      entries
-    };
-    await writeFile(join(backupDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-
-    try {
-      for (const sourcePath of uniquePaths) {
-        await rm(sourcePath, { recursive: true, force: true });
-      }
-      return {
-        backupId,
-        libraryId: safeLibraryId,
-        managedLocations: uniquePaths,
-        operation: "retire"
-      };
-    } catch (error) {
-      await restoreCleanupBackup(manifest);
-      throw new Error(
-        `Retiring shared Skill ${safeLibraryId} failed and was rolled back: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
@@ -1913,9 +1868,9 @@ export const createSkillLibraryStore = (
     importGitHubSkills,
     removeSkill,
     manageTargetSkill,
+    deployLibrarySkill,
     consolidateSkillGroup,
     setSharedSkillRetention,
-    retireSharedSkill,
     rollbackSkillCleanup,
     checkUpdates,
     setUpdateSource,

@@ -42,6 +42,9 @@ import type {
   ProfileDetail,
   RollbackPreview,
   RollbackResult,
+  SharedSkillPreparation,
+  SkillCleanupBackupSummary,
+  SkillCleanupResult,
   SkillLibraryEntry,
   StopManagingMode,
   StopManagingPreview,
@@ -85,6 +88,14 @@ export interface ActivationService {
     previewId: string,
     options?: InternalApplyProfileOptions
   ): Promise<ApplyResult>;
+  completeSharedSkillMigration(input: {
+    skillKey: string;
+    libraryId: string;
+    sharedPaths: string[];
+    consumerTargetIds: string[];
+  }): Promise<SkillCleanupResult>;
+  listSharedSkillMigrationBackups(): Promise<SkillCleanupBackupSummary[]>;
+  rollbackSharedSkillMigration(backupId: string): Promise<void>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
   rollback(backupId: string): Promise<RollbackResult>;
   previewStopManaging(targetId: string, mode: StopManagingMode): Promise<StopManagingPreview>;
@@ -208,6 +219,28 @@ const normalizeTargetState = (value: unknown): TargetState => {
           typeof item.contentHash === "string"
       )
     : [];
+  const sharedSkillPreparations = Array.isArray(record.sharedSkillPreparations)
+    ? record.sharedSkillPreparations.filter(
+        (item): item is SharedSkillPreparation =>
+          Boolean(item) &&
+          typeof item === "object" &&
+          "skillKey" in item &&
+          "libraryId" in item &&
+          "sharedPaths" in item &&
+          "targetName" in item &&
+          "disposition" in item &&
+          "profileId" in item &&
+          "profileHash" in item &&
+          typeof item.skillKey === "string" &&
+          typeof item.libraryId === "string" &&
+          Array.isArray(item.sharedPaths) &&
+          item.sharedPaths.every((path) => typeof path === "string") &&
+          typeof item.targetName === "string" &&
+          (item.disposition === "install" || item.disposition === "omit") &&
+          typeof item.profileId === "string" &&
+          typeof item.profileHash === "string"
+      )
+    : [];
   const recoveryRecord =
     record.recoveryRequired && typeof record.recoveryRequired === "object"
       ? (record.recoveryRequired as unknown as Record<string, unknown>)
@@ -243,6 +276,7 @@ const normalizeTargetState = (value: unknown): TargetState => {
         : undefined,
     lastAppliedAt: typeof record.lastAppliedAt === "string" ? record.lastAppliedAt : undefined,
     managedResources,
+    sharedSkillPreparations,
     recoveryRequired
   };
 };
@@ -473,6 +507,7 @@ export const createActivationService = ({
             lifecycleReason,
             lastAppliedAt: state.lastAppliedAt,
             managedResourceCount: state.managedResources?.length ?? 0,
+            sharedSkillPreparations: state.sharedSkillPreparations ?? [],
             warningCount: 0,
             errorCount: driftCount
           };
@@ -487,6 +522,112 @@ export const createActivationService = ({
   const writeTargetState = async (targetId: string, state: TargetState) => {
     await mkdir(paths.targetStatesDir, { recursive: true, mode: 0o700 });
     await writeAtomic(statePathFor(targetId), `${JSON.stringify(state, null, 2)}\n`);
+  };
+
+  const sharedSkillPreparationPlan = async (
+    profile: ProfileDetail,
+    targetPaths: TargetPaths,
+    profileHash: string,
+    skillLibrary: SkillLibraryEntry[]
+  ) => {
+    const inventory = await skillLibraryStore.scanInventory([targetPaths]);
+    const sharedBySkill = new Map<
+      string,
+      { skillKey: string; libraryId: string; paths: Set<string> }
+    >();
+    for (const item of inventory) {
+      if (
+        !item.sharedLocation ||
+        !item.libraryId ||
+        item.contentMatchesLibrary !== true ||
+        item.ignoreReason === "keep-shared" ||
+        skillLibrary.some(
+          (skill) => skill.id === item.libraryId && resolve(skill.path) === resolve(item.path)
+        )
+      ) {
+        continue;
+      }
+      const key = `${item.skillKey}:${item.libraryId}`;
+      const entry = sharedBySkill.get(key) ?? {
+        skillKey: item.skillKey,
+        libraryId: item.libraryId,
+        paths: new Set<string>()
+      };
+      entry.paths.add(resolve(item.path));
+      sharedBySkill.set(key, entry);
+    }
+
+    const preparations: SharedSkillPreparation[] = [];
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const fingerprints: Record<string, string> = {};
+    const deferredLibraryIds = new Set<string>();
+    for (const shared of sharedBySkill.values()) {
+      const reference = profile.assetPolicy.skillRefs.find(
+        (item) => item.libraryId === shared.libraryId && item.enabled !== false
+      );
+      const targetName = reference?.targetName ?? shared.libraryId;
+      const profileOwnedConflict = profile.assetPolicy.ownedDirs.some(
+        (item) => item.kind === "skill" && item.targetName === targetName
+      );
+      if (profileOwnedConflict) {
+        errors.push(
+          `Cannot prepare shared Skill ${shared.skillKey}: Profile-owned Skill ${targetName} uses the same Target name.`
+        );
+        continue;
+      }
+      if (targetPaths.skillsDir) {
+        const targetPath = join(targetPaths.skillsDir, targetName);
+        const occupyingItem = inventory.find(
+          (item) => !item.sharedLocation && resolve(item.path) === resolve(targetPath)
+        );
+        if (
+          occupyingItem &&
+          occupyingItem.status !== "managed"
+        ) {
+          errors.push(
+            `Cannot prepare shared Skill ${shared.skillKey}: ${targetPath} is occupied by a non-AgentEnv Skill.`
+          );
+          continue;
+        }
+      }
+      const sharedPaths = [...shared.paths].sort();
+      for (const path of sharedPaths) {
+        fingerprints[path] = (await hashPath(path)) ?? "";
+      }
+      deferredLibraryIds.add(shared.libraryId);
+      preparations.push({
+        skillKey: shared.skillKey,
+        libraryId: shared.libraryId,
+        sharedPaths,
+        targetName,
+        disposition: reference ? "install" : "omit",
+        profileId: profile.id,
+        profileHash
+      });
+      warnings.push(
+        reference
+          ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory until Complete migration installs the Target-specific copy.`
+          : `Shared Skill ${shared.skillKey} stays active until Complete migration removes the compatibility copy; this Profile will omit it afterward.`
+      );
+    }
+
+    preparations.sort((left, right) => left.skillKey.localeCompare(right.skillKey));
+    return {
+      runtimeProfile: {
+        ...profile,
+        assetPolicy: {
+          ...profile.assetPolicy,
+          skillRefs: profile.assetPolicy.skillRefs.filter(
+            (reference) => !deferredLibraryIds.has(reference.libraryId)
+          )
+        }
+      },
+      preparations,
+      errors,
+      warnings,
+      fingerprints
+    };
   };
 
   const desiredSkillTargets = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>) =>
@@ -797,11 +938,23 @@ export const createActivationService = ({
       )
       .map((reference) => reference.libraryId);
     const effectivePayload = effectivePayloadFor(profile);
-    const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
     const targetPaths = adapter.createTargetPaths({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
     });
+    const profileContentHash =
+      sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
+      createProfileContentHash(targeted.profile);
+    const preparationPlan = await sharedSkillPreparationPlan(
+      profile,
+      targetPaths,
+      profileContentHash,
+      skillLibrary
+    );
+    const materializedProfile = materializeProfileMcpRefs(
+      preparationPlan.runtimeProfile,
+      mcpLibrary
+    );
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     const stateFile = await readTargetStateFile(adapter.descriptor.id);
@@ -868,9 +1021,7 @@ export const createActivationService = ({
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
-      profileContentHash:
-        sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
-        createProfileContentHash(targeted.profile),
+      profileContentHash,
       libraryVersions: collectLibraryResourceVersions(profile, skillLibrary, mcpLibrary),
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
@@ -880,7 +1031,8 @@ export const createActivationService = ({
         ),
         targetPreview.warnings,
         drift.warnings,
-        unmanagedWarnings
+        unmanagedWarnings,
+        preparationPlan.warnings
       ),
       errors: withoutGenericExternalConflicts(targetPreview.errors).concat(
         recoveryErrors,
@@ -890,7 +1042,8 @@ export const createActivationService = ({
         withoutGenericExternalConflicts(assetErrors),
         drift.errors,
         ignoredErrors,
-        externalConflicts.errors
+        externalConflicts.errors,
+        preparationPlan.errors
       ),
       changes: targetPreview.changes,
       resourceChanges: assetPlan.resourceChanges,
@@ -898,8 +1051,15 @@ export const createActivationService = ({
         ...targetPreview.liveFingerprints,
         [stateFile.path]: hashText(stateFile.content)
       },
-      resourceFingerprints: assetPlan.resourceFingerprints,
+      resourceFingerprints: {
+        ...assetPlan.resourceFingerprints,
+        ...preparationPlan.fingerprints
+      },
       sourceFingerprints: assetPlan.sourceFingerprints,
+      sharedSkillPreparations: preparationPlan.preparations,
+      sharedSkillPreparationChanged:
+        JSON.stringify(stateFile.state.sharedSkillPreparations ?? []) !==
+        JSON.stringify(preparationPlan.preparations),
       targetState: targetPreview.targetState,
       effectivePayload,
       omissions: targeted.omissions,
@@ -928,7 +1088,8 @@ export const createActivationService = ({
     if (
       preview.operation !== "takeover" &&
       preview.changes.length === 0 &&
-      preview.resourceChanges.length === 0
+      preview.resourceChanges.length === 0 &&
+      !preview.sharedSkillPreparationChanged
     ) {
       return { ok: false, errors: ["No changes to apply"] };
     }
@@ -968,11 +1129,26 @@ export const createActivationService = ({
     if (!libraryResourceVersionsEqual(currentLibraryVersions, preview.libraryVersions)) {
       return { ok: false, errors: ["Library resources changed after preview; review the latest versions"] };
     }
-    const materializedProfile = materializeProfileMcpRefs(profile, mcpLibrary);
     const targetPaths = adapter.createTargetPaths({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
     });
+    const preparationPlan = await sharedSkillPreparationPlan(
+      profile,
+      targetPaths,
+      currentProfileHash,
+      skillLibrary
+    );
+    if (
+      JSON.stringify(preparationPlan.preparations) !==
+      JSON.stringify(preview.sharedSkillPreparations ?? [])
+    ) {
+      return { ok: false, errors: ["Shared Skill migration state changed after preview"] };
+    }
+    const materializedProfile = materializeProfileMcpRefs(
+      preparationPlan.runtimeProfile,
+      mcpLibrary
+    );
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     const isTakeover = preview.operation === "takeover";
@@ -1081,6 +1257,7 @@ export const createActivationService = ({
         appliedLibraryVersions: currentLibraryVersions,
         lastAppliedAt: new Date().toISOString(),
         managedResources,
+        sharedSkillPreparations: preparationPlan.preparations,
         recoveryRequired: undefined
       });
     } catch (error) {
@@ -1127,6 +1304,296 @@ export const createActivationService = ({
     return { ok: true, backupId: backup.id };
     } finally {
       activeTargetOperations.delete(preview.targetId);
+    }
+  };
+
+  const completeSharedSkillMigration = async ({
+    skillKey,
+    libraryId,
+    sharedPaths,
+    consumerTargetIds
+  }: {
+    skillKey: string;
+    libraryId: string;
+    sharedPaths: string[];
+    consumerTargetIds: string[];
+  }): Promise<SkillCleanupResult> => {
+    const targetIds = [...new Set(consumerTargetIds)].sort();
+    if (targetIds.length === 0) {
+      throw new Error(`${skillKey} has no installed Target consumers to migrate.`);
+    }
+    const busyTarget = targetIds.find((targetId) => activeTargetOperations.has(targetId));
+    if (busyTarget) {
+      throw new Error(`Another operation is already running for ${busyTarget}`);
+    }
+    targetIds.forEach((targetId) => activeTargetOperations.add(targetId));
+
+    try {
+      const [skillLibrary, mcpLibrary] = await Promise.all([
+        skillLibraryStore.listSkills(),
+        mcpLibraryStore.listServers()
+      ]);
+      const librarySkill = skillLibrary.find((skill) => skill.id === libraryId);
+      if (!librarySkill) {
+        throw new Error(`Library Skill is unavailable: ${libraryId}`);
+      }
+
+      const contexts: Array<{
+        targetId: string;
+        targetPaths: TargetPaths;
+        targetPath: string;
+        statePath: string;
+        state: TargetState;
+        preparation: SharedSkillPreparation;
+      }> = [];
+      const normalizedSharedPaths = [...new Set(sharedPaths.map((path) => resolve(path)))].sort();
+
+      for (const targetId of targetIds) {
+        const adapter = targetRegistry.get(targetId);
+        const targetPaths = adapter.createTargetPaths({
+          homeDir: paths.homeDir,
+          fakeHomeRoot: paths.fakeHomeRoot
+        });
+        if (!targetPaths.skillsDir) {
+          throw new Error(`${adapter.descriptor.name} does not expose a skills directory.`);
+        }
+        const stateFile = await readTargetStateFile(targetId);
+        const preparation = (stateFile.state.sharedSkillPreparations ?? []).find(
+          (item) => item.skillKey === skillKey && item.libraryId === libraryId
+        );
+        if (!preparation || !stateFile.state.activeProfileId) {
+          throw new Error(
+            `${adapter.descriptor.name} is not prepared. Save and Apply its current Profile first.`
+          );
+        }
+        if (stateFile.state.recoveryRequired) {
+          throw new Error(`${adapter.descriptor.name} requires recovery before migration.`);
+        }
+        if (
+          JSON.stringify([...preparation.sharedPaths].map((path) => resolve(path)).sort()) !==
+          JSON.stringify(normalizedSharedPaths)
+        ) {
+          throw new Error(`${adapter.descriptor.name} was prepared for a different shared copy.`);
+        }
+
+        const sourceProfile = await profileStore.readProfile(stateFile.state.activeProfileId);
+        const targetedProfile = targetProfile(sourceProfile, adapter).profile;
+        const effectiveProfile = applyLibrarySkillAvailability(targetedProfile, skillLibrary);
+        const expectedReference = effectiveProfile.assetPolicy.skillRefs.find(
+          (reference) => reference.libraryId === libraryId && reference.enabled !== false
+        );
+        const currentProfileHash =
+          sourceProfile.targetContentHashes?.[targetId] ??
+          createProfileContentHash(targetedProfile);
+        const currentLibraryVersions = collectLibraryResourceVersions(
+          effectiveProfile,
+          skillLibrary,
+          mcpLibrary
+        );
+        if (
+          preparation.profileId !== sourceProfile.id ||
+          preparation.profileHash !== currentProfileHash ||
+          preparation.disposition !== (expectedReference ? "install" : "omit") ||
+          preparation.targetName !== (expectedReference?.targetName ?? libraryId) ||
+          stateFile.state.appliedProfileHash !== currentProfileHash ||
+          !libraryResourceVersionsEqual(
+            currentLibraryVersions,
+            stateFile.state.appliedLibraryVersions
+          )
+        ) {
+          throw new Error(
+            `${adapter.descriptor.name} preparation is stale. Preview and Apply the saved Profile again.`
+          );
+        }
+
+        const targetPath = join(targetPaths.skillsDir, preparation.targetName);
+        const inventory = await skillLibraryStore.scanInventory([targetPaths]);
+        const occupyingItem = inventory.find(
+          (item) => !item.sharedLocation && resolve(item.path) === resolve(targetPath)
+        );
+        if (
+          occupyingItem &&
+          (occupyingItem.status !== "managed" || occupyingItem.libraryId !== libraryId)
+        ) {
+          throw new Error(
+            `${adapter.descriptor.name} cannot switch ${skillKey}: ${targetPath} is not the prepared AgentEnv copy.`
+          );
+        }
+        contexts.push({
+          targetId,
+          targetPaths,
+          targetPath,
+          statePath: stateFile.path,
+          state: stateFile.state,
+          preparation
+        });
+      }
+
+      for (const sharedPath of normalizedSharedPaths) {
+        if (!(await pathExists(join(sharedPath, "SKILL.md")))) {
+          throw new Error(`Shared Skill changed before migration: ${sharedPath}`);
+        }
+        if (
+          (await hashComparablePath(sharedPath)) !==
+          (await hashComparablePath(librarySkill.path))
+        ) {
+          throw new Error(`Shared Skill no longer matches Library: ${sharedPath}`);
+        }
+      }
+
+      const backup = await backupStore.createBackup(
+        [
+          ...normalizedSharedPaths,
+          ...contexts.flatMap((context) => [context.targetPath, context.statePath])
+        ].filter((path, index, all) => all.indexOf(path) === index),
+        {
+          operation: "shared-skill-migration",
+          targetIds,
+          profileName: libraryId
+        }
+      );
+      const installedPaths: string[] = [];
+
+      try {
+        for (const sharedPath of normalizedSharedPaths) {
+          await rm(sharedPath, { recursive: true, force: true });
+        }
+        for (const context of contexts) {
+          if (context.preparation.disposition === "install") {
+            await skillLibraryStore.deployLibrarySkill({
+              targetPaths: context.targetPaths,
+              targetName: context.preparation.targetName,
+              libraryId,
+              profileId: context.preparation.profileId
+            });
+            installedPaths.push(context.targetPath);
+          } else {
+            await rm(context.targetPath, { recursive: true, force: true });
+          }
+
+          const retainedResources = (context.state.managedResources ?? []).filter(
+            (resource) => resolve(resource.path) !== resolve(context.targetPath)
+          );
+          const migratedResources =
+            context.preparation.disposition === "install"
+              ? await snapshotManagedResources([context.targetPath], context.targetPaths)
+              : [];
+          await writeTargetState(context.targetId, {
+            ...context.state,
+            managedResources: retainedResources.concat(migratedResources),
+            sharedSkillPreparations: (context.state.sharedSkillPreparations ?? []).filter(
+              (item) => item.skillKey !== skillKey || item.libraryId !== libraryId
+            )
+          });
+        }
+
+        for (const sharedPath of normalizedSharedPaths) {
+          if (await pathExists(sharedPath)) {
+            throw new Error(`Shared Skill removal verification failed: ${sharedPath}`);
+          }
+        }
+        for (const context of contexts) {
+          const shouldExist = context.preparation.disposition === "install";
+          if ((await pathExists(join(context.targetPath, "SKILL.md"))) !== shouldExist) {
+            throw new Error(`Target Skill verification failed: ${context.targetPath}`);
+          }
+          if (
+            shouldExist &&
+            ((await hashComparablePath(context.targetPath)) !==
+              (await hashComparablePath(librarySkill.path)) ||
+              (await readTextIfExists(markerPathFor(context.targetPath))) !==
+                createOwnerMarkerContent({
+                  profileId: context.preparation.profileId,
+                  targetId: context.targetId,
+                  kind: "skill",
+                  source: `skills-library/${libraryId}`
+                }))
+          ) {
+            throw new Error(`Target Skill ownership verification failed: ${context.targetPath}`);
+          }
+        }
+        await appendHistory(paths, {
+          type: "shared-skill-migration",
+          skillKey,
+          libraryId,
+          targetIds,
+          backupId: backup.id
+        });
+      } catch (error) {
+        try {
+          await restoreBackupEntries(backup);
+        } catch (restoreError) {
+          const recoveryError = `Shared Skill migration failed: ${errorMessage(error)}; automatic restore failed: ${errorMessage(restoreError)}`;
+          await Promise.all(
+            contexts.map(async (context) => {
+              try {
+                const currentState = (await readTargetStateFile(context.targetId)).state;
+                await writeTargetState(context.targetId, {
+                  ...currentState,
+                  recoveryRequired: {
+                    operation: "rollback",
+                    error: recoveryError,
+                    backupId: backup.id,
+                    occurredAt: new Date().toISOString()
+                  }
+                });
+              } catch {
+                // The backup id in the reported error remains the manual recovery path.
+              }
+            })
+          );
+          throw new Error(
+            `${recoveryError}. Recovery required for backup ${backup.id}.`
+          );
+        }
+        throw new Error(
+          `Shared Skill migration failed and was restored: ${errorMessage(error)}`
+        );
+      }
+
+      return {
+        backupId: backup.id,
+        libraryId,
+        managedLocations: normalizedSharedPaths.concat(installedPaths),
+        operation: "retire"
+      };
+    } finally {
+      targetIds.forEach((targetId) => activeTargetOperations.delete(targetId));
+    }
+  };
+
+  const listSharedSkillMigrationBackups = async (): Promise<SkillCleanupBackupSummary[]> =>
+    (await backupStore.listBackups())
+      .filter((backup) => backup.operation === "shared-skill-migration")
+      .map((backup) => ({
+        id: backup.id,
+        libraryId: backup.profileName ?? "shared-skill",
+        createdAt: backup.createdAt,
+        locationCount: backup.fileCount,
+        operation: "retire" as const
+      }));
+
+  const rollbackSharedSkillMigration = async (backupId: string): Promise<void> => {
+    const backup = await backupStore.readBackup(backupId);
+    if (backup.operation !== "shared-skill-migration") {
+      throw new Error(`Backup is not a shared Skill migration: ${backupId}`);
+    }
+    const targetIds = backup.targetIds ?? [];
+    const busyTarget = targetIds.find((targetId) => activeTargetOperations.has(targetId));
+    if (busyTarget) {
+      throw new Error(`Another operation is already running for ${busyTarget}`);
+    }
+    targetIds.forEach((targetId) => activeTargetOperations.add(targetId));
+    try {
+      await restoreBackupEntries(backup);
+      await appendHistory(paths, {
+        type: "rollback-shared-skill-migration",
+        backupId,
+        targetIds
+      });
+      await rm(join(paths.backupsDir, backupId), { recursive: true, force: true });
+    } finally {
+      targetIds.forEach((targetId) => activeTargetOperations.delete(targetId));
     }
   };
 
@@ -1387,6 +1854,9 @@ export const createActivationService = ({
     listTargetStates,
     previewProfile,
     applyProfile,
+    completeSharedSkillMigration,
+    listSharedSkillMigrationBackups,
+    rollbackSharedSkillMigration,
     previewRollback,
     rollback,
     previewStopManaging,

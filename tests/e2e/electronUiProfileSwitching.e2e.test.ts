@@ -2673,8 +2673,8 @@ describe("Electron UI profile switching e2e", () => {
     });
     await cleanupGroup.waitFor({ state: "visible" });
     await expect.poll(() => cleanupGroup.textContent()).toContain("Shared source");
-    await expect.poll(() => cleanupGroup.textContent()).toContain("OpenCode: Uses shared copy");
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Codex: Uses shared copy");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("OpenCode: Needs Apply");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Codex: Needs Apply");
     expect(
       await cleanupGroup
         .getByRole("button", { name: "Take over shared-migration-reviewer" })
@@ -2711,7 +2711,7 @@ describe("Electron UI profile switching e2e", () => {
       .toBe(true);
     await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(sharedContent);
     await expect(fileExists(join(sharedSkillDir, ".agentenv-owner.json"))).resolves.toBe(false);
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Waiting for Targets");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Preparing Targets");
 
     const retirementError = await page.evaluate(async ({ skillKey, libraryId, path }) => {
       try {
@@ -2729,7 +2729,7 @@ describe("Electron UI profile switching e2e", () => {
       libraryId: "shared-migration-reviewer",
       path: sharedSkillDir
     });
-    expect(retirementError).toContain("still used from the shared location");
+    expect(retirementError).toContain("is not prepared");
     await expect(fileExists(sharedSkillDir)).resolves.toBe(true);
 
     await cleanupGroup
@@ -2739,10 +2739,10 @@ describe("Electron UI profile switching e2e", () => {
     await cleanupGroup
       .getByRole("button", { name: "Review shared shared-migration-reviewer" })
       .click();
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Waiting for Targets");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Preparing Targets");
   }, 30_000);
 
-  it("retires and restores a shared Skill after every consumer has a managed copy", async () => {
+  it("atomically migrates and restores a shared Skill after every consumer is prepared", async () => {
     const { appDataRoot, homeDir, opencodeDir, codexDir, page } = await launchApp();
     const skillId = "shared-ready-reviewer";
     const skillName = "Shared Ready Reviewer";
@@ -2766,10 +2766,15 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "Skills");
     await addLibrarySkillToProfile(page, skillName);
     await saveProfile(page);
-    await previewAndApply(page, "OpenCode");
-    await expect
-      .poll(() => fileExists(join(opencodeDir, "skills", skillId, ".agentenv-owner.json")))
-      .toBe(true);
+    await applyActionButton(page, "OpenCode").click();
+    const preparationPreview = page.getByRole("dialog", { name: "Preview" });
+    await expect.poll(() => preparationPreview.textContent()).toContain("Shared Skill preparation");
+    await expect.poll(() => preparationPreview.textContent()).toContain(
+      `Install as ${skillId} after migration`
+    );
+    await preparationPreview.getByRole("button", { name: "Apply profile" }).click();
+    await preparationPreview.waitFor({ state: "hidden" });
+    await expect(fileExists(join(opencodeDir, "skills", skillId))).resolves.toBe(false);
 
     await selectTarget(page, "Codex");
     await selectProfile(page, "UI Codex alpha");
@@ -2777,28 +2782,49 @@ describe("Electron UI profile switching e2e", () => {
     await addLibrarySkillToProfile(page, skillName);
     await saveProfile(page);
     await previewAndApply(page, "Codex");
-    await expect
-      .poll(() => fileExists(join(codexDir, "skills", skillId, ".agentenv-owner.json")))
-      .toBe(true);
+    await expect(fileExists(join(codexDir, "skills", skillId))).resolves.toBe(false);
 
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local" }).click();
     cleanupGroup = page.getByRole("group", { name: `Cleanup group ${skillId}` });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Ready to remove");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Ready to switch");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("OpenCode: Prepared");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Codex: Prepared");
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      const geometry = await cleanupGroup.evaluate((row) => {
+        const rowBox = row.getBoundingClientRect();
+        const actionGroup = row.querySelector<HTMLElement>(".cleanup-group-actions")!;
+        const actions = actionGroup.getBoundingClientRect();
+        return {
+          contained: actions.right <= rowBox.right + 1 && row.scrollWidth <= row.clientWidth + 1,
+          buttonsFit: Array.from(actionGroup.querySelectorAll<HTMLElement>("button"))
+            .every((button) => button.scrollWidth <= button.clientWidth + 1)
+        };
+      });
+      expect(geometry).toEqual({ contained: true, buttonsFit: true });
+    }
     await cleanupGroup
-      .getByRole("button", { name: `Remove shared copy ${skillId}` })
+      .getByRole("button", { name: `Complete migration ${skillId}` })
       .click();
-    const retirementDialog = page.getByRole("dialog", { name: "Remove shared Skill copy" });
-    await retirementDialog.getByRole("button", { name: "Remove shared copy" }).click();
+    const retirementDialog = page.getByRole("dialog", { name: "Complete shared Skill migration" });
+    await retirementDialog.getByRole("button", { name: "Complete migration" }).click();
     await retirementDialog.waitFor({ state: "hidden" });
     await expect(fileExists(sharedSkillDir)).resolves.toBe(false);
     await expect(fileExists(join(appDataRoot, "skills-library", skillId, "SKILL.md"))).resolves.toBe(true);
+    await expect(fileExists(join(opencodeDir, "skills", skillId, ".agentenv-owner.json"))).resolves.toBe(true);
+    await expect(fileExists(join(codexDir, "skills", skillId, ".agentenv-owner.json"))).resolves.toBe(true);
 
     const history = page.getByRole("region", { name: "Cleanup history" });
-    await expect.poll(() => history.textContent()).toContain("Shared copy removal");
+    await expect.poll(() => history.textContent()).toContain("Shared migration");
     await history.getByRole("button", { name: `Restore cleanup ${skillId}` }).click();
     await expect.poll(() => fileExists(join(sharedSkillDir, "SKILL.md"))).toBe(true);
     await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(sharedContent);
+    await expect.poll(() => fileExists(join(opencodeDir, "skills", skillId))).toBe(false);
+    await expect.poll(() => fileExists(join(codexDir, "skills", skillId))).toBe(false);
   }, 45_000);
 
   it("auto-manages safe cleanup groups while leaving content conflicts for review", async () => {

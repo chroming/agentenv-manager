@@ -12,6 +12,7 @@ import { createActivationService } from "../../src/main/activationService";
 import { createBackupStore } from "../../src/main/backupStore";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
+import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import type { AgentTargetAdapter } from "../../src/main/targets/types";
 
@@ -86,7 +87,7 @@ const makeEnv = async () => {
   });
   const service = createActivationService({ paths, profileStore });
 
-  return { paths, service };
+  return { paths, profileStore, service };
 };
 
 afterEach(async () => {
@@ -169,6 +170,144 @@ describe("activation service", () => {
 
     const state = (await service.listTargetStates()).find(({ targetId }) => targetId === "codex");
     expect(state?.errorCount).toBe(0);
+  });
+
+  it("prepares and atomically completes a shared Skill migration", async () => {
+    const { paths, service } = await makeEnv();
+    const librarySkill = join(paths.skillsLibraryDir, "reviewer");
+    const sharedSkill = join(paths.userSkillsDir, "reviewer");
+    const targetSkill = join(paths.codexHome, "skills", "reviewer");
+    await mkdir(librarySkill, { recursive: true });
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(join(librarySkill, "SKILL.md"), "---\nname: reviewer\n---\n");
+    await writeFile(join(sharedSkill, "SKILL.md"), "---\nname: reviewer\n---\n");
+
+    const assetPolicyPath = join(paths.profilesDir, "daily-coding", "assets.json");
+    const assetPolicy = JSON.parse(await readFile(assetPolicyPath, "utf8")) as {
+      skillRefs: Array<{ libraryId: string; targetName: string }>;
+    };
+    assetPolicy.skillRefs.push({ libraryId: "reviewer", targetName: "reviewer" });
+    await writeFile(assetPolicyPath, JSON.stringify(assetPolicy));
+
+    const preview = await service.previewProfile("daily-coding");
+    expect(preview.sharedSkillPreparationChanged).toBe(true);
+    expect(preview.sharedSkillPreparations).toEqual([
+      expect.objectContaining({
+        skillKey: "reviewer",
+        libraryId: "reviewer",
+        disposition: "install",
+        targetName: "reviewer"
+      })
+    ]);
+    expect(preview.resourceChanges).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: targetSkill })])
+    );
+
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain(
+      "name: reviewer"
+    );
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).rejects.toThrow();
+    expect((await service.listTargetStates())[0]?.sharedSkillPreparations).toHaveLength(1);
+
+    const migration = await service.completeSharedSkillMigration({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      sharedPaths: [sharedSkill],
+      consumerTargetIds: ["codex"]
+    });
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).resolves.toContain(
+      "name: reviewer"
+    );
+    expect((await service.listTargetStates())[0]?.sharedSkillPreparations).toEqual([]);
+    await expect(service.listSharedSkillMigrationBackups()).resolves.toEqual([
+      expect.objectContaining({ id: migration.backupId, libraryId: "reviewer" })
+    ]);
+
+    await service.rollbackSharedSkillMigration(migration.backupId);
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain(
+      "name: reviewer"
+    );
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).rejects.toThrow();
+    expect((await service.listTargetStates())[0]?.sharedSkillPreparations).toHaveLength(1);
+  });
+
+  it("removes a shared Skill without deploying it when the prepared Profile omits it", async () => {
+    const { paths, service } = await makeEnv();
+    const librarySkill = join(paths.skillsLibraryDir, "unused-reviewer");
+    const sharedSkill = join(paths.userSkillsDir, "unused-reviewer");
+    const targetSkill = join(paths.codexHome, "skills", "unused-reviewer");
+    await mkdir(librarySkill, { recursive: true });
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(join(librarySkill, "SKILL.md"), "---\nname: unused-reviewer\n---\n");
+    await writeFile(join(sharedSkill, "SKILL.md"), "---\nname: unused-reviewer\n---\n");
+
+    const preview = await service.previewProfile("daily-coding");
+    expect(preview.sharedSkillPreparations).toEqual([
+      expect.objectContaining({
+        skillKey: "unused-reviewer",
+        disposition: "omit"
+      })
+    ]);
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    await service.completeSharedSkillMigration({
+      skillKey: "unused-reviewer",
+      libraryId: "unused-reviewer",
+      sharedPaths: [sharedSkill],
+      consumerTargetIds: ["codex"]
+    });
+
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).rejects.toThrow();
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).rejects.toThrow();
+  });
+
+  it("restores shared paths and Target state when migration deployment fails", async () => {
+    const { paths, profileStore } = await makeEnv();
+    const baseSkillStore = createSkillLibraryStore(paths);
+    const failingService = createActivationService({
+      paths,
+      profileStore,
+      skillLibraryStore: {
+        ...baseSkillStore,
+        deployLibrarySkill: async () => {
+          throw new Error("Injected deployment failure");
+        }
+      }
+    });
+    const librarySkill = join(paths.skillsLibraryDir, "failure-reviewer");
+    const sharedSkill = join(paths.userSkillsDir, "failure-reviewer");
+    const targetSkill = join(paths.codexHome, "skills", "failure-reviewer");
+    await mkdir(librarySkill, { recursive: true });
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(join(librarySkill, "SKILL.md"), "---\nname: failure-reviewer\n---\n");
+    await writeFile(join(sharedSkill, "SKILL.md"), "---\nname: failure-reviewer\n---\n");
+    const assetPolicyPath = join(paths.profilesDir, "daily-coding", "assets.json");
+    const assetPolicy = JSON.parse(await readFile(assetPolicyPath, "utf8")) as {
+      skillRefs: Array<{ libraryId: string; targetName: string }>;
+    };
+    assetPolicy.skillRefs.push({
+      libraryId: "failure-reviewer",
+      targetName: "failure-reviewer"
+    });
+    await writeFile(assetPolicyPath, JSON.stringify(assetPolicy));
+
+    const preview = await failingService.previewProfile("daily-coding");
+    expect((await failingService.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    await expect(
+      failingService.completeSharedSkillMigration({
+        skillKey: "failure-reviewer",
+        libraryId: "failure-reviewer",
+        sharedPaths: [sharedSkill],
+        consumerTargetIds: ["codex"]
+      })
+    ).rejects.toThrow("migration failed and was restored");
+
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain(
+      "name: failure-reviewer"
+    );
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).rejects.toThrow();
+    expect((await failingService.listTargetStates())[0]?.sharedSkillPreparations).toHaveLength(1);
   });
 
   it("migrates legacy AgentEnv-owned Codex Skills out of the compatibility directory", async () => {

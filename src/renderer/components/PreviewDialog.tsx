@@ -212,6 +212,12 @@ export const PreviewDialog = ({
   const fileCountLabel = plural(preview.changes.length, "file");
   const resourceCountLabel = plural(resourceChanges.length, "resource");
   const payload = isActivationPreview ? preview.effectivePayload : undefined;
+  const sharedPreparations = isActivationPreview
+    ? (preview.sharedSkillPreparations ?? [])
+    : [];
+  const sharedPreparationChanged = isActivationPreview
+    ? preview.sharedSkillPreparationChanged === true
+    : false;
   const payloadParts = payload
     ? [
         payload.instructions > 0 ? plural(payload.instructions, "instruction file") : undefined,
@@ -286,6 +292,22 @@ export const PreviewDialog = ({
               replace: replaceChanges.length,
               remove: removeChanges.length
             })}</span>
+          </section>
+        ) : null}
+        {sharedPreparationChanged ? (
+          <section className="preview-summary-card">
+            <strong>{t("Shared Skill preparation")}</strong>
+            <span>{t("{{count}} migration decisions", { count: sharedPreparations.length })}</span>
+            {sharedPreparations.map((preparation) => (
+              <p className="warning" key={`${preparation.skillKey}:${preparation.libraryId}`}>
+                {preparation.skillKey}
+                <small>
+                  {preparation.disposition === "install"
+                    ? t("Install as {{name}} after migration", { name: preparation.targetName })
+                    : t("Omit after migration")}
+                </small>
+              </p>
+            ))}
           </section>
         ) : null}
       </section>

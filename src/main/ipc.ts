@@ -131,8 +131,13 @@ export const registerIpcHandlers = ({
     const targets = await targetDiscoveryService.listTargets();
     return skillLibraryStore.scanInventory(targets.map((target) => target.paths));
   });
-  ipcMain.handle("skills:list-cleanup-backups", () =>
-    skillLibraryStore.listCleanupBackups()
+  ipcMain.handle("skills:list-cleanup-backups", async () =>
+    (await Promise.all([
+      activationService.listSharedSkillMigrationBackups(),
+      skillLibraryStore.listCleanupBackups()
+    ]))
+      .flat()
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   );
   ipcMain.handle("skills:ignore-group", (_event, skillKey: unknown) =>
     skillLibraryStore.ignoreSkillGroup(String(skillKey))
@@ -352,36 +357,22 @@ export const registerIpcHandlers = ({
     const consumerTargetIds = new Set(
       sharedEntries.flatMap((item) => item.foundIn).filter((id) => installedTargetIds.has(id))
     );
-    const managedTargetIds = new Set(
-      (await activationService.listTargetStates())
-        .filter((state) => state.status === "managed")
-        .map((state) => state.targetId)
-    );
-    const migratedTargetIds = new Set(
-      inventory
-        .filter(
-          (item) =>
-            item.skillKey === skillKey &&
-            item.sharedLocation !== true &&
-            item.status === "managed" &&
-            item.libraryId === libraryId &&
-            item.contentMatchesLibrary === true
-        )
-        .flatMap((item) => item.foundIn)
-    );
-    const pendingConsumers = [...consumerTargetIds].filter(
-      (id) => !managedTargetIds.has(id) || !migratedTargetIds.has(id)
-    );
-    if (pendingConsumers.length > 0) {
-      throw new Error(
-        `${skillKey} is still used from the shared location by: ${pendingConsumers.join(", ")}. Apply a managed Profile to those Targets first.`
-      );
-    }
-    return skillLibraryStore.retireSharedSkill(libraryId, sharedPaths);
+    return activationService.completeSharedSkillMigration({
+      skillKey,
+      libraryId,
+      sharedPaths,
+      consumerTargetIds: [...consumerTargetIds]
+    });
   });
-  ipcMain.handle("skills:rollback-cleanup", (_event, backupId: unknown) =>
-    skillLibraryStore.rollbackSkillCleanup(parseId(backupId, "cleanup backup id"))
-  );
+  ipcMain.handle("skills:rollback-cleanup", async (_event, backupId: unknown) => {
+    const id = parseId(backupId, "cleanup backup id");
+    const migrationBackups = await activationService.listSharedSkillMigrationBackups();
+    if (migrationBackups.some((backup) => backup.id === id)) {
+      await activationService.rollbackSharedSkillMigration(id);
+      return;
+    }
+    await skillLibraryStore.rollbackSkillCleanup(id);
+  });
   ipcMain.handle("skills:check-updates", async (_event, ids: unknown) => {
     await waitForAutomationBackgroundDelay();
     return skillLibraryStore.checkUpdates(

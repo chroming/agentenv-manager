@@ -961,42 +961,6 @@ description: >
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("backs up and retires a shared compatibility copy without removing Library content", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
-    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
-    const source = join(root, "source", "reviewer");
-    const sharedCopy = join(paths.userSkillsDir, "reviewer");
-    await mkdir(source, { recursive: true });
-    await mkdir(sharedCopy, { recursive: true });
-    await writeFile(join(source, "SKILL.md"), "# Library\n", "utf8");
-    await writeFile(join(sharedCopy, "SKILL.md"), "# Shared\n", "utf8");
-    const store = createSkillLibraryStore(paths);
-    await store.importSkill({ sourcePath: source, id: "reviewer" });
-
-    const result = await store.retireSharedSkill("reviewer", [sharedCopy]);
-    expect(result).toMatchObject({
-      libraryId: "reviewer",
-      managedLocations: [sharedCopy],
-      operation: "retire"
-    });
-    await expect(readFile(join(sharedCopy, "SKILL.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
-    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
-      .resolves.toBe("# Library\n");
-    await expect(store.listCleanupBackups()).resolves.toEqual([
-      expect.objectContaining({
-        id: result.backupId,
-        libraryId: "reviewer",
-        operation: "retire",
-        locationCount: 1
-      })
-    ]);
-
-    await store.rollbackSkillCleanup(result.backupId);
-    await expect(readFile(join(sharedCopy, "SKILL.md"), "utf8")).resolves.toBe("# Shared\n");
-    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
-      .resolves.toBe("# Library\n");
-  });
-
   it("uses an existing Library version without requiring a selected canonical location", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

@@ -466,7 +466,18 @@ export interface TargetState {
   appliedLibraryVersions?: LibraryResourceVersions;
   lastAppliedAt?: string;
   managedResources?: ManagedResourceSnapshot[];
+  sharedSkillPreparations?: SharedSkillPreparation[];
   recoveryRequired?: TargetRecoveryState;
+}
+
+export interface SharedSkillPreparation {
+  skillKey: string;
+  libraryId: string;
+  sharedPaths: string[];
+  targetName: string;
+  disposition: "install" | "omit";
+  profileId: string;
+  profileHash: string;
 }
 
 export type TargetManagementStatus = "unmanaged" | "managed";
@@ -495,6 +506,7 @@ export interface TargetManagementState {
   lifecycleReason?: string;
   lastAppliedAt?: string;
   managedResourceCount: number;
+  sharedSkillPreparations?: SharedSkillPreparation[];
   warningCount: number;
   errorCount: number;
 }
@@ -602,6 +614,8 @@ export interface ActivationPreview {
   liveFingerprints: Record<string, string>;
   resourceFingerprints: Record<string, string>;
   sourceFingerprints: Record<string, string>;
+  sharedSkillPreparations?: SharedSkillPreparation[];
+  sharedSkillPreparationChanged?: boolean;
   targetId: string;
   targetState: TargetState;
   effectivePayload?: EffectiveProfilePayload;
@@ -641,8 +655,9 @@ export interface BackupEntry {
 export interface BackupManifest {
   id: string;
   createdAt: string;
-  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift";
+  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration";
   targetId?: string;
+  targetIds?: string[];
   profileId?: string;
   profileName?: string;
   entries: BackupEntry[];
@@ -652,8 +667,9 @@ export interface BackupSummary {
   id: string;
   createdAt: string;
   fileCount: number;
-  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift";
+  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration";
   targetId?: string;
+  targetIds?: string[];
   profileId?: string;
   profileName?: string;
 }

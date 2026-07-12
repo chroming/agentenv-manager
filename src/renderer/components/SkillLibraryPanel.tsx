@@ -82,7 +82,7 @@ interface SkillLibraryPanelProps {
   bulkUpdatePlans?: SkillUpdatePlan[];
   skillUsage: Record<string, string[]>;
   installedTargetIds?: string[];
-  managedTargetIds?: string[];
+  preparedTargetIdsBySkill?: Record<string, string[]>;
   activeTool?: "import" | "discoveries";
   isRefreshingInventory?: boolean;
   onCloseTool?(): void;
@@ -177,8 +177,8 @@ const cleanupStateLabel = (state: SkillCleanupGroupState) => {
 
 const sharedMigrationLabel = (state: SharedSkillMigrationState) => {
   if (state === "not-imported") return "Shared source";
-  if (state === "waiting") return "Waiting for Targets";
-  if (state === "ready") return "Ready to remove";
+  if (state === "waiting") return "Preparing Targets";
+  if (state === "ready") return "Ready to switch";
   if (state === "kept") return "Kept shared";
   if (state === "external") return "External";
   return "Conflict";
@@ -204,7 +204,7 @@ export const SkillLibraryPanel = ({
   bulkUpdatePlans,
   skillUsage,
   installedTargetIds = [],
-  managedTargetIds = [],
+  preparedTargetIdsBySkill = {},
   activeTool,
   isRefreshingInventory = false,
   onCloseTool,
@@ -527,8 +527,8 @@ export const SkillLibraryPanel = ({
     }
   };
   const cleanupGroups = useMemo(
-    () => buildSkillCleanupGroups(skillInventory, { installedTargetIds, managedTargetIds }),
-    [installedTargetIds, managedTargetIds, skillInventory]
+    () => buildSkillCleanupGroups(skillInventory, { installedTargetIds, preparedTargetIdsBySkill }),
+    [installedTargetIds, preparedTargetIdsBySkill, skillInventory]
   );
   const automaticCleanupRequests = useMemo(
     () =>
@@ -557,8 +557,8 @@ export const SkillLibraryPanel = ({
   const reviewCount = manualCleanupCount + sharedReviewCount;
   const migrationSummary = [
     sharedImportCount > 0 ? t("{{count}} ready to import", { count: sharedImportCount }) : "",
-    sharedReadyCount > 0 ? t("{{count}} ready to remove", { count: sharedReadyCount }) : "",
-    sharedWaitingCount > 0 ? t("{{count}} waiting for Targets", { count: sharedWaitingCount }) : "",
+    sharedReadyCount > 0 ? t("{{count}} ready to switch", { count: sharedReadyCount }) : "",
+    sharedWaitingCount > 0 ? t("{{count}} Targets need Apply", { count: sharedWaitingCount }) : "",
     automaticCleanupRequests.length > 0
       ? t("{{count}} local copies ready", { count: automaticCleanupRequests.length })
       : "",
@@ -1464,15 +1464,15 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
-            aria-label={t("Remove shared Skill copy")}
+            aria-label={t("Complete shared Skill migration")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">{t("Remove shared copy")}</div>
+                <div className="section-title">{t("Complete migration")}</div>
                 <p className="muted">
-                  {t("Every installed consumer is managed. Remove {{name}} from the shared compatibility directory?", {
+                  {t("Every installed consumer is prepared. Switch {{name}} from the shared directory to each Target's saved Profile?", {
                     name: sharedRetireCandidate.primary?.name ?? sharedRetireCandidate.skillKey
                   })}
                 </p>
@@ -1480,7 +1480,7 @@ export const SkillLibraryPanel = ({
             </header>
             <div className="cleanup-retire-summary">
               <div>
-                <strong>{t("Managed consumers")}</strong>
+                <strong>{t("Prepared consumers")}</strong>
                 <span>
                   {sharedRetireCandidate.sharedMigration.consumers.length > 0
                     ? sharedRetireCandidate.sharedMigration.consumers.map(targetName).join(" · ")
@@ -1496,7 +1496,7 @@ export const SkillLibraryPanel = ({
                   tooltipClassName="library-source-tooltip"
                 />
               ))}
-              <small>{t("A restorable backup is created before the shared copy is removed. The Library copy is kept.")}</small>
+              <small>{t("The Library copy is kept. One backup covers the shared copy, Target copies, and migration state; any failed step restores all of them.")}</small>
             </div>
             <footer className="preview-actions">
               <button
@@ -1509,13 +1509,13 @@ export const SkillLibraryPanel = ({
                 {t("Cancel")}
               </button>
               <button
-                className="danger-action"
+                className="primary-action"
                 type="button"
                 aria-busy={sharedOperation?.action === "retire"}
                 disabled={Boolean(sharedOperation)}
                 onClick={() => void retireSharedCopy()}
               >
-                {t(sharedOperation?.action === "retire" ? "Removing..." : "Remove shared copy")}
+                {t(sharedOperation?.action === "retire" ? "Switching..." : "Complete migration")}
               </button>
             </footer>
           </section>
@@ -2038,8 +2038,8 @@ export const SkillLibraryPanel = ({
                           {sharedMigration.consumers.length > 0 ? sharedMigration.consumers.map((targetId) => (
                             <span key={targetId}>
                               {targetName(targetId)}: {t(sharedMigration.pendingConsumers.includes(targetId)
-                                ? "Uses shared copy"
-                                : "Migrated")}
+                                ? "Needs Apply"
+                                : "Prepared")}
                             </span>
                           )) : <span>{t("No installed consumers detected")}</span>}
                         </div>
@@ -2093,11 +2093,11 @@ export const SkillLibraryPanel = ({
                         <button
                           className="secondary-action cleanup-retire-action"
                           type="button"
-                          aria-label={t("Remove shared copy {{id}}", { id: group.skillKey })}
+                          aria-label={t("Complete migration {{id}}", { id: group.skillKey })}
                           disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}
                           onClick={() => setSharedRetireKey(group.skillKey)}
                         >
-                          {t("Remove shared copy")}
+                          {t("Complete migration")}
                         </button>
                       ) : null}
                       {automaticRequest ? (
@@ -2216,8 +2216,8 @@ export const SkillLibraryPanel = ({
                         <PreviewText
                           ariaLabel={`Full cleanup history details ${backup.libraryId}`}
                           className="cleanup-history-details"
-                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared copy removal" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
-                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared copy removal" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
                         />
                       </div>
                       <div className="cleanup-group-actions">

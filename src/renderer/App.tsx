@@ -1619,7 +1619,9 @@ const AppContent = ({
   );
   const canApply = Boolean(
     preview &&
-      (preview.changes.length > 0 || preview.resourceChanges.length > 0) &&
+      (preview.changes.length > 0 ||
+        preview.resourceChanges.length > 0 ||
+        preview.sharedSkillPreparationChanged) &&
       (preview.errors.length === 0 || (previewHasOnlyManagedDrift && replaceManagedDrift)) &&
       (!preview.requiresOmissionAcknowledgement || acceptCrossTargetOmissions) &&
       localValidationErrors.length === 0 &&
@@ -2181,7 +2183,7 @@ const AppContent = ({
       await refreshProfiles({ checkSkillUpdates: false });
       setSkillUpdateCheckStatus({
         state: "success",
-        message: `Removed ${input.skillKey} from the shared compatibility directory`
+        message: `Completed shared migration for ${input.skillKey}`
       });
       return true;
     } catch (unknownError) {
@@ -3018,9 +3020,17 @@ const AppContent = ({
                 installedTargetIds={targets
                   .filter((target) => target.health.executableFound)
                   .map((target) => target.id)}
-                managedTargetIds={targetStates
-                  .filter((target) => target.status === "managed")
-                  .map((target) => target.targetId)}
+                preparedTargetIdsBySkill={targetStates
+                  .filter((target) => target.lifecycleStatus === "applied")
+                  .reduce<Record<string, string[]>>((bySkill, target) => {
+                    for (const preparation of target.sharedSkillPreparations ?? []) {
+                      bySkill[preparation.skillKey] = [
+                        ...(bySkill[preparation.skillKey] ?? []),
+                        target.targetId
+                      ];
+                    }
+                    return bySkill;
+                  }, {})}
                 activeTool={skillLibraryTool}
                 isRefreshingInventory={skillInventoryRefreshing}
                 onCloseTool={() => setSkillLibraryTool(undefined)}

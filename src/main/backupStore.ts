@@ -24,7 +24,7 @@ export interface BackupStoreOptions {
 export interface BackupStore {
   createBackup(
     sourcePaths: string[],
-    context?: Pick<BackupManifest, "operation" | "targetId" | "profileId" | "profileName">
+    context?: Pick<BackupManifest, "operation" | "targetId" | "targetIds" | "profileId" | "profileName">
   ): Promise<BackupManifest>;
   listBackups(): Promise<BackupSummary[]>;
   readBackup(id: string): Promise<BackupManifest>;
@@ -64,7 +64,7 @@ export const createBackupStore = (
 
   const createBackup = async (
     sourcePaths: string[],
-    context: Pick<BackupManifest, "operation" | "targetId" | "profileId" | "profileName"> = {}
+    context: Pick<BackupManifest, "operation" | "targetId" | "targetIds" | "profileId" | "profileName"> = {}
   ): Promise<BackupManifest> => {
     await ensurePrivateDir(paths.backupsDir);
 
@@ -169,6 +169,7 @@ export const createBackupStore = (
         fileCount: manifest.entries.length,
         operation: manifest.operation,
         targetId: manifest.targetId,
+        targetIds: manifest.targetIds,
         profileId: manifest.profileId,
         profileName: manifest.profileName
       }))
