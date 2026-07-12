@@ -46,8 +46,7 @@
 }
 
 .resource-icon-trigger:hover {
-  box-shadow: 0 0 0 3px rgba(23, 105, 245, 0.12);
-  transform: translateY(-1px);
+  box-shadow: 0 0 0 2px rgba(23, 105, 245, 0.12);
 }
 
 .resource-icon-trigger:focus-visible {
@@ -118,10 +117,10 @@
 
 .resource-icon-menu {
   background: #fff;
-  border: 1px solid #dfe6f0;
+  border: 1px solid var(--border);
   border-radius: 8px;
   box-sizing: border-box;
-  box-shadow: 0 14px 34px rgba(26, 38, 59, 0.18);
+  box-shadow: 0 10px 28px rgba(15, 15, 15, 0.16);
   display: grid;
   gap: 6px;
   grid-template-columns: repeat(5, 34px);

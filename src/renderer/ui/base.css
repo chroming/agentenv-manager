@@ -50,7 +50,7 @@ button {
   cursor: pointer;
   display: inline-flex;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   justify-content: center;
   line-height: 1.2;
   min-height: var(--control-height-default);
@@ -68,11 +68,11 @@ button {
 
 button:hover:not(:disabled) {
   background: var(--surface-muted);
-  border-color: #9aa6b8;
+  border-color: var(--border-strong);
 }
 
 button:active:not(:disabled) {
-  transform: translateY(1px) scale(0.99);
+  background: var(--surface-pressed);
 }
 
 button:focus-visible,
@@ -80,7 +80,7 @@ select:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 2px solid rgba(37, 99, 235, 0.32);
+  outline: 2px solid rgba(23, 105, 245, 0.28);
   outline-offset: 2px;
 }
 

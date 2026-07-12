@@ -1,8 +1,8 @@
 .settings-page {
   align-content: start;
   display: grid;
-  gap: 14px;
-  max-width: 920px;
+  gap: 0;
+  max-width: 900px;
   width: 100%;
 }
 
@@ -61,9 +61,9 @@
 
 .backup-settings-icon {
   align-items: center;
-  background: #f1f5ff;
+  background: #f1f1ef;
   border-radius: 7px;
-  color: var(--accent);
+  color: #5f615d;
   display: inline-flex;
   height: 34px;
   justify-content: center;
@@ -133,9 +133,9 @@
 
 .backup-kind-icon {
   align-items: center;
-  background: #eef4ff;
+  background: #f1f1ef;
   border-radius: 7px;
-  color: var(--accent);
+  color: #5f615d;
   display: inline-flex;
   height: 34px;
   justify-content: center;
@@ -327,18 +327,25 @@
 }
 
 .settings-data-path {
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: var(--muted);
   display: block;
   margin-top: 12px;
-  padding: 9px 10px;
+  padding: 0;
 }
 
 .settings-page > .resource-section {
-  background: #fff;
-  padding: 16px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--border);
+  padding: 18px 16px;
+}
+
+.settings-page > .page-header + .resource-section {
+  border-top: 0;
 }
 
 .settings-section {
@@ -361,7 +368,7 @@
 .settings-page .resource-settings-grid > label > span {
   color: var(--text);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 18px;
 }
 
@@ -506,8 +513,8 @@
 
 .settings-service-icon {
   align-items: center;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: #f1f1ef;
+  border: 0;
   border-radius: 8px;
   color: #24292f;
   display: inline-flex;

@@ -4527,10 +4527,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(await libraryRow.getAttribute("class")).toContain("is-globally-disabled");
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).backgroundColor))
-      .toBe("rgb(243, 245, 248)");
+      .toBe("rgb(245, 245, 243)");
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
-      .toContain("rgb(154, 166, 183)");
+      .toContain("rgb(155, 156, 151)");
     const disabledTab = page.getByRole("tab", { name: /Disabled 1/ });
     await disabledTab.click();
     expect(await disabledTab.getAttribute("aria-selected")).toBe("true");

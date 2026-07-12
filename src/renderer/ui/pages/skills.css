@@ -27,7 +27,8 @@
 .page-eyebrow {
   color: var(--muted);
   font-size: 10px;
-  font-weight: 750;
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 14px;
   text-transform: uppercase;
 }
@@ -37,9 +38,24 @@
   display: flex;
   gap: 7px;
   margin: 0;
+  color: var(--text);
+  font-weight: 650;
+}
+
+.skill-library-panel .library-quick-tabs {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.skill-library-panel .library-toolbar {
+  background: var(--surface);
+  border-top: 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .skill-library-panel .library-table {
+  border: 0;
+  border-radius: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
@@ -89,6 +105,7 @@
 }
 
 .skill-library-panel .library-table__head {
+  background: #fafaf8;
   display: grid;
   padding: 11px 14px;
 }
@@ -96,15 +113,17 @@
 .skill-library-panel .library-table-row {
   align-items: center;
   grid-template-areas: none;
-  min-height: 72px;
-  padding: 10px 14px;
+  background: var(--surface);
+  min-height: 66px;
+  padding: 8px 14px;
   row-gap: 3px;
+  transform: none;
 }
 
 .skill-library-panel .library-table-row.is-globally-disabled,
 .skill-library-panel .library-table-row.is-globally-disabled:hover {
-  background: #f3f5f8;
-  box-shadow: inset 3px 0 #9aa6b7;
+  background: #f5f5f3;
+  box-shadow: inset 2px 0 #9b9c97;
 }
 
 .skill-library-panel .library-table-row.is-globally-disabled .resource-avatar,
@@ -141,13 +160,13 @@
 
 .library-global-state {
   align-items: center;
-  background: #eef1f5;
-  border-radius: var(--radius-pill);
-  color: #64748b;
+  background: transparent;
+  border-radius: 0;
+  color: var(--muted);
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 10px;
-  font-weight: 760;
+  font-weight: 600;
   gap: 4px;
   line-height: 19px;
   padding-inline: 7px;
@@ -269,6 +288,44 @@
   overflow: visible;
 }
 
+.skill-library-panel .library-actions-cell .icon-action {
+  opacity: 0.38;
+  transition: opacity var(--motion-fast), background-color var(--motion-fast);
+}
+
+.skill-library-panel .library-table-row:hover .library-actions-cell .icon-action,
+.skill-library-panel .library-table-row:focus-within .library-actions-cell .icon-action,
+.skill-library-panel .library-actions-cell .icon-action[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.skill-library-panel .library-table-row:hover {
+  background: #fafaf8;
+  transform: none;
+}
+
+.skill-library-panel .library-table-row .resource-chip,
+.skill-library-panel .library-table-row .resource-status {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--muted);
+  font-weight: 500;
+  padding-inline: 0;
+}
+
+.skill-library-panel .library-table-row .resource-status.is-warning,
+.skill-library-panel .library-table-row .resource-status.is-error,
+.skill-library-panel .library-table-row .library-global-state.is-working {
+  border-radius: var(--radius-control);
+  padding-inline: 6px;
+}
+
+.skill-library-panel .library-resource-cell .resource-avatar {
+  background: #f1f1ef;
+  color: #5f615d;
+}
+
 .skill-library-panel .library-table__head > span:last-child {
   justify-self: end;
 }
@@ -365,7 +422,7 @@
       "resource source update actions"
       "resource usage installs actions";
     grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.62fr) minmax(120px, 0.58fr) 42px;
-    min-height: 76px;
+    min-height: 68px;
   }
 
   .skill-library-panel .library-resource-cell { grid-area: resource; }
@@ -375,6 +432,89 @@
   .skill-library-panel .library-usage-cell { grid-area: usage; }
   .skill-library-panel .library-installs-cell { grid-area: installs; }
   .skill-library-panel .library-actions-cell { grid-area: actions; }
+}
+
+@media (max-width: 1050px) {
+  .skill-library-panel .library-table__head {
+    display: none;
+  }
+
+  .skill-library-panel .library-table-row {
+    grid-template-areas:
+      "resource source update actions"
+      "resource usage installs actions";
+    grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.62fr) minmax(120px, 0.58fr) 42px;
+    grid-template-rows: 28px 20px;
+    height: 68px;
+    max-height: 68px;
+    min-height: 68px;
+    padding: 8px 14px;
+  }
+
+  .skill-library-panel .library-resource-cell { grid-area: resource; }
+  .skill-library-panel .library-source-cell { grid-area: source; }
+  .skill-library-panel .library-version-cell { display: none; }
+  .skill-library-panel .library-update-cell { grid-area: update; }
+  .skill-library-panel .library-usage-cell { grid-area: usage; }
+  .skill-library-panel .library-installs-cell { grid-area: installs; }
+  .skill-library-panel .library-actions-cell { grid-area: actions; }
+
+  .skill-library-panel .library-source-cell,
+  .skill-library-panel .library-update-cell,
+  .skill-library-panel .library-usage-cell,
+  .skill-library-panel .library-installs-cell {
+    align-items: center;
+    align-self: stretch;
+    display: flex;
+    height: auto;
+    min-height: 0;
+  }
+
+  .skill-library-panel .library-usage-cell > small {
+    display: none;
+  }
+
+  .skill-library-panel .library-table-row:has(.library-installs-cell .library-row-inline-action)
+    .library-installs-cell,
+  .skill-library-panel
+    .library-table-row:has(.library-update-cell .library-row-inline-action):not(
+      :has(.library-installs-cell .library-row-inline-action, .library-install-entry)
+    )
+    .library-update-cell {
+    align-content: center;
+    display: grid;
+    gap: 4px;
+    grid-row: 1 / span 2;
+    grid-template-rows: 28px 20px;
+  }
+
+  .skill-library-panel .library-table-row:has(.library-installs-cell .library-row-inline-action)
+    .library-update-cell,
+  .skill-library-panel
+    .library-table-row:has(.library-update-cell .library-row-inline-action):not(
+      :has(.library-installs-cell .library-row-inline-action, .library-install-entry)
+    )
+    .library-installs-cell {
+    display: none;
+  }
+
+  .skill-library-panel
+    .library-table-row:has(.library-update-cell .library-row-inline-action):has(
+      .library-install-entry
+    )
+    .library-install-entry > span {
+    display: none;
+  }
+
+  .skill-library-panel .library-source-open > span {
+    display: none;
+  }
+
+  .skill-library-panel .library-source-open {
+    flex: 0 0 30px;
+    min-width: 30px;
+    padding-inline: 4px;
+  }
 }
 
 .cleanup-review-dialog {

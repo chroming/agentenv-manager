@@ -1,21 +1,21 @@
 :root {
-  --text: #172033;
-  --muted: #667085;
-  --subtle: #8a95a6;
-  --border: #e7ebf2;
-  --border-strong: #d8dee9;
-  --page: #f6f8fc;
+  --text: #2f302e;
+  --muted: #6f716c;
+  --subtle: #969791;
+  --border: #e9e8e5;
+  --border-strong: #d9d8d4;
+  --page: #f7f7f5;
   --surface: #ffffff;
-  --surface-muted: #f8fafc;
-  --surface-pressed: #f1f5f9;
+  --surface-muted: #f7f7f5;
+  --surface-pressed: #efefed;
   --accent: #1769f5;
-  --accent-strong: #0f56d9;
-  --success: #18875a;
-  --success-bg: #e8f6ef;
-  --warning: #b7791f;
-  --warning-bg: #fff6df;
-  --danger: #c9352b;
-  --danger-bg: #fff0ee;
+  --accent-strong: #0b5bd3;
+  --success: #2f7d57;
+  --success-bg: #edf7f1;
+  --warning: #95651d;
+  --warning-bg: #fbf4e4;
+  --danger: #bd3e35;
+  --danger-bg: #fbefed;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -30,13 +30,13 @@
   --icon-size-default: 16px;
   --icon-box-compact: 32px;
   --icon-box-default: 36px;
-  --radius-control: 7px;
+  --radius-control: 6px;
   --radius-surface: 8px;
   --radius-pill: 999px;
 
-  --shadow-soft: 0 14px 34px rgba(15, 23, 42, 0.05);
-  --motion-fast: 150ms ease;
-  --motion-standard: 220ms ease;
+  --shadow-soft: 0 8px 24px rgba(15, 15, 15, 0.07);
+  --motion-fast: 140ms ease-out;
+  --motion-standard: 180ms ease-out;
 
   --z-base: 0;
   --z-raised: 1;

@@ -82,9 +82,16 @@
 .target-card--workflow {
   background: #fff;
   display: grid;
-  gap: 12px;
+  border-color: var(--border);
+  box-shadow: none;
+  gap: 10px;
   min-height: 0;
   padding: 14px 16px;
+  transform: none;
+}
+
+.target-card--workflow:hover {
+  transform: none;
 }
 
 .target-workflow-header {
@@ -109,7 +116,7 @@
 
 .target-workflow-icon {
   align-items: center;
-  background: #eef4ff;
+  background: #f1f1ef;
   border-radius: 8px;
   display: inline-flex;
   height: 38px;
@@ -141,19 +148,20 @@
 }
 
 .target-state-grid {
-  background: #f8fafc;
-  border: 1px solid #edf1f6;
-  border-radius: 7px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--border);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .target-state-grid > span {
-  border-right: 1px solid #e8edf4;
+  border-right: 1px solid var(--border);
   display: grid;
   gap: 4px;
   min-width: 0;
-  padding: 9px 12px;
+  padding: 9px 10px 0;
 }
 
 .target-state-grid > span:last-child {
@@ -163,8 +171,9 @@
 .target-state-grid small {
   color: var(--muted);
   font-size: 10px;
-  font-weight: 760;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .target-state-grid strong {
@@ -189,7 +198,7 @@
 }
 
 .target-diagnostics {
-  background: #fbfcff;
+  background: transparent;
   border-top: 1px solid var(--border);
   display: grid;
   gap: 8px;

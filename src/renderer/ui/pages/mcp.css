@@ -2,7 +2,7 @@
   align-items: center;
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   display: flex;
   gap: 8px;
@@ -202,17 +202,46 @@
 }
 
 .skill-library-panel[aria-label="MCP library"] .resource-section {
+  background: var(--surface);
+  border: 0;
+  border-radius: 0;
   padding-top: 0;
 }
 
 .skill-library-panel[aria-label="MCP library"] .resource-list {
   align-content: start;
-  gap: 4px;
+  gap: 0;
   grid-auto-rows: min-content;
 }
 
 .skill-library-panel[aria-label="MCP library"] .resource-row__main {
   gap: 2px;
+}
+
+.skill-library-panel[aria-label="MCP library"] .resource-row {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.skill-library-panel[aria-label="MCP library"] .resource-row:hover {
+  background: #fafaf8;
+  transform: none;
+}
+
+.skill-library-panel[aria-label="MCP library"] .resource-row > .resource-avatar {
+  background: #f1f1ef;
+  color: #5f615d;
+}
+
+.skill-library-panel[aria-label="MCP library"] .resource-row__actions {
+  opacity: 0.42;
+  transition: opacity var(--motion-fast);
+}
+
+.skill-library-panel[aria-label="MCP library"] .resource-row:hover .resource-row__actions,
+.skill-library-panel[aria-label="MCP library"] .resource-row:focus-within .resource-row__actions {
+  opacity: 1;
 }
 
 .mcp-row-name,
@@ -254,7 +283,7 @@
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 10px 28px rgba(15, 15, 15, 0.16);
   padding: 5px;
   position: fixed;
   width: 196px;
