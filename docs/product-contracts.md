@@ -498,10 +498,11 @@ Shared compatibility migration contract:
 
 - A shared compatibility group has one of six explicit states: `Shared source`, `Preparing Targets`, `Ready to switch`, `Kept shared`, `External`, or `Conflict`.
 - The group shows Library import status and every installed consumer Target as either `Needs Apply` or `Prepared`.
+- Every `Needs Apply` Target is an action, not a passive badge. It MUST open Profiles with that Target selected and, when the Target has an active Profile, open that Profile's Skills section so the required migration decision can be saved and applied.
 - `Import copy` is non-destructive: it copies the selected shared content into Library and leaves the shared path untouched.
 - `Preparing Targets` remains until every installed adapter-declared consumer has applied a current Profile that records whether the Skill will be installed or omitted after cutover. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
 - `Ready to switch` requires an exact Library copy and a non-stale preparation for every installed consumer. Current Profile hashes and Library versions MUST be revalidated in the main process, not only by renderer state.
-- `Complete migration` requires confirmation and executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
+- `Complete migration` requires confirmation that lists each prepared Target's final `Install as <name>` or `Do not install` decision. It executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
 - Cleanup history exposes the completed shared migration as one restorable operation. Restore returns shared paths, Target paths, and preparation state to their pre-migration state.
 - `Keep shared` records a path-scoped decision and resolves the group without changing files. `Review again` removes only that decision.
 - Shared compatibility groups MUST NOT participate in `Take over all` or generic duplicate cleanup.
@@ -578,6 +579,7 @@ Create from Target gives an existing native environment a reusable Profile repre
 
 - Capture MUST read only paths declared by the selected Target adapter.
 - A Target-row capture command MUST keep the invoking Targets workspace visible until the user confirms. Cancel and Escape return focus to that exact command without changing workspace.
+- Target-row command hierarchy follows lifecycle state: an unmanaged Target presents `Capture` as the primary action and Profiles as secondary; a managed Target presents `Open Profile` as the primary action and Capture as secondary. Both commands remain available without competing primary emphasis.
 - Profiles may offer a general `From Target` entry, but a Target-row entry MUST bind the source Target directly and MUST NOT ask the user to choose Blank versus From Target again.
 - Capture uses two explicit steps: setup and capture review. Review provides Back without losing the Profile name or selected Target.
 - Preview MUST list portable resources to include or reuse, new Library imports, excluded resources, and conflicts.
@@ -810,6 +812,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Default and minimum viewport without document overflow.
 - Skill table headers and every data row MUST share one column contract; contextual actions MUST NOT resize preceding columns.
 - Version, update, usage, and install metadata MUST use aligned first- and second-line tracks, including empty states and truncated values.
+- The Profile Target selector uses the selected Target name as its visible label without a redundant `Target:` prefix; its accessible name retains the full command meaning.
 - First and last row menus are topmost and in viewport.
 - Escape, outside click, keyboard focus, and focus restoration.
 - Working, success, warning, error, no-op, drift, destructive, and recovery states are inspected visually.
@@ -841,7 +844,7 @@ Last verified: 2026-07-15 against the current `main` tree at the time of this sn
 
 - `366` automated tests passed across `48` test files; the `72`-test Electron UI suite and `79` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
-- All `37` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
+- All `39` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.

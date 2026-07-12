@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -91,6 +91,7 @@ import {
 } from "./components/ProfileSidebar";
 import {
   SkillLibraryPanel,
+  type PreparedSkillTarget,
   type SkillUpdateCheckStatus
 } from "./components/SkillLibraryPanel";
 import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
@@ -1391,6 +1392,23 @@ const AppContent = ({
     guardProfileAction(`apply to ${targetName}`, () => selectTargetNow(targetId));
   };
 
+  const openProfilesForMigrationTarget = (targetId: string) => {
+    const targetName = targets.find((target) => target.id === targetId)?.name ?? "target";
+    const activeProfileId = targetStates.find(
+      (state) => state.targetId === targetId
+    )?.activeProfileId;
+    guardProfileAction(`prepare ${targetName}`, async () => {
+      setSkillLibraryTool(undefined);
+      setSelectedTargetId(targetId);
+      if (activeProfileId) {
+        await selectProfileNow(activeProfileId, "skills");
+        return;
+      }
+      setActiveComposerSection("skills");
+      setActiveWorkspace("profiles");
+    });
+  };
+
   const continuePendingProfileAction = async (saveFirst: boolean) => {
     const action = pendingProfileActionRef.current;
     if (!action) {
@@ -1512,6 +1530,25 @@ const AppContent = ({
     });
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
+  const preparedSkillTargetsBySkill = useMemo(
+    () =>
+      targetStates
+        .filter((target) => target.lifecycleStatus === "applied")
+        .reduce<Record<string, PreparedSkillTarget[]>>((bySkill, target) => {
+          for (const preparation of target.sharedSkillPreparations ?? []) {
+            bySkill[preparation.skillKey] = [
+              ...(bySkill[preparation.skillKey] ?? []),
+              {
+                targetId: target.targetId,
+                targetName: preparation.targetName,
+                disposition: preparation.disposition
+              }
+            ];
+          }
+          return bySkill;
+        }, {}),
+    [targetStates]
+  );
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
   const selectedSkillUpdateImpact = selectedSkillUpdatePlan
     ? `Updates the shared Library copy used by ${plural(
@@ -2836,7 +2873,7 @@ const AppContent = ({
       ) : (
         <Monitor size={16} aria-hidden="true" />
       )}
-      <span>{t("Target: {{name}}", { name: selectedTarget.name })}</span>
+      <span>{selectedTarget.name}</span>
     </div>
   ) : (
     <div className="profile-target-workspace-control">
@@ -2854,7 +2891,7 @@ const AppContent = ({
         }}
       >
         {selectedTargetIcon?.assetUrl ? <img className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`} src={selectedTargetIcon.assetUrl} alt="" /> : <Monitor size={16} aria-hidden="true" />}
-        <span>{t("Target: {{name}}", { name: selectedTarget?.name ?? t("Select") })}</span>
+        <span>{selectedTarget?.name ?? t("Select")}</span>
         <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
       </button>
       {isTargetMenuOpen ? (
@@ -3020,17 +3057,7 @@ const AppContent = ({
                 installedTargetIds={targets
                   .filter((target) => target.health.executableFound)
                   .map((target) => target.id)}
-                preparedTargetIdsBySkill={targetStates
-                  .filter((target) => target.lifecycleStatus === "applied")
-                  .reduce<Record<string, string[]>>((bySkill, target) => {
-                    for (const preparation of target.sharedSkillPreparations ?? []) {
-                      bySkill[preparation.skillKey] = [
-                        ...(bySkill[preparation.skillKey] ?? []),
-                        target.targetId
-                      ];
-                    }
-                    return bySkill;
-                  }, {})}
+                preparedTargetsBySkill={preparedSkillTargetsBySkill}
                 activeTool={skillLibraryTool}
                 isRefreshingInventory={skillInventoryRefreshing}
                 onCloseTool={() => setSkillLibraryTool(undefined)}
@@ -3070,6 +3097,7 @@ const AppContent = ({
                 }}
                 onSetSharedSkillRetention={setSharedSkillRetention}
                 onRetireSharedSkill={retireSharedSkill}
+                onOpenProfilesForTarget={openProfilesForMigrationTarget}
                 onRestoreCleanup={(backupId) => void undoSkillCleanup(backupId)}
                 updateCheckStatus={skillUpdateCheckStatus}
                 viewState={skillLibraryViewState}

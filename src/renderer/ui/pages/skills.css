@@ -611,6 +611,27 @@
   white-space: nowrap;
 }
 
+.cleanup-migration-target {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--accent);
+  display: inline-flex;
+  font-size: inherit;
+  font-weight: 680;
+  gap: 4px;
+  min-height: 20px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+
+.cleanup-migration-target:hover {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
 .cleanup-shared-progress > span:first-child {
   color: #52617a;
   font-weight: 680;
@@ -621,8 +642,8 @@
   border-left: 1px solid var(--border);
 }
 
-.cleanup-retire-action {
-  color: var(--danger);
+.cleanup-migration-action {
+  white-space: nowrap;
 }
 
 .cleanup-retire-summary {
@@ -634,6 +655,25 @@
 .cleanup-retire-summary > div {
   display: grid;
   gap: 3px;
+}
+
+.cleanup-migration-decisions {
+  display: grid;
+  gap: 6px;
+}
+
+.cleanup-migration-decisions > span {
+  align-items: center;
+  background: var(--surface-muted);
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 6px 9px;
+}
+
+.cleanup-migration-decisions > span > strong {
+  color: var(--text);
 }
 
 .cleanup-retire-summary strong {

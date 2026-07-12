@@ -162,9 +162,11 @@ const prepareFixture = async (root) => {
   const binDir = join(root, "bin");
   const githubFixtureRoot = join(root, "github-fixtures");
   const opencodeDir = join(homeDir, ".config", "opencode");
+  const codexDir = join(homeDir, ".codex");
   await mkdir(appDataRoot, { recursive: true });
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
+  await mkdir(codexDir, { recursive: true });
 
   for (const command of ["opencode", "codex", "claude"]) {
     const executable = join(binDir, command);
@@ -182,7 +184,7 @@ const prepareFixture = async (root) => {
       heading: "OpenCode review workflow"
     },
     {
-      directory: join(homeDir, ".agents", "skills", cleanupSkillName),
+      directory: join(codexDir, "skills", cleanupSkillName),
       description: "Codex review workflow with security checks, migration validation, and detailed reporting.",
       heading: "Codex review workflow"
     }
@@ -195,6 +197,14 @@ const prepareFixture = async (root) => {
       "utf8"
     );
   }
+  const sharedSkillName = "shared-compatibility-reviewer";
+  const sharedSkillDir = join(homeDir, ".agents", "skills", sharedSkillName);
+  await mkdir(sharedSkillDir, { recursive: true });
+  await writeFile(
+    join(sharedSkillDir, "SKILL.md"),
+    "---\nname: Shared Compatibility Reviewer\ndescription: Shared today and ready for a deliberate per-Target migration.\n---\n\n# Shared Compatibility Reviewer\n",
+    "utf8"
+  );
   const cleanupBackupDir = join(appDataRoot, "backups", "skill-cleanup", "cleanup-capture-1");
   await mkdir(cleanupBackupDir, { recursive: true });
   await writeJson(join(cleanupBackupDir, "manifest.json"), {
@@ -209,7 +219,7 @@ const prepareFixture = async (root) => {
         backupPath: join(cleanupBackupDir, "locations", `0-${cleanupSkillName}`)
       },
       {
-        sourcePath: join(homeDir, ".agents", "skills", cleanupSkillName),
+        sourcePath: join(codexDir, "skills", cleanupSkillName),
         backupPath: join(cleanupBackupDir, "locations", `1-${cleanupSkillName}`)
       }
     ]
@@ -243,9 +253,9 @@ const prepareFixture = async (root) => {
 const capturePage = async (
   page,
   path,
-  { forceFullRepaint = false, preserveFocus = false, preservePointer = false } = {}
+  { preserveFocus = false, preservePointer = false } = {}
 ) => {
-  await page.evaluate(async ({ shouldForceFullRepaint, shouldPreserveFocus }) => {
+  await page.evaluate(async ({ shouldPreserveFocus }) => {
     await document.fonts?.ready;
     for (const animation of document.getAnimations()) {
       animation.finish();
@@ -253,15 +263,8 @@ const capturePage = async (
     if (!shouldPreserveFocus && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    if (shouldForceFullRepaint) {
-      const previousVisibility = document.body.style.visibility;
-      document.body.style.visibility = "hidden";
-      document.body.getBoundingClientRect();
-      document.body.style.visibility = previousVisibility;
-    }
     await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
   }, {
-    shouldForceFullRepaint: forceFullRepaint,
     shouldPreserveFocus: preserveFocus
   });
   if (!preservePointer) {
@@ -387,7 +390,7 @@ try {
   const { appDataRoot, binDir, githubFixtureRoot, homeDir } = await prepareFixture(fixtureRoot);
   app = await electron.launch({
     executablePath: electronPath,
-    args: [join(projectRoot, "out", "main", "main.js")],
+    args: ["--disable-gpu", join(projectRoot, "out", "main", "main.js")],
     env: {
       ...process.env,
       AGENTENV_AUTOMATION: "1",
@@ -458,10 +461,10 @@ try {
   await capturePage(page, join(outputDir, "skills-cleanup-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-cleanup-920x620.png"));
-  const cleanupLocations = cleanupGroup.getByLabel(
-    "Full cleanup locations cross-agent-review-workflow-with-a-long-name"
+  const cleanupSummary = cleanupGroup.getByLabel(
+    "Full cleanup summary cross-agent-review-workflow-with-a-long-name"
   );
-  await cleanupLocations.hover();
+  await cleanupSummary.hover();
   await page.getByRole("tooltip").waitFor({ state: "visible", timeout: 5_000 });
   await capturePage(
     page,
@@ -530,8 +533,7 @@ try {
       .waitFor({ state: "visible" });
     await capturePage(
       page,
-      join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`),
-      sectionName === "Advanced" ? { forceFullRepaint: true } : undefined
+      join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`)
     );
   }
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -577,7 +579,7 @@ try {
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "target-capture-setup-1180x728.png"));
   await targetCaptureDialog.getByRole("button", { name: "Review" }).click();
-  const targetCaptureReview = page.getByRole("dialog", { name: "Review OpenCode takeover" });
+  const targetCaptureReview = page.getByRole("dialog", { name: "Review OpenCode capture" });
   await targetCaptureReview.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "target-capture-review-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);

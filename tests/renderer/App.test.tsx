@@ -1418,6 +1418,8 @@ describe("App", () => {
 
     await openProfiles();
     let menuButton = screen.getByRole("button", { name: "Select apply target" });
+    expect(menuButton).toHaveTextContent("OpenCode");
+    expect(menuButton).not.toHaveTextContent("Target:");
     menuButton.focus();
     fireEvent.click(menuButton);
     let menu = screen.getByRole("menu", { name: "Apply targets" });

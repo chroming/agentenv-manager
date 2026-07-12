@@ -67,6 +67,7 @@ describe("SkillLibraryPanel", () => {
     const onUnignoreSkillGroup = vi.fn();
     const onSetSharedSkillRetention = vi.fn().mockResolvedValue(true);
     const onRetireSharedSkill = vi.fn().mockResolvedValue(true);
+    const onOpenProfilesForTarget = vi.fn();
     const onRestoreCleanup = vi.fn();
     const onCloseTool = vi.fn();
     const onRefreshInventory = vi.fn().mockResolvedValue(undefined);
@@ -336,7 +337,12 @@ describe("SkillLibraryPanel", () => {
         bulkUpdatePlans={bulkUpdatePlans}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         installedTargetIds={["opencode", "codex"]}
-        preparedTargetIdsBySkill={{ "compat-reviewer": ["opencode", "codex"] }}
+        preparedTargetsBySkill={{
+          "compat-reviewer": [
+            { targetId: "opencode", targetName: "compat-reviewer", disposition: "install" },
+            { targetId: "codex", targetName: "compat-reviewer", disposition: "omit" }
+          ]
+        }}
         activeTool={activeTool}
         isRefreshingInventory={false}
         onCloseTool={onCloseTool}
@@ -368,6 +374,7 @@ describe("SkillLibraryPanel", () => {
         onUnignoreSkillGroup={onUnignoreSkillGroup}
         onSetSharedSkillRetention={onSetSharedSkillRetention}
         onRetireSharedSkill={onRetireSharedSkill}
+        onOpenProfilesForTarget={onOpenProfilesForTarget}
         onRestoreCleanup={onRestoreCleanup}
         updateCheckStatus={{ state: "success", message: "2 updates available" }}
         viewState={{ ...defaultSkillLibraryViewState, scrollTop: 180 }}
@@ -618,6 +625,8 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(removeSharedButton);
     const retireDialog = screen.getByRole("dialog", { name: "Complete shared Skill migration" });
     expect(retireDialog).toHaveTextContent("The Library copy is kept");
+    expect(retireDialog).toHaveTextContent("OpenCodeInstall as compat-reviewer");
+    expect(retireDialog).toHaveTextContent("CodexDo not install");
     expect(retireDialog).toHaveTextContent("/tmp/home/.agents/skills/compat-reviewer");
     fireEvent.click(within(retireDialog).getByRole("button", { name: "Complete migration" }));
     await waitFor(() => expect(onRetireSharedSkill).toHaveBeenCalledWith({

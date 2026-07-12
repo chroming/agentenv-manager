@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   BookOpenText,
+  ArrowRight,
   CheckCircle2,
   ExternalLink,
   Folder,
@@ -72,6 +73,12 @@ export type SkillUpdateCheckStatus = {
   message: string;
 };
 
+export interface PreparedSkillTarget {
+  targetId: string;
+  targetName: string;
+  disposition: "install" | "omit";
+}
+
 interface SkillLibraryPanelProps {
   isLoading?: boolean;
   librarySkills: SkillLibraryEntry[];
@@ -82,7 +89,7 @@ interface SkillLibraryPanelProps {
   bulkUpdatePlans?: SkillUpdatePlan[];
   skillUsage: Record<string, string[]>;
   installedTargetIds?: string[];
-  preparedTargetIdsBySkill?: Record<string, string[]>;
+  preparedTargetsBySkill?: Record<string, PreparedSkillTarget[]>;
   activeTool?: "import" | "discoveries";
   isRefreshingInventory?: boolean;
   onCloseTool?(): void;
@@ -114,6 +121,7 @@ interface SkillLibraryPanelProps {
   onUnignoreSkillGroup(skillKey: string): void;
   onSetSharedSkillRetention(input: SharedSkillRetentionInput): Promise<boolean>;
   onRetireSharedSkill(input: RetireSharedSkillInput): Promise<boolean>;
+  onOpenProfilesForTarget(targetId: string): void;
   onRestoreCleanup(backupId: string): void;
   updateCheckStatus?: SkillUpdateCheckStatus;
   viewState: SkillLibraryViewState;
@@ -204,7 +212,7 @@ export const SkillLibraryPanel = ({
   bulkUpdatePlans,
   skillUsage,
   installedTargetIds = [],
-  preparedTargetIdsBySkill = {},
+  preparedTargetsBySkill = {},
   activeTool,
   isRefreshingInventory = false,
   onCloseTool,
@@ -236,6 +244,7 @@ export const SkillLibraryPanel = ({
   onUnignoreSkillGroup,
   onSetSharedSkillRetention,
   onRetireSharedSkill,
+  onOpenProfilesForTarget,
   onRestoreCleanup,
   updateCheckStatus,
   viewState,
@@ -527,8 +536,16 @@ export const SkillLibraryPanel = ({
     }
   };
   const cleanupGroups = useMemo(
-    () => buildSkillCleanupGroups(skillInventory, { installedTargetIds, preparedTargetIdsBySkill }),
-    [installedTargetIds, preparedTargetIdsBySkill, skillInventory]
+    () => buildSkillCleanupGroups(skillInventory, {
+      installedTargetIds,
+      preparedTargetIdsBySkill: Object.fromEntries(
+        Object.entries(preparedTargetsBySkill).map(([skillKey, targets]) => [
+          skillKey,
+          targets.map((target) => target.targetId)
+        ])
+      )
+    }),
+    [installedTargetIds, preparedTargetsBySkill, skillInventory]
   );
   const automaticCleanupRequests = useMemo(
     () =>
@@ -606,6 +623,9 @@ export const SkillLibraryPanel = ({
   const sharedRetireCandidate = sharedRetireKey
     ? cleanupGroups.find((group) => group.skillKey === sharedRetireKey)
     : undefined;
+  const sharedRetireTargets = sharedRetireKey
+    ? preparedTargetsBySkill[sharedRetireKey] ?? []
+    : [];
   const externalImportGroup = externalImport
     ? cleanupGroups.find((group) => group.skillKey === externalImport.skillKey)
     : undefined;
@@ -1481,11 +1501,23 @@ export const SkillLibraryPanel = ({
             <div className="cleanup-retire-summary">
               <div>
                 <strong>{t("Prepared consumers")}</strong>
-                <span>
-                  {sharedRetireCandidate.sharedMigration.consumers.length > 0
-                    ? sharedRetireCandidate.sharedMigration.consumers.map(targetName).join(" · ")
-                    : t("No installed consumers detected")}
-                </span>
+                {sharedRetireTargets.length > 0 ? (
+                  <div className="cleanup-migration-decisions">
+                    {sharedRetireTargets.map((target) => (
+                      <span key={target.targetId}>
+                        <strong>{targetName(target.targetId)}</strong>
+                        {t(
+                          target.disposition === "install"
+                            ? "Install as {{name}}"
+                            : "Do not install",
+                          { name: target.targetName }
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span>{t("No installed consumers detected")}</span>
+                )}
               </div>
               {sharedRetireCandidate.sharedMigration.paths.map((path) => (
                 <PreviewText
@@ -2035,13 +2067,24 @@ export const SkillLibraryPanel = ({
                               ? `${t("Library")}: ${t("Imported")}`
                               : `${t("Library")}: ${t("Not imported")}`}
                           </span>
-                          {sharedMigration.consumers.length > 0 ? sharedMigration.consumers.map((targetId) => (
-                            <span key={targetId}>
-                              {targetName(targetId)}: {t(sharedMigration.pendingConsumers.includes(targetId)
-                                ? "Needs Apply"
-                                : "Prepared")}
-                            </span>
-                          )) : <span>{t("No installed consumers detected")}</span>}
+                          {sharedMigration.consumers.length > 0 ? sharedMigration.consumers.map((targetId) =>
+                            sharedMigration.pendingConsumers.includes(targetId) ? (
+                              <button
+                                className="cleanup-migration-target"
+                                type="button"
+                                aria-label={t("Prepare {{name}} in Profiles", { name: targetName(targetId) })}
+                                key={targetId}
+                                onClick={() => onOpenProfilesForTarget(targetId)}
+                              >
+                                {targetName(targetId)}: {t("Needs Apply")}
+                                <ArrowRight size={12} strokeWidth={2.2} aria-hidden="true" />
+                              </button>
+                            ) : (
+                              <span key={targetId}>
+                                {targetName(targetId)}: {t("Prepared")}
+                              </span>
+                            )
+                          ) : <span>{t("No installed consumers detected")}</span>}
                         </div>
                       ) : null}
                       <PreviewText
@@ -2091,7 +2134,7 @@ export const SkillLibraryPanel = ({
                         </button>
                       ) : sharedMigration?.state === "ready" ? (
                         <button
-                          className="secondary-action cleanup-retire-action"
+                          className="primary-action cleanup-migration-action"
                           type="button"
                           aria-label={t("Complete migration {{id}}", { id: group.skillKey })}
                           disabled={Boolean(automaticCleanupKey) || Boolean(sharedOperation)}

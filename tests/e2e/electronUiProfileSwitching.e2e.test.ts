@@ -2273,6 +2273,12 @@ describe("Electron UI profile switching e2e", () => {
     await openCodeCard
       .getByRole("button", { name: "Open OpenCode in Profiles" })
       .waitFor({ state: "visible" });
+    await expect
+      .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
+      .toContain("primary-inline-action");
+    await expect
+      .poll(() => openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).getAttribute("class"))
+      .toContain("secondary-action");
     const diagnostics = openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" });
     await diagnostics.click();
     await openCodeCard.getByRole("region", { name: "OpenCode diagnostics" }).waitFor({
@@ -2304,6 +2310,12 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Targets", exact: true }).click();
     const openCodeCard = page.getByRole("article", { name: "Target OpenCode" });
+    await expect
+      .poll(() => openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).getAttribute("class"))
+      .toContain("primary-inline-action");
+    await expect
+      .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
+      .toContain("secondary-action");
     await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
     await openCodeCard.getByRole("button", { name: "Stop managing OpenCode" }).click();
 
@@ -2712,6 +2724,15 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(sharedContent);
     await expect(fileExists(join(sharedSkillDir, ".agentenv-owner.json"))).resolves.toBe(false);
     await expect.poll(() => cleanupGroup.textContent()).toContain("Preparing Targets");
+    await cleanupGroup
+      .getByRole("button", { name: "Prepare OpenCode in Profiles" })
+      .click();
+    await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
+    await expect.poll(() => page.getByRole("button", { name: "Select apply target" }).textContent())
+      .toContain("OpenCode");
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    await cleanupGroup.waitFor({ state: "visible" });
 
     const retirementError = await page.evaluate(async ({ skillKey, libraryId, path }) => {
       try {
@@ -2811,6 +2832,8 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: `Complete migration ${skillId}` })
       .click();
     const retirementDialog = page.getByRole("dialog", { name: "Complete shared Skill migration" });
+    await expect.poll(() => retirementDialog.textContent()).toContain(`Install as ${skillId}`);
+    await expectInViewport(page, retirementDialog);
     await retirementDialog.getByRole("button", { name: "Complete migration" }).click();
     await retirementDialog.waitFor({ state: "hidden" });
     await expect(fileExists(sharedSkillDir)).resolves.toBe(false);
