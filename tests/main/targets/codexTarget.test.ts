@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readlink, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -160,6 +160,47 @@ describe("Codex target adapter", () => {
         "utf8"
       )
     ).resolves.toContain('"kind": "agent"');
+  });
+
+  it("links reusable library skills as whole directories for Codex", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-codex-"));
+    const adapter = createCodexTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const skillLibraryDir = join(root, "app-data", "skills-library");
+    const librarySkillDir = join(skillLibraryDir, "shared-reviewer");
+    await mkdir(join(librarySkillDir, "references"), { recursive: true });
+    await writeFile(join(librarySkillDir, "SKILL.md"), "# Shared reviewer\n");
+    await writeFile(join(librarySkillDir, "references", "guide.md"), "# Guide\n");
+    const profile: ProfileDetail = {
+      ...makeProfile(""),
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [{ libraryId: "shared-reviewer", targetName: "agentenv-shared-reviewer" }],
+        mcpRefs: [],
+        disabledSkillPaths: []
+      }
+    };
+
+    await expect(
+      adapter.validateAssets({ profile, targetPaths, skillLibraryDir })
+    ).resolves.toEqual([]);
+    await adapter.applyAssets({
+      profile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: "symlink"
+    });
+
+    const targetDir = join(targetPaths.skillsDir ?? "", "agentenv-shared-reviewer");
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(targetDir)).resolves.toBe(librarySkillDir);
+    await expect(readFile(join(targetDir, "references", "guide.md"), "utf8")).resolves.toBe(
+      "# Guide\n"
+    );
+    await expect(readFile(`${targetDir}.agentenv-owner.json`, "utf8")).resolves.toContain(
+      '"source": "skills-library/shared-reviewer"'
+    );
   });
 
   it("captures portable Codex MCP and disabled skills while excluding native settings", async () => {

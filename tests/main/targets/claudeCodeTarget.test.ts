@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readlink, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "jsonc-parser";
@@ -247,6 +247,47 @@ describe("Claude Code target adapter", () => {
       adapter.validateAssets({ profile, targetPaths })
     ).resolves.toContain(
       `skill target already exists and is not AgentEnv-owned: ${targetDir}`
+    );
+  });
+
+  it("links reusable library skills as whole directories for Claude Code", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const skillLibraryDir = join(root, "app-data", "skills-library");
+    const librarySkillDir = join(skillLibraryDir, "shared-reviewer");
+    await mkdir(join(librarySkillDir, "references"), { recursive: true });
+    await writeFile(join(librarySkillDir, "SKILL.md"), "# Shared reviewer\n");
+    await writeFile(join(librarySkillDir, "references", "guide.md"), "# Guide\n");
+    const profile: ProfileDetail = {
+      ...makeProfile("{}"),
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [{ libraryId: "shared-reviewer", targetName: "shared-reviewer" }],
+        mcpRefs: [],
+        disabledSkillPaths: []
+      }
+    };
+
+    await expect(
+      adapter.validateAssets({ profile, targetPaths, skillLibraryDir })
+    ).resolves.toEqual([]);
+    await adapter.applyAssets({
+      profile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: "symlink"
+    });
+
+    const targetDir = join(targetPaths.skillsDir ?? "", "shared-reviewer");
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(targetDir)).resolves.toBe(librarySkillDir);
+    await expect(readFile(join(targetDir, "references", "guide.md"), "utf8")).resolves.toBe(
+      "# Guide\n"
+    );
+    await expect(readFile(`${targetDir}.agentenv-owner.json`, "utf8")).resolves.toContain(
+      '"source": "skills-library/shared-reviewer"'
     );
   });
 
