@@ -620,6 +620,9 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - No supported viewport has page-level horizontal scrolling.
 - Layout verification MUST measure document and owned scroll-region overflow, child containment, text fit, sibling control overlap, and floating-layer stacking; successful clicks alone do not satisfy this contract.
 - The Electron compositor, document root, and application shell MUST paint the complete content viewport with the page background; short pages and navigation transitions MUST NOT expose an unpainted window background.
+- Electron MUST NOT expose an empty renderer frame during cold start. Its compositor background matches the application surface, and the HTML shell provides a branded, reduced-motion-aware launch state before React mounts without delaying foreground renderer scheduling.
+- Startup loads Library Skills independently from Target discovery. Local core data becomes usable before GitHub update checks, local inventory scans, and derived Profile usage finish; those background enrichments MUST merge into the visible UI without replacing it with an empty state.
+- Renderer startup MUST NOT synchronously open duplicate browser-side persistence. Locale begins from the operating system and then adopts the authoritative local Settings value during core loading.
 - Packaged macOS PNG and ICNS assets MUST preserve transparent corners around the app-icon silhouette so Finder volumes and Dock icons do not render an opaque square frame.
 - Primary commands and lifecycle state remain visible.
 - Switching workspaces MUST NOT resize or reposition global chrome. Sidebar, brand lockup, navigation rows, status card, page gutter, first-level page titles, and page-header control height use shared geometry at a given viewport.
@@ -815,7 +818,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-15 against the current `main` tree at the time of this snapshot.
 
-- `350` automated tests passed across `48` test files; the `68`-test Electron UI suite and `75` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `352` automated tests passed across `48` test files; the `68`-test Electron UI suite and `75` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `37` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.

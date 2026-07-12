@@ -82,6 +82,17 @@ const readPngRgba = async (path: string) => {
 };
 
 describe("package metadata", () => {
+  it("provides a painted renderer state before React mounts", async () => {
+    const rendererHtml = await readFile(
+      join(process.cwd(), "src", "renderer", "index.html"),
+      "utf8"
+    );
+
+    expect(rendererHtml).toContain("data-agentenv-boot");
+    expect(rendererHtml).toContain("background: #f6f8fc");
+    expect(rendererHtml).toContain("prefers-reduced-motion: reduce");
+  });
+
   it("exposes Electron packaging entrypoints", async () => {
     const packageJson = JSON.parse(
       await readFile(join(process.cwd(), "package.json"), "utf8")

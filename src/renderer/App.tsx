@@ -576,6 +576,7 @@ const AppContent = ({
   const skillSearchInputRef = useRef<HTMLInputElement>(null);
   const mcpSearchInputRef = useRef<HTMLInputElement>(null);
   const mcpCreateButtonRef = useRef<HTMLButtonElement>(null);
+  const dataRefreshRequestRef = useRef(0);
   const profileFlowRequestRef = useRef(0);
   const activeProfileFlowRequestRef = useRef<number | undefined>(undefined);
   const saveInFlightRef = useRef(false);
@@ -667,35 +668,87 @@ const AppContent = ({
     }
   };
 
-  const refreshProfiles = async ({
-    checkSkillUpdates = true,
-    settingsOverride
-  }: {
-    checkSkillUpdates?: boolean;
-    settingsOverride?: AgentEnvSettings;
-  } = {}) => {
+  const loadProfileCore = async (
+    settingsOverride?: AgentEnvSettings,
+    shouldApply: () => boolean = () => true
+  ) => {
+    const skillItemsPromise = window.agentEnv.listSkillLibrary();
+    const corePromise = Promise.all([
+      window.agentEnv.listTargets(),
+      window.agentEnv.listTargetStates(),
+      window.agentEnv.listProfiles(),
+      window.agentEnv.listBackups(),
+      skillItemsPromise,
+      window.agentEnv.listSkillCleanupBackups(),
+      window.agentEnv.listMcpLibrary(),
+      settingsOverride ?? window.agentEnv.readSettings()
+    ]);
+
+    const skillItems = await skillItemsPromise;
+    if (shouldApply()) {
+      setLibrarySkills(skillItems);
+    }
+
     const [
       targetItems,
       targetStateItems,
       profileItems,
       backupItems,
-      skillItems,
+      ,
       cleanupBackupItems,
       mcpItems,
       settings
-    ] = await Promise.all([
-      window.agentEnv.listTargets(),
-      window.agentEnv.listTargetStates(),
-      window.agentEnv.listProfiles(),
-      window.agentEnv.listBackups(),
-      window.agentEnv.listSkillLibrary(),
-      window.agentEnv.listSkillCleanupBackups(),
-      window.agentEnv.listMcpLibrary(),
-      settingsOverride ?? window.agentEnv.readSettings()
-    ]);
+    ] = await corePromise;
+
+    if (!shouldApply()) {
+      return {
+        targetItems,
+        targetStateItems,
+        profileItems,
+        backupItems,
+        skillItems,
+        mcpItems,
+        settings
+      };
+    }
+
+    setTargets(targetItems);
+    setTargetStates(
+      targetStateItems.map((targetState) => ({
+        ...targetState,
+        activeProfileName:
+          profileItems.find((profile) => profile.id === targetState.activeProfileId)?.name ??
+          targetState.activeProfileName
+      }))
+    );
+    setProfiles(profileItems);
+    setBackups(backupItems);
+    setSkillCleanupBackups(cleanupBackupItems);
+    setMcpServers(mcpItems);
+    setSkillSettings(settings);
+    onLocalePreferenceChange(settings.locale);
+    setSelectedTargetId((current) => current ?? targetItems[0]?.id);
+
+    return {
+      targetItems,
+      targetStateItems,
+      profileItems,
+      backupItems,
+      skillItems,
+      mcpItems,
+      settings
+    };
+  };
+
+  const loadProfileEnrichment = async (
+    core: Awaited<ReturnType<typeof loadProfileCore>>,
+    checkSkillUpdates: boolean,
+    shouldApply: () => boolean = () => true
+  ) => {
+    const { targetItems, profileItems, skillItems, mcpItems, settings } = core;
     const [skillUpdatesResult, skillInventoryResult, githubStatusResult] =
       await Promise.allSettled([
-        checkSkillUpdates
+        checkSkillUpdates && settings.skillAutoCheckEnabled
           ? window.agentEnv.checkSkillLibraryUpdates()
           : Promise.resolve(skillUpdates),
         window.agentEnv.scanSkillInventory(),
@@ -742,31 +795,31 @@ const AppContent = ({
         );
       }
     }
-    setTargets(targetItems);
-    setTargetStates(
-      targetStateItems.map((targetState) => ({
-        ...targetState,
-        activeProfileName:
-          profileItems.find((profile) => profile.id === targetState.activeProfileId)?.name ??
-          targetState.activeProfileName
-      }))
-    );
-    setProfiles(profileItems);
-    setBackups(backupItems);
-    setLibrarySkills(skillItems);
-    setSkillCleanupBackups(cleanupBackupItems);
-    setMcpServers(mcpItems);
+    if (!shouldApply()) {
+      return { skillUpdateItems };
+    }
     setSkillUpdates(skillUpdateItems);
     setSkillInventory(skillInventoryItems);
-    setSkillSettings(settings);
-    onLocalePreferenceChange(settings.locale);
     setGithubAuthStatus(githubStatus);
     setSkillUsage(usage);
     setMcpUsage(nextMcpUsage);
     setProfileResourceCounts(nextProfileResourceCounts);
     setProfileLibraryVersions(nextProfileLibraryVersions);
-    setSelectedTargetId((current) => current ?? targetItems[0]?.id);
-    return { targetItems, targetStateItems, profileItems, backupItems, skillUpdateItems };
+    return { skillUpdateItems };
+  };
+
+  const refreshProfiles = async ({
+    checkSkillUpdates = true,
+    settingsOverride
+  }: {
+    checkSkillUpdates?: boolean;
+    settingsOverride?: AgentEnvSettings;
+  } = {}) => {
+    const requestId = ++dataRefreshRequestRef.current;
+    const shouldApply = () => dataRefreshRequestRef.current === requestId;
+    const core = await loadProfileCore(settingsOverride, shouldApply);
+    const enrichment = await loadProfileEnrichment(core, checkSkillUpdates, shouldApply);
+    return { ...core, ...enrichment };
   };
 
   const refreshSkills = async () => {
@@ -786,10 +839,24 @@ const AppContent = ({
 
   useEffect(() => {
     let isMounted = true;
+    const requestId = ++dataRefreshRequestRef.current;
+    const shouldApply = () => isMounted && dataRefreshRequestRef.current === requestId;
 
-    refreshProfiles()
-      .then(async ({ profileItems, targetItems, targetStateItems }) => {
-        if (!isMounted || profileItems.length === 0) {
+    loadProfileCore(undefined, shouldApply)
+      .then(async (core) => {
+        if (!shouldApply()) {
+          return;
+        }
+
+        setIsLoading(false);
+        void loadProfileEnrichment(core, true, shouldApply).catch((unknownError) => {
+          if (shouldApply()) {
+            setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+          }
+        });
+
+        const { profileItems, targetItems, targetStateItems } = core;
+        if (profileItems.length === 0) {
           return;
         }
 
@@ -833,6 +900,9 @@ const AppContent = ({
 
     return () => {
       isMounted = false;
+      if (dataRefreshRequestRef.current === requestId) {
+        dataRefreshRequestRef.current += 1;
+      }
     };
   }, []);
 
@@ -3988,29 +4058,9 @@ const AppContent = ({
 };
 
 export const App = () => {
-  const [localePreference, setLocalePreference] = useState<AppLocale>(() => {
-    if (/jsdom/i.test(window.navigator.userAgent)) {
-      return "system";
-    }
-    try {
-      const cached = window.localStorage.getItem("agentenv.locale");
-      return cached === "en" || cached === "zh_CN" || cached === "zh_TW" || cached === "system"
-        ? cached
-        : "system";
-    } catch {
-      return "system";
-    }
-  });
+  const [localePreference, setLocalePreference] = useState<AppLocale>("system");
   const updateLocalePreference = useCallback((locale: AppLocale) => {
     setLocalePreference(locale);
-    if (/jsdom/i.test(window.navigator.userAgent)) {
-      return;
-    }
-    try {
-      window.localStorage.setItem("agentenv.locale", locale);
-    } catch {
-      // The settings store remains authoritative if renderer storage is unavailable.
-    }
   }, []);
 
   return (

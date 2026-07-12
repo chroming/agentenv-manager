@@ -583,6 +583,57 @@ describe("App", () => {
     expect(screen.getByLabelText("OpenCode-only opencode.jsonc")).toHaveValue('{\n  "mcp": {}\n}\n');
   });
 
+  it("renders Library Skills before startup discovery and update checks finish", async () => {
+    const targetRequest = deferred<TargetInfo[]>();
+    const inventoryRequest = deferred<Awaited<ReturnType<AgentEnvApi["scanSkillInventory"]>>>();
+    const updateRequest = deferred<Awaited<ReturnType<AgentEnvApi["checkSkillLibraryUpdates"]>>>();
+    const api = installApi({
+      listTargets: vi.fn().mockReturnValue(targetRequest.promise),
+      listSkillLibrary: vi.fn().mockResolvedValue([
+        {
+          id: "startup-reviewer",
+          name: "Startup Reviewer",
+          description: "Available from local Library data",
+          path: "/tmp/skills-library/startup-reviewer",
+          sourceType: "github",
+          source: "https://github.com/acme/skills/tree/main/startup-reviewer",
+          updatePolicy: "tracked",
+          contentHash: "startup-hash",
+          updatedAt: "2026-07-15T00:00:00.000Z"
+        }
+      ]),
+      scanSkillInventory: vi.fn().mockReturnValue(inventoryRequest.promise),
+      checkSkillLibraryUpdates: vi.fn().mockReturnValue(updateRequest.promise)
+    });
+    render(<App />);
+
+    expect(
+      await screen.findByRole("group", { name: "Library item startup-reviewer" })
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Loading skills")).not.toBeInTheDocument();
+    expect(api.scanSkillInventory).not.toHaveBeenCalled();
+    expect(api.checkSkillLibraryUpdates).not.toHaveBeenCalled();
+
+    await act(async () => {
+      targetRequest.resolve([target]);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(api.scanSkillInventory).toHaveBeenCalledTimes(1));
+    expect(api.checkSkillLibraryUpdates).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("region", { name: "Skill library" })).toHaveTextContent(
+      "Startup Reviewer"
+    );
+    expect(screen.getByRole("region", { name: "System status" })).not.toHaveTextContent(
+      "Loading"
+    );
+
+    await act(async () => {
+      inventoryRequest.resolve([]);
+      updateRequest.resolve([]);
+      await Promise.resolve();
+    });
+  });
+
   it("opens libraries as an app-level workspace", async () => {
     const listSkillLibrary = vi.fn().mockResolvedValue([
       {

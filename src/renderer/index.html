@@ -4,9 +4,59 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AgentEnv Manager</title>
+    <style>
+      html,
+      body,
+      #root {
+        background: #f6f8fc;
+        height: 100%;
+        margin: 0;
+      }
+
+      .app-boot {
+        align-items: center;
+        color: #152238;
+        display: flex;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        gap: 11px;
+        height: 100%;
+        justify-content: center;
+      }
+
+      .app-boot__mark {
+        animation: app-boot-spin 0.9s linear infinite;
+        border: 2px solid #d9e4f7;
+        border-radius: 50%;
+        border-top-color: #1768e5;
+        height: 18px;
+        width: 18px;
+      }
+
+      .app-boot strong {
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      @keyframes app-boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .app-boot__mark {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="app-boot" data-agentenv-boot role="status" aria-label="Starting AgentEnv Manager">
+        <span class="app-boot__mark" aria-hidden="true"></span>
+        <strong>AgentEnv Manager</strong>
+      </div>
+    </div>
     <script type="module" src="./main.tsx"></script>
   </body>
 </html>
