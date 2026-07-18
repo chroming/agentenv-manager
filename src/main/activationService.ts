@@ -423,7 +423,14 @@ export const createActivationService = ({
   allowRealHomeWrites = false,
   settingsStore = createSettingsStore(paths),
   mcpLibraryStore = createMcpLibraryStore(paths),
-  skillLibraryStore = createSkillLibraryStore(paths, settingsStore)
+  skillLibraryStore = createSkillLibraryStore(paths, settingsStore, {
+    targetPathsProvider: () => targetRegistry.listAdapters().map((adapter) =>
+      adapter.createTargetPaths({
+        homeDir: paths.homeDir,
+        fakeHomeRoot: paths.fakeHomeRoot
+      })
+    )
+  })
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
   const previews = new Map<string, ActivationPreview>();

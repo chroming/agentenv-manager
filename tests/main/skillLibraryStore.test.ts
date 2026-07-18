@@ -1174,6 +1174,40 @@ description: >
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("trusts cleanup roots supplied by a newly registered target", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir: join(root, "home")
+    });
+    const fixtureSkillsDir = join(paths.homeDir, ".fixture-agent", "extensions");
+    const fixtureCopy = join(fixtureSkillsDir, "reviewer");
+    await mkdir(fixtureCopy, { recursive: true });
+    await writeFile(join(fixtureCopy, "SKILL.md"), "# Fixture copy\n", "utf8");
+    const targetPaths = {
+      targetId: "fixture-agent",
+      configDir: dirname(fixtureSkillsDir),
+      instructionsPath: join(paths.homeDir, ".fixture-agent", "AGENT.md"),
+      configPath: join(paths.homeDir, ".fixture-agent", "fixture.json"),
+      skillsDir: fixtureSkillsDir
+    };
+    const store = createSkillLibraryStore(paths, undefined, {
+      targetPathsProvider: () => [targetPaths]
+    });
+
+    const result = await store.consolidateSkillGroup({
+      skillKey: "reviewer",
+      libraryId: "reviewer",
+      canonicalPath: fixtureCopy,
+      locations: [{ targetPaths, targetDir: fixtureCopy }]
+    });
+
+    await store.rollbackSkillCleanup(result.backupId);
+    await expect(readFile(join(fixtureCopy, "SKILL.md"), "utf8")).resolves.toBe(
+      "# Fixture copy\n"
+    );
+  });
+
   it("adds a chosen shared version to Library without assigning Target ownership", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

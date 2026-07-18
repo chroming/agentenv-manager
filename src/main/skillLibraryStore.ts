@@ -48,6 +48,7 @@ import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
 import { deploySkillDirectory, removeSkillDeployment } from "./skillDeployment";
+import { createTargetRegistry } from "./targets/registry";
 
 interface SkillMetadataFile {
   sourceType?: SkillSourceType;
@@ -192,6 +193,7 @@ interface SkillLibraryStoreOptions {
   fetch?: FetchLike;
   skillsCliLockPaths?: string[];
   profileStore?: Pick<ProfileStore, "listProfiles" | "readProfile" | "saveProfile">;
+  targetPathsProvider?: () => TargetPaths[];
 }
 
 interface ParsedGitHubSkillSource {
@@ -489,6 +491,13 @@ export const createSkillLibraryStore = (
   const fetchImpl = options.fetch ?? fetch;
   const authTokenProvider = options.authTokenProvider;
   const profileStore = options.profileStore;
+  const targetPathsProvider = options.targetPathsProvider ?? (() =>
+    createTargetRegistry().listAdapters().map((adapter) =>
+      adapter.createTargetPaths({
+        homeDir: paths.homeDir,
+        fakeHomeRoot: paths.fakeHomeRoot
+      })
+    ));
 
   const readIgnoreRules = async () =>
     (await readJsonIfExists<SkillCleanupIgnoreRule[]>(ignoreRulesPath))?.filter(
@@ -1427,6 +1436,23 @@ export const createSkillLibraryStore = (
 
   const cleanupBackupRoot = () => join(paths.backupsDir, "skill-cleanup");
 
+  const trustedSkillRoots = async (): Promise<string[]> => {
+    const targetRoots = targetPathsProvider().flatMap((target) => [
+      target.skillsDir,
+      ...(target.skillScanDirs ?? []),
+      ...(target.skillLocations ?? []).map((location) => location.path)
+    ]);
+    return [
+      await libraryDir(),
+      paths.profilesDir,
+      paths.userSkillsDir,
+      ...targetRoots
+    ]
+      .filter((path): path is string => Boolean(path))
+      .map((path) => resolve(path))
+      .filter((path, index, roots) => roots.indexOf(path) === index);
+  };
+
   const readCleanupBackup = async (backupId: string) => {
     const safeId = SafeIdSchema.parse(backupId);
     const backupDir = join(cleanupBackupRoot(), safeId);
@@ -1437,15 +1463,7 @@ export const createSkillLibraryStore = (
     if (manifest.id !== safeId || !Array.isArray(manifest.entries)) {
       throw new Error(`Invalid Skill cleanup backup: ${safeId}`);
     }
-    const allowedRoots = [
-      await libraryDir(),
-      paths.profilesDir,
-      paths.userSkillsDir,
-      join(paths.homeDir, ".codex", "skills"),
-      join(paths.homeDir, ".claude", "skills"),
-      join(paths.homeDir, ".config", "opencode", "skills"),
-      join(paths.homeDir, ".config", "opencode", "skill")
-    ].map((path) => resolve(path));
+    const allowedRoots = await trustedSkillRoots();
     const backupLocationsRoot = resolve(backupDir, "locations");
     const seenBackupPaths = new Set<string>();
     for (const entry of manifest.entries) {

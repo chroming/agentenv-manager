@@ -287,6 +287,12 @@ const createServices = async () => {
     {
       profileStore,
       authTokenProvider: githubAuthService.readAccessToken,
+      targetPathsProvider: () => targetRegistry.listAdapters().map((adapter) =>
+        adapter.createTargetPaths({
+          homeDir: paths.homeDir,
+          fakeHomeRoot: paths.fakeHomeRoot
+        })
+      ),
       ...(process.env.AGENTENV_GITHUB_FIXTURE_ROOT
         ? { fetch: createGitHubFixtureFetch(process.env.AGENTENV_GITHUB_FIXTURE_ROOT) }
         : {})
