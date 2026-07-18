@@ -702,6 +702,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Comparable actions in one command group use the same control height; Profile Save and Apply also reserve the same width so lifecycle state changes do not shift surrounding content.
 - A related command group MAY move below its heading at narrower supported widths, but its individual controls MUST remain together rather than orphan-wrapping one control onto another line.
 - Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.
+- Every Profile row shares fixed icon and content columns. Selection, dirty/current badges, hover, and long-name truncation MUST NOT move the icon, name, description, counts, or deployment text origin.
 - Profile list icons use one consistent compact slot and icon family. Decorative per-row icon colors MUST NOT imply unsupported categories or state.
 - Profile icons MAY use the shared built-in icon set. Changing a Profile icon modifies the Profile draft, follows dirty-navigation protection, and is persisted only by whole-Profile Save.
 - Icon pickers MUST use one shared component, expose the selected state without color alone, remain topmost inside the viewport, and close on selection, Escape, or safe outside click.
@@ -910,7 +911,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-17 against the current `main` tree at the time of this snapshot.
 
-- `448` automated tests passed across `52` test files; the `85`-test Electron UI suite and `93` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `449` automated tests passed across `52` test files; the `86`-test Electron UI suite and `94` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `51` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, and focused update-setting states.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
@@ -928,6 +929,7 @@ Last verified: 2026-07-17 against the current `main` tree at the time of this sn
 - Shared compatibility migration now distinguishes imported, preparing, ready, retained, external, and conflict states; Apply records per-Target install or omit intent without duplicate runtime copies, and Electron E2E verifies early-switch blocking, transactional cutover, backup history, and full restore.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards; Configuration changes is a keyboard-focusable review action that opens the first collapsed diff without widening the dialog.
+- Profile list icon and content columns remain aligned at the minimum viewport, and a deliberately long truncated Profile name keeps the same text origin before and after selection.
 - JSON/JSONC, TOML, YAML, assignment-style, token-prefix, and private-key detection reject new literal credentials; legacy Preview before/after/diff payloads are redacted before reaching the renderer.
 - Same-format drift recovery adopts compatible Instructions, native config, disabled-Skill paths, and exact Library MCP definitions into a backed-up Profile while naming excluded or unmapped items.
 - Production dependency audit reported zero known vulnerabilities.

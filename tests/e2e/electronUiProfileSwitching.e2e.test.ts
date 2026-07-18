@@ -66,7 +66,8 @@ const findProfileByName = async (appDataRoot: string, name: string) => {
 
 const writeOpenCodeProfile = async (
   appDataRoot: string,
-  variant: "alpha" | "beta"
+  variant: "alpha" | "beta",
+  profileName?: string
 ) => {
   const profileId = `ui-opencode-${variant}`;
   const profileDir = join(appDataRoot, "profiles", profileId);
@@ -75,7 +76,7 @@ const writeOpenCodeProfile = async (
   await writeJson(join(profileDir, "profile.json"), {
     id: profileId,
     targetId: "opencode",
-    name: `UI OpenCode ${variant}`,
+    name: profileName ?? `UI OpenCode ${variant}`,
     description: `UI e2e ${variant}`,
     version: 1,
     managed: { instructions: true, config: true, assets: true }
@@ -402,6 +403,7 @@ const launchApp = async (
     testCloseGuard?: boolean;
     migratedBackupFixtures?: boolean;
     includeClaudeTarget?: boolean;
+    openCodeBetaProfileName?: string;
   } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
@@ -446,7 +448,7 @@ const launchApp = async (
     "utf8"
   );
   await writeOpenCodeProfile(appDataRoot, "alpha");
-  await writeOpenCodeProfile(appDataRoot, "beta");
+  await writeOpenCodeProfile(appDataRoot, "beta", options.openCodeBetaProfileName);
   await writeCodexProfile(appDataRoot, "alpha");
   await writeCodexProfile(appDataRoot, "beta");
   const librarySkill = await writeLibrarySkill(appDataRoot);
@@ -2100,6 +2102,64 @@ describe("Electron UI profile switching e2e", () => {
     expect(mcpHeaderHeight).toBeLessThanOrEqual(34);
     expect(await workbench.evaluate((element) => getComputedStyle(element).gridTemplateColumns))
       .toMatch(/^220px /);
+  }, 30_000);
+
+  it("keeps Profile columns aligned when a long name becomes selected", async () => {
+    const longProfileName =
+      "UI OpenCode beta for a deliberately long production review environment";
+    const { page } = await launchApp({ openCodeBetaProfileName: longProfileName });
+    await resizeAppWindow(page, 920, 620);
+    await selectProfile(page, "UI OpenCode alpha");
+
+    const longRow = page.getByRole("group", { name: `Profile ${longProfileName}` });
+    const measureRows = () =>
+      page.locator(".profile-row").evaluateAll((rows) =>
+        rows.map((row) => {
+          const icon = row.querySelector<HTMLElement>(".profile-row__icon")!;
+          const content = row.querySelector<HTMLElement>(".profile-row__content")!;
+          const name = row.querySelector<HTMLElement>(".profile-row__name")!;
+          return {
+            profileName: name.textContent,
+            iconLeft: icon.getBoundingClientRect().left,
+            contentLeft: content.getBoundingClientRect().left,
+            nameLeft: name.getBoundingClientRect().left
+          };
+        })
+      );
+    const measureLongRow = () =>
+      longRow.evaluate((row) => {
+        const icon = row.querySelector<HTMLElement>(".profile-row__icon")!;
+        const content = row.querySelector<HTMLElement>(".profile-row__content")!;
+        const name = row.querySelector<HTMLElement>(".profile-row__name")!;
+        return {
+          iconLeft: icon.getBoundingClientRect().left,
+          contentLeft: content.getBoundingClientRect().left,
+          nameLeft: name.getBoundingClientRect().left,
+          nameIsTruncated: name.scrollWidth > name.clientWidth
+        };
+      });
+    const expectColumnsAligned = (rows: Awaited<ReturnType<typeof measureRows>>) => {
+      const reference = rows[0];
+      for (const row of rows) {
+        expect(row.iconLeft - reference.iconLeft, row.profileName ?? undefined).toBeCloseTo(0, 1);
+        expect(row.contentLeft - reference.contentLeft, row.profileName ?? undefined).toBeCloseTo(0, 1);
+        expect(row.nameLeft - reference.nameLeft, row.profileName ?? undefined).toBeCloseTo(0, 1);
+      }
+    };
+
+    const before = await measureLongRow();
+    expect(before.nameIsTruncated).toBe(true);
+    expectColumnsAligned(await measureRows());
+
+    await longRow.locator(".profile-row__content").click();
+    await page.getByRole("heading", { name: longProfileName }).waitFor({ state: "visible" });
+
+    const after = await measureLongRow();
+    expect(after.nameIsTruncated).toBe(true);
+    expect(after.iconLeft).toBeCloseTo(before.iconLeft, 1);
+    expect(after.contentLeft).toBeCloseTo(before.contentLeft, 1);
+    expect(after.nameLeft).toBeCloseTo(before.nameLeft, 1);
+    expectColumnsAligned(await measureRows());
   }, 30_000);
 
   it("keeps Library chrome fixed while only the long Skill list scrolls", async () => {

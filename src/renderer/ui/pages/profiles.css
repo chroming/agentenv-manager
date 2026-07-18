@@ -425,9 +425,8 @@
 .profile-row.is-active {
   background: #eeeeec;
   border-color: transparent;
-  border-left: 3px solid var(--accent);
   border-radius: 0 6px 6px 0;
-  box-shadow: none;
+  box-shadow: inset 3px 0 0 var(--accent);
   margin: 0;
 }
 
@@ -447,6 +446,9 @@
 
 .profile-row__content {
   gap: 1px;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  justify-items: stretch;
 }
 
 .profile-row__title {
@@ -457,6 +459,7 @@
   gap: 6px;
   line-height: 17px;
   min-width: 0;
+  width: 100%;
 }
 
 .profile-row__name {

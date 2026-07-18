@@ -518,7 +518,7 @@
 
   .skill-library-panel .library-installs-cell {
     align-self: center;
-    gap: 3px;
+    gap: 4px;
     grid-template-rows: 22px 18px;
   }
 
