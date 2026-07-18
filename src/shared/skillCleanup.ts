@@ -204,7 +204,7 @@ export const buildSkillCleanupGroups = (
         : hasExternal
           ? {
               state: "managed-elsewhere",
-              action: unresolvedExternal ? "review-ownership" : "none"
+              action: "review-ownership"
             }
           : sharedMigration?.state === "ready"
             ? { state: "shared-copy-replaceable", action: "review-replacement" }

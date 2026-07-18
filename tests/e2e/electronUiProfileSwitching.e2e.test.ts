@@ -3619,7 +3619,18 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(appDataRoot, "skills-library", "open-browser-use-2", "SKILL.md"), "utf8"))
       .resolves.toContain("# External");
     expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
-    expect(await page.getByRole("button", { name: `Review ownership ${skillId}` }).count()).toBe(0);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const representedReview = page.getByRole("button", { name: `Review ownership ${skillId}` });
+    await representedReview.waitFor({ state: "visible" });
+    await representedReview.click();
+    const representedDialog = page.getByRole("dialog", { name: "Import external skill" });
+    await expect.poll(() => representedDialog.textContent()).toContain("Review the matching Library copy");
+    await representedDialog.getByRole("button", { name: "Review Library copy" }).click();
+    const representedConflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await representedConflict.waitFor({ state: "visible" });
+    await expect.poll(() => representedConflict.textContent()).toContain("Identical");
+    await representedConflict.getByRole("button", { name: "Use existing" }).click();
+    await representedConflict.waitFor({ state: "hidden" });
     const repeatedImport = await page.evaluate(async (sourcePath) => {
       const preview = await window.agentEnv.previewSkillImport({
         kind: "local",
@@ -3638,6 +3649,68 @@ describe("Electron UI profile switching e2e", () => {
       skill: { id: "open-browser-use-2" }
     });
   }, 45_000);
+
+  it("updates an existing Library source from a represented External Skill", async () => {
+    const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
+    const skillId = "external-source-upgrade";
+    const content =
+      "---\nname: External Source Upgrade\ndescription: Same content with online provenance.\n---\n# External Source Upgrade\n";
+    const libraryDir = join(appDataRoot, "skills-library", skillId);
+    const localSourceDir = join(appDataRoot, "local-sources", skillId);
+    const canonicalDir = join(homeDir, ".agents", "skills", skillId);
+    const targetDir = join(opencodeDir, "skills", skillId);
+    await mkdir(libraryDir, { recursive: true });
+    await mkdir(localSourceDir, { recursive: true });
+    await mkdir(canonicalDir, { recursive: true });
+    await mkdir(dirname(targetDir), { recursive: true });
+    await writeFile(join(libraryDir, "SKILL.md"), content);
+    await writeFile(join(localSourceDir, "SKILL.md"), content);
+    await writeFile(join(canonicalDir, "SKILL.md"), content);
+    await writeJson(join(libraryDir, ".agentenv-skill.json"), {
+      sourceType: "local",
+      source: localSourceDir,
+      updatePolicy: "untracked"
+    });
+    await symlink(canonicalDir, targetDir, "dir");
+    await writeJson(join(homeDir, ".agents", ".skill-lock.json"), {
+      version: 3,
+      skills: {
+        [skillId]: {
+          source: "acme/browser-skills",
+          sourceType: "github",
+          sourceUrl: "https://github.com/acme/browser-skills",
+          ref: "main",
+          skillPath: `skills/${skillId}/SKILL.md`,
+          skillFolderHash: "external-source-upgrade-tree"
+        }
+      }
+    });
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const group = page.getByRole("group", { name: `Cleanup group ${skillId}` });
+    await group.waitFor({ state: "visible" });
+    await group.getByRole("button", { name: `Review ownership ${skillId}` }).click();
+    const externalDialog = page.getByRole("dialog", { name: "Import external skill" });
+    await expect.poll(() => externalDialog.textContent()).toContain("Review the matching Library copy");
+    await externalDialog.getByRole("button", { name: "Review Library copy" }).click();
+    const conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await conflict.waitFor({ state: "visible" });
+    await expect.poll(() => conflict.textContent()).toContain("Source available");
+    await conflict.getByRole("button", { name: "Update source" }).click();
+    await conflict.waitFor({ state: "hidden" });
+
+    await expect.poll(async () => readJson<{
+      sourceType?: string;
+      source?: string;
+      updatePolicy?: string;
+    }>(join(libraryDir, ".agentenv-skill.json"))).toMatchObject({
+      sourceType: "github",
+      source: `https://github.com/acme/browser-skills/tree/main/skills/${skillId}`,
+      updatePolicy: "tracked"
+    });
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
+  }, 30_000);
 
   it("keeps all three conflicting Target copies after a stale cleanup error", async () => {
     const { opencodeDir, codexDir, claudeDir, page } = await launchApp({

@@ -699,9 +699,11 @@ export const SkillLibraryPanel = ({
     externalImportGroup?.activeItems.filter(
       (item) =>
         item.status === "external" &&
-        item.externalOwnership &&
-        item.contentMatchesLibrary !== true
+        item.externalOwnership
     ) ?? [];
+  const selectedExternalImport = externalImportItems.find(
+    (item) => item.path === externalImport?.sourcePath
+  );
   const cleanupUsesExistingLibrary = Boolean(
     cleanupCandidate?.items.some((item) => item.status === "library" || item.status === "managed") ||
       (cleanupDraft && librarySkills.some((skill) => skill.id === cleanupDraft.libraryId))
@@ -1888,7 +1890,9 @@ export const SkillLibraryPanel = ({
                   {t("Import {{name}}", { name: externalImportGroup.primary?.name ?? externalImport.skillKey })}
                 </div>
                 <p className="muted">
-                  {t("Create an independent Library copy. Skills CLI files and lock data stay unchanged.")}
+                  {selectedExternalImport?.contentMatchesLibrary
+                    ? t("Review the matching Library copy and any source changes. External files and lock data stay unchanged.")
+                    : t("Create an independent Library copy. Skills CLI files and lock data stay unchanged.")}
                 </p>
               </div>
             </header>
@@ -1945,7 +1949,13 @@ export const SkillLibraryPanel = ({
                 )}
                 onClick={() => void importSelectedExternalSkill()}
               >
-                {t(localImportOperation ? "Importing..." : "Import copy")}
+                {t(
+                  localImportOperation
+                    ? "Reviewing..."
+                    : selectedExternalImport?.contentMatchesLibrary
+                      ? "Review Library copy"
+                      : "Import copy"
+                )}
               </button>
             </footer>
           </section>
@@ -2388,7 +2398,6 @@ export const SkillLibraryPanel = ({
                     const source = group.activeItems.find(
                       (item) =>
                         item.status === "external" &&
-                        item.contentMatchesLibrary !== true &&
                         item.externalOwnership?.state !== "broken-link"
                     );
                     if (source) {

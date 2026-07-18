@@ -115,6 +115,17 @@ describe("SkillLibraryPanel", () => {
             updatedAt: "2026-07-02T00:00:00.000Z"
           },
           {
+            id: "represented-external",
+            name: "Represented External",
+            description: "External content already represented in Library",
+            path: "/tmp/skills-library/represented-external",
+            sourceType: "local",
+            source: "/tmp/source/represented-external",
+            updatePolicy: "untracked",
+            contentHash: "represented-external-hash",
+            updatedAt: "2026-07-02T00:00:00.000Z"
+          },
+          {
             id: "copied-local",
             name: "Copied Local",
             description: "Copied into the library",
@@ -269,6 +280,32 @@ describe("SkillLibraryPanel", () => {
                 locator: "https://github.com/acme/skills",
                 ref: "main",
                 subpath: "skills/external-reviewer"
+              }
+            }
+          },
+          {
+            id: "represented-external",
+            name: "Represented External",
+            description: "External content already represented in Library",
+            path: "/tmp/opencode/skills/represented-external",
+            foundIn: ["opencode"],
+            status: "external",
+            libraryId: "represented-external",
+            contentMatchesLibrary: true,
+            skillKey: "represented-external",
+            contentHash: "represented-external-hash",
+            externalOwnership: {
+              manager: "skills-cli",
+              lockPath: "/tmp/home/.agents/.skill-lock.json",
+              lockVersion: 3,
+              canonicalPath: "/tmp/home/.agents/skills/represented-external",
+              confidence: "confirmed",
+              state: "healthy",
+              upstream: {
+                kind: "github",
+                locator: "https://github.com/acme/skills",
+                ref: "main",
+                subpath: "skills/represented-external"
               }
             }
           },
@@ -715,6 +752,26 @@ describe("SkillLibraryPanel", () => {
     await waitFor(() =>
       expect(onImportExternal).toHaveBeenCalledWith(
         expect.objectContaining({ id: "external-reviewer", status: "external" })
+      )
+    );
+    const representedExternalGroup = screen.getByRole("group", {
+      name: "Cleanup group represented-external"
+    });
+    const reviewRepresented = within(representedExternalGroup).getByRole("button", {
+      name: "Review ownership represented-external"
+    });
+    expect(reviewRepresented).toBeEnabled();
+    fireEvent.click(reviewRepresented);
+    externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
+    expect(externalDialog).toHaveTextContent("Review the matching Library copy");
+    fireEvent.click(within(externalDialog).getByRole("button", { name: "Review Library copy" }));
+    await waitFor(() =>
+      expect(onImportExternal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "represented-external",
+          status: "external",
+          contentMatchesLibrary: true
+        })
       )
     );
     const cleanupHistory = screen.getByRole("region", { name: "Cleanup history" });

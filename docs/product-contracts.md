@@ -553,7 +553,7 @@ External ownership contract:
 - Skills tracked by a supported Skills CLI lock are classified as `External`, not `Unmanaged`.
 - Directory symlinks and broken tracked symlinks remain visible in Scan results.
 - `Import copy` copies a selected healthy external installation into Library, preserves verified upstream metadata, and leaves the external files and lock unchanged.
-- `Import copy` is idempotent. Matching Library content is reused; an occupied ID with different content receives the next available ID instead of failing. After rescan, an external installation with matching Library content remains labelled `External` but has no repeated Import action and shows its Library relationship.
+- `Import copy` is idempotent. Matching Library content is reused; an occupied ID with different content requires the shared duplicate-import decision instead of failing or silently suffixing. After rescan, an external installation with matching Library content remains labelled `External`, shows its Library relationship, and retains a `Review` entry. Review offers `Update source` when online provenance can improve tracking, otherwise it confirms reuse; it MUST NOT create a duplicate Library copy.
 - External installations MUST NOT enter the ordinary cleanup transaction that replaces selected locations with AgentEnv-managed copies.
 - A desired Profile Skill occupying an externally managed Target path blocks Apply with the manager, path, and required recovery action identified.
 

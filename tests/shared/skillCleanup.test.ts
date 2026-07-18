@@ -117,7 +117,7 @@ describe("skill cleanup groups", () => {
     expect(group).toMatchObject({
       state: "external",
       resolution: "resolved",
-      presentation: { state: "managed-elsewhere", action: "none" }
+      presentation: { state: "managed-elsewhere", action: "review-ownership" }
     });
   });
 
