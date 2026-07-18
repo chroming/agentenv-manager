@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   applyEdits,
@@ -13,34 +13,13 @@ import type {
   PlannedFileChange,
   ProfileDetail,
   TargetActivationPreview,
-  TargetPaths,
   TargetState
 } from "../../shared/types";
 import { createUnifiedDiff } from "../diff";
-import {
-  pathEntryExists,
-  pathExists,
-  readTextIfExists,
-  replacePathAtomically,
-  writeAtomic
-} from "../fileUtils";
-import { hashComparableResource } from "../resourceHash";
-import {
-  createOwnerMarkerContent,
-  isAgentEnvOwnedDir,
-  markerPathFor,
-  markerPathForFile
-} from "../ownershipMarkers";
-import { removeSkillDeployment } from "../skillDeployment";
+import { pathExists, readTextIfExists } from "../fileUtils";
 import { jsonMcpEnvironment, materializeJsonMcpRefs } from "../mcpRefs";
 import { findSecretWarnings } from "../secretWarnings";
-import {
-  addSkillRefBackupPaths,
-  applySkillRefs,
-  skillTargetNames,
-  validateSkillRefs
-} from "./skillRefs";
-import type { AgentTargetAdapter, TargetAssetInput } from "./types";
+import type { AgentTargetAdapter } from "./types";
 import {
   captureJsonMcpServers,
   isJsonSubset,
@@ -48,6 +27,7 @@ import {
   sanitizeCapturedJson
 } from "./capture";
 import { createProfileFileDriver } from "./shared/profileFiles";
+import { createDirectoryAssetDriver } from "./shared/assetDeployment";
 
 const DEFAULT_STATE: TargetState = {
   managedConfigKeys: [],
@@ -75,6 +55,11 @@ const materializeMcpRefs = (
         }
       : { type: server.transport, url: server.url };
   }
+});
+
+const assets = createDirectoryAssetDriver({
+  targetName: "Claude Code",
+  markerTargetId: ({ profile }) => profile.manifest.targetId
 });
 
 const METADATA_CONFIG_KEYS = new Set(["$schema"]);
@@ -259,197 +244,6 @@ const findOverlayConflicts = (
   }
 
   return errors;
-};
-
-const targetRootFor = (targetPaths: TargetPaths, kind: "agent" | "skill") =>
-  kind === "agent" ? targetPaths.agentsDir : targetPaths.skillsDir;
-
-const targetDirFor = (
-  targetPaths: TargetPaths,
-  kind: "agent" | "skill",
-  targetName: string
-) => {
-  const root = targetRootFor(targetPaths, kind);
-  if (!root) {
-    throw new Error(`Target does not support ${kind} directories`);
-  }
-  return join(root, targetName);
-};
-
-const validateAssets = async (input: TargetAssetInput) => {
-  const { profile, targetPaths } = input;
-  const errors: string[] = [];
-  const profileDir = profile.profileDir;
-  if ((profile.assetPolicy.ownedFiles ?? []).length > 0) {
-    errors.push("Claude Code target does not support owned file assets");
-  }
-  if (!profileDir && profile.assetPolicy.ownedDirs.length > 0) {
-    return ["Profile directory is required to copy owned assets"];
-  }
-
-  for (const ownedDir of profile.assetPolicy.ownedDirs) {
-    const sourceDir = join(profileDir ?? "", ownedDir.source);
-    const targetDir = targetDirFor(targetPaths, ownedDir.kind, ownedDir.targetName);
-    const sourceExists = await pathExists(sourceDir);
-    if (!sourceExists) {
-      errors.push(`Owned ${ownedDir.kind} source does not exist: ${sourceDir}`);
-    }
-    const targetExists =
-      !(input.isolateSkillRoot && ownedDir.kind === "skill") &&
-      await pathExists(targetDir);
-    const owned = targetExists && await isAgentEnvOwnedDir(targetDir, {
-      targetId: targetPaths.targetId,
-      kind: ownedDir.kind
-    });
-    const matching =
-      targetExists && sourceExists && input.allowMatchingUnmanagedAssets &&
-      (await hashComparableResource(sourceDir)) === (await hashComparableResource(targetDir));
-    if (targetExists && !owned && !matching) {
-      errors.push(
-        `${ownedDir.kind} target already exists and is not AgentEnv-owned: ${targetDir}`
-      );
-    }
-  }
-
-  errors.push(...(await validateSkillRefs(input)));
-
-  return errors;
-};
-
-const removeStaleOwnedDirs = async (input: TargetAssetInput) => {
-  const { profile, targetPaths } = input;
-  const desired = new Set(
-    profile.assetPolicy.ownedDirs.map((ownedDir) => `${ownedDir.kind}:${ownedDir.targetName}`)
-  );
-  for (const skillName of skillTargetNames(input)) {
-    desired.add(`skill:${skillName}`);
-  }
-  const roots: Array<{ kind: "agent" | "skill"; path?: string }> = [
-    { kind: "agent", path: targetPaths.agentsDir },
-    { kind: "skill", path: targetPaths.skillsDir }
-  ];
-
-  for (const root of roots) {
-    if (!root.path || !(await pathExists(root.path))) {
-      continue;
-    }
-
-    const entries = await readdir(root.path, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory() && !entry.isSymbolicLink()) {
-        continue;
-      }
-
-      const targetDir = join(root.path, entry.name);
-      const key = `${root.kind}:${entry.name}`;
-      if (
-        !desired.has(key) &&
-        (await isAgentEnvOwnedDir(targetDir, {
-          targetId: targetPaths.targetId,
-          kind: root.kind
-        }))
-      ) {
-        if (root.kind === "skill") {
-          await removeSkillDeployment(targetDir);
-        } else {
-          await rm(targetDir, { recursive: true, force: true });
-        }
-      }
-    }
-  }
-};
-
-const getAssetBackupPaths = async (input: TargetAssetInput) => {
-  const { profile, targetPaths } = input;
-  const paths = new Set<string>();
-  const desired = new Set(
-    profile.assetPolicy.ownedDirs.map((ownedDir) => `${ownedDir.kind}:${ownedDir.targetName}`)
-  );
-  for (const skillName of skillTargetNames(input)) {
-    desired.add(`skill:${skillName}`);
-  }
-  const roots: Array<{ kind: "agent" | "skill"; path?: string }> = [
-    { kind: "agent", path: targetPaths.agentsDir },
-    { kind: "skill", path: targetPaths.skillsDir }
-  ];
-
-  for (const ownedDir of profile.assetPolicy.ownedDirs) {
-    if (!(input.isolateSkillRoot && ownedDir.kind === "skill")) {
-      paths.add(targetDirFor(targetPaths, ownedDir.kind, ownedDir.targetName));
-    }
-  }
-  addSkillRefBackupPaths(paths, targetPaths, input);
-
-  for (const root of roots) {
-    if (input.isolateSkillRoot && root.kind === "skill") {
-      continue;
-    }
-    if (!root.path || !(await pathExists(root.path))) {
-      continue;
-    }
-
-    const entries = await readdir(root.path, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory() && !entry.isSymbolicLink()) {
-        continue;
-      }
-
-      const targetDir = join(root.path, entry.name);
-      const key = `${root.kind}:${entry.name}`;
-      if (
-        !desired.has(key) &&
-        (await isAgentEnvOwnedDir(targetDir, {
-          targetId: targetPaths.targetId,
-          kind: root.kind
-        }))
-      ) {
-        paths.add(targetDir);
-        if (root.kind === "skill") paths.add(markerPathForFile(targetDir));
-      }
-    }
-  }
-
-  return [...paths];
-};
-
-const applyAssets = async (input: TargetAssetInput) => {
-  const { profile, targetPaths } = input;
-  await removeStaleOwnedDirs(input);
-
-  for (const ownedDir of profile.assetPolicy.ownedDirs) {
-    const sourceDir = join(profile.profileDir ?? "", ownedDir.source);
-    const targetDir = targetDirFor(targetPaths, ownedDir.kind, ownedDir.targetName);
-
-    const owned = await isAgentEnvOwnedDir(targetDir, {
-      targetId: targetPaths.targetId,
-      kind: ownedDir.kind
-    });
-    const matching =
-      input.allowMatchingUnmanagedAssets &&
-      await pathExists(sourceDir) &&
-      await pathExists(targetDir) &&
-      (await hashComparableResource(sourceDir)) === (await hashComparableResource(targetDir));
-    if ((await pathEntryExists(targetDir)) && !owned && !matching) {
-      throw new Error(
-        `${ownedDir.kind} target changed after preview and is not AgentEnv-owned: ${targetDir}`
-      );
-    }
-
-    await mkdir(targetDirFor(targetPaths, ownedDir.kind, "."), { recursive: true });
-    await replacePathAtomically(targetDir, async (stagingPath) => {
-      await cp(sourceDir, stagingPath, { recursive: true });
-      await writeAtomic(
-        markerPathFor(stagingPath),
-        createOwnerMarkerContent({
-          profileId: profile.id,
-          targetId: profile.manifest.targetId,
-          kind: ownedDir.kind,
-          source: ownedDir.source
-        })
-      );
-    });
-  }
-  await applySkillRefs(input);
 };
 
 export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
@@ -676,7 +470,5 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       targetState
     };
   },
-  validateAssets,
-  getAssetBackupPaths,
-  applyAssets
+  ...assets
 });
