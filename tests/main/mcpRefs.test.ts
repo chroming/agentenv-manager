@@ -1,6 +1,8 @@
 import { parse } from "jsonc-parser";
 import { describe, expect, it } from "vitest";
-import { materializeProfileMcpRefs } from "../../src/main/mcpRefs";
+import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
+import { createCodexTargetAdapter } from "../../src/main/targets/codexTarget";
+import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
 import type { McpLibraryEntry, ProfileDetail } from "../../src/shared/types";
 
 const makeProfile = (targetId: string): ProfileDetail => ({
@@ -35,7 +37,10 @@ const stdioServer: McpLibraryEntry = {
 
 describe("MCP library reference materialization", () => {
   it("writes OpenCode environment substitutions without secret values", () => {
-    const result = materializeProfileMcpRefs(makeProfile("opencode"), [stdioServer]);
+    const result = createOpenCodeTargetAdapter().materializeMcpRefs(
+      makeProfile("opencode"),
+      [stdioServer]
+    );
     expect(parse(result.configText)).toMatchObject({
       mcp: {
         local_search: {
@@ -48,7 +53,10 @@ describe("MCP library reference materialization", () => {
   });
 
   it("writes Claude Code environment substitutions without secret values", () => {
-    const result = materializeProfileMcpRefs(makeProfile("claude-code"), [stdioServer]);
+    const result = createClaudeCodeTargetAdapter().materializeMcpRefs(
+      makeProfile("claude-code"),
+      [stdioServer]
+    );
     expect(parse(result.configText)).toMatchObject({
       mcpServers: {
         local_search: {
@@ -62,7 +70,10 @@ describe("MCP library reference materialization", () => {
   });
 
   it("writes Codex parent environment forwarding without secret values", () => {
-    const result = materializeProfileMcpRefs(makeProfile("codex"), [stdioServer]);
+    const result = createCodexTargetAdapter().materializeMcpRefs(
+      makeProfile("codex"),
+      [stdioServer]
+    );
     expect(result.configText).toContain("[mcp_servers.local_search]");
     expect(result.configText).toContain('env_vars = ["SEARCH_TOKEN"]');
     expect(result.configText).not.toContain("env = {");
@@ -76,7 +87,10 @@ describe("MCP library reference materialization", () => {
       args: [],
       url: "https://example.com/mcp"
     };
-    const result = materializeProfileMcpRefs(makeProfile("opencode"), [remoteServer]);
+    const result = createOpenCodeTargetAdapter().materializeMcpRefs(
+      makeProfile("opencode"),
+      [remoteServer]
+    );
     expect(parse(result.configText).mcp.local_search).toEqual({
       type: "remote",
       url: "https://example.com/mcp"

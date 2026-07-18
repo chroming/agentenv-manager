@@ -45,6 +45,8 @@ export const defineTargetIntegration = (
       integration.profile.readProfileFiles(profileDir, manifest),
     writeProfileFiles: (profileDir, profile) =>
       integration.profile.writeProfileFiles(profileDir, profile),
+    materializeMcpRefs: (profile, mcpLibrary) =>
+      integration.mcp.materializeMcpRefs(profile, mcpLibrary),
     createPreview: (input) => integration.config.createPreview(input),
     validateAssets: (input) => integration.assets.validateAssets(input),
     getAssetBackupPaths: (input) => integration.assets.getAssetBackupPaths(input),

@@ -905,6 +905,7 @@ describe("activation service", () => {
       writeProfileFiles: () => {
         throw new Error("not used");
       },
+      materializeMcpRefs: (profile) => profile,
       createPreview: async () => ({
         warnings: [],
         errors: [],

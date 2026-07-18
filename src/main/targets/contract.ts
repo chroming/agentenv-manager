@@ -27,6 +27,13 @@ export interface TargetConfigDriver {
   createPreview(input: TargetPreviewInput): ReturnType<AgentTargetAdapter["createPreview"]>;
 }
 
+export interface TargetMcpDriver {
+  materializeMcpRefs(
+    profile: ProfileDetail,
+    mcpLibrary: Parameters<AgentTargetAdapter["materializeMcpRefs"]>[1]
+  ): ProfileDetail;
+}
+
 export interface TargetAssetDriver {
   validateAssets(input: TargetAssetInput): ReturnType<AgentTargetAdapter["validateAssets"]>;
   getAssetBackupPaths(
@@ -46,5 +53,6 @@ export interface AgentTargetIntegration {
   paths: TargetPathDriver;
   profile: TargetProfileDriver;
   config: TargetConfigDriver;
+  mcp: TargetMcpDriver;
   assets: TargetAssetDriver;
 }

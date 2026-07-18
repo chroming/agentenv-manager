@@ -17,7 +17,6 @@ import {
   createMcpLibraryStore,
   type McpLibraryStore
 } from "./mcpLibraryStore";
-import { materializeProfileMcpRefs } from "./mcpRefs";
 import type { ProfileStore } from "./profileStore";
 import {
   createSettingsStore,
@@ -1104,7 +1103,7 @@ export const createActivationService = ({
       preparationPlan.runtimeProfile,
       inventory
     );
-    const materializedProfile = materializeProfileMcpRefs(
+    const materializedProfile = adapter.materializeMcpRefs(
       externallyResolved.profile,
       mcpLibrary
     );
@@ -1340,7 +1339,7 @@ export const createActivationService = ({
     if (externallyResolved.errors.length > 0) {
       return { ok: false, errors: externallyResolved.errors };
     }
-    const materializedProfile = materializeProfileMcpRefs(
+    const materializedProfile = adapter.materializeMcpRefs(
       externallyResolved.profile,
       mcpLibrary
     );

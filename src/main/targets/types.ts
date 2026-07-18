@@ -45,6 +45,10 @@ export interface AgentTargetAdapter {
   captureProfile(targetPaths: TargetPaths): Promise<CapturedTargetProfile>;
   readProfileFiles(profileDir: string, manifest: ProfileDetail["manifest"]): Promise<ProfileDetail>;
   writeProfileFiles(profileDir: string, profile: ProfileDetail): Promise<void>;
+  materializeMcpRefs(
+    profile: ProfileDetail,
+    mcpLibrary: McpLibraryEntry[]
+  ): ProfileDetail;
   createPreview(input: TargetPreviewInput): Promise<TargetActivationPreview>;
   validateAssets(input: TargetAssetInput): Promise<string[]>;
   getAssetBackupPaths(input: TargetAssetInput): Promise<string[]>;

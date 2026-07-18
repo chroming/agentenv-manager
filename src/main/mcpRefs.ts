@@ -157,7 +157,10 @@ const materializeJsonMcpRefs = (
   };
 };
 
-const materializeCodexMcpRefs = (profile: ProfileDetail, mcpLibrary: McpLibraryEntry[]) => {
+export const materializeCodexMcpRefs = (
+  profile: ProfileDetail,
+  mcpLibrary: McpLibraryEntry[]
+) => {
   const resolved = resolveMcpRefs(profile.assetPolicy, mcpLibrary);
   if (resolved.length === 0) {
     return profile;
@@ -174,18 +177,12 @@ const materializeCodexMcpRefs = (profile: ProfileDetail, mcpLibrary: McpLibraryE
   };
 };
 
-export const materializeProfileMcpRefs = (
+export const materializeOpenCodeMcpRefs = (
   profile: ProfileDetail,
   mcpLibrary: McpLibraryEntry[]
-): ProfileDetail => {
-  if (profile.manifest.targetId === "opencode") {
-    return materializeJsonMcpRefs(profile, mcpLibrary, "opencode");
-  }
-  if (profile.manifest.targetId === "claude-code") {
-    return materializeJsonMcpRefs(profile, mcpLibrary, "claude-code");
-  }
-  if (profile.manifest.targetId === "codex") {
-    return materializeCodexMcpRefs(profile, mcpLibrary);
-  }
-  return profile;
-};
+): ProfileDetail => materializeJsonMcpRefs(profile, mcpLibrary, "opencode");
+
+export const materializeClaudeCodeMcpRefs = (
+  profile: ProfileDetail,
+  mcpLibrary: McpLibraryEntry[]
+): ProfileDetail => materializeJsonMcpRefs(profile, mcpLibrary, "claude-code");

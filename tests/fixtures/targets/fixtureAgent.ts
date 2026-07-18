@@ -107,6 +107,9 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
       targetState: { managedConfigKeys: [], managedMcpNames: [] }
     })
   },
+  mcp: {
+    materializeMcpRefs: (profile) => profile
+  },
   assets: {
     validateAssets: async () => [],
     getAssetBackupPaths: async () => [],

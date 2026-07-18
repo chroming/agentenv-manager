@@ -33,6 +33,7 @@ import {
   markerPathForFile
 } from "../ownershipMarkers";
 import { removeSkillDeployment } from "../skillDeployment";
+import { materializeOpenCodeMcpRefs } from "../mcpRefs";
 import { findSecretWarnings } from "../secretWarnings";
 import {
   addSkillRefBackupPaths,
@@ -516,6 +517,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       )
     ]);
   },
+  materializeMcpRefs: materializeOpenCodeMcpRefs,
   createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;
     const warnings = findSecretWarnings(profile.instructions).concat(
