@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   applyEdits,
@@ -8,7 +8,6 @@ import {
   printParseErrorCode,
   type ParseError
 } from "jsonc-parser";
-import { AssetPolicySchema } from "../../shared/schemas";
 import type {
   PlannedFileChange,
   ProfileDetail,
@@ -43,6 +42,7 @@ import {
 } from "./skillRefs";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
 import { captureJsonMcpServers, sameJsonValue, sanitizeCapturedJson } from "./capture";
+import { createProfileFileDriver } from "./shared/profileFiles";
 
 const DEFAULT_STATE: TargetState = {
   managedConfigKeys: [],
@@ -412,6 +412,12 @@ const applyAssets = async (input: TargetAssetInput) => {
   await applySkillRefs(input);
 };
 
+const profileFiles = createProfileFileDriver({
+  instructionsFile: "AGENTS.md",
+  configFile: "opencode.jsonc",
+  readConfigText: readOpenCodeProfileConfig
+});
+
 export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   descriptor: {
     id: "opencode",
@@ -493,33 +499,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       excluded: sanitized.excluded.concat(capturedMcp.excluded.map((name) => `mcp.${name}`))
     };
   },
-  readProfileFiles: async (profileDir, manifest) => {
-    const [instructions, configText, assetPolicyContent] = await Promise.all([
-      readFile(join(profileDir, "AGENTS.md"), "utf8"),
-      readOpenCodeProfileConfig(profileDir),
-      readFile(join(profileDir, "assets.json"), "utf8")
-    ]);
-    return {
-      id: manifest.id,
-      profileDir,
-      manifest,
-      instructions,
-      configText,
-      assetPolicy: AssetPolicySchema.parse(JSON.parse(assetPolicyContent))
-    };
-  },
-  writeProfileFiles: async (profileDir, profile) => {
-    await mkdir(profileDir, { recursive: true });
-    await Promise.all([
-      writeFile(join(profileDir, "AGENTS.md"), profile.instructions, "utf8"),
-      writeFile(join(profileDir, "opencode.jsonc"), profile.configText, "utf8"),
-      writeFile(
-        join(profileDir, "assets.json"),
-        `${JSON.stringify(AssetPolicySchema.parse(profile.assetPolicy), null, 2)}\n`,
-        "utf8"
-      )
-    ]);
-  },
+  ...profileFiles,
   materializeMcpRefs: materializeOpenCodeMcpRefs,
   createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;

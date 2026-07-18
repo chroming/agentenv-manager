@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   applyEdits,
@@ -8,7 +8,6 @@ import {
   printParseErrorCode,
   type ParseError
 } from "jsonc-parser";
-import { AssetPolicySchema } from "../../shared/schemas";
 import type {
   PlannedFileChange,
   ProfileDetail,
@@ -47,11 +46,17 @@ import {
   sameJsonValue,
   sanitizeCapturedJson
 } from "./capture";
+import { createProfileFileDriver } from "./shared/profileFiles";
 
 const DEFAULT_STATE: TargetState = {
   managedConfigKeys: [],
   managedMcpNames: []
 };
+
+const profileFiles = createProfileFileDriver({
+  instructionsFile: "CLAUDE.md",
+  configFile: "claude-code.json"
+});
 
 const METADATA_CONFIG_KEYS = new Set(["$schema"]);
 
@@ -510,33 +515,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       excluded: sanitized.excluded.concat(capturedMcp.excluded.map((name) => `.claude.json.mcpServers.${name}`))
     };
   },
-  readProfileFiles: async (profileDir, manifest) => {
-    const [instructions, configText, assetPolicyContent] = await Promise.all([
-      readFile(join(profileDir, "CLAUDE.md"), "utf8"),
-      readFile(join(profileDir, "claude-code.json"), "utf8"),
-      readFile(join(profileDir, "assets.json"), "utf8")
-    ]);
-    return {
-      id: manifest.id,
-      profileDir,
-      manifest,
-      instructions,
-      configText,
-      assetPolicy: AssetPolicySchema.parse(JSON.parse(assetPolicyContent))
-    };
-  },
-  writeProfileFiles: async (profileDir, profile) => {
-    await mkdir(profileDir, { recursive: true });
-    await Promise.all([
-      writeFile(join(profileDir, "CLAUDE.md"), profile.instructions, "utf8"),
-      writeFile(join(profileDir, "claude-code.json"), profile.configText, "utf8"),
-      writeFile(
-        join(profileDir, "assets.json"),
-        `${JSON.stringify(AssetPolicySchema.parse(profile.assetPolicy), null, 2)}\n`,
-        "utf8"
-      )
-    ]);
-  },
+  ...profileFiles,
   materializeMcpRefs: materializeClaudeCodeMcpRefs,
   createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;

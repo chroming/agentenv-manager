@@ -41,6 +41,7 @@ import {
   validateSkillRefs
 } from "./skillRefs";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
+import { createProfileFileDriver } from "./shared/profileFiles";
 
 const hashText = (content: string): string =>
   createHash("sha256").update(content).digest("hex");
@@ -388,6 +389,13 @@ const readConfigText = async (profileDir: string) => {
   return readFile(join(profileDir, "mcp.toml"), "utf8");
 };
 
+const profileFiles = createProfileFileDriver({
+  instructionsFile: "AGENTS.md",
+  configFile: "config.toml",
+  readConfigText,
+  readAssetPolicy
+});
+
 export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
   descriptor: {
     id: "codex",
@@ -505,33 +513,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       excluded: excluded.concat(nativeKeys.map((key) => `config.toml.${key}`))
     };
   },
-  readProfileFiles: async (profileDir, manifest) => {
-    const [instructions, configText, assetPolicy] = await Promise.all([
-      readFile(join(profileDir, "AGENTS.md"), "utf8"),
-      readConfigText(profileDir),
-      readAssetPolicy(profileDir)
-    ]);
-    return {
-      id: manifest.id,
-      profileDir,
-      manifest,
-      instructions,
-      configText,
-      assetPolicy
-    };
-  },
-  writeProfileFiles: async (profileDir, profile) => {
-    await mkdir(profileDir, { recursive: true });
-    await Promise.all([
-      writeFile(join(profileDir, "AGENTS.md"), profile.instructions, "utf8"),
-      writeFile(join(profileDir, "config.toml"), profile.configText, "utf8"),
-      writeFile(
-        join(profileDir, "assets.json"),
-        `${JSON.stringify(AssetPolicySchema.parse(profile.assetPolicy), null, 2)}\n`,
-        "utf8"
-      )
-    ]);
-  },
+  ...profileFiles,
   materializeMcpRefs: materializeCodexMcpRefs,
   createPreview: async ({ profile, targetPaths, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const createdState: TargetState = {
