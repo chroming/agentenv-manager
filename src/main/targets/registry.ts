@@ -17,11 +17,19 @@ export const createTargetRegistry = (
     createCodexTargetAdapter()
   ]
 ): TargetRegistry => {
-  const byId = new Map(adapters.map((adapter) => [adapter.descriptor.id, adapter]));
+  const registeredAdapters = [...adapters];
+  const byId = new Map<string, AgentTargetAdapter>();
+  for (const adapter of registeredAdapters) {
+    const targetId = adapter.descriptor.id;
+    if (byId.has(targetId)) {
+      throw new Error(`Duplicate target id: ${targetId}`);
+    }
+    byId.set(targetId, adapter);
+  }
 
   return {
-    list: () => adapters.map((adapter) => adapter.descriptor),
-    listAdapters: () => adapters,
+    list: () => registeredAdapters.map((adapter) => adapter.descriptor),
+    listAdapters: () => [...registeredAdapters],
     get: (targetId) => {
       const adapter = byId.get(targetId);
       if (!adapter) {
