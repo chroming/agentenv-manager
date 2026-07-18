@@ -1268,16 +1268,8 @@ export const createActivationService = ({
       allowMatchingUnmanagedSkills: isTakeover,
       allowMatchingUnmanagedAssets: isTakeover
     });
-    const takeoverPaths = isTakeover
-      ? [
-          targetPaths.instructionsPath,
-          targetPaths.configPath,
-          ...(targetPaths.mcpConfigPath ? [targetPaths.mcpConfigPath] : [])
-        ]
-      : [];
     const backup = await backupStore.createBackup(
       [
-        ...takeoverPaths,
         ...preview.changes.map((change) => change.path),
         ...assetBackupPaths,
         ...(options.additionalBackupPaths ?? []),
@@ -1318,7 +1310,7 @@ export const createActivationService = ({
         });
       }
       const managedResources = await snapshotManagedResources(
-        [...takeoverPaths, ...preview.changes.map((change) => change.path), ...assetBackupPaths],
+        [...preview.changes.map((change) => change.path), ...assetBackupPaths],
         targetPaths
       );
       for (const resource of managedResources) {

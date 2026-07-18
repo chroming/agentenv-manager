@@ -130,6 +130,34 @@ describe("Codex target adapter", () => {
     );
   });
 
+  it("leaves config.toml outside the plan when the Profile has no MCP or Skill settings", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-codex-"));
+    const adapter = createCodexTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.configPath, 'model = "gpt-5"\n# user-owned config\n');
+    const profile = {
+      ...makeProfile(""),
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [],
+        mcpRefs: [],
+        disabledSkillPaths: []
+      }
+    };
+
+    const preview = await adapter.createPreview({
+      profile,
+      targetPaths,
+      state: { managedConfigKeys: [], managedMcpNames: [] }
+    });
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.changes.map((change) => change.path)).not.toContain(targetPaths.configPath);
+    expect(Object.keys(preview.liveFingerprints)).not.toContain(targetPaths.configPath);
+  });
+
   it("copies owned Codex skills and custom agent files with strict ownership", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-codex-"));
     const adapter = createCodexTargetAdapter();

@@ -146,8 +146,10 @@ const applyJsoncOverlay = (
     }
   }
 
-  for (const key of profileMetadataKeys) {
-    nextContent = setJsoncProperty(nextContent, [key], profileConfig[key]);
+  if (profileConfigKeys.length > 0) {
+    for (const key of profileMetadataKeys) {
+      nextContent = setJsoncProperty(nextContent, [key], profileConfig[key]);
+    }
   }
 
   for (const key of profileConfigKeys) {
@@ -155,17 +157,17 @@ const applyJsoncOverlay = (
   }
 
   for (const name of state.managedMcpNames) {
+    nextContent = setJsoncProperty(nextContent, ["mcp", name], undefined);
     delete nextMcp[name];
   }
   for (const [name, server] of Object.entries(profileMcp)) {
+    nextContent = setJsoncProperty(nextContent, ["mcp", name], server);
     nextMcp[name] = server;
   }
 
-  nextContent = setJsoncProperty(
-    nextContent,
-    ["mcp"],
-    Object.keys(nextMcp).length > 0 ? nextMcp : undefined
-  );
+  if (Object.keys(nextMcp).length === 0) {
+    nextContent = setJsoncProperty(nextContent, ["mcp"], undefined);
+  }
 
   return {
     nextContent,
@@ -526,20 +528,37 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       profile.instructions
     );
 
-    const liveConfig = parseJsoncObject(liveConfigText, "Invalid live opencode.jsonc");
-    const profileConfig = parseJsoncObject(
-      profile.configText,
-      "Invalid profile opencode.jsonc"
-    );
+    const profileConfig = profile.manifest.managed.config
+      ? parseJsoncObject(profile.configText, "Invalid profile opencode.jsonc")
+      : { ok: true as const, value: {} };
     let targetState: TargetState = activeState;
-    if (!liveConfig.ok) {
-      errors.push(liveConfig.message);
-    }
     if (!profileConfig.ok) {
       errors.push(profileConfig.message);
     }
 
-    if (liveConfig.ok && profileConfig.ok) {
+    const profileConfigKeys = profileConfig.ok
+      ? Object.keys(profileConfig.value).filter(
+          (key) => key !== "mcp" && !METADATA_CONFIG_KEYS.has(key)
+        )
+      : [];
+    const profileMcpNames =
+      profileConfig.ok && isRecord(profileConfig.value.mcp)
+        ? Object.keys(profileConfig.value.mcp)
+        : [];
+    const shouldManageConfig =
+      profile.manifest.managed.config &&
+      (profileConfigKeys.length > 0 ||
+        profileMcpNames.length > 0 ||
+        activeState.managedConfigKeys.length > 0 ||
+        activeState.managedMcpNames.length > 0);
+    const liveConfig = shouldManageConfig
+      ? parseJsoncObject(liveConfigText, "Invalid live opencode.jsonc")
+      : { ok: true as const, value: {} };
+    if (!liveConfig.ok) {
+      errors.push(liveConfig.message);
+    }
+
+    if (shouldManageConfig && liveConfig.ok && profileConfig.ok) {
       errors.push(...findOverlayConflicts(liveConfig.value, profileConfig.value, activeState, allowMatchingUnmanagedConfig));
       if (errors.length === 0) {
         const planned = applyJsoncOverlay(
@@ -559,7 +578,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       changes,
       liveFingerprints: {
         [targetPaths.instructionsPath]: hashText(liveInstructions),
-        [targetPaths.configPath]: hashText(liveConfigText)
+        ...(shouldManageConfig ? { [targetPaths.configPath]: hashText(liveConfigText) } : {})
       },
       targetState
     };

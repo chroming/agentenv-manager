@@ -175,6 +175,42 @@ describe("activation service", () => {
     expect(state?.errorCount).toBe(0);
   });
 
+  it("does not back up or track an untouched Target config during takeover", async () => {
+    const { paths, service } = await makeEnv();
+    const profileDir = join(paths.profilesDir, "daily-coding");
+    await writeFile(join(profileDir, "mcp.toml"), "");
+    await writeFile(
+      join(profileDir, "assets.json"),
+      JSON.stringify({
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [],
+        mcpRefs: [],
+        disabledSkillPaths: []
+      })
+    );
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n# user-owned config\n');
+
+    const preview = await service.previewProfile("daily-coding");
+    expect(preview.changes.map((change) => change.path)).not.toContain(paths.codexConfigPath);
+    const result = await service.applyProfile("daily-coding", preview.id);
+    expect(result.ok).toBe(true);
+
+    const state = JSON.parse(
+      await readFile(join(paths.targetStatesDir, "codex.json"), "utf8")
+    ) as { managedResources: Array<{ path: string }> };
+    expect(state.managedResources.map((resource) => resource.path)).not.toContain(
+      paths.codexConfigPath
+    );
+    if (result.ok) {
+      const backup = await createBackupStore(paths).readBackup(result.backupId);
+      expect(backup.entries.map((entry) => entry.sourcePath)).not.toContain(paths.codexConfigPath);
+    }
+    await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toBe(
+      'model = "gpt-5"\n# user-owned config\n'
+    );
+  });
+
   it("prepares and atomically completes a shared Skill migration", async () => {
     const { paths, service } = await makeEnv();
     const librarySkill = join(paths.skillsLibraryDir, "reviewer");

@@ -210,7 +210,7 @@ describe("Claude Code target adapter", () => {
       change.path.endsWith(".claude.json")
     );
     expect(preview.errors).toEqual([]);
-    expect(parse(settingsChange?.after ?? "")).toEqual({});
+    expect(settingsChange).toBeUndefined();
     expect(parse(mcpChange?.after ?? "")).toMatchObject({
       mcpServers: {
         docs: {
@@ -219,6 +219,33 @@ describe("Claude Code target adapter", () => {
         }
       }
     });
+  });
+
+  it("leaves Claude settings and MCP files outside the plan when neither surface is used", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.configPath, '{ "theme": "dark" }\n');
+    await writeFile(
+      targetPaths.mcpConfigPath ?? "",
+      '{ "mcpServers": { "docs": { "type": "http", "url": "https://example.com" } } }\n'
+    );
+    const profile = makeProfile(
+      '{ "settings": { "$schema": "https://json.schemastore.org/claude-code-settings.json" }, "mcpServers": {} }\n'
+    );
+
+    const preview = await adapter.createPreview({
+      profile,
+      targetPaths,
+      state: { managedConfigKeys: [], managedMcpNames: [] }
+    });
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.changes.map((change) => change.path)).not.toContain(targetPaths.configPath);
+    expect(preview.changes.map((change) => change.path)).not.toContain(targetPaths.mcpConfigPath);
+    expect(Object.keys(preview.liveFingerprints)).not.toContain(targetPaths.configPath);
+    expect(Object.keys(preview.liveFingerprints)).not.toContain(targetPaths.mcpConfigPath);
   });
 
   it("does not treat an empty owner marker as permission to replace user skills", async () => {

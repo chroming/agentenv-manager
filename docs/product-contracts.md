@@ -211,9 +211,9 @@ The Profile editor MUST distinguish these states:
 Rules:
 
 - Save MUST persist the complete Profile, not an individual accordion section.
-- Save and Apply MUST appear as one ordered action group in the selected Profile context: Save first, then Apply. Page creation and Target selection controls MUST NOT separate these two lifecycle commands.
+- Save, Target selection, and Apply MUST appear as one ordered action group in the selected Profile context: Save first, choose the destination, then Apply. Page creation controls MUST NOT separate these lifecycle commands.
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
-- Edit, Duplicate, Delete, Save, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation and Target context.
+- Edit, Duplicate, Delete, Save, Target selection, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation.
 - Every Profile row MUST list all Targets currently using that Profile, even when legacy deployment state has no application timestamp. Each Target is visibly distinguished as current, pending, or needing attention.
 - Selected-Target lifecycle status belongs beside Save and Apply inside the selected Profile surface. It MUST NOT be repeated as a separate page-level summary strip.
 - Unsaved changes MUST block Preview and Apply.
@@ -221,6 +221,8 @@ Rules:
 - Failed validation or Save MUST preserve all draft input.
 - Applying a Profile MUST NOT change its native Target format.
 - When exactly one installed Target is available, Profiles MUST show it as stable context instead of an option menu. When multiple installed Targets are available, Target selection remains available.
+- Target selection is scoped to the selected Profile rather than the Profiles page. During an app session, each Profile remembers its own selected Target; otherwise the most recent active Target for that Profile is preferred, followed by its native Target. Choosing a Target for one Profile MUST NOT change another Profile's destination context.
+- An empty managed Instructions value is a valid complete Profile state. Preview MUST describe it as clearing the managed instruction file rather than blocking Apply.
 - On entry, Profiles SHOULD select the chosen Target's active Profile, pin it first in the list, mark it Current, and open its Skills section for the common single-Target workflow.
 - Profile Skills MUST expose enabled and disabled Library references in one compact list. Each row shows its display name, Library path, exact Library content revision, source kind, install name when different, and current state without forcing a details dialog. When the selected Target currently runs that Profile, the row also shows its applied content revision; a mismatch, missing install, or pending removal is `Apply pending`. Ownership, update-source policy, source-check result, Profile availability, and Target deployment are separate dimensions: the action-state column shows only exceptional or currently actionable states, while routine ownership and revisions remain metadata. `Not tracked` MUST NOT be presented as an ownership or management state. Check checks only enabled tracked references in that Profile; Add opens a searchable Library-only picker that identifies source, revision, and path and omits already attached or globally disabled Skills; Remove detaches a reference from the Profile without deleting Library content. A missing reference disables its availability control and offers Relink or Remove. Row menus MUST fit their longest localized command at the minimum viewport.
 - Legacy Profile-owned Skills MUST be labeled as Profile-only with revision unavailable. `Import to Library` creates an independent canonical Library copy, replaces the draft entry with a Library reference, preserves the existing Profile file, exposes local working and error states, and still requires Save before changing the persisted Profile.
@@ -336,6 +338,8 @@ Status: stale checks and no-op detection are `Implemented`.
 ## 11. Apply And Takeover Contract
 
 Apply means complete replacement of the AgentEnv-managed portion of one Target with one saved Profile.
+
+Target configuration files remain user-owned unless the effective Profile has MCP, native Advanced configuration, Target-specific Skill settings, or previously managed entries that must be removed. A config file that has no planned semantic change MUST NOT be rewritten, backed up as an affected path, fingerprinted for Preview freshness, or recorded as an AgentEnv-managed resource.
 
 It MUST:
 
@@ -616,6 +620,8 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Existing Library content is reused only when its comparable content hash or semantic MCP definition matches exactly.
 - Sensitive values, credentials, caches, history, runtime state, and unsupported native fields MUST remain Target-owned and MUST be named as excluded.
 - Ignored Skills remain in place and are excluded from the new Profile.
+- Skills identified as owned by an external manager remain in place and are excluded from the captured Profile. Capture review MUST name the external manager; later Apply MUST NOT unexpectedly turn that external installation into a blocking desired resource.
+- Exact matching native configuration values MAY be adopted into AgentEnv management without a content-conflict error. A differing unmanaged value remains a blocking conflict.
 - Duplicate active runtime copies with identical content MAY be represented by one Library reference, but every source copy remains unchanged. Same-name copies with different content block capture because the canonical content is ambiguous.
 - Preview becomes stale when any captured source path changes before confirmation.
 - Saving a captured Profile MUST NOT invoke Apply, create a Target Backup or deployment state, add ownership markers, delete a source path, or write Target history.

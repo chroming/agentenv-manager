@@ -22,7 +22,7 @@ import {
   writeAtomic
 } from "../fileUtils";
 import { hashComparableResource } from "../resourceHash";
-import { replaceManagedSection } from "../managedSections";
+import { replaceManagedSection, stripManagedSection } from "../managedSections";
 import {
   createOwnerMarkerContent,
   isAgentEnvOwnedDir,
@@ -553,20 +553,34 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       );
     }
 
-    const liveValidation = validateToml(liveConfig);
+    const skillsToml = profile.manifest.managed.assets
+      ? buildSkillsConfigToml(profile)
+      : "";
+    const hasManagedMcpSection = liveConfig.includes("AgentEnv Manager: mcp");
+    const hasManagedSkillsSection = liveConfig.includes("AgentEnv Manager: skills");
+    const shouldManageMcp =
+      profile.manifest.managed.config &&
+      (profile.configText.trim().length > 0 || hasManagedMcpSection);
+    const shouldManageSkills =
+      profile.manifest.managed.assets &&
+      (skillsToml.trim().length > 0 || hasManagedSkillsSection);
+    const shouldManageConfig = shouldManageMcp || shouldManageSkills;
+    const liveValidation = shouldManageConfig ? validateToml(liveConfig) : { ok: true as const };
     if (!liveValidation.ok) {
       errors.push(invalidMessage("Invalid live config.toml", liveValidation.message));
     }
 
-    const profileMcpValidation = validateToml(profile.configText);
+    const profileMcpValidation = shouldManageMcp
+      ? validateToml(profile.configText)
+      : { ok: true as const };
     if (!profileMcpValidation.ok) {
-      errors.push(
-        invalidMessage("Invalid profile MCP TOML", profileMcpValidation.message)
-      );
+      errors.push(invalidMessage("Invalid profile MCP TOML", profileMcpValidation.message));
     }
 
-    if (liveValidation.ok && profileMcpValidation.ok && profile.manifest.managed.config) {
-      const conflicts = findUnmanagedMcpConflicts(liveConfig, profile.configText, allowMatchingUnmanagedConfig);
+    if (shouldManageConfig && liveValidation.ok && profileMcpValidation.ok) {
+      const conflicts = shouldManageMcp
+        ? findUnmanagedMcpConflicts(liveConfig, profile.configText, allowMatchingUnmanagedConfig)
+        : [];
       errors.push(
         ...conflicts.map(
           (name) =>
@@ -575,19 +589,16 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       );
 
       if (conflicts.length === 0) {
-        const skillsToml = profile.manifest.managed.assets
-          ? buildSkillsConfigToml(profile)
-          : "";
-        const nextConfigWithMcp = replaceManagedSection(
-          liveConfig,
-          "mcp",
-          profile.configText
-        );
-        const nextConfig = replaceManagedSection(
-          nextConfigWithMcp,
-          "skills",
-          skillsToml
-        );
+        const nextConfigWithMcp = shouldManageMcp
+          ? profile.configText.trim().length > 0
+            ? replaceManagedSection(liveConfig, "mcp", profile.configText)
+            : stripManagedSection(liveConfig, "mcp")
+          : liveConfig;
+        const nextConfig = shouldManageSkills
+          ? skillsToml.trim().length > 0
+            ? replaceManagedSection(nextConfigWithMcp, "skills", skillsToml)
+            : stripManagedSection(nextConfigWithMcp, "skills")
+          : nextConfigWithMcp;
         const finalValidation = validateToml(nextConfig);
 
         if (!finalValidation.ok) {
@@ -606,7 +617,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       changes,
       liveFingerprints: {
         [targetPaths.instructionsPath]: hashText(liveInstructions),
-        [targetPaths.configPath]: hashText(liveConfig)
+        ...(shouldManageConfig ? { [targetPaths.configPath]: hashText(liveConfig) } : {})
       },
       targetState: createdState
     };

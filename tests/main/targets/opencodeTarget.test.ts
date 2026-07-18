@@ -126,6 +126,7 @@ describe("OpenCode target adapter", () => {
       change.path.endsWith("opencode.jsonc")
     );
     expect(configChange).toBeDefined();
+    expect(configChange?.after).toContain("// user preference");
     const parsed = parse(configChange?.after ?? "") as Record<string, unknown>;
     expect(parsed).toMatchObject({
       theme: "system",
@@ -180,6 +181,27 @@ describe("OpenCode target adapter", () => {
     expect(preview.errors).toContain(
       "MCP server context7 already exists outside AgentEnv management"
     );
+  });
+
+  it("leaves opencode.jsonc outside the plan when the Profile has no config or MCP", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(
+      targetPaths.configPath,
+      '{\n  // user-owned config\n  "theme": "dark",\n  "mcp": { "docs": { "type": "remote", "url": "https://example.com" } }\n}\n'
+    );
+
+    const preview = await adapter.createPreview({
+      profile: makeProfile("{}\n"),
+      targetPaths,
+      state: { managedConfigKeys: [], managedMcpNames: [] }
+    });
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.changes.map((change) => change.path)).not.toContain(targetPaths.configPath);
+    expect(Object.keys(preview.liveFingerprints)).not.toContain(targetPaths.configPath);
   });
 
   it("reads legacy profile config files named opencode.json", async () => {

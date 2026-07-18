@@ -147,8 +147,10 @@ const applySettingsOverlay = (
     }
   }
 
-  for (const key of profileMetadataKeys) {
-    nextContent = setJsoncProperty(nextContent, [key], profileSettings[key]);
+  if (profileConfigKeys.length > 0) {
+    for (const key of profileMetadataKeys) {
+      nextContent = setJsoncProperty(nextContent, [key], profileSettings[key]);
+    }
   }
 
   for (const key of profileConfigKeys) {
@@ -173,17 +175,17 @@ const applyMcpOverlay = (
     : ({} as Record<string, unknown>);
 
   for (const name of state.managedMcpNames) {
+    nextContent = setJsoncProperty(nextContent, ["mcpServers", name], undefined);
     delete nextMcp[name];
   }
   for (const [name, server] of Object.entries(profileMcp)) {
+    nextContent = setJsoncProperty(nextContent, ["mcpServers", name], server);
     nextMcp[name] = server;
   }
 
-  nextContent = setJsoncProperty(
-    nextContent,
-    ["mcpServers"],
-    Object.keys(nextMcp).length > 0 ? nextMcp : undefined
-  );
+  if (Object.keys(nextMcp).length === 0) {
+    nextContent = setJsoncProperty(nextContent, ["mcpServers"], undefined);
+  }
 
   return {
     nextContent,
@@ -539,26 +541,41 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       profile.instructions
     );
 
-    const liveSettings = parseJsoncObject(liveSettingsText, "Invalid live settings.json");
-    const liveMcp = parseJsoncObject(liveMcpText, "Invalid live .claude.json");
-    const profileConfig = parseJsoncObject(
-      profile.configText,
-      "Invalid profile Claude Code config"
-    );
+    const profileConfig = profile.manifest.managed.config
+      ? parseJsoncObject(profile.configText, "Invalid profile Claude Code config")
+      : { ok: true as const, value: {} };
     let targetState: TargetState = activeState;
 
+    if (!profileConfig.ok) {
+      errors.push(profileConfig.message);
+    }
+
+    const { settings, mcpServers } = profileConfig.ok
+      ? parseProfileConfig(profileConfig.value)
+      : { settings: {}, mcpServers: {} };
+    const profileSettingKeys = Object.keys(settings).filter(
+      (key) => !METADATA_CONFIG_KEYS.has(key)
+    );
+    const shouldManageSettings =
+      profile.manifest.managed.config &&
+      (profileSettingKeys.length > 0 || activeState.managedConfigKeys.length > 0);
+    const shouldManageMcp =
+      profile.manifest.managed.config &&
+      (Object.keys(mcpServers).length > 0 || activeState.managedMcpNames.length > 0);
+    const liveSettings = shouldManageSettings
+      ? parseJsoncObject(liveSettingsText, "Invalid live settings.json")
+      : { ok: true as const, value: {} };
+    const liveMcp = shouldManageMcp
+      ? parseJsoncObject(liveMcpText, "Invalid live .claude.json")
+      : { ok: true as const, value: {} };
     if (!liveSettings.ok) {
       errors.push(liveSettings.message);
     }
     if (!liveMcp.ok) {
       errors.push(liveMcp.message);
     }
-    if (!profileConfig.ok) {
-      errors.push(profileConfig.message);
-    }
 
-    if (liveSettings.ok && liveMcp.ok && profileConfig.ok) {
-      const { settings, mcpServers } = parseProfileConfig(profileConfig.value);
+    if (profileConfig.ok && liveSettings.ok && liveMcp.ok) {
       errors.push(
         ...findOverlayConflicts(
           liveSettings.value,
@@ -570,34 +587,32 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
         )
       );
       if (errors.length === 0) {
-        const plannedSettings = applySettingsOverlay(
-          liveSettingsText,
-          liveSettings.value,
-          settings,
-          activeState
-        );
-        const plannedMcp = applyMcpOverlay(
-          liveMcpText,
-          liveMcp.value,
-          mcpServers,
-          activeState
-        );
+        const plannedSettings = shouldManageSettings
+          ? applySettingsOverlay(liveSettingsText, liveSettings.value, settings, activeState)
+          : { nextContent: liveSettingsText, managedConfigKeys: [] };
+        const plannedMcp = shouldManageMcp
+          ? applyMcpOverlay(liveMcpText, liveMcp.value, mcpServers, activeState)
+          : { nextContent: liveMcpText, managedMcpNames: [] };
         targetState = {
           managedConfigKeys: plannedSettings.managedConfigKeys,
           managedMcpNames: plannedMcp.managedMcpNames
         };
-        addChange(
-          changes,
-          targetPaths.configPath,
-          liveSettingsText,
-          plannedSettings.nextContent
-        );
-        addChange(
-          changes,
-          targetPaths.mcpConfigPath ?? "",
-          liveMcpText,
-          plannedMcp.nextContent
-        );
+        if (shouldManageSettings) {
+          addChange(
+            changes,
+            targetPaths.configPath,
+            liveSettingsText,
+            plannedSettings.nextContent
+          );
+        }
+        if (shouldManageMcp) {
+          addChange(
+            changes,
+            targetPaths.mcpConfigPath ?? "",
+            liveMcpText,
+            plannedMcp.nextContent
+          );
+        }
       }
     }
 
@@ -607,8 +622,10 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       changes,
       liveFingerprints: {
         [targetPaths.instructionsPath]: hashText(liveInstructions),
-        [targetPaths.configPath]: hashText(liveSettingsText),
-        [targetPaths.mcpConfigPath ?? ""]: hashText(liveMcpText)
+        ...(shouldManageSettings ? { [targetPaths.configPath]: hashText(liveSettingsText) } : {}),
+        ...(shouldManageMcp
+          ? { [targetPaths.mcpConfigPath ?? ""]: hashText(liveMcpText) }
+          : {})
       },
       targetState
     };
