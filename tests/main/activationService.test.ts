@@ -621,13 +621,13 @@ describe("activation service", () => {
     expect(preview.errors[0]).toContain("Owned skill source does not exist");
   });
 
-  it("reports empty managed instructions during preview", async () => {
+  it("allows an empty managed instructions surface to clear the target", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(join(paths.profilesDir, "daily-coding", "AGENTS.md"), "   \n");
 
     const preview = await service.previewProfile("daily-coding");
 
-    expect(preview.errors).toContain("Managed instructions are empty");
+    expect(preview.errors).not.toContain("Managed instructions are empty");
   });
 
   it("refuses non-AgentEnv skill target conflicts without writing", async () => {

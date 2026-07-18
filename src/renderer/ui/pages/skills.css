@@ -324,6 +324,17 @@
 .skill-library-panel .library-resource-cell .resource-avatar {
   background: #f1f1ef;
   color: #5f615d;
+  height: 32px;
+  width: 32px;
+}
+
+.skill-library-panel .library-resource-cell {
+  grid-template-columns: 32px minmax(0, 1fr);
+}
+
+.skill-library-panel .library-resource-cell .resource-avatar svg {
+  height: 20px;
+  width: 20px;
 }
 
 .skill-library-panel .library-table__head > span:last-child {

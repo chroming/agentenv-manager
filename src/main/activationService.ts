@@ -376,19 +376,6 @@ const applyLibrarySkillAvailability = (
   };
 };
 
-const validateProfileStructure = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>) => {
-  const errors: string[] = [];
-
-  if (
-    profile.manifest.managed.instructions &&
-    profile.instructions.trim().length === 0
-  ) {
-    errors.push("Managed instructions are empty");
-  }
-
-  return errors;
-};
-
 const effectivePayloadFor = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>): EffectiveProfilePayload => {
   const compactConfig = profile.configText.replace(/\s/g, "");
   const instructions =
@@ -1030,11 +1017,11 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
       state: stateFile.state,
-      allowMatchingUnmanagedConfig: isTakeover,
+      allowMatchingUnmanagedConfig: true,
       allowMatchingUnmanagedSkills: isTakeover,
       allowMatchingUnmanagedAssets: isTakeover
     });
-    const profileErrors = validateProfileStructure(profile);
+    const profileErrors: string[] = [];
     const recoveryErrors = stateFile.state.recoveryRequired
       ? [
           `${adapter.descriptor.name} requires recovery before another Apply: ${stateFile.state.recoveryRequired.error}`

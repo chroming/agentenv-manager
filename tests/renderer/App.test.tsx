@@ -1498,6 +1498,21 @@ describe("App", () => {
         { name: "Codex" }
       )
     ).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(
+      within(screen.getByRole("menu", { name: "Apply targets" })).getByRole(
+        "menuitemradio",
+        { name: "OpenCode" }
+      )
+    );
+    fireEvent.click(within(profileList).getByRole("button", { name: /Daily Coding/ }));
+    menuButton = await screen.findByRole("button", { name: "Select apply target" });
+    fireEvent.click(menuButton);
+    expect(
+      within(screen.getByRole("menu", { name: "Apply targets" })).getByRole(
+        "menuitemradio",
+        { name: "Codex" }
+      )
+    ).toHaveAttribute("aria-checked", "true");
   });
 
   it("preserves a dirty draft when the checked target is re-selected", async () => {
@@ -1806,14 +1821,13 @@ describe("App", () => {
     render(<App />);
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
-    expect(readiness).toHaveTextContent("Review profile configuration");
-    expect(screen.getByRole("button", { name: "Review Advanced" })).toBeInTheDocument();
+    expect(readiness).toHaveTextContent("Ready to take over OpenCode");
     action = screen.getByRole("button", { name: "Apply" });
     fireEvent.click(action);
     await waitFor(() => expect(invalidApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     dialog = screen.getByRole("dialog", { name: "Preview" });
-    expect(dialog).toHaveTextContent("Instructions are empty");
-    expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeDisabled();
+    expect(dialog).not.toHaveTextContent("Instructions are empty");
+    expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeEnabled();
 
     cleanup();
     const driftError =

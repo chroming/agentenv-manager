@@ -211,7 +211,7 @@ The Profile editor MUST distinguish these states:
 Rules:
 
 - Save MUST persist the complete Profile, not an individual accordion section.
-- Save, Target selection, and Apply MUST appear as one ordered action group in the selected Profile context: Save first, choose the destination, then Apply. Page creation controls MUST NOT separate these lifecycle commands.
+- Save, Apply, and Target selection MUST appear as one compact action group in the selected Profile context. Save and Apply remain adjacent; the Profile-scoped destination selector sits immediately beside Apply. Page creation controls MUST NOT separate these lifecycle commands.
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
 - Edit, Duplicate, Delete, Save, Target selection, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation.
 - Every Profile row MUST list all Targets currently using that Profile, even when legacy deployment state has no application timestamp. Each Target is visibly distinguished as current, pending, or needing attention.

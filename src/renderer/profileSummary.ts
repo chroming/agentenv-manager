@@ -41,6 +41,30 @@ export const listProfileApplications = (
       );
     });
 
+export const preferredTargetForProfile = (
+  profileId: string,
+  nativeTargetId: string,
+  targetStates: readonly TargetManagementState[],
+  targets: readonly TargetInfo[],
+  rememberedTargetId?: string
+): string | undefined => {
+  const availableTargetIds = new Set(targets.map((target) => target.id));
+  if (rememberedTargetId && availableTargetIds.has(rememberedTargetId)) {
+    return rememberedTargetId;
+  }
+
+  const activeTargetId = listProfileApplications(profileId, targetStates, targets)[0]?.state.targetId;
+  if (activeTargetId && availableTargetIds.has(activeTargetId)) {
+    return activeTargetId;
+  }
+
+  if (availableTargetIds.has(nativeTargetId)) {
+    return nativeTargetId;
+  }
+
+  return targets.find((target) => target.health.executableFound)?.id ?? targets[0]?.id;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 

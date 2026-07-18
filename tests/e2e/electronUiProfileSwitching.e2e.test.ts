@@ -1267,7 +1267,7 @@ describe("Electron UI profile switching e2e", () => {
         contentGap: Math.round(content.left - icon.right)
       };
     });
-    expect(newProfileGeometry).toEqual({ iconSize: 28, contentGap: 6 });
+    expect(newProfileGeometry).toEqual({ iconSize: 28, contentGap: 4 });
     expect(await findProfileByName(appDataRoot, "Docs Writing")).toMatchObject({
       name: "Docs Writing",
       description: "Writing workspace"
@@ -1594,6 +1594,22 @@ describe("Electron UI profile switching e2e", () => {
 
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
+    const skillIconGeometry = await sharedRow.locator(".resource-avatar").evaluate((icon) => {
+      const glyph = icon.querySelector<SVGElement>("svg")!;
+      const iconBox = icon.getBoundingClientRect();
+      const glyphBox = glyph.getBoundingClientRect();
+      return {
+        iconSize: [iconBox.width, iconBox.height],
+        glyphSize: [glyphBox.width, glyphBox.height],
+        centerDelta: [
+          Math.abs(iconBox.left + iconBox.width / 2 - (glyphBox.left + glyphBox.width / 2)),
+          Math.abs(iconBox.top + iconBox.height / 2 - (glyphBox.top + glyphBox.height / 2))
+        ]
+      };
+    });
+    expect(skillIconGeometry.iconSize).toEqual([32, 32]);
+    expect(skillIconGeometry.glyphSize).toEqual([20, 20]);
+    expect(skillIconGeometry.centerDelta.every((delta) => delta <= 0.5)).toBe(true);
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
     const popover = page.getByRole("menu", { name: "Actions for shared-reviewer" });
     await popover.waitFor({ state: "visible" });
@@ -1747,6 +1763,35 @@ describe("Electron UI profile switching e2e", () => {
     expect(compactProfileGeometry.profileRows.every((height) => height <= 92)).toBe(true);
     expect(compactProfileGeometry.composerRows.every((height) => height <= 54)).toBe(true);
     expect(compactProfileGeometry.composerTitleCount).toBe(0);
+    const profileObjectGeometry = await page.locator(".profile-row").first().evaluate((row) => {
+      const icon = row.querySelector<HTMLElement>(".profile-row__icon")!;
+      const content = row.querySelector<HTMLElement>(".profile-row__content")!;
+      const iconBox = icon.getBoundingClientRect();
+      const contentBox = content.getBoundingClientRect();
+      return {
+        iconTextGap: contentBox.left - iconBox.right,
+        iconWidth: iconBox.width,
+        headerTargetControls: document.querySelectorAll(
+          ".profile-page-header .profile-target-workspace-control, .profile-page-header .profile-target-workspace-button"
+        ).length
+      };
+    });
+    expect(profileObjectGeometry.iconTextGap).toBeGreaterThanOrEqual(3);
+    expect(profileObjectGeometry.iconTextGap).toBeLessThanOrEqual(5);
+    expect(profileObjectGeometry.iconWidth).toBe(28);
+    expect(profileObjectGeometry.headerTargetControls).toBe(0);
+
+    const profileCommitGeometry = await commitActions.evaluate((group) => {
+      const save = group.querySelector<HTMLElement>(".save-button")!;
+      const apply = group.querySelector<HTMLElement>(".profile-apply-button")!;
+      const target = group.querySelector<HTMLElement>(".profile-target-workspace-button")!;
+      const boxes = [save, apply, target].map((item) => item.getBoundingClientRect());
+      return {
+        ordered: boxes[0].right < boxes[1].left && boxes[1].right < boxes[2].left,
+        targetFits: target.scrollWidth <= target.clientWidth + 1
+      };
+    });
+    expect(profileCommitGeometry).toEqual({ ordered: true, targetFits: true });
 
     const shellMetrics = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
@@ -1897,6 +1942,21 @@ describe("Electron UI profile switching e2e", () => {
 
     await resizeAppWindow(page, 920, 620);
     await expectInViewport(page, page.locator(".profile-hero"));
+    const minimumCommitGeometry = await commitActions.evaluate((group) => {
+      const groupBox = group.getBoundingClientRect();
+      const controls = [...group.children]
+        .filter((child): child is HTMLElement => child instanceof HTMLElement)
+        .map((child) => child.getBoundingClientRect());
+      return {
+        contained: controls.every(
+          (box) => box.left >= groupBox.left - 1 && box.right <= groupBox.right + 1
+        ),
+        separated: controls.every(
+          (box, index) => index === 0 || box.left >= controls[index - 1].right
+        )
+      };
+    });
+    expect(minimumCommitGeometry).toEqual({ contained: true, separated: true });
     await expectInViewport(page, skillsTrigger);
     await expectInViewport(
       page,
@@ -2117,8 +2177,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(profileGeometry.descriptionDisplay).not.toBe("none");
       expect(profileGeometry.iconHeight).toBeLessThanOrEqual(30);
       expect(profileGeometry.rowHeight).toBeLessThanOrEqual(92);
-      expect(profileGeometry.gap).toBeGreaterThanOrEqual(6);
-      expect(profileGeometry.gap).toBeLessThanOrEqual(10);
+      expect(profileGeometry.gap).toBeGreaterThanOrEqual(3);
+      expect(profileGeometry.gap).toBeLessThanOrEqual(5);
       expect(profileGeometry.statsOverflow).toBeLessThanOrEqual(1);
 
       const heroContent = await page.locator(".profile-hero").evaluate((hero) => ({

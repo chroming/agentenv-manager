@@ -368,7 +368,7 @@
   border: 1px solid transparent;
   border-bottom-color: var(--border);
   border-radius: 0;
-  gap: 6px;
+  gap: 4px;
   grid-template-columns: var(--profile-icon-slot) minmax(0, 1fr);
   min-height: 82px;
   padding: 8px 9px;
@@ -663,6 +663,24 @@
 
 .profile-commit-actions .profile-apply-control {
   flex: 0 0 auto;
+}
+
+.profile-commit-actions .profile-target-workspace-control,
+.profile-commit-actions > .profile-target-workspace-button {
+  flex: 0 0 132px;
+  min-width: 0;
+  width: 132px;
+}
+
+.profile-commit-actions .profile-target-workspace-button {
+  justify-content: flex-start;
+  max-width: none;
+  width: 100%;
+}
+
+.profile-commit-actions .profile-target-workspace-button > span {
+  flex: 1 1 auto;
+  text-align: left;
 }
 
 .profile-commit-actions > .icon-action {
@@ -1032,7 +1050,7 @@
   }
 
   .profile-row {
-    gap: 6px;
+    gap: 4px;
     min-height: 88px;
     padding: 8px;
   }
@@ -1099,6 +1117,22 @@
     flex-basis: 92px;
     min-width: 92px;
     width: 92px;
+  }
+
+  .profile-commit-actions .profile-target-workspace-control,
+  .profile-commit-actions > .profile-target-workspace-button {
+    flex-basis: 52px;
+    width: 52px;
+  }
+
+  .profile-commit-actions .profile-target-workspace-button {
+    gap: 4px;
+    justify-content: center;
+    padding-inline: 6px;
+  }
+
+  .profile-commit-actions .profile-target-workspace-button > span {
+    display: none;
   }
 
   .profile-composer-section__trigger,

@@ -7,6 +7,7 @@ import type {
 import {
   findRecentProfileApplication,
   listProfileApplications,
+  preferredTargetForProfile,
   summarizeProfile
 } from "../../src/renderer/profileSummary";
 
@@ -226,5 +227,30 @@ describe("profile summary", () => {
       { state: states[1], target: targets[1] },
       { state: states[0], target: targets[0] }
     ]);
+  });
+
+  it("keeps apply target context scoped to each profile", () => {
+    const targets = [
+      { id: "opencode", name: "OpenCode", health: { executableFound: true } },
+      { id: "codex", name: "Codex", health: { executableFound: true } },
+      { id: "claude-code", name: "Claude Code", health: { executableFound: true } }
+    ] as TargetInfo[];
+    const states = [
+      {
+        targetId: "codex",
+        activeProfileId: "daily-coding",
+        lastAppliedAt: "2026-07-10T08:00:00.000Z"
+      }
+    ] as TargetManagementState[];
+
+    expect(
+      preferredTargetForProfile("daily-coding", "opencode", states, targets, "claude-code")
+    ).toBe("claude-code");
+    expect(preferredTargetForProfile("daily-coding", "opencode", states, targets)).toBe(
+      "codex"
+    );
+    expect(preferredTargetForProfile("new-profile", "opencode", states, targets)).toBe(
+      "opencode"
+    );
   });
 });

@@ -211,6 +211,88 @@ describe("target capture service", () => {
     await expect(readFile(join(ignoredDir, "SKILL.md"), "utf8")).resolves.toContain("Private Local");
   });
 
+  it("captures Claude without claiming empty instructions or Skills CLI resources", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-capture-claude-external-"));
+    const homeDir = join(root, "home");
+    const appDataRoot = join(root, "app-data");
+    const paths = createPaths({ appDataRoot, homeDir });
+    const targetRegistry = createTargetRegistry();
+    const settingsStore = createSettingsStore(paths);
+    const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
+    const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+    const mcpLibraryStore = createMcpLibraryStore(paths);
+    const activationService = createActivationService({
+      paths,
+      profileStore,
+      targetRegistry,
+      settingsStore,
+      skillLibraryStore,
+      mcpLibraryStore
+    });
+    const service = createTargetCaptureService({
+      paths,
+      profileStore,
+      targetRegistry,
+      skillLibraryStore,
+      mcpLibraryStore,
+      targetDiscoveryService: installedTargetDiscovery("claude-code")
+    });
+    const claudeDir = join(homeDir, ".claude");
+    const externalSkillDir = join(claudeDir, "skills", "open-browser-use");
+    await mkdir(externalSkillDir, { recursive: true });
+    await mkdir(join(homeDir, ".agents"), { recursive: true });
+    await writeFile(
+      join(externalSkillDir, "SKILL.md"),
+      "---\nname: open-browser-use\ndescription: Browser workflow.\n---\n\n# Browser\n"
+    );
+    await writeFile(join(claudeDir, "settings.json"), JSON.stringify({ env: { MODE: "review" } }));
+    await writeFile(
+      join(homeDir, ".agents", ".skill-lock.json"),
+      JSON.stringify({
+        version: 3,
+        skills: {
+          "open-browser-use": {
+            sourceType: "github",
+            source: "example/open-browser-use",
+            skillPath: "skills/open-browser-use/SKILL.md"
+          }
+        }
+      })
+    );
+
+    const capture = await service.previewTarget("claude-code");
+    expect(capture.resources).toContainEqual(
+      expect.objectContaining({
+        kind: "skill",
+        id: "open-browser-use",
+        action: "exclude",
+        detail: "Managed by Skills CLI; remains unchanged"
+      })
+    );
+    const result = await service.createFromTarget({
+      previewId: capture.id,
+      name: "Claude Existing"
+    });
+    expect(result.profile.assetPolicy.skillRefs).toEqual([]);
+    expect(result.importedSkillCount).toBe(0);
+
+    await mkdir(paths.targetStatesDir, { recursive: true });
+    await writeFile(
+      join(paths.targetStatesDir, "claude-code.json"),
+      JSON.stringify({
+        activeProfileId: "legacy-profile",
+        managedConfigKeys: [],
+        managedMcpNames: [],
+        managedResources: []
+      })
+    );
+    const applyPreview = await activationService.previewProfile(result.profile.id, "claude-code");
+    expect(applyPreview.errors).toEqual([]);
+    expect(applyPreview.errors.join("\n")).not.toContain("Instructions are empty");
+    expect(applyPreview.errors.join("\n")).not.toContain("Config key env");
+    expect(applyPreview.errors.join("\n")).not.toContain("Skills CLI manages");
+  });
+
   it("leaves duplicate source Skills unchanged across Target captures", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-capture-compatibility-"));
     const homeDir = join(root, "home");

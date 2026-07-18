@@ -660,6 +660,8 @@ Object.assign(zhCN, {
   "Remove profile": "移除配置方案",
   "Open Targets": "打开目标",
   "Apply": "应用",
+  "Empty": "空内容",
+  "Applying this Profile clears managed instructions": "应用此配置方案会清空受管理的指令文件",
   "Current target {{name}}": "当前目标 {{name}}",
   "Target: {{name}}": "目标：{{name}}",
   "Select apply target": "选择应用目标",

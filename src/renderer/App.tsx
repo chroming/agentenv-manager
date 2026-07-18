@@ -123,6 +123,7 @@ import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
 import {
   listProfileApplications,
+  preferredTargetForProfile,
   summarizeProfile,
   type ProfileResourceSummary
 } from "./profileSummary";
@@ -443,15 +444,15 @@ const createValidationRows = (
       value: profile.manifest.managed.instructions
         ? profile.instructions.trim().length > 0
           ? "OK"
-          : "Blocked"
+          : "Empty"
         : "Disabled",
       detail:
         profile.manifest.managed.instructions && profile.instructions.trim().length === 0
-          ? "Instructions are empty"
+          ? "Applying this Profile clears managed instructions"
           : undefined,
       level:
         profile.manifest.managed.instructions && profile.instructions.trim().length === 0
-          ? "error"
+          ? "warning"
           : "ok"
     },
     {
@@ -569,6 +570,7 @@ const AppContent = ({
   const [mcpUsage, setMcpUsage] = useState<Record<string, string[]>>({});
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string>();
+  const [profileTargetSelections, setProfileTargetSelections] = useState<Record<string, string>>({});
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
@@ -965,7 +967,9 @@ const AppContent = ({
           profileItems.find((profile) => profile.id === activeProfileId) ??
           profileItems.find((profile) => !initialTargetId || profile.targetId === initialTargetId) ??
           profileItems[0];
-        setSelectedTargetId(initialTargetId ?? initialProfile.targetId);
+        const initialProfileTargetId = initialTargetId ?? initialProfile.targetId;
+        setSelectedTargetId(initialProfileTargetId);
+        setProfileTargetSelections({ [initialProfile.id]: initialProfileTargetId });
         setSelectedProfileId(initialProfile.id);
         setActiveComposerSection(activeProfileId === initialProfile.id ? "skills" : undefined);
         const requestId = ++profileFlowRequestRef.current;
@@ -1035,7 +1039,20 @@ const AppContent = ({
       if (requestId !== profileFlowRequestRef.current) {
         return;
       }
-      setSelectedTargetId((current) => current ?? profile.manifest.targetId);
+      const profileTargetId = preferredTargetForProfile(
+        profile.id,
+        profile.manifest.targetId,
+        targetStates,
+        targets,
+        profileTargetSelections[profile.id]
+      );
+      setSelectedTargetId(profileTargetId);
+      if (profileTargetId) {
+        setProfileTargetSelections((current) => ({
+          ...current,
+          [profile.id]: profileTargetId
+        }));
+      }
       setDraftProfile(profile);
       setIsProfileDirty(false);
       setProfileSaveStatus("");
@@ -1414,6 +1431,10 @@ const AppContent = ({
             });
         await refreshProfiles();
         setSelectedTargetId(saved.manifest.targetId);
+        setProfileTargetSelections((current) => ({
+          ...current,
+          [saved.id]: saved.manifest.targetId
+        }));
         setSelectedProfileId(saved.id);
         setDraftProfile(saved);
         if (profileCreateSource === "target") {
@@ -1461,6 +1482,10 @@ const AppContent = ({
       const saved = await window.agentEnv.duplicateProfile(selectedProfileId);
       await refreshProfiles();
       setSelectedTargetId(saved.manifest.targetId);
+      setProfileTargetSelections((current) => ({
+        ...current,
+        [saved.id]: saved.manifest.targetId
+      }));
       setSelectedProfileId(saved.id);
       setDraftProfile(saved);
       setActiveComposerSection(undefined);
@@ -1493,6 +1518,10 @@ const AppContent = ({
         const nextDetail = await window.agentEnv.readProfile(nextProfile.id);
         setSelectedProfileId(nextProfile.id);
         setSelectedTargetId(nextProfile.targetId);
+        setProfileTargetSelections((current) => ({
+          ...current,
+          [nextProfile.id]: nextProfile.targetId
+        }));
         setDraftProfile(nextDetail);
       } else {
         setSelectedProfileId(undefined);
@@ -1587,6 +1616,12 @@ const AppContent = ({
     }
 
     setSelectedTargetId(targetId);
+    if (selectedProfileId) {
+      setProfileTargetSelections((current) => ({
+        ...current,
+        [selectedProfileId]: targetId
+      }));
+    }
     setPreview(undefined);
     setRollbackPreview(undefined);
   };
@@ -3458,7 +3493,6 @@ const AppContent = ({
                 <p>{t("Compose reusable environments and apply them safely to local agent targets.")}</p>
               </div>
               <div className="profile-page-actions" ref={profilePageActionsRef}>
-                {targetWorkspaceControl}
                 <button
                   className="profile-new-button"
                   type="button"
@@ -3678,6 +3712,7 @@ const AppContent = ({
                             </button>
                           </div>
                           {profileApplyControl}
+                          {targetWorkspaceControl}
                           <button
                             ref={profileActionsButtonRef}
                             className="icon-action"

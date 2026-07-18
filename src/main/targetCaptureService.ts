@@ -136,7 +136,10 @@ export const createTargetCaptureService = ({
     const runtimeRoots = new Set(runtimeLocations.map((location) => location.path));
     const runtimeInventory = inventory.filter((entry) => runtimeRoots.has(dirname(entry.path)));
     const ignoredInventory = runtimeInventory.filter((entry) => entry.status === "ignored");
-    const skillInventory = runtimeInventory.filter((entry) => entry.status !== "ignored");
+    const externalInventory = runtimeInventory.filter((entry) => entry.status === "external");
+    const skillInventory = runtimeInventory.filter(
+      (entry) => entry.status !== "ignored" && entry.status !== "external"
+    );
     const groupedSkills = new Map<string, typeof skillInventory>();
     for (const entry of skillInventory) {
       groupedSkills.set(entry.id, [...(groupedSkills.get(entry.id) ?? []), entry]);
@@ -155,6 +158,17 @@ export const createTargetCaptureService = ({
         detail: "Ignored; kept in its current location"
       });
       warnings.push(`Ignored skill ${entry.name} will remain Target-owned`);
+    }
+    for (const entry of externalInventory) {
+      resources.push({
+        kind: "skill",
+        id: entry.id,
+        name: entry.name,
+        sourcePath: entry.path,
+        action: "exclude",
+        detail: "Managed by Skills CLI; remains unchanged"
+      });
+      warnings.push(`Skills CLI skill ${entry.name} remains externally managed`);
     }
     const reservedSkillIds = new Set(librarySkills.map((skill) => skill.id));
     const skills: CapturedSkill[] = [];
