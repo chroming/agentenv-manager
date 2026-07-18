@@ -8,6 +8,7 @@ import type {
 import { DiffViewer } from "./DiffViewer";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { useI18n, type TranslationValues } from "../i18n";
+import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 
 interface PreviewDialogProps {
   preview?: ActivationPreview | RollbackPreview | StopManagingPreview;
@@ -18,6 +19,7 @@ interface PreviewDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   errorMessage?: string;
+  targetNames?: TargetNameIndex;
   managedDriftAcknowledged?: boolean;
   onManagedDriftAcknowledgedChange?(acknowledged: boolean): void;
   omissionsAcknowledged?: boolean;
@@ -37,13 +39,6 @@ const FOCUSABLE_SELECTOR = [
   "textarea:not([disabled])",
   "[tabindex]:not([tabindex='-1'])"
 ].join(",");
-
-const targetLabel = (targetId?: string) => {
-  if (targetId === "opencode") return "OpenCode";
-  if (targetId === "codex") return "Codex";
-  if (targetId === "claude-code") return "Claude Code";
-  return "Target";
-};
 
 const prettifyIssue = (
   message: string,
@@ -98,6 +93,7 @@ export const PreviewDialog = ({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   errorMessage,
+  targetNames = {},
   managedDriftAcknowledged = false,
   onManagedDriftAcknowledgedChange,
   omissionsAcknowledged = false,
@@ -226,7 +222,7 @@ export const PreviewDialog = ({
     "targetName" in preview
       ? preview.targetName
       : "targetId" in preview
-        ? targetLabel(preview.targetId)
+        ? targetNameFor(preview.targetId, targetNames, "Target")
         : "Target";
   const isActivationPreview = "profileId" in preview;
   const blockedItems = preview.errors.map((error) => prettifyIssue(error, targetName, t));

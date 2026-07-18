@@ -83,11 +83,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const unique = (names: readonly string[]): string[] => [...new Set(names)];
 
-type ProfileTargetSchema = Pick<TargetInfo, "id" | "configLanguage">;
+type ProfileTargetSchema = Pick<TargetInfo, "id" | "configLanguage" | "mcpConfigKey">;
 
 const jsoncMcpNames = (
   configText: string,
-  property: "mcp" | "mcpServers"
+  property: string
 ): string[] => {
   const errors: ParseError[] = [];
   const parsed = parseJsonc(configText.trim() || "{}", errors, { allowTrailingComma: true });
@@ -98,10 +98,10 @@ const jsoncMcpNames = (
   return isRecord(parsed[property]) ? Object.keys(parsed[property]) : [];
 };
 
-const tomlMcpNames = (configText: string): string[] => {
+const tomlMcpNames = (configText: string, property: string): string[] => {
   try {
     const parsed = TOML.parse(configText) as Record<string, unknown>;
-    return isRecord(parsed.mcp_servers) ? Object.keys(parsed.mcp_servers) : [];
+    return isRecord(parsed[property]) ? Object.keys(parsed[property]) : [];
   } catch {
     return [];
   }
@@ -111,14 +111,14 @@ const rawMcpNames = (
   configText: string,
   target: ProfileTargetSchema
 ): string[] => {
-  if (target.id === "opencode" && target.configLanguage === "jsonc") {
-    return jsoncMcpNames(configText, "mcp");
+  if (!target.mcpConfigKey) {
+    return [];
   }
-  if (target.id === "claude-code" && target.configLanguage === "jsonc") {
-    return jsoncMcpNames(configText, "mcpServers");
+  if (target.configLanguage === "jsonc") {
+    return jsoncMcpNames(configText, target.mcpConfigKey);
   }
-  if (target.id === "codex" && target.configLanguage === "toml") {
-    return tomlMcpNames(configText);
+  if (target.configLanguage === "toml") {
+    return tomlMcpNames(configText, target.mcpConfigKey);
   }
   return [];
 };

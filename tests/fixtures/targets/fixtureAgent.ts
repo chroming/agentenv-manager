@@ -17,9 +17,12 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
     id: "fixture-agent",
     name: "Fixture Agent",
     description: "Contract-test target.",
+    iconKey: "generic",
+    displayOrder: 99,
     instructionsLabel: "AGENT.md",
     configLabel: "fixture.json",
     configLanguage: "jsonc",
+    mcpConfigKey: "mcp",
     realWritesEnabled: true,
     executableName: "fixture-agent",
     capabilities: {

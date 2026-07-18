@@ -1,17 +1,12 @@
 import type { BackupSummary, RollbackPreview } from "../../shared/types";
 import { useI18n } from "../i18n";
-
-const targetName = (targetId?: string) => {
-  if (targetId === "opencode") return "OpenCode";
-  if (targetId === "codex") return "Codex";
-  if (targetId === "claude-code") return "Claude Code";
-  return "Local files";
-};
+import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 
 interface HistoryViewProps {
   backups: BackupSummary[];
   busy: boolean;
   rollbackPreview?: RollbackPreview;
+  targetNames?: TargetNameIndex;
   onPreviewRollback(backupId: string): void;
   onRestoreRollback(): void;
 }
@@ -20,6 +15,7 @@ export const HistoryView = ({
   backups,
   busy,
   rollbackPreview,
+  targetNames = {},
   onPreviewRollback,
   onRestoreRollback
 }: HistoryViewProps) => {
@@ -35,7 +31,7 @@ export const HistoryView = ({
         key={backup.id}
       >
         <div className="history-row__main">
-          <span>{backup.profileName ? `${backup.profileName} → ${targetName(backup.targetId)}` : t("System backup · {{target}}", { target: targetName(backup.targetId) })}</span>
+          <span>{backup.profileName ? `${backup.profileName} → ${targetNameFor(backup.targetId, targetNames, "Local files")}` : t("System backup · {{target}}", { target: targetNameFor(backup.targetId, targetNames, "Local files") })}</span>
           <small>
             {backup.operation === "apply" ? t("Before Profile apply") : t("Filesystem snapshot")} · {t("{{count}} files", { count: backup.fileCount })} ·{" "}
             {formatDate(backup.createdAt)}

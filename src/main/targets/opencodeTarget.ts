@@ -417,9 +417,12 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     id: "opencode",
     name: "OpenCode",
     description: "Manage global OpenCode instructions, JSONC config, agents, and skills.",
+    iconKey: "opencode",
+    displayOrder: 0,
     instructionsLabel: "AGENTS.md",
     configLabel: "opencode.jsonc",
     configLanguage: "jsonc",
+    mcpConfigKey: "mcp",
     realWritesEnabled: true,
     executableName: "opencode",
     capabilities: {

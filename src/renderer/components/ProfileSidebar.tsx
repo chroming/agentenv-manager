@@ -41,15 +41,13 @@ const targetInitials = (target: TargetInfo) => {
 };
 
 export const targetIconFor = (target: TargetInfo): { flavor: TargetIconFlavor; assetUrl?: string } => {
-  const key = `${target.id} ${target.name}`.toLowerCase();
-
-  if (key.includes("opencode")) {
+  if (target.iconKey === "opencode") {
     return { flavor: "opencode", assetUrl: openCodeIconUrl };
   }
-  if (key.includes("claude")) {
+  if (target.iconKey === "claude") {
     return { flavor: "claude", assetUrl: claudeIconUrl };
   }
-  if (key.includes("codex")) {
+  if (target.iconKey === "codex") {
     return { flavor: "codex", assetUrl: openAiIconUrl };
   }
 
@@ -57,15 +55,7 @@ export const targetIconFor = (target: TargetInfo): { flavor: TargetIconFlavor; a
 };
 
 const targetDisplayRank = (target: TargetInfo) => {
-  const flavor = targetIconFor(target).flavor;
-  const rank: Record<TargetIconFlavor, number> = {
-    opencode: 0,
-    codex: 1,
-    claude: 2,
-    generic: 3
-  };
-
-  return rank[flavor];
+  return target.displayOrder ?? Number.MAX_SAFE_INTEGER;
 };
 
 export const ProfileSidebar = ({

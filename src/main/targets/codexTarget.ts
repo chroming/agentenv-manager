@@ -393,9 +393,12 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     id: "codex",
     name: "Codex",
     description: "Manage global Codex instructions, TOML config sections, and skills.",
+    iconKey: "codex",
+    displayOrder: 1,
     instructionsLabel: "AGENTS.md",
     configLabel: "config.toml managed fragment",
     configLanguage: "toml",
+    mcpConfigKey: "mcp_servers",
     realWritesEnabled: true,
     executableName: "codex",
     capabilities: {

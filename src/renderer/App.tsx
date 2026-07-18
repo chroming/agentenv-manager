@@ -131,6 +131,7 @@ import {
   summarizeProfile,
   type ProfileResourceSummary
 } from "./profileSummary";
+import { createTargetNameIndex } from "./targetPresentation";
 
 const emptyAssetPolicy: AssetPolicy = {
   ownedDirs: [],
@@ -556,6 +557,7 @@ const AppContent = ({
 }) => {
   const { t, formatDate, formatNumber } = useI18n();
   const [targets, setTargets] = useState<TargetInfo[]>([]);
+  const targetNames = useMemo(() => createTargetNameIndex(targets), [targets]);
   const [targetStates, setTargetStates] = useState<TargetManagementState[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
@@ -3764,6 +3766,7 @@ const AppContent = ({
                 installedTargetIds={targets
                   .filter((target) => target.health.executableFound)
                   .map((target) => target.id)}
+                targetNames={targetNames}
                 preparedTargetsBySkill={preparedSkillTargetsBySkill}
                 activeTool={skillLibraryTool}
                 isRefreshingInventory={skillInventoryRefreshing}
@@ -4295,6 +4298,7 @@ const AppContent = ({
                   )}
                   busy={busy}
                   rollbackPreview={undefined}
+                  targetNames={targetNames}
                   onPreviewRollback={previewSelectedRollback}
                   onRestoreRollback={restoreSelectedRollback}
                 />
@@ -4303,6 +4307,7 @@ const AppContent = ({
             {rollbackPreview ? (
               <PreviewDialog
                 preview={rollbackPreview}
+                targetNames={targetNames}
                 title={t("Rollback preview")}
                 confirmLabel={t("Restore backup")}
                 confirmDisabled={busy || rollbackPreview.errors.length > 0}
@@ -4320,6 +4325,7 @@ const AppContent = ({
             {preview ? (
               <PreviewDialog
                 preview={preview}
+                targetNames={targetNames}
                 title={t("Apply preview for {{name}}", { name: activeTargetName })}
                 confirmLabel={t(replaceManagedDrift ? "Back up and replace" : "Apply profile")}
                 confirmDisabled={!canApply || busy}
@@ -5048,7 +5054,11 @@ const AppContent = ({
             ) : null}
           </section>
         ) : rollbackPreview ? (
-          <PreviewDialog preview={rollbackPreview} title={t("Rollback preview")} />
+          <PreviewDialog
+            preview={rollbackPreview}
+            targetNames={targetNames}
+            title={t("Rollback preview")}
+          />
         ) : (
           <div className="empty-state">
             <h2>{t("No profile selected")}</h2>

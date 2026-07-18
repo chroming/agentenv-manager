@@ -69,6 +69,7 @@ import {
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
 import { Switch } from "./ui";
+import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -91,6 +92,7 @@ interface SkillLibraryPanelProps {
   bulkUpdatePlans?: SkillUpdatePlan[];
   skillUsage: Record<string, string[]>;
   installedTargetIds?: string[];
+  targetNames?: TargetNameIndex;
   preparedTargetsBySkill?: Record<string, PreparedSkillTarget[]>;
   activeTool?: "import" | "discoveries";
   isRefreshingInventory?: boolean;
@@ -159,15 +161,13 @@ const sourceName = (skill: SkillLibraryEntry) => {
   return source;
 };
 
-const targetName = (targetId: string) => {
-  if (targetId === "opencode") return "OpenCode";
-  if (targetId === "codex") return "Codex";
-  if (targetId === "claude-code") return "Claude Code";
-  return targetId;
-};
-
-const cleanupLocationLabel = (item: SkillInventoryEntry) => {
-  const names = item.foundIn.map(targetName);
+const cleanupLocationLabel = (
+  item: SkillInventoryEntry,
+  targetNames: TargetNameIndex
+) => {
+  const names = item.foundIn.map((targetId) =>
+    targetNameFor(targetId, targetNames, "Unknown Target")
+  );
   if (names.length > 1) {
     return `Shared: ${names.join(" + ")}`;
   }
@@ -262,6 +262,7 @@ export const SkillLibraryPanel = ({
   bulkUpdatePlans,
   skillUsage,
   installedTargetIds = [],
+  targetNames = {},
   preparedTargetsBySkill = {},
   activeTool,
   isRefreshingInventory = false,
@@ -1325,8 +1326,8 @@ export const SkillLibraryPanel = ({
                   {installs.length === 0 ? <strong className="library-install-empty">{t("Not installed")}</strong> : null}
                   {staleCopies.length === 0 ? installs.slice(0, 1).map((install) => (
                     <span className="library-install-entry" key={install.path}>
-                      <span title={install.foundIn.map(targetName).join(", ")}>
-                        {install.foundIn.map(targetName).join(", ")}
+                      <span title={install.foundIn.map((targetId) => targetNameFor(targetId, targetNames, targetId)).join(", ")}>
+                        {install.foundIn.map((targetId) => targetNameFor(targetId, targetNames, targetId)).join(", ")}
                         {installs.length > 1 ? ` +${installs.length - 1}` : ""}
                       </span>
                       <strong className={`resource-chip resource-chip--${install.status}`}>
@@ -1896,7 +1897,7 @@ export const SkillLibraryPanel = ({
             </header>
             <div className="cleanup-bulk-review-list">
               {sharedTargetReview.sharedMigration.pendingConsumers.map((targetId) => (
-                <span key={targetId}>{t(targetName(targetId))}</span>
+                <span key={targetId}>{t(targetNameFor(targetId, targetNames, targetId))}</span>
               ))}
               <ol className="shared-target-review-steps">
                 <li>{t("Configure and Apply the Profile each Target should use.")}</li>
@@ -1968,7 +1969,7 @@ export const SkillLibraryPanel = ({
                   <div className="cleanup-migration-decisions">
                     {sharedRetireTargets.map((target) => (
                       <span key={target.targetId}>
-                        <strong>{targetName(target.targetId)}</strong>
+                        <strong>{targetNameFor(target.targetId, targetNames, target.targetId)}</strong>
                         {t(
                           target.disposition === "install"
                             ? "Install as {{name}}"
@@ -2155,7 +2156,7 @@ export const SkillLibraryPanel = ({
                     }
                   />
                   <span>
-                    <strong>{t(cleanupLocationLabel(item))}</strong>
+                    <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
                     <PreviewText
                       ariaLabel={t("Full external source path {{path}}", { path: item.path })}
                       className="cleanup-option-path"
@@ -2233,7 +2234,7 @@ export const SkillLibraryPanel = ({
               {cleanupDetails.items.map((item) => (
                 <div className="cleanup-details-location" key={`${item.status}-${item.path}`}>
                   <div>
-                    <strong>{t(cleanupLocationLabel(item))}</strong>
+                    <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
                     <span className={`resource-chip resource-chip--${item.status}`}>
                       {t(inventoryStatusLabel(item.status))}
                     </span>
@@ -2345,7 +2346,7 @@ export const SkillLibraryPanel = ({
                           })}
                         />
                         <span>
-                          <strong>{t(cleanupLocationLabel(item))}</strong>
+                          <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
                           <PreviewText
                             ariaLabel={t("Full source path {{path}}", { path: item.path })}
                             className="cleanup-option-path"
@@ -2382,7 +2383,7 @@ export const SkillLibraryPanel = ({
                           }
                         />
                         <span>
-                          <strong>{t(cleanupLocationLabel(item))}</strong>
+                          <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
                           <PreviewText
                             ariaLabel={t("Full source path {{path}}", { path: item.path })}
                             className="cleanup-option-path"
@@ -2430,7 +2431,7 @@ export const SkillLibraryPanel = ({
                       })}
                     />
                     <span>
-                      <strong>{t(cleanupLocationLabel(item))}</strong>
+                      <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
                       <PreviewText
                         ariaLabel={t("Full managed path {{path}}", { path: item.path })}
                         className="cleanup-option-path"
@@ -2697,10 +2698,10 @@ export const SkillLibraryPanel = ({
                         ariaLabel={t("Full cleanup locations {{id}}", { id: group.skillKey })}
                         className="cleanup-group-locations"
                         displayText={group.items
-                          .map((skill) => `${cleanupLocationLabel(skill)} · ${skill.path}`)
+                          .map((skill) => `${cleanupLocationLabel(skill, targetNames)} · ${skill.path}`)
                           .join(" | ")}
                         text={group.items
-                          .map((skill) => `${cleanupLocationLabel(skill)} · ${skill.path}`)
+                          .map((skill) => `${cleanupLocationLabel(skill, targetNames)} · ${skill.path}`)
                           .join("\n")}
                         tooltipClassName="library-source-tooltip"
                       />

@@ -77,7 +77,11 @@ describe("profile summary", () => {
       }
     });
 
-    expect(summarizeProfile(profile, { id: "opencode", configLanguage: "jsonc" })).toEqual({
+    expect(summarizeProfile(profile, {
+      id: "opencode",
+      configLanguage: "jsonc",
+      mcpConfigKey: "mcp"
+    })).toEqual({
       instructions: { count: 1 },
       skills: {
         count: 3,
@@ -122,7 +126,11 @@ describe("profile summary", () => {
       }
     });
 
-    expect(summarizeProfile(profile, { id: "codex", configLanguage: "toml" })).toMatchObject({
+    expect(summarizeProfile(profile, {
+      id: "codex",
+      configLanguage: "toml",
+      mcpConfigKey: "mcp_servers"
+    })).toMatchObject({
       skills: { count: 3, names: ["alpha", "beta", "gamma"] },
       mcp: {
         count: 3,
@@ -143,7 +151,11 @@ describe("profile summary", () => {
     });
 
     expect(
-      summarizeProfile(profile, { id: "claude-code", configLanguage: "jsonc" })
+      summarizeProfile(profile, {
+        id: "claude-code",
+        configLanguage: "jsonc",
+        mcpConfigKey: "mcpServers"
+      })
     ).toMatchObject({
       instructions: { count: 0 },
       mcp: { count: 2, names: ["context7", "docs"] }
@@ -159,7 +171,8 @@ describe("profile summary", () => {
     expect(
       summarizeProfile(unmanagedInstructions, {
         id: "claude-code",
-        configLanguage: "jsonc"
+        configLanguage: "jsonc",
+        mcpConfigKey: "mcpServers"
       }).instructions.count
     ).toBe(0);
   });
@@ -177,10 +190,18 @@ describe("profile summary", () => {
     });
 
     expect(
-      summarizeProfile(profile, { id: "opencode", configLanguage: "jsonc" }).mcp
+      summarizeProfile(profile, {
+        id: "opencode",
+        configLanguage: "jsonc",
+        mcpConfigKey: "mcp"
+      }).mcp
     ).toEqual({ count: 1, names: ["opencode-search"] });
     expect(
-      summarizeProfile(profile, { id: "claude-code", configLanguage: "jsonc" }).mcp
+      summarizeProfile(profile, {
+        id: "claude-code",
+        configLanguage: "jsonc",
+        mcpConfigKey: "mcpServers"
+      }).mcp
     ).toEqual({ count: 1, names: ["claude-docs"] });
   });
 

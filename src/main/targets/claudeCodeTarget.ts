@@ -433,9 +433,12 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     id: "claude-code",
     name: "Claude Code",
     description: "Manage global Claude Code memory, settings, user MCP, agents, and skills.",
+    iconKey: "claude",
+    displayOrder: 2,
     instructionsLabel: "CLAUDE.md",
     configLabel: "settings + user MCP JSONC",
     configLanguage: "jsonc",
+    mcpConfigKey: "mcpServers",
     realWritesEnabled: true,
     executableName: "claude",
     capabilities: {

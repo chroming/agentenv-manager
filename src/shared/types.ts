@@ -567,9 +567,12 @@ export interface TargetDescriptor {
   id: string;
   name: string;
   description: string;
+  iconKey?: string;
+  displayOrder?: number;
   instructionsLabel: string;
   configLabel: string;
   configLanguage: "jsonc" | "toml" | "text";
+  mcpConfigKey?: string;
   realWritesEnabled: boolean;
   executableName?: string;
   capabilities: TargetCapabilities;
