@@ -216,6 +216,7 @@ export const registerIpcHandlers = ({
       !localInstall.sharedLocation &&
       localInstall.status !== "external" &&
       localInstall.status !== "ignored" &&
+      input.conflictResolution?.action !== "update-source" &&
       input.provenance?.externalManager !== "skills-cli";
     if (canTakeOwnership) {
       const preview = await skillLibraryStore.previewImport({ kind: "local", input });
@@ -289,7 +290,8 @@ export const registerIpcHandlers = ({
     return {
       skill,
       managedLocations: [],
-      reused: input.conflictResolution?.action === "reuse"
+      reused: input.conflictResolution?.action === "reuse",
+      sourceUpdated: input.conflictResolution?.action === "update-source"
     };
   });
   ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>

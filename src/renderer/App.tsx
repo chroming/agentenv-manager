@@ -1126,11 +1126,13 @@ const AppContent = ({
     }
 
     const preferredConflict =
-      preview.conflicts.find((conflict) => conflict.identical) ?? preview.conflicts[0];
+      preview.conflicts.find((conflict) => conflict.sourceUpdateAvailable) ??
+      preview.conflicts.find((conflict) => conflict.identical) ??
+      preview.conflicts[0];
     setSkillLibraryTool(undefined);
     setSelectedSkillConflictId(preferredConflict.existing.id);
     setSkillImportAlternateId(preview.suggestedId);
-    setSkillImportDecision(preferredConflict.identical ? "keep-both" : "replace");
+    setSkillImportDecision(preferredConflict.contentIdentical ? "keep-both" : "replace");
     const resolution = await new Promise<SkillImportConflictResolution | undefined>((resolve) => {
       setPendingSkillImport({ preview, resolve });
     });
@@ -1196,7 +1198,11 @@ const AppContent = ({
       });
       setSkillUpdateCheckStatus({
         state: "success",
-        message: result.reused
+        message: result.sourceUpdated
+          ? t("Updated the tracked source for {{name}}. Save the Profile to use this reference.", {
+              name: result.skill.name
+            })
+          : result.reused
           ? t("Using the existing {{name}} Library entry. Save the Profile to use this reference.", {
               name: result.skill.name
             })
@@ -2084,7 +2090,9 @@ const AppContent = ({
       setSkillUpdateCheckStatus({
         state: "success",
         message:
-          result.reused
+          result.sourceUpdated
+            ? `Updated source for ${result.skill.name}`
+            : result.reused
             ? `Using existing ${result.skill.name} from Library`
             : result.managedLocations.length > 0
             ? `Imported ${result.skill.name} · Local copy is now managed`
@@ -2122,7 +2130,9 @@ const AppContent = ({
       await refreshProfiles();
       setSkillUpdateCheckStatus({
         state: "success",
-        message: result.reused
+        message: result.sourceUpdated
+          ? `Updated source for ${skill.name}`
+          : result.reused
           ? `${skill.name} already has a matching Library copy`
           : `Imported ${skill.name} to Library as ${result.skill.id}`
       });
@@ -2450,10 +2460,14 @@ const AppContent = ({
     setError(undefined);
     try {
       const result: GitHubSkillImportResult = { imported: [], failed: [] };
+      let updatedSourceCount = 0;
       for (const input of inputs) {
         try {
           const prepared = await prepareSkillImport({ kind: "github", input });
           if (!prepared || prepared.kind !== "github") continue;
+          if (prepared.input.conflictResolution?.action === "update-source") {
+            updatedSourceCount += 1;
+          }
           result.imported.push(
             await window.agentEnv.importGitHubSkillToLibrary(prepared.input)
           );
@@ -2473,7 +2487,11 @@ const AppContent = ({
           message:
             result.failed.length > 0
               ? `Imported ${result.imported.length} · ${result.failed.length} failed`
-              : `Imported ${result.imported.length} ${result.imported.length === 1 ? "skill" : "skills"}`
+              : updatedSourceCount === result.imported.length
+                ? `Updated ${updatedSourceCount} ${updatedSourceCount === 1 ? "skill source" : "skill sources"}`
+                : updatedSourceCount > 0
+                  ? `Imported ${result.imported.length - updatedSourceCount} · Updated ${updatedSourceCount} ${updatedSourceCount === 1 ? "source" : "sources"}`
+                  : `Imported ${result.imported.length} ${result.imported.length === 1 ? "skill" : "skills"}`
         });
       }
       return result;
@@ -4660,13 +4678,21 @@ const AppContent = ({
                     )}
                   </div>
                   <p className="muted">
-                    {selectedSkillImportConflict.identical
-                      ? t("The incoming Skill is identical to the Library copy.")
-                      : t("Review the versions and file changes before choosing which copy to keep.")}
+                    {selectedSkillImportConflict.sourceUpdateAvailable
+                      ? t("The content matches, and the incoming Skill adds a tracked online source.")
+                      : selectedSkillImportConflict.identical
+                        ? t("The incoming Skill is identical to the Library copy.")
+                        : t("Review the versions, sources, and file changes before choosing which copy to keep.")}
                   </p>
                 </div>
                 <span className={`skill-import-match-state${selectedSkillImportConflict.identical ? " is-identical" : " is-different"}`}>
-                  {t(selectedSkillImportConflict.identical ? "Identical" : "Different")}
+                  {t(
+                    selectedSkillImportConflict.sourceUpdateAvailable
+                      ? "Source available"
+                      : selectedSkillImportConflict.identical
+                        ? "Identical"
+                        : "Different"
+                  )}
                 </span>
               </header>
 
@@ -4681,11 +4707,11 @@ const AppContent = ({
                       key={conflict.existing.id}
                       onClick={() => {
                         setSelectedSkillConflictId(conflict.existing.id);
-                        setSkillImportDecision(conflict.identical ? "keep-both" : "replace");
+                        setSkillImportDecision(conflict.contentIdentical ? "keep-both" : "replace");
                       }}
                     >
                       <strong>{conflict.existing.id}</strong>
-                      <span>{t(conflict.identical ? "Identical" : "Different")}</span>
+                      <span>{t(conflict.sourceUpdateAvailable ? "Source available" : conflict.identical ? "Identical" : "Different")}</span>
                     </button>
                   ))}
                 </div>
@@ -4702,6 +4728,7 @@ const AppContent = ({
                     <dl>
                       <div><dt>{t("Version")}</dt><dd>{item.version ?? t("Not declared")}</dd></div>
                       <div><dt>{t("Hash")}</dt><dd><code title={item.contentHash}>{item.contentHash.slice(0, 12)}</code></dd></div>
+                      <div><dt>{t("Source")}</dt><dd title={item.source}>{item.sourceType === "github" ? item.source : t("Local")}</dd></div>
                       <div><dt>{t("ID")}</dt><dd><code>{item.id}</code></dd></div>
                     </dl>
                   </article>
@@ -4731,7 +4758,7 @@ const AppContent = ({
                 )}
               </div>
 
-              {!selectedSkillImportConflict.identical ? (
+              {!selectedSkillImportConflict.contentIdentical ? (
                 <div className="skill-import-decisions" role="radiogroup" aria-label={t("Import decision")}>
                   <label className={skillImportDecision === "replace" ? "is-selected" : ""}>
                     <input
@@ -4771,9 +4798,11 @@ const AppContent = ({
                 <button
                   className="primary-action"
                   type="button"
-                  disabled={!selectedSkillImportConflict.identical && skillImportDecision === "keep-both" && !alternateSkillIdValid}
+                  disabled={!selectedSkillImportConflict.contentIdentical && skillImportDecision === "keep-both" && !alternateSkillIdValid}
                   onClick={() => {
-                    if (selectedSkillImportConflict.identical) {
+                    if (selectedSkillImportConflict.sourceUpdateAvailable) {
+                      confirmSkillImport({ action: "update-source", existingId: selectedSkillImportConflict.existing.id });
+                    } else if (selectedSkillImportConflict.identical) {
                       confirmSkillImport({ action: "reuse", existingId: selectedSkillImportConflict.existing.id });
                     } else if (skillImportDecision === "replace") {
                       confirmSkillImport({ action: "replace", existingId: selectedSkillImportConflict.existing.id });
@@ -4783,9 +4812,11 @@ const AppContent = ({
                   }}
                 >
                   {t(
-                    selectedSkillImportConflict.identical
-                      ? "Use existing"
-                      : skillImportDecision === "replace"
+                    selectedSkillImportConflict.sourceUpdateAvailable
+                      ? "Update source"
+                      : selectedSkillImportConflict.identical
+                        ? "Use existing"
+                        : skillImportDecision === "replace"
                         ? "Replace Skill"
                         : "Save another Skill"
                   )}

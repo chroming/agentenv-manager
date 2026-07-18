@@ -5183,6 +5183,54 @@ describe("Electron UI profile switching e2e", () => {
     expect((await readdir(join(appDataRoot, "backups", "skill-cleanup"))).length).toBeGreaterThan(0);
   }, 45_000);
 
+  it("updates tracking metadata when identical content gains a GitHub source", async () => {
+    const { appDataRoot, githubFixtureRoot, page } = await launchApp();
+    const remotePath = "skills/shared-reviewer-online";
+    const fixtureDir = join(githubFixtureRoot, "acme", "agent-skills", "main", remotePath);
+    await mkdir(fixtureDir, { recursive: true });
+    await writeFile(
+      join(fixtureDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Shared review guidance for multiple profiles.\n---\n\n# Shared Reviewer\n\nReview code changes before applying them.\n",
+      "utf8"
+    );
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Import skills" }).click();
+    await page.getByRole("tab", { name: "GitHub" }).click();
+    await page.getByLabel("GitHub skill URL")
+      .fill(`https://github.com/acme/agent-skills/tree/main/${remotePath}`);
+    await page.getByRole("button", { name: "Scan", exact: true }).click();
+    await page.getByRole("checkbox", { name: "Select Shared Reviewer" })
+      .waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Import 1" }).click();
+
+    const conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await conflict.waitFor({ state: "visible" });
+    await expect.poll(() => conflict.textContent()).toContain("Source available");
+    await expect.poll(() => conflict.textContent()).toContain("No file changes");
+    await expect.poll(() => conflict.textContent()).toContain(
+      `https://github.com/acme/agent-skills/tree/main/${remotePath}`
+    );
+    expect(await conflict.getByRole("radio", { name: /Replace Library copy/ }).count()).toBe(0);
+    await conflict.getByRole("button", { name: "Update source" }).click();
+    await conflict.waitFor({ state: "hidden" });
+
+    expect(await page.getByRole("group", { name: "Library item shared-reviewer" }).count()).toBe(1);
+    expect(await page.getByRole("group", { name: "Library item shared-reviewer-online" }).count()).toBe(0);
+    await expect.poll(async () => readJson<{
+        sourceType?: string;
+        source?: string;
+        updatePolicy?: string;
+      }>(join(appDataRoot, "skills-library", "shared-reviewer", ".agentenv-skill.json")))
+      .toMatchObject({
+        sourceType: "github",
+        source: `https://github.com/acme/agent-skills/tree/main/${remotePath}`,
+        updatePolicy: "tracked"
+      });
+    await expect(readFile(join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md"), "utf8"))
+      .resolves.toContain("Review code changes before applying them.");
+  }, 45_000);
+
   it("updates a local library skill from its tracked source", async () => {
     const { librarySkill, page } = await launchApp();
 

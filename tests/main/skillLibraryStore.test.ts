@@ -120,6 +120,56 @@ describe("skill library store", () => {
       .toBe(true);
   });
 
+  it("offers a source-only update when identical content gains a GitHub source", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data") });
+    const sourceDir = join(root, "reviewer");
+    const content = "---\nname: reviewer\ndescription: Review changes.\n---\n# Reviewer\n";
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), content);
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: sourceDir, id: "reviewer" });
+    const upstream = {
+      kind: "github" as const,
+      locator: "https://github.com/acme/skills/tree/main/reviewer",
+      ref: "main",
+      subpath: "reviewer",
+      revision: "abc123"
+    };
+
+    const preview = await store.previewImport({
+      kind: "local",
+      input: { sourcePath: sourceDir, id: "reviewer", upstream }
+    });
+    expect(preview.conflicts[0]).toMatchObject({
+      contentIdentical: true,
+      sourceUpdateAvailable: true,
+      identical: false,
+      changes: []
+    });
+    expect(preview.incoming).toMatchObject({
+      sourceType: "github",
+      source: "https://github.com/acme/skills/tree/main/reviewer"
+    });
+
+    const updated = await store.importSkill({
+      sourcePath: sourceDir,
+      id: "reviewer",
+      upstream,
+      expectedContentHash: preview.incoming.contentHash,
+      conflictResolution: { action: "update-source", existingId: "reviewer" }
+    });
+    expect(updated).toMatchObject({
+      id: "reviewer",
+      sourceType: "github",
+      source: "https://github.com/acme/skills/tree/main/reviewer",
+      updatePolicy: "tracked",
+      remoteRevision: "abc123"
+    });
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toBe(content);
+  });
+
   it("detects Skills CLI directory links and imports an independent tracked copy", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

@@ -153,13 +153,17 @@ export interface SkillImportSnapshot {
   version?: string;
   versionSource?: "version" | "metadata.version";
   contentHash: string;
+  sourceType: SkillSourceType;
   source: string;
+  upstream?: SkillUpstream;
   skillMarkdown: string;
 }
 
 export interface SkillImportConflict {
   existing: SkillImportSnapshot;
   match: "name" | "id" | "name-and-id";
+  contentIdentical: boolean;
+  sourceUpdateAvailable: boolean;
   identical: boolean;
   changes: PlannedFileChange[];
 }
@@ -173,6 +177,7 @@ export interface SkillImportPreview {
 
 export type SkillImportConflictResolution =
   | { action: "reuse"; existingId: string }
+  | { action: "update-source"; existingId: string }
   | { action: "replace"; existingId: string }
   | { action: "keep-both"; id: string };
 
@@ -181,6 +186,7 @@ export interface SkillImportResult {
   managedLocations: string[];
   backupId?: string;
   reused?: boolean;
+  sourceUpdated?: boolean;
 }
 
 export interface GitHubSkillImportInput {

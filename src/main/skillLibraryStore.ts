@@ -709,7 +709,7 @@ export const createSkillLibraryStore = (
   const snapshotForDirectory = async (
     id: string,
     skillDir: string,
-    source: string
+    source: Pick<SkillImportSnapshot, "sourceType" | "source" | "upstream">
   ): Promise<SkillImportSnapshot> => {
     const frontmatter = await validateSkillFrontmatter(skillDir);
     return {
@@ -719,7 +719,7 @@ export const createSkillLibraryStore = (
       version: frontmatter.version,
       versionSource: frontmatter.versionSource,
       contentHash: await computeContentHash(skillDir),
-      source,
+      ...source,
       skillMarkdown: await readFile(join(skillDir, "SKILL.md"), "utf8")
     };
   };
@@ -728,10 +728,10 @@ export const createSkillLibraryStore = (
     source: SkillImportPreviewInput,
     sourceDir: string,
     requestedId: string,
-    sourceLabel: string
+    sourceDetails: Pick<SkillImportSnapshot, "sourceType" | "source" | "upstream">
   ): Promise<SkillImportPreview> => {
     const safeRequestedId = SafeIdSchema.parse(requestedId);
-    const incoming = await snapshotForDirectory(safeRequestedId, sourceDir, sourceLabel);
+    const incoming = await snapshotForDirectory(safeRequestedId, sourceDir, sourceDetails);
     const skills = await listSkills();
     const normalizedIncomingName = normalizedSkillName(incoming.name);
     const matchingSkills = skills.filter(
@@ -743,16 +743,31 @@ export const createSkillLibraryStore = (
         const existing = await snapshotForDirectory(
           skill.id,
           skill.path,
-          skill.source ?? skill.path
+          {
+            sourceType: skill.sourceType,
+            source: skill.source ?? skill.path,
+            upstream: skill.upstream
+          }
         );
-        const identical = existing.contentHash === incoming.contentHash;
+        const contentIdentical = existing.contentHash === incoming.contentHash;
+        const normalizedSource = (value: string) => value.trim().replace(/\/+$/, "");
+        const sourceUpdateAvailable =
+          contentIdentical &&
+          incoming.sourceType === "github" &&
+          (
+            existing.sourceType !== "github" ||
+            normalizedSource(existing.source) !== normalizedSource(incoming.source)
+          );
+        const identical = contentIdentical && !sourceUpdateAvailable;
         const nameMatches = normalizedSkillName(skill.name) === normalizedIncomingName;
         const idMatches = skill.id === safeRequestedId;
         return {
           existing,
           match: nameMatches && idMatches ? "name-and-id" : nameMatches ? "name" : "id",
+          contentIdentical,
+          sourceUpdateAvailable,
           identical,
-          changes: identical ? [] : await createSkillChanges(skill.path, sourceDir)
+          changes: contentIdentical ? [] : await createSkillChanges(skill.path, sourceDir)
         };
       })
     );
@@ -774,7 +789,23 @@ export const createSkillLibraryStore = (
         source,
         sourceDir,
         source.input.id ?? basename(sourceDir),
-        sourceDir
+        source.input.upstream?.kind === "github"
+          ? (() => {
+              const githubSource = parseGitHubSkillUrl(source.input.upstream!.locator, {
+                ref: source.input.upstream!.ref,
+                remotePath: source.input.upstream!.subpath
+              });
+              return {
+                sourceType: "github" as const,
+                source: githubSource.sourceUrl,
+                upstream: source.input.upstream
+              };
+            })()
+          : {
+              sourceType: "local",
+              source: sourceDir,
+              upstream: source.input.upstream ?? { kind: "local", locator: sourceDir }
+            }
       );
     }
 
@@ -792,7 +823,16 @@ export const createSkillLibraryStore = (
         source,
         tempDir,
         source.input.id ?? parsedSource.defaultId,
-        parsedSource.sourceUrl
+        {
+          sourceType: "github",
+          source: parsedSource.sourceUrl,
+          upstream: {
+            kind: "github",
+            locator: parsedSource.sourceUrl,
+            ref: parsedSource.ref,
+            subpath: parsedSource.remotePath
+          }
+        }
       );
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -1213,7 +1253,7 @@ export const createSkillLibraryStore = (
       throw new Error("Skill changed after the import preview; review the latest version");
     }
     if (preview.conflicts.length === 0) {
-      return { id: preview.incoming.id, replace: false, reused: false };
+      return { id: preview.incoming.id, replace: false, reused: false, sourceOnly: false };
     }
     if (!resolution) {
       throw new Error(`Skill name or ID already exists in Library: ${preview.incoming.name}`);
@@ -1227,19 +1267,30 @@ export const createSkillLibraryStore = (
       if (!selected?.identical) {
         throw new Error("Only an identical Library skill can be reused");
       }
-      return { id: selected.existing.id, replace: false, reused: true };
+      return { id: selected.existing.id, replace: false, reused: true, sourceOnly: false };
+    }
+    if (resolution.action === "update-source") {
+      if (!selected?.contentIdentical || !selected.sourceUpdateAvailable) {
+        throw new Error("The selected Skill no longer has an available source-only update");
+      }
+      return {
+        id: selected.existing.id,
+        replace: false,
+        reused: false,
+        sourceOnly: true
+      };
     }
     if (resolution.action === "replace") {
       if (!selected) {
         throw new Error("The selected Library skill is no longer a matching conflict");
       }
-      return { id: selected.existing.id, replace: true, reused: false };
+      return { id: selected.existing.id, replace: true, reused: false, sourceOnly: false };
     }
     const safeId = SafeIdSchema.parse(resolution.id);
     if (preview.conflicts.some((conflict) => conflict.existing.id === safeId)) {
       throw new Error(`Library skill already exists: ${safeId}`);
     }
-    return { id: safeId, replace: false, reused: false };
+    return { id: safeId, replace: false, reused: false, sourceOnly: false };
   };
 
   const importSkill = async ({
@@ -1266,7 +1317,30 @@ export const createSkillLibraryStore = (
       return existing;
     }
     const targetDir = join(await libraryDir(), plan.id);
-    const previousMetadata = plan.replace ? await readLibraryMetadata(targetDir) : undefined;
+    const previousMetadata = plan.replace || plan.sourceOnly
+      ? await readLibraryMetadata(targetDir)
+      : undefined;
+    const githubSource = upstream?.kind === "github"
+      ? parseGitHubSkillUrl(upstream.locator, {
+          ref: upstream.ref,
+          remotePath: upstream.subpath
+        })
+      : undefined;
+    if (plan.sourceOnly) {
+      await writeMetadata(targetDir, {
+        sourceType: githubSource ? "github" : sourceType,
+        source: githubSource?.sourceUrl ?? sourcePath,
+        remoteRef: githubSource?.ref,
+        remotePath: githubSource?.remotePath,
+        remoteRevision: githubSource ? upstream?.revision : undefined,
+        updatePolicy: githubSource ? "tracked" : "untracked",
+        iconKey: previousMetadata?.iconKey,
+        globallyEnabled: previousMetadata?.globallyEnabled,
+        upstream: upstream ?? { kind: "local", locator: sourcePath },
+        provenance: provenance ?? previousMetadata?.provenance ?? { importedVia: "agentenv" }
+      });
+      return entryFor(plan.id, targetDir);
+    }
     const backup = plan.replace ? await createLibraryUpdateBackup(plan.id, targetDir) : undefined;
     try {
       await removeAndCopy(sourcePath, targetDir);
@@ -1274,12 +1348,6 @@ export const createSkillLibraryStore = (
       if (backup) return failAfterCleanupRollback(backup, `Replacing ${plan.id}`, error);
       throw error;
     }
-    const githubSource = upstream?.kind === "github"
-      ? parseGitHubSkillUrl(upstream.locator, {
-          ref: upstream.ref,
-          remotePath: upstream.subpath
-        })
-      : undefined;
     try {
       await writeMetadata(targetDir, {
         sourceType: githubSource ? "github" : sourceType,
@@ -1553,7 +1621,17 @@ export const createSkillLibraryStore = (
         previewSource,
         tempDir,
         id ?? source.defaultId,
-        source.sourceUrl
+        {
+          sourceType: "github",
+          source: source.sourceUrl,
+          upstream: {
+            kind: "github",
+            locator: source.sourceUrl,
+            ref: source.ref,
+            subpath: source.remotePath,
+            revision
+          }
+        }
       );
       const plan = resolveImportPlan(preview, conflictResolution, expectedContentHash);
       if (plan.reused) {
@@ -1562,7 +1640,30 @@ export const createSkillLibraryStore = (
         return existing;
       }
       const targetDir = join(await libraryDir(), plan.id);
-      const previousMetadata = plan.replace ? await readLibraryMetadata(targetDir) : undefined;
+      const previousMetadata = plan.replace || plan.sourceOnly
+        ? await readLibraryMetadata(targetDir)
+        : undefined;
+      if (plan.sourceOnly) {
+        await writeMetadata(targetDir, {
+          sourceType: "github",
+          source: source.sourceUrl,
+          remoteRef: source.ref,
+          remotePath: source.remotePath,
+          remoteRevision: revision,
+          updatePolicy: "tracked",
+          iconKey: previousMetadata?.iconKey,
+          globallyEnabled: previousMetadata?.globallyEnabled,
+          upstream: {
+            kind: "github",
+            locator: source.sourceUrl,
+            ref: source.ref,
+            subpath: source.remotePath,
+            revision
+          },
+          provenance: previousMetadata?.provenance ?? { importedVia: "agentenv" }
+        });
+        return entryFor(plan.id, targetDir);
+      }
       const backup = plan.replace ? await createLibraryUpdateBackup(plan.id, targetDir) : undefined;
       try {
         await removeAndCopy(tempDir, targetDir);
