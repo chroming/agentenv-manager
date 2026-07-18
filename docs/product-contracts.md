@@ -215,6 +215,7 @@ Rules:
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
 - Edit, Duplicate, Delete, Save, Target selection, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation.
 - Every Profile row MUST list all Targets currently using that Profile, even when legacy deployment state has no application timestamp. Each Target is visibly distinguished as current, pending, or needing attention.
+- The Profile list is always ordered by persisted creation time, newest first. Selection, the chosen Apply Target, Current state, Save, and Apply MUST NOT reorder it.
 - Selected-Target lifecycle status belongs beside Save and Apply inside the selected Profile surface. It MUST NOT be repeated as a separate page-level summary strip.
 - Unsaved changes MUST block Preview and Apply.
 - Switching Profile, Target, workspace, or closing the window with a dirty draft MUST offer Save, Discard, or Cancel.
@@ -622,6 +623,8 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Ignored Skills remain in place and are excluded from the new Profile.
 - Skills identified as owned by an external manager remain in place and are excluded from the captured Profile. Capture review MUST name the external manager; later Apply MUST NOT unexpectedly turn that external installation into a blocking desired resource.
 - Exact matching native configuration values MAY be adopted into AgentEnv management without a content-conflict error. A differing unmanaged value remains a blocking conflict.
+- A captured Claude Code `env` subset MUST NOT overwrite additional Target-owned values that were omitted during secret sanitization. When every captured value still matches, Apply preserves the complete live `env` outside AgentEnv ownership; a changed captured value remains a blocking conflict.
+- An existing Profile reference that resolves to an externally managed Skill with exactly matching Library content is preserved as external during Apply and MUST NOT block or be replaced. Different content remains a blocking ownership conflict.
 - Duplicate active runtime copies with identical content MAY be represented by one Library reference, but every source copy remains unchanged. Same-name copies with different content block capture because the canonical content is ambiguous.
 - Preview becomes stale when any captured source path changes before confirmation.
 - Saving a captured Profile MUST NOT invoke Apply, create a Target Backup or deployment state, add ownership markers, delete a source path, or write Target history.

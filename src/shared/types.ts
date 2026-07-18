@@ -3,6 +3,7 @@ export interface ProfileSummary {
   targetId: string;
   name: string;
   description: string;
+  createdAt?: string;
   iconKey?: ResourceIconKey;
   contentHash?: string;
   targetContentHashes?: Record<string, string>;

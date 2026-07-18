@@ -2,6 +2,7 @@ import * as TOML from "@iarna/toml";
 import { parse as parseJsonc, type ParseError } from "jsonc-parser";
 import type {
   ProfileDetail,
+  ProfileSummary,
   SkillLibraryEntry,
   TargetInfo,
   TargetManagementState
@@ -17,6 +18,18 @@ export interface RecentProfileApplication {
   state: TargetManagementState;
   target?: TargetInfo;
 }
+
+export const compareProfilesByCreationTime = (
+  left: Pick<ProfileSummary, "id" | "name" | "createdAt">,
+  right: Pick<ProfileSummary, "id" | "name" | "createdAt">
+) => {
+  const leftTime = Date.parse(left.createdAt ?? "");
+  const rightTime = Date.parse(right.createdAt ?? "");
+  const timeDifference =
+    (Number.isFinite(rightTime) ? rightTime : 0) -
+    (Number.isFinite(leftTime) ? leftTime : 0);
+  return timeDifference || left.name.localeCompare(right.name) || left.id.localeCompare(right.id);
+};
 
 export const listProfileApplications = (
   profileId: string,

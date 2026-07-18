@@ -182,6 +182,61 @@ describe("Claude Code target adapter", () => {
     );
   });
 
+  it("accepts semantically equal unmanaged settings with different key order", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-equal-settings-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(
+      targetPaths.configPath,
+      JSON.stringify({ env: { SECOND: "two", FIRST: "one" } }),
+      "utf8"
+    );
+    const profile = makeProfile(
+      JSON.stringify({ settings: { env: { FIRST: "one", SECOND: "two" } } })
+    );
+
+    const preview = await adapter.createPreview({
+      profile,
+      targetPaths,
+      state: { managedConfigKeys: [], managedMcpNames: [] },
+      allowMatchingUnmanagedConfig: true
+    });
+
+    expect(preview.errors).toEqual([]);
+  });
+
+  it("preserves unmanaged env values omitted from a captured profile", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-partial-env-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(
+      targetPaths.configPath,
+      JSON.stringify({ env: { MODE: "review", ANTHROPIC_AUTH_TOKEN: "secret" } }),
+      "utf8"
+    );
+    const profile = makeProfile(
+      JSON.stringify({ settings: { env: { MODE: "review" } } })
+    );
+
+    const preview = await adapter.createPreview({
+      profile,
+      targetPaths,
+      state: { managedConfigKeys: [], managedMcpNames: [] },
+      allowMatchingUnmanagedConfig: true
+    });
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.warnings).toContain(
+      "Claude Code env contains Target-owned values and will be preserved"
+    );
+    expect(preview.changes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ path: targetPaths.configPath })])
+    );
+    expect(preview.targetState.managedConfigKeys).not.toContain("env");
+  });
+
   it("does not write wrapper-only mcpServers into settings.json", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
     const adapter = createClaudeCodeTargetAdapter();

@@ -5,6 +5,7 @@ import type {
   TargetManagementState
 } from "../../src/shared/types";
 import {
+  compareProfilesByCreationTime,
   findRecentProfileApplication,
   listProfileApplications,
   preferredTargetForProfile,
@@ -34,6 +35,18 @@ const makeProfile = (overrides: Partial<ProfileDetail> = {}): ProfileDetail => (
 });
 
 describe("profile summary", () => {
+  it("sorts profiles by creation time without lifecycle state", () => {
+    const profiles = [
+      { id: "older", name: "A older", createdAt: "2026-07-15T00:00:00.000Z" },
+      { id: "newer", name: "Z newer", createdAt: "2026-07-16T00:00:00.000Z" }
+    ];
+
+    expect([...profiles].sort(compareProfilesByCreationTime).map((profile) => profile.id)).toEqual([
+      "newer",
+      "older"
+    ]);
+  });
+
   it("summarizes instructions skills and MCP deterministically", () => {
     const profile = makeProfile({
       configText: `{

@@ -40,7 +40,12 @@ import {
   validateSkillRefs
 } from "./skillRefs";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
-import { captureJsonMcpServers, sameJsonValue, sanitizeCapturedJson } from "./capture";
+import {
+  captureJsonMcpServers,
+  isJsonSubset,
+  sameJsonValue,
+  sanitizeCapturedJson
+} from "./capture";
 
 const DEFAULT_STATE: TargetState = {
   managedConfigKeys: [],
@@ -556,13 +561,13 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     const profileSettingKeys = Object.keys(settings).filter(
       (key) => !METADATA_CONFIG_KEYS.has(key)
     );
-    const shouldManageSettings =
+    const shouldInspectSettings =
       profile.manifest.managed.config &&
       (profileSettingKeys.length > 0 || activeState.managedConfigKeys.length > 0);
     const shouldManageMcp =
       profile.manifest.managed.config &&
       (Object.keys(mcpServers).length > 0 || activeState.managedMcpNames.length > 0);
-    const liveSettings = shouldManageSettings
+    const liveSettings = shouldInspectSettings
       ? parseJsoncObject(liveSettingsText, "Invalid live settings.json")
       : { ok: true as const, value: {} };
     const liveMcp = shouldManageMcp
@@ -575,12 +580,38 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       errors.push(liveMcp.message);
     }
 
+    let effectiveSettings = settings;
+    if (
+      profileConfig.ok &&
+      liveSettings.ok &&
+      allowMatchingUnmanagedConfig &&
+      !activeState.managedConfigKeys.includes("env") &&
+      "env" in settings &&
+      "env" in liveSettings.value &&
+      isJsonSubset(settings.env, liveSettings.value.env) &&
+      !sameJsonValue(settings.env, liveSettings.value.env)
+    ) {
+      effectiveSettings = Object.fromEntries(
+        Object.entries(settings).filter(([key]) => key !== "env")
+      );
+      warnings.push(
+        "Claude Code env contains Target-owned values and will be preserved"
+      );
+    }
+
+    const effectiveSettingKeys = Object.keys(effectiveSettings).filter(
+      (key) => !METADATA_CONFIG_KEYS.has(key)
+    );
+    const shouldManageSettings =
+      profile.manifest.managed.config &&
+      (effectiveSettingKeys.length > 0 || activeState.managedConfigKeys.length > 0);
+
     if (profileConfig.ok && liveSettings.ok && liveMcp.ok) {
       errors.push(
         ...findOverlayConflicts(
           liveSettings.value,
           liveMcp.value,
-          settings,
+          effectiveSettings,
           mcpServers,
           activeState,
           allowMatchingUnmanagedConfig
@@ -588,7 +619,12 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       );
       if (errors.length === 0) {
         const plannedSettings = shouldManageSettings
-          ? applySettingsOverlay(liveSettingsText, liveSettings.value, settings, activeState)
+          ? applySettingsOverlay(
+              liveSettingsText,
+              liveSettings.value,
+              effectiveSettings,
+              activeState
+            )
           : { nextContent: liveSettingsText, managedConfigKeys: [] };
         const plannedMcp = shouldManageMcp
           ? applyMcpOverlay(liveMcpText, liveMcp.value, mcpServers, activeState)

@@ -952,23 +952,61 @@ export const createActivationService = ({
       );
   };
 
-  const externalSkillConflicts = async (
+  const resolveExternalSkills = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
     targetPaths: TargetPaths
   ) => {
+    const references = (profile.assetPolicy.skillRefs ?? []).filter(
+      (reference) => reference.enabled !== false
+    );
     const desired = desiredSkillTargets(profile);
-    if (desired.size === 0) {
-      return { errors: [] as string[], paths: new Set<string>() };
-    }
-    const conflicts = (await skillLibraryStore.scanInventory([targetPaths])).filter(
-      (skill) => skill.status === "external" && desired.has(skill.id)
+    const external = desired.size === 0
+      ? []
+      : (await skillLibraryStore.scanInventory([targetPaths])).filter(
+          (skill) => skill.status === "external" && desired.has(skill.id)
+        );
+    const preservedReferences = new Set(
+      external.flatMap((skill) => {
+        const reference = references.find(
+          (item) => item.targetName === skill.id && item.libraryId === skill.libraryId
+        );
+        return reference && skill.contentMatchesLibrary === true
+          ? [`${reference.libraryId}:${reference.targetName}`]
+          : [];
+      })
+    );
+    const conflicts = external.filter(
+      (skill) =>
+        !references.some(
+          (reference) =>
+            preservedReferences.has(`${reference.libraryId}:${reference.targetName}`) &&
+            reference.targetName === skill.id
+        )
     );
     return {
+      profile: preservedReferences.size === 0
+        ? profile
+        : {
+            ...profile,
+            assetPolicy: {
+              ...profile.assetPolicy,
+              skillRefs: profile.assetPolicy.skillRefs.filter(
+                (reference) =>
+                  !preservedReferences.has(`${reference.libraryId}:${reference.targetName}`)
+              )
+            }
+          },
       errors: conflicts.map(
         (skill) =>
           `Cannot install ${skill.id} because Skills CLI manages the existing Skill at ${skill.path}. Remove it from Skills CLI, then rescan before applying this Profile.`
       ),
-      paths: new Set(conflicts.map((skill) => skill.path))
+      warnings: external
+        .filter((skill) => !conflicts.includes(skill))
+        .map(
+          (skill) =>
+            `${skill.id} is already provided by Skills CLI with matching content and will be preserved`
+        ),
+      paths: new Set(external.map((skill) => skill.path))
     };
   };
 
@@ -1003,8 +1041,12 @@ export const createActivationService = ({
       profileContentHash,
       skillLibrary
     );
-    const materializedProfile = materializeProfileMcpRefs(
+    const externallyResolved = await resolveExternalSkills(
       preparationPlan.runtimeProfile,
+      targetPaths
+    );
+    const materializedProfile = materializeProfileMcpRefs(
+      externallyResolved.profile,
       mcpLibrary
     );
     const settings = await settingsStore.readSettings();
@@ -1048,11 +1090,10 @@ export const createActivationService = ({
     const drift = await findManagedDrift(stateFile.state, materializedProfile, targetPaths);
     const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, targetPaths);
     const ignoredErrors = await ignoredSkillConflicts(materializedProfile, targetPaths);
-    const externalConflicts = await externalSkillConflicts(materializedProfile, targetPaths);
     const withoutGenericExternalConflicts = (errors: string[]) =>
       errors.filter(
         (error) =>
-          ![...externalConflicts.paths].some(
+          ![...externallyResolved.paths].some(
             (path) => error.includes(path) && error.includes("not AgentEnv-owned")
           )
       );
@@ -1084,7 +1125,8 @@ export const createActivationService = ({
         targetPreview.warnings,
         drift.warnings,
         unmanagedWarnings,
-        preparationPlan.warnings
+        preparationPlan.warnings,
+        externallyResolved.warnings
       ),
       errors: withoutGenericExternalConflicts(targetPreview.errors).concat(
         recoveryErrors,
@@ -1094,7 +1136,7 @@ export const createActivationService = ({
         withoutGenericExternalConflicts(assetErrors),
         drift.errors,
         ignoredErrors,
-        externalConflicts.errors,
+        externallyResolved.errors,
         preparationPlan.errors
       ),
       changes: targetPreview.changes,
@@ -1197,8 +1239,15 @@ export const createActivationService = ({
     ) {
       return { ok: false, errors: ["Shared Skill migration state changed after preview"] };
     }
-    const materializedProfile = materializeProfileMcpRefs(
+    const externallyResolved = await resolveExternalSkills(
       preparationPlan.runtimeProfile,
+      targetPaths
+    );
+    if (externallyResolved.errors.length > 0) {
+      return { ok: false, errors: externallyResolved.errors };
+    }
+    const materializedProfile = materializeProfileMcpRefs(
+      externallyResolved.profile,
       mcpLibrary
     );
     const settings = await settingsStore.readSettings();

@@ -236,6 +236,7 @@ const summaryOf = (detail: ProfileDetail) => ({
   targetId: detail.manifest.targetId,
   name: detail.manifest.name,
   description: detail.manifest.description,
+  createdAt: detail.manifest.createdAt,
   iconKey: detail.manifest.iconKey,
   contentHash: detail.contentHash,
   targetContentHashes: detail.targetContentHashes
@@ -1136,7 +1137,7 @@ describe("App", () => {
     expect(screen.queryByLabelText("OpenCode-only opencode.jsonc")).not.toBeInTheDocument();
   });
 
-  it("focuses the active profile and edits its enabled library skills through Save", async () => {
+  it("focuses the active profile without moving it ahead of newer profiles", async () => {
     const activeProfile: ProfileDetail = {
       ...richProfile,
       assetPolicy: {
@@ -1149,7 +1150,10 @@ describe("App", () => {
     };
     const checkSkillLibraryUpdates = vi.fn().mockResolvedValue([]);
     const api = installApi({
-      listProfiles: vi.fn().mockResolvedValue([summaryOf(profileB), summaryOf(activeProfile)]),
+      listProfiles: vi.fn().mockResolvedValue([
+        { ...summaryOf(profileB), createdAt: "2026-07-16T00:00:00.000Z" },
+        { ...summaryOf(activeProfile), createdAt: "2026-07-15T00:00:00.000Z" }
+      ]),
       readProfile: vi.fn().mockImplementation(async (profileId) =>
         profileId === activeProfile.id ? activeProfile : profileB
       ),
@@ -1186,8 +1190,9 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     const profileList = screen.getByRole("complementary", { name: "Profile list" });
     const profileRows = profileList.querySelectorAll(".profile-row");
-    expect(profileRows[0]).toHaveTextContent("Daily Coding");
-    expect(profileRows[0]).toHaveTextContent("Current");
+    expect(profileRows[0]).toHaveTextContent("Profile B");
+    expect(profileRows[1]).toHaveTextContent("Daily Coding");
+    expect(profileRows[1]).toHaveTextContent("Current");
 
     const skillsRegion = await screen.findByRole("region", { name: "Profile skills" });
     expect(within(skillsRegion).getByRole("switch", { name: "Disable Testing" })).toBeChecked();
@@ -1441,7 +1446,10 @@ describe("App", () => {
   it("keeps profiles available when selecting another apply target", async () => {
     const api = installApi({
       listTargets: vi.fn().mockResolvedValue([target, codexTarget]),
-      listProfiles: vi.fn().mockResolvedValue([summaryOf(profile), summaryOf(codexProfile)]),
+      listProfiles: vi.fn().mockResolvedValue([
+        { ...summaryOf(profile), createdAt: "2026-07-15T00:00:00.000Z" },
+        { ...summaryOf(codexProfile), createdAt: "2026-07-16T00:00:00.000Z" }
+      ]),
       readProfile: vi.fn().mockImplementation(async (profileId) =>
         profileId === codexProfile.id ? codexProfile : profile
       )
@@ -1449,6 +1457,10 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
+    const profileList = screen.getByRole("complementary", { name: "Profile list" });
+    const profileOrder = () =>
+      [...profileList.querySelectorAll(".profile-row__name")].map((item) => item.textContent);
+    expect(profileOrder()).toEqual(["Codex Review", "Daily Coding"]);
     let menuButton = screen.getByRole("button", { name: "Select apply target" });
     expect(menuButton).toHaveTextContent("OpenCode");
     expect(menuButton).not.toHaveTextContent("Target:");
@@ -1481,15 +1493,16 @@ describe("App", () => {
     fireEvent.click(menuButton);
     menu = screen.getByRole("menu", { name: "Apply targets" });
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Codex" }));
-    const profileList = screen.getByRole("complementary", { name: "Profile list" });
     expect(within(profileList).getByText("Daily Coding")).toBeInTheDocument();
     const compatibleRow = within(profileList).getByRole("button", { name: /Codex Review/ });
     expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+    expect(profileOrder()).toEqual(["Codex Review", "Daily Coding"]);
 
     fireEvent.click(compatibleRow);
     expect(await screen.findByRole("heading", { name: "Codex Review" })).toBeInTheDocument();
     expect(api.readProfile).toHaveBeenCalledWith("codex-review");
+    expect(profileOrder()).toEqual(["Codex Review", "Daily Coding"]);
     menuButton = screen.getByRole("button", { name: "Select apply target" });
     fireEvent.click(menuButton);
     expect(

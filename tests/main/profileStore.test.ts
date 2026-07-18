@@ -6,17 +6,22 @@ import { createProfileStore } from "../../src/main/profileStore";
 
 let root = "";
 
-const writeProfile = async (profileRoot: string) => {
-  const profileDir = join(profileRoot, "profiles", "daily-coding");
+const writeProfile = async (
+  profileRoot: string,
+  input: { id?: string; name?: string; createdAt?: string } = {}
+) => {
+  const id = input.id ?? "daily-coding";
+  const profileDir = join(profileRoot, "profiles", id);
   await mkdir(profileDir, { recursive: true });
   await writeFile(
     join(profileDir, "profile.json"),
       JSON.stringify({
-        id: "daily-coding",
+        id,
         targetId: "codex",
-        name: "Daily Coding",
+        name: input.name ?? "Daily Coding",
         description: "Default",
         iconKey: "rocket",
+        ...(input.createdAt ? { createdAt: input.createdAt } : {}),
         version: 1,
         managed: { instructions: true, config: true, assets: true }
       })
@@ -52,6 +57,7 @@ describe("profile store", () => {
         targetId: "codex",
         name: "Daily Coding",
         description: "Default",
+        createdAt: expect.any(String),
         iconKey: "rocket",
         contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         targetContentHashes: {
@@ -60,6 +66,27 @@ describe("profile store", () => {
           codex: expect.stringMatching(/^[a-f0-9]{64}$/)
         }
       }
+    ]);
+  });
+
+  it("lists profiles by persisted creation time newest first", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-order-"));
+    await writeProfile(root, {
+      id: "newer-profile",
+      name: "A Newer Profile",
+      createdAt: "2026-07-16T10:00:00.000Z"
+    });
+    await writeProfile(root, {
+      id: "older-profile",
+      name: "Z Older Profile",
+      createdAt: "2026-07-15T10:00:00.000Z"
+    });
+
+    const store = createProfileStore({ appDataRoot: root });
+
+    expect((await store.listProfiles()).map((profile) => profile.id)).toEqual([
+      "newer-profile",
+      "older-profile"
     ]);
   });
 
@@ -74,6 +101,15 @@ describe("profile store", () => {
     expect(profile.instructions).toBe("# Agent\n");
     expect(profile.configText).toBe("[mcp_servers.docs]\n");
     expect(profile.assetPolicy.ownedDirs).toEqual([]);
+    await store.saveProfile({
+      manifest: { ...profile.manifest, createdAt: undefined },
+      instructions: profile.instructions,
+      configText: profile.configText,
+      assetPolicy: profile.assetPolicy
+    });
+    expect(
+      JSON.parse(await readFile(join(root, "profiles", "daily-coding", "profile.json"), "utf8"))
+    ).toMatchObject({ createdAt: profile.manifest.createdAt });
   });
 
   it("rejects unsafe profile ids", async () => {
@@ -99,6 +135,9 @@ describe("profile store", () => {
 
     expect(duplicate.id).not.toBe("daily-coding");
     expect(duplicate.manifest.name).toBe("Daily Coding Copy");
+    expect(Date.parse(duplicate.manifest.createdAt ?? "")).toBeGreaterThanOrEqual(
+      Date.parse((await store.readProfile("daily-coding")).manifest.createdAt ?? "")
+    );
     await expect(
       readFile(join(duplicate.profileDir ?? "", "skills", "reviewer", "SKILL.md"), "utf8")
     ).resolves.toBe("# Reviewer\n");

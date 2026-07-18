@@ -127,5 +127,30 @@ export const captureJsonMcpServers = (
   return { servers, excluded };
 };
 
-export const sameJsonValue = (left: unknown, right: unknown) =>
-  JSON.stringify(left) === JSON.stringify(right);
+export const sameJsonValue = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((item, index) => sameJsonValue(item, right[index]));
+  }
+  if (isRecord(left) || isRecord(right)) {
+    if (!isRecord(left) || !isRecord(right)) return false;
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    return leftKeys.length === rightKeys.length &&
+      leftKeys.every(
+        (key, index) => key === rightKeys[index] && sameJsonValue(left[key], right[key])
+      );
+  }
+  return false;
+};
+
+export const isJsonSubset = (subset: unknown, value: unknown): boolean => {
+  if (sameJsonValue(subset, value)) return true;
+  if (Array.isArray(subset) || Array.isArray(value)) return false;
+  if (!isRecord(subset) || !isRecord(value)) return false;
+  return Object.entries(subset).every(
+    ([key, child]) => key in value && isJsonSubset(child, value[key])
+  );
+};

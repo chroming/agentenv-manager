@@ -1297,6 +1297,29 @@ describe("Electron UI profile switching e2e", () => {
     });
     const duplicate = await findProfileByName(appDataRoot, "Docs Writing v2 Copy");
     expect(duplicate).toMatchObject({ name: "Docs Writing v2 Copy" });
+    const profileNames = () =>
+      page.locator(".profile-row__name").evaluateAll((items) =>
+        items.map((item) => item.textContent)
+      );
+    expect((await profileNames()).slice(0, 2)).toEqual([
+      "Docs Writing v2 Copy",
+      "Docs Writing v2"
+    ]);
+    await page
+      .locator(".profile-row")
+      .filter({ has: page.getByText("Docs Writing v2", { exact: true }) })
+      .locator(".profile-row__content")
+      .click();
+    await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({ state: "visible" });
+    expect((await profileNames()).slice(0, 2)).toEqual([
+      "Docs Writing v2 Copy",
+      "Docs Writing v2"
+    ]);
+    await page
+      .locator(".profile-row")
+      .filter({ has: page.getByText("Docs Writing v2 Copy", { exact: true }) })
+      .locator(".profile-row__content")
+      .click();
 
     await page.getByRole("button", { name: "More profile actions" }).click({ timeout: 5_000 });
     await page.getByRole("menuitem", { name: "Delete profile" }).click({ timeout: 5_000 });
@@ -2591,7 +2614,6 @@ describe("Electron UI profile switching e2e", () => {
     const codexCard = page.getByRole("article", { name: "Target Codex" });
     await codexCard.getByRole("button", { name: "Open Codex in Profiles" }).click();
     await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-    await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply", exact: true }).waitFor({ state: "visible" });
   }, 30_000);
 

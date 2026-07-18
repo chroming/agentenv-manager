@@ -245,7 +245,16 @@ describe("target capture service", () => {
       join(externalSkillDir, "SKILL.md"),
       "---\nname: open-browser-use\ndescription: Browser workflow.\n---\n\n# Browser\n"
     );
-    await writeFile(join(claudeDir, "settings.json"), JSON.stringify({ env: { MODE: "review" } }));
+    await writeFile(
+      join(claudeDir, "settings.json"),
+      JSON.stringify({
+        env: {
+          SECOND: "two",
+          FIRST: "one",
+          ANTHROPIC_AUTH_TOKEN: "secret"
+        }
+      })
+    );
     await writeFile(
       join(homeDir, ".agents", ".skill-lock.json"),
       JSON.stringify({
@@ -276,6 +285,30 @@ describe("target capture service", () => {
     expect(result.profile.assetPolicy.skillRefs).toEqual([]);
     expect(result.importedSkillCount).toBe(0);
 
+    await skillLibraryStore.importSkill({
+      sourcePath: externalSkillDir,
+      id: "open-browser-use"
+    });
+    const capturedConfig = JSON.parse(result.profile.configText) as {
+      settings: Record<string, unknown>;
+      mcpServers: Record<string, unknown>;
+    };
+    const legacyProfile = await profileStore.saveProfile({
+      manifest: result.profile.manifest,
+      instructions: result.profile.instructions,
+      configText: `${JSON.stringify({
+        ...capturedConfig,
+        settings: {
+          model: "claude-sonnet",
+          env: { FIRST: "one", SECOND: "two" }
+        }
+      }, null, 2)}\n`,
+      assetPolicy: {
+        ...result.profile.assetPolicy,
+        skillRefs: [{ libraryId: "open-browser-use", targetName: "open-browser-use" }]
+      }
+    });
+
     await mkdir(paths.targetStatesDir, { recursive: true });
     await writeFile(
       join(paths.targetStatesDir, "claude-code.json"),
@@ -286,11 +319,39 @@ describe("target capture service", () => {
         managedResources: []
       })
     );
-    const applyPreview = await activationService.previewProfile(result.profile.id, "claude-code");
+    const applyPreview = await activationService.previewProfile(legacyProfile.id, "claude-code");
     expect(applyPreview.errors).toEqual([]);
     expect(applyPreview.errors.join("\n")).not.toContain("Instructions are empty");
     expect(applyPreview.errors.join("\n")).not.toContain("Config key env");
     expect(applyPreview.errors.join("\n")).not.toContain("Skills CLI manages");
+    expect(applyPreview.warnings).toContain(
+      "open-browser-use is already provided by Skills CLI with matching content and will be preserved"
+    );
+    expect(applyPreview.warnings).toContain(
+      "Claude Code env contains Target-owned values and will be preserved"
+    );
+    expect(applyPreview.resourceChanges).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "open-browser-use" })
+      ])
+    );
+
+    const applyResult = await activationService.applyProfile(
+      legacyProfile.id,
+      applyPreview.id
+    );
+    expect(applyResult).toEqual(expect.objectContaining({ ok: true }));
+    expect(JSON.parse(await readFile(join(claudeDir, "settings.json"), "utf8"))).toEqual({
+      model: "claude-sonnet",
+      env: {
+        SECOND: "two",
+        FIRST: "one",
+        ANTHROPIC_AUTH_TOKEN: "secret"
+      }
+    });
+    await expect(readFile(join(externalSkillDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "# Browser"
+    );
   });
 
   it("leaves duplicate source Skills unchanged across Target captures", async () => {

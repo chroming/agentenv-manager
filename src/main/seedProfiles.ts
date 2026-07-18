@@ -35,6 +35,7 @@ export const seedDefaultProfiles = async (
 
   const adapter = targetRegistry.get("opencode");
   const profile = adapter.createDefaultProfile("opencode-daily-coding");
+  profile.manifest.createdAt = new Date().toISOString();
   const profileDir = join(paths.profilesDir, profile.id);
   await mkdir(profileDir, { recursive: true });
   await writeFile(

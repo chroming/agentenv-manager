@@ -122,6 +122,7 @@ import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration
 import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
 import {
+  compareProfilesByCreationTime,
   listProfileApplications,
   preferredTargetForProfile,
   summarizeProfile,
@@ -1767,11 +1768,7 @@ const AppContent = ({
 
       return `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedProfileSearch);
     })
-    .sort((left, right) => {
-      if (left.id === currentProfileId) return -1;
-      if (right.id === currentProfileId) return 1;
-      return left.name.localeCompare(right.name);
-    });
+    .sort(compareProfilesByCreationTime);
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const preparedSkillTargetsBySkill = useMemo(

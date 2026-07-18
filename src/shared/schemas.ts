@@ -52,6 +52,7 @@ export const ProfileManifestSchema = z.object({
   name: z.string().min(1),
   description: z.string().default(""),
   iconKey: ResourceIconKeySchema.optional(),
+  createdAt: z.string().datetime().optional(),
   version: z.literal(1),
   managed: ManagedSurfaceSchema
 });

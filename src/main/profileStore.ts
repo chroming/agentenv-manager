@@ -40,6 +40,25 @@ const slugProfileName = (name: string) => {
   return SafeIdSchema.safeParse(slug).success ? slug : "profile";
 };
 
+const createdAtFromProfile = (
+  id: string,
+  storedCreatedAt: string | undefined,
+  stats: Awaited<ReturnType<typeof lstat>>
+) => {
+  if (storedCreatedAt) {
+    return storedCreatedAt;
+  }
+  const idTimestamp = id.match(/-(\d{13})$/)?.[1];
+  if (idTimestamp) {
+    const parsed = new Date(Number(idTimestamp));
+    if (Number.isFinite(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+  const filesystemTime = stats.birthtimeMs > 0 ? stats.birthtime : stats.mtime;
+  return filesystemTime.toISOString();
+};
+
 export const createProfileStore = (
   overrides: PathOverrides,
   targetRegistry: TargetRegistry = createTargetRegistry()
@@ -57,9 +76,13 @@ export const createProfileStore = (
     if (!profileStats.isDirectory() || profileStats.isSymbolicLink()) {
       throw new Error(`Profile storage must be a real directory: ${parsedId.data}`);
     }
-    const manifest = ProfileManifestSchema.parse(
+    const storedManifest = ProfileManifestSchema.parse(
       await readJson(join(profileDir, "profile.json"))
     );
+    const manifest = {
+      ...storedManifest,
+      createdAt: createdAtFromProfile(storedManifest.id, storedManifest.createdAt, profileStats)
+    };
     const profile = await targetRegistry
       .get(manifest.targetId)
       .readProfileFiles(profileDir, manifest);
@@ -97,6 +120,7 @@ export const createProfileStore = (
           targetId: profile.manifest.targetId,
           name: profile.manifest.name,
           description: profile.manifest.description,
+          createdAt: profile.manifest.createdAt,
           iconKey: profile.manifest.iconKey,
           contentHash: profile.contentHash,
           targetContentHashes: profile.targetContentHashes
@@ -104,12 +128,34 @@ export const createProfileStore = (
       })
     );
 
-    return summaries.sort((a, b) => a.name.localeCompare(b.name));
+    return summaries.sort((a, b) => {
+      const createdAtDifference =
+        Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? "");
+      return createdAtDifference || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+    });
   };
 
   const saveProfile = async (input: SaveProfileInput): Promise<ProfileDetail> => {
-    const manifest = ProfileManifestSchema.parse(input.manifest);
-    const profileDir = join(paths.profilesDir, manifest.id);
+    const parsedManifest = ProfileManifestSchema.parse(input.manifest);
+    const profileDir = join(paths.profilesDir, parsedManifest.id);
+    let createdAt = parsedManifest.createdAt;
+    if (!createdAt && await pathEntryExists(profileDir)) {
+      const [currentManifest, currentStats] = await Promise.all([
+        readJson(join(profileDir, "profile.json")).then((value) =>
+          ProfileManifestSchema.parse(value)
+        ),
+        lstat(profileDir)
+      ]);
+      createdAt = createdAtFromProfile(
+        currentManifest.id,
+        currentManifest.createdAt,
+        currentStats
+      );
+    }
+    const manifest = {
+      ...parsedManifest,
+      createdAt: createdAt ?? new Date().toISOString()
+    };
     const adapter = targetRegistry.get(manifest.targetId);
     const profile: ProfileDetail = {
       id: manifest.id,
@@ -155,6 +201,7 @@ export const createProfileStore = (
       ...profile,
       manifest: {
         ...profile.manifest,
+        createdAt: new Date().toISOString(),
         name: input.name?.trim() || profile.manifest.name,
         description: input.description?.trim() ?? profile.manifest.description
       }
@@ -170,6 +217,7 @@ export const createProfileStore = (
     const manifest = {
       ...profile.manifest,
       id: duplicateId,
+      createdAt: new Date().toISOString(),
       name: `${profile.manifest.name} Copy`
     };
 
