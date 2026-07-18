@@ -841,6 +841,72 @@ describe("App", () => {
     expect(api.previewLibrarySkillUpdate).toHaveBeenCalledWith("local-reviewer");
   });
 
+  it("updates Skill metadata locally without reloading Profiles or Target inventory", async () => {
+    const api = installApi({
+      listSkillLibrary: vi.fn().mockResolvedValue([
+        {
+          id: "local-reviewer",
+          name: "Local Reviewer",
+          description: "Review from a local source",
+          path: "/tmp/skills-library/local-reviewer",
+          sourceType: "local",
+          source: "/tmp/source/local-reviewer",
+          updatePolicy: "tracked",
+          contentHash: "hash",
+          updatedAt: "2026-07-02T00:00:00.000Z"
+        }
+      ])
+    });
+    render(<App />);
+
+    const localRow = await screen.findByRole("group", { name: "Library item local-reviewer" });
+    const unrelatedReads = [
+      api.listTargets,
+      api.listTargetStates,
+      api.listProfiles,
+      api.listBackups,
+      api.listSkillLibrary,
+      api.scanSkillInventory,
+      api.listMcpLibrary
+    ];
+    unrelatedReads.forEach((read) => vi.mocked(read).mockClear());
+    vi.mocked(api.checkSkillLibraryUpdates).mockClear();
+
+    fireEvent.click(within(localRow).getByRole("button", { name: "More actions for local-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Update settings" }));
+    const trackingSwitch = screen.getByRole("switch", {
+      name: "Track updates for local-reviewer"
+    });
+    fireEvent.click(trackingSwitch);
+    await waitFor(() =>
+      expect(api.setSkillUpdatePolicy).toHaveBeenCalledWith({
+        id: "local-reviewer",
+        policy: "untracked"
+      })
+    );
+    await waitFor(() => expect(trackingSwitch).toHaveAttribute("aria-checked", "false"));
+    fireEvent.click(trackingSwitch);
+    await waitFor(() =>
+      expect(api.setSkillUpdatePolicy).toHaveBeenCalledWith({
+        id: "local-reviewer",
+        policy: "tracked"
+      })
+    );
+    await waitFor(() =>
+      expect(api.checkSkillLibraryUpdates).toHaveBeenCalledWith(["local-reviewer"])
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Change icon for local-reviewer" })
+    );
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Code" }));
+    await waitFor(() =>
+      expect(api.setSkillIcon).toHaveBeenCalledWith({ id: "local-reviewer", iconKey: "code" })
+    );
+    unrelatedReads.forEach((read) => expect(read).not.toHaveBeenCalled());
+  });
+
   it("rescans local target skills when opening local skill discoveries", async () => {
     const api = installApi({
       scanSkillInventory: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([
@@ -980,9 +1046,21 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Library workspace" });
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
 
+    const unrelatedReads = [
+      api.listTargets,
+      api.listTargetStates,
+      api.listProfiles,
+      api.listBackups,
+      api.listSkillLibrary,
+      api.scanSkillInventory,
+      api.listMcpLibrary
+    ];
+    unrelatedReads.forEach((read) => vi.mocked(read).mockClear());
+
     const languageSelect = screen.getByTestId("locale-select");
     fireEvent.change(languageSelect, { target: { value: "zh_CN" } });
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ locale: "zh_CN" }));
+    unrelatedReads.forEach((read) => expect(read).not.toHaveBeenCalled());
     expect(await screen.findByRole("button", { name: "配置方案" })).toBeInTheDocument();
     expect(document.documentElement.lang).toBe("zh-CN");
 
@@ -1115,6 +1193,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
     await waitFor(() => expect(api.listTargets).toHaveBeenCalledTimes(2));
+    expect(api.listTargets).toHaveBeenLastCalledWith(true);
     await waitFor(() =>
       expect(screen.getByRole("article", { name: "Target OpenCode" })).toHaveTextContent("Missing")
     );
@@ -1428,9 +1507,36 @@ describe("App", () => {
     fireEvent.keyDown(document, { key: "s", ctrlKey: true });
 
     expect(api.saveProfile).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Saving..." })).toBeDisabled();
     pendingSave.resolve(profile);
     await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeDisabled());
+  });
+
+  it("enables Apply as soon as Profile persistence finishes without a full refresh", async () => {
+    const api = installApi();
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
+      target: { value: "# Fast save\n" }
+    });
+    vi.mocked(api.listTargets).mockClear();
+    vi.mocked(api.listTargetStates).mockClear();
+    vi.mocked(api.listProfiles).mockClear();
+    vi.mocked(api.listBackups).mockClear();
+    vi.mocked(api.scanSkillInventory).mockClear();
+    vi.mocked(api.checkSkillLibraryUpdates).mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled());
+    expect(api.listTargets).not.toHaveBeenCalled();
+    expect(api.listTargetStates).not.toHaveBeenCalled();
+    expect(api.listProfiles).not.toHaveBeenCalled();
+    expect(api.listBackups).not.toHaveBeenCalled();
+    expect(api.scanSkillInventory).not.toHaveBeenCalled();
+    expect(api.checkSkillLibraryUpdates).not.toHaveBeenCalled();
   });
 
   it("preserves a dirty Profile draft when shortcut save fails", async () => {
@@ -1716,6 +1822,13 @@ describe("App", () => {
     await screen.findByRole("heading", { name: "Profile B" });
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(api.previewApply).toHaveBeenCalledWith("profile-b", "opencode"));
+    expect(screen.getByRole("button", { name: "Apply" })).toHaveAttribute(
+      "aria-busy",
+      "true"
+    );
+    expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
+      "Reviewing changes"
+    );
 
     deferProfileC = true;
     const profileList = screen.getByRole("complementary", { name: "Profile list" });

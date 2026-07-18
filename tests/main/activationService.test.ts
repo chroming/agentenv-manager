@@ -10,7 +10,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createActivationService } from "../../src/main/activationService";
 import { createBackupStore } from "../../src/main/backupStore";
 import { createPaths } from "../../src/main/paths";
@@ -88,9 +88,10 @@ const makeEnv = async () => {
     codexHome: paths.codexHome,
     userSkillsDir: paths.userSkillsDir
   });
-  const service = createActivationService({ paths, profileStore });
+  const skillLibraryStore = createSkillLibraryStore(paths);
+  const service = createActivationService({ paths, profileStore, skillLibraryStore });
 
-  return { paths, profileStore, service };
+  return { paths, profileStore, service, skillLibraryStore };
 };
 
 afterEach(async () => {
@@ -101,6 +102,15 @@ afterEach(async () => {
 });
 
 describe("activation service", () => {
+  it("scans Target Skill inventory once per preview", async () => {
+    const { service, skillLibraryStore } = await makeEnv();
+    const scanInventory = vi.spyOn(skillLibraryStore, "scanInventory");
+
+    await service.previewProfile("daily-coding");
+
+    expect(scanInventory).toHaveBeenCalledTimes(1);
+  });
+
   it("applies a profile, creates a backup, and copies owned skills", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");

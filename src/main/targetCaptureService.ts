@@ -123,11 +123,14 @@ export const createTargetCaptureService = ({
       fakeHomeRoot: paths.fakeHomeRoot
     });
     const captured = await adapter.captureProfile(targetPaths);
-    const [librarySkills, libraryMcp, inventory] = await Promise.all([
+    const [librarySkills, libraryMcp] = await Promise.all([
       skillLibraryStore.listSkills(),
-      mcpLibraryStore.listServers(),
-      skillLibraryStore.scanInventory([targetPaths])
+      mcpLibraryStore.listServers()
     ]);
+    const inventory = await skillLibraryStore.scanInventory(
+      [targetPaths],
+      librarySkills
+    );
     const runtimeLocations = (targetPaths.skillLocations ?? [
       ...(targetPaths.skillsDir
         ? [{ path: targetPaths.skillsDir, role: "preferred-runtime" as const, shared: false }]

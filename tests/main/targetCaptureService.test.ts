@@ -1,4 +1,13 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readlink,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -351,6 +360,106 @@ describe("target capture service", () => {
     });
     await expect(readFile(join(externalSkillDir, "SKILL.md"), "utf8")).resolves.toContain(
       "# Browser"
+    );
+  });
+
+  it("isolates a captured Claude Skills root link without modifying its shared target", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-capture-claude-root-link-"));
+    const homeDir = join(root, "home");
+    const appDataRoot = join(root, "app-data");
+    const paths = createPaths({ appDataRoot, homeDir });
+    const targetRegistry = createTargetRegistry();
+    const settingsStore = createSettingsStore(paths);
+    const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
+    const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+    const mcpLibraryStore = createMcpLibraryStore(paths);
+    const activationService = createActivationService({
+      paths,
+      profileStore,
+      targetRegistry,
+      settingsStore,
+      skillLibraryStore,
+      mcpLibraryStore
+    });
+    const captureService = createTargetCaptureService({
+      paths,
+      profileStore,
+      targetRegistry,
+      skillLibraryStore,
+      mcpLibraryStore,
+      targetDiscoveryService: installedTargetDiscovery("claude-code")
+    });
+    const claudeDir = join(homeDir, ".claude");
+    const sharedSkillsDir = join(homeDir, ".agents", "skills");
+    const sharedSkillDir = join(sharedSkillsDir, "shared-review");
+    const claudeSkillsDir = join(claudeDir, "skills");
+    const sharedSkillContent =
+      "---\nname: shared-review\ndescription: Shared review.\n---\n\n# Shared\n";
+    await mkdir(sharedSkillDir, { recursive: true });
+    await mkdir(claudeDir, { recursive: true });
+    await writeFile(join(sharedSkillDir, "SKILL.md"), sharedSkillContent, "utf8");
+    await writeFile(join(claudeDir, "CLAUDE.md"), "# Existing Claude\n", "utf8");
+    await writeFile(join(claudeDir, "settings.json"), "{}\n", "utf8");
+    await symlink(sharedSkillsDir, claudeSkillsDir, "dir");
+
+    const capture = await captureService.previewTarget("claude-code");
+    const captured = await captureService.createFromTarget({
+      previewId: capture.id,
+      name: "Claude Shared Skills"
+    });
+    expect(captured.profile.assetPolicy.skillRefs).toEqual([
+      { libraryId: "shared-review", targetName: "shared-review" }
+    ]);
+
+    const preview = await activationService.previewProfile(
+      captured.profile.id,
+      "claude-code"
+    );
+    expect(preview.errors).toEqual([]);
+    expect(preview.skillRootTransition).toEqual(expect.objectContaining({
+      path: claudeSkillsDir,
+      linkTarget: sharedSkillsDir
+    }));
+    expect(preview.resourceChanges).toContainEqual(
+      expect.objectContaining({
+        kind: "directory",
+        action: "replace",
+        name: "Skills folder",
+        path: claudeSkillsDir
+      })
+    );
+    expect(preview.resourceChanges).toContainEqual(
+      expect.objectContaining({
+        kind: "skill",
+        action: "install",
+        name: "shared-review",
+        path: join(claudeSkillsDir, "shared-review")
+      })
+    );
+
+    const result = await activationService.applyProfile(captured.profile.id, preview.id);
+    expect(result).toEqual(expect.objectContaining({ ok: true }));
+    expect((await lstat(claudeSkillsDir)).isDirectory()).toBe(true);
+    expect((await lstat(claudeSkillsDir)).isSymbolicLink()).toBe(false);
+    expect((await lstat(join(claudeSkillsDir, "shared-review"))).isSymbolicLink()).toBe(true);
+    expect(await readlink(join(claudeSkillsDir, "shared-review"))).toBe(
+      join(paths.skillsLibraryDir, "shared-review")
+    );
+    await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(
+      sharedSkillContent
+    );
+    await expect(readFile(join(sharedSkillDir, ".agentenv-owner.json"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+
+    if (!result.ok) throw new Error("Apply unexpectedly failed");
+    await activationService.previewRollback(result.backupId);
+    expect(await activationService.rollback(result.backupId)).toEqual(
+      expect.objectContaining({ ok: true })
+    );
+    expect((await lstat(claudeSkillsDir)).isSymbolicLink()).toBe(true);
+    expect(await readlink(claudeSkillsDir)).toBe(sharedSkillsDir);
+    await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(
+      sharedSkillContent
     );
   });
 

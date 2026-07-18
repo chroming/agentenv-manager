@@ -48,6 +48,7 @@ import type {
   SharedSkillPreparation,
   SkillCleanupBackupSummary,
   SkillCleanupResult,
+  SkillInventoryEntry,
   SkillLibraryEntry,
   StopManagingMode,
   StopManagingPreview,
@@ -69,6 +70,11 @@ import {
   markerPathForFile
 } from "./ownershipMarkers";
 import { removeSkillDeployment } from "./skillDeployment";
+import {
+  inspectSkillRoot,
+  isolateSkillRoot,
+  type SkillRootTransition
+} from "./skillRootTopology";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -289,9 +295,16 @@ const createRollbackChange = async (
   entry: BackupManifest["entries"][number]
 ): Promise<PlannedFileChange> => {
   if (entry.kind === "symlink") {
-    const before = (await pathExists(entry.sourcePath))
+    const currentStats = (await pathEntryExists(entry.sourcePath))
+      ? await lstat(entry.sourcePath)
+      : undefined;
+    const before = currentStats?.isSymbolicLink()
       ? `[link] ${await readlink(entry.sourcePath)}\n`
-      : "";
+      : currentStats?.isDirectory()
+        ? "[directory]\n"
+        : currentStats?.isFile()
+          ? "[file]\n"
+          : "";
     const after = entry.missing ? "" : `[link] ${await readlink(entry.backupPath ?? "")}\n`;
     return {
       path: entry.sourcePath,
@@ -453,6 +466,9 @@ export const createActivationService = ({
     for (const entry of backup.entries) {
       const sourcePath = resolve(entry.sourcePath);
       const allowedResource = [...resourceRoots].some((root) => {
+        if (sourcePath === root) {
+          return entry.kind === "symlink";
+        }
         const child = relative(root, sourcePath);
         return child.length > 0 && !child.startsWith("..") && !child.includes("/../") && dirname(sourcePath) === root;
       });
@@ -580,9 +596,9 @@ export const createActivationService = ({
     profile: ProfileDetail,
     targetPaths: TargetPaths,
     profileHash: string,
-    skillLibrary: SkillLibraryEntry[]
+    skillLibrary: SkillLibraryEntry[],
+    inventory: SkillInventoryEntry[]
   ) => {
-    const inventory = await skillLibraryStore.scanInventory([targetPaths]);
     const sharedBySkill = new Map<
       string,
       { skillKey: string; libraryId: string; paths: Set<string> }
@@ -745,10 +761,9 @@ export const createActivationService = ({
 
   const unmanagedSkillWarnings = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    targetPaths: TargetPaths
+    inventory: SkillInventoryEntry[]
   ) => {
     const desired = desiredSkillTargets(profile);
-    const inventory = await skillLibraryStore.scanInventory([targetPaths]);
     return inventory
       .filter(
         (skill) =>
@@ -861,22 +876,47 @@ export const createActivationService = ({
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
     targetPaths: TargetPaths,
     assetPaths: string[],
-    skillLibraryDir: string
+    skillLibraryDir: string,
+    skillRootTransition?: SkillRootTransition
   ) => {
     const desired = desiredAssetResources(profile, targetPaths, skillLibraryDir);
-    const resourceChanges: PlannedResourceChange[] = [];
+    const resourceChanges: PlannedResourceChange[] = skillRootTransition
+      ? [{
+          kind: "directory",
+          action: "replace",
+          name: "Skills folder",
+          path: skillRootTransition.path,
+          source: `Linked to ${skillRootTransition.resolvedPath}`
+        }]
+      : [];
     const resourceFingerprints: Record<string, string> = {};
     const sourceFingerprints: Record<string, string> = {};
 
-    for (const { sourcePath } of desired.values()) {
-      sourceFingerprints[sourcePath] = (await hashPath(sourcePath)) ?? "";
+    await Promise.all(
+      [...desired.values()].map(async ({ sourcePath }) => {
+        sourceFingerprints[sourcePath] = (await hashPath(sourcePath)) ?? "";
+      })
+    );
+
+    if (skillRootTransition) {
+      resourceFingerprints[skillRootTransition.path] =
+        (await hashPath(skillRootTransition.path)) ?? "";
     }
 
-    for (const path of [...new Set(assetPaths)]) {
-      resourceFingerprints[path] = (await hashPath(path)) ?? "";
+    for (const path of [...new Set([...assetPaths, ...desired.keys()])]) {
+      const behindTransitionedRoot = Boolean(
+        skillRootTransition &&
+        dirname(path) === skillRootTransition.path
+      );
+      if (!behindTransitionedRoot) {
+        resourceFingerprints[path] = (await hashPath(path)) ?? "";
+      }
+      if (skillRootTransition && path === skillRootTransition.path) {
+        continue;
+      }
       const resource = desired.get(path);
       if (resource) {
-        const exists = await pathExists(path);
+        const exists = !behindTransitionedRoot && await pathExists(path);
         const stats = exists ? await stat(path) : undefined;
         const markerPath = stats?.isDirectory() ? markerPathFor(path) : markerPathForFile(path);
         const expectedMarker = createOwnerMarkerContent({
@@ -927,7 +967,7 @@ export const createActivationService = ({
 
   const ignoredSkillConflicts = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    targetPaths: TargetPaths
+    inventory: SkillInventoryEntry[]
   ) => {
     const desiredSkillTargets = new Set(
       profile.assetPolicy.ownedDirs
@@ -943,7 +983,6 @@ export const createActivationService = ({
       return [];
     }
 
-    const inventory = await skillLibraryStore.scanInventory([targetPaths]);
     return inventory
       .filter((skill) => skill.status === "ignored" && desiredSkillTargets.has(skill.id))
       .map(
@@ -954,7 +993,7 @@ export const createActivationService = ({
 
   const resolveExternalSkills = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    targetPaths: TargetPaths
+    inventory: SkillInventoryEntry[]
   ) => {
     const references = (profile.assetPolicy.skillRefs ?? []).filter(
       (reference) => reference.enabled !== false
@@ -962,7 +1001,7 @@ export const createActivationService = ({
     const desired = desiredSkillTargets(profile);
     const external = desired.size === 0
       ? []
-      : (await skillLibraryStore.scanInventory([targetPaths])).filter(
+      : inventory.filter(
           (skill) => skill.status === "external" && desired.has(skill.id)
         );
     const preservedReferences = new Set(
@@ -1032,6 +1071,25 @@ export const createActivationService = ({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
     });
+    const skillRootInspection = await inspectSkillRoot(targetPaths.skillsDir);
+    const skillRootTransition =
+      skillRootInspection.kind === "symlink"
+        ? skillRootInspection.transition
+        : undefined;
+    const inventoryTargetPaths =
+      skillRootInspection.kind === "directory" || skillRootInspection.kind === "missing"
+        ? targetPaths
+        : {
+            ...targetPaths,
+            skillsDir: undefined,
+            skillScanDirs: (targetPaths.skillScanDirs ?? []).filter(
+              (path) => resolve(path) !== resolve(targetPaths.skillsDir ?? "")
+            )
+          };
+    const inventory = await skillLibraryStore.scanInventory(
+      [inventoryTargetPaths],
+      skillLibrary
+    );
     const profileContentHash =
       sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
       createProfileContentHash(targeted.profile);
@@ -1039,11 +1097,12 @@ export const createActivationService = ({
       profile,
       targetPaths,
       profileContentHash,
-      skillLibrary
+      skillLibrary,
+      inventory
     );
     const externallyResolved = await resolveExternalSkills(
       preparationPlan.runtimeProfile,
-      targetPaths
+      inventory
     );
     const materializedProfile = materializeProfileMcpRefs(
       externallyResolved.profile,
@@ -1061,9 +1120,11 @@ export const createActivationService = ({
       state: stateFile.state,
       allowMatchingUnmanagedConfig: true,
       allowMatchingUnmanagedSkills: isTakeover,
-      allowMatchingUnmanagedAssets: isTakeover
+      allowMatchingUnmanagedAssets: isTakeover,
+      isolateSkillRoot: Boolean(skillRootTransition)
     });
-    const profileErrors: string[] = [];
+    const profileErrors: string[] =
+      skillRootInspection.kind === "invalid" ? [skillRootInspection.error] : [];
     const recoveryErrors = stateFile.state.recoveryRequired
       ? [
           `${adapter.descriptor.name} requires recovery before another Apply: ${stateFile.state.recoveryRequired.error}`
@@ -1085,11 +1146,12 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
       allowMatchingUnmanagedSkills: isTakeover,
-      allowMatchingUnmanagedAssets: isTakeover
+      allowMatchingUnmanagedAssets: isTakeover,
+      isolateSkillRoot: Boolean(skillRootTransition)
     });
     const drift = await findManagedDrift(stateFile.state, materializedProfile, targetPaths);
-    const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, targetPaths);
-    const ignoredErrors = await ignoredSkillConflicts(materializedProfile, targetPaths);
+    const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, inventory);
+    const ignoredErrors = await ignoredSkillConflicts(materializedProfile, inventory);
     const withoutGenericExternalConflicts = (errors: string[]) =>
       errors.filter(
         (error) =>
@@ -1103,13 +1165,18 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
       allowMatchingUnmanagedSkills: isTakeover,
-      allowMatchingUnmanagedAssets: isTakeover
+      allowMatchingUnmanagedAssets: isTakeover,
+      isolateSkillRoot: Boolean(skillRootTransition)
     });
+    if (skillRootTransition) {
+      assetBackupPaths.push(skillRootTransition.path);
+    }
     const assetPlan = await planAssetResources(
       materializedProfile,
       targetPaths,
       assetBackupPaths,
-      skillLibraryDir
+      skillLibraryDir,
+      skillRootTransition
     );
     const preview: ActivationPreview = {
       id: randomUUID(),
@@ -1126,7 +1193,12 @@ export const createActivationService = ({
         drift.warnings,
         unmanagedWarnings,
         preparationPlan.warnings,
-        externallyResolved.warnings
+        externallyResolved.warnings,
+        ...(skillRootTransition
+          ? [
+              `${adapter.descriptor.name} Skills folder is linked to ${skillRootTransition.resolvedPath}. Apply will preserve that directory and replace only the Target root link with a private Skills folder.`
+            ]
+          : [])
       ),
       errors: withoutGenericExternalConflicts(targetPreview.errors).concat(
         recoveryErrors,
@@ -1158,7 +1230,8 @@ export const createActivationService = ({
       effectivePayload,
       omissions: targeted.omissions,
       requiresOmissionAcknowledgement: targeted.omissions.length > 0,
-      operation: isTakeover ? "takeover" : "apply"
+      operation: isTakeover ? "takeover" : "apply",
+      skillRootTransition
     };
     previews.set(preview.id, preview);
     return preview;
@@ -1227,11 +1300,32 @@ export const createActivationService = ({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
     });
+    const currentSkillRoot = await inspectSkillRoot(targetPaths.skillsDir);
+    if (
+      !preview.skillRootTransition &&
+      (currentSkillRoot.kind === "symlink" || currentSkillRoot.kind === "invalid")
+    ) {
+      return { ok: false, errors: ["Skills root changed after preview; review the latest version"] };
+    }
+    const inventoryTargetPaths = preview.skillRootTransition
+      ? {
+          ...targetPaths,
+          skillsDir: undefined,
+          skillScanDirs: (targetPaths.skillScanDirs ?? []).filter(
+            (path) => resolve(path) !== resolve(targetPaths.skillsDir ?? "")
+          )
+        }
+      : targetPaths;
+    const inventory = await skillLibraryStore.scanInventory(
+      [inventoryTargetPaths],
+      skillLibrary
+    );
     const preparationPlan = await sharedSkillPreparationPlan(
       profile,
       targetPaths,
       currentProfileHash,
-      skillLibrary
+      skillLibrary,
+      inventory
     );
     if (
       JSON.stringify(preparationPlan.preparations) !==
@@ -1241,7 +1335,7 @@ export const createActivationService = ({
     }
     const externallyResolved = await resolveExternalSkills(
       preparationPlan.runtimeProfile,
-      targetPaths
+      inventory
     );
     if (externallyResolved.errors.length > 0) {
       return { ok: false, errors: externallyResolved.errors };
@@ -1289,7 +1383,8 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
       allowMatchingUnmanagedSkills: isTakeover,
-      allowMatchingUnmanagedAssets: isTakeover
+      allowMatchingUnmanagedAssets: isTakeover,
+      isolateSkillRoot: Boolean(preview.skillRootTransition)
     });
     if (assetErrors.length > 0) {
       return { ok: false, errors: assetErrors };
@@ -1302,15 +1397,19 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
       allowMatchingUnmanagedSkills: isTakeover,
-      allowMatchingUnmanagedAssets: isTakeover
+      allowMatchingUnmanagedAssets: isTakeover,
+      isolateSkillRoot: Boolean(preview.skillRootTransition)
     });
+    if (preview.skillRootTransition) {
+      assetBackupPaths.push(preview.skillRootTransition.path);
+    }
     const backup = await backupStore.createBackup(
-      [
+      [...new Set([
         ...preview.changes.map((change) => change.path),
         ...assetBackupPaths,
         ...(options.additionalBackupPaths ?? []),
         statePath
-      ],
+      ])],
       {
         operation: "apply",
         targetId: preview.targetId,
@@ -1335,6 +1434,9 @@ export const createActivationService = ({
         await writeAtomic(change.path, change.after);
       }
 
+      if (preview.skillRootTransition) {
+        await isolateSkillRoot(preview.skillRootTransition);
+      }
       if (preview.resourceChanges.length > 0) {
         await adapter.applyAssets({
           profile: materializedProfile,
@@ -1342,11 +1444,23 @@ export const createActivationService = ({
           skillLibraryDir,
           skillSyncMethod: settings.skillSyncMethod,
           allowMatchingUnmanagedSkills: isTakeover,
-          allowMatchingUnmanagedAssets: isTakeover
+          allowMatchingUnmanagedAssets: isTakeover,
+          isolateSkillRoot: Boolean(preview.skillRootTransition)
         });
       }
+      if (preview.skillRootTransition) {
+        const isolatedRoot = await inspectSkillRoot(preview.skillRootTransition.path);
+        if (isolatedRoot.kind !== "directory") {
+          throw new Error(
+            `Post-apply verification failed for Skills root ${preview.skillRootTransition.path}`
+          );
+        }
+      }
+      const managedAssetPaths = preview.skillRootTransition
+        ? [...desiredAssetResources(materializedProfile, targetPaths, skillLibraryDir).keys()]
+        : assetBackupPaths;
       const managedResources = await snapshotManagedResources(
-        [...preview.changes.map((change) => change.path), ...assetBackupPaths],
+        [...preview.changes.map((change) => change.path), ...managedAssetPaths],
         targetPaths
       );
       for (const resource of managedResources) {

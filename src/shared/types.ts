@@ -19,7 +19,7 @@ export interface AgentEnvApi {
   cancelWindowClose(): void;
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
-  listTargets(): Promise<TargetInfo[]>;
+  listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   scanSkillInventory(): Promise<SkillInventoryEntry[]>;
@@ -772,6 +772,11 @@ export interface ActivationPreview {
   omissions?: PlannedOmission[];
   requiresOmissionAcknowledgement?: boolean;
   operation?: "apply" | "takeover";
+  skillRootTransition?: {
+    path: string;
+    linkTarget: string;
+    resolvedPath: string;
+  };
 }
 
 export interface EffectiveProfilePayload {

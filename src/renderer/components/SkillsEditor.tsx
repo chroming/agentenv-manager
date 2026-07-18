@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { LoaderCircle, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import {
@@ -286,6 +286,18 @@ export const SkillsEditor = ({
     (ownedFile) => ownedFile.kind === "agent"
   );
   const librarySkillEntries = value.skillRefs ?? [];
+  const librarySkillsById = useMemo(
+    () => new Map(librarySkills.map((skill) => [skill.id, skill])),
+    [librarySkills]
+  );
+  const skillUpdatesById = useMemo(
+    () => new Map(skillUpdates.map((update) => [update.id, update])),
+    [skillUpdates]
+  );
+  const mcpServersById = useMemo(
+    () => new Map(mcpServers.map((server) => [server.id, server])),
+    [mcpServers]
+  );
   const availableLibrarySkills = librarySkills.filter((skill) => skill.globallyEnabled !== false);
   const libraryMcpEntries = value.mcpRefs ?? [];
   const mcpState = getMcpResources(configText, configLanguage, preview);
@@ -308,11 +320,11 @@ export const SkillsEditor = ({
   const enabledLibrarySkillCount = librarySkillEntries.filter(
     (entry) =>
       entry.enabled !== false &&
-      librarySkills.find((skill) => skill.id === entry.libraryId)?.globallyEnabled !== false
+      librarySkillsById.get(entry.libraryId)?.globallyEnabled !== false
   ).length;
   const checkableSkillIds = librarySkillEntries
     .filter((entry) => entry.enabled !== false)
-    .map((entry) => librarySkills.find((skill) => skill.id === entry.libraryId))
+    .map((entry) => librarySkillsById.get(entry.libraryId))
     .filter((skill): skill is SkillLibraryEntry => Boolean(skill))
     .filter((skill) => skill.globallyEnabled !== false)
     .filter((skill) => skill.updatePolicy === "tracked")
@@ -672,8 +684,8 @@ export const SkillsEditor = ({
           ))}
 
           {librarySkillEntries.map((entry, index) => {
-            const skill = librarySkills.find((item) => item.id === entry.libraryId);
-            const update = skillUpdates.find((item) => item.id === entry.libraryId);
+            const skill = librarySkillsById.get(entry.libraryId);
+            const update = skillUpdatesById.get(entry.libraryId);
             const profileEnabled = entry.enabled !== false;
             const globallyEnabled = skill?.globallyEnabled !== false;
             const enabled = profileEnabled && globallyEnabled;
@@ -1194,9 +1206,7 @@ export const SkillsEditor = ({
               : null}
             {showsSkills
               ? librarySkillEntries.map((asset, index) => {
-                  const librarySkill = librarySkills.find(
-                    (skill) => skill.id === asset.libraryId
-                  );
+                  const librarySkill = librarySkillsById.get(asset.libraryId);
                   return (
                     <div
                       aria-label={t("Library skill {{name}}", { name: asset.targetName })}
@@ -1229,9 +1239,7 @@ export const SkillsEditor = ({
               : null}
             {showsMcp
               ? libraryMcpEntries.map((asset, index) => {
-                  const mcpServer = mcpServers.find(
-                    (server) => server.id === asset.libraryId
-                  );
+                  const mcpServer = mcpServersById.get(asset.libraryId);
                   return (
                     <div
                       aria-label={t("MCP {{name}}", { name: asset.targetName })}

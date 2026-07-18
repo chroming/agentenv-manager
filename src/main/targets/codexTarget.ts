@@ -102,6 +102,7 @@ const validateAssets = async (input: TargetAssetInput) => {
       errors.push(`Owned skill source does not exist: ${sourceDir}`);
     }
     if (
+      !input.isolateSkillRoot &&
       (await pathExists(targetDir)) &&
       !(await isOwnedSkillDir(targetDir, targetPaths))
     ) {
@@ -224,14 +225,16 @@ const getAssetBackupPaths = async (input: TargetAssetInput) => {
 
   if (targetPaths.skillsDir) {
     for (const ownedDir of profile.assetPolicy.ownedDirs) {
-      if (ownedDir.kind === "skill") {
+      if (ownedDir.kind === "skill" && !input.isolateSkillRoot) {
         paths.add(join(targetPaths.skillsDir, ownedDir.targetName));
       }
     }
   }
   addSkillRefBackupPaths(paths, targetPaths, input);
-  for (const legacyPath of await legacyOwnedSkillDirs(targetPaths)) {
-    paths.add(legacyPath);
+  if (!input.isolateSkillRoot) {
+    for (const legacyPath of await legacyOwnedSkillDirs(targetPaths)) {
+      paths.add(legacyPath);
+    }
   }
   if (targetPaths.agentsDir) {
     for (const ownedFile of profile.assetPolicy.ownedFiles ?? []) {
@@ -243,7 +246,11 @@ const getAssetBackupPaths = async (input: TargetAssetInput) => {
     }
   }
 
-  if (targetPaths.skillsDir && (await pathExists(targetPaths.skillsDir))) {
+  if (
+    !input.isolateSkillRoot &&
+    targetPaths.skillsDir &&
+    (await pathExists(targetPaths.skillsDir))
+  ) {
     const entries = await readdir(targetPaths.skillsDir, { withFileTypes: true });
     for (const entry of entries) {
       if ((!entry.isDirectory() && !entry.isSymbolicLink()) || desired.has(entry.name)) {
@@ -354,8 +361,10 @@ const applyAssets = async (input: TargetAssetInput) => {
     );
   }
   await applySkillRefs(input);
-  for (const legacyPath of await legacyOwnedSkillDirs(targetPaths)) {
-    await removeSkillDeployment(legacyPath);
+  if (!input.isolateSkillRoot) {
+    for (const legacyPath of await legacyOwnedSkillDirs(targetPaths)) {
+      await removeSkillDeployment(legacyPath);
+    }
   }
 };
 

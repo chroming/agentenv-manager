@@ -300,6 +300,25 @@
   min-height: var(--profile-control-height);
 }
 
+.profile-commit-actions .save-button .is-spinning {
+  animation: spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+
+.profile-apply-button .is-spinning,
+.preview-actions .is-spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+.preview-actions .primary-action {
+  position: relative;
+}
+
+.preview-actions .primary-action > .is-spinning {
+  left: 10px;
+  position: absolute;
+}
+
 .profile-page-actions .profile-new-button {
   min-width: 116px;
 }

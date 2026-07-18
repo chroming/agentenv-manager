@@ -23,7 +23,7 @@ export interface TargetDiscoveryOptions {
 }
 
 export interface TargetDiscoveryService {
-  listTargets(): Promise<TargetInfo[]>;
+  listTargets(options?: { forceRefresh?: boolean }): Promise<TargetInfo[]>;
 }
 
 const canAccess = async (path: string, mode: number) => {
@@ -214,7 +214,31 @@ export const createTargetDiscoveryService = (
     systemPathLookup = options.pathEnv === undefined,
     shellPathLookup = options.pathEnv === undefined
   } = options;
-  const listTargets = async (): Promise<TargetInfo[]> =>
+  const executableCache = new Map<
+    string,
+    { path?: string; checkedAt: number }
+  >();
+  const executableCacheTtlMs = 30_000;
+  const discoverExecutable = async (name: string, forceRefresh: boolean) => {
+    const cached = executableCache.get(name);
+    if (!forceRefresh && cached && Date.now() - cached.checkedAt < executableCacheTtlMs) {
+      if (!cached.path || await canAccess(cached.path, constants.X_OK)) {
+        return cached.path;
+      }
+    }
+    const path = await findExecutable(
+      name,
+      pathEnv,
+      paths.homeDir,
+      systemPathLookup,
+      shellPathLookup
+    );
+    executableCache.set(name, { path, checkedAt: Date.now() });
+    return path;
+  };
+  const listTargets = async (
+    listOptions: { forceRefresh?: boolean } = {}
+  ): Promise<TargetInfo[]> =>
     Promise.all(
       targetRegistry.listAdapters().map(async (adapter) => {
         const targetPaths = adapter.createTargetPaths({
@@ -223,13 +247,7 @@ export const createTargetDiscoveryService = (
         });
         const executableName = adapter.descriptor.executableName;
         const executablePath = executableName
-          ? await findExecutable(
-              executableName,
-              pathEnv,
-              paths.homeDir,
-              systemPathLookup,
-              shellPathLookup
-            )
+          ? await discoverExecutable(executableName, listOptions.forceRefresh === true)
           : undefined;
         const executableFound = executableName ? Boolean(executablePath) : true;
         const checks = await createChecks(targetPaths);

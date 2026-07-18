@@ -88,6 +88,8 @@ Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data ro
 - A compatibility copy with conflicting content blocks automatic consolidation.
 - External manager metadata, including Skills CLI lock files, is read-only evidence. AgentEnv MUST NOT silently edit or delete another manager's lock data.
 - Importing an externally managed Skill creates an independent Library copy and MUST NOT imply that AgentEnv has taken ownership of the external installation.
+- A Target-specific Skills root MAY itself be a symbolic link to a shared or external directory. Capture MAY read that linked content, but Apply MUST treat the root link as one filesystem boundary: Preview names the link and resolved destination, Apply backs up and atomically replaces only the root link with a real Target-owned directory before installing child resources, and the linked destination remains untouched.
+- A broken, cyclic, or non-directory Target Skills root link blocks Apply with remediation. Rollback after root isolation MUST restore the exact original link and remove only the Target-owned directory created by AgentEnv.
 
 ### 4.3 Profile
 
@@ -211,6 +213,7 @@ The Profile editor MUST distinguish these states:
 Rules:
 
 - Save MUST persist the complete Profile, not an individual accordion section.
+- Save MUST expose local working feedback immediately. Once persistence succeeds, the editor becomes clean and Apply availability is recalculated from the returned saved Profile without waiting for Target discovery, inventory scanning, update checks, usage aggregation, or a full-page refresh.
 - Save, Apply, and Target selection MUST appear as one compact action group in the selected Profile context. Save and Apply remain adjacent; the Profile-scoped destination selector sits immediately beside Apply. Page creation controls MUST NOT separate these lifecycle commands.
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
 - Edit, Duplicate, Delete, Save, Target selection, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation.
@@ -672,6 +675,10 @@ Idle -> Pressed -> Working -> Success | Warning | Error | Partial failure
 - A newer warning or error replaces stale success feedback.
 - Completion updates visible persisted state, not only a message.
 - No visible command may appear to do nothing.
+- Profile edits update the in-memory draft without filesystem scans. Save, Preview, and Apply each expose control-local working state for their complete asynchronous lifetime.
+- One Preview request MUST reuse one normalized Library and local-inventory snapshot rather than recursively scanning or hashing the same resource roots once per validation stage.
+- Repeated background Target reads MAY reuse recent executable discovery. The explicit Target `Refresh` command MUST bypass that cache.
+- Apply completion MUST update the visible verified Target state immediately; nonessential history, usage, and enrichment refreshes continue without holding the primary action in a working state.
 - Global feedback MUST NOT block unrelated workspace controls. Only actions owned by the feedback surface, such as Dismiss or Connect GitHub, receive pointer input.
 
 Status: shared transient success, persistent error, background progress, GitHub remediation, and non-blocking global feedback are `Implemented`.
@@ -821,6 +828,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Create from Target captures portable resources, reuses exact Library matches, and leaves Target files and deployment state unchanged.
 - Ignored resources and unsupported native data remain Target-owned after Create from Target.
 - Applying the same Library Skill to OpenCode, Codex, and Claude Code creates isolated Target-specific runtime copies.
+- Create from Target followed by first Apply isolates a Target Skills root that aliases a shared directory, preserves the shared destination byte-for-byte, installs Target-owned child references, and restores the original root link through Rollback.
 - Shared compatibility copies remain unchanged during capture; later removal requires the explicit reviewed Scan local cleanup workflow.
 - Adding a shared compatibility Skill to Library keeps one shared runtime copy active and removes redundant Target-specific copies. Apply prepares each installed consumer without creating duplicate runtime copies; Replace shared copy then performs one backed-up, verified cross-Target switch without deleting Library content.
 
@@ -872,6 +880,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - First and last row menus are topmost and in viewport.
 - Escape, outside click, keyboard focus, and focus restoration.
 - Working, success, warning, error, no-op, drift, destructive, and recovery states are inspected visually.
+- Profile Skill toggles respond from the in-memory draft without a data reload; Save immediately shows working feedback and enables Apply after persistence; Preview immediately shows working feedback and opens without duplicate inventory scans.
 - System locale detection, explicit `en`/`zh_CN`/`zh_TW` switching, persisted reload, and unsupported-locale fallback.
 - Default and minimum viewport containment in all supported interface languages, including long Traditional Chinese labels.
 

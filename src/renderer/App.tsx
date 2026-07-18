@@ -12,6 +12,7 @@ import {
   GitFork,
   HardDrive,
   History,
+  LoaderCircle,
   Monitor,
   MoreHorizontal,
   Network,
@@ -139,6 +140,33 @@ const emptyAssetPolicy: AssetPolicy = {
   disabledSkillPaths: []
 };
 
+const reconcileProfileUsage = (
+  current: Record<string, string[]>,
+  previousReferencedIds: readonly string[],
+  nextReferencedIds: readonly string[],
+  previousName: string,
+  nextName: string
+) => {
+  const next = Object.fromEntries(
+    Object.entries(current).map(([id, names]) => [id, [...names]])
+  );
+  const previousIds = previousReferencedIds.length > 0
+    ? previousReferencedIds
+    : Object.entries(current)
+        .filter(([, names]) => names.includes(previousName))
+        .map(([id]) => id);
+  for (const id of new Set(previousIds)) {
+    const names = next[id] ?? [];
+    const previousIndex = names.indexOf(previousName);
+    if (previousIndex >= 0) names.splice(previousIndex, 1);
+    if (names.length === 0) delete next[id];
+  }
+  for (const id of new Set(nextReferencedIds)) {
+    next[id] = [...(next[id] ?? []), nextName];
+  }
+  return next;
+};
+
 type ComposerSection = "instructions" | "skills" | "mcp" | "advanced";
 type ProfileDialogMode = "create" | "edit";
 type ProfileCreateSource = "blank" | "target";
@@ -152,6 +180,7 @@ interface PendingProfileAction {
 interface PendingSkillImport {
   preview: SkillImportPreview;
   resolve: (resolution: SkillImportConflictResolution | undefined) => void;
+  committing?: boolean;
 }
 
 interface BackupManagerNotice {
@@ -598,6 +627,8 @@ const AppContent = ({
   const [importingOwnedSkillIndex, setImportingOwnedSkillIndex] = useState<number>();
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [isProfilePreviewing, setIsProfilePreviewing] = useState(false);
+  const [isProfileApplying, setIsProfileApplying] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
   const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
   const [dataBackupStatus, setDataBackupStatus] = useState("");
@@ -746,17 +777,19 @@ const AppContent = ({
     profileFlowRequestRef.current += 1;
     if (activeProfileFlowRequestRef.current !== undefined) {
       activeProfileFlowRequestRef.current = undefined;
+      setIsProfilePreviewing(false);
       setBusy(false);
     }
   };
 
   const loadProfileCore = async (
     settingsOverride?: AgentEnvSettings,
-    shouldApply: () => boolean = () => true
+    shouldApply: () => boolean = () => true,
+    forceTargetRefresh = false
   ) => {
     const skillItemsPromise = window.agentEnv.listSkillLibrary();
     const corePromise = Promise.all([
-      window.agentEnv.listTargets(),
+      window.agentEnv.listTargets(forceTargetRefresh),
       window.agentEnv.listTargetStates(),
       window.agentEnv.listProfiles(),
       window.agentEnv.listBackups(),
@@ -896,20 +929,26 @@ const AppContent = ({
   };
 
   const refreshProfiles = async ({
-    checkSkillUpdates = true,
+    checkSkillUpdates = false,
     forceSkillUpdateCheck = false,
+    forceTargetRefresh = false,
     settingsOverride
   }: {
     checkSkillUpdates?: boolean;
     forceSkillUpdateCheck?: boolean;
+    forceTargetRefresh?: boolean;
     settingsOverride?: AgentEnvSettings;
   } = {}) => {
     const requestId = ++dataRefreshRequestRef.current;
     const shouldApply = () => dataRefreshRequestRef.current === requestId;
-    const core = await loadProfileCore(settingsOverride, shouldApply);
+    const core = await loadProfileCore(
+      settingsOverride,
+      shouldApply,
+      forceTargetRefresh
+    );
     const enrichment = await loadProfileEnrichment(
       core,
-      checkSkillUpdates,
+      checkSkillUpdates || forceSkillUpdateCheck,
       shouldApply,
       forceSkillUpdateCheck
     );
@@ -929,6 +968,108 @@ const AppContent = ({
       setSkillRefreshStatus(undefined);
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     }
+  };
+
+  const replaceLibrarySkillLocally = (
+    updated: SkillLibraryEntry,
+    options: { invalidateUpdateCheck?: boolean } = {}
+  ) => {
+    setLibrarySkills((current) =>
+      current.some((skill) => skill.id === updated.id)
+        ? current.map((skill) => (skill.id === updated.id ? updated : skill))
+        : current.concat(updated)
+    );
+    if (options.invalidateUpdateCheck) {
+      setSkillUpdates((current) => current.filter((item) => item.id !== updated.id));
+      setSelectedSkillUpdatePlan((current) =>
+        current?.id === updated.id ? undefined : current
+      );
+    }
+  };
+
+  const applyLibraryContentUpdatesLocally = (updatedSkills: SkillLibraryEntry[]) => {
+    if (updatedSkills.length === 0) return;
+    const updatesById = new Map(updatedSkills.map((skill) => [skill.id, skill]));
+    setLibrarySkills((current) =>
+      current.map((skill) => updatesById.get(skill.id) ?? skill)
+    );
+    setSkillUpdates((current) => [
+      ...current.filter((item) => !updatesById.has(item.id)),
+      ...updatedSkills
+        .filter((skill) => skill.updatePolicy === "tracked")
+        .map((skill): SkillUpdateInfo => ({
+          id: skill.id,
+          name: skill.name,
+          sourceType: skill.sourceType,
+          currentRevision: skill.remoteRevision ?? skill.contentHash,
+          latestRevision: skill.remoteRevision ?? skill.contentHash,
+          updateAvailable: false
+        }))
+    ]);
+    setProfileLibraryVersions((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([profileId, versions]) => {
+          const skills = { ...versions.skills };
+          for (const skill of updatedSkills) {
+            if (Object.prototype.hasOwnProperty.call(skills, skill.id)) {
+              skills[skill.id] = skill.contentHash;
+            }
+          }
+          return [profileId, { ...versions, skills }];
+        })
+      )
+    );
+    setTargetStates((current) =>
+      current.map((state) => {
+        const appliedSkills = state.appliedLibraryVersions?.skills ?? {};
+        const changedDeployment = updatedSkills.some(
+          (skill) =>
+            Object.prototype.hasOwnProperty.call(
+              appliedSkills,
+              skill.id
+            ) && appliedSkills[skill.id] !== skill.contentHash
+        );
+        if (
+          !changedDeployment ||
+          state.lifecycleStatus === "drifted" ||
+          state.lifecycleStatus === "recovery-required"
+        ) {
+          return state;
+        }
+        return {
+          ...state,
+          lifecycleStatus: "pending" as const,
+          lifecycleReason: "Library resources changed after the last Apply"
+        };
+      })
+    );
+  };
+
+  const refreshTrackedSkillUpdateLocally = (skill: SkillLibraryEntry) => {
+    if (skill.updatePolicy !== "tracked") return;
+    void window.agentEnv
+      .checkSkillLibraryUpdates([skill.id])
+      .then((updates) => {
+        setSkillUpdates((current) => [
+          ...current.filter((item) => item.id !== skill.id),
+          ...updates
+        ]);
+      })
+      .catch((unknownError) => {
+        setSkillUpdates((current) => [
+          ...current.filter((item) => item.id !== skill.id),
+          {
+            id: skill.id,
+            name: skill.name,
+            sourceType: skill.sourceType,
+            updateAvailable: false,
+            error:
+              unknownError instanceof Error
+                ? unknownError.message
+                : String(unknownError)
+          }
+        ]);
+      });
   };
 
   useEffect(() => {
@@ -1010,7 +1151,7 @@ const AppContent = ({
     const intervalMs =
       Math.max(5, skillSettings.skillAutoCheckIntervalMinutes) * 60 * 1000;
     const timer = window.setInterval(() => {
-      refreshProfiles().catch((unknownError) => {
+      refreshProfiles({ checkSkillUpdates: true }).catch((unknownError) => {
         setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       });
     }, intervalMs);
@@ -1168,13 +1309,17 @@ const AppContent = ({
   };
 
   const dismissSkillImport = () => {
+    if (pendingSkillImport?.committing) return;
     pendingSkillImport?.resolve(undefined);
     setPendingSkillImport(undefined);
   };
 
   const confirmSkillImport = (resolution: SkillImportConflictResolution) => {
-    pendingSkillImport?.resolve(resolution);
-    setPendingSkillImport(undefined);
+    if (!pendingSkillImport || pendingSkillImport.committing) return;
+    pendingSkillImport.resolve(resolution);
+    setPendingSkillImport((current) =>
+      current ? { ...current, committing: true } : current
+    );
   };
 
   const importOwnedSkillToLibrary = async (
@@ -1201,6 +1346,7 @@ const AppContent = ({
       });
       if (!prepared || prepared.kind !== "local") return;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
+      setPendingSkillImport(undefined);
       await refreshProfiles({ checkSkillUpdates: false });
       updateDraftProfile({
         ...draftProfile,
@@ -1231,6 +1377,7 @@ const AppContent = ({
             })
       });
     } catch (unknownError) {
+      setPendingSkillImport(undefined);
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setImportingOwnedSkillIndex(undefined);
@@ -1272,13 +1419,89 @@ const AppContent = ({
       return undefined;
     }
 
-    const saved = await window.agentEnv.saveProfile(toSaveInput(draftProfile));
-    setDraftProfile(saved);
-    setIsProfileDirty(false);
-    setProfileSaveStatus("Profile saved");
-    setSkillUpdateCheckStatus(undefined);
-    await refreshProfiles();
-    return saved;
+    const previousName =
+      profiles.find((profile) => profile.id === draftProfile.id)?.name ??
+      draftProfile.manifest.name;
+    const previousLibraryVersions = profileLibraryVersions[draftProfile.id];
+    setIsProfileSaving(true);
+    setProfileSaveStatus("Saving profile");
+    try {
+      const saved = await window.agentEnv.saveProfile(toSaveInput(draftProfile));
+      const summary: ProfileSummary = {
+        id: saved.id,
+        targetId: saved.manifest.targetId,
+        name: saved.manifest.name,
+        description: saved.manifest.description,
+        createdAt: saved.manifest.createdAt,
+        iconKey: saved.manifest.iconKey,
+        contentHash: saved.contentHash,
+        targetContentHashes: saved.targetContentHashes
+      };
+      setProfiles((current) =>
+        current.some((profile) => profile.id === saved.id)
+          ? current.map((profile) => profile.id === saved.id ? summary : profile)
+          : current.concat(summary)
+      );
+      const nativeTarget = targets.find(
+        (target) => target.id === saved.manifest.targetId
+      );
+      if (nativeTarget) {
+        setProfileResourceCounts((current) => ({
+          ...current,
+          [saved.id]: summarizeProfile(saved, nativeTarget, librarySkills)
+        }));
+      }
+      setProfileLibraryVersions((current) => ({
+        ...current,
+        [saved.id]: collectLibraryResourceVersions(saved, librarySkills, mcpServers)
+      }));
+      setSkillUsage((current) => reconcileProfileUsage(
+        current,
+        Object.keys(previousLibraryVersions?.skills ?? {}),
+        saved.assetPolicy.skillRefs.map((reference) => reference.libraryId),
+        previousName,
+        saved.manifest.name
+      ));
+      setMcpUsage((current) => reconcileProfileUsage(
+        current,
+        Object.keys(previousLibraryVersions?.mcp ?? {}),
+        saved.assetPolicy.mcpRefs.map((reference) => reference.libraryId),
+        previousName,
+        saved.manifest.name
+      ));
+      setTargetStates((current) =>
+        current.map((state) => {
+          if (state.activeProfileId !== saved.id) return state;
+          const expectedHash =
+            saved.targetContentHashes?.[state.targetId] ??
+            (saved.manifest.targetId === state.targetId ? saved.contentHash : undefined);
+          const contentChanged =
+            !expectedHash || expectedHash !== state.appliedProfileHash;
+          return {
+            ...state,
+            activeProfileName: saved.manifest.name,
+            ...(contentChanged &&
+            state.lifecycleStatus !== "drifted" &&
+            state.lifecycleStatus !== "recovery-required"
+              ? {
+                  lifecycleStatus: "pending" as const,
+                  lifecycleReason: "Saved Profile changed after the last Apply"
+                }
+              : {})
+          };
+        })
+      );
+      setDraftProfile(saved);
+      setIsProfileDirty(false);
+      setProfileSaveStatus("Profile saved");
+      setSkillUpdateCheckStatus(undefined);
+      return saved;
+    } catch (error) {
+      setProfileSaveStatus("");
+      throw error;
+    } finally {
+      setIsProfileSaving(false);
+    }
   };
 
   const saveSelectedProfile = async () => {
@@ -1286,8 +1509,6 @@ const AppContent = ({
       return;
     }
     saveInFlightRef.current = true;
-    setIsProfileSaving(true);
-    setBusy(true);
     setError(undefined);
     try {
       await saveDraft();
@@ -1295,8 +1516,6 @@ const AppContent = ({
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       saveInFlightRef.current = false;
-      setIsProfileSaving(false);
-      setBusy(false);
     }
   };
 
@@ -1592,7 +1811,8 @@ const AppContent = ({
         ? dataRestoreReturnFocusRef
         : appModalFallbackFocusRef,
     onDismiss: dismissAppModal,
-    dismissDisabled: busy && !pendingSkillImport,
+    dismissDisabled:
+      Boolean(pendingSkillImport?.committing) || (busy && !pendingSkillImport),
     focusKey:
       pendingSkillImport
         ? `skill-import:${pendingSkillImport.preview.incoming.contentHash}`
@@ -1862,25 +2082,29 @@ const AppContent = ({
   const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
   const readinessTargetName = selectedTarget?.name ?? t("Target");
   const readinessActionText =
-    readiness.status === "applied"
-      ? t("Up to date on {{name}}", { name: readinessTargetName })
-      : readiness.status === "apply-pending"
-        ? t("Apply pending on {{name}}", { name: readinessTargetName })
-        : readiness.status === "unmanaged"
-          ? t("Ready to take over {{name}}", { name: readinessTargetName })
-          : readiness.status === "ready"
-            ? t("Ready for {{name}}", { name: readinessTargetName })
-            : readiness.status === "dirty"
-              ? t("Save changes to continue")
-              : readiness.status === "target-unavailable"
-                ? t("{{name}} unavailable", { name: readinessTargetName })
-                : readiness.status === "validation-error"
-                  ? t("Review profile configuration")
-                  : readiness.status === "preview-error"
-                    ? t("Review blocking issues")
-                    : readiness.status === "no-target"
-                      ? t("Select a Target")
-                      : t(readiness.message);
+    isProfilePreviewing
+      ? t("Reviewing changes")
+      : isProfileApplying
+        ? t("Applying profile")
+        : readiness.status === "applied"
+          ? t("Up to date on {{name}}", { name: readinessTargetName })
+          : readiness.status === "apply-pending"
+            ? t("Apply pending on {{name}}", { name: readinessTargetName })
+            : readiness.status === "unmanaged"
+              ? t("Ready to take over {{name}}", { name: readinessTargetName })
+              : readiness.status === "ready"
+                ? t("Ready for {{name}}", { name: readinessTargetName })
+                : readiness.status === "dirty"
+                  ? t("Save changes to continue")
+                  : readiness.status === "target-unavailable"
+                    ? t("{{name}} unavailable", { name: readinessTargetName })
+                    : readiness.status === "validation-error"
+                      ? t("Review profile configuration")
+                      : readiness.status === "preview-error"
+                        ? t("Review blocking issues")
+                        : readiness.status === "no-target"
+                          ? t("Select a Target")
+                          : t(readiness.message);
   const applyDisabled =
     !draftProfile || !selectedTarget || busy || isProfileDirty || readiness.status === "applied";
   const applyDescription = !draftProfile
@@ -1924,6 +2148,7 @@ const AppContent = ({
 
     const requestId = ++profileFlowRequestRef.current;
     activeProfileFlowRequestRef.current = requestId;
+    setIsProfilePreviewing(true);
     setBusy(true);
     try {
       const nextPreview = await window.agentEnv.previewApply(
@@ -1952,6 +2177,7 @@ const AppContent = ({
     } finally {
       if (requestId === profileFlowRequestRef.current) {
         activeProfileFlowRequestRef.current = undefined;
+        setIsProfilePreviewing(false);
         setBusy(false);
       }
     }
@@ -1989,6 +2215,7 @@ const AppContent = ({
     }
 
     setBusy(true);
+    setIsProfileApplying(true);
     setError(undefined);
     setProfileSaveStatus("");
     try {
@@ -2000,12 +2227,46 @@ const AppContent = ({
         setError(result.errors.join("\n"));
         return;
       }
+      const appliedAt = new Date().toISOString();
+      setTargetStates((current) => {
+        const appliedState: TargetManagementState = {
+          targetId: preview.targetId,
+          activeProfileId: draftProfile.id,
+          activeProfileName: draftProfile.manifest.name,
+          appliedProfileHash: preview.profileContentHash,
+          appliedLibraryVersions: preview.libraryVersions,
+          status: "managed",
+          lifecycleStatus: "applied",
+          lastAppliedAt: appliedAt,
+          managedResourceCount: preview.effectivePayload?.total ??
+            preview.changes.length + preview.resourceChanges.length,
+          sharedSkillPreparations: preview.sharedSkillPreparations ?? [],
+          warningCount: preview.warnings.length,
+          errorCount: 0
+        };
+        return current.some((state) => state.targetId === preview.targetId)
+          ? current.map((state) => state.targetId === preview.targetId ? appliedState : state)
+          : current.concat(appliedState);
+      });
       setPreview(undefined);
       setRollbackPreview(undefined);
-      await refreshProfiles();
+      void window.agentEnv.listBackups().then(setBackups).catch(() => undefined);
+      const appliedProfileHash = preview.profileContentHash;
+      void window.agentEnv
+        .listTargetStates()
+        .then((refreshedStates) => {
+          setTargetStates((current) =>
+            current.find((state) => state.targetId === preview.targetId)?.appliedProfileHash ===
+            appliedProfileHash
+              ? refreshedStates
+              : current
+          );
+        })
+        .catch(() => undefined);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
+      setIsProfileApplying(false);
       setBusy(false);
     }
   };
@@ -2119,6 +2380,7 @@ const AppContent = ({
       const prepared = await prepareSkillImport({ kind: "local", input: { sourcePath } });
       if (!prepared || prepared.kind !== "local") return false;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
+      setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
       setSkillUpdateCheckStatus({
@@ -2134,6 +2396,7 @@ const AppContent = ({
       });
       return true;
     } catch (unknownError) {
+      setPendingSkillImport(undefined);
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       return false;
     } finally {
@@ -2160,6 +2423,7 @@ const AppContent = ({
       });
       if (!prepared || prepared.kind !== "local") return false;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
+      setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
       setSkillUpdateCheckStatus({
@@ -2172,6 +2436,7 @@ const AppContent = ({
       });
       return true;
     } catch (unknownError) {
+      setPendingSkillImport(undefined);
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       return false;
     } finally {
@@ -2183,10 +2448,16 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.updateLibrarySkill(id);
+      const updated = await window.agentEnv.updateLibrarySkill(id);
       setSelectedSkillUpdatePlan(undefined);
-      const { skillUpdateItems } = await refreshProfiles();
-      setSkillUpdateCheckStatus(summarizeSkillUpdateResult(id, skillUpdateItems, t));
+      applyLibraryContentUpdatesLocally([updated]);
+      setSkillUpdateCheckStatus(
+        summarizeSkillUpdateResult(
+          id,
+          skillUpdates.filter((item) => item.id !== id),
+          t
+        )
+      );
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2289,13 +2560,21 @@ const AppContent = ({
       const failures = results.filter((result): result is PromiseRejectedResult =>
         result.status === "rejected"
       );
+      const updatedSkills = results.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : []
+      );
       setSelectedSkillUpdatePlan(undefined);
-      const { skillUpdateItems } = await refreshProfiles();
+      applyLibraryContentUpdatesLocally(updatedSkills);
+      const updatedIds = new Set(updatedSkills.map((skill) => skill.id));
+      const remainingUpdates = skillUpdates.filter(
+        (update) =>
+          !updatedIds.has(update.id) && update.updateAvailable && !update.error
+      ).length;
       if (failures.length === 0) {
         setSkillUpdateCheckStatus({
           state: "success",
           message:
-            skillUpdateItems.filter((update) => update.updateAvailable && !update.error).length > 0
+            remainingUpdates > 0
               ? `Updated ${plural(ids.length, "skill")} · More updates remain`
               : `Updated ${plural(ids.length, "skill")} · All tracked skills are up to date`
         });
@@ -2545,7 +2824,9 @@ const AppContent = ({
           result.imported.push(
             await window.agentEnv.importGitHubSkillToLibrary(prepared.input)
           );
+          setPendingSkillImport(undefined);
         } catch (importError) {
+          setPendingSkillImport(undefined);
           result.failed.push({
             id: input.id ?? "skill",
             sourceUrl: input.url,
@@ -2702,9 +2983,9 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.setSkillUpdateSource(input);
-      setSelectedSkillUpdatePlan(undefined);
-      await refreshProfiles();
+      const updated = await window.agentEnv.setSkillUpdateSource(input);
+      replaceLibrarySkillLocally(updated, { invalidateUpdateCheck: true });
+      refreshTrackedSkillUpdateLocally(updated);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2716,9 +2997,9 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.setSkillUpdatePolicy(input);
-      setSelectedSkillUpdatePlan(undefined);
-      await refreshProfiles();
+      const updated = await window.agentEnv.setSkillUpdatePolicy(input);
+      replaceLibrarySkillLocally(updated, { invalidateUpdateCheck: true });
+      refreshTrackedSkillUpdateLocally(updated);
       setSkillUpdateCheckStatus({
         state: "success",
         message:
@@ -2762,8 +3043,8 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      await window.agentEnv.setSkillIcon(input);
-      await refreshSkills();
+      const updated = await window.agentEnv.setSkillIcon(input);
+      replaceLibrarySkillLocally(updated);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2816,7 +3097,6 @@ const AppContent = ({
       const nextSettings = await window.agentEnv.updateSettings(input);
       setSkillSettings(nextSettings);
       onLocalePreferenceChange(nextSettings.locale);
-      await refreshProfiles({ settingsOverride: nextSettings });
       if ("backupRetentionDays" in input) await refreshManagedBackups();
       setSettingsSaveStatus("Settings saved");
     } catch (unknownError) {
@@ -2965,7 +3245,7 @@ const AppContent = ({
     setError(undefined);
     setTargetRefreshStatus("refreshing");
     try {
-      await refreshProfiles();
+      await refreshProfiles({ forceTargetRefresh: true });
       setTargetRefreshStatus("refreshed");
     } catch (unknownError) {
       setTargetRefreshStatus(undefined);
@@ -3252,7 +3532,12 @@ const AppContent = ({
         }
       : profileSaveStatus
         ? {
-            kind: profileSaveStatus === "Profile saved" ? "success" : "info",
+            kind:
+              profileSaveStatus === "Profile saved"
+                ? "success"
+                : profileSaveStatus === "Saving profile"
+                  ? "loading"
+                  : "info",
             title: profileSaveStatus
           }
         : dataBackupStatus
@@ -3274,9 +3559,17 @@ const AppContent = ({
         aria-describedby="profile-apply-description"
         title={t(applyActionLabel)}
         disabled={applyDisabled}
+        aria-busy={isProfilePreviewing}
         onClick={previewSelectedProfile}
       >
-        {selectedTargetIcon?.assetUrl ? (
+        {isProfilePreviewing ? (
+          <LoaderCircle
+            className="is-spinning"
+            size={17}
+            strokeWidth={2.2}
+            aria-hidden="true"
+          />
+        ) : selectedTargetIcon?.assetUrl ? (
           <img
             className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`}
             src={selectedTargetIcon.assetUrl}
@@ -3764,10 +4057,18 @@ const AppContent = ({
                               className={`save-button${isProfileDirty ? " is-primary" : ""}`}
                               type="button"
                               aria-busy={isProfileSaving}
-                              disabled={busy || !isProfileDirty}
+                              disabled={busy || isProfileSaving || !isProfileDirty}
                               onClick={saveSelectedProfile}
                             >
-                              {t("Save")}
+                              {isProfileSaving ? (
+                                <LoaderCircle
+                                  className="is-spinning"
+                                  size={15}
+                                  strokeWidth={2.2}
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              {t(isProfileSaving ? "Saving..." : "Save")}
                             </button>
                           </div>
                           {profileApplyControl}
@@ -4022,6 +4323,7 @@ const AppContent = ({
                 title={t("Apply preview for {{name}}", { name: activeTargetName })}
                 confirmLabel={t(replaceManagedDrift ? "Back up and replace" : "Apply profile")}
                 confirmDisabled={!canApply || busy}
+                confirmBusy={isProfileApplying}
                 managedDriftAcknowledged={replaceManagedDrift}
                 onManagedDriftAcknowledgedChange={setReplaceManagedDrift}
                 omissionsAcknowledged={acceptCrossTargetOmissions}
@@ -4760,6 +5062,7 @@ const AppContent = ({
               role="dialog"
               aria-modal="true"
               aria-label={t("Review duplicate Skill")}
+              aria-busy={pendingSkillImport.committing}
               onClick={(event) => event.stopPropagation()}
             >
               <header className="profile-dialog-header">
@@ -4795,6 +5098,7 @@ const AppContent = ({
                   {pendingSkillImport.preview.conflicts.map((conflict) => (
                     <button
                       type="button"
+                      disabled={pendingSkillImport.committing}
                       role="radio"
                       aria-checked={conflict.existing.id === selectedSkillImportConflict.existing.id}
                       className={conflict.existing.id === selectedSkillImportConflict.existing.id ? "is-selected" : ""}
@@ -4857,6 +5161,7 @@ const AppContent = ({
                   <label className={skillImportDecision === "replace" ? "is-selected" : ""}>
                     <input
                       type="radio"
+                      disabled={pendingSkillImport.committing}
                       name="skill-import-decision"
                       checked={skillImportDecision === "replace"}
                       onChange={() => setSkillImportDecision("replace")}
@@ -4866,6 +5171,7 @@ const AppContent = ({
                   <label className={skillImportDecision === "keep-both" ? "is-selected" : ""}>
                     <input
                       type="radio"
+                      disabled={pendingSkillImport.committing}
                       name="skill-import-decision"
                       checked={skillImportDecision === "keep-both"}
                       onChange={() => setSkillImportDecision("keep-both")}
@@ -4876,6 +5182,7 @@ const AppContent = ({
                     <label className="skill-import-alternate-id">
                       <span>{t("Library ID")}</span>
                       <input
+                        disabled={pendingSkillImport.committing}
                         value={skillImportAlternateId}
                         aria-invalid={!alternateSkillIdValid}
                         onChange={(event) => setSkillImportAlternateId(event.target.value)}
@@ -4886,13 +5193,24 @@ const AppContent = ({
               ) : null}
 
               <footer className="preview-actions">
-                <button ref={appModalInitialFocusRef} className="secondary-action" type="button" onClick={dismissSkillImport}>
+                <button
+                  ref={appModalInitialFocusRef}
+                  className="secondary-action"
+                  type="button"
+                  disabled={pendingSkillImport.committing}
+                  onClick={dismissSkillImport}
+                >
                   {t("Cancel")}
                 </button>
                 <button
                   className="primary-action"
                   type="button"
-                  disabled={!selectedSkillImportConflict.contentIdentical && skillImportDecision === "keep-both" && !alternateSkillIdValid}
+                  disabled={Boolean(
+                    pendingSkillImport.committing ||
+                    (!selectedSkillImportConflict.contentIdentical &&
+                      skillImportDecision === "keep-both" &&
+                      !alternateSkillIdValid)
+                  )}
                   onClick={() => {
                     if (selectedSkillImportConflict.sourceUpdateAvailable) {
                       confirmSkillImport({ action: "update-source", existingId: selectedSkillImportConflict.existing.id });
@@ -4905,14 +5223,19 @@ const AppContent = ({
                     }
                   }}
                 >
+                  {pendingSkillImport.committing ? (
+                    <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+                  ) : null}
                   {t(
-                    selectedSkillImportConflict.sourceUpdateAvailable
-                      ? "Update source"
-                      : selectedSkillImportConflict.identical
-                        ? "Use existing"
-                        : skillImportDecision === "replace"
-                        ? "Replace Skill"
-                        : "Save another Skill"
+                    pendingSkillImport.committing
+                      ? "Importing..."
+                      : selectedSkillImportConflict.sourceUpdateAvailable
+                        ? "Update source"
+                        : selectedSkillImportConflict.identical
+                          ? "Use existing"
+                          : skillImportDecision === "replace"
+                            ? "Replace Skill"
+                            : "Save another Skill"
                   )}
                 </button>
               </footer>

@@ -103,6 +103,33 @@ describe("target discovery", () => {
     expect(opencode?.health.canWrite).toBe(true);
   });
 
+  it("caches missing executable checks until an explicit refresh", async () => {
+    const { binDir, service } = await makeService();
+    const executable = join(binDir, "opencode");
+
+    const initial = await service.listTargets();
+    expect(initial.find((target) => target.id === "opencode")?.health.status).toBe(
+      "missing"
+    );
+
+    await writeFile(executable, "#!/bin/sh\n");
+    await chmod(executable, 0o755);
+
+    const cached = await service.listTargets();
+    expect(cached.find((target) => target.id === "opencode")?.health.status).toBe(
+      "missing"
+    );
+
+    const refreshed = await service.listTargets({ forceRefresh: true });
+    expect(refreshed.find((target) => target.id === "opencode")?.health).toEqual(
+      expect.objectContaining({
+        status: "ready",
+        executableFound: true,
+        executablePath: executable
+      })
+    );
+  });
+
   it("finds CLIs in common user bin paths when the GUI PATH is sparse", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-discovery-"));
     const executable = join(root, ".local", "bin", "opencode");

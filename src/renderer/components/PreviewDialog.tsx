@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, LoaderCircle } from "lucide-react";
 import type {
   ActivationPreview,
   RollbackPreview,
@@ -13,6 +13,7 @@ interface PreviewDialogProps {
   preview?: ActivationPreview | RollbackPreview | StopManagingPreview;
   title?: string;
   confirmDisabled?: boolean;
+  confirmBusy?: boolean;
   cancelDisabled?: boolean;
   confirmLabel?: string;
   cancelLabel?: string;
@@ -92,6 +93,7 @@ export const PreviewDialog = ({
   preview,
   title = "Preview",
   confirmDisabled = false,
+  confirmBusy = false,
   cancelDisabled = false,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
@@ -492,8 +494,12 @@ export const PreviewDialog = ({
             className="primary-action"
             type="button"
             disabled={confirmDisabled}
+            aria-busy={confirmBusy}
             onClick={onConfirm}
           >
+            {confirmBusy ? (
+              <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+            ) : null}
             {t(confirmLabel)}
           </button>
         </footer>

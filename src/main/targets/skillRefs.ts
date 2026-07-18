@@ -39,7 +39,8 @@ export const validateSkillRefs = async ({
   profile,
   targetPaths,
   skillLibraryDir,
-  allowMatchingUnmanagedSkills
+  allowMatchingUnmanagedSkills,
+  isolateSkillRoot
 }: TargetAssetInput) => {
   const errors: string[] = [];
   const skillRefs = (profile.assetPolicy.skillRefs ?? []).filter(
@@ -77,7 +78,7 @@ export const validateSkillRefs = async ({
     if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
       errors.push(`Library skill does not exist: ${sourceDir}`);
     }
-    const exists = await pathExists(targetDir);
+    const exists = !isolateSkillRoot && await pathExists(targetDir);
     const owned = exists && await isOwnedSkillDir(targetDir, targetPaths);
     const matchingUnmanaged =
       exists && allowMatchingUnmanagedSkills && await contentMatches(sourceDir, targetDir);
@@ -94,7 +95,7 @@ export const addSkillRefBackupPaths = (
   targetPaths: TargetPaths,
   input: TargetAssetInput
 ) => {
-  if (!targetPaths.skillsDir) {
+  if (!targetPaths.skillsDir || input.isolateSkillRoot) {
     return;
   }
   for (const skillRef of (input.profile.assetPolicy.skillRefs ?? []).filter(

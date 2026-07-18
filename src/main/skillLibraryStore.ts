@@ -143,7 +143,10 @@ export interface ConsolidateSharedSkillGroupStoreInput {
 
 export interface SkillLibraryStore {
   listSkills(): Promise<SkillLibraryEntry[]>;
-  scanInventory(targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]>;
+  scanInventory(
+    targetPaths: TargetPaths[],
+    librarySkills?: SkillLibraryEntry[]
+  ): Promise<SkillInventoryEntry[]>;
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
   listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
@@ -1105,8 +1108,11 @@ export const createSkillLibraryStore = (
     return undefined;
   };
 
-  const scanInventory = async (targetPaths: TargetPaths[]): Promise<SkillInventoryEntry[]> => {
-    const librarySkills = await listSkills();
+  const scanInventory = async (
+    targetPaths: TargetPaths[],
+    knownLibrarySkills?: SkillLibraryEntry[]
+  ): Promise<SkillInventoryEntry[]> => {
+    const librarySkills = knownLibrarySkills ?? await listSkills();
     const libraryIds = new Set(librarySkills.map((skill) => skill.id));
     const libraryById = new Map(librarySkills.map((skill) => [skill.id, skill]));
     const ignoreRules = await readIgnoreRules();

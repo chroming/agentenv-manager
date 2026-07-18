@@ -265,7 +265,9 @@ const validateAssets = async (input: TargetAssetInput) => {
     if (!sourceExists) {
       errors.push(`Owned ${ownedDir.kind} source does not exist: ${sourceDir}`);
     }
-    const targetExists = await pathExists(targetDir);
+    const targetExists =
+      !(input.isolateSkillRoot && ownedDir.kind === "skill") &&
+      await pathExists(targetDir);
     const owned = targetExists && await isOwnedTargetDir(targetDir, targetPaths, ownedDir.kind);
     const matching =
       targetExists && sourceExists && input.allowMatchingUnmanagedAssets &&
@@ -337,11 +339,16 @@ const getAssetBackupPaths = async (input: TargetAssetInput) => {
   ];
 
   for (const ownedDir of profile.assetPolicy.ownedDirs) {
-    paths.add(targetDirFor(targetPaths, ownedDir.kind, ownedDir.targetName));
+    if (!(input.isolateSkillRoot && ownedDir.kind === "skill")) {
+      paths.add(targetDirFor(targetPaths, ownedDir.kind, ownedDir.targetName));
+    }
   }
   addSkillRefBackupPaths(paths, targetPaths, input);
 
   for (const root of roots) {
+    if (input.isolateSkillRoot && root.kind === "skill") {
+      continue;
+    }
     if (!root.path || !(await pathExists(root.path))) {
       continue;
     }

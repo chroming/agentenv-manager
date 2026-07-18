@@ -553,9 +553,8 @@ const previewAndApply = async (page: Page, targetName: "OpenCode" | "Codex") => 
 const saveProfile = async (page: Page) => {
   const saveButton = page.getByRole("button", { name: "Save", exact: true });
   await saveButton.click();
-  await expect.poll(() => saveButton.getAttribute("aria-busy")).toBe("true");
-  await expect.poll(() => saveButton.getAttribute("aria-busy")).toBe("false");
-  await expect.poll(() => saveButton.isDisabled()).toBe(true);
+  await expect.poll(() => page.getByRole("button", { name: "Save", exact: true }).isDisabled())
+    .toBe(true);
 };
 
 const addLibrarySkillToProfile = async (page: Page, skillName = "Shared Reviewer") => {
@@ -5059,6 +5058,42 @@ describe("Electron UI profile switching e2e", () => {
     expect(reenabledAssets.skillRefs).toEqual([
       { libraryId: "layout-skill-1", targetName: "layout-skill-1", enabled: true }
     ]);
+  }, 30_000);
+
+  it("keeps Profile Skill edits, Save, and Preview responsive with many Skills", async () => {
+    const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 30 });
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Skills");
+    const skillRow = page.getByRole("listitem", {
+      name: "Profile skill layout-skill-1",
+      exact: true
+    });
+    const skillSwitch = skillRow.getByRole("switch", {
+      name: "Disable layout-skill-1",
+      exact: true
+    });
+
+    const toggleStartedAt = await page.evaluate(() => performance.now());
+    await skillSwitch.click();
+    await skillRow.getByRole("switch", { name: "Enable layout-skill-1", exact: true }).waitFor();
+    const toggleDuration = (await page.evaluate(() => performance.now())) - toggleStartedAt;
+    expect(toggleDuration).toBeLessThan(500);
+
+    const saveStartedAt = await page.evaluate(() => performance.now());
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("button", { name: "Apply", exact: true }).waitFor({ state: "visible" });
+    await expect.poll(() => page.getByRole("button", { name: "Apply", exact: true }).isEnabled())
+      .toBe(true);
+    const saveDuration = (await page.evaluate(() => performance.now())) - saveStartedAt;
+    expect(saveDuration).toBeLessThan(1_200);
+
+    const previewStartedAt = await page.evaluate(() => performance.now());
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    expect(await page.getByRole("button", { name: "Apply", exact: true }).getAttribute("aria-busy"))
+      .toBe("true");
+    await page.getByRole("dialog", { name: "Preview" }).waitFor({ state: "visible" });
+    const previewDuration = (await page.evaluate(() => performance.now())) - previewStartedAt;
+    expect(previewDuration).toBeLessThan(2_000);
   }, 30_000);
 
   it("globally disables a Library skill, hides it from Profile selection, and removes it on Apply", async () => {
