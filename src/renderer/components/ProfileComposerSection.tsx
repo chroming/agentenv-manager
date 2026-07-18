@@ -32,7 +32,7 @@ export const ProfileComposerSection = ({
   const summaryId = `${generatedId}-summary`;
   const panelId = `${generatedId}-panel`;
   const uniqueChipNames = [...new Set(chipNames)];
-  const visibleChipNames = uniqueChipNames.slice(0, 3);
+  const visibleChipNames = uniqueChipNames.slice(0, 2);
   const overflowCount = Math.max(0, uniqueChipNames.length - visibleChipNames.length);
 
   return (
@@ -68,7 +68,11 @@ export const ProfileComposerSection = ({
           {visibleChipNames.map((chipName, index) => (
             <Fragment key={chipName}>
               {index > 0 ? " " : null}
-              <span className="resource-chip" data-testid="profile-composer-chip">
+              <span
+                className="resource-chip"
+                data-testid="profile-composer-chip"
+                title={chipName}
+              >
                 {chipName}
               </span>
             </Fragment>

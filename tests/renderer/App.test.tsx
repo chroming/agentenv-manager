@@ -663,7 +663,9 @@ describe("App", () => {
     fireEvent.click(within(composer).getByRole("button", { name: "Instructions" }));
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
     fireEvent.click(within(composer).getByRole("button", { name: "Advanced" }));
-    expect(screen.getByLabelText("OpenCode-only opencode.jsonc")).toHaveValue('{\n  "mcp": {}\n}\n');
+    expect(screen.getByLabelText("OpenCode settings (opencode.jsonc)")).toHaveValue(
+      '{\n  "mcp": {}\n}\n'
+    );
   });
 
   it("renders Library Skills before startup discovery and update checks finish", async () => {
@@ -1226,10 +1228,10 @@ describe("App", () => {
 
     expect(instructions).toHaveAccessibleDescription(/1.*AGENTS\.md/);
     expect(skills).toHaveAccessibleDescription(
-      /4.*profile-review.*profile-debug.*library-testing.*\+1/
+      /4.*profile-review.*profile-debug.*\+2/
     );
     expect(mcp).toHaveAccessibleDescription(
-      /4.*library-docs.*shared-mcp.*raw-search.*\+1/
+      /4.*library-docs.*shared-mcp.*\+2/
     );
     expect(advanced).toHaveAccessibleDescription(/1.*legacy-skill/);
     expect(skills).toHaveAttribute("aria-expanded", "false");
@@ -1242,12 +1244,12 @@ describe("App", () => {
     fireEvent.click(advanced);
     expect(advanced).toHaveAttribute("aria-expanded", "true");
     expect(mcp).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByLabelText("OpenCode-only opencode.jsonc")).toBeInTheDocument();
+    expect(screen.getByLabelText("OpenCode settings (opencode.jsonc)")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "History" })).toBeInTheDocument();
 
     fireEvent.click(advanced);
     expect(advanced).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByLabelText("OpenCode-only opencode.jsonc")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("OpenCode settings (opencode.jsonc)")).not.toBeInTheDocument();
   });
 
   it("focuses the active profile without moving it ahead of newer profiles", async () => {

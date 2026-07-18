@@ -378,15 +378,25 @@ export const PreviewDialog = ({
         ) : null}
         {sharedPreparationChanged ? (
           <section className="preview-summary-card">
-            <strong>{t("Shared Skill preparation")}</strong>
-            <span>{t("{{count}} migration decisions", { count: sharedPreparations.length })}</span>
+            <strong>{t("Shared Skill cleanup")}</strong>
+            <span>
+              {t(
+                sharedPreparations.length === 1
+                  ? "1 Skill affected"
+                  : "{{count}} Skills affected",
+                { count: sharedPreparations.length }
+              )}
+            </span>
             {sharedPreparations.map((preparation) => (
-              <p className="warning" key={`${preparation.skillKey}:${preparation.libraryId}`}>
+              <p
+                className="preview-shared-skill-change"
+                key={`${preparation.skillKey}:${preparation.libraryId}`}
+              >
                 {preparation.skillKey}
                 <small>
                   {preparation.disposition === "install"
-                    ? t("Install as {{name}} after migration", { name: preparation.targetName })
-                    : t("Omit after migration")}
+                    ? t("After cleanup: install as {{name}}", { name: preparation.targetName })
+                    : t("After cleanup: remove from this Target")}
                 </small>
               </p>
             ))}

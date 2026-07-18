@@ -20,6 +20,7 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  SearchCheck,
   Settings2,
   SlidersHorizontal,
   Sparkles,
@@ -227,14 +228,14 @@ const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
   if (action === "review-differences") return "Review differences";
   if (action === "review-drift") return "Review drift";
   if (action === "review-ownership") return "Review ownership";
-  if (action === "open-profiles") return "Manage shared Skill";
+  if (action === "open-profiles") return "Review shared copy";
   if (action === "review-replacement") return "Review replacement";
   return "";
 };
 
 const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
   if (action === "open-profiles") {
-    return "Manage shared";
+    return "Review copy";
   }
   if (action === "review-replacement") {
     return "Replace shared";
@@ -1077,7 +1078,11 @@ export const SkillLibraryPanel = ({
             disabled={updateCheckStatus?.state === "checking"}
             onClick={onCheckUpdates}
           >
-            <RefreshCw size={15} strokeWidth={2.2} />
+            {updateCheckStatus?.state === "checking" ? (
+              <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
+            ) : (
+              <SearchCheck size={15} strokeWidth={2.2} />
+            )}
             <span>{t(updateCheckStatus?.state === "checking" ? "Checking..." : "Check updates")}</span>
           </button>
           <button
@@ -1844,13 +1849,13 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
-            aria-label={t("Manage ready copies")}
+            aria-label={t("Review ready skills")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">{t("Manage ready copies")}</div>
+                <div className="section-title">{t("Review ready skills")}</div>
                 <p className="muted">
                   {t("These Skills have one clear canonical version. AgentEnv will add or reuse Library content and normalize the detected Target copies.")}
                 </p>
@@ -1878,7 +1883,7 @@ export const SkillLibraryPanel = ({
                 type="button"
                 onClick={() => void runAutomaticCleanup("all", automaticCleanupRequests)}
               >
-                {t("Manage {{count}} skills", { count: automaticCleanupRequests.length })}
+                {t("Clean up {{count}} skills", { count: automaticCleanupRequests.length })}
               </button>
             </footer>
           </section>
@@ -1892,15 +1897,16 @@ export const SkillLibraryPanel = ({
             className="profile-form-dialog profile-form-dialog--compact shared-target-review-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label={t("Review shared Skill Targets")}
+            aria-label={t("Choose shared Skill handling")}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">{t("Manage shared Skill")}</div>
+                <div className="section-title">{t("Choose how Targets use this Skill")}</div>
                 <p className="muted">
-                  {t("{{name}} is loaded from a shared compatibility folder, independently of Profile references.", {
-                    name: sharedTargetReview.primary?.name ?? sharedTargetReview.skillKey
+                  {t("{{name}} is still loaded by {{count}} Targets from one shared folder.", {
+                    name: sharedTargetReview.primary?.name ?? sharedTargetReview.skillKey,
+                    count: sharedTargetReview.sharedMigration.pendingConsumers.length
                   })}
                 </p>
               </div>
@@ -1909,11 +1915,10 @@ export const SkillLibraryPanel = ({
               {sharedTargetReview.sharedMigration.pendingConsumers.map((targetId) => (
                 <span key={targetId}>{t(targetNameFor(targetId, targetNames, targetId))}</span>
               ))}
-              <ol className="shared-target-review-steps">
-                <li>{t("Configure and Apply the Profile each Target should use.")}</li>
-                <li>{t("Return to Scan local and choose Replace shared.")}</li>
-              </ol>
-              <small>{t("A Profile without this Skill records that it should be removed from that Target.")}</small>
+              <p className="shared-target-review-guidance">
+                {t("Apply the intended Profile to each Target, then return here to replace the shared copy.")}
+              </p>
+              <small>{t("Profiles without this Skill will remove it from that Target when the shared copy is replaced.")}</small>
             </div>
             <footer className="preview-actions">
               <button
@@ -1932,7 +1937,7 @@ export const SkillLibraryPanel = ({
                   if (succeeded) setSharedTargetReviewKey(undefined);
                 })}
               >
-                {t("Keep shared")}
+                {t("Keep shared copy")}
               </button>
               <button
                 className="primary-action"
@@ -1942,7 +1947,7 @@ export const SkillLibraryPanel = ({
                   onOpenProfiles();
                 }}
               >
-                {t("Configure Profiles")}
+                {t("Open Profiles")}
               </button>
             </footer>
           </section>
@@ -1966,7 +1971,7 @@ export const SkillLibraryPanel = ({
               <div>
                 <div className="section-title">{t("Replace shared copy")}</div>
                 <p className="muted">
-                  {t("Every installed consumer is ready. Replace the shared {{name}} copy with each Target's saved Profile?", {
+                  {t("Each Target will use its saved Profile instead of the shared {{name}} copy.", {
                     name: sharedRetireCandidate.primary?.name ?? sharedRetireCandidate.skillKey
                   })}
                 </p>
@@ -1974,7 +1979,7 @@ export const SkillLibraryPanel = ({
             </header>
             <div className="cleanup-retire-summary">
               <div>
-                <strong>{t("Prepared consumers")}</strong>
+                <strong>{t("After replacement")}</strong>
                 {sharedRetireTargets.length > 0 ? (
                   <div className="cleanup-migration-decisions">
                     {sharedRetireTargets.map((target) => (
@@ -2002,7 +2007,7 @@ export const SkillLibraryPanel = ({
                   tooltipClassName="library-source-tooltip"
                 />
               ))}
-              <small>{t("The Library copy is kept. One backup covers the shared copy, Target copies, and migration state; any failed step restores all of them.")}</small>
+              <small>{t("The Library copy is kept. One backup covers the shared copy, Target copies, and saved Target decisions; any failed step restores all of them.")}</small>
             </div>
             <footer className="preview-actions">
               <button
@@ -2576,15 +2581,15 @@ export const SkillLibraryPanel = ({
                   {t("Skills on this Mac")}
                   <InfoTip label={t("Each group shows one Skill, its detected copies, and the next safe cleanup action.")} />
                 </div>
-                <small>{migrationSummary || t("No migration actions needed")}</small>
+                <small>{migrationSummary || t("No cleanup actions needed")}</small>
               </div>
               <button
                 className={`${automaticCleanupRequests.length > 0 ? "primary-action" : "secondary-action"} cleanup-auto-action`}
                 type="button"
                 aria-label={
                   automaticCleanupRequests.length > 0
-                    ? t("Auto-manage {{count}} ready skills", { count: automaticCleanupRequests.length })
-                    : t("Auto-manage unavailable")
+                    ? t("Review {{count}} ready Skills", { count: automaticCleanupRequests.length })
+                    : t("No ready Skills to review")
                 }
                 title={
                   automaticCleanupRequests.length === 0
@@ -2600,7 +2605,7 @@ export const SkillLibraryPanel = ({
                   strokeWidth={2.2}
                   aria-hidden="true"
                 />
-                {t(automaticCleanupKey === "all" ? "Managing..." : "Auto-manage")}
+                {t(automaticCleanupKey === "all" ? "Managing..." : "Review ready")}
               </button>
             </div>
             <div className="resource-list resource-list--unmanaged">
@@ -2693,7 +2698,7 @@ export const SkillLibraryPanel = ({
                       ) : null}
                       {sharedProgressText ? (
                         <PreviewText
-                          ariaLabel={t("Full shared migration state {{id}}", { id: group.skillKey })}
+                          ariaLabel={t("Full shared copy state {{id}}", { id: group.skillKey })}
                           className="cleanup-shared-progress"
                           text={sharedProgressText}
                         />
@@ -2777,7 +2782,7 @@ export const SkillLibraryPanel = ({
                                   }}
                                 >
                                   <Link2Off size={14} strokeWidth={2.2} />
-                                  <span><strong>{t("Keep shared")}</strong></span>
+                                  <span><strong>{t("Keep shared copy")}</strong></span>
                                 </button>
                               ) : sharedMigration?.state === "kept" ? (
                                 <button
@@ -2850,8 +2855,8 @@ export const SkillLibraryPanel = ({
                         <PreviewText
                           ariaLabel={t("Full cleanup history details {{id}}", { id: backup.libraryId })}
                           className="cleanup-history-details"
-                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
-                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared copy replacement" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared copy replacement" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
                         />
                       </div>
                       <div className="cleanup-group-actions">

@@ -195,52 +195,57 @@
   margin-top: 4px;
 }
 
-.skill-library-panel[aria-label="MCP library"] .resource-row {
+.skill-library-panel--mcp .resource-row {
   grid-template-columns: 36px minmax(0, 1fr) auto;
   min-height: 58px;
   padding-block: 7px;
 }
 
-.skill-library-panel[aria-label="MCP library"] .resource-section {
+.skill-library-panel--mcp .resource-section {
   background: var(--surface);
   border: 0;
   border-radius: 0;
   padding-top: 0;
 }
 
-.skill-library-panel[aria-label="MCP library"] .resource-list {
+.skill-library-panel--mcp .resource-list {
   align-content: start;
   gap: 0;
   grid-auto-rows: min-content;
 }
 
-.skill-library-panel[aria-label="MCP library"] .resource-row__main {
+.skill-library-panel--mcp .resource-row__main {
   gap: 2px;
 }
 
-.skill-library-panel[aria-label="MCP library"] .resource-row {
+.skill-library-panel--mcp .resource-row {
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
 }
 
-.skill-library-panel[aria-label="MCP library"] .resource-row:hover {
+.skill-library-panel--mcp .resource-row:hover {
   background: #fafaf8;
   transform: none;
 }
 
-.skill-library-panel[aria-label="MCP library"] .resource-row > .resource-avatar {
+.skill-library-panel--mcp .resource-row > .resource-avatar {
   background: #f1f1ef;
   color: #5f615d;
 }
 
-.skill-library-panel[aria-label="MCP library"] .resource-row__actions {
+.mcp-row-icon svg {
+  height: 18px;
+  width: 18px;
+}
+
+.skill-library-panel--mcp .resource-row__actions {
   opacity: 0.42;
   transition: opacity var(--motion-fast);
 }
 
-.skill-library-panel[aria-label="MCP library"] .resource-row:hover .resource-row__actions,
-.skill-library-panel[aria-label="MCP library"] .resource-row:focus-within .resource-row__actions {
+.skill-library-panel--mcp .resource-row:hover .resource-row__actions,
+.skill-library-panel--mcp .resource-row:focus-within .resource-row__actions {
   opacity: 1;
 }
 

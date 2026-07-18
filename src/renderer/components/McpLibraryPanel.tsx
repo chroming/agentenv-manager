@@ -1,5 +1,5 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { MoreHorizontal, Network, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import type { McpLibraryEntry, McpTransport, SaveMcpServerInput } from "../../shared/types";
 import {
@@ -297,7 +297,7 @@ export const McpLibraryPanel = ({
   );
 
   return (
-    <section className="skill-library-panel" aria-label={t("MCP library")}>
+    <section className="skill-library-panel skill-library-panel--mcp" aria-label={t("MCP library")}>
       <label className="mcp-library-search">
         <Search size={15} strokeWidth={2.2} aria-hidden="true" />
         <input
@@ -326,7 +326,9 @@ export const McpLibraryPanel = ({
               key={server.id}
               role="group"
             >
-              <span className="resource-chip">MCP</span>
+              <span className="resource-avatar mcp-row-icon" aria-hidden="true">
+                <Network size={18} strokeWidth={2.1} />
+              </span>
               <div className="resource-row__main">
                 <OverflowTooltip
                   ariaLabel={t("Full MCP name {{id}}", { id: server.id })}

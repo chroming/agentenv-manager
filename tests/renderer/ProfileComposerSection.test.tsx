@@ -63,20 +63,17 @@ describe("ProfileComposerSection", () => {
     );
 
     const trigger = screen.getByRole("button", { name: "MCP Servers" });
-    const summary = screen.getByText("+2").parentElement;
+    const summary = screen.getByText("+3").parentElement;
 
     expect(summary).not.toBeNull();
     const chips = within(summary!).getAllByTestId("profile-composer-chip");
 
-    expect(chips.map((chip) => chip.textContent)).toEqual([
-      "Context7",
-      "Filesystem",
-      "GitHub"
-    ]);
-    expect(within(summary!).getByText("+2")).toBeInTheDocument();
+    expect(chips.map((chip) => chip.textContent)).toEqual(["Context7", "Filesystem"]);
+    expect(chips.every((chip) => chip.getAttribute("title") === chip.textContent)).toBe(true);
+    expect(within(summary!).getByText("+3")).toBeInTheDocument();
     expect(screen.getByText("6", { selector: ".profile-composer-section__count" })).toBeVisible();
     expect(trigger).toHaveAccessibleDescription(
-      "Connect shared tools 6 Context7 Filesystem GitHub +2"
+      "Connect shared tools 6 Context7 Filesystem +3"
     );
   });
 

@@ -4257,7 +4257,7 @@ const AppContent = ({
                 id="advanced"
                 icon={<Settings2 size={18} strokeWidth={2.2} />}
                 title={t("Advanced")}
-                description={t("Raw config, overrides, validation, and history")}
+                description={t("Target settings, validation, and recovery")}
                 count={draftProfile.assetPolicy.disabledSkillPaths.length}
                 chipNames={draftProfile.assetPolicy.disabledSkillPaths}
                 expanded={activeComposerSection === "advanced"}
@@ -4270,7 +4270,7 @@ const AppContent = ({
                   </div>
                 ) : null}
                 <McpEditor
-                  label={t("{{name}}-only {{config}}", { name: profileTarget?.name ?? t("Native"), config: profileTarget?.configLabel ?? t("config") })}
+                  label={t("{{name}} settings ({{config}})", { name: profileTarget?.name ?? t("Native"), config: profileTarget?.configLabel ?? t("config") })}
                   value={draftProfile.configText}
                   onChange={(configText) => {
                     updateDraftProfile({ ...draftProfile, configText });

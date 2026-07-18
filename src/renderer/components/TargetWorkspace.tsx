@@ -196,7 +196,7 @@ export const TargetWorkspace = ({
                     aria-label={t("Open {{name}} in Profiles", { name: target.name })}
                     onClick={() => onManageTarget(target.id)}
                   >
-                    {t(isManaged ? "Open Profile" : "Profiles")}
+                    {t(isManaged ? "Open Profile" : "Choose Profile")}
                     <ArrowRight size={14} strokeWidth={2.2} />
                   </button>
                 </span>

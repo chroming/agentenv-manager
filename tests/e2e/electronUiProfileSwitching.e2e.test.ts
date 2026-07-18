@@ -1236,6 +1236,11 @@ describe("Electron UI profile switching e2e", () => {
     await openCodeCard.waitFor({ state: "visible" });
     await expect.poll(() => openCodeCard.textContent()).toContain("ManagementApplied");
     await expect.poll(() => openCodeCard.textContent()).toContain("Active profileUI OpenCode alpha");
+    await expect
+      .poll(() =>
+        openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).textContent()
+      )
+      .toContain("Open Profile");
   }, 30_000);
 
   it("blocks profile apply when the target paths are no longer writable", async () => {
@@ -1738,6 +1743,13 @@ describe("Electron UI profile switching e2e", () => {
 
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
+    const [refreshIconClass, checkIconClass] = await Promise.all([
+      page.getByRole("button", { name: "Refresh skills" }).locator("svg").getAttribute("class"),
+      page.getByRole("button", { name: "Check updates" }).locator("svg").getAttribute("class")
+    ]);
+    expect(refreshIconClass).toContain("lucide-refresh-cw");
+    expect(checkIconClass).toContain("lucide-search-check");
+    expect(checkIconClass).not.toBe(refreshIconClass);
     const skillIconGeometry = await sharedRow.locator(".resource-avatar").evaluate((icon) => {
       const glyph = icon.querySelector<SVGElement>("svg")!;
       const iconBox = icon.getBoundingClientRect();
@@ -2213,6 +2225,36 @@ describe("Electron UI profile switching e2e", () => {
 
     await expandComposerSection(page, "MCP Servers");
     expect(await page.locator(".asset-editor-header--compact .section-title").count()).toBe(0);
+    const profileMcpServers = page.getByRole("region", { name: "Profile MCP servers" });
+    await profileMcpServers.waitFor({ state: "visible" });
+    expect(await profileMcpServers.getByText("Inventory", { exact: true }).count()).toBe(0);
+    expect(await profileMcpServers.getByText("Configured", { exact: true }).count()).toBe(0);
+    expect(await profileMcpServers.locator(".resource-chip").count()).toBe(0);
+    const mcpRowGeometry = await profileMcpServers.locator(".profile-mcp-row").evaluateAll(
+      (rows) =>
+        rows.map((row) => {
+          const rowBox = row.getBoundingClientRect();
+          const iconBox = row.querySelector<HTMLElement>(".profile-mcp-row__icon")!
+            .getBoundingClientRect();
+          return {
+            contained: [...row.children].every((child) => {
+              const childBox = child.getBoundingClientRect();
+              return childBox.left >= rowBox.left - 1 && childBox.right <= rowBox.right + 1;
+            }),
+            height: Math.round(rowBox.height),
+            iconHeight: Math.round(iconBox.height),
+            iconWidth: Math.round(iconBox.width)
+          };
+        })
+    );
+    expect(mcpRowGeometry.length).toBeGreaterThan(0);
+    expect(mcpRowGeometry.every((row) => row.contained)).toBe(true);
+    expect(mcpRowGeometry.every((row) => row.height <= 54)).toBe(true);
+    expect(mcpRowGeometry.every((row) => row.iconHeight === 30 && row.iconWidth === 30)).toBe(true);
+    await expectInViewport(
+      page,
+      profileMcpServers.getByRole("button", { name: "Remove shared-docs from profile" })
+    );
     const mcpHeaderHeight = await page
       .locator('[data-profile-composer-id="mcp"] .asset-editor-header--compact')
       .evaluate((header) => Math.round(header.getBoundingClientRect().height));
@@ -2462,6 +2504,19 @@ describe("Electron UI profile switching e2e", () => {
       await expectInViewport(page, page.getByRole("article", { name: `Target ${targetName}` }));
     }
     const openCodeTarget = page.getByRole("article", { name: "Target OpenCode" });
+    const claudeTarget = page.getByRole("article", { name: "Target Claude Code" });
+    await expect
+      .poll(() =>
+        openCodeTarget.getByRole("button", { name: "Open OpenCode in Profiles" }).textContent()
+      )
+      .toContain("Choose Profile");
+    await expect
+      .poll(() =>
+        claudeTarget
+          .getByRole("button", { name: "Open Claude Code in Profiles" })
+          .textContent()
+      )
+      .toContain("Choose Profile");
     const targetPeerActions = await Promise.all(
       [
         openCodeTarget.getByRole("button", { name: "Create profile from OpenCode" }),
@@ -3453,7 +3508,7 @@ describe("Electron UI profile switching e2e", () => {
       await Promise.all([
         sharedStateTooltip.boundingBox(),
         cleanupGroup
-          .getByRole("button", { name: "Manage shared Skill shared-migration-reviewer" })
+          .getByRole("button", { name: "Review shared copy shared-migration-reviewer" })
           .boundingBox()
       ]).then(([tooltip, action]) =>
         Boolean(
@@ -3467,18 +3522,20 @@ describe("Electron UI profile switching e2e", () => {
       )
     ).toBe(false);
     await cleanupGroup
-      .getByRole("button", { name: "Manage shared Skill shared-migration-reviewer" })
+      .getByRole("button", { name: "Review shared copy shared-migration-reviewer" })
       .click();
-    const sharedTargetReview = page.getByRole("dialog", { name: "Review shared Skill Targets" });
+    const sharedTargetReview = page.getByRole("dialog", { name: "Choose shared Skill handling" });
     await sharedTargetReview.waitFor({ state: "visible" });
     await expect.poll(() => sharedTargetReview.textContent()).toContain(
-      "independently of Profile references"
+      "still loaded by 2 Targets from one shared folder"
     );
     await expect.poll(() => sharedTargetReview.textContent()).toContain("OpenCode");
     await expect.poll(() => sharedTargetReview.textContent()).toContain("Codex");
-    await expect.poll(() => sharedTargetReview.textContent()).toContain("Replace shared");
-    await expect(sharedTargetReview.getByRole("button", { name: "Keep shared" }).count()).resolves.toBe(1);
-    await sharedTargetReview.getByRole("button", { name: "Configure Profiles" }).click();
+    await expect.poll(() => sharedTargetReview.textContent()).toContain(
+      "return here to replace the shared copy"
+    );
+    await expect(sharedTargetReview.getByRole("button", { name: "Keep shared copy" }).count()).resolves.toBe(1);
+    await sharedTargetReview.getByRole("button", { name: "Open Profiles" }).click();
     await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local" }).click();
@@ -3506,7 +3563,7 @@ describe("Electron UI profile switching e2e", () => {
     await cleanupGroup
       .getByRole("button", { name: "More cleanup actions for shared-migration-reviewer" })
       .click();
-    await page.getByRole("menuitem", { name: "Keep shared" }).click();
+    await page.getByRole("menuitem", { name: "Keep shared copy" }).click();
     await expect.poll(() => cleanupGroup.textContent()).toContain("Kept");
     await cleanupGroup
       .getByRole("button", { name: "More cleanup actions for shared-migration-reviewer" })
@@ -3556,9 +3613,9 @@ describe("Electron UI profile switching e2e", () => {
     await saveProfile(page);
     await applyActionButton(page, "OpenCode").click();
     const preparationPreview = page.getByRole("dialog", { name: "Preview" });
-    await expect.poll(() => preparationPreview.textContent()).toContain("Shared Skill preparation");
+    await expect.poll(() => preparationPreview.textContent()).toContain("Shared Skill cleanup");
     await expect.poll(() => preparationPreview.textContent()).toContain(
-      `Install as ${skillId} after migration`
+      `After cleanup: install as ${skillId}`
     );
     await preparationPreview.getByRole("button", { name: "Apply profile" }).click();
     await preparationPreview.waitFor({ state: "hidden" });
@@ -3616,11 +3673,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(`${join(codexDir, "skills", skillId)}.agentenv-owner.json`)).resolves.toBe(true);
 
     const history = page.getByRole("region", { name: "Cleanup history" });
-    await expect.poll(() => history.textContent()).toContain("Shared migration");
+    await expect.poll(() => history.textContent()).toContain("Shared copy replacement");
     const migrationHistoryRow = history
       .locator(".cleanup-history-row")
       .filter({ hasText: skillId })
-      .filter({ hasText: "Shared migration" });
+      .filter({ hasText: "Shared copy replacement" });
     await migrationHistoryRow
       .getByRole("button", { name: `Restore cleanup ${skillId}` })
       .click();
@@ -3774,8 +3831,8 @@ describe("Electron UI profile switching e2e", () => {
     ));
     expect(resolvedAlignment[0]).toEqual(resolvedAlignment[1]);
 
-    await page.getByRole("button", { name: /Auto-manage \d+ ready skills/ }).click();
-    const bulkCleanupDialog = page.getByRole("dialog", { name: "Manage ready copies" });
+    await page.getByRole("button", { name: /Review \d+ ready Skills/ }).click();
+    const bulkCleanupDialog = page.getByRole("dialog", { name: "Review ready skills" });
     await expect.poll(() => bulkCleanupDialog.textContent()).toContain("Auto Local Reviewer");
     await expectInViewport(page, bulkCleanupDialog);
     expect(
@@ -3783,7 +3840,7 @@ describe("Electron UI profile switching e2e", () => {
         .locator(".preview-actions button")
         .evaluateAll((buttons) => buttons.every((button) => button.scrollWidth <= button.clientWidth))
     ).toBe(true);
-    await bulkCleanupDialog.getByRole("button", { name: /Manage \d+ skills/ }).click();
+    await bulkCleanupDialog.getByRole("button", { name: /Clean up \d+ skills/ }).click();
     await expect
       .poll(
         () => fileExists(join(appDataRoot, "skills-library", "auto-local-reviewer", "SKILL.md")),
@@ -3798,7 +3855,7 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe(false);
     await expect.poll(() => conflictGroup.textContent()).toContain("Conflict");
     await expect
-      .poll(() => page.getByRole("button", { name: /Auto-manage \d+ ready skills/ }).count())
+      .poll(() => page.getByRole("button", { name: /Review \d+ ready Skills/ }).count())
       .toBe(0);
   }, 30_000);
 
@@ -4180,6 +4237,9 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "MCP Servers" }).click();
     await page.getByRole("region", { name: "MCP library" }).waitFor({ state: "visible" });
+    const sharedMcpRow = page.getByRole("group", { name: "MCP library item shared-docs" });
+    expect(await sharedMcpRow.locator(".resource-chip").count()).toBe(0);
+    expect(await sharedMcpRow.locator(".mcp-row-icon .lucide-network").count()).toBe(1);
     await page.getByRole("button", { name: "Add MCP server" }).click();
     await page.getByLabel("MCP library id").fill("local-search");
     await page.getByLabel("MCP library name").fill("Local Search");
@@ -4965,8 +5025,23 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.locator("html").getAttribute("lang")).toBe("zh-TW");
 
     await resizeAppWindow(page, 920, 620);
-    for (const workspace of ["技能", "設定檔", "目標", "設定"]) {
+    for (const workspace of ["技能", "MCP 伺服器", "設定檔", "目標", "設定"]) {
       await page.getByRole("button", { name: workspace, exact: true }).click();
+      if (workspace === "MCP 伺服器") {
+        const mcpLibrary = page.locator(".skill-library-panel--mcp");
+        await mcpLibrary.waitFor({ state: "visible" });
+        const mcpRowGeometry = await mcpLibrary.locator(".resource-row").first().evaluate((row) => {
+          const style = getComputedStyle(row);
+          return {
+            gridTemplateColumns: style.gridTemplateColumns,
+            height: Math.round(row.getBoundingClientRect().height),
+            minHeight: style.minHeight
+          };
+        });
+        expect(mcpRowGeometry.gridTemplateColumns).toMatch(/^36px /);
+        expect(mcpRowGeometry.minHeight).toBe("58px");
+        expect(mcpRowGeometry.height).toBeLessThanOrEqual(72);
+      }
       const containment = await page.evaluate(() => ({
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: document.documentElement.clientWidth,

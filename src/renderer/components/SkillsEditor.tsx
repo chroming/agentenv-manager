@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { LoaderCircle, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import {
+  LoaderCircle,
+  MoreHorizontal,
+  Network,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2
+} from "lucide-react";
 import {
   parse as parseJsonc,
   printParseErrorCode,
@@ -1121,18 +1130,25 @@ export const SkillsEditor = ({
       ) : null}
 
       {mode !== "advanced" ? (
-        <section className="resource-section" aria-label={t("Resource inventory")}>
-          <div>
-            <div className="resource-heading">
-              {t("Inventory")}
-              <InfoTip label={t("This list shows profile-owned resources, shared library references, and MCP servers that will be considered during preview and apply.")} />
-            </div>
-          </div>
-          <div className="resource-table-head" aria-hidden="true">
-            <span>{t("Type")}</span>
-            <span>{t("Name and source")}</span>
-            <span>{t("Status")}</span>
-          </div>
+        <section
+          className={`resource-section${mode === "mcp" ? " resource-section--profile-mcp" : ""}`}
+          aria-label={t(mode === "mcp" ? "Profile MCP servers" : "Resource inventory")}
+        >
+          {mode !== "mcp" ? (
+            <>
+              <div>
+                <div className="resource-heading">
+                  {t("Inventory")}
+                  <InfoTip label={t("This list shows profile-owned resources, shared library references, and MCP servers that will be considered during preview and apply.")} />
+                </div>
+              </div>
+              <div className="resource-table-head" aria-hidden="true">
+                <span>{t("Type")}</span>
+                <span>{t("Name and source")}</span>
+                <span>{t("Status")}</span>
+              </div>
+            </>
+          ) : null}
           <div className="resource-list">
             {showsMcp && mcpState.error ? (
               <p className="warning">{t("Config parse error: {{error}}", { error: mcpState.error })}</p>
@@ -1240,34 +1256,53 @@ export const SkillsEditor = ({
             {showsMcp
               ? libraryMcpEntries.map((asset, index) => {
                   const mcpServer = mcpServersById.get(asset.libraryId);
+                  const endpoint =
+                    mcpServer?.transport === "stdio"
+                      ? [mcpServer.command, ...(mcpServer.args ?? [])]
+                          .filter(Boolean)
+                          .join(" ")
+                      : mcpServer?.url ?? `mcp-library/${asset.libraryId}`;
                   return (
                     <div
                       aria-label={t("MCP {{name}}", { name: asset.targetName })}
-                      className="resource-row"
+                      className="resource-row profile-mcp-row"
                       key={`${asset.libraryId}:${asset.targetName}:${index}`}
                       role="group"
                     >
-                      <span className="resource-chip">MCP</span>
+                      <span className="resource-avatar profile-mcp-row__icon" aria-hidden="true">
+                        <Network size={17} strokeWidth={2.1} />
+                      </span>
                       <div className="resource-row__main">
-                        <span>{asset.targetName}</span>
-                        <small>{t("Library")}</small>
-                        <small>{mcpServer?.name ?? asset.libraryId}</small>
-                        <small>
-                          {mcpServer?.transport === "stdio"
-                            ? [mcpServer.command, ...(mcpServer.args ?? [])]
-                                .filter(Boolean)
-                                .join(" ")
-                            : mcpServer?.url ?? `mcp-library/${asset.libraryId}`}
+                        <OverflowTooltip
+                          ariaLabel={t("Full MCP name {{id}}", { id: asset.targetName })}
+                          className="profile-mcp-row__name"
+                          text={asset.targetName}
+                        />
+                        <small className="profile-mcp-row__meta">
+                          <span className="profile-mcp-row__source">
+                            {t("Library · {{name}}", {
+                              name: mcpServer?.name ?? asset.libraryId
+                            })}
+                          </span>
+                          <OverflowTooltip
+                            ariaLabel={t("Full MCP endpoint {{id}}", { id: asset.targetName })}
+                            className="profile-mcp-row__detail"
+                            text={endpoint}
+                            tooltipClassName="library-source-tooltip"
+                          />
                         </small>
                       </div>
                       <div className="resource-row__actions">
-                        <strong className="resource-status">{t("Configured")}</strong>
                         <button
-                          className="secondary-action"
+                          className="icon-action"
                           type="button"
+                          aria-label={t("Remove {{name}} from profile", {
+                            name: asset.targetName
+                          })}
+                          title={t("Remove from profile")}
                           onClick={() => removeMcpRef(index)}
                         >
-                          {t("Remove from profile")}
+                          <Trash2 size={15} strokeWidth={2.1} aria-hidden="true" />
                         </button>
                       </div>
                     </div>
@@ -1278,22 +1313,36 @@ export const SkillsEditor = ({
               ? mcpState.resources.map((resource) => (
                   <div
                     aria-label={t("MCP {{name}}", { name: resource.name })}
-                    className="resource-row"
+                    className="resource-row profile-mcp-row"
                     key={resource.name}
                     role="group"
                   >
-                    <span className="resource-chip">MCP</span>
+                    <span className="resource-avatar profile-mcp-row__icon" aria-hidden="true">
+                      <Network size={17} strokeWidth={2.1} />
+                    </span>
                     <div className="resource-row__main">
-                      <span>{resource.name}</span>
-                      <small>{t("Raw config")}</small>
-                      <small>{resource.type}</small>
-                      <small>{resource.detail}</small>
+                      <OverflowTooltip
+                        ariaLabel={t("Full MCP name {{id}}", { id: resource.name })}
+                        className="profile-mcp-row__name"
+                        text={resource.name}
+                      />
+                      <small className="profile-mcp-row__meta">
+                        <span className="profile-mcp-row__source">
+                          {t("Native config · {{type}}", { type: resource.type })}
+                        </span>
+                        <OverflowTooltip
+                          ariaLabel={t("Full MCP endpoint {{id}}", { id: resource.name })}
+                          className="profile-mcp-row__detail"
+                          text={resource.detail}
+                          tooltipClassName="library-source-tooltip"
+                        />
+                      </small>
                     </div>
-                    <strong
-                      className={`resource-status resource-status--${resource.status.toLowerCase()}`}
-                    >
-                      {t(resource.status)}
-                    </strong>
+                    {resource.status === "Conflict" ? (
+                      <strong className="resource-status resource-status--conflict">
+                        {t("Conflict")}
+                      </strong>
+                    ) : null}
                   </div>
                 ))
               : null}

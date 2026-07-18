@@ -84,7 +84,7 @@ Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data ro
 - A compatibility copy is switched only through an explicit Scan local migration action after every installed consumer Target has applied a current preparation; Capture never removes it as a side effect.
 - Completing migration MUST create one restorable backup for the shared paths, every affected Target path, and every affected Target state. It removes the shared paths first, deploys or omits the Skill according to each prepared Profile, verifies the result, and restores the whole transaction on any failure.
 - AgentEnv MUST NOT edit per-Agent configuration to suppress duplicate discovery during this migration.
-- `Keep shared` is a path-scoped migration decision. It MUST NOT ignore or alter same-name copies in Target-specific directories.
+- `Keep shared copy` is a path-scoped decision. It MUST NOT ignore or alter same-name copies in Target-specific directories.
 - A compatibility copy with conflicting content blocks automatic consolidation.
 - External manager metadata, including Skills CLI lock files, is read-only evidence. AgentEnv MUST NOT silently edit or delete another manager's lock data.
 - Importing an externally managed Skill creates an independent Library copy and MUST NOT imply that AgentEnv has taken ownership of the external installation.
@@ -530,7 +530,7 @@ User-facing state and action contract:
 - A Skill already in Library uses `Unmanaged` / `Manage copies`, `Conflict` / `Review`, or `Changed` / `Review`.
 - External ownership uses `External` / `Review`. Internal states such as `Auto-ready`, `Take over`, and `Resolve conflict` MUST NOT be presented as user actions.
 - `Add to Library`, `Manage copies`, and every review action open a preview dialog before mutation. Row actions use lightweight styling; filled emphasis is reserved for the dialog commit and an intentional bulk command.
-- `Auto-manage` is a stable Cleanup command rather than a conditionally disappearing feature. It is enabled only when at least one group has one unambiguous canonical version, otherwise it remains visible and disabled with an unavailable explanation. It opens `Manage ready copies`, a bulk confirmation listing every eligible Skill and the independent-backup behavior before it starts. A failure in one Skill does not roll back completed independent Skills, and the result reports both completed and remaining groups.
+- `Review ready` is a stable Cleanup command rather than a conditionally disappearing feature. It is enabled only when at least one group has one unambiguous canonical version, otherwise it remains visible and disabled with an unavailable explanation. It opens `Review ready skills`, a bulk confirmation listing every eligible Skill and the independent-backup behavior before `Clean up N skills` starts. A failure in one Skill does not roll back completed independent Skills, and the result reports both completed and remaining groups.
 - The main process MUST rescan and compare the reviewed content hashes immediately before mutation. Stale previews fail without modifying Library or local copies.
 - Every mutating cleanup backs up all affected locations first. A failure after mutation begins attempts to restore Library and every affected location independently; one failed restore MUST NOT prevent later paths from being restored. The error distinguishes a completed rollback from an incomplete rollback, and the renderer rescans disk before presenting the remaining group state.
 - After successful cleanup, selected Target-specific copies rescan as current and `Managed`; the group MUST NOT retain a duplicate or pending action.
@@ -542,14 +542,13 @@ Shared compatibility migration contract:
 
 - A shared Skill not yet in Library follows the same `Add to Library` intent as every other local Skill. If multiple versions exist, the dialog adds a version choice.
 - Adding a shared Skill to Library is one transaction: back up all copies, create the Library canonical copy, keep exactly one shared compatibility copy active, and remove redundant Target-specific copies. The shared copy MUST NOT receive a Target ownership marker.
-- Once Library is ready, Cleanup shows the compact `Shared` badge and states that consumer Targets still load the compatibility copy independently of Profile references. `Manage shared Skill` presents the two valid outcomes in one workflow: configure and Apply each affected Target's intended Profile so the shared copy can become Target-managed installs (or explicit omissions), or mark the shared copy `Kept`. A Profile that omits the Skill is a valid explicit decision to remove it for that Target. Cleanup MUST NOT show per-Target `Needs Apply` chips or pretend Profile Apply is a Cleanup step.
-- An installed Target that still reads the compatibility location remains a consumer even when AgentEnv does not manage its Profile. AgentEnv MUST preserve the shared copy and block replacement until that Target records an explicit applied decision. `Keep shared` is the non-takeover outcome; skills-only Target ownership is not currently supported and MUST NOT be implied by the UI.
-- After every affected Target has an explicit current decision, the row shows `Ready` / `Replace shared`; the confirmation remains the mutation boundary.
-- Profiles independently save and apply each Target's install-or-omit decision. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
-- When every installed consumer has a current preparation, Cleanup shows `Ready` / `Replace shared`.
+- Once Library is ready, Cleanup shows the compact `Shared` badge and states that consumer Targets still load the compatibility copy independently of Profile references. `Review shared copy` presents the two valid outcomes in one workflow: open Profiles so each affected Target can receive its intended Profile, or `Keep shared copy`. A Profile that omits the Skill is a valid explicit decision to remove it for that Target. Cleanup MUST NOT show per-Target `Needs Apply` chips, expose internal preparation or migration phases as commands, or pretend Profile Apply is a Cleanup step.
+- An installed Target that still reads the compatibility location remains a consumer even when AgentEnv does not manage its Profile. AgentEnv MUST preserve the shared copy and block replacement until that Target records an explicit applied decision. `Keep shared copy` is the non-takeover outcome; skills-only Target ownership is not currently supported and MUST NOT be implied by the UI.
+- After every affected Target has an explicit current decision, the row shows `Ready` / `Replace shared copy`; the confirmation remains the mutation boundary.
+- Profiles independently save and apply each Target's install-or-omit decision. Apply Preview describes the final outcome as `After cleanup: install as <name>` or `After cleanup: remove from this Target`; it MUST NOT expose preparation records or migration decisions. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
 - `Replace shared copy` requires confirmation that lists each prepared Target's final `Install as <name>` or `Do not install` decision. It executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
-- Cleanup history exposes the completed shared migration as one restorable operation. Restore returns shared paths, Target paths, and preparation state to their pre-migration state.
-- `Keep shared` records a path-scoped decision and resolves the group without changing files. `Review again` removes only that decision.
+- Cleanup history exposes the completed `Shared copy replacement` as one restorable operation. Restore returns shared paths, Target paths, and preparation state to their pre-replacement state.
+- `Keep shared copy` records a path-scoped decision and resolves the group without changing files. `Review again` removes only that decision.
 - Shared compatibility groups MUST NOT participate in generic Target-copy bulk cleanup.
 
 Cleanup review contract:
@@ -617,6 +616,7 @@ Status: local and recursive GitHub import, in-place Refresh, per-Skill update po
 - Updating an MCP definition marks affected deployments `Changes pending` but does not deploy.
 - An MCP used by any Profile MUST NOT be deleted.
 - MCP rows use compact list density. Edit MAY remain a visible row command; destructive delete belongs in the row overflow and always requires confirmation. Aggregate count cards MUST NOT repeat information already visible in the Library list without enabling a distinct decision.
+- A Profile's expanded MCP section is already scoped to MCP, so it MUST NOT repeat `Inventory`, an `MCP` type badge, or routine `Configured` status on every row. It shows the server name, Library or native-config source, endpoint, and only exceptional status such as `Conflict`; removal is a labelled secondary icon action.
 - Environment values that appear secret MUST be masked in UI, Preview, logs, and diagnostics.
 - Backups containing secrets MUST remain local and use restrictive filesystem permissions.
 
@@ -628,7 +628,7 @@ Create from Target gives an existing native environment a reusable Profile repre
 
 - Capture MUST read only paths declared by the selected Target adapter.
 - A Target-row capture command MUST keep the invoking Targets workspace visible until the user confirms. Cancel and Escape return focus to that exact command without changing workspace.
-- Target-row command hierarchy follows lifecycle state: an unmanaged Target presents `Capture` as the primary action and Profiles as secondary; a managed Target presents `Open Profile` as the primary action and Capture as secondary. Both commands remain available without competing primary emphasis.
+- Target-row command hierarchy follows lifecycle state: an unmanaged Target presents `Capture` as the primary action and `Choose Profile` as secondary; a managed Target presents `Open Profile` as the primary action and Capture as secondary. Both commands remain available without competing primary emphasis.
 - Profiles may offer a general `From Target` entry, but a Target-row entry MUST bind the source Target directly and MUST NOT ask the user to choose Blank versus From Target again.
 - Capture uses two explicit steps: setup and capture review. Review provides Back without losing the Profile name or selected Target.
 - Preview MUST list portable resources to include or reuse, new Library imports, excluded resources, and conflicts.
@@ -915,7 +915,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-17 against the current `main` tree at the time of this snapshot.
 
-- `454` automated tests passed across `52` test files; the `88`-test Electron UI suite and `96` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- `455` automated tests passed across `52` test files; the `88`-test Electron UI suite and `96` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
 - The CSS architecture gate passed with six named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `51` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, and focused update-setting states.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.

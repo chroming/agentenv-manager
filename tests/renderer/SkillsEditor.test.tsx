@@ -441,11 +441,11 @@ describe("SkillsEditor", () => {
       />
     );
 
-    const inventory = screen.getByRole("region", { name: "Resource inventory" });
+    const inventory = screen.getByRole("region", { name: "Profile MCP servers" });
     const contextRows = within(inventory).getAllByRole("group", { name: "MCP context7" });
     expect(contextRows).toHaveLength(2);
     expect(contextRows[0]).toHaveTextContent("Library");
-    expect(contextRows[1]).toHaveTextContent("Raw config");
+    expect(contextRows[1]).toHaveTextContent("Native config");
     expect(within(inventory).getByRole("group", { name: "MCP filesystem" })).toHaveTextContent(
       "npx -y @modelcontextprotocol/server-filesystem"
     );
@@ -469,7 +469,11 @@ describe("SkillsEditor", () => {
       ]
     });
 
-    fireEvent.click(within(contextRows[0]).getByRole("button", { name: "Remove from profile" }));
+    expect(within(inventory).queryByText("Inventory")).not.toBeInTheDocument();
+    expect(within(inventory).queryByText("Configured")).not.toBeInTheDocument();
+    fireEvent.click(
+      within(contextRows[0]).getByRole("button", { name: "Remove context7 from profile" })
+    );
     expect(onChange).toHaveBeenLastCalledWith({
       ...mixedPolicy,
       mcpRefs: []
@@ -661,7 +665,7 @@ describe("SkillsEditor", () => {
       />
     );
 
-    const inventory = screen.getByRole("region", { name: "Resource inventory" });
+    const inventory = screen.getByRole("region", { name: "Profile MCP servers" });
     expect(within(inventory).getByRole("group", { name: "MCP context7" })).toHaveTextContent(
       "npx -y @upstash/context7-mcp"
     );

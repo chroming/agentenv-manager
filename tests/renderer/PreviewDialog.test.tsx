@@ -88,6 +88,36 @@ describe("PreviewDialog", () => {
     expect(screen.getByText("1 install · 1 replace · 1 remove")).toBeInTheDocument();
   });
 
+  it("describes shared Skill changes as final cleanup outcomes", () => {
+    render(
+      <PreviewDialog
+        preview={{
+          ...preview,
+          sharedSkillPreparationChanged: true,
+          sharedSkillPreparations: [
+            {
+              skillKey: "reviewer",
+              libraryId: "reviewer",
+              sharedPaths: ["/tmp/home/.agents/skills/reviewer"],
+              targetName: "reviewer",
+              disposition: "install",
+              profileId: "daily-coding",
+              profileHash: "profile-hash"
+            }
+          ]
+        }}
+      />
+    );
+
+    expect(screen.getByText("Shared Skill cleanup")).toBeInTheDocument();
+    expect(screen.getByText("1 Skill affected")).toBeInTheDocument();
+    const outcome = screen.getByText("After cleanup: install as reviewer");
+    expect(outcome).toBeInTheDocument();
+    expect(outcome.closest("p")).toHaveClass("preview-shared-skill-change");
+    expect(outcome.closest("p")).not.toHaveClass("warning");
+    expect(screen.queryByText(/preparation|migration decision/i)).not.toBeInTheDocument();
+  });
+
   it("requires an explicit acknowledgement for resources omitted on another Target", () => {
     const onAcknowledgedChange = vi.fn();
     render(

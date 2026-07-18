@@ -964,14 +964,11 @@
   white-space: nowrap;
 }
 
-.shared-target-review-steps {
+.shared-target-review-guidance {
   color: var(--text);
-  display: grid;
   font-size: 12px;
-  gap: 6px;
   line-height: 1.45;
   margin: 2px 0 0;
-  padding-left: 20px;
 }
 
 .shared-target-review-dialog .shared-keep-action {

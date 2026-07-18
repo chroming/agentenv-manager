@@ -664,7 +664,7 @@ describe("SkillLibraryPanel", () => {
         name: "More cleanup actions for compat-reviewer"
       })
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Keep shared" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Keep shared copy" }));
     expect(onSetSharedSkillRetention).toHaveBeenCalledWith({
       skillKey: "compat-reviewer",
       paths: ["/tmp/home/.agents/skills/compat-reviewer"],
@@ -711,15 +711,15 @@ describe("SkillLibraryPanel", () => {
       })
     );
     const takeOverAllButton = within(discoveries).getByRole("button", {
-      name: "Auto-manage 3 ready skills"
+      name: "Review 3 ready Skills"
     });
-    expect(takeOverAllButton).toHaveTextContent("Auto-manage");
+    expect(takeOverAllButton).toHaveTextContent("Review ready");
     fireEvent.click(takeOverAllButton);
-    const bulkCleanupDialog = screen.getByRole("dialog", { name: "Manage ready copies" });
+    const bulkCleanupDialog = screen.getByRole("dialog", { name: "Review ready skills" });
     expect(bulkCleanupDialog).toHaveTextContent("Copied Local");
     expect(bulkCleanupDialog).toHaveTextContent("Legacy Reviewer");
     fireEvent.click(
-      within(bulkCleanupDialog).getByRole("button", { name: "Manage 3 skills" })
+      within(bulkCleanupDialog).getByRole("button", { name: "Clean up 3 skills" })
     );
     expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
       expect.arrayContaining([
