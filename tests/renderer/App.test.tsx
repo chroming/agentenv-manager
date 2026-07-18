@@ -305,6 +305,30 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       conflicts: [],
       suggestedId: "skill"
     })),
+    previewSkillMerge: vi.fn().mockResolvedValue({
+      name: "skill",
+      entries: [],
+      comparisons: [],
+      profileCount: 0,
+      installCount: 0
+    }),
+    mergeLibrarySkills: vi.fn().mockResolvedValue({
+      backupId: "merge-backup",
+      skill: {
+        id: "skill",
+        name: "skill",
+        description: "",
+        path: "/tmp/skill",
+        sourceType: "local",
+        source: "/tmp/skill",
+        updatePolicy: "untracked",
+        contentHash: "hash",
+        updatedAt: "2026-07-02T00:00:00.000Z"
+      },
+      removedIds: [],
+      profilesUpdated: 0,
+      installsUpdated: 0
+    }),
     importSkillToLibrary: vi.fn().mockResolvedValue({
       skill: {
         id: "skill",

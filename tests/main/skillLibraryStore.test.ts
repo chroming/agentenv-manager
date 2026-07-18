@@ -1811,4 +1811,220 @@ description: >
       after: "---\nname: reviewer\n---\n# v2\n"
     });
   });
+
+  it("merges same-name Library skills while choosing content and update source independently", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const alphaDir = join(paths.skillsLibraryDir, "reviewer-alpha");
+    const betaDir = join(paths.skillsLibraryDir, "reviewer-beta");
+    const profileDir = join(paths.profilesDir, "daily-coding");
+    await mkdir(alphaDir, { recursive: true });
+    await mkdir(betaDir, { recursive: true });
+    await mkdir(profileDir, { recursive: true });
+    await writeFile(
+      join(alphaDir, "SKILL.md"),
+      "---\nname: reviewer\nversion: 1.0.0\n---\n# Keep this content\n",
+      "utf8"
+    );
+    await writeFile(
+      join(alphaDir, ".agentenv-skill.json"),
+      JSON.stringify({ sourceType: "local", source: "/original/alpha", updatePolicy: "untracked" }),
+      "utf8"
+    );
+    await writeFile(
+      join(betaDir, "SKILL.md"),
+      "---\nname: reviewer\nversion: 2.0.0\n---\n# Other content\n",
+      "utf8"
+    );
+    await writeFile(
+      join(betaDir, ".agentenv-skill.json"),
+      JSON.stringify({
+        sourceType: "github",
+        source: "https://github.com/acme/reviewer/tree/main/skill",
+        remoteRef: "main",
+        remotePath: "skill",
+        remoteRevision: "abcdef123456",
+        updatePolicy: "tracked",
+        upstream: {
+          kind: "github",
+          locator: "https://github.com/acme/reviewer/tree/main/skill",
+          ref: "main",
+          subpath: "skill",
+          revision: "abcdef123456"
+        }
+      }),
+      "utf8"
+    );
+    const originalProfile = {
+      id: "daily-coding",
+      profileDir,
+      manifest: {
+        id: "daily-coding",
+        targetId: "opencode",
+        name: "Daily Coding",
+        description: "",
+        version: 1 as const,
+        managed: { instructions: true, config: true, assets: true }
+      },
+      instructions: "",
+      configText: "{}",
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [{ libraryId: "reviewer-beta", targetName: "reviewer", enabled: true }],
+        mcpRefs: [],
+        disabledSkillPaths: []
+      }
+    };
+    let currentProfile = originalProfile;
+    await writeFile(join(profileDir, "profile-state.json"), JSON.stringify(originalProfile), "utf8");
+    const profileStore = {
+      listProfiles: async () => [{ id: currentProfile.id, targetId: "opencode", name: "Daily Coding", description: "" }],
+      readProfile: async () => currentProfile,
+      saveProfile: async (input: typeof originalProfile) => {
+        currentProfile = { ...input, id: input.manifest.id, profileDir };
+        await writeFile(join(profileDir, "profile-state.json"), JSON.stringify(currentProfile), "utf8");
+        return currentProfile;
+      }
+    };
+    const store = createSkillLibraryStore(paths, undefined, { profileStore });
+    const targetPaths = {
+      targetId: "opencode",
+      configDir: join(paths.homeDir, ".config", "opencode"),
+      instructionsPath: "",
+      configPath: "",
+      skillsDir: join(paths.homeDir, ".config", "opencode", "skills")
+    };
+    await store.deployLibrarySkill({
+      targetPaths,
+      targetName: "reviewer",
+      libraryId: "reviewer-beta",
+      profileId: "daily-coding"
+    });
+
+    const preview = await store.previewMerge("reviewer-alpha", [targetPaths]);
+    expect(preview).toMatchObject({
+      name: "reviewer",
+      entries: [
+        { id: "reviewer-alpha", profileNames: [] },
+        { id: "reviewer-beta", profileNames: ["Daily Coding"] }
+      ],
+      profileCount: 1,
+      installCount: 1
+    });
+    expect(preview.comparisons[0]).toMatchObject({
+      leftId: "reviewer-alpha",
+      rightId: "reviewer-beta",
+      identical: false,
+      changes: [expect.objectContaining({ path: "SKILL.md" })]
+    });
+
+    const result = await store.mergeSkills(
+      {
+        ids: preview.entries.map((entry) => entry.id),
+        keepId: "reviewer-alpha",
+        sourceId: "reviewer-beta",
+        expectedContentHashes: Object.fromEntries(
+          preview.entries.map((entry) => [entry.id, entry.contentHash])
+        )
+      },
+      [targetPaths]
+    );
+
+    expect(result).toMatchObject({
+      removedIds: ["reviewer-beta"],
+      profilesUpdated: 1,
+      installsUpdated: 1
+    });
+    await expect(store.listSkills()).resolves.toEqual([
+      expect.objectContaining({
+        id: "reviewer-alpha",
+        sourceType: "github",
+        source: "https://github.com/acme/reviewer/tree/main/skill",
+        updatePolicy: "tracked"
+      })
+    ]);
+    await expect(readFile(join(alphaDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "# Keep this content"
+    );
+    expect(currentProfile.assetPolicy.skillRefs).toEqual([
+      { libraryId: "reviewer-alpha", targetName: "reviewer", enabled: true }
+    ]);
+    await expect(readlink(join(targetPaths.skillsDir, "reviewer"))).resolves.toBe(alphaDir);
+    await expect(
+      readFile(`${join(targetPaths.skillsDir, "reviewer")}.agentenv-owner.json`, "utf8")
+    ).resolves.toContain('"source": "skills-library/reviewer-alpha"');
+
+    await store.rollbackSkillCleanup(result.backupId);
+    await expect(readFile(join(betaDir, "SKILL.md"), "utf8")).resolves.toContain("# Other content");
+    await expect(readlink(join(targetPaths.skillsDir, "reviewer"))).resolves.toBe(betaDir);
+    await expect(readFile(join(profileDir, "profile-state.json"), "utf8")).resolves.toContain(
+      '"libraryId":"reviewer-beta"'
+    );
+  });
+
+  it("recognizes identical same-name Library skills and still preserves the chosen source", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const localDir = join(paths.skillsLibraryDir, "reviewer-local");
+    const githubDir = join(paths.skillsLibraryDir, "reviewer-github");
+    const content = "---\nname: reviewer\n---\n# Same content\n";
+    for (const path of [localDir, githubDir]) {
+      await mkdir(path, { recursive: true });
+      await writeFile(join(path, "SKILL.md"), content, "utf8");
+    }
+    await writeFile(
+      join(githubDir, ".agentenv-skill.json"),
+      JSON.stringify({
+        sourceType: "github",
+        source: "https://github.com/acme/reviewer/tree/main/skill",
+        updatePolicy: "tracked"
+      }),
+      "utf8"
+    );
+    const profileStore = {
+      listProfiles: async () => [],
+      readProfile: async () => { throw new Error("unexpected profile read"); },
+      saveProfile: async () => { throw new Error("unexpected profile save"); }
+    };
+    const store = createSkillLibraryStore(paths, undefined, { profileStore });
+
+    const preview = await store.previewMerge("reviewer-local", []);
+    expect(preview.comparisons).toEqual([
+      expect.objectContaining({ identical: true, changes: [] })
+    ]);
+
+    await writeFile(join(githubDir, "SKILL.md"), `${content}\nChanged after preview.\n`, "utf8");
+    await expect(store.mergeSkills({
+      ids: preview.entries.map((entry) => entry.id),
+      keepId: "reviewer-local",
+      sourceId: "reviewer-github",
+      expectedContentHashes: Object.fromEntries(
+        preview.entries.map((entry) => [entry.id, entry.contentHash])
+      )
+    }, [])).rejects.toThrow("changed after the merge preview");
+    await expect(readFile(join(githubDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "Changed after preview"
+    );
+    await writeFile(join(githubDir, "SKILL.md"), content, "utf8");
+    const refreshedPreview = await store.previewMerge("reviewer-local", []);
+
+    const result = await store.mergeSkills({
+      ids: refreshedPreview.entries.map((entry) => entry.id),
+      keepId: "reviewer-local",
+      sourceId: "reviewer-github",
+      expectedContentHashes: Object.fromEntries(
+        refreshedPreview.entries.map((entry) => [entry.id, entry.contentHash])
+      )
+    }, []);
+
+    expect(result.removedIds).toEqual(["reviewer-github"]);
+    await expect(store.listSkills()).resolves.toEqual([
+      expect.objectContaining({
+        id: "reviewer-local",
+        sourceType: "github",
+        updatePolicy: "tracked"
+      })
+    ]);
+  });
 });

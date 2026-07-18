@@ -285,6 +285,7 @@ const createServices = async () => {
     paths,
     settingsStore,
     {
+      profileStore,
       authTokenProvider: githubAuthService.readAccessToken,
       ...(process.env.AGENTENV_GITHUB_FIXTURE_ROOT
         ? { fetch: createGitHubFixtureFetch(process.env.AGENTENV_GITHUB_FIXTURE_ROOT) }

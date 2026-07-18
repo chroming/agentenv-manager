@@ -69,6 +69,8 @@ describe("SkillLibraryPanel", () => {
     const onRetireSharedSkill = vi.fn().mockResolvedValue(true);
     const onOpenProfiles = vi.fn();
     const onRestoreCleanup = vi.fn();
+    const onPreviewSkillMerge = vi.fn();
+    const onMergeLibrarySkills = vi.fn().mockResolvedValue(true);
     const onCloseTool = vi.fn();
     const onRefreshInventory = vi.fn().mockResolvedValue(undefined);
     const onViewStateChange = vi.fn();
@@ -397,6 +399,8 @@ describe("SkillLibraryPanel", () => {
         onCloseBulkUpdatePreview={onCloseBulkUpdatePreview}
         onSyncSkillInstalls={onSyncSkillInstalls}
         onRemoveLibrarySkill={onRemoveLibrarySkill}
+        onPreviewSkillMerge={onPreviewSkillMerge}
+        onMergeLibrarySkills={onMergeLibrarySkills}
         onReviewSkillUsage={onReviewSkillUsage}
         onCheckUpdates={onCheckUpdates}
         onOpenSource={onOpenSource}
@@ -919,5 +923,142 @@ describe("SkillLibraryPanel", () => {
     expect(partialApply).toBeEnabled();
     fireEvent.click(partialApply);
     expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith(["shared-reviewer"]);
+  });
+
+  it("reviews same-name Library differences and keeps content and source choices independent", async () => {
+    const preview = {
+      name: "reviewer",
+      entries: [
+        {
+          id: "reviewer-alpha",
+          name: "reviewer",
+          description: "Alpha",
+          version: "1.0.0",
+          contentHash: "alpha-hash",
+          sourceType: "local" as const,
+          source: "/tmp/alpha",
+          skillMarkdown: "# Alpha\n",
+          globallyEnabled: true,
+          updatePolicy: "untracked" as const,
+          profileNames: ["Daily Coding"],
+          installCount: 1
+        },
+        {
+          id: "reviewer-beta",
+          name: "reviewer",
+          description: "Beta",
+          version: "2.0.0",
+          contentHash: "beta-hash",
+          sourceType: "github" as const,
+          source: "https://github.com/acme/reviewer",
+          skillMarkdown: "# Beta\n",
+          globallyEnabled: true,
+          updatePolicy: "tracked" as const,
+          profileNames: [],
+          installCount: 0
+        }
+      ],
+      comparisons: [
+        {
+          leftId: "reviewer-alpha",
+          rightId: "reviewer-beta",
+          identical: false,
+          changes: [
+            {
+              path: "SKILL.md",
+              before: "# Alpha\n",
+              after: "# Beta\n",
+              diff: "--- before\n+++ after\n@@\n-# Alpha\n+# Beta\n"
+            }
+          ]
+        }
+      ],
+      profileCount: 1,
+      installCount: 1
+    };
+    const onPreviewSkillMerge = vi.fn().mockResolvedValue(preview);
+    const onMergeLibrarySkills = vi.fn().mockResolvedValue(true);
+    const noop = vi.fn();
+
+    render(
+      <SkillLibraryPanel
+        librarySkills={preview.entries.map((entry) => ({
+          id: entry.id,
+          name: entry.name,
+          description: entry.description,
+          version: entry.version,
+          path: `/tmp/library/${entry.id}`,
+          sourceType: entry.sourceType,
+          source: entry.source,
+          globallyEnabled: entry.globallyEnabled,
+          updatePolicy: entry.updatePolicy,
+          contentHash: entry.contentHash,
+          updatedAt: "2026-07-16T00:00:00.000Z"
+        }))}
+        skillUpdates={[]}
+        skillInventory={[]}
+        cleanupBackups={[]}
+        skillUsage={{ "reviewer-alpha": ["Daily Coding"] }}
+        onRefreshInventory={vi.fn().mockResolvedValue(undefined)}
+        onSelectLocalSkillFolder={vi.fn().mockResolvedValue(undefined)}
+        onImportUnmanaged={vi.fn().mockResolvedValue(false)}
+        onImportExternal={vi.fn().mockResolvedValue(false)}
+        onScanGitHubSkills={vi.fn()}
+        onImportGitHubSkills={vi.fn()}
+        onManageTargetSkill={noop}
+        onConsolidateSkillGroup={vi.fn().mockResolvedValue(false)}
+        onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue(undefined)}
+        onSetUpdateSource={noop}
+        onSetUpdatePolicy={noop}
+        onSetAvailability={vi.fn().mockResolvedValue(true)}
+        onSetIcon={noop}
+        onPreviewLibrarySkillUpdate={noop}
+        onCloseUpdatePreview={noop}
+        onUpdateLibrarySkill={noop}
+        onUpdateAllLibrarySkills={noop}
+        onPreviewAllLibrarySkillUpdates={noop}
+        onCloseBulkUpdatePreview={noop}
+        onSyncSkillInstalls={noop}
+        onRemoveLibrarySkill={noop}
+        onPreviewSkillMerge={onPreviewSkillMerge}
+        onMergeLibrarySkills={onMergeLibrarySkills}
+        onReviewSkillUsage={noop}
+        onCheckUpdates={noop}
+        onOpenSource={noop}
+        onIgnoreSkillGroup={noop}
+        onUnignoreSkillGroup={noop}
+        onSetSharedSkillRetention={vi.fn().mockResolvedValue(true)}
+        onRetireSharedSkill={vi.fn().mockResolvedValue(true)}
+        onOpenProfiles={noop}
+        onRestoreCleanup={noop}
+        viewState={defaultSkillLibraryViewState}
+        onViewStateChange={noop}
+      />
+    );
+
+    const row = screen.getByRole("group", { name: "Library item reviewer-alpha" });
+    fireEvent.click(within(row).getByRole("button", { name: "More actions for reviewer-alpha" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Merge duplicates" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Merge same-name Skills" });
+    expect(within(dialog).getByText("SKILL.md")).toBeInTheDocument();
+    const keepGroup = within(dialog).getByRole("group", { name: "Keep Skill" });
+    const sourceGroup = within(dialog).getByRole("group", { name: "Keep update source" });
+    fireEvent.click(within(keepGroup).getByRole("radio", { name: /reviewer-beta/ }));
+    fireEvent.click(within(sourceGroup).getByRole("radio", { name: /reviewer-alpha/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Merge Skills" }));
+
+    await waitFor(() => expect(onMergeLibrarySkills).toHaveBeenCalledWith({
+      ids: ["reviewer-alpha", "reviewer-beta"],
+      keepId: "reviewer-beta",
+      sourceId: "reviewer-alpha",
+      expectedContentHashes: {
+        "reviewer-alpha": "alpha-hash",
+        "reviewer-beta": "beta-hash"
+      }
+    }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Merge same-name Skills" })).not.toBeInTheDocument()
+    );
   });
 });

@@ -3070,6 +3070,39 @@ describe("Electron UI profile switching e2e", () => {
     await conflict.getByRole("button", { name: "Use existing" }).click();
     await conflict.waitFor({ state: "hidden" });
     expect(await page.locator(".library-table-row", { hasText: "Shared Reviewer" }).count()).toBe(2);
+
+    const originalRow = page.getByRole("group", { name: "Library item shared-reviewer", exact: true });
+    await originalRow.getByRole("button", { name: "More actions for shared-reviewer", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Merge duplicates" }).click();
+    const mergeDialog = page.getByRole("dialog", { name: "Merge same-name Skills" });
+    await mergeDialog.waitFor({ state: "visible" });
+    await expectInViewport(page, mergeDialog);
+    await expectNoHorizontalOverflow(page, [".skill-merge-dialog"]);
+    await expect.poll(() => mergeDialog.textContent()).toContain("Differences found");
+    await expect.poll(() => mergeDialog.textContent()).toContain("SKILL.md");
+    const keepSkill = mergeDialog.getByRole("group", { name: "Keep Skill" });
+    const keepSource = mergeDialog.getByRole("group", { name: "Keep update source" });
+    await keepSkill.getByRole("radio", { name: /^shared-reviewer\s/ }).check();
+    await keepSource.getByRole("radio", { name: /shared-reviewer-alternative/ }).check();
+    await mergeDialog.getByRole("button", { name: "Merge Skills" }).click();
+    await mergeDialog.waitFor({ state: "hidden" });
+
+    await expect
+      .poll(() => page.getByRole("group", { name: /Library item shared-reviewer/ }).count())
+      .toBe(1);
+    await expect(fileExists(join(appDataRoot, "skills-library", "shared-reviewer-alternative")))
+      .resolves.toBe(false);
+    await expect(readFile(join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md"), "utf8"))
+      .resolves.toContain("Shared Reviewer");
+    const undoMerge = page.getByRole("button", { name: "Undo merge" });
+    await undoMerge.waitFor({ state: "visible" });
+    await expect.poll(() => page.getByText("Merged duplicates into shared-reviewer").count()).toBe(1);
+    await undoMerge.click();
+    await expect
+      .poll(() => page.locator(".library-table-row", { hasText: "Shared Reviewer" }).count())
+      .toBe(2);
+    await expect(fileExists(join(appDataRoot, "skills-library", "shared-reviewer-alternative", "SKILL.md")))
+      .resolves.toBe(true);
   }, 45_000);
 
   it("imports a Target-local skill and immediately replaces the source with a managed install", async () => {

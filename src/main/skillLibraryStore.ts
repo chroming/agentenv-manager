@@ -22,6 +22,9 @@ import type {
   SkillImportSnapshot,
   SkillIconInput,
   SkillLibraryEntry,
+  SkillMergeInput,
+  SkillMergePreview,
+  SkillMergeResult,
   SkillProvenance,
   ResourceIconKey,
   SkillSourceType,
@@ -40,6 +43,7 @@ import { createUnifiedDiff } from "./diff";
 import { pathEntryExists, pathExists, replacePathAtomically, replacePathWithCopy, writeAtomic } from "./fileUtils";
 import { createOwnerMarkerContent, markerPathFor, markerPathForFile } from "./ownershipMarkers";
 import type { AgentEnvPaths } from "./paths";
+import type { ProfileStore } from "./profileStore";
 import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
@@ -68,7 +72,7 @@ interface SkillCleanupBackupManifest {
   libraryRemoved?: boolean;
   libraryBackupPath?: string;
   createdAt: string;
-  operation?: "cleanup" | "remove" | "retire" | "update";
+  operation?: "cleanup" | "remove" | "retire" | "update" | "merge";
   entries: Array<{ sourcePath: string; backupPath: string }>;
 }
 
@@ -146,6 +150,8 @@ export interface SkillLibraryStore {
   unignoreSkillGroup(skillKey: string): Promise<void>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   previewImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
+  previewMerge(id: string, targetPaths: TargetPaths[]): Promise<SkillMergePreview>;
+  mergeSkills(input: SkillMergeInput, targetPaths: TargetPaths[]): Promise<SkillMergeResult>;
   importSkill(input: ImportSkillStoreInput): Promise<SkillLibraryEntry>;
   importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
@@ -182,6 +188,7 @@ interface SkillLibraryStoreOptions {
   authTokenProvider?: () => Promise<string | undefined>;
   fetch?: FetchLike;
   skillsCliLockPaths?: string[];
+  profileStore?: Pick<ProfileStore, "listProfiles" | "readProfile" | "saveProfile">;
 }
 
 interface ParsedGitHubSkillSource {
@@ -478,6 +485,7 @@ export const createSkillLibraryStore = (
   const ignoreRulesPath = join(paths.appDataRoot, "skill-cleanup-ignore-rules.json");
   const fetchImpl = options.fetch ?? fetch;
   const authTokenProvider = options.authTokenProvider;
+  const profileStore = options.profileStore;
 
   const readIgnoreRules = async () =>
     (await readJsonIfExists<SkillCleanupIgnoreRule[]>(ignoreRulesPath))?.filter(
@@ -1424,6 +1432,8 @@ export const createSkillLibraryStore = (
       throw new Error(`Invalid Skill cleanup backup: ${safeId}`);
     }
     const allowedRoots = [
+      await libraryDir(),
+      paths.profilesDir,
       paths.userSkillsDir,
       join(paths.homeDir, ".codex", "skills"),
       join(paths.homeDir, ".claude", "skills"),
@@ -1850,6 +1860,241 @@ export const createSkillLibraryStore = (
         source: `skills-library/${libraryId}`
       })
     });
+  };
+
+  const previewMerge = async (
+    id: string,
+    targetPaths: TargetPaths[]
+  ): Promise<SkillMergePreview> => {
+    const safeId = SafeIdSchema.parse(id);
+    const skills = await listSkills();
+    const selected = skills.find((skill) => skill.id === safeId);
+    if (!selected) {
+      throw new Error(`Library skill does not exist: ${safeId}`);
+    }
+    const normalizedName = normalizedSkillName(selected.name);
+    const matching = skills
+      .filter((skill) => normalizedSkillName(skill.name) === normalizedName)
+      .sort((left, right) => left.id.localeCompare(right.id));
+    if (matching.length < 2) {
+      throw new Error(`${selected.name} has no same-name Library skill to merge`);
+    }
+
+    const profiles = profileStore
+      ? await Promise.all(
+          (await profileStore.listProfiles()).map((profile) => profileStore.readProfile(profile.id))
+        )
+      : [];
+    const inventory = targetPaths.length > 0 ? await scanInventory(targetPaths) : [];
+    const entries = await Promise.all(
+      matching.map(async (skill) => {
+        const snapshot = await snapshotForDirectory(skill.id, skill.path, {
+          sourceType: skill.sourceType,
+          source: skill.source ?? skill.path,
+          upstream: skill.upstream
+        });
+        return {
+          ...snapshot,
+          iconKey: skill.iconKey,
+          globallyEnabled: skill.globallyEnabled !== false,
+          updatePolicy: skill.updatePolicy,
+          profileNames: profiles
+            .filter((profile) =>
+              profile.assetPolicy.skillRefs.some((reference) => reference.libraryId === skill.id)
+            )
+            .map((profile) => profile.manifest.name)
+            .sort(),
+          installCount: inventory.filter(
+            (item) => item.status === "managed" && item.libraryId === skill.id
+          ).length
+        };
+      })
+    );
+    const comparisons = [];
+    for (let leftIndex = 0; leftIndex < matching.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < matching.length; rightIndex += 1) {
+        const left = matching[leftIndex];
+        const right = matching[rightIndex];
+        const identical = entries[leftIndex].contentHash === entries[rightIndex].contentHash;
+        comparisons.push({
+          leftId: left.id,
+          rightId: right.id,
+          identical,
+          changes: identical ? [] : await createSkillChanges(left.path, right.path)
+        });
+      }
+    }
+    const matchingIds = new Set(matching.map((skill) => skill.id));
+    return {
+      name: selected.name,
+      entries,
+      comparisons,
+      profileCount: profiles.filter((profile) =>
+        profile.assetPolicy.skillRefs.some((reference) => matchingIds.has(reference.libraryId))
+      ).length,
+      installCount: inventory.filter(
+        (item) => item.status === "managed" && item.libraryId && matchingIds.has(item.libraryId)
+      ).length
+    };
+  };
+
+  const mergeSkills = async (
+    input: SkillMergeInput,
+    targetPaths: TargetPaths[]
+  ): Promise<SkillMergeResult> => {
+    const keepId = SafeIdSchema.parse(input.keepId);
+    const sourceId = SafeIdSchema.parse(input.sourceId);
+    const requestedIds = [...new Set(input.ids.map((id) => SafeIdSchema.parse(id)))].sort();
+    if (requestedIds.length < 2 || !requestedIds.includes(keepId) || !requestedIds.includes(sourceId)) {
+      throw new Error("Skill merge requires at least two reviewed entries and valid selections");
+    }
+    if (!profileStore) {
+      throw new Error("Profile storage is required to merge Library skills safely");
+    }
+
+    const preview = await previewMerge(keepId, targetPaths);
+    const currentIds = preview.entries.map((entry) => entry.id).sort();
+    if (currentIds.join("\0") !== requestedIds.join("\0")) {
+      throw new Error("Same-name Library skills changed after preview; review them again");
+    }
+    for (const entry of preview.entries) {
+      if (input.expectedContentHashes[entry.id] !== entry.contentHash) {
+        throw new Error(`${entry.id} changed after the merge preview; review it again`);
+      }
+    }
+
+    const skills = await listSkills();
+    const skillsById = new Map(skills.map((skill) => [skill.id, skill]));
+    const keepSkill = skillsById.get(keepId);
+    const sourceSkill = skillsById.get(sourceId);
+    if (!keepSkill || !sourceSkill) {
+      throw new Error("A selected Library skill no longer exists");
+    }
+    const removedIds = requestedIds.filter((id) => id !== keepId);
+    const removedIdSet = new Set(removedIds);
+    const profileDetails = await Promise.all(
+      (await profileStore.listProfiles()).map((profile) => profileStore.readProfile(profile.id))
+    );
+    const affectedProfiles = profileDetails.filter((profile) =>
+      profile.assetPolicy.skillRefs.some((reference) => removedIdSet.has(reference.libraryId))
+    );
+    const inventory = targetPaths.length > 0 ? await scanInventory(targetPaths) : [];
+    const affectedInstalls = inventory.filter(
+      (item) =>
+        item.status === "managed" &&
+        Boolean(item.libraryId && removedIdSet.has(item.libraryId)) &&
+        Boolean(item.foundIn[0])
+    );
+
+    const backupId = `merge-${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const backupDir = join(cleanupBackupRoot(), backupId);
+    const protectedPaths = [
+      ...requestedIds.map((id) => skillsById.get(id)!.path),
+      ...affectedProfiles.map((profile) => profile.profileDir ?? join(paths.profilesDir, profile.id)),
+      ...affectedInstalls.flatMap((install) => [install.path, markerPathForFile(install.path)])
+    ];
+    const entries: SkillCleanupBackupManifest["entries"] = [];
+    await mkdir(join(backupDir, "locations"), { recursive: true });
+    for (const sourcePath of [...new Set(protectedPaths)]) {
+      if (!(await pathEntryExists(sourcePath))) continue;
+      const backupPath = join(
+        backupDir,
+        "locations",
+        `${entries.length}-${basename(sourcePath)}`
+      );
+      await cp(sourcePath, backupPath, { recursive: true, dereference: false });
+      entries.push({ sourcePath, backupPath });
+    }
+    const manifest: SkillCleanupBackupManifest = {
+      id: backupId,
+      libraryId: keepId,
+      libraryCreated: false,
+      operation: "merge",
+      createdAt: new Date().toISOString(),
+      entries
+    };
+    await writeAtomic(
+      join(backupDir, "manifest.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`
+    );
+
+    try {
+      const keepMetadata = await readLibraryMetadata(keepSkill.path);
+      const sourceMetadata = await readLibraryMetadata(sourceSkill.path);
+      const mergedMetadata: SkillMetadataFile = {
+        sourceType: sourceSkill.sourceType,
+        source: sourceSkill.source,
+        remoteRef: sourceMetadata.remoteRef,
+        remotePath: sourceMetadata.remotePath,
+        remoteRevision: sourceMetadata.remoteRevision,
+        updatePolicy: sourceSkill.updatePolicy,
+        updateCheckEnabled: sourceSkill.updatePolicy === "tracked",
+        globallyEnabled: keepSkill.globallyEnabled !== false,
+        iconKey: keepMetadata.iconKey,
+        contentHash: await computeContentHash(keepSkill.path),
+        updatedAt: new Date().toISOString(),
+        upstream: sourceMetadata.upstream,
+        provenance: sourceMetadata.provenance
+      };
+      await writeAtomic(
+        join(keepSkill.path, ".agentenv-skill.json"),
+        `${JSON.stringify(mergedMetadata, null, 2)}\n`
+      );
+
+      for (const profile of affectedProfiles) {
+        const hasKeptReference = profile.assetPolicy.skillRefs.some(
+          (reference) => reference.libraryId === keepId
+        );
+        const mappedReferences = profile.assetPolicy.skillRefs
+          .filter((reference) => !(hasKeptReference && removedIdSet.has(reference.libraryId)))
+          .map((reference) =>
+            removedIdSet.has(reference.libraryId)
+              ? { ...reference, libraryId: keepId }
+              : reference
+          );
+        const nextReferences = mappedReferences.reduce<typeof mappedReferences>(
+          (references, reference) => {
+            const existing = references.find(
+              (candidate) =>
+                candidate.libraryId === reference.libraryId &&
+                candidate.targetName === reference.targetName
+            );
+            if (!existing) {
+              references.push({ ...reference });
+            } else if (existing.enabled === false && reference.enabled !== false) {
+              existing.enabled = reference.enabled;
+            }
+            return references;
+          },
+          []
+        );
+        await profileStore.saveProfile({
+          manifest: profile.manifest,
+          instructions: profile.instructions,
+          configText: profile.configText,
+          assetPolicy: { ...profile.assetPolicy, skillRefs: nextReferences }
+        });
+      }
+      for (const install of affectedInstalls) {
+        await replaceTargetSkill({
+          libraryId: keepId,
+          targetDir: install.path,
+          targetId: install.foundIn[0]
+        });
+      }
+      for (const removedId of removedIds) {
+        await rm(skillsById.get(removedId)!.path, { recursive: true, force: true });
+      }
+      return {
+        backupId,
+        skill: await entryFor(keepId, keepSkill.path),
+        removedIds,
+        profilesUpdated: affectedProfiles.length,
+        installsUpdated: affectedInstalls.length
+      };
+    } catch (error) {
+      return failAfterCleanupRollback(manifest, `Merging ${preview.name}`, error);
+    }
   };
 
   const consolidateSkillGroup = async ({
@@ -2464,6 +2709,8 @@ export const createSkillLibraryStore = (
     unignoreSkillGroup,
     scanUnmanaged,
     previewImport,
+    previewMerge,
+    mergeSkills,
     importSkill,
     importGitHubSkill,
     scanGitHubSkills,

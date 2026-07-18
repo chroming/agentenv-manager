@@ -23,6 +23,7 @@ import type {
   SkillImportInput,
   SkillImportPreviewInput,
   SkillIconInput,
+  SkillMergeInput,
   SaveMcpServerInput,
   SaveProfileInput,
   SkillUpdatePolicyInput,
@@ -189,6 +190,24 @@ export const registerIpcHandlers = ({
       throw new Error("Skill import preview requires a local or GitHub source");
     }
     return skillLibraryStore.previewImport(input);
+  });
+  ipcMain.handle("skills:preview-merge", async (_event, id: unknown) => {
+    const skillId = parseId(id, "skill id");
+    const targets = await targetDiscoveryService.listTargets();
+    return skillLibraryStore.previewMerge(
+      skillId,
+      targets.map((target) => target.paths)
+    );
+  });
+  ipcMain.handle("skills:merge-library", async (_event, input: SkillMergeInput) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Skill merge selection is required");
+    }
+    const targets = await targetDiscoveryService.listTargets();
+    return skillLibraryStore.mergeSkills(
+      input,
+      targets.map((target) => target.paths)
+    );
   });
   ipcMain.handle("skills:import-library", async (_event, input: SkillImportInput) => {
     if (!input || typeof input !== "object" || typeof input.sourcePath !== "string") {

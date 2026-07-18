@@ -31,6 +31,8 @@ export interface AgentEnvApi {
   removeMcpServer(id: string): Promise<void>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   previewSkillImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
+  previewSkillMerge(id: string): Promise<SkillMergePreview>;
+  mergeLibrarySkills(input: SkillMergeInput): Promise<SkillMergeResult>;
   importSkillToLibrary(input: SkillImportInput): Promise<SkillImportResult>;
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
@@ -190,6 +192,44 @@ export interface SkillImportResult {
   sourceUpdated?: boolean;
 }
 
+export interface SkillMergePreviewEntry extends SkillImportSnapshot {
+  iconKey?: ResourceIconKey;
+  globallyEnabled: boolean;
+  updatePolicy: SkillUpdatePolicy;
+  profileNames: string[];
+  installCount: number;
+}
+
+export interface SkillMergeComparison {
+  leftId: string;
+  rightId: string;
+  identical: boolean;
+  changes: PlannedFileChange[];
+}
+
+export interface SkillMergePreview {
+  name: string;
+  entries: SkillMergePreviewEntry[];
+  comparisons: SkillMergeComparison[];
+  profileCount: number;
+  installCount: number;
+}
+
+export interface SkillMergeInput {
+  ids: string[];
+  keepId: string;
+  sourceId: string;
+  expectedContentHashes: Record<string, string>;
+}
+
+export interface SkillMergeResult {
+  backupId: string;
+  skill: SkillLibraryEntry;
+  removedIds: string[];
+  profilesUpdated: number;
+  installsUpdated: number;
+}
+
 export interface GitHubSkillImportInput {
   url: string;
   id?: string;
@@ -330,8 +370,10 @@ export interface SkillCleanupResult {
   backupId: string;
   libraryId: string;
   managedLocations: string[];
-  operation?: "cleanup" | "remove" | "retire" | "update";
+  operation?: "cleanup" | "remove" | "retire" | "update" | "merge";
   libraryCreated?: boolean;
+  profilesUpdated?: number;
+  installsUpdated?: number;
 }
 
 export interface SkillCleanupBackupSummary {
@@ -339,7 +381,7 @@ export interface SkillCleanupBackupSummary {
   libraryId: string;
   createdAt: string;
   locationCount: number;
-  operation?: "cleanup" | "remove" | "retire" | "update";
+  operation?: "cleanup" | "remove" | "retire" | "update" | "merge";
 }
 
 export interface UnmanagedSkillEntry {

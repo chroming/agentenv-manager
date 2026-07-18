@@ -70,6 +70,8 @@ import type {
   SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillLibraryEntry,
+  SkillMergeInput,
+  SkillMergePreview,
   SkillUpdatePolicyInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
@@ -2211,6 +2213,46 @@ const AppContent = ({
     }
   };
 
+  const previewSkillMerge = async (id: string): Promise<SkillMergePreview> => {
+    setError(undefined);
+    try {
+      return await window.agentEnv.previewSkillMerge(id);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      throw unknownError;
+    }
+  };
+
+  const mergeLibrarySkills = async (input: SkillMergeInput) => {
+    setBusy(true);
+    setError(undefined);
+    setSkillUpdateCheckStatus({ state: "checking", message: `Merging ${input.ids.length} skills...` });
+    try {
+      const result = await window.agentEnv.mergeLibrarySkills(input);
+      setSkillCleanupResult({
+        backupId: result.backupId,
+        libraryId: result.skill.id,
+        managedLocations: [],
+        operation: "merge",
+        profilesUpdated: result.profilesUpdated,
+        installsUpdated: result.installsUpdated
+      });
+      await refreshProfiles({ checkSkillUpdates: false });
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: `Merged ${input.ids.length} skills into ${result.skill.id}`
+      });
+      return true;
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      setSkillUpdateCheckStatus({ state: "error", message: "Skill merge failed" });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const reviewSkillUsage = (id: string) => {
     const firstProfileName = skillUsage[id]?.[0];
     const profile = profiles.find((item) => item.name === firstProfileName);
@@ -2635,13 +2677,19 @@ const AppContent = ({
     setError(undefined);
     const restoringRemoval =
       skillCleanupResult?.backupId === backupId && skillCleanupResult.operation === "remove";
+    const restoringMerge =
+      skillCleanupResult?.backupId === backupId && skillCleanupResult.operation === "merge";
     try {
       await window.agentEnv.rollbackSkillCleanup(backupId);
       setSkillCleanupResult(undefined);
       await refreshProfiles();
       setSkillUpdateCheckStatus({
         state: "success",
-        message: restoringRemoval ? "Skill removal undone" : "Skill cleanup undone"
+        message: restoringRemoval
+          ? "Skill removal undone"
+          : restoringMerge
+            ? "Skill merge undone"
+            : "Skill cleanup undone"
       });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -3148,6 +3196,8 @@ const AppContent = ({
           title:
             skillCleanupResult.operation === "remove"
               ? t("Removed {{id}}", { id: skillCleanupResult.libraryId })
+              : skillCleanupResult.operation === "merge"
+                ? t("Merged duplicates into {{id}}", { id: skillCleanupResult.libraryId })
               : skillCleanupResult.operation === "retire"
                 ? t("Replaced shared copy for {{id}}", { id: skillCleanupResult.libraryId })
                 : skillCleanupResult.libraryCreated
@@ -3160,11 +3210,21 @@ const AppContent = ({
                 : t("Removed from the Library and {{count}} managed Target installs.", {
                     count: skillCleanupResult.managedLocations.length
                   })
+              : skillCleanupResult.operation === "merge"
+                ? t("Updated {{profiles}} profiles and {{installs}} managed installs. A restorable backup is available in History.", {
+                    profiles: skillCleanupResult.profilesUpdated ?? 0,
+                    installs: skillCleanupResult.installsUpdated ?? 0
+                  })
               : t("{{count}} local copies were updated. A restorable backup is available in History.", {
                   count: skillCleanupResult.managedLocations.length
                 }),
           action: {
-            label: skillCleanupResult.operation === "remove" ? "Undo removal" : "Undo cleanup",
+            label:
+              skillCleanupResult.operation === "remove"
+                ? "Undo removal"
+                : skillCleanupResult.operation === "merge"
+                  ? "Undo merge"
+                  : "Undo cleanup",
             onClick: () => void undoSkillCleanup()
           }
         }
@@ -3436,6 +3496,8 @@ const AppContent = ({
                 onCloseBulkUpdatePreview={() => setBulkSkillUpdatePlans(undefined)}
                 onSyncSkillInstalls={(id) => void syncSkillInstalls(id)}
                 onRemoveLibrarySkill={removeLibrarySkill}
+                onPreviewSkillMerge={previewSkillMerge}
+                onMergeLibrarySkills={mergeLibrarySkills}
                 onReviewSkillUsage={reviewSkillUsage}
                 onCheckUpdates={checkSkillUpdates}
                 onOpenSource={(url) => {

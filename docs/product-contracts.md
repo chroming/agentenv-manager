@@ -492,6 +492,17 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - Update and install-repair commands MUST appear in their semantic `Updates` and `Installs` columns. The `Actions` column is reserved for the overflow menu and MUST NOT compete with labelled row actions for width.
 - Row actions and their secondary revision or install state MUST occupy independent vertical tracks. A control's rendered height MUST fit inside its track, with at least `4px` clear space before secondary text; child overflow MUST NOT be used to compress the row.
 
+### 16.1.2 Merge Same-Name Skills
+
+- `Merge duplicates` appears only for a Library name represented by two or more stable Library IDs. It is a row overflow command, not a page-level mode or automatic cleanup side effect.
+- Preview includes every same-name Library entry and compares all files, declared versions, content hashes, sources, Profile usage, and managed-install counts. Identical content is stated explicitly; differences use the standard formatted diff viewer.
+- The user independently chooses `Keep Skill` and `Keep update source`. `Keep Skill` owns the surviving Library ID, canonical content, icon, and global availability. `Keep update source` owns source type, locator, revision metadata, provenance, and tracked/untracked policy; choosing a source MUST NOT silently choose that entry's content.
+- Confirming Merge verifies the reviewed member set and every reviewed content hash. A new duplicate, removed entry, or changed content makes the preview stale and blocks mutation.
+- Merge migrates every Profile reference from removed IDs to the surviving ID. If a Profile already references the surviving ID, that existing reference and its target name and enabled state win, and references to removed IDs are dropped. Otherwise target names and enabled states are preserved while only the Library ID changes; references that collapse onto the same target name become one reference and remain enabled when any original reference was enabled.
+- Every AgentEnv-managed install derived from a removed ID is relinked or recopied to the surviving Library entry without waiting for another Apply. Unmanaged and externally managed copies are untouched.
+- Merge is one transaction covering all selected Library entries, affected Profile directories, managed installs, and ownership markers. Failure restores every backed-up path; success creates one History entry that can restore the pre-merge entries and references.
+- The completion message names the surviving ID and reports updated Profile and managed-install counts. Success follows the global transient-feedback policy; failure remains dismissible and actionable.
+
 ### 16.2 Scan And Cleanup
 
 Scan MUST inspect every adapter-declared Skill location and group results by canonical Skill identity and content.

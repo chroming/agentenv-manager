@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   CheckCircle2,
+  Combine,
   ExternalLink,
   Folder,
   GitBranch,
@@ -42,6 +43,8 @@ import type {
   SkillInventoryEntry,
   SkillIconInput,
   SkillLibraryEntry,
+  SkillMergeInput,
+  SkillMergePreview,
   SkillSourceType,
   SkillUpdatePolicyInput,
   SkillUpdateInfo,
@@ -52,6 +55,7 @@ import { InfoTip } from "./InfoTip";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { ResourceIconPicker } from "./ResourceIconPicker";
 import { SkillUpdateDialog } from "./SkillUpdateDialog";
+import { DiffViewer } from "./DiffViewer";
 import {
   matchesSkillStatusFilter,
   type SkillLibraryViewState,
@@ -112,6 +116,8 @@ interface SkillLibraryPanelProps {
   onCloseBulkUpdatePreview(): void;
   onSyncSkillInstalls(id: string): void;
   onRemoveLibrarySkill(id: string): void;
+  onPreviewSkillMerge(id: string): Promise<SkillMergePreview>;
+  onMergeLibrarySkills(input: SkillMergeInput): Promise<boolean>;
   onReviewSkillUsage(id: string): void;
   onCheckUpdates(): void;
   onOpenSource(url: string): void;
@@ -281,6 +287,8 @@ export const SkillLibraryPanel = ({
   onCloseBulkUpdatePreview,
   onSyncSkillInstalls,
   onRemoveLibrarySkill,
+  onPreviewSkillMerge,
+  onMergeLibrarySkills,
   onReviewSkillUsage,
   onCheckUpdates,
   onOpenSource,
@@ -324,6 +332,11 @@ export const SkillLibraryPanel = ({
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
   const [disableCandidate, setDisableCandidate] = useState<SkillLibraryEntry>();
   const [sourceCandidate, setSourceCandidate] = useState<SkillLibraryEntry>();
+  const [mergePreview, setMergePreview] = useState<SkillMergePreview>();
+  const [mergeKeepId, setMergeKeepId] = useState("");
+  const [mergeSourceId, setMergeSourceId] = useState("");
+  const [mergeCompareId, setMergeCompareId] = useState("");
+  const [mergeOperation, setMergeOperation] = useState<"loading" | "merging">();
   const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
   const [sharedTargetReviewKey, setSharedTargetReviewKey] = useState<string>();
@@ -388,6 +401,8 @@ export const SkillLibraryPanel = ({
       setDisableCandidate(undefined);
     } else if (sourceCandidate) {
       setSourceCandidate(undefined);
+    } else if (mergePreview) {
+      setMergePreview(undefined);
     } else if (cleanupDetailsKey) {
       setCleanupDetailsKey(undefined);
     } else if (sharedTargetReviewKey) {
@@ -409,6 +424,7 @@ export const SkillLibraryPanel = ({
       deleteCandidate ||
       disableCandidate ||
       sourceCandidate ||
+      mergePreview ||
       bulkUpdatePlans ||
       externalImport ||
       cleanupDetailsKey ||
@@ -417,6 +433,28 @@ export const SkillLibraryPanel = ({
       autoCleanupReviewOpen ||
       cleanupDraft
   );
+  const openMergePreview = async (skill: SkillLibraryEntry) => {
+    setOpenAction(undefined);
+    setMergeOperation("loading");
+    try {
+      const preview = await onPreviewSkillMerge(skill.id);
+      const preferredSource =
+        preview.entries.find(
+          (entry) => entry.id === skill.id && entry.updatePolicy === "tracked"
+        ) ??
+        preview.entries.find(
+          (entry) => entry.sourceType === "github" && entry.updatePolicy === "tracked"
+        ) ??
+        preview.entries.find((entry) => entry.id === skill.id) ??
+        preview.entries[0];
+      setMergePreview(preview);
+      setMergeKeepId(skill.id);
+      setMergeSourceId(preferredSource.id);
+      setMergeCompareId(preview.entries.find((entry) => entry.id !== skill.id)?.id ?? "");
+    } finally {
+      setMergeOperation(undefined);
+    }
+  };
   useLayoutEffect(() => {
     if (!openActionId) {
       return;
@@ -473,7 +511,9 @@ export const SkillLibraryPanel = ({
     dialogRef: modalDialogRef,
     initialFocusRef: modalInitialFocusRef,
     fallbackFocusRef: modalFallbackFocusRef,
-    dismissDisabled: Boolean(availabilityOperation || sharedOperation || cleanupOperationKey),
+    dismissDisabled: Boolean(
+      availabilityOperation || sharedOperation || cleanupOperationKey || mergeOperation
+    ),
     onDismiss: dismissModal
   });
   useModalDialog({
@@ -894,6 +934,34 @@ export const SkillLibraryPanel = ({
     const sourcePath = await onSelectLocalSkillFolder();
     if (sourcePath) {
       setLocalSkillPath(sourcePath);
+    }
+  };
+  const mergeKeepEntry = mergePreview?.entries.find((entry) => entry.id === mergeKeepId);
+  const mergeSourceEntry = mergePreview?.entries.find((entry) => entry.id === mergeSourceId);
+  const mergeCompareEntries = mergePreview?.entries.filter((entry) => entry.id !== mergeKeepId) ?? [];
+  const effectiveCompareId = mergeCompareEntries.some((entry) => entry.id === mergeCompareId)
+    ? mergeCompareId
+    : mergeCompareEntries[0]?.id ?? "";
+  const mergeComparison = mergePreview?.comparisons.find(
+    (comparison) =>
+      (comparison.leftId === mergeKeepId && comparison.rightId === effectiveCompareId) ||
+      (comparison.rightId === mergeKeepId && comparison.leftId === effectiveCompareId)
+  );
+  const confirmMerge = async () => {
+    if (!mergePreview || !mergeKeepEntry || !mergeSourceEntry || mergeOperation) return;
+    setMergeOperation("merging");
+    try {
+      const merged = await onMergeLibrarySkills({
+        ids: mergePreview.entries.map((entry) => entry.id),
+        keepId: mergeKeepEntry.id,
+        sourceId: mergeSourceEntry.id,
+        expectedContentHashes: Object.fromEntries(
+          mergePreview.entries.map((entry) => [entry.id, entry.contentHash])
+        )
+      });
+      if (merged) setMergePreview(undefined);
+    } finally {
+      setMergeOperation(undefined);
     }
   };
 
@@ -1360,6 +1428,27 @@ export const SkillLibraryPanel = ({
                             <Settings2 size={14} strokeWidth={2.2} />
                             <span>{t("Update settings")}</span>
                           </button>
+                          {(skillNameCounts.get(skill.name.normalize("NFKC").trim().toLowerCase()) ?? 0) > 1 ? (
+                            <button
+                              className="row-action-item"
+                              type="button"
+                              role="menuitem"
+                              disabled={Boolean(mergeOperation)}
+                              onClick={() => {
+                                modalFallbackFocusRef.current = document.querySelector(
+                                  `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
+                                );
+                                void openMergePreview(skill);
+                              }}
+                            >
+                              {mergeOperation === "loading" ? (
+                                <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
+                              ) : (
+                                <Combine size={14} strokeWidth={2.2} />
+                              )}
+                              <span>{t("Merge duplicates")}</span>
+                            </button>
+                          ) : null}
                           <button
                             className="row-action-item row-action-item--danger"
                             type="button"
@@ -1391,6 +1480,159 @@ export const SkillLibraryPanel = ({
         onClose={onCloseUpdatePreview}
         onConfirm={onUpdateLibrarySkill}
       />
+
+      {mergePreview && mergeKeepEntry && mergeSourceEntry ? (
+        <div className="preview-modal-backdrop" onClick={() => !mergeOperation && setMergePreview(undefined)}>
+          <section
+            ref={modalDialogRef}
+            className="profile-form-dialog skill-merge-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("Merge same-name Skills")}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="profile-dialog-header">
+              <div>
+                <div className="section-title">{t("Merge same-name Skills")}</div>
+                <p className="muted">
+                  {t("Choose the Library entry to keep and the update source to retain.")}
+                </p>
+              </div>
+              <span className={`skill-import-match-state${mergePreview.comparisons.every((item) => item.identical) ? " is-identical" : " is-different"}`}>
+                {t(mergePreview.comparisons.every((item) => item.identical) ? "Identical" : "Differences found")}
+              </span>
+            </header>
+
+            <div className="skill-merge-body">
+              <fieldset className="skill-merge-choice-group">
+                <legend>{t("Keep Skill")}</legend>
+                <p>{t("This entry keeps its Library ID, content, icon, and availability.")}</p>
+                <div className="skill-merge-choice-grid">
+                  {mergePreview.entries.map((entry) => (
+                    <label className={mergeKeepId === entry.id ? "is-selected" : ""} key={entry.id}>
+                      <input
+                        type="radio"
+                        name="merge-keep-skill"
+                        checked={mergeKeepId === entry.id}
+                        onChange={() => {
+                          setMergeKeepId(entry.id);
+                          setMergeCompareId(
+                            mergePreview.entries.find((candidate) => candidate.id !== entry.id)?.id ?? ""
+                          );
+                        }}
+                      />
+                      <span>
+                        <strong>{entry.id}</strong>
+                        <small>{entry.version ?? t("Not declared")} · {entry.contentHash.slice(0, 8)}</small>
+                        <small>{t("{{profiles}} profiles · {{installs}} installs", {
+                          profiles: entry.profileNames.length,
+                          installs: entry.installCount
+                        })}</small>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset className="skill-merge-choice-group skill-merge-source-group">
+                <legend>{t("Keep update source")}</legend>
+                <p>{t("Content still comes from the Skill selected above.")}</p>
+                <div className="skill-merge-source-list">
+                  {mergePreview.entries.map((entry) => (
+                    <label className={mergeSourceId === entry.id ? "is-selected" : ""} key={entry.id}>
+                      <input
+                        type="radio"
+                        name="merge-source-skill"
+                        checked={mergeSourceId === entry.id}
+                        onChange={() => setMergeSourceId(entry.id)}
+                      />
+                      <span>
+                        <strong>{entry.sourceType === "github" ? "GitHub" : t("Local")} · {entry.id}</strong>
+                        <small title={entry.source}>{entry.source}</small>
+                      </span>
+                      <em>{t(entry.updatePolicy === "tracked" ? "Tracked" : "Not tracked")}</em>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <section className="skill-merge-diff" aria-label={t("Skill differences") }>
+                <header>
+                  <div>
+                    <strong>{t("Compare content")}</strong>
+                    <span>{mergeKeepEntry.id}</span>
+                  </div>
+                  {mergeCompareEntries.length > 1 ? (
+                    <select
+                      aria-label={t("Compare with")}
+                      value={effectiveCompareId}
+                      onChange={(event) => setMergeCompareId(event.target.value)}
+                    >
+                      {mergeCompareEntries.map((entry) => (
+                        <option key={entry.id} value={entry.id}>{entry.id}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span>{effectiveCompareId}</span>
+                  )}
+                </header>
+                {mergeComparison?.changes.length ? (
+                  <div className="diff-list">
+                    {mergeComparison.changes.map((change) => (
+                      <div className="diff-file" key={change.path}>
+                        <div className="diff-file-meta"><strong>{change.path}</strong></div>
+                        <DiffViewer path={change.path} diff={change.diff} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="skill-merge-identical">
+                    <CheckCircle2 size={16} strokeWidth={2.2} />
+                    <span>{t("No file changes")}</span>
+                  </div>
+                )}
+              </section>
+
+              <div className="skill-merge-impact">
+                <strong>{t("Merge impact")}</strong>
+                <span>{t("{{skills}} entries become one · {{profiles}} profiles updated · {{installs}} installs relinked", {
+                  skills: mergePreview.entries.length,
+                  profiles: mergePreview.profileCount,
+                  installs: mergePreview.entries
+                    .filter((entry) => entry.id !== mergeKeepId)
+                    .reduce((total, entry) => total + entry.installCount, 0)
+                })}</span>
+              </div>
+            </div>
+
+            <footer className="preview-actions">
+              <button
+                ref={modalInitialFocusRef}
+                className="secondary-action"
+                type="button"
+                disabled={Boolean(mergeOperation)}
+                onClick={() => setMergePreview(undefined)}
+              >
+                {t("Cancel")}
+              </button>
+              <button
+                className="primary-action"
+                type="button"
+                aria-busy={mergeOperation === "merging"}
+                disabled={Boolean(mergeOperation)}
+                onClick={() => void confirmMerge()}
+              >
+                {mergeOperation === "merging" ? (
+                  <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
+                ) : (
+                  <Combine size={14} strokeWidth={2.2} />
+                )}
+                {t(mergeOperation === "merging" ? "Merging..." : "Merge Skills")}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       {sourceCandidate && sourceCandidateDraft ? (
         <div className="preview-modal-backdrop" onClick={() => setSourceCandidate(undefined)}>
@@ -2597,8 +2839,8 @@ export const SkillLibraryPanel = ({
                         <PreviewText
                           ariaLabel={t("Full cleanup history details {{id}}", { id: backup.libraryId })}
                           className="cleanup-history-details"
-                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : backup.operation === "update" ? "Update" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
-                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : backup.operation === "update" ? "Update" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared migration" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
                         />
                       </div>
                       <div className="cleanup-group-actions">
