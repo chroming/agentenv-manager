@@ -291,6 +291,19 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     saveMcpServer: vi.fn().mockImplementation(async (input) => input),
     removeMcpServer: vi.fn().mockResolvedValue(undefined),
     scanUnmanagedSkills: vi.fn().mockResolvedValue([]),
+    previewSkillImport: vi.fn().mockImplementation(async (source) => ({
+      source,
+      incoming: {
+        id: "skill",
+        name: "skill",
+        description: "",
+        contentHash: "hash",
+        source: "/tmp/skill",
+        skillMarkdown: "# Skill\n"
+      },
+      conflicts: [],
+      suggestedId: "skill"
+    })),
     importSkillToLibrary: vi.fn().mockResolvedValue({
       skill: {
         id: "skill",

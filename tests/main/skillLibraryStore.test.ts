@@ -30,6 +30,96 @@ describe("skill library store", () => {
       .rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("previews same-name imports and requires an explicit reuse, replace, or keep-both decision", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data") });
+    const existingDir = join(root, "existing-reviewer");
+    const incomingDir = join(root, "incoming-reviewer");
+    await mkdir(existingDir, { recursive: true });
+    await mkdir(incomingDir, { recursive: true });
+    await writeFile(
+      join(existingDir, "SKILL.md"),
+      "---\nname: reviewer\ndescription: Existing.\nmetadata:\n  version: '1.0'\n---\n# Existing\n"
+    );
+    const incomingContent =
+      "---\nname: reviewer\ndescription: Incoming.\nversion: 2.0.0\n---\n# Incoming\n";
+    await writeFile(join(incomingDir, "SKILL.md"), incomingContent);
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: existingDir, id: "reviewer" });
+
+    const preview = await store.previewImport({
+      kind: "local",
+      input: { sourcePath: incomingDir, id: "reviewer" }
+    });
+    expect(preview).toMatchObject({
+      incoming: { name: "reviewer", version: "2.0.0", versionSource: "version" },
+      suggestedId: "reviewer-2",
+      conflicts: [
+        {
+          existing: {
+            id: "reviewer",
+            version: "1.0",
+            versionSource: "metadata.version"
+          },
+          identical: false
+        }
+      ]
+    });
+    expect(preview.conflicts[0].changes[0]).toMatchObject({ path: "SKILL.md" });
+    await expect(
+      store.importSkill({ sourcePath: incomingDir, id: "reviewer" })
+    ).rejects.toThrow("Skill name or ID already exists");
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Existing");
+
+    await writeFile(join(incomingDir, "SKILL.md"), `${incomingContent}\nChanged after preview.\n`);
+    await expect(
+      store.importSkill({
+        sourcePath: incomingDir,
+        id: "reviewer",
+        expectedContentHash: preview.incoming.contentHash,
+        conflictResolution: { action: "keep-both", id: "reviewer-2" }
+      })
+    ).rejects.toThrow("changed after the import preview");
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer-2", "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    await writeFile(join(incomingDir, "SKILL.md"), incomingContent);
+
+    const kept = await store.importSkill({
+      sourcePath: incomingDir,
+      id: "reviewer",
+      expectedContentHash: preview.incoming.contentHash,
+      conflictResolution: { action: "keep-both", id: "reviewer-2" }
+    });
+    expect(kept).toMatchObject({ id: "reviewer-2", version: "2.0.0" });
+
+    const duplicatePreview = await store.previewImport({
+      kind: "local",
+      input: { sourcePath: incomingDir, id: "reviewer" }
+    });
+    const identical = duplicatePreview.conflicts.find((item) => item.existing.id === "reviewer-2");
+    expect(identical?.identical).toBe(true);
+    const reused = await store.importSkill({
+      sourcePath: incomingDir,
+      id: "reviewer",
+      expectedContentHash: duplicatePreview.incoming.contentHash,
+      conflictResolution: { action: "reuse", existingId: "reviewer-2" }
+    });
+    expect(reused.id).toBe("reviewer-2");
+
+    const replaced = await store.importSkill({
+      sourcePath: incomingDir,
+      id: "reviewer",
+      expectedContentHash: duplicatePreview.incoming.contentHash,
+      conflictResolution: { action: "replace", existingId: "reviewer" }
+    });
+    expect(replaced).toMatchObject({ id: "reviewer", version: "2.0.0" });
+    await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Incoming");
+    expect((await store.listCleanupBackups()).some((backup) => backup.libraryId === "reviewer"))
+      .toBe(true);
+  });
+
   it("detects Skills CLI directory links and imports an independent tracked copy", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

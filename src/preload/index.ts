@@ -23,6 +23,7 @@ const api: AgentEnvApi = {
   saveMcpServer: (input) => ipcRenderer.invoke("mcp:save-library", input),
   removeMcpServer: (id) => ipcRenderer.invoke("mcp:remove-library", id),
   scanUnmanagedSkills: () => ipcRenderer.invoke("skills:scan-unmanaged"),
+  previewSkillImport: (input) => ipcRenderer.invoke("skills:preview-import", input),
   importSkillToLibrary: (input) => ipcRenderer.invoke("skills:import-library", input),
   importGitHubSkillToLibrary: (input) => ipcRenderer.invoke("skills:import-github", input),
   scanGitHubSkills: (url) => ipcRenderer.invoke("skills:scan-github", url),

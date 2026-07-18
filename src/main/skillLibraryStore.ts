@@ -15,7 +15,11 @@ import type {
   SkillCleanupResult,
   SkillAvailabilityInput,
   SkillInventoryEntry,
+  SkillImportConflict,
   SkillImportInput,
+  SkillImportPreview,
+  SkillImportPreviewInput,
+  SkillImportSnapshot,
   SkillIconInput,
   SkillLibraryEntry,
   SkillProvenance,
@@ -106,6 +110,7 @@ export interface SkillLibraryStore {
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
+  previewImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
   importSkill(input: ImportSkillStoreInput): Promise<SkillLibraryEntry>;
   importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
@@ -682,6 +687,8 @@ export const createSkillLibraryStore = (
       id,
       name: frontmatter.name || id,
       description: frontmatter.description,
+      version: frontmatter.version,
+      versionSource: frontmatter.versionSource,
       iconKey: metadata.iconKey,
       path: skillDir,
       sourceType: metadata.sourceType ?? "local",
@@ -695,6 +702,101 @@ export const createSkillLibraryStore = (
       upstream: metadata.upstream,
       provenance: metadata.provenance
     };
+  };
+
+  const normalizedSkillName = (name: string) => name.normalize("NFKC").trim().toLowerCase();
+
+  const snapshotForDirectory = async (
+    id: string,
+    skillDir: string,
+    source: string
+  ): Promise<SkillImportSnapshot> => {
+    const frontmatter = await validateSkillFrontmatter(skillDir);
+    return {
+      id,
+      name: frontmatter.name || id,
+      description: frontmatter.description,
+      version: frontmatter.version,
+      versionSource: frontmatter.versionSource,
+      contentHash: await computeContentHash(skillDir),
+      source,
+      skillMarkdown: await readFile(join(skillDir, "SKILL.md"), "utf8")
+    };
+  };
+
+  const previewDirectoryImport = async (
+    source: SkillImportPreviewInput,
+    sourceDir: string,
+    requestedId: string,
+    sourceLabel: string
+  ): Promise<SkillImportPreview> => {
+    const safeRequestedId = SafeIdSchema.parse(requestedId);
+    const incoming = await snapshotForDirectory(safeRequestedId, sourceDir, sourceLabel);
+    const skills = await listSkills();
+    const normalizedIncomingName = normalizedSkillName(incoming.name);
+    const matchingSkills = skills.filter(
+      (skill) =>
+        normalizedSkillName(skill.name) === normalizedIncomingName || skill.id === safeRequestedId
+    );
+    const conflicts: SkillImportConflict[] = await Promise.all(
+      matchingSkills.map(async (skill) => {
+        const existing = await snapshotForDirectory(
+          skill.id,
+          skill.path,
+          skill.source ?? skill.path
+        );
+        const identical = existing.contentHash === incoming.contentHash;
+        const nameMatches = normalizedSkillName(skill.name) === normalizedIncomingName;
+        const idMatches = skill.id === safeRequestedId;
+        return {
+          existing,
+          match: nameMatches && idMatches ? "name-and-id" : nameMatches ? "name" : "id",
+          identical,
+          changes: identical ? [] : await createSkillChanges(skill.path, sourceDir)
+        };
+      })
+    );
+    const usedIds = new Set(skills.map((skill) => skill.id));
+    let suggestedId = safeRequestedId;
+    for (let suffix = 2; usedIds.has(suggestedId); suffix += 1) {
+      suggestedId = `${safeRequestedId}-${suffix}`;
+    }
+    return { source, incoming, conflicts, suggestedId };
+  };
+
+  const previewImport = async (source: SkillImportPreviewInput): Promise<SkillImportPreview> => {
+    if (source.kind === "local") {
+      const sourceDir = resolve(source.input.sourcePath);
+      if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
+        throw new Error(`Skill source is missing SKILL.md: ${sourceDir}`);
+      }
+      return previewDirectoryImport(
+        source,
+        sourceDir,
+        source.input.id ?? basename(sourceDir),
+        sourceDir
+      );
+    }
+
+    const parsedSource = parseGitHubSkillUrl(source.input.url, {
+      ref: source.input.ref,
+      remotePath: source.input.remotePath
+    });
+    const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-preview-"));
+    try {
+      const { hasSkillMd } = await readGitHubTree(parsedSource, tempDir);
+      if (!hasSkillMd) {
+        throw new Error(`GitHub skill source is missing SKILL.md: ${source.input.url}`);
+      }
+      return await previewDirectoryImport(
+        source,
+        tempDir,
+        source.input.id ?? parsedSource.defaultId,
+        parsedSource.sourceUrl
+      );
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   };
 
   const readLibraryMetadata = async (skillDir: string) =>
@@ -1102,43 +1204,104 @@ export const createSkillLibraryStore = (
       }));
   };
 
+  const resolveImportPlan = (
+    preview: SkillImportPreview,
+    resolution: SkillImportInput["conflictResolution"],
+    expectedContentHash: string | undefined
+  ) => {
+    if (expectedContentHash && preview.incoming.contentHash !== expectedContentHash) {
+      throw new Error("Skill changed after the import preview; review the latest version");
+    }
+    if (preview.conflicts.length === 0) {
+      return { id: preview.incoming.id, replace: false, reused: false };
+    }
+    if (!resolution) {
+      throw new Error(`Skill name or ID already exists in Library: ${preview.incoming.name}`);
+    }
+    const selected = resolution.action === "keep-both"
+      ? undefined
+      : preview.conflicts.find(
+          (conflict) => conflict.existing.id === resolution.existingId
+        );
+    if (resolution.action === "reuse") {
+      if (!selected?.identical) {
+        throw new Error("Only an identical Library skill can be reused");
+      }
+      return { id: selected.existing.id, replace: false, reused: true };
+    }
+    if (resolution.action === "replace") {
+      if (!selected) {
+        throw new Error("The selected Library skill is no longer a matching conflict");
+      }
+      return { id: selected.existing.id, replace: true, reused: false };
+    }
+    const safeId = SafeIdSchema.parse(resolution.id);
+    if (preview.conflicts.some((conflict) => conflict.existing.id === safeId)) {
+      throw new Error(`Library skill already exists: ${safeId}`);
+    }
+    return { id: safeId, replace: false, reused: false };
+  };
+
   const importSkill = async ({
     sourcePath,
     id,
     sourceType = "local",
     provenance,
-    upstream
+    upstream,
+    expectedContentHash,
+    conflictResolution
   }: ImportSkillStoreInput): Promise<SkillLibraryEntry> => {
     if (!(await pathExists(join(sourcePath, "SKILL.md")))) {
       throw new Error(`Skill source is missing SKILL.md: ${sourcePath}`);
     }
     await validateSkillFrontmatter(sourcePath);
-    const safeId = SafeIdSchema.parse(id ?? basename(sourcePath));
-    const targetDir = join(await libraryDir(), safeId);
-    if (await pathExists(targetDir)) {
-      throw new Error(`Library skill already exists: ${safeId}`);
+    const preview = await previewImport({
+      kind: "local",
+      input: { sourcePath, id, provenance, upstream }
+    });
+    const plan = resolveImportPlan(preview, conflictResolution, expectedContentHash);
+    if (plan.reused) {
+      const existing = (await listSkills()).find((skill) => skill.id === plan.id);
+      if (!existing) throw new Error(`Library skill does not exist: ${plan.id}`);
+      return existing;
     }
-    await removeAndCopy(sourcePath, targetDir);
+    const targetDir = join(await libraryDir(), plan.id);
+    const previousMetadata = plan.replace ? await readLibraryMetadata(targetDir) : undefined;
+    const backup = plan.replace ? await createLibraryUpdateBackup(plan.id, targetDir) : undefined;
+    try {
+      await removeAndCopy(sourcePath, targetDir);
+    } catch (error) {
+      if (backup) return failAfterCleanupRollback(backup, `Replacing ${plan.id}`, error);
+      throw error;
+    }
     const githubSource = upstream?.kind === "github"
       ? parseGitHubSkillUrl(upstream.locator, {
           ref: upstream.ref,
           remotePath: upstream.subpath
         })
       : undefined;
-    await writeMetadata(targetDir, {
-      sourceType: githubSource ? "github" : sourceType,
-      source: githubSource?.sourceUrl ?? sourcePath,
-      remoteRef: githubSource?.ref,
-      remotePath: githubSource?.remotePath,
-      remoteRevision: githubSource ? upstream?.revision : undefined,
-      updatePolicy: githubSource ? "tracked" : "untracked",
-      upstream: upstream ?? {
-        kind: "local",
-        locator: sourcePath
-      },
-      provenance: provenance ?? { importedVia: "agentenv" }
-    });
-    return entryFor(safeId, targetDir);
+    try {
+      await writeMetadata(targetDir, {
+        sourceType: githubSource ? "github" : sourceType,
+        source: githubSource?.sourceUrl ?? sourcePath,
+        remoteRef: githubSource?.ref,
+        remotePath: githubSource?.remotePath,
+        remoteRevision: githubSource ? upstream?.revision : undefined,
+        updatePolicy: githubSource ? "tracked" : "untracked",
+        iconKey: previousMetadata?.iconKey,
+        globallyEnabled: previousMetadata?.globallyEnabled,
+        upstream: upstream ?? {
+          kind: "local",
+          locator: sourcePath
+        },
+        provenance: provenance ?? { importedVia: "agentenv" }
+      });
+      return entryFor(plan.id, targetDir);
+    } catch (error) {
+      if (backup) return failAfterCleanupRollback(backup, `Replacing ${plan.id}`, error);
+      await rm(targetDir, { recursive: true, force: true });
+      throw error;
+    }
   };
 
   const cleanupBackupRoot = () => join(paths.backupsDir, "skill-cleanup");
@@ -1369,14 +1532,11 @@ export const createSkillLibraryStore = (
     url,
     id,
     ref,
-    remotePath
+    remotePath,
+    expectedContentHash,
+    conflictResolution
   }: GitHubSkillImportInput): Promise<SkillLibraryEntry> => {
     const source = parseGitHubSkillUrl(url, { ref, remotePath });
-    const safeId = SafeIdSchema.parse(id ?? source.defaultId);
-    const targetDir = join(await libraryDir(), safeId);
-    if (await pathExists(targetDir)) {
-      throw new Error(`Library skill already exists: ${safeId}`);
-    }
 
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-"));
     try {
@@ -1385,24 +1545,51 @@ export const createSkillLibraryStore = (
         throw new Error(`GitHub skill source is missing SKILL.md: ${url}`);
       }
       await validateSkillFrontmatter(tempDir);
-      await removeAndCopy(tempDir, targetDir);
-      await writeMetadata(targetDir, {
-        sourceType: "github",
-        source: source.sourceUrl,
-        remoteRef: source.ref,
-        remotePath: source.remotePath,
-        remoteRevision: revision,
-        updatePolicy: "tracked",
-        upstream: {
-          kind: "github",
-          locator: source.sourceUrl,
-          ref: source.ref,
-          subpath: source.remotePath,
-          revision
-        },
-        provenance: { importedVia: "agentenv" }
-      });
-      return entryFor(safeId, targetDir);
+      const previewSource: SkillImportPreviewInput = {
+        kind: "github",
+        input: { url, id, ref, remotePath }
+      };
+      const preview = await previewDirectoryImport(
+        previewSource,
+        tempDir,
+        id ?? source.defaultId,
+        source.sourceUrl
+      );
+      const plan = resolveImportPlan(preview, conflictResolution, expectedContentHash);
+      if (plan.reused) {
+        const existing = (await listSkills()).find((skill) => skill.id === plan.id);
+        if (!existing) throw new Error(`Library skill does not exist: ${plan.id}`);
+        return existing;
+      }
+      const targetDir = join(await libraryDir(), plan.id);
+      const previousMetadata = plan.replace ? await readLibraryMetadata(targetDir) : undefined;
+      const backup = plan.replace ? await createLibraryUpdateBackup(plan.id, targetDir) : undefined;
+      try {
+        await removeAndCopy(tempDir, targetDir);
+        await writeMetadata(targetDir, {
+          sourceType: "github",
+          source: source.sourceUrl,
+          remoteRef: source.ref,
+          remotePath: source.remotePath,
+          remoteRevision: revision,
+          updatePolicy: "tracked",
+          iconKey: previousMetadata?.iconKey,
+          globallyEnabled: previousMetadata?.globallyEnabled,
+          upstream: {
+            kind: "github",
+            locator: source.sourceUrl,
+            ref: source.ref,
+            subpath: source.remotePath,
+            revision
+          },
+          provenance: { importedVia: "agentenv" }
+        });
+        return entryFor(plan.id, targetDir);
+      } catch (error) {
+        if (backup) return failAfterCleanupRollback(backup, `Replacing ${plan.id}`, error);
+        await rm(targetDir, { recursive: true, force: true });
+        throw error;
+      }
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -1536,6 +1723,9 @@ export const createSkillLibraryStore = (
     const safeLibraryId = SafeIdSchema.parse(libraryId);
     const targetLibraryDir = join(await libraryDir(), safeLibraryId);
     const libraryCreated = !(await pathExists(join(targetLibraryDir, "SKILL.md")));
+    const previousLibraryMetadata = replaceLibrary
+      ? await readLibraryMetadata(targetLibraryDir)
+      : undefined;
     if ((libraryCreated || replaceLibrary) && !locations.some((location) => location.targetDir === canonicalPath)) {
       throw new Error("Source skill must be one of the selected cleanup locations");
     }
@@ -1598,6 +1788,8 @@ export const createSkillLibraryStore = (
           sourceType: "local",
           source: canonicalPath,
           updatePolicy: "untracked",
+          iconKey: previousLibraryMetadata?.iconKey,
+          globallyEnabled: previousLibraryMetadata?.globallyEnabled,
           upstream: { kind: "local", locator: canonicalPath },
           provenance: { importedVia: "local-scan" }
         });
@@ -2131,6 +2323,7 @@ export const createSkillLibraryStore = (
     ignoreSkillGroup,
     unignoreSkillGroup,
     scanUnmanaged,
+    previewImport,
     importSkill,
     importGitHubSkill,
     scanGitHubSkills,

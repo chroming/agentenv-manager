@@ -60,6 +60,10 @@ import type {
   McpLibraryEntry,
   SaveMcpServerInput,
   SkillInventoryEntry,
+  SkillImportConflictResolution,
+  SkillImportInput,
+  SkillImportPreview,
+  SkillImportPreviewInput,
   SkillAvailabilityInput,
   SkillIconInput,
   SkillCleanupRequest,
@@ -80,6 +84,7 @@ import {
   libraryResourceVersionsEqual
 } from "../shared/libraryVersions";
 import { AgentsEditor } from "./components/AgentsEditor";
+import { DiffViewer } from "./components/DiffViewer";
 import { HistoryView } from "./components/HistoryView";
 import { InfoTip } from "./components/InfoTip";
 import { OverflowTooltip } from "./components/OverflowTooltip";
@@ -138,6 +143,11 @@ type ProfileCaptureActivity = "idle" | "reviewing" | "creating";
 
 interface PendingProfileAction {
   label: string;
+}
+
+interface PendingSkillImport {
+  preview: SkillImportPreview;
+  resolve: (resolution: SkillImportConflictResolution | undefined) => void;
 }
 
 interface BackupManagerNotice {
@@ -522,6 +532,10 @@ const AppContent = ({
   const [skillInventoryRefreshing, setSkillInventoryRefreshing] = useState(false);
   const [skillCleanupBackups, setSkillCleanupBackups] = useState<SkillCleanupBackupSummary[]>([]);
   const [skillCleanupResult, setSkillCleanupResult] = useState<SkillCleanupResult>();
+  const [pendingSkillImport, setPendingSkillImport] = useState<PendingSkillImport>();
+  const [selectedSkillConflictId, setSelectedSkillConflictId] = useState("");
+  const [skillImportAlternateId, setSkillImportAlternateId] = useState("");
+  const [skillImportDecision, setSkillImportDecision] = useState<"replace" | "keep-both">("replace");
   const [selectedSkillUpdatePlan, setSelectedSkillUpdatePlan] = useState<SkillUpdatePlan>();
   const [bulkSkillUpdatePlans, setBulkSkillUpdatePlans] = useState<SkillUpdatePlan[]>();
   const [profileResourceCounts, setProfileResourceCounts] = useState<
@@ -1097,6 +1111,50 @@ const AppContent = ({
     setRollbackPreview(undefined);
   };
 
+  const prepareSkillImport = async (
+    source: SkillImportPreviewInput
+  ): Promise<SkillImportPreviewInput | undefined> => {
+    const preview = await window.agentEnv.previewSkillImport(source);
+    if (preview.conflicts.length === 0) {
+      return {
+        ...source,
+        input: {
+          ...source.input,
+          expectedContentHash: preview.incoming.contentHash
+        }
+      } as SkillImportPreviewInput;
+    }
+
+    const preferredConflict =
+      preview.conflicts.find((conflict) => conflict.identical) ?? preview.conflicts[0];
+    setSkillLibraryTool(undefined);
+    setSelectedSkillConflictId(preferredConflict.existing.id);
+    setSkillImportAlternateId(preview.suggestedId);
+    setSkillImportDecision(preferredConflict.identical ? "keep-both" : "replace");
+    const resolution = await new Promise<SkillImportConflictResolution | undefined>((resolve) => {
+      setPendingSkillImport({ preview, resolve });
+    });
+    if (!resolution) return undefined;
+    return {
+      ...source,
+      input: {
+        ...source.input,
+        expectedContentHash: preview.incoming.contentHash,
+        conflictResolution: resolution
+      }
+    } as SkillImportPreviewInput;
+  };
+
+  const dismissSkillImport = () => {
+    pendingSkillImport?.resolve(undefined);
+    setPendingSkillImport(undefined);
+  };
+
+  const confirmSkillImport = (resolution: SkillImportConflictResolution) => {
+    pendingSkillImport?.resolve(resolution);
+    setPendingSkillImport(undefined);
+  };
+
   const importOwnedSkillToLibrary = async (
     index: number,
     asset: AssetPolicy["ownedDirs"][number]
@@ -1110,18 +1168,18 @@ const AppContent = ({
       .toLocaleLowerCase()
       .replace(/[^a-z0-9_-]+/g, "-")
       .replace(/^-+|-+$/g, "") || "profile-skill";
-    const usedIds = new Set(librarySkills.map((skill) => skill.id));
-    let libraryId = baseId;
-    for (let suffix = 2; usedIds.has(libraryId); suffix += 1) {
-      libraryId = `${baseId}-${suffix}`;
-    }
     const sourcePath = `${draftProfile.profileDir.replace(/[\\/]+$/, "")}/${asset.source.replace(/^[\\/]+/, "")}`;
 
     setImportingOwnedSkillIndex(index);
     setError(undefined);
     try {
-      const result = await window.agentEnv.importSkillToLibrary({ sourcePath, id: libraryId });
-      setLibrarySkills((current) => current.concat(result.skill));
+      const prepared = await prepareSkillImport({
+        kind: "local",
+        input: { sourcePath, id: baseId }
+      });
+      if (!prepared || prepared.kind !== "local") return;
+      const result = await window.agentEnv.importSkillToLibrary(prepared.input);
+      await refreshProfiles({ checkSkillUpdates: false });
       updateDraftProfile({
         ...draftProfile,
         assetPolicy: {
@@ -1138,9 +1196,13 @@ const AppContent = ({
       });
       setSkillUpdateCheckStatus({
         state: "success",
-        message: t("{{name}} imported to Library. Save the Profile to use this reference.", {
-          name: result.skill.name
-        })
+        message: result.reused
+          ? t("Using the existing {{name}} Library entry. Save the Profile to use this reference.", {
+              name: result.skill.name
+            })
+          : t("{{name}} imported to Library. Save the Profile to use this reference.", {
+              name: result.skill.name
+            })
       });
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -1467,10 +1529,12 @@ const AppContent = ({
   };
 
   const appModalOpen = Boolean(
-    pendingProfileAction || profileDialogMode || deleteProfileDialogOpen || dataRestorePreview || backupManagerOpen
+    pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileDialogOpen || dataRestorePreview || backupManagerOpen
   );
   const dismissAppModal = () => {
-    if (backupManagerOpen) {
+    if (pendingSkillImport) {
+      dismissSkillImport();
+    } else if (backupManagerOpen) {
       closeBackupManager();
     } else if (dataRestorePreview) {
       setDataRestorePreview(undefined);
@@ -1490,9 +1554,11 @@ const AppContent = ({
         ? dataRestoreReturnFocusRef
         : appModalFallbackFocusRef,
     onDismiss: dismissAppModal,
-    dismissDisabled: busy,
+    dismissDisabled: busy && !pendingSkillImport,
     focusKey:
-      profileDialogMode === "create" && profileCreateSource === "target"
+      pendingSkillImport
+        ? `skill-import:${pendingSkillImport.preview.incoming.contentHash}`
+        : profileDialogMode === "create" && profileCreateSource === "target"
         ? `target-capture:${targetCapturePreview ? "review" : "setup"}`
         : profileDialogMode ?? (deleteProfileDialogOpen
             ? "delete"
@@ -2010,13 +2076,17 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      const result = await window.agentEnv.importSkillToLibrary({ sourcePath });
+      const prepared = await prepareSkillImport({ kind: "local", input: { sourcePath } });
+      if (!prepared || prepared.kind !== "local") return false;
+      const result = await window.agentEnv.importSkillToLibrary(prepared.input);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
       setSkillUpdateCheckStatus({
         state: "success",
         message:
-          result.managedLocations.length > 0
+          result.reused
+            ? `Using existing ${result.skill.name} from Library`
+            : result.managedLocations.length > 0
             ? `Imported ${result.skill.name} · Local copy is now managed`
             : `Imported ${result.skill.name} to Library`
       });
@@ -2033,16 +2103,21 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      const result = await window.agentEnv.importSkillToLibrary({
-        sourcePath: skill.path,
-        id: skill.skillKey,
-        upstream: skill.externalOwnership?.upstream,
-        provenance: {
-          importedVia: "local-scan",
-          externalManager: "skills-cli",
-          externalLockPath: skill.externalOwnership?.lockPath
+      const prepared = await prepareSkillImport({
+        kind: "local",
+        input: {
+          sourcePath: skill.path,
+          id: skill.skillKey,
+          upstream: skill.externalOwnership?.upstream,
+          provenance: {
+            importedVia: "local-scan",
+            externalManager: "skills-cli",
+            externalLockPath: skill.externalOwnership?.lockPath
+          }
         }
       });
+      if (!prepared || prepared.kind !== "local") return false;
+      const result = await window.agentEnv.importSkillToLibrary(prepared.input);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
       setSkillUpdateCheckStatus({
@@ -2374,7 +2449,22 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      const result = await window.agentEnv.importGitHubSkills(inputs);
+      const result: GitHubSkillImportResult = { imported: [], failed: [] };
+      for (const input of inputs) {
+        try {
+          const prepared = await prepareSkillImport({ kind: "github", input });
+          if (!prepared || prepared.kind !== "github") continue;
+          result.imported.push(
+            await window.agentEnv.importGitHubSkillToLibrary(prepared.input)
+          );
+        } catch (importError) {
+          result.failed.push({
+            id: input.id ?? "skill",
+            sourceUrl: input.url,
+            error: importError instanceof Error ? importError.message : String(importError)
+          });
+        }
+      }
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles({ checkSkillUpdates: false });
       if (result.imported.length > 0) {
@@ -3161,6 +3251,14 @@ const AppContent = ({
     </div>
   );
 
+  const selectedSkillImportConflict = pendingSkillImport?.preview.conflicts.find(
+    (conflict) => conflict.existing.id === selectedSkillConflictId
+  ) ?? pendingSkillImport?.preview.conflicts[0];
+  const alternateSkillIdValid = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(skillImportAlternateId) &&
+    !pendingSkillImport?.preview.conflicts.some(
+      (conflict) => conflict.existing.id === skillImportAlternateId
+    );
+
   return (
     <main
       className={`app-shell${activeWorkspace === "library" ? " app-shell--library" : ""}${
@@ -3304,6 +3402,7 @@ const AppContent = ({
                 onSetSharedSkillRetention={setSharedSkillRetention}
                 onRetireSharedSkill={retireSharedSkill}
                 onOpenProfiles={openProfilesForSharedSkill}
+                importConflictOpen={Boolean(pendingSkillImport)}
                 onRestoreCleanup={(backupId) => void undoSkillCleanup(backupId)}
                 updateCheckStatus={skillUpdateCheckStatus}
                 viewState={skillLibraryViewState}
@@ -4541,6 +4640,160 @@ const AppContent = ({
             <h2>{t("No profile selected")}</h2>
           </div>
         )}
+        {pendingSkillImport && selectedSkillImportConflict ? (
+          <div className="preview-modal-backdrop" onClick={dismissSkillImport}>
+            <section
+              ref={appModalDialogRef}
+              className="profile-form-dialog skill-import-conflict-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("Review duplicate Skill")}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="profile-dialog-header">
+                <div>
+                  <div className="section-title">
+                    {t(
+                      selectedSkillImportConflict.match === "id"
+                        ? "A Skill with this Library ID already exists"
+                        : "A Skill with this name already exists"
+                    )}
+                  </div>
+                  <p className="muted">
+                    {selectedSkillImportConflict.identical
+                      ? t("The incoming Skill is identical to the Library copy.")
+                      : t("Review the versions and file changes before choosing which copy to keep.")}
+                  </p>
+                </div>
+                <span className={`skill-import-match-state${selectedSkillImportConflict.identical ? " is-identical" : " is-different"}`}>
+                  {t(selectedSkillImportConflict.identical ? "Identical" : "Different")}
+                </span>
+              </header>
+
+              {pendingSkillImport.preview.conflicts.length > 1 ? (
+                <div className="skill-import-existing-picker" role="radiogroup" aria-label={t("Existing Skills with the same name")}>
+                  {pendingSkillImport.preview.conflicts.map((conflict) => (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={conflict.existing.id === selectedSkillImportConflict.existing.id}
+                      className={conflict.existing.id === selectedSkillImportConflict.existing.id ? "is-selected" : ""}
+                      key={conflict.existing.id}
+                      onClick={() => {
+                        setSelectedSkillConflictId(conflict.existing.id);
+                        setSkillImportDecision(conflict.identical ? "keep-both" : "replace");
+                      }}
+                    >
+                      <strong>{conflict.existing.id}</strong>
+                      <span>{t(conflict.identical ? "Identical" : "Different")}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="skill-import-comparison-summary">
+                {[
+                  { label: t("Library copy"), item: selectedSkillImportConflict.existing },
+                  { label: t("Incoming copy"), item: pendingSkillImport.preview.incoming }
+                ].map(({ label, item }) => (
+                  <article key={label}>
+                    <span>{label}</span>
+                    <strong>{item.name}</strong>
+                    <dl>
+                      <div><dt>{t("Version")}</dt><dd>{item.version ?? t("Not declared")}</dd></div>
+                      <div><dt>{t("Hash")}</dt><dd><code title={item.contentHash}>{item.contentHash.slice(0, 12)}</code></dd></div>
+                      <div><dt>{t("ID")}</dt><dd><code>{item.id}</code></dd></div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+
+              <div className="skill-import-file-review">
+                <div className="skill-import-file-review__header">
+                  <strong>{t("SKILL.md preview")}</strong>
+                  <span>
+                    {selectedSkillImportConflict.changes.length === 0
+                      ? t("No file changes")
+                      : t("{{count}} changed files", { count: selectedSkillImportConflict.changes.length })}
+                  </span>
+                </div>
+                {selectedSkillImportConflict.changes.length > 0 ? (
+                  <div className="diff-list">
+                    {selectedSkillImportConflict.changes.map((change) => (
+                      <div className="diff-file" key={change.path}>
+                        <div className="diff-file-meta"><strong>{change.path}</strong></div>
+                        <DiffViewer path={change.path} diff={change.diff} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <pre className="skill-import-identical-preview">{pendingSkillImport.preview.incoming.skillMarkdown}</pre>
+                )}
+              </div>
+
+              {!selectedSkillImportConflict.identical ? (
+                <div className="skill-import-decisions" role="radiogroup" aria-label={t("Import decision")}>
+                  <label className={skillImportDecision === "replace" ? "is-selected" : ""}>
+                    <input
+                      type="radio"
+                      name="skill-import-decision"
+                      checked={skillImportDecision === "replace"}
+                      onChange={() => setSkillImportDecision("replace")}
+                    />
+                    <span><strong>{t("Replace Library copy")}</strong><small>{t("Profiles keep the same Skill reference. The current Library copy is backed up.")}</small></span>
+                  </label>
+                  <label className={skillImportDecision === "keep-both" ? "is-selected" : ""}>
+                    <input
+                      type="radio"
+                      name="skill-import-decision"
+                      checked={skillImportDecision === "keep-both"}
+                      onChange={() => setSkillImportDecision("keep-both")}
+                    />
+                    <span><strong>{t("Keep both")}</strong><small>{t("Save the incoming Skill under a different Library ID.")}</small></span>
+                  </label>
+                  {skillImportDecision === "keep-both" ? (
+                    <label className="skill-import-alternate-id">
+                      <span>{t("Library ID")}</span>
+                      <input
+                        value={skillImportAlternateId}
+                        aria-invalid={!alternateSkillIdValid}
+                        onChange={(event) => setSkillImportAlternateId(event.target.value)}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <footer className="preview-actions">
+                <button ref={appModalInitialFocusRef} className="secondary-action" type="button" onClick={dismissSkillImport}>
+                  {t("Cancel")}
+                </button>
+                <button
+                  className="primary-action"
+                  type="button"
+                  disabled={!selectedSkillImportConflict.identical && skillImportDecision === "keep-both" && !alternateSkillIdValid}
+                  onClick={() => {
+                    if (selectedSkillImportConflict.identical) {
+                      confirmSkillImport({ action: "reuse", existingId: selectedSkillImportConflict.existing.id });
+                    } else if (skillImportDecision === "replace") {
+                      confirmSkillImport({ action: "replace", existingId: selectedSkillImportConflict.existing.id });
+                    } else {
+                      confirmSkillImport({ action: "keep-both", id: skillImportAlternateId });
+                    }
+                  }}
+                >
+                  {t(
+                    selectedSkillImportConflict.identical
+                      ? "Use existing"
+                      : skillImportDecision === "replace"
+                        ? "Replace Skill"
+                        : "Save another Skill"
+                  )}
+                </button>
+              </footer>
+            </section>
+          </div>
+        ) : null}
         {profileDialogMode === "create" && profileCreateSource === "target" ? (
           <TargetCaptureDialog
             target={targets.find((target) => target.id === profileForm.targetId)}

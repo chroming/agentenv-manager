@@ -126,6 +126,7 @@ interface SkillLibraryPanelProps {
   onViewStateChange(next: SkillLibraryViewState): void;
   searchInputRef?: RefObject<HTMLInputElement | null>;
   scrollOwnerRef?(node: HTMLDivElement | null): void;
+  importConflictOpen?: boolean;
 }
 
 const sourceLabel = (skill: SkillLibraryEntry) => {
@@ -293,7 +294,8 @@ export const SkillLibraryPanel = ({
   viewState,
   onViewStateChange,
   searchInputRef,
-  scrollOwnerRef
+  scrollOwnerRef,
+  importConflictOpen = false
 }: SkillLibraryPanelProps) => {
   const { formatDate, t } = useI18n();
   const [githubUrl, setGithubUrl] = useState("");
@@ -337,6 +339,11 @@ export const SkillLibraryPanel = ({
     skillKey: string;
     sourcePath: string;
   }>();
+  useEffect(() => {
+    if (importConflictOpen) {
+      setExternalImport(undefined);
+    }
+  }, [importConflictOpen]);
   const [sourceDrafts, setSourceDrafts] = useState<
     Record<string, { sourceType: SkillSourceType; source: string }>
   >({});
@@ -347,6 +354,11 @@ export const SkillLibraryPanel = ({
   const modalFallbackFocusRef = useRef<HTMLElement>(null);
   const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
   const skillsById = new Map(librarySkills.map((skill) => [skill.id, skill]));
+  const skillNameCounts = librarySkills.reduce((counts, skill) => {
+    const key = skill.name.normalize("NFKC").trim().toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
   const enabledSkillIds = new Set(
     librarySkills.filter((skill) => skill.globallyEnabled !== false).map((skill) => skill.id)
   );
@@ -1071,9 +1083,11 @@ export const SkillLibraryPanel = ({
             const updateAction = hasUpdate ? "update" : hasError ? "retry" : undefined;
             const usageCount = (skillUsage[skill.id] ?? []).length;
             const revisionLabel = shortRevision(skill);
-            const versionLabel = skill.remoteRef ?? revisionLabel;
-            const versionDetail = skill.remoteRef
+            const versionLabel = skill.version ?? skill.remoteRef ?? revisionLabel;
+            const versionDetail = skill.version
               ? revisionLabel
+              : skill.remoteRef
+                ? revisionLabel
               : hasUpdateSource
                 ? isTracked
                   ? "Tracked source"
@@ -1096,6 +1110,9 @@ export const SkillLibraryPanel = ({
                   <div className="skill-title-stack">
                     <span className="skill-title-line">
                       <strong className="skill-title">{skill.name}</strong>
+                      {(skillNameCounts.get(skill.name.normalize("NFKC").trim().toLowerCase()) ?? 0) > 1 ? (
+                        <span className="library-duplicate-id">{skill.id}</span>
+                      ) : null}
                       {!globallyEnabled || availabilityIsChanging ? (
                         <span className={`library-global-state${availabilityIsChanging ? " is-working" : ""}`}>
                           {availabilityIsChanging ? (

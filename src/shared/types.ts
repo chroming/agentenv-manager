@@ -29,6 +29,7 @@ export interface AgentEnvApi {
   saveMcpServer(input: SaveMcpServerInput): Promise<McpLibraryEntry>;
   removeMcpServer(id: string): Promise<void>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
+  previewSkillImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
   importSkillToLibrary(input: SkillImportInput): Promise<SkillImportResult>;
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
@@ -92,6 +93,8 @@ export interface SkillLibraryEntry {
   id: string;
   name: string;
   description: string;
+  version?: string;
+  versionSource?: "version" | "metadata.version";
   iconKey?: ResourceIconKey;
   path: string;
   sourceType: SkillSourceType;
@@ -135,7 +138,43 @@ export interface SkillImportInput {
   id?: string;
   provenance?: SkillProvenance;
   upstream?: SkillUpstream;
+  expectedContentHash?: string;
+  conflictResolution?: SkillImportConflictResolution;
 }
+
+export type SkillImportPreviewInput =
+  | { kind: "local"; input: SkillImportInput }
+  | { kind: "github"; input: GitHubSkillImportInput };
+
+export interface SkillImportSnapshot {
+  id: string;
+  name: string;
+  description: string;
+  version?: string;
+  versionSource?: "version" | "metadata.version";
+  contentHash: string;
+  source: string;
+  skillMarkdown: string;
+}
+
+export interface SkillImportConflict {
+  existing: SkillImportSnapshot;
+  match: "name" | "id" | "name-and-id";
+  identical: boolean;
+  changes: PlannedFileChange[];
+}
+
+export interface SkillImportPreview {
+  source: SkillImportPreviewInput;
+  incoming: SkillImportSnapshot;
+  conflicts: SkillImportConflict[];
+  suggestedId: string;
+}
+
+export type SkillImportConflictResolution =
+  | { action: "reuse"; existingId: string }
+  | { action: "replace"; existingId: string }
+  | { action: "keep-both"; id: string };
 
 export interface SkillImportResult {
   skill: SkillLibraryEntry;
@@ -149,6 +188,8 @@ export interface GitHubSkillImportInput {
   id?: string;
   ref?: string;
   remotePath?: string;
+  expectedContentHash?: string;
+  conflictResolution?: SkillImportConflictResolution;
 }
 
 export type GitHubSkillCandidateStatus = "ready" | "already-imported" | "duplicate";

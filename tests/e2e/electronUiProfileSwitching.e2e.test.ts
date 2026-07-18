@@ -2885,6 +2885,75 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
   }, 30_000);
 
+  it("reviews same-name Skill differences before keeping another Library copy", async () => {
+    const { appDataRoot, page } = await launchApp();
+    await resizeAppWindow(page, 920, 620);
+    const incomingDir = join(appDataRoot, "manual-import-skills", "shared-reviewer-alternative");
+    await mkdir(incomingDir, { recursive: true });
+    await writeFile(
+      join(incomingDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Alternative review guidance.\nversion: 2.0.0\n---\n# Alternative Reviewer\n",
+      "utf8"
+    );
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      incomingDir
+    );
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Import skills" }).click();
+    await page.getByRole("button", { name: "Choose local skill folder" }).click();
+    await page.getByRole("button", { name: "Import copy", exact: true }).click();
+    let conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await conflict.waitFor({ state: "visible" });
+    const conflictBounds = await conflict.boundingBox();
+    expect(conflictBounds).not.toBeNull();
+    expect(conflictBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(conflictBounds!.y).toBeGreaterThanOrEqual(0);
+    expect(conflictBounds!.x + conflictBounds!.width).toBeLessThanOrEqual(920);
+    expect(conflictBounds!.y + conflictBounds!.height).toBeLessThanOrEqual(620);
+    await conflict.getByRole("button", { name: "Replace Skill" }).waitFor({ state: "visible" });
+    await expect.poll(() => conflict.textContent()).toContain("Different");
+    await expect.poll(() => conflict.textContent()).toContain("2.0.0");
+    await expect.poll(() => conflict.textContent()).toContain("SKILL.md");
+    await conflict.getByRole("radio", { name: /Keep both/ }).check();
+    await conflict.getByRole("textbox", { name: "Library ID", exact: true })
+      .fill("shared-reviewer-alternative");
+    await conflict.getByRole("button", { name: "Save another Skill" }).click();
+    await conflict.waitFor({ state: "hidden" });
+
+    await page.getByRole("group", { name: "Library item shared-reviewer-alternative" })
+      .waitFor({ state: "visible" });
+    await expect.poll(() =>
+      page.getByRole("group", { name: "Library item shared-reviewer-alternative" }).textContent()
+    ).toContain("2.0.0");
+    await expect(readFile(join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md"), "utf8"))
+      .resolves.toContain("Shared Reviewer");
+    await expect(readFile(join(appDataRoot, "skills-library", "shared-reviewer-alternative", "SKILL.md"), "utf8"))
+      .resolves.toContain("Alternative Reviewer");
+    const sameNameRows = page.locator(".library-table-row", { hasText: "Shared Reviewer" });
+    expect(await sameNameRows.count()).toBe(2);
+    await expect.poll(() => sameNameRows.nth(0).textContent()).toContain("shared-reviewer");
+    await expect.poll(() => sameNameRows.nth(1).textContent()).toContain("shared-reviewer-alternative");
+
+    await page.getByRole("button", { name: "Import skills" }).click();
+    await page.getByRole("button", { name: "Choose local skill folder" }).click();
+    await page.getByRole("button", { name: "Import copy", exact: true }).click();
+    conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await conflict.waitFor({ state: "visible" });
+    await conflict.getByRole("radio", { name: /shared-reviewer-alternative/ }).click();
+    await expect.poll(() => conflict.textContent()).toContain("Identical");
+    await conflict.getByRole("button", { name: "Use existing" }).click();
+    await conflict.waitFor({ state: "hidden" });
+    expect(await page.locator(".library-table-row", { hasText: "Shared Reviewer" }).count()).toBe(2);
+  }, 45_000);
+
   it("imports a Target-local skill and immediately replaces the source with a managed install", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
     const localSkillDir = join(opencodeDir, "skills", "managed-after-import");
@@ -3535,29 +3604,40 @@ describe("Electron UI profile switching e2e", () => {
     const dialog = page.getByRole("dialog", { name: "Import external skill" });
     await dialog.getByRole("button", { name: "Import copy" }).click();
     await dialog.waitFor({ state: "hidden" });
+    const duplicateDialog = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await duplicateDialog.waitFor({ state: "visible" });
+    await duplicateDialog.getByRole("radio", { name: /Keep both/ }).check();
+    await duplicateDialog.getByRole("textbox", { name: "Library ID", exact: true })
+      .fill("open-browser-use-2");
+    await duplicateDialog.getByRole("button", { name: "Save another Skill" }).click();
+    await duplicateDialog.waitFor({ state: "hidden" });
 
     await page.getByRole("group", { name: "Library item open-browser-use-2" })
       .waitFor({ state: "visible" });
-    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
-      "Imported Open Browser Use to Library as open-browser-use-2"
-    );
     await expect(readFile(join(existingLibraryDir, "SKILL.md"), "utf8"))
       .resolves.toContain("Existing unrelated");
     await expect(readFile(join(appDataRoot, "skills-library", "open-browser-use-2", "SKILL.md"), "utf8"))
       .resolves.toContain("# External");
     expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
-    await expect.poll(() => group.textContent()).toContain("Library / open-browser-use-2");
-    expect(await group.getByRole("button", { name: `Review ownership ${skillId}` }).count()).toBe(0);
-    const repeatedImport = await page.evaluate((sourcePath) =>
-      window.agentEnv.importSkillToLibrary({ sourcePath, id: "open-browser-use" }),
-      targetDir
-    );
+    expect(await page.getByRole("button", { name: `Review ownership ${skillId}` }).count()).toBe(0);
+    const repeatedImport = await page.evaluate(async (sourcePath) => {
+      const preview = await window.agentEnv.previewSkillImport({
+        kind: "local",
+        input: { sourcePath, id: "open-browser-use" }
+      });
+      return window.agentEnv.importSkillToLibrary({
+        sourcePath,
+        id: "open-browser-use",
+        expectedContentHash: preview.incoming.contentHash,
+        conflictResolution: { action: "reuse", existingId: "open-browser-use-2" }
+      });
+    }, targetDir);
     expect(repeatedImport).toMatchObject({
       reused: true,
       managedLocations: [],
       skill: { id: "open-browser-use-2" }
     });
-  }, 30_000);
+  }, 45_000);
 
   it("keeps all three conflicting Target copies after a stale cleanup error", async () => {
     const { opencodeDir, codexDir, claudeDir, page } = await launchApp({
@@ -5061,6 +5141,47 @@ describe("Electron UI profile switching e2e", () => {
       readFile(join(appDataRoot, "skills-library", "release-check", "SKILL.md"), "utf8")
     ).rejects.toMatchObject({ code: "ENOENT" });
   }, 30_000);
+
+  it("reviews a GitHub same-name conflict before replacing the Library copy", async () => {
+    const { appDataRoot, githubFixtureRoot, page } = await launchApp();
+    const remotePath = "skills/shared-reviewer-next";
+    const fixtureDir = join(githubFixtureRoot, "acme", "agent-skills", "main", remotePath);
+    await mkdir(fixtureDir, { recursive: true });
+    await writeFile(
+      join(fixtureDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: GitHub replacement.\nmetadata:\n  version: '3.0'\n---\n# GitHub replacement\n",
+      "utf8"
+    );
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Import skills" }).click();
+    await page.getByRole("tab", { name: "GitHub" }).click();
+    await page.getByLabel("GitHub skill URL")
+      .fill(`https://github.com/acme/agent-skills/tree/main/${remotePath}`);
+    await page.getByRole("button", { name: "Scan", exact: true }).click();
+    await page.getByRole("checkbox", { name: "Select Shared Reviewer" })
+      .waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Import 1" }).click();
+
+    const conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await conflict.waitFor({ state: "visible" });
+    await expect.poll(() => conflict.textContent()).toContain("3.0");
+    await expect.poll(() => conflict.textContent()).toContain("Different");
+    await conflict.getByRole("button", { name: "Replace Skill" }).click();
+    await conflict.waitFor({ state: "hidden" });
+
+    await expect.poll(() =>
+      readFile(join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md"), "utf8")
+    ).toContain("GitHub replacement");
+    const metadata = await readJson<{ sourceType?: string; source?: string }>(
+      join(appDataRoot, "skills-library", "shared-reviewer", ".agentenv-skill.json")
+    );
+    expect(metadata).toMatchObject({
+      sourceType: "github",
+      source: `https://github.com/acme/agent-skills/tree/main/${remotePath}`
+    });
+    expect((await readdir(join(appDataRoot, "backups", "skill-cleanup"))).length).toBeGreaterThan(0);
+  }, 45_000);
 
   it("updates a local library skill from its tracked source", async () => {
     const { librarySkill, page } = await launchApp();

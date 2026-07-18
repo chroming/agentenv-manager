@@ -21,6 +21,7 @@ import type {
   SharedSkillRetentionInput,
   SkillCleanupRequest,
   SkillImportInput,
+  SkillImportPreviewInput,
   SkillIconInput,
   SaveMcpServerInput,
   SaveProfileInput,
@@ -183,6 +184,12 @@ export const registerIpcHandlers = ({
       .listTargets()
       .then((targets) => skillLibraryStore.scanUnmanaged(targets.map((target) => target.paths)))
   );
+  ipcMain.handle("skills:preview-import", (_event, input: SkillImportPreviewInput) => {
+    if (!input || (input.kind !== "local" && input.kind !== "github")) {
+      throw new Error("Skill import preview requires a local or GitHub source");
+    }
+    return skillLibraryStore.previewImport(input);
+  });
   ipcMain.handle("skills:import-library", async (_event, input: SkillImportInput) => {
     if (!input || typeof input !== "object" || typeof input.sourcePath !== "string") {
       throw new Error("Skill import requires a source path");
@@ -211,13 +218,37 @@ export const registerIpcHandlers = ({
       localInstall.status !== "ignored" &&
       input.provenance?.externalManager !== "skills-cli";
     if (canTakeOwnership) {
-      const existingLibrary = (await skillLibraryStore.listSkills()).find(
-        (item) => item.id === libraryId
-      );
-      if (existingLibrary && existingLibrary.contentHash !== localInstall.contentHash) {
-        throw new Error(
-          `${libraryId} differs from the existing Library version. Open Scan local to review the conflict.`
-        );
+      const preview = await skillLibraryStore.previewImport({ kind: "local", input });
+      if (input.expectedContentHash && preview.incoming.contentHash !== input.expectedContentHash) {
+        throw new Error("Skill changed after the import preview; review the latest version");
+      }
+      const resolution = input.conflictResolution;
+      const selectedConflict = resolution?.action === "keep-both"
+        ? undefined
+        : preview.conflicts.find(
+            (conflict) => conflict.existing.id === resolution?.existingId
+          );
+      if (preview.conflicts.length > 0 && !resolution) {
+        throw new Error(`Skill name or ID already exists in Library: ${preview.incoming.name}`);
+      }
+      if (resolution?.action === "reuse") {
+        if (!selectedConflict?.identical) {
+          throw new Error("Only an identical Library skill can be reused");
+        }
+      }
+      const resolvedLibraryId = resolution?.action === "keep-both"
+        ? SafeIdSchema.parse(resolution.id)
+        : resolution?.action === "replace"
+          ? selectedConflict?.existing.id
+          : resolution?.action === "reuse"
+            ? selectedConflict?.existing.id
+          : preview.incoming.id;
+      if (!resolvedLibraryId) throw new Error("The selected Library conflict no longer exists");
+      if (
+        resolution?.action === "keep-both" &&
+        (await skillLibraryStore.listSkills()).some((skill) => skill.id === resolvedLibraryId)
+      ) {
+        throw new Error(`Library skill already exists: ${resolvedLibraryId}`);
       }
       const target = targets
         .filter((item) => localInstall.foundIn.includes(item.id))
@@ -231,8 +262,9 @@ export const registerIpcHandlers = ({
       }
       const cleanup = await skillLibraryStore.consolidateSkillGroup({
         skillKey: localInstall.skillKey,
-        libraryId,
+        libraryId: resolvedLibraryId,
         canonicalPath: sourcePath,
+        replaceLibrary: resolution?.action === "replace",
         locations: [{ targetPaths: target.paths, targetDir: sourcePath }]
       });
       const skill = (await skillLibraryStore.listSkills()).find(
@@ -244,29 +276,21 @@ export const registerIpcHandlers = ({
       return {
         skill,
         managedLocations: cleanup.managedLocations,
-        backupId: cleanup.backupId
+        backupId: cleanup.backupId,
+        reused: resolution?.action === "reuse"
       };
     }
 
-    const librarySkills = await skillLibraryStore.listSkills();
-    const matchingLibrarySkill = localInstall?.contentHash
-      ? librarySkills.find((skill) => skill.contentHash === localInstall.contentHash)
-      : undefined;
-    if (matchingLibrarySkill) {
-      return { skill: matchingLibrarySkill, managedLocations: [], reused: true };
-    }
-
-    const usedIds = new Set(librarySkills.map((skill) => skill.id));
-    let importId = libraryId;
-    for (let suffix = 2; usedIds.has(importId); suffix += 1) {
-      importId = `${libraryId}-${suffix}`;
-    }
     const skill = await skillLibraryStore.importSkill({
       ...input,
-      id: importId,
+      id: libraryId,
       sourcePath
     });
-    return { skill, managedLocations: [] };
+    return {
+      skill,
+      managedLocations: [],
+      reused: input.conflictResolution?.action === "reuse"
+    };
   });
   ipcMain.handle("skills:import-github", (_event, input: GitHubSkillImportInput) =>
     skillLibraryStore.importGitHubSkill(input)
