@@ -54,6 +54,18 @@ describe("PreviewDialog", () => {
     expect(diff.querySelector(".syntax-token")).toBeTruthy();
   });
 
+  it("makes configuration changes an explicit review action", () => {
+    render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
+
+    const review = screen.getByRole("button", { name: "Review 1 file" });
+    const details = screen.getByText("/tmp/home/.config/opencode/opencode.jsonc").closest("details");
+    expect(details).not.toHaveAttribute("open");
+
+    fireEvent.click(review);
+
+    expect(details).toHaveAttribute("open");
+  });
+
   it("shows install, replace, and remove resource operations explicitly", () => {
     render(
       <PreviewDialog
@@ -172,7 +184,7 @@ describe("PreviewDialog", () => {
   it("wraps Tab from the last modal control to the first", () => {
     render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = dialog.querySelector<HTMLElement>("summary");
+    const firstControl = within(dialog).getByRole("button", { name: "Review 1 file" });
     const lastControl = within(dialog).getByRole("button", { name: "Confirm" });
     lastControl.focus();
 
@@ -184,7 +196,7 @@ describe("PreviewDialog", () => {
   it("wraps Shift+Tab from the first modal control to the last", () => {
     render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = dialog.querySelector<HTMLElement>("summary");
+    const firstControl = within(dialog).getByRole("button", { name: "Review 1 file" });
     const lastControl = within(dialog).getByRole("button", { name: "Confirm" });
     firstControl?.focus();
 
@@ -206,7 +218,7 @@ describe("PreviewDialog", () => {
     );
     const { rerender } = render(renderDialog(false));
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = dialog.querySelector<HTMLElement>("summary");
+    const firstControl = within(dialog).getByRole("button", { name: "Review 1 file" });
     const confirm = within(dialog).getByRole("button", { name: "Confirm" });
     confirm.focus();
 

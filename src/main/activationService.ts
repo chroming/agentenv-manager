@@ -33,6 +33,7 @@ import {
 } from "./targets/registry";
 import type {
   ActivationPreview,
+  AdoptTargetChangesResult,
   ApplyProfileOptions,
   ApplyResult,
   BackupManifest,
@@ -74,6 +75,8 @@ import {
   isolateSkillRoot,
   type SkillRootTransition
 } from "./skillRootTopology";
+import { redactSensitiveValues } from "./secretWarnings";
+import { semanticMcpDefinition } from "./mcpIdentity";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -109,7 +112,7 @@ export interface ActivationService {
   rollback(backupId: string): Promise<RollbackResult>;
   previewStopManaging(targetId: string, mode: StopManagingMode): Promise<StopManagingPreview>;
   stopManaging(previewId: string): Promise<StopManagingResult>;
-  adoptTargetInstructions(profileId: string, targetId: string): Promise<Awaited<ReturnType<ProfileStore["readProfile"]>>>;
+  adoptTargetChanges(profileId: string, targetId: string): Promise<AdoptTargetChangesResult>;
 }
 
 const DEFAULT_TARGET_STATE: TargetState = {
@@ -117,6 +120,22 @@ const DEFAULT_TARGET_STATE: TargetState = {
   managedMcpNames: [],
   managedResources: []
 };
+
+const publicPreview = (preview: ActivationPreview): ActivationPreview => ({
+  ...preview,
+  warnings: preview.warnings.map(redactSensitiveValues),
+  errors: preview.errors.map(redactSensitiveValues),
+  changes: preview.changes.map((change) => {
+    const before = redactSensitiveValues(change.before);
+    const after = redactSensitiveValues(change.after);
+    return {
+      ...change,
+      before,
+      after,
+      diff: createUnifiedDiff(change.path, before, after)
+    };
+  })
+});
 
 const hashText = (content: string): string =>
   createHash("sha256").update(content).digest("hex");
@@ -1240,7 +1259,7 @@ export const createActivationService = ({
       skillRootTransition
     };
     previews.set(preview.id, preview);
-    return preview;
+    return publicPreview(preview);
   };
 
   const applyProfile = async (
@@ -2084,34 +2103,98 @@ export const createActivationService = ({
     }
   };
 
-  const adoptTargetInstructions = async (profileId: string, targetId: string) => {
+  const adoptTargetChanges = async (
+    profileId: string,
+    targetId: string
+  ): Promise<AdoptTargetChangesResult> => {
     const profile = await profileStore.readProfile(profileId);
     if (profile.manifest.targetId !== targetId) {
-      throw new Error("Live instructions can only be adopted into a Profile with the same native Target format");
+      throw new Error("Live changes can only be adopted into a Profile with the same native Target format");
     }
-    const adapter = targetRegistry.get(targetId);
-    const targetPaths = adapter.createTargetPaths({
-      homeDir: paths.homeDir,
-      fakeHomeRoot: paths.fakeHomeRoot
-    });
-    const liveInstructions = await readTextIfExists(targetPaths.instructionsPath);
-    if (liveInstructions.trim().length === 0) {
-      throw new Error(`${adapter.descriptor.name} live instructions are empty`);
+    if (activeTargetOperations.has(targetId)) {
+      throw new Error(`Another ${targetId} operation is already running`);
     }
-    if (profile.profileDir) {
-      await backupStore.createBackup([profile.profileDir], {
-        operation: "adopt-drift",
-        targetId,
-        profileId,
-        profileName: profile.manifest.name
+    activeTargetOperations.add(targetId);
+    try {
+      const adapter = targetRegistry.get(targetId);
+      const targetPaths = adapter.createTargetPaths({
+        homeDir: paths.homeDir,
+        fakeHomeRoot: paths.fakeHomeRoot
       });
+      const captured = await adapter.captureProfile(targetPaths);
+      const adopted: AdoptTargetChangesResult["adopted"] = [];
+      const skipped = [...captured.excluded];
+      let instructions = profile.instructions;
+      let configText = profile.configText;
+      let assetPolicy = profile.assetPolicy;
+
+      if (captured.instructions !== profile.instructions) {
+        instructions = captured.instructions;
+        adopted.push("instructions");
+      }
+      if (captured.configText !== profile.configText) {
+        configText = captured.configText;
+        adopted.push("config");
+      }
+
+      if (adapter.descriptor.capabilities.disabledSkillPaths) {
+        const previous = JSON.stringify(profile.assetPolicy.disabledSkillPaths);
+        const next = JSON.stringify(captured.disabledSkillPaths);
+        if (previous !== next) {
+          assetPolicy = { ...assetPolicy, disabledSkillPaths: captured.disabledSkillPaths };
+          adopted.push("disabled-skills");
+        }
+      }
+
+      const libraryMcp = await mcpLibraryStore.listServers();
+      const matchedMcpRefs = captured.mcpServers.map((server) => {
+        const match = libraryMcp.find(
+          (candidate) => semanticMcpDefinition(candidate) === semanticMcpDefinition(server)
+        );
+        return match ? { libraryId: match.id, targetName: server.name } : undefined;
+      });
+      const missingMcp = captured.mcpServers.filter(
+        (_, index) => !matchedMcpRefs[index]
+      );
+      if (missingMcp.length > 0) {
+        skipped.push(
+          ...missingMcp.map((server) => `MCP server ${server.name} is not in the Library`)
+        );
+      } else {
+        const nextMcpRefs = matchedMcpRefs.filter(
+          (reference): reference is NonNullable<typeof reference> => Boolean(reference)
+        );
+        if (JSON.stringify(nextMcpRefs) !== JSON.stringify(profile.assetPolicy.mcpRefs)) {
+          assetPolicy = { ...assetPolicy, mcpRefs: nextMcpRefs };
+          adopted.push("mcp");
+        }
+      }
+
+      if (adopted.length === 0) {
+        throw new Error(
+          skipped.length > 0
+            ? `No compatible live changes can be adopted: ${skipped.join("; ")}`
+            : "No compatible live changes to adopt"
+        );
+      }
+      if (profile.profileDir) {
+        await backupStore.createBackup([profile.profileDir], {
+          operation: "adopt-drift",
+          targetId,
+          profileId,
+          profileName: profile.manifest.name
+        });
+      }
+      const saved = await profileStore.saveProfile({
+        manifest: profile.manifest,
+        instructions,
+        configText,
+        assetPolicy
+      });
+      return { profile: saved, adopted, skipped };
+    } finally {
+      activeTargetOperations.delete(targetId);
     }
-    return profileStore.saveProfile({
-      manifest: profile.manifest,
-      instructions: liveInstructions,
-      configText: profile.configText,
-      assetPolicy: profile.assetPolicy
-    });
   };
 
   return {
@@ -2125,6 +2208,6 @@ export const createActivationService = ({
     rollback,
     previewStopManaging,
     stopManaging,
-    adoptTargetInstructions
+    adoptTargetChanges
   };
 };

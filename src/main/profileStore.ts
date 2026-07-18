@@ -15,6 +15,7 @@ import { createProfileContentHash } from "./profileFingerprint";
 import { targetProfile } from "./profileTargeting";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
 import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils";
+import { findSecretWarnings } from "./secretWarnings";
 
 export interface ProfileStore {
   listProfiles(): Promise<ProfileSummary[]>;
@@ -136,6 +137,18 @@ export const createProfileStore = (
   };
 
   const saveProfile = async (input: SaveProfileInput): Promise<ProfileDetail> => {
+    const secretWarnings = [
+      ...findSecretWarnings(input.instructions),
+      ...findSecretWarnings(input.configText)
+    ];
+    if (secretWarnings.length > 0) {
+      const keys = [...new Set(secretWarnings.map((warning) => warning.split(": ").at(-1)))]
+        .filter(Boolean)
+        .join(", ");
+      throw new Error(
+        `Profile contains literal credentials (${keys}). Reference environment variables instead.`
+      );
+    }
     const parsedManifest = ProfileManifestSchema.parse(input.manifest);
     const profileDir = join(paths.profilesDir, parsedManifest.id);
     let createdAt = parsedManifest.createdAt;

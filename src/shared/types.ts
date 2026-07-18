@@ -84,7 +84,15 @@ export interface AgentEnvApi {
   openDataFolder(): Promise<void>;
   selectDataRestore(): Promise<DataRestorePreview | undefined>;
   restoreDataBackup(path: string): Promise<{ safetyBackupPath: string }>;
-  adoptTargetInstructions(profileId: string, targetId: string): Promise<ProfileDetail>;
+  adoptTargetChanges(profileId: string, targetId: string): Promise<AdoptTargetChangesResult>;
+}
+
+export type AdoptedTargetResource = "instructions" | "config" | "mcp" | "disabled-skills";
+
+export interface AdoptTargetChangesResult {
+  profile: ProfileDetail;
+  adopted: AdoptedTargetResource[];
+  skipped: string[];
 }
 
 export interface ApplyProfileOptions {

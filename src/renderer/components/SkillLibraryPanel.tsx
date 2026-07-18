@@ -676,8 +676,12 @@ export const SkillLibraryPanel = ({
     (group) => group.presentation.state === "shared-copy-in-use"
   ).length;
   const migrationSummary = [
-    manualCleanupCount > 0 ? t("{{count}} need action", { count: manualCleanupCount }) : "",
-    sharedWaitingCount > 0 ? t("{{count}} shared copies need review", { count: sharedWaitingCount }) : ""
+    manualCleanupCount > 0
+      ? t(manualCleanupCount === 1 ? "1 item needs action" : "{{count}} items need action", { count: manualCleanupCount })
+      : "",
+    sharedWaitingCount > 0
+      ? t(sharedWaitingCount === 1 ? "1 shared copy needs review" : "{{count}} shared copies need review", { count: sharedWaitingCount })
+      : ""
   ].filter(Boolean).join(" · ");
   const normalizedLocalSkillPath = localSkillPath.trim().replace(/\/+$/, "");
   const selectedLocalInventory = skillInventory.find(
@@ -1091,7 +1095,7 @@ export const SkillLibraryPanel = ({
       </div>
 
       <section className="library-table" aria-label={t("Library skills")}>
-        <div className="library-table__head">
+        <div className="library-table__head library-table__head--full">
           <span>{t("Skill")}</span>
           <span>{t("Source")}</span>
           <span>{t("Version")}</span>
@@ -1111,6 +1115,12 @@ export const SkillLibraryPanel = ({
             {t("Installs")}
             <InfoTip label={t("Shows whether each Target install matches the Library copy. This is separate from source updates.")} />
           </span>
+          <span>{t("Actions")}</span>
+        </div>
+        <div className="library-table__head library-table__head--compact">
+          <span>{t("Skill")}</span>
+          <span>{t("Source")} · {t("Version")} · {t("Profiles")}</span>
+          <span>{t("Updates")} · {t("Installs")}</span>
           <span>{t("Actions")}</span>
         </div>
         <div className="library-table__body" ref={scrollOwnerRef}>
@@ -1161,9 +1171,9 @@ export const SkillLibraryPanel = ({
                 ? revisionLabel
               : hasUpdateSource
                 ? isTracked
-                  ? "Tracked source"
-                  : "Source retained"
-                : "Library revision";
+                  ? "Tracked"
+                  : "Source"
+                : "Revision";
             return (
               <div
                 aria-label={t("Library item {{id}}", { id: skill.id })}

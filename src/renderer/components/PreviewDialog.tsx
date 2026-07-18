@@ -25,7 +25,7 @@ interface PreviewDialogProps {
   omissionsAcknowledged?: boolean;
   onOmissionsAcknowledgedChange?(acknowledged: boolean): void;
   onOpenRecovery?(): void;
-  onAdoptInstructions?(): void;
+  onAdoptTargetChanges?(): void;
   onCancel?(): void;
   onConfirm?(): void;
 }
@@ -99,7 +99,7 @@ export const PreviewDialog = ({
   omissionsAcknowledged = false,
   onOmissionsAcknowledgedChange,
   onOpenRecovery,
-  onAdoptInstructions,
+  onAdoptTargetChanges,
   onCancel,
   onConfirm
 }: PreviewDialogProps) => {
@@ -110,6 +110,7 @@ export const PreviewDialog = ({
   const isModalOpen = Boolean(preview && hasActions);
   const dialogRef = useRef<HTMLElement>(null);
   const resourceListRef = useRef<HTMLDivElement>(null);
+  const diffListRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const [hiddenResourceCount, setHiddenResourceCount] = useState(0);
   const onCancelRef = useRef(onCancel);
@@ -128,6 +129,15 @@ export const PreviewDialog = ({
         child.getBoundingClientRect().bottom > visibleBottom + 1
     ).length;
     setHiddenResourceCount(hiddenCount);
+  };
+
+  const reviewConfigurationChanges = () => {
+    const firstChange = diffListRef.current?.querySelector<HTMLDetailsElement>("details");
+    const firstSummary = firstChange?.querySelector<HTMLElement>("summary");
+    if (!firstChange || !firstSummary) return;
+    firstChange.open = true;
+    firstChange.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => firstSummary.focus({ preventScroll: true }), 180);
   };
 
   useEffect(() => {
@@ -355,10 +365,16 @@ export const PreviewDialog = ({
           </section>
         ) : null}
         {preview.changes.length > 0 ? (
-          <section className="preview-summary-card">
+          <button
+            className="preview-summary-card preview-summary-card--action"
+            type="button"
+            aria-label={t("Review {{files}}", { files: fileCountLabel })}
+            onClick={reviewConfigurationChanges}
+          >
             <strong>{t("Configuration changes")}</strong>
             <span>{t("{{files}} changed", { files: fileCountLabel })}</span>
-          </section>
+            <ChevronDown size={15} strokeWidth={2.2} aria-hidden="true" />
+          </button>
         ) : null}
         {sharedPreparationChanged ? (
           <section className="preview-summary-card">
@@ -415,9 +431,9 @@ export const PreviewDialog = ({
           </label>
           {onOpenRecovery ? (
             <div className="preview-drift-actions">
-              {onAdoptInstructions ? (
-                <button className="secondary-action" type="button" onClick={onAdoptInstructions}>
-                  {t("Adopt live instructions")}
+              {onAdoptTargetChanges ? (
+                <button className="secondary-action" type="button" onClick={onAdoptTargetChanges}>
+                  {t("Adopt compatible changes")}
                 </button>
               ) : null}
               <button className="secondary-action" type="button" onClick={onOpenRecovery}>
@@ -453,9 +469,9 @@ export const PreviewDialog = ({
           ) : null}
         </section>
       ) : null}
-      <div className="diff-list">
+      <div className="diff-list" ref={diffListRef}>
         {preview.changes.map((change) => (
-          <details key={change.path} open>
+          <details key={change.path}>
             <summary>
               <span>{change.path}</span>
               <strong className={`change-kind change-kind--${changeKind(change).toLowerCase()}`}>

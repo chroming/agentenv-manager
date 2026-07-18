@@ -677,8 +677,8 @@ export const registerIpcHandlers = ({
   ipcMain.handle("data:restore", (_event, path: unknown) =>
     restoreDataBackup(paths, String(path))
   );
-  ipcMain.handle("targets:adopt-instructions", (_event, profileId: unknown, targetId: unknown) =>
-    activationService.adoptTargetInstructions(
+  ipcMain.handle("targets:adopt-changes", (_event, profileId: unknown, targetId: unknown) =>
+    activationService.adoptTargetChanges(
       parseId(profileId, "profile id"),
       parseId(targetId, "target id")
     )

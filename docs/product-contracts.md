@@ -232,7 +232,7 @@ Rules:
 - Legacy Profile-owned Skills MUST be labeled as Profile-only with revision unavailable. `Import to Library` creates an independent canonical Library copy, replaces the draft entry with a Library reference, preserves the existing Profile file, exposes local working and error states, and still requires Save before changing the persisted Profile.
 - Updating from Profile Skills still updates the global Library copy. The update confirmation MUST disclose how many Profiles reference it and whether Copy or Live link mode changes installed Targets immediately.
 
-Status: whole-Profile Save, dirty protection, per-Target applied hashes, active-Profile focus, and Profile-scoped Skill enablement are `Implemented`. Adopting native live Instructions is `Implemented`; adoption of other compatible surfaces is `Partial`.
+Status: whole-Profile Save, dirty protection, per-Target applied hashes, active-Profile focus, and Profile-scoped Skill enablement are `Implemented`. Same-format adoption of compatible live Instructions, native configuration, disabled-Skill paths, and MCP definitions already represented in Library is `Implemented`; Target-owned Skills, agents, excluded credentials, and MCP definitions absent from Library remain explicit non-adoptable items.
 
 ## 8. Target Lifecycle
 
@@ -318,7 +318,7 @@ Preview MUST:
 7. Indicate whether the Target is being taken over or switched.
 8. Leave the Target unchanged.
 
-Preview hierarchy MUST put concrete resource identities and actions before secondary filesystem detail. Preserve counts stay in the summary; long preserved paths live in a compact expandable detail section. Resource paths remain available through selectable overflow detail rather than dominating the primary scan path. A resource list that overflows MUST show its total count, a persistent scrollbar, and an explicit remaining-item cue; the default viewport shows at least three complete resource rows without moving the Apply actions out of view.
+Preview hierarchy MUST put concrete resource identities and actions before secondary filesystem detail. Preserve counts stay in the summary; long preserved paths live in a compact expandable detail section. Resource paths remain available through selectable overflow detail rather than dominating the primary scan path. A resource list that overflows MUST show its total count, a persistent scrollbar, and an explicit remaining-item cue; the default viewport shows at least three complete resource rows without moving the Apply actions out of view. Configuration changes are an explicit summary action that opens and focuses the first collapsed file diff; long diff lines scroll only inside the diff surface and MUST NOT widen the dialog.
 
 A Preview becomes stale when any of these changes:
 
@@ -405,7 +405,7 @@ A drifted Target MUST NOT appear Applied. The user MUST be offered these explici
 
 Cross-Target deployments MUST NOT adopt native Advanced data into a Profile of another format automatically.
 
-Status: detection, diff inspection, explicit overwrite with Backup, native Instructions adoption, and detach choices are `Implemented`. Selective adoption of other native resource types is `Partial`.
+Status: detection, diff inspection, explicit overwrite with Backup, compatible same-format Instructions/configuration/disabled-path/Library-MCP adoption, and detach choices are `Implemented`. Target-owned Skills, agents, excluded credentials, and MCP definitions absent from Library are intentionally not adopted by this recovery action.
 
 ## 14. Stop Managing Contract
 
@@ -616,7 +616,7 @@ Status: local and recursive GitHub import, in-place Refresh, per-Skill update po
 - Environment values that appear secret MUST be masked in UI, Preview, logs, and diagnostics.
 - Backups containing secrets MUST remain local and use restrictive filesystem permissions.
 
-Status: reusable references, immutable identity, deletion protection, portable stdio environment references, and remote URL validation are `Implemented`; richer remote authentication and broad secret masking are `Partial`.
+Status: reusable references, immutable identity, deletion protection, portable stdio environment references, remote URL validation, structured literal-credential detection, Profile-save blocking, and Preview redaction are `Implemented`; richer remote authentication remains `Partial`.
 
 ## 18. Create From Target Contract
 
@@ -712,7 +712,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Profile Save and Apply remain visible while the selected Profile's Composer owns internal scrolling.
 - Buttons do not wrap at supported desktop widths.
 - Text line boxes, icon boxes, and control padding MUST fit inside their controls without vertical clipping.
-- Apply Preview keeps its header and footer stable while summary, resources, and diffs own bounded internal scrolling.
+- Apply Preview keeps its header and footer stable. The modal owns the primary vertical scroll; large resource plans remain bounded, and long diff lines own only their horizontal overflow.
 - Create from Target keeps its step header and action footer visible at both supported viewports. Only the dialog body scrolls; resource groups MUST NOT introduce a second nested scroll region.
 - Menus, tooltips, and dialogs remain above rows and inside the visible viewport.
 - Peer actions with equal consequence use the same neutral treatment. Accent fill is reserved for the current primary commit or flow-advance action; Target `Capture` and `Profiles` are neutral peers.
@@ -735,6 +735,9 @@ Status: supported viewport containment, topmost overlays, modal focus trapping, 
 - Renderer-requested external links MUST be validated by the main process and limited to `http` and `https` URLs.
 - GitHub OAuth tokens are stored using the operating system's secure credential facility when available.
 - Secrets MUST NOT appear in renderer logs, main-process logs, Preview diff, screenshots, or global feedback.
+- Profile Save MUST reject literal credentials detected in JSON/JSONC, TOML, YAML, or assignment-style Instructions and direct the user to environment references. Legacy content is redacted before any Preview crosses the preload boundary.
+- Preview redaction MUST replace sensitive before/after values and regenerate the rendered diff from those redacted values while the main process retains the original internal plan only for the guarded Apply operation.
+- Managed Backup roots and individual Backup directories MUST be enforced as owner-only (`0700`) storage.
 - File writes use validated IDs and paths and MUST prevent path traversal.
 - Symlink operations MUST not escape approved Library and Target roots.
 - AgentEnv MUST never modify agent authentication files such as Codex `auth.json`.
@@ -874,7 +877,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 
 - Empty, one-item, long-content, 50, 100, and 500-item cases where relevant.
 - Default and minimum viewport without document overflow.
-- Skill table headers and every data row MUST share one column contract; contextual actions MUST NOT resize preceding columns.
+- Skill table headers and every data row MUST share one column contract; contextual actions MUST NOT resize preceding columns. Compact width uses a visible grouped header and retains Skill, source, version, Profile usage, update, install, and action information rather than hiding columns.
 - Version, update, usage, and install metadata MUST use aligned first- and second-line tracks, including empty states and truncated values.
 - The Profile Target selector uses the selected Target name as its visible label without a redundant `Target:` prefix; its accessible name retains the full command meaning.
 - First and last row menus are topmost and in viewport.
@@ -901,13 +904,13 @@ AgentEnv Manager is production-ready only when all of these are true:
 - Default and minimum desktop viewports pass containment and overlay checks.
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
 
-Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, rollback, stale rollback protection, no-op, cross-Target payload review, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, native Instructions adoption, active-Profile deletion recovery, Stop Managing workflows, and portable MCP environment references are functional. Richer remote MCP authentication, complete secret handling, and broader drift adoption remain release requirements.
+Current verdict: **Needs refinement**. Core Library, Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target payload review, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, compatible same-format drift adoption, active-Profile deletion recovery, Stop Managing workflows, portable MCP environment references, literal-credential blocking, and Preview redaction are functional. Richer remote MCP authentication, persisted `nativeTargetId` terminology migration, broader Skill identity edge coverage, and signed/notarized distribution remain release work.
 
 ### 25.1 Verification Snapshot
 
-Last verified: 2026-07-16 against the current `main` tree at the time of this snapshot.
+Last verified: 2026-07-17 against the current `main` tree at the time of this snapshot.
 
-- `395` automated tests passed across `50` test files; the `77`-test Electron UI suite and `85` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
+- `448` automated tests passed across `52` test files; the `85`-test Electron UI suite and `93` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
 - The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `51` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, and focused update-setting states.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
@@ -920,19 +923,20 @@ Last verified: 2026-07-16 against the current `main` tree at the time of this sn
 - In-place Skill Refresh, GitHub directory candidate selection, partial batch import behavior, source-default Skill icons, custom Skill icon persistence, and draft-gated Profile icons passed Store, renderer, and Electron E2E coverage.
 - Skill Import source modes, compact row command menus, focused update settings, compact MCP rows, overflow-only MCP deletion, resource-first Apply Preview, and neutral Capture outcomes passed renderer, Electron E2E, and visual capture coverage.
 - Library Skill disable, picker exclusion, update-check isolation, re-enable, and Apply-time Target removal and restoration passed Store, renderer, and Electron E2E coverage; Profile Skill switches use the same Save and Apply contract as Add and Remove.
-- Skill table headers, mixed-action rows, two-line metadata, empty install states, update labels, action-to-detail clearance, compact non-truncating Cleanup badges, equal-width Cleanup actions, and status-tooltip clearance passed coordinate, overlap, and overflow assertions at both supported viewports.
+- Skill table headers, compact grouped headers, retained version metadata, mixed-action rows, aligned metadata, empty install states, update labels, action-to-detail clearance, compact non-truncating Cleanup badges, equal-width Cleanup actions, and status-tooltip clearance passed coordinate, overlap, and overflow assertions at both supported viewports.
 - Target-local import now creates a transactional managed install, shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
 - Shared compatibility migration now distinguishes imported, preparing, ready, retained, external, and conflict states; Apply records per-Target install or omit intent without duplicate runtime copies, and Electron E2E verifies early-switch blocking, transactional cutover, backup history, and full restore.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
-- Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards.
+- Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards; Configuration changes is a keyboard-focusable review action that opens the first collapsed diff without widening the dialog.
+- JSON/JSONC, TOML, YAML, assignment-style, token-prefix, and private-key detection reject new literal credentials; legacy Preview before/after/diff payloads are redacted before reaching the renderer.
+- Same-format drift recovery adopts compatible Instructions, native config, disabled-Skill paths, and exact Library MCP definitions into a backed-up Profile while naming excluded or unmapped items.
 - Production dependency audit reported zero known vulnerabilities.
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
 - Signed and notarized distribution verification remains outstanding; the local packaged primary-workflow smoke uses an unsigned `.app`.
 
 ## 26. Current Priority Gaps
 
-1. Add richer remote MCP authentication, complete secret masking, and backup permission guarantees.
-2. Add explicit Backup retention controls.
-3. Extend Adopt into Profile beyond native Instructions where the adapter can map changes safely.
-4. Migrate persisted Profile terminology from `targetId` to `nativeTargetId` with backward compatibility.
-5. Broaden Skill identity contract tests for same-ID conflicts and different-ID identical-content candidates.
+1. Add richer remote MCP authentication without storing portable plaintext credentials.
+2. Migrate persisted Profile terminology from `targetId` to `nativeTargetId` with backward compatibility.
+3. Broaden Skill identity contract tests for same-ID conflicts and different-ID identical-content candidates.
+4. Sign and notarize macOS distribution, then repeat packaged primary-workflow verification on a clean Mac.

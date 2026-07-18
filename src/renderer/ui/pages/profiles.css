@@ -323,6 +323,17 @@
   min-width: 116px;
 }
 
+.profile-page-actions .profile-new-button:not(.is-primary) {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.profile-page-actions .profile-new-button:not(.is-primary):hover:not(:disabled) {
+  background: var(--surface-muted);
+  border-color: var(--border-strong);
+}
+
 .profile-readiness-strip {
   grid-template-columns: minmax(230px, 1fr) minmax(280px, 1fr);
   height: 64px;
@@ -931,6 +942,37 @@
   white-space: normal;
 }
 
+.preview-summary-card--action {
+  appearance: none;
+  color: inherit;
+  cursor: pointer;
+  grid-template-columns: minmax(0, 1fr) auto;
+  text-align: left;
+  transition: background-color var(--motion-fast), border-color var(--motion-fast);
+  width: 100%;
+}
+
+.preview-summary-card--action > strong,
+.preview-summary-card--action > span {
+  grid-column: 1;
+}
+
+.preview-summary-card--action > svg {
+  color: var(--accent);
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  place-self: center;
+}
+
+.preview-summary-card--action:hover {
+  background: var(--surface-muted);
+}
+
+.preview-summary-card--action:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(23, 105, 245, 0.24);
+  outline: 0;
+}
+
 .preview-resource-plan > header {
   min-height: 42px;
   padding: 9px 12px;
@@ -1073,8 +1115,11 @@
 }
 
 .preview-dialog--modal .diff-list {
-  flex: 1 1 auto;
-  min-height: 96px;
+  flex: 0 0 auto;
+  max-width: 100%;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .preview-dialog--modal .diff-list details {
@@ -1142,8 +1187,9 @@
   }
 
   .profile-hero {
-    grid-template-columns: 32px minmax(120px, 1fr) auto;
-    min-height: 118px;
+    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    min-height: 150px;
     padding: 12px;
   }
 
@@ -1172,7 +1218,9 @@
   }
 
   .profile-action-stack {
-    grid-column: 3;
+    gap: 5px;
+    grid-column: 1 / -1;
+    grid-row: 2;
     justify-items: end;
     justify-self: end;
   }
@@ -1195,8 +1243,8 @@
 
   .profile-commit-actions .profile-target-workspace-control,
   .profile-commit-actions > .profile-target-workspace-button {
-    flex-basis: 52px;
-    width: 52px;
+    flex-basis: 128px;
+    width: 128px;
   }
 
   .profile-commit-actions .profile-target-workspace-button {
@@ -1206,7 +1254,7 @@
   }
 
   .profile-commit-actions .profile-target-workspace-button > span {
-    display: none;
+    display: block;
   }
 
   .profile-composer-section__trigger,

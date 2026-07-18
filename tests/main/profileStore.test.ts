@@ -119,6 +119,25 @@ describe("profile store", () => {
     await expect(store.readProfile("../bad")).rejects.toThrow("Invalid profile id");
   });
 
+  it("rejects literal credentials before writing a Profile", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-secret-profile-"));
+    await writeProfile(root);
+    const store = createProfileStore({ appDataRoot: root });
+    const profile = await store.readProfile("daily-coding");
+
+    await expect(
+      store.saveProfile({
+        manifest: profile.manifest,
+        instructions: profile.instructions,
+        configText: '{ "api_key": "sk-1234567890abcdefghijklmnop" }',
+        assetPolicy: profile.assetPolicy
+      })
+    ).rejects.toThrow("Reference environment variables instead");
+    await expect(
+      readFile(join(root, "profiles", "daily-coding", "mcp.toml"), "utf8")
+    ).resolves.toBe("[mcp_servers.docs]\n");
+  });
+
   it("duplicates a profile including profile-owned files", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-"));
     await writeProfile(root);

@@ -183,7 +183,7 @@ export const TargetCaptureDialog = ({
 
               <div className="capture-review__summary" aria-label={t("Capture summary")}>
                 <span><strong>{includedResources.length}</strong><small>{t("Profile resources")}</small></span>
-                <span><strong>{importedResources.length}</strong><small>{t("Library imports")}</small></span>
+                <span><strong>{importedResources.length}</strong><small>{t(importedResources.length === 1 ? "Library import" : "Library imports")}</small></span>
                 <span><strong>0</strong><small>{t("Source changes")}</small></span>
               </div>
 

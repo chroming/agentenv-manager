@@ -573,7 +573,11 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     openDataFolder: vi.fn().mockResolvedValue(undefined),
     selectDataRestore: vi.fn().mockResolvedValue(undefined),
     restoreDataBackup: vi.fn().mockResolvedValue({ safetyBackupPath: "/tmp/safety" }),
-    adoptTargetInstructions: vi.fn().mockResolvedValue(profile),
+    adoptTargetChanges: vi.fn().mockResolvedValue({
+      profile,
+      adopted: ["instructions"],
+      skipped: []
+    }),
     ...overrides
   };
 
@@ -2208,7 +2212,7 @@ describe("App", () => {
 
     fireEvent.click(within(manager).getByRole("button", { name: "Clean up now" }));
     expect(within(manager).getByText("Clean up backups?")).toBeInTheDocument();
-    fireEvent.click(within(manager).getByRole("button", { name: "Clean up 1 backups" }));
+    fireEvent.click(within(manager).getByRole("button", { name: "Clean up 1 backup" }));
     await waitFor(() => expect(api.cleanupManagedBackups).toHaveBeenCalledOnce());
     expect(await within(manager).findByText("Deleted 0 backups · Freed 0 B")).toBeInTheDocument();
   });

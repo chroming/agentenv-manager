@@ -1045,19 +1045,22 @@ describe("Electron UI profile switching e2e", () => {
         const updateRect = updateCell.getBoundingClientRect();
         const buttonRect = updateButton.getBoundingClientRect();
         const detailRect = updateDetail.getBoundingClientRect();
+        const detailVisible = getComputedStyle(updateDetail).display !== "none";
         const actionsRect = actionsCell.getBoundingClientRect();
         return {
           buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
           buttonInsideUpdateColumn:
             buttonRect.left >= updateRect.left - 1 && buttonRect.right <= updateRect.right + 1,
           columnsDoNotOverlap: updateRect.right <= actionsRect.left,
-          detailClearance: detailRect.top - buttonRect.bottom
+          detailClearance: detailVisible ? detailRect.top - buttonRect.bottom : undefined
         };
       });
       expect(updateActionGeometry.buttonFitsText).toBe(true);
       expect(updateActionGeometry.buttonInsideUpdateColumn).toBe(true);
       expect(updateActionGeometry.columnsDoNotOverlap).toBe(true);
-      expect(updateActionGeometry.detailClearance).toBeGreaterThanOrEqual(4);
+      if (updateActionGeometry.detailClearance !== undefined) {
+        expect(updateActionGeometry.detailClearance).toBeGreaterThanOrEqual(4);
+      }
       await expectTextFits(changingRow.locator(".library-row-inline-action"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
@@ -1966,6 +1969,8 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, page.locator(".profile-hero"));
     const minimumCommitGeometry = await commitActions.evaluate((group) => {
       const groupBox = group.getBoundingClientRect();
+      const target = group.querySelector<HTMLElement>(".profile-target-workspace-button")!;
+      const targetLabel = target.querySelector<HTMLElement>("span")!;
       const controls = [...group.children]
         .filter((child): child is HTMLElement => child instanceof HTMLElement)
         .map((child) => child.getBoundingClientRect());
@@ -1975,10 +1980,17 @@ describe("Electron UI profile switching e2e", () => {
         ),
         separated: controls.every(
           (box, index) => index === 0 || box.left >= controls[index - 1].right
-        )
+        ),
+        targetLabelDisplay: getComputedStyle(targetLabel).display,
+        targetLabel: targetLabel.textContent?.trim()
       };
     });
-    expect(minimumCommitGeometry).toEqual({ contained: true, separated: true });
+    expect(minimumCommitGeometry).toEqual({
+      contained: true,
+      separated: true,
+      targetLabelDisplay: "block",
+      targetLabel: "OpenCode"
+    });
     await expectInViewport(page, skillsTrigger);
     await expectInViewport(
       page,
@@ -2546,6 +2558,17 @@ describe("Electron UI profile switching e2e", () => {
       .evaluateAll((cards) => cards.map((card) => getComputedStyle(card).alignSelf));
     expect(summaryCardAlignment.length).toBeGreaterThan(0);
     expect(summaryCardAlignment.every((alignment) => alignment === "start")).toBe(true);
+    const configurationReview = previewDialog.getByRole("button", {
+      name: /Review \d+ files?/
+    });
+    await configurationReview.click();
+    const firstConfigurationChange = previewDialog.locator(".diff-list details").first();
+    await expect.poll(() => firstConfigurationChange.getAttribute("open")).not.toBeNull();
+    await expect.poll(() => firstConfigurationChange.locator("summary").evaluate(
+      (summary) => document.activeElement === summary
+    )).toBe(true);
+    await expectInViewport(page, firstConfigurationChange.locator("summary"));
+    await previewDialog.evaluate((dialog) => { dialog.scrollTop = 0; });
 
     const expectPreviewGeometry = async () => {
       const cancelButton = previewDialog.getByRole("button", { name: "Cancel" });
@@ -4252,7 +4275,8 @@ describe("Electron UI profile switching e2e", () => {
       const installs = row.querySelector<HTMLElement>(".library-installs-cell")!.getBoundingClientRect();
       return {
         actionGap: actions.left - Math.max(update.right, installs.right),
-        headerDisplay: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel .library-table__head")!).display,
+        fullHeaderDisplay: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel .library-table__head--full")!).display,
+        compactHeaderDisplay: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel .library-table__head--compact")!).display,
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: document.documentElement.clientWidth,
         versionDisplay: getComputedStyle(row.querySelector<HTMLElement>(".library-version-cell")!).display
@@ -4260,8 +4284,9 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(compactGeometry.documentWidth).toBe(compactGeometry.viewportWidth);
     expect(compactGeometry.actionGap).toBeGreaterThanOrEqual(9);
-    expect(compactGeometry.headerDisplay).toBe("none");
-    expect(compactGeometry.versionDisplay).toBe("none");
+    expect(compactGeometry.fullHeaderDisplay).toBe("none");
+    expect(compactGeometry.compactHeaderDisplay).toBe("grid");
+    expect(compactGeometry.versionDisplay).not.toBe("none");
   }, 30_000);
 
   it("updates all available library skill updates from the rendered app", async () => {
@@ -4455,10 +4480,10 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => fileExists(manualDeleteDir)).toBe(false);
 
     await manager.getByRole("button", { name: "Clean up now" }).click();
-    await manager.getByRole("button", { name: "Clean up 1 backups" }).click();
+    await manager.getByRole("button", { name: "Clean up 1 backup" }).click();
     await expect.poll(() => fileExists(policyDeleteDir)).toBe(false);
     await expect(fileExists(retainedDir)).resolves.toBe(true);
-    await expect.poll(() => manager.textContent()).toContain("1 backups");
+    await expect.poll(() => manager.textContent()).toContain("1 backup");
   }, 30_000);
 
   it("installs library skills using copy mode from Settings", async () => {

@@ -185,6 +185,81 @@ describe("activation service", () => {
     expect(state?.errorCount).toBe(0);
   });
 
+  it("never exposes legacy literal credentials through an Apply Preview", async () => {
+    const { paths, service } = await makeEnv();
+    const literalSecret = "sk-1234567890abcdefghijklmnop";
+    await writeFile(
+      join(paths.profilesDir, "daily-coding", "mcp.toml"),
+      `api_key = "${literalSecret}"\n`
+    );
+
+    const preview = await service.previewProfile("daily-coding");
+    const serialized = JSON.stringify(preview);
+    expect(serialized).not.toContain(literalSecret);
+    expect(serialized).toContain("<redacted>");
+    expect(preview.warnings).toContain(
+      "Possible literal secret in profile content: api_key"
+    );
+  });
+
+  it("adopts compatible live instructions, native config, and Library MCP references", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-adopt-target-"));
+    const paths = createPaths({ appDataRoot: root, homeDir: root });
+    const profileDir = join(paths.profilesDir, "open-profile");
+    const liveDir = join(root, ".config", "opencode");
+    await mkdir(profileDir, { recursive: true });
+    await mkdir(liveDir, { recursive: true });
+    await writeFile(
+      join(profileDir, "profile.json"),
+      JSON.stringify({
+        id: "open-profile",
+        targetId: "opencode",
+        name: "Open Profile",
+        description: "Adoption test",
+        version: 1,
+        managed: { instructions: true, config: true, assets: true }
+      })
+    );
+    await writeFile(join(profileDir, "AGENTS.md"), "# Old guidance\n");
+    await writeFile(join(profileDir, "opencode.jsonc"), '{ "theme": "old" }\n');
+    await writeFile(
+      join(profileDir, "assets.json"),
+      JSON.stringify({ ownedDirs: [], ownedFiles: [], skillRefs: [], mcpRefs: [], disabledSkillPaths: [] })
+    );
+    await writeFile(join(liveDir, "AGENTS.md"), "# Live guidance\n");
+    await writeFile(
+      join(liveDir, "opencode.jsonc"),
+      JSON.stringify({
+        theme: "new",
+        mcp: { docs: { type: "remote", url: "https://example.com/mcp" } }
+      })
+    );
+    await writeFile(
+      paths.mcpLibraryPath,
+      JSON.stringify([
+        {
+          id: "library-docs",
+          name: "Docs",
+          transport: "http",
+          url: "https://example.com/mcp"
+        }
+      ])
+    );
+    const profileStore = createProfileStore({ appDataRoot: root, homeDir: root });
+    const service = createActivationService({ paths, profileStore });
+
+    const result = await service.adoptTargetChanges("open-profile", "opencode");
+
+    expect(result.adopted).toEqual(["instructions", "config", "mcp"]);
+    expect(result.skipped).toEqual([]);
+    expect(result.profile.instructions).toBe("# Live guidance\n");
+    expect(JSON.parse(result.profile.configText)).toEqual({ theme: "new" });
+    expect(result.profile.assetPolicy.mcpRefs).toEqual([
+      { libraryId: "library-docs", targetName: "docs" }
+    ]);
+    await expect(createBackupStore(paths).listBackups()).resolves.toHaveLength(1);
+  });
+
   it("does not back up or track an untouched Target config during takeover", async () => {
     const { paths, service } = await makeEnv();
     const profileDir = join(paths.profilesDir, "daily-coding");

@@ -346,7 +346,12 @@ export const McpLibraryPanel = ({
                     ariaLabel={t("Environment summary for {{id}}", { id: server.id })}
                     className="mcp-row-meta-item"
                     text={Object.keys(server.env ?? {}).length > 0
-                      ? t("{{count}} env variables", { count: Object.keys(server.env ?? {}).length })
+                      ? t(
+                          Object.keys(server.env ?? {}).length === 1
+                            ? "{{count}} env variable"
+                            : "{{count}} env variables",
+                          { count: Object.keys(server.env ?? {}).length }
+                        )
                       : t("No env variables")}
                   />
                   <OverflowTooltip

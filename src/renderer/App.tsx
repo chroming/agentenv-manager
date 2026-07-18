@@ -2273,19 +2273,40 @@ const AppContent = ({
     }
   };
 
-  const adoptLiveInstructions = async () => {
+  const adoptCompatibleTargetChanges = async () => {
     if (!draftProfile || !selectedTarget) return;
     setBusy(true);
     setError(undefined);
     try {
-      const saved = await window.agentEnv.adoptTargetInstructions(
+      const result = await window.agentEnv.adoptTargetChanges(
         draftProfile.id,
         selectedTarget.id
       );
-      setDraftProfile(saved);
+      setDraftProfile(result.profile);
       setIsProfileDirty(false);
       setPreview(undefined);
-      setProfileSaveStatus("Live instructions adopted into Profile");
+      const adoptedLabels = result.adopted.map((kind) =>
+        t(
+          kind === "instructions"
+            ? "Instructions"
+            : kind === "config"
+              ? "Advanced"
+              : kind === "mcp"
+                ? "MCP Servers"
+                : "Disabled skills"
+        )
+      );
+      setProfileSaveStatus(
+        result.skipped.length > 0
+          ? t("Adopted {{resources}}; {{count}} items still need review", {
+              resources: adoptedLabels.join(", "),
+              count: result.skipped.length
+            })
+          : t("Adopted {{resources}} from {{target}}", {
+              resources: adoptedLabels.join(", "),
+              target: selectedTarget.name
+            })
+      );
       await refreshProfiles();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -3169,11 +3190,11 @@ const AppContent = ({
       setBackupManagerNotice({
         kind: result.failures.length > 0 ? "error" : "success",
         message: result.failures.length > 0
-          ? t("Deleted {{count}} backups; {{failed}} failed", {
+          ? t(result.deletedCount === 1 ? "Deleted 1 backup; {{failed}} failed" : "Deleted {{count}} backups; {{failed}} failed", {
               count: result.deletedCount,
               failed: result.failures.length
             })
-          : t("Deleted {{count}} backups · Freed {{size}}", {
+          : t(result.deletedCount === 1 ? "Deleted 1 backup · Freed {{size}}" : "Deleted {{count}} backups · Freed {{size}}", {
               count: result.deletedCount,
               size: formatBytes(result.freedBytes)
             })
@@ -3705,7 +3726,7 @@ const AppContent = ({
                 {activeLibraryTab === "skills" ? (
                   <>
                     <button
-                      className="primary-inline-action"
+                      className={librarySkills.length === 0 ? "primary-inline-action" : "secondary-action"}
                       type="button"
                       aria-label={t("Import skills")}
                       onClick={() => setSkillLibraryTool("import")}
@@ -3849,7 +3870,7 @@ const AppContent = ({
               </div>
               <div className="profile-page-actions" ref={profilePageActionsRef}>
                 <button
-                  className="profile-new-button"
+                  className={`profile-new-button${profiles.length === 0 ? " is-primary" : ""}`}
                   type="button"
                   onClick={openCreateProfileDialog}
                 >
@@ -4338,9 +4359,9 @@ const AppContent = ({
                   setPreview(undefined);
                   setActiveComposerSection("advanced");
                 }}
-                onAdoptInstructions={
+                onAdoptTargetChanges={
                   draftProfile.manifest.targetId === selectedTarget?.id
-                    ? adoptLiveInstructions
+                    ? adoptCompatibleTargetChanges
                     : undefined
                 }
                 onCancel={() => {
@@ -4737,7 +4758,7 @@ const AppContent = ({
                     <small>
                       {managedBackupsLoading && !managedBackups
                         ? t("Calculating storage...")
-                        : t("{{count}} backups · {{size}}", {
+                        : t((managedBackups?.items.length ?? 0) === 1 ? "{{count}} backup · {{size}}" : "{{count}} backups · {{size}}", {
                             count: managedBackups?.items.length ?? 0,
                             size: formatBytes(managedBackups?.totalBytes ?? 0)
                           })}
@@ -4922,7 +4943,7 @@ const AppContent = ({
                         <div>
                           <div className="section-title">{t("Clean up backups?")}</div>
                           <p className="muted">
-                            {t("Delete {{count}} backups and free approximately {{size}}.", {
+                            {t((managedBackups?.eligibleCount ?? 0) === 1 ? "Delete 1 backup and free approximately {{size}}." : "Delete {{count}} backups and free approximately {{size}}.", {
                               count: managedBackups?.eligibleCount ?? 0,
                               size: formatBytes(managedBackups?.eligibleBytes ?? 0)
                             })}
@@ -4937,7 +4958,7 @@ const AppContent = ({
                           {t("Cancel")}
                         </button>
                         <button className="danger-action" type="button" disabled={busy} onClick={() => void cleanupManagedBackups()}>
-                          {t("Clean up {{count}} backups", { count: managedBackups?.eligibleCount ?? 0 })}
+                          {t((managedBackups?.eligibleCount ?? 0) === 1 ? "Clean up 1 backup" : "Clean up {{count}} backups", { count: managedBackups?.eligibleCount ?? 0 })}
                         </button>
                       </footer>
                     </>
@@ -4947,7 +4968,7 @@ const AppContent = ({
                         <div>
                           <div className="section-title">{t("Manage Backups")}</div>
                           <p className="muted">
-                            {t("{{count}} backups · {{size}}", {
+                            {t((managedBackups?.items.length ?? 0) === 1 ? "{{count}} backup · {{size}}" : "{{count}} backups · {{size}}", {
                               count: managedBackups?.items.length ?? 0,
                               size: formatBytes(managedBackups?.totalBytes ?? 0)
                             })}

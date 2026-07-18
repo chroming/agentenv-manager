@@ -78,8 +78,8 @@ const api: AgentEnvApi = {
   openDataFolder: () => ipcRenderer.invoke("data:open-folder"),
   selectDataRestore: () => ipcRenderer.invoke("data:select-restore"),
   restoreDataBackup: (path) => ipcRenderer.invoke("data:restore", path),
-  adoptTargetInstructions: (profileId, targetId) =>
-    ipcRenderer.invoke("targets:adopt-instructions", profileId, targetId)
+  adoptTargetChanges: (profileId, targetId) =>
+    ipcRenderer.invoke("targets:adopt-changes", profileId, targetId)
 };
 
 contextBridge.exposeInMainWorld("agentEnv", api);

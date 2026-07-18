@@ -139,7 +139,7 @@ export const TargetWorkspace = ({
           >
             <ArchiveRestore size={15} strokeWidth={2.2} />
             {t("Recovery")}
-            <span aria-label={t("{{count}} backups", { count: backups.length })}>{backups.length}</span>
+            <span aria-label={t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}>{backups.length}</span>
           </button>
           <button
             className="secondary-action"
@@ -281,7 +281,7 @@ export const TargetWorkspace = ({
                 <div className="section-title">{t("Recovery")}</div>
                 <p className="muted">{t("Backups created before managed applies.")}</p>
               </div>
-              <span>{t("{{count}} backups", { count: backups.length })}</span>
+              <span>{t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}</span>
             </header>
             <div className="target-recovery-dialog__body">
               <HistoryView

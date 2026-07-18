@@ -17,6 +17,7 @@ import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetRegistry } from "./targets/registry";
 import type { CapturedTargetProfile } from "./targets/types";
+import { semanticMcpDefinition } from "./mcpIdentity";
 
 interface CapturedSkill {
   targetName: string;
@@ -82,15 +83,6 @@ const uniqueId = (base: string, reserved: Set<string>) => {
   reserved.add(candidate);
   return candidate;
 };
-
-const semanticMcp = (server: McpLibraryEntry) =>
-  JSON.stringify({
-    transport: server.transport,
-    command: server.command,
-    args: server.args ?? [],
-    url: server.url,
-    env: server.env ?? {}
-  });
 
 const fingerprintPath = async (path: string) => {
   if (!(await pathExists(path))) return "missing";
@@ -215,7 +207,9 @@ export const createTargetCaptureService = ({
 
     const reservedMcpIds = new Set(libraryMcp.map((server) => server.id));
     const mcp: CapturedMcp[] = captured.mcpServers.map((server) => {
-      const existing = libraryMcp.find((item) => semanticMcp(item) === semanticMcp(server));
+      const existing = libraryMcp.find(
+        (item) => semanticMcpDefinition(item) === semanticMcpDefinition(server)
+      );
       const libraryId = existing?.id ?? uniqueId(
         reservedMcpIds.has(server.id) ? `${targetId}-${server.id}` : server.id,
         reservedMcpIds
