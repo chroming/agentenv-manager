@@ -91,6 +91,7 @@ describe("SkillLibraryPanel", () => {
       showSelectedUpdatePlan = false
     ) => (
       <SkillLibraryPanel
+        targetNames={{ opencode: "OpenCode", codex: "Codex" }}
         librarySkills={[
           {
             id: "shared-reviewer",

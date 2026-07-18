@@ -80,6 +80,7 @@ describe("PreviewDialog", () => {
     const onAcknowledgedChange = vi.fn();
     render(
       <PreviewDialog
+        targetNames={{ codex: "Codex" }}
         preview={{
           ...preview,
           targetId: "codex",
