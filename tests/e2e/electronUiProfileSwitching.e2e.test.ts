@@ -2492,7 +2492,7 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("opens the apply preview at its summary instead of scrolling to the footer", async () => {
-    const { page } = await launchApp();
+    const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 8 });
     await resizeAppWindow(page, 1180, 728);
     await selectProfile(page, "UI OpenCode alpha");
 
@@ -2504,6 +2504,42 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, previewDialog.locator(".preview-header"));
     await expectInViewport(page, previewDialog.locator(".preview-actions"));
     const summaryGrid = previewDialog.locator(".preview-summary-grid");
+    const resourcePlan = previewDialog.getByRole("region", { name: "Resource changes" });
+    const resourceList = resourcePlan.getByRole("list", {
+      name: "Scrollable resource changes"
+    });
+    const resourceRows = resourceList.locator("article");
+    const resourceCount = await resourceRows.count();
+    expect(resourceCount).toBeGreaterThan(4);
+    await expect.poll(() => resourcePlan.locator("header").textContent())
+      .toContain(`${resourceCount} total`);
+
+    const resourceGeometry = await resourceList.evaluate((list) => {
+      const listBox = list.getBoundingClientRect();
+      const visibleRows = [...list.querySelectorAll("article")].filter((row) => {
+        const rowBox = row.getBoundingClientRect();
+        return rowBox.top >= listBox.top - 1 && rowBox.bottom <= listBox.bottom + 1;
+      }).length;
+      return {
+        visibleRows,
+        listHeight: listBox.height,
+        planHeight: list.closest(".preview-resource-plan")?.getBoundingClientRect().height,
+        dialogHeight: list.closest(".preview-dialog")?.getBoundingClientRect().height,
+        diffHeight: list.closest(".preview-dialog")?.querySelector(".diff-list")?.getBoundingClientRect().height
+      };
+    });
+    expect(resourceGeometry.visibleRows, JSON.stringify(resourceGeometry)).toBeGreaterThanOrEqual(3);
+    await resourcePlan.locator(".preview-resource-plan__more").waitFor({ state: "visible" });
+    await resourceList.evaluate((list) => {
+      list.scrollTop = list.scrollHeight;
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await resourcePlan.locator(".preview-resource-plan__more").waitFor({ state: "hidden" });
+    await resourceList.evaluate((list) => {
+      list.scrollTop = 0;
+      list.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await resourcePlan.locator(".preview-resource-plan__more").waitFor({ state: "visible" });
     await expect.poll(() => summaryGrid.evaluate((element) => getComputedStyle(element).alignItems))
       .toBe("start");
     const summaryCardAlignment = await previewDialog

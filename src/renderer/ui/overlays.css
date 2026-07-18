@@ -21,7 +21,7 @@
 
 @media (min-height: 700px) {
   .preview-resource-plan:has(article + article) {
-    min-height: 146px;
+    min-height: min(280px, 38vh);
   }
 }
 

@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import type {
   ActivationPreview,
   RollbackPreview,
@@ -110,9 +111,39 @@ export const PreviewDialog = ({
   const hasActions = Boolean(onCancel || onConfirm);
   const isModalOpen = Boolean(preview && hasActions);
   const dialogRef = useRef<HTMLElement>(null);
+  const resourceListRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const [hiddenResourceCount, setHiddenResourceCount] = useState(0);
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
+
+  const updateResourceOverflow = () => {
+    const list = resourceListRef.current;
+    if (!list) {
+      setHiddenResourceCount(0);
+      return;
+    }
+    const visibleBottom = list.getBoundingClientRect().bottom;
+    const hiddenCount = [...list.children].filter(
+      (child) =>
+        child instanceof HTMLElement &&
+        child.getBoundingClientRect().bottom > visibleBottom + 1
+    ).length;
+    setHiddenResourceCount(hiddenCount);
+  };
+
+  useEffect(() => {
+    if (!preview) {
+      setHiddenResourceCount(0);
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(updateResourceOverflow);
+    window.addEventListener("resize", updateResourceOverflow);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateResourceOverflow);
+    };
+  }, [preview]);
 
   useEffect(() => {
     if (!isModalOpen) {
@@ -239,16 +270,26 @@ export const PreviewDialog = ({
   const resourcePlan = resourceChanges.length > 0 ? (
     <section className="preview-resource-plan" aria-label={t("Resource changes")}>
       <header>
-        <strong>{t("Resource changes")}</strong>
+        <span className="preview-resource-plan__title">
+          <strong>{t("Resource changes")}</strong>
+          <span>{t("{{count}} total", { count: resourceChanges.length })}</span>
+        </span>
         <span>{t("{{install}} install · {{replace}} replace · {{remove}} remove", {
           install: installChanges.length,
           replace: replaceChanges.length,
           remove: removeChanges.length
         })}</span>
       </header>
-      <div>
+      <div
+        ref={resourceListRef}
+        className="preview-resource-plan__list"
+        role="list"
+        aria-label={t("Scrollable resource changes")}
+        tabIndex={resourceChanges.length > 1 ? 0 : undefined}
+        onScroll={updateResourceOverflow}
+      >
         {resourceChanges.map((change) => (
-          <article key={`${change.action}:${change.path}`}>
+          <article role="listitem" key={`${change.action}:${change.path}`}>
             <span className={`change-kind change-kind--${change.action}`}>
               {t(
                 change.action === "install"
@@ -270,6 +311,12 @@ export const PreviewDialog = ({
           </article>
         ))}
       </div>
+      {hiddenResourceCount > 0 ? (
+        <div className="preview-resource-plan__more" aria-hidden="true">
+          <ChevronDown size={14} strokeWidth={2.2} />
+          <span>{t("{{count}} more changes below", { count: hiddenResourceCount })}</span>
+        </div>
+      ) : null}
     </section>
   ) : null;
 

@@ -315,7 +315,7 @@ Preview MUST:
 7. Indicate whether the Target is being taken over or switched.
 8. Leave the Target unchanged.
 
-Preview hierarchy MUST put concrete resource identities and actions before secondary filesystem detail. Preserve counts stay in the summary; long preserved paths live in a compact expandable detail section. Resource paths remain available through selectable overflow detail rather than dominating the primary scan path.
+Preview hierarchy MUST put concrete resource identities and actions before secondary filesystem detail. Preserve counts stay in the summary; long preserved paths live in a compact expandable detail section. Resource paths remain available through selectable overflow detail rather than dominating the primary scan path. A resource list that overflows MUST show its total count, a persistent scrollbar, and an explicit remaining-item cue; the default viewport shows at least three complete resource rows without moving the Apply actions out of view.
 
 A Preview becomes stale when any of these changes:
 

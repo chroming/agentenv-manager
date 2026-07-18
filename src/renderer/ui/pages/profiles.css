@@ -216,19 +216,27 @@
 }
 
 .preview-dialog--modal .preview-resource-plan {
-  flex: 0 1 auto;
-  max-height: min(210px, 28vh);
+  flex: 0 1 min(280px, 38vh);
+  max-height: min(280px, 38vh);
 }
 
 .preview-dialog--modal .preview-resource-plan:has(article + article) {
-  flex-basis: min(136px, 24vh);
-  min-height: min(136px, 24vh);
+  flex-basis: min(280px, 38vh);
+  min-height: min(280px, 38vh);
 }
 
-.preview-dialog--modal .preview-resource-plan > div {
+.preview-dialog--modal .preview-resource-plan__list {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+@media (max-height: 680px) {
+  .preview-dialog--modal .preview-resource-plan,
+  .preview-dialog--modal .preview-resource-plan:has(article + article) {
+    flex-basis: min(190px, 31vh);
+    min-height: min(190px, 31vh);
+  }
 }
 
 .preview-dialog--modal .preview-actions {
@@ -909,6 +917,18 @@
   padding: 9px 12px;
 }
 
+.preview-resource-plan__title {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.preview-resource-plan__title > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .preview-resource-plan > header strong,
 .preview-resource-plan > header span {
   line-height: 18px;
@@ -917,6 +937,41 @@
 .preview-resource-plan article {
   min-height: 52px;
   padding: 8px 12px;
+}
+
+.preview-resource-plan__list {
+  scrollbar-color: #b8c3d2 transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.preview-resource-plan__list:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(23, 105, 245, 0.22);
+  outline: 0;
+}
+
+.preview-resource-plan__list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.preview-resource-plan__list::-webkit-scrollbar-thumb {
+  background: #b8c3d2;
+  border: 2px solid #fbfcff;
+  border-radius: 8px;
+}
+
+.preview-resource-plan__more {
+  align-items: center;
+  background: linear-gradient(to bottom, rgba(251, 252, 255, 0.9), #f5f8fc);
+  border-top: 1px solid #e3e9f1;
+  color: var(--muted-strong);
+  display: flex;
+  flex: 0 0 28px;
+  font-size: 11px;
+  font-weight: 650;
+  gap: 5px;
+  justify-content: center;
+  min-height: 28px;
 }
 
 .preview-resource-plan__identity strong,
