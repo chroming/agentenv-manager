@@ -15,6 +15,8 @@
     "dist:mac": "npm run icons:mac && npm run build && electron-builder --mac",
     "audit:styles": "node scripts/audit-renderer-css.mjs --check",
     "audit:styles:report": "node scripts/audit-renderer-css.mjs",
+    "audit:targets": "node scripts/audit-target-boundaries.mjs",
+    "target:new": "node scripts/create-target-integration.mjs",
     "capture:ui": "npm run build && node scripts/capture-profiles.mjs --output /tmp/agentenv-ui-captures/current",
     "capture:profiles": "npm run build && node scripts/capture-profiles.mjs",
     "test": "vitest run",
