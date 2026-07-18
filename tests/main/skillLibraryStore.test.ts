@@ -4,6 +4,9 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPaths } from "../../src/main/paths";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
+import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
+import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
+import { buildSkillCleanupGroups } from "../../src/shared/skillCleanup";
 
 let root = "";
 
@@ -871,6 +874,60 @@ description: >
     await expect(store.scanInventory([targetPaths])).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ path: sharedCopy, status: "unmanaged" })])
     );
+  });
+
+  it("cleans every Target copy when one adapter also scans another Target's Skill directory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const openCodePaths = createOpenCodeTargetAdapter().createTargetPaths({ homeDir: paths.homeDir });
+    const claudePaths = createClaudeCodeTargetAdapter().createTargetPaths({ homeDir: paths.homeDir });
+    const sharedCopy = join(paths.homeDir, ".agents", "skills", "demo");
+    const openCodeCopy = join(paths.homeDir, ".config", "opencode", "skills", "demo");
+    const claudeCopy = join(paths.homeDir, ".claude", "skills", "demo");
+    for (const path of [sharedCopy, openCodeCopy, claudeCopy]) {
+      await mkdir(path, { recursive: true });
+    }
+    await writeFile(join(sharedCopy, "SKILL.md"), "# Shared demo\n", "utf8");
+    await writeFile(join(openCodeCopy, "SKILL.md"), "# OpenCode demo\n", "utf8");
+    await writeFile(join(claudeCopy, "SKILL.md"), "# Claude demo\n", "utf8");
+    const store = createSkillLibraryStore(paths);
+
+    const firstScan = await store.scanInventory([openCodePaths, claudePaths]);
+    const group = buildSkillCleanupGroups(firstScan).find((item) => item.skillKey === "demo");
+
+    expect(group?.items).toHaveLength(3);
+    expect(group?.items.find((item) => item.path === sharedCopy)).toMatchObject({
+      sharedLocation: true
+    });
+    expect(group?.items.find((item) => item.path === openCodeCopy)).toMatchObject({
+      foundIn: ["opencode"],
+      locationRole: "preferred-runtime",
+      sharedLocation: false
+    });
+    expect(group?.items.find((item) => item.path === claudeCopy)).toMatchObject({
+      foundIn: ["claude-code", "opencode"],
+      locationRole: "preferred-runtime",
+      sharedLocation: false
+    });
+
+    const sharedPaths = group?.items.filter((item) => item.sharedLocation).map((item) => item.path) ?? [];
+    const duplicatePaths = group?.items.filter((item) => !item.sharedLocation).map((item) => item.path) ?? [];
+    await store.consolidateSharedSkillGroup({
+      skillKey: "demo",
+      libraryId: "demo",
+      canonicalPath: claudeCopy,
+      sharedPaths,
+      duplicatePaths
+    });
+
+    const secondScan = await store.scanInventory([openCodePaths, claudePaths]);
+    expect(secondScan).toHaveLength(1);
+    expect(secondScan[0]).toMatchObject({
+      path: sharedCopy,
+      sharedLocation: true,
+      libraryId: "demo",
+      contentMatchesLibrary: true
+    });
   });
 
   it("scans additional target skill roots such as singular OpenCode skill directories", async () => {

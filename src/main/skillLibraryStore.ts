@@ -31,6 +31,7 @@ import type {
   SkillUpdatePolicyInput,
   SkillUpdatePlan,
   SkillUpdateSourceInput,
+  TargetSkillLocationRole,
   TargetPaths,
   UnmanagedSkillEntry,
   SharedSkillRetentionInput
@@ -70,6 +71,40 @@ interface SkillCleanupBackupManifest {
   operation?: "cleanup" | "remove" | "retire" | "update";
   entries: Array<{ sourcePath: string; backupPath: string }>;
 }
+
+const skillLocationAuthority = (
+  role: TargetSkillLocationRole | undefined,
+  shared: boolean | undefined
+): number => {
+  if (!role && shared === undefined) return -1;
+  const roleRank: Record<TargetSkillLocationRole, number> = {
+    "preferred-runtime": 4,
+    "alternate-runtime": 3,
+    "compatibility-runtime": 2,
+    "discovery-only": 1
+  };
+  return (shared === false ? 10 : 0) + (role ? roleRank[role] : 0);
+};
+
+const mergeInventoryLocation = (
+  entry: SkillInventoryEntry,
+  targetId: string,
+  location: { role: TargetSkillLocationRole; shared: boolean } | undefined
+): void => {
+  const replacesLocation =
+    skillLocationAuthority(location?.role, location?.shared) >
+    skillLocationAuthority(entry.locationRole, entry.sharedLocation);
+
+  if (replacesLocation) {
+    entry.locationRole = location?.role;
+    entry.sharedLocation = location?.shared;
+    entry.foundIn = [targetId, ...entry.foundIn.filter((item) => item !== targetId)];
+    return;
+  }
+  if (!entry.foundIn.includes(targetId)) {
+    entry.foundIn.push(targetId);
+  }
+};
 
 export interface ImportSkillStoreInput extends SkillImportInput {
   sourceType?: SkillSourceType;
@@ -1103,7 +1138,13 @@ export const createSkillLibraryStore = (
                 confidence: "confirmed" as const,
                 state: "broken-link" as const
               };
-              byKey.set(`external:${entry.name}:${skillDir}`, {
+              const key = `external:${entry.name}:${skillDir}`;
+              const existing = byKey.get(key);
+              if (existing) {
+                mergeInventoryLocation(existing, target.targetId, location);
+                continue;
+              }
+              byKey.set(key, {
                 id: entry.name,
                 name: entry.name,
                 description: "External Skill link target is missing.",
@@ -1163,9 +1204,7 @@ export const createSkillLibraryStore = (
           const key = `${status}:${libraryId ?? entry.name}:${skillDir}`;
           const existing = byKey.get(key);
           if (existing) {
-            if (!existing.foundIn.includes(target.targetId)) {
-              existing.foundIn.push(target.targetId);
-            }
+            mergeInventoryLocation(existing, target.targetId, location);
             continue;
           }
           const skillDirStats = await lstat(skillDir);
