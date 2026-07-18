@@ -121,17 +121,17 @@ const applyJsoncOverlay = (
     METADATA_CONFIG_KEYS.has(key)
   );
 
-  for (const key of state.managedConfigKeys) {
-    if (
-      key !== "mcp" &&
-      !METADATA_CONFIG_KEYS.has(key) &&
-      !profileConfigKeys.includes(key)
-    ) {
-      nextContent = setJsoncProperty(nextContent, [key], undefined);
-    }
-  }
-
   if (profileConfigKeys.length > 0) {
+    for (const key of state.managedConfigKeys) {
+      if (
+        key !== "mcp" &&
+        !METADATA_CONFIG_KEYS.has(key) &&
+        !profileConfigKeys.includes(key)
+      ) {
+        nextContent = setJsoncProperty(nextContent, [key], undefined);
+      }
+    }
+
     for (const key of profileMetadataKeys) {
       nextContent = setJsoncProperty(nextContent, [key], profileConfig[key]);
     }
@@ -360,7 +360,6 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       profile.manifest.managed.config &&
       (profileConfigKeys.length > 0 ||
         profileMcpNames.length > 0 ||
-        activeState.managedConfigKeys.length > 0 ||
         activeState.managedMcpNames.length > 0);
     const liveConfig = shouldManageConfig
       ? parseJsoncObject(liveConfigText, "Invalid live opencode.jsonc")
@@ -381,6 +380,8 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
         targetState = planned.targetState;
         addChange(changes, targetPaths.configPath, liveConfigText, planned.nextContent);
       }
+    } else if (!shouldManageConfig && profileConfig.ok) {
+      targetState = DEFAULT_STATE;
     }
 
     return {

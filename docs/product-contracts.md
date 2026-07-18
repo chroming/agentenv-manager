@@ -343,7 +343,9 @@ Status: stale checks and no-op detection are `Implemented`.
 
 Apply means complete replacement of the AgentEnv-managed portion of one Target with one saved Profile.
 
-Target configuration files remain user-owned unless the effective Profile has MCP, native Advanced configuration, Target-specific Skill settings, or previously managed entries that must be removed. A config file that has no planned semantic change MUST NOT be rewritten, backed up as an affected path, fingerprinted for Preview freshness, or recorded as an AgentEnv-managed resource.
+Target configuration files remain user-owned unless the effective Profile has MCP, native Advanced configuration, or Target-specific Skill settings. A config file that has no planned semantic change MUST NOT be rewritten, backed up as an affected path, fingerprinted for Preview freshness, or recorded as an AgentEnv-managed resource.
+
+Native Advanced ownership is explicit and non-sticky. When a Profile contains no native Advanced values, Apply MUST preserve the live native settings byte-for-byte, clear their prior AgentEnv ownership metadata, and MUST NOT interpret omission as deletion. When a Profile explicitly contains native Advanced values, replacement semantics MAY remove keys that were managed by the previously active Profile but are absent from the new explicit Advanced payload. Releasing ownership metadata alone is a valid Apply operation even when no live file content changes.
 
 It MUST:
 
@@ -356,7 +358,7 @@ It MUST:
 7. Record one history entry only after success.
 8. Refresh visible Profile and Target state after completion.
 
-Switching Profiles MUST remove resources owned by the previously active Profile when they are absent from the new Profile. Unmanaged resources MUST remain untouched unless they occupy a required destination, in which case Apply is blocked.
+Switching Profiles MUST remove managed external resources owned by the previously active Profile when they are absent from the new Profile. Omitted native Advanced settings follow the ownership-release rule above and remain in place. Unmanaged resources MUST remain untouched unless they occupy a required destination, in which case Apply is blocked.
 
 Takeover is the first Apply to an unmanaged Target. Preview MUST disclose:
 
@@ -402,6 +404,8 @@ A drifted Target MUST NOT appear Applied. The user MUST be offered these explici
 | Restore previous deployment | Restore the most recent known-good AgentEnv deployment. |
 | Stop managing and keep current | Detach ownership while preserving current files. |
 | Ignore for now | Keep the Target visibly Drifted and block ordinary Apply. |
+
+One drifted path MUST produce one ownership problem. If an external tool replaces a previously managed Skill or agent and removes its ownership marker, Preview MUST report the managed drift instead of also reporting a generic unmanaged-destination collision. `Back up and replace` MAY bypass ownership validation only for the exact drifted paths recorded by the fresh Preview; unrelated unmanaged destinations remain blocking conflicts.
 
 Cross-Target deployments MUST NOT adopt native Advanced data into a Profile of another format automatically.
 
@@ -911,8 +915,8 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-17 against the current `main` tree at the time of this snapshot.
 
-- `449` automated tests passed across `52` test files; the `86`-test Electron UI suite and `94` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, and recovery scenarios.
-- The CSS architecture gate passed with two named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
+- `454` automated tests passed across `52` test files; the `88`-test Electron UI suite and `96` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- The CSS architecture gate passed with six named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `51` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, and focused update-setting states.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.

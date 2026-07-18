@@ -133,6 +133,48 @@ describe("Claude Code target adapter", () => {
     });
   });
 
+  it("preserves previously managed native settings when the Profile has no Advanced values", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    const liveSettings = `${JSON.stringify(
+      {
+        permissions: { defaultMode: "bypassPermissions" },
+        theme: "dark"
+      },
+      null,
+      2
+    )}\n`;
+    await writeFile(targetPaths.configPath, liveSettings, "utf8");
+
+    const profile = makeProfile(
+      `${JSON.stringify(
+        {
+          settings: { $schema: "https://json.schemastore.org/claude-code-settings.json" },
+          mcpServers: {}
+        },
+        null,
+        2
+      )}\n`
+    );
+    const state: TargetState = {
+      managedConfigKeys: ["permissions"],
+      managedMcpNames: []
+    };
+
+    const preview = await adapter.createPreview({ profile, targetPaths, state });
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.changes.map((change) => change.path)).not.toContain(targetPaths.configPath);
+    expect(preview.liveFingerprints).not.toHaveProperty(targetPaths.configPath);
+    expect(preview.targetState).toEqual({
+      managedConfigKeys: [],
+      managedMcpNames: []
+    });
+    await expect(readFile(targetPaths.configPath, "utf8")).resolves.toBe(liveSettings);
+  });
+
   it("reports unmanaged settings and MCP conflicts before apply", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
     const adapter = createClaudeCodeTargetAdapter();

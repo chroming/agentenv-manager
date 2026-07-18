@@ -143,6 +143,41 @@ describe("OpenCode target adapter", () => {
     });
   });
 
+  it("preserves previously managed native settings when the Profile has no Advanced values", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
+    const adapter = createOpenCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    const liveConfig = `${JSON.stringify(
+      {
+        permission: { bash: "allow" },
+        theme: "system"
+      },
+      null,
+      2
+    )}\n`;
+    await writeFile(targetPaths.configPath, liveConfig, "utf8");
+    const state: TargetState = {
+      managedConfigKeys: ["permission"],
+      managedMcpNames: []
+    };
+
+    const preview = await adapter.createPreview({
+      profile: makeProfile("{}\n"),
+      targetPaths,
+      state
+    });
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.changes.map((change) => change.path)).not.toContain(targetPaths.configPath);
+    expect(preview.liveFingerprints).not.toHaveProperty(targetPaths.configPath);
+    expect(preview.targetState).toEqual({
+      managedConfigKeys: [],
+      managedMcpNames: []
+    });
+    await expect(readFile(targetPaths.configPath, "utf8")).resolves.toBe(liveConfig);
+  });
+
   it("reports unmanaged MCP name conflicts before apply", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
     const adapter = createOpenCodeTargetAdapter();

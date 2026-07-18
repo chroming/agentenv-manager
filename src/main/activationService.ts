@@ -762,12 +762,17 @@ export const createActivationService = ({
   const findManagedDrift = async (
     state: TargetState,
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    targetPaths: TargetPaths
+    targetPaths: TargetPaths,
+    affectedPaths?: ReadonlySet<string>
   ) => {
     const errors: string[] = [];
     const warnings: string[] = [];
+    const paths = new Set<string>();
     const desired = desiredManagedPaths(profile, targetPaths);
     for (const resource of state.managedResources ?? []) {
+      if (affectedPaths && !affectedPaths.has(resource.path)) {
+        continue;
+      }
       const currentHash = await hashPath(resource.path);
       if (!currentHash) {
         if (desired.has(resource.path)) {
@@ -776,12 +781,13 @@ export const createActivationService = ({
         continue;
       }
       if (currentHash !== resource.contentHash) {
+        paths.add(resource.path);
         errors.push(
           `External changes detected in AgentEnv-managed ${resource.kind} ${resource.id}: ${resource.path}`
         );
       }
     }
-    return { errors, warnings };
+    return { errors, warnings, paths };
   };
 
   const unmanagedSkillWarnings = async (
@@ -1165,25 +1171,6 @@ export const createActivationService = ({
         ? [`${adapter.descriptor.name} does not support ${server.transport} MCP server ${server.name}`]
         : [];
     });
-    const assetErrors = await adapter.validateAssets({
-      profile: materializedProfile,
-      targetPaths,
-      skillLibraryDir,
-      skillSyncMethod: settings.skillSyncMethod,
-      allowMatchingUnmanagedSkills: isTakeover,
-      allowMatchingUnmanagedAssets: isTakeover,
-      isolateSkillRoot: Boolean(skillRootTransition)
-    });
-    const drift = await findManagedDrift(stateFile.state, materializedProfile, targetPaths);
-    const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, inventory);
-    const ignoredErrors = await ignoredSkillConflicts(materializedProfile, inventory);
-    const withoutGenericExternalConflicts = (errors: string[]) =>
-      errors.filter(
-        (error) =>
-          ![...externallyResolved.paths].some(
-            (path) => error.includes(path) && error.includes("not AgentEnv-owned")
-          )
-      );
     const assetBackupPaths = await adapter.getAssetBackupPaths({
       profile: materializedProfile,
       targetPaths,
@@ -1196,6 +1183,35 @@ export const createActivationService = ({
     if (skillRootTransition) {
       assetBackupPaths.push(skillRootTransition.path);
     }
+    const affectedManagedPaths = new Set([
+      ...targetPreview.changes.map((change) => change.path),
+      ...assetBackupPaths
+    ]);
+    const drift = await findManagedDrift(
+      stateFile.state,
+      materializedProfile,
+      targetPaths,
+      affectedManagedPaths
+    );
+    const assetErrors = await adapter.validateAssets({
+      profile: materializedProfile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: settings.skillSyncMethod,
+      allowMatchingUnmanagedSkills: isTakeover,
+      allowMatchingUnmanagedAssets: isTakeover,
+      replaceableManagedPaths: drift.paths,
+      isolateSkillRoot: Boolean(skillRootTransition)
+    });
+    const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, inventory);
+    const ignoredErrors = await ignoredSkillConflicts(materializedProfile, inventory);
+    const withoutGenericExternalConflicts = (errors: string[]) =>
+      errors.filter(
+        (error) =>
+          ![...externallyResolved.paths].some(
+            (path) => error.includes(path) && error.includes("not AgentEnv-owned")
+          )
+      );
     const assetPlan = await planAssetResources(
       materializedProfile,
       targetPaths,
@@ -1251,6 +1267,11 @@ export const createActivationService = ({
       sharedSkillPreparationChanged:
         JSON.stringify(stateFile.state.sharedSkillPreparations ?? []) !==
         JSON.stringify(preparationPlan.preparations),
+      targetStateChanged:
+        JSON.stringify(stateFile.state.managedConfigKeys) !==
+          JSON.stringify(targetPreview.targetState.managedConfigKeys) ||
+        JSON.stringify(stateFile.state.managedMcpNames) !==
+          JSON.stringify(targetPreview.targetState.managedMcpNames),
       targetState: targetPreview.targetState,
       effectivePayload,
       omissions: targeted.omissions,
@@ -1281,7 +1302,8 @@ export const createActivationService = ({
       preview.operation !== "takeover" &&
       preview.changes.length === 0 &&
       preview.resourceChanges.length === 0 &&
-      !preview.sharedSkillPreparationChanged
+      !preview.sharedSkillPreparationChanged &&
+      !preview.targetStateChanged
     ) {
       return { ok: false, errors: ["No changes to apply"] };
     }
@@ -1402,19 +1424,6 @@ export const createActivationService = ({
       }
     }
 
-    const assetErrors = await adapter.validateAssets({
-      profile: materializedProfile,
-      targetPaths,
-      skillLibraryDir,
-      skillSyncMethod: settings.skillSyncMethod,
-      allowMatchingUnmanagedSkills: isTakeover,
-      allowMatchingUnmanagedAssets: isTakeover,
-      isolateSkillRoot: Boolean(preview.skillRootTransition)
-    });
-    if (assetErrors.length > 0) {
-      return { ok: false, errors: assetErrors };
-    }
-
     const statePath = statePathFor(preview.targetId);
     const assetBackupPaths = await adapter.getAssetBackupPaths({
       profile: materializedProfile,
@@ -1428,6 +1437,35 @@ export const createActivationService = ({
     if (preview.skillRootTransition) {
       assetBackupPaths.push(preview.skillRootTransition.path);
     }
+    const affectedManagedPaths = new Set([
+      ...preview.changes.map((change) => change.path),
+      ...assetBackupPaths
+    ]);
+    const currentStateFile = await readTargetStateFile(preview.targetId);
+    const currentDrift = await findManagedDrift(
+      currentStateFile.state,
+      materializedProfile,
+      targetPaths,
+      affectedManagedPaths
+    );
+    const replaceableManagedPaths = options.allowManagedDrift
+      ? currentDrift.paths
+      : undefined;
+
+    const assetErrors = await adapter.validateAssets({
+      profile: materializedProfile,
+      targetPaths,
+      skillLibraryDir,
+      skillSyncMethod: settings.skillSyncMethod,
+      allowMatchingUnmanagedSkills: isTakeover,
+      allowMatchingUnmanagedAssets: isTakeover,
+      replaceableManagedPaths,
+      isolateSkillRoot: Boolean(preview.skillRootTransition)
+    });
+    if (assetErrors.length > 0) {
+      return { ok: false, errors: assetErrors };
+    }
+
     const backup = await backupStore.createBackup(
       [...new Set([
         ...preview.changes.map((change) => change.path),
@@ -1470,6 +1508,7 @@ export const createActivationService = ({
           skillSyncMethod: settings.skillSyncMethod,
           allowMatchingUnmanagedSkills: isTakeover,
           allowMatchingUnmanagedAssets: isTakeover,
+          replaceableManagedPaths,
           isolateSkillRoot: Boolean(preview.skillRootTransition)
         });
       }

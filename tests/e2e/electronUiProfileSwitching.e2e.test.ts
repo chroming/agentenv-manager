@@ -195,6 +195,38 @@ const writeCodexProfile = async (
   return profileId;
 };
 
+const writeClaudeProfile = async (appDataRoot: string) => {
+  const profileId = "ui-claude-clean";
+  const profileDir = join(appDataRoot, "profiles", profileId);
+  await mkdir(profileDir, { recursive: true });
+  await writeJson(join(profileDir, "profile.json"), {
+    id: profileId,
+    targetId: "claude-code",
+    name: "UI Claude clean",
+    description: "UI Claude profile without native Advanced values",
+    version: 1,
+    managed: { instructions: true, config: true, assets: true }
+  });
+  await writeFile(
+    join(profileDir, "CLAUDE.md"),
+    "# UI Claude clean\n\n- Keep native Claude Code settings Target-owned.\n",
+    "utf8"
+  );
+  await writeJson(join(profileDir, "claude-code.json"), {
+    settings: {
+      $schema: "https://json.schemastore.org/claude-code-settings.json"
+    },
+    mcpServers: {}
+  });
+  await writeJson(join(profileDir, "assets.json"), {
+    ownedDirs: [],
+    ownedFiles: [],
+    skillRefs: [],
+    mcpRefs: [],
+    disabledSkillPaths: []
+  });
+};
+
 const writeLibrarySkill = async (appDataRoot: string) => {
   const sourceDir = join(appDataRoot, "source-skills", "shared-reviewer");
   const libraryDir = join(appDataRoot, "skills-library", "shared-reviewer");
@@ -451,6 +483,9 @@ const launchApp = async (
   await writeOpenCodeProfile(appDataRoot, "beta", options.openCodeBetaProfileName);
   await writeCodexProfile(appDataRoot, "alpha");
   await writeCodexProfile(appDataRoot, "beta");
+  if (options.includeClaudeTarget) {
+    await writeClaudeProfile(appDataRoot);
+  }
   const librarySkill = await writeLibrarySkill(appDataRoot);
   if (options.openCodeAlphaLibrarySkillCount) {
     await addOpenCodeAlphaLibrarySkills(appDataRoot, options.openCodeAlphaLibrarySkillCount);
@@ -541,10 +576,13 @@ const openSkillLibrary = async (page: Page) => {
     .click();
 };
 
-const applyActionButton = (page: Page, _targetName: "OpenCode" | "Codex") =>
+const applyActionButton = (page: Page, _targetName: "OpenCode" | "Codex" | "Claude Code") =>
   page.getByRole("button", { name: "Apply", exact: true }).first();
 
-const previewAndApply = async (page: Page, targetName: "OpenCode" | "Codex") => {
+const previewAndApply = async (
+  page: Page,
+  targetName: "OpenCode" | "Codex" | "Claude Code"
+) => {
   await applyActionButton(page, targetName).click();
   const previewDialog = page.getByRole("dialog", { name: "Preview" });
   await previewDialog.waitFor({ state: "visible" });
@@ -1614,6 +1652,85 @@ describe("Electron UI profile switching e2e", () => {
     await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain("UI ALPHA");
+  }, 30_000);
+
+  it("offers one recoverable drift action when another tool replaces a managed Skill", async () => {
+    const { opencodeDir, page } = await launchApp();
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    const targetSkillDir = join(opencodeDir, "skills", "ui-alpha-skill");
+    await rm(targetSkillDir, { recursive: true, force: true });
+    await rm(`${targetSkillDir}.agentenv-owner.json`, { force: true });
+    await mkdir(targetSkillDir, { recursive: true });
+    await writeFile(
+      join(targetSkillDir, "SKILL.md"),
+      "---\nname: ui-alpha-skill\n---\n\nUpdated by another tool.\n",
+      "utf8"
+    );
+
+    await page.getByRole("button", { name: "Targets", exact: true }).click();
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await page.getByText("Targets refreshed", { exact: true }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Profiles", exact: true }).click();
+    await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Apply", exact: true }).click();
+
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await expect.poll(() => previewDialog.textContent()).toContain(
+      "OpenCode skill changed outside AgentEnv"
+    );
+    expect(await previewDialog.textContent()).not.toContain(
+      "Skill target already exists and is not AgentEnv-owned"
+    );
+    await previewDialog
+      .getByLabel("I understand; back up and replace these changes")
+      .check();
+    await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+    await expect(readFile(join(targetSkillDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "alpha skill prompt"
+    );
+  }, 30_000);
+
+  it("preserves Claude Code native settings when the Profile has no Advanced values", async () => {
+    const { appDataRoot, claudeDir, page } = await launchApp({ includeClaudeTarget: true });
+    const settingsPath = join(claudeDir, "settings.json");
+    const nativeSettings = {
+      permissions: { defaultMode: "bypassPermissions" },
+      theme: "dark"
+    };
+    await writeJson(settingsPath, nativeSettings);
+    await writeFile(
+      join(claudeDir, "CLAUDE.md"),
+      "# UI Claude clean\n\n- Keep native Claude Code settings Target-owned.\n",
+      "utf8"
+    );
+    await mkdir(join(appDataRoot, "target-states"), { recursive: true });
+    await writeJson(join(appDataRoot, "target-states", "claude-code.json"), {
+      managedConfigKeys: ["permissions"],
+      managedMcpNames: [],
+      activeProfileId: "previous-claude-profile",
+      managedResources: []
+    });
+
+    await selectProfile(page, "UI Claude clean");
+    await selectTarget(page, "Claude Code");
+    await applyActionButton(page, "Claude Code").click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    expect(await previewDialog.textContent()).not.toContain(settingsPath);
+    expect(await previewDialog.textContent()).not.toContain("bypassPermissions");
+    await previewDialog.getByRole("button", { name: "Apply profile" }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+
+    await expect(readJson(settingsPath)).resolves.toEqual(nativeSettings);
+    await expect(
+      readJson<{ managedConfigKeys: string[] }>(
+        join(appDataRoot, "target-states", "claude-code.json")
+      )
+    ).resolves.toMatchObject({ managedConfigKeys: [] });
   }, 30_000);
 
   it("shows polished skill row actions and update check feedback in the rendered app", async () => {

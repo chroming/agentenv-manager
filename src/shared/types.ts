@@ -778,6 +778,7 @@ export interface ActivationPreview {
   sourceFingerprints: Record<string, string>;
   sharedSkillPreparations?: SharedSkillPreparation[];
   sharedSkillPreparationChanged?: boolean;
+  targetStateChanged?: boolean;
   targetId: string;
   targetState: TargetState;
   effectivePayload?: EffectiveProfilePayload;

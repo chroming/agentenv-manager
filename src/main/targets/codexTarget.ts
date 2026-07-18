@@ -106,7 +106,8 @@ const validateAssets = async (input: TargetAssetInput) => {
     if (
       !input.isolateSkillRoot &&
       (await pathExists(targetDir)) &&
-      !(await isOwnedSkillDir(targetDir, targetPaths))
+      !(await isOwnedSkillDir(targetDir, targetPaths)) &&
+      input.replaceableManagedPaths?.has(targetDir) !== true
     ) {
       errors.push(`Skill target already exists and is not AgentEnv-owned: ${targetDir}`);
     }
@@ -135,7 +136,8 @@ const validateAssets = async (input: TargetAssetInput) => {
     const matching =
       targetExists && (await pathExists(sourceFile)) && input.allowMatchingUnmanagedAssets &&
       (await hashComparableResource(sourceFile)) === (await hashComparableResource(targetFile));
-    if (targetExists && !owned && !matching) {
+    const replaceableManaged = input.replaceableManagedPaths?.has(targetFile) === true;
+    if (targetExists && !owned && !matching && !replaceableManaged) {
       errors.push(`Agent target already exists and is not AgentEnv-owned: ${targetFile}`);
     }
   }
@@ -307,7 +309,8 @@ const applyAssets = async (input: TargetAssetInput) => {
     const targetDir = join(targetPaths.skillsDir ?? "", ownedDir.targetName);
 
     const owned = await isOwnedSkillDir(targetDir, targetPaths);
-    if ((await pathEntryExists(targetDir)) && !owned) {
+    const replaceableManaged = input.replaceableManagedPaths?.has(targetDir) === true;
+    if ((await pathEntryExists(targetDir)) && !owned && !replaceableManaged) {
       throw new Error(
         `Skill target changed after preview and is not AgentEnv-owned: ${targetDir}`
       );
@@ -344,7 +347,8 @@ const applyAssets = async (input: TargetAssetInput) => {
       await pathExists(sourceFile) &&
       await pathExists(targetFile) &&
       (await hashComparableResource(sourceFile)) === (await hashComparableResource(targetFile));
-    if ((await pathEntryExists(targetFile)) && !owned && !matching) {
+    const replaceableManaged = input.replaceableManagedPaths?.has(targetFile) === true;
+    if ((await pathEntryExists(targetFile)) && !owned && !matching && !replaceableManaged) {
       throw new Error(
         `Agent target changed after preview and is not AgentEnv-owned: ${targetFile}`
       );

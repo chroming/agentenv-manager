@@ -367,7 +367,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     );
     const shouldInspectSettings =
       profile.manifest.managed.config &&
-      (profileSettingKeys.length > 0 || activeState.managedConfigKeys.length > 0);
+      profileSettingKeys.length > 0;
     const shouldManageMcp =
       profile.manifest.managed.config &&
       (Object.keys(mcpServers).length > 0 || activeState.managedMcpNames.length > 0);
@@ -408,7 +408,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     );
     const shouldManageSettings =
       profile.manifest.managed.config &&
-      (effectiveSettingKeys.length > 0 || activeState.managedConfigKeys.length > 0);
+      effectiveSettingKeys.length > 0;
 
     if (profileConfig.ok && liveSettings.ok && liveMcp.ok) {
       errors.push(

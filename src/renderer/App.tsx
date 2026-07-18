@@ -2127,7 +2127,8 @@ const AppContent = ({
     preview &&
       (preview.changes.length > 0 ||
         preview.resourceChanges.length > 0 ||
-        preview.sharedSkillPreparationChanged) &&
+        preview.sharedSkillPreparationChanged ||
+        preview.targetStateChanged) &&
       (preview.errors.length === 0 || (previewHasOnlyManagedDrift && replaceManagedDrift)) &&
       (!preview.requiresOmissionAcknowledgement || acceptCrossTargetOmissions) &&
       localValidationErrors.length === 0 &&

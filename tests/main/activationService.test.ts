@@ -672,6 +672,49 @@ describe("activation service", () => {
     }
   });
 
+  it("backs up and replaces a managed Skill that an external tool rewrote", async () => {
+    const { paths, service } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Old agents\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+
+    const firstPreview = await service.previewProfile("daily-coding");
+    expect((await service.applyProfile("daily-coding", firstPreview.id)).ok).toBe(true);
+
+    const targetSkillDir = join(
+      paths.codexHome,
+      "skills",
+      "agentenv-daily-coding-example-skill"
+    );
+    await rm(targetSkillDir, { recursive: true, force: true });
+    await rm(`${targetSkillDir}.agentenv-owner.json`, { force: true });
+    await mkdir(targetSkillDir, { recursive: true });
+    await writeFile(
+      join(targetSkillDir, "SKILL.md"),
+      "---\nname: example\n---\n\nUpdated by another tool.\n"
+    );
+
+    const driftPreview = await service.previewProfile("daily-coding");
+    expect(driftPreview.errors).toEqual([
+      `External changes detected in AgentEnv-managed skill agentenv-daily-coding-example-skill: ${targetSkillDir}`
+    ]);
+    expect((await service.applyProfile("daily-coding", driftPreview.id)).ok).toBe(false);
+
+    const result = await service.applyProfile("daily-coding", driftPreview.id, {
+      allowManagedDrift: true
+    });
+    expect(result.ok).toBe(true);
+    await expect(readFile(join(targetSkillDir, "SKILL.md"), "utf8")).resolves.toBe(
+      "---\nname: example\n---\n"
+    );
+    if (result.ok) {
+      const backup = await createBackupStore(paths).readBackup(result.backupId);
+      const skillEntry = backup.entries.find((entry) => entry.sourcePath === targetSkillDir);
+      await expect(
+        readFile(join(skillEntry?.backupPath ?? "", "SKILL.md"), "utf8")
+      ).resolves.toContain("Updated by another tool.");
+    }
+  });
+
   it("keeps newly added unmanaged skills visible as warnings without blocking preview", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");
