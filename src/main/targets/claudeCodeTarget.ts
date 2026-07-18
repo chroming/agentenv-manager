@@ -9,6 +9,7 @@ import {
   type ParseError
 } from "jsonc-parser";
 import type {
+  McpLibraryEntry,
   PlannedFileChange,
   ProfileDetail,
   TargetActivationPreview,
@@ -31,7 +32,7 @@ import {
   markerPathForFile
 } from "../ownershipMarkers";
 import { removeSkillDeployment } from "../skillDeployment";
-import { materializeClaudeCodeMcpRefs } from "../mcpRefs";
+import { jsonMcpEnvironment, materializeJsonMcpRefs } from "../mcpRefs";
 import { findSecretWarnings } from "../secretWarnings";
 import {
   addSkillRefBackupPaths,
@@ -56,6 +57,24 @@ const DEFAULT_STATE: TargetState = {
 const profileFiles = createProfileFileDriver({
   instructionsFile: "CLAUDE.md",
   configFile: "claude-code.json"
+});
+
+const materializeMcpRefs = (
+  profile: ProfileDetail,
+  mcpLibrary: McpLibraryEntry[]
+) => materializeJsonMcpRefs(profile, mcpLibrary, {
+  property: "mcpServers",
+  serializeServer: (server) => {
+    const env = jsonMcpEnvironment(server, (sourceName) => `\${${sourceName}}`);
+    return server.transport === "stdio"
+      ? {
+          type: "stdio",
+          command: server.command,
+          args: server.args ?? [],
+          ...(env ? { env } : {})
+        }
+      : { type: server.transport, url: server.url };
+  }
 });
 
 const METADATA_CONFIG_KEYS = new Set(["$schema"]);
@@ -504,7 +523,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     if (!settings.ok) throw new Error(settings.message);
     if (!mcpConfig.ok) throw new Error(mcpConfig.message);
     const liveMcp = isRecord(mcpConfig.value.mcpServers) ? mcpConfig.value.mcpServers : {};
-    const capturedMcp = captureJsonMcpServers(liveMcp, "claude");
+    const capturedMcp = captureJsonMcpServers(liveMcp, "shell-env");
     const sanitized = sanitizeCapturedJson(settings.value, "claude.settings");
     return {
       instructions,
@@ -516,7 +535,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     };
   },
   ...profileFiles,
-  materializeMcpRefs: materializeClaudeCodeMcpRefs,
+  materializeMcpRefs,
   createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;
     const warnings = findSecretWarnings(profile.instructions).concat(

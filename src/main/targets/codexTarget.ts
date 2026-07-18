@@ -31,7 +31,7 @@ import {
   markerPathForFile
 } from "../ownershipMarkers";
 import { findSecretWarnings } from "../secretWarnings";
-import { materializeCodexMcpRefs } from "../mcpRefs";
+import { materializeTomlMcpRefs } from "../mcpRefs";
 import { removeSkillDeployment } from "../skillDeployment";
 import { findUnmanagedMcpConflicts, validateToml } from "../tomlConfig";
 import {
@@ -514,7 +514,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     };
   },
   ...profileFiles,
-  materializeMcpRefs: materializeCodexMcpRefs,
+  materializeMcpRefs: materializeTomlMcpRefs,
   createPreview: async ({ profile, targetPaths, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const createdState: TargetState = {
       managedConfigKeys: [],

@@ -47,9 +47,9 @@ const quoteToml = (value: string) => JSON.stringify(value);
 const quoteTomlKey = (value: string) =>
   /^[A-Za-z0-9_-]+$/.test(value) ? value : JSON.stringify(value);
 
-const envForTarget = (
+export const jsonMcpEnvironment = (
   server: McpLibraryEntry,
-  targetId: "opencode" | "claude-code"
+  referenceFor: (sourceName: string) => string
 ) => {
   if (server.transport !== "stdio" || !server.env || Object.keys(server.env).length === 0) {
     return undefined;
@@ -57,43 +57,9 @@ const envForTarget = (
   return Object.fromEntries(
     Object.entries(server.env).map(([key, sourceName]) => [
       key,
-      targetId === "opencode" ? `{env:${sourceName}}` : `\${${sourceName}}`
+      referenceFor(sourceName)
     ])
   );
-};
-
-const serverForJsonTarget = (
-  server: McpLibraryEntry,
-  targetId: "opencode" | "claude-code"
-) => {
-  const env = envForTarget(server, targetId);
-  if (targetId === "opencode") {
-    if (server.transport === "stdio") {
-      return {
-        type: "local",
-        command: [server.command, ...(server.args ?? [])].filter(Boolean),
-        ...(env ? { environment: env } : {})
-      };
-    }
-    return {
-      type: "remote",
-      url: server.url
-    };
-  }
-
-  if (server.transport === "stdio") {
-    return {
-      type: "stdio",
-      command: server.command,
-      args: server.args ?? [],
-      ...(env ? { env } : {})
-    };
-  }
-
-  return {
-    type: server.transport,
-    url: server.url
-  };
 };
 
 const serverForCodexToml = (name: string, server: McpLibraryEntry) => {
@@ -133,10 +99,13 @@ const resolveMcpRefs = (
   });
 };
 
-const materializeJsonMcpRefs = (
+export const materializeJsonMcpRefs = (
   profile: ProfileDetail,
   mcpLibrary: McpLibraryEntry[],
-  targetId: "opencode" | "claude-code"
+  format: {
+    property: string;
+    serializeServer(server: McpLibraryEntry): unknown;
+  }
 ) => {
   const resolved = resolveMcpRefs(profile.assetPolicy, mcpLibrary);
   if (resolved.length === 0) {
@@ -144,11 +113,11 @@ const materializeJsonMcpRefs = (
   }
 
   const config = parseJsoncObject(profile.configText, "Invalid profile config");
-  const property = targetId === "opencode" ? "mcp" : "mcpServers";
+  const property = format.property;
   const existing = isRecord(config[property]) ? config[property] : {};
   const merged = { ...existing };
   for (const { targetName, server } of resolved) {
-    merged[targetName] = serverForJsonTarget(server, targetId);
+    merged[targetName] = format.serializeServer(server);
   }
 
   return {
@@ -157,7 +126,7 @@ const materializeJsonMcpRefs = (
   };
 };
 
-export const materializeCodexMcpRefs = (
+export const materializeTomlMcpRefs = (
   profile: ProfileDetail,
   mcpLibrary: McpLibraryEntry[]
 ) => {
@@ -176,13 +145,3 @@ export const materializeCodexMcpRefs = (
       .join("\n\n") + "\n"
   };
 };
-
-export const materializeOpenCodeMcpRefs = (
-  profile: ProfileDetail,
-  mcpLibrary: McpLibraryEntry[]
-): ProfileDetail => materializeJsonMcpRefs(profile, mcpLibrary, "opencode");
-
-export const materializeClaudeCodeMcpRefs = (
-  profile: ProfileDetail,
-  mcpLibrary: McpLibraryEntry[]
-): ProfileDetail => materializeJsonMcpRefs(profile, mcpLibrary, "claude-code");

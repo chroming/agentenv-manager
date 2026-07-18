@@ -53,13 +53,15 @@ const slug = (value: string) => {
 
 const envReferences = (
   value: unknown,
-  syntax: "opencode" | "claude"
+  syntax: "braced-env" | "shell-env"
 ): Record<string, string> | undefined => {
   if (!isRecord(value)) return {};
   const result: Record<string, string> = {};
   for (const [name, raw] of Object.entries(value)) {
     if (!envName.test(name) || typeof raw !== "string") return undefined;
-    const match = syntax === "opencode" ? raw.match(/^\{env:([A-Za-z_][A-Za-z0-9_]*)\}$/) : raw.match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/);
+    const match = syntax === "braced-env"
+      ? raw.match(/^\{env:([A-Za-z_][A-Za-z0-9_]*)\}$/)
+      : raw.match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/);
     if (!match || match[1] !== name) return undefined;
     result[name] = name;
   }
@@ -68,7 +70,7 @@ const envReferences = (
 
 export const captureJsonMcpServers = (
   value: unknown,
-  syntax: "opencode" | "claude"
+  syntax: "braced-env" | "shell-env"
 ): { servers: McpLibraryEntry[]; excluded: string[] } => {
   if (!isRecord(value)) return { servers: [], excluded: [] };
   const servers: McpLibraryEntry[] = [];

@@ -9,6 +9,7 @@ import {
   type ParseError
 } from "jsonc-parser";
 import type {
+  McpLibraryEntry,
   PlannedFileChange,
   ProfileDetail,
   TargetActivationPreview,
@@ -32,7 +33,7 @@ import {
   markerPathForFile
 } from "../ownershipMarkers";
 import { removeSkillDeployment } from "../skillDeployment";
-import { materializeOpenCodeMcpRefs } from "../mcpRefs";
+import { jsonMcpEnvironment, materializeJsonMcpRefs } from "../mcpRefs";
 import { findSecretWarnings } from "../secretWarnings";
 import {
   addSkillRefBackupPaths,
@@ -418,6 +419,23 @@ const profileFiles = createProfileFileDriver({
   readConfigText: readOpenCodeProfileConfig
 });
 
+const materializeMcpRefs = (
+  profile: ProfileDetail,
+  mcpLibrary: McpLibraryEntry[]
+) => materializeJsonMcpRefs(profile, mcpLibrary, {
+  property: "mcp",
+  serializeServer: (server) => {
+    const environment = jsonMcpEnvironment(server, (sourceName) => `{env:${sourceName}}`);
+    return server.transport === "stdio"
+      ? {
+          type: "local",
+          command: [server.command, ...(server.args ?? [])].filter(Boolean),
+          ...(environment ? { environment } : {})
+        }
+      : { type: "remote", url: server.url };
+  }
+});
+
 export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   descriptor: {
     id: "opencode",
@@ -487,7 +505,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     const parsed = parseJsoncObject(configText, "Invalid live opencode.jsonc");
     if (!parsed.ok) throw new Error(parsed.message);
     const config = cloneJson(parsed.value);
-    const capturedMcp = captureJsonMcpServers(config.mcp, "opencode");
+    const capturedMcp = captureJsonMcpServers(config.mcp, "braced-env");
     delete config.mcp;
     const sanitized = sanitizeCapturedJson(config, "opencode");
     return {
@@ -500,7 +518,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     };
   },
   ...profileFiles,
-  materializeMcpRefs: materializeOpenCodeMcpRefs,
+  materializeMcpRefs,
   createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;
     const warnings = findSecretWarnings(profile.instructions).concat(
