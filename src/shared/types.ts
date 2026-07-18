@@ -569,6 +569,7 @@ export interface TargetDescriptor {
   description: string;
   iconKey?: string;
   displayOrder?: number;
+  defaultProfileId?: string;
   instructionsLabel: string;
   configLabel: string;
   configLanguage: "jsonc" | "toml" | "text";

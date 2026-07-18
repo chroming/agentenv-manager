@@ -1,7 +1,5 @@
 import type { TargetDescriptor } from "../../shared/types";
-import { createClaudeCodeTargetAdapter } from "./claudeCodeTarget";
-import { createCodexTargetAdapter } from "./codexTarget";
-import { createOpenCodeTargetAdapter } from "./opencodeTarget";
+import { createBuiltInTargetAdapters } from "./integrations";
 import type { AgentTargetAdapter } from "./types";
 
 export interface TargetRegistry {
@@ -11,11 +9,7 @@ export interface TargetRegistry {
 }
 
 export const createTargetRegistry = (
-  adapters: AgentTargetAdapter[] = [
-    createOpenCodeTargetAdapter(),
-    createClaudeCodeTargetAdapter(),
-    createCodexTargetAdapter()
-  ]
+  adapters: AgentTargetAdapter[] = createBuiltInTargetAdapters()
 ): TargetRegistry => {
   const registeredAdapters = [...adapters];
   const byId = new Map<string, AgentTargetAdapter>();

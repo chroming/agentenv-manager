@@ -33,8 +33,13 @@ export const seedDefaultProfiles = async (
     return;
   }
 
-  const adapter = targetRegistry.get("opencode");
-  const profile = adapter.createDefaultProfile("opencode-daily-coding");
+  const adapter = targetRegistry
+    .listAdapters()
+    .find((candidate) => candidate.descriptor.defaultProfileId);
+  if (!adapter?.descriptor.defaultProfileId) {
+    return;
+  }
+  const profile = adapter.createDefaultProfile(adapter.descriptor.defaultProfileId);
   profile.manifest.createdAt = new Date().toISOString();
   const profileDir = join(paths.profilesDir, profile.id);
   await mkdir(profileDir, { recursive: true });

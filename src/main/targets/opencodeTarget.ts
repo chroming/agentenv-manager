@@ -443,6 +443,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     description: "Manage global OpenCode instructions, JSONC config, agents, and skills.",
     iconKey: "opencode",
     displayOrder: 0,
+    defaultProfileId: "opencode-daily-coding",
     instructionsLabel: "AGENTS.md",
     configLabel: "opencode.jsonc",
     configLanguage: "jsonc",
