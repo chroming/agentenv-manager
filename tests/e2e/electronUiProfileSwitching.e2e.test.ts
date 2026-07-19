@@ -2972,21 +2972,49 @@ describe("Electron UI profile switching e2e", () => {
     await expectPreviewGeometry();
   }, 30_000);
 
-  it("lays out Agents as adaptive management cards with on-demand diagnostics", async () => {
+  it("lays out Agents as one ordered management list with on-demand diagnostics", async () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
     await page.getByRole("button", { name: "Agents", exact: true }).click();
 
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     const claudeCard = page.getByRole("article", { name: "Agent Claude Code" });
-    const [openCodeBox, claudeBox] = await Promise.all([
+    const codexCard = page.getByRole("article", { name: "Agent Codex" });
+    const [openCodeBox, claudeBox, codexBox] = await Promise.all([
       openCodeCard.boundingBox(),
-      claudeCard.boundingBox()
+      claudeCard.boundingBox(),
+      codexCard.boundingBox()
     ]);
     expect(openCodeBox).not.toBeNull();
     expect(claudeBox).not.toBeNull();
-    expect(Math.abs(claudeBox!.y - openCodeBox!.y)).toBeLessThanOrEqual(1);
-    expect(claudeBox!.x).toBeGreaterThan(openCodeBox!.x);
+    expect(codexBox).not.toBeNull();
+    expect(Math.abs(claudeBox!.x - openCodeBox!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(codexBox!.x - openCodeBox!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(claudeBox!.width - openCodeBox!.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(codexBox!.width - openCodeBox!.width)).toBeLessThanOrEqual(1);
+    expect(claudeBox!.y).toBeGreaterThanOrEqual(openCodeBox!.y + openCodeBox!.height);
+    expect(codexBox!.y).toBeGreaterThanOrEqual(claudeBox!.y + claudeBox!.height);
+
+    const diagnostics = openCodeCard.getByRole("button", {
+      name: "Show OpenCode diagnostics"
+    });
+    await diagnostics.click();
+    await openCodeCard.getByRole("region", { name: "OpenCode diagnostics" }).waitFor({
+      state: "visible"
+    });
+    const [expandedOpenCodeBox, shiftedClaudeBox] = await Promise.all([
+      openCodeCard.boundingBox(),
+      claudeCard.boundingBox()
+    ]);
+    expect(expandedOpenCodeBox).not.toBeNull();
+    expect(shiftedClaudeBox).not.toBeNull();
+    expect(shiftedClaudeBox!.y).toBeGreaterThan(claudeBox!.y);
+    expect(
+      shiftedClaudeBox!.y - (expandedOpenCodeBox!.y + expandedOpenCodeBox!.height)
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      shiftedClaudeBox!.y - (expandedOpenCodeBox!.y + expandedOpenCodeBox!.height)
+    ).toBeLessThanOrEqual(13);
 
     await resizeAppWindow(page, 920, 620);
     const [compactOpenCodeBox, compactClaudeBox] = await Promise.all([
@@ -3006,11 +3034,6 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).getAttribute("class"))
       .toContain("secondary-action");
-    const diagnostics = openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" });
-    await diagnostics.click();
-    await openCodeCard.getByRole("region", { name: "OpenCode diagnostics" }).waitFor({
-      state: "visible"
-    });
     expect(
       await claudeCard.getByRole("button", { name: "Show Claude Code diagnostics" }).getAttribute("aria-expanded")
     ).toBe("false");
@@ -3047,7 +3070,6 @@ describe("Electron UI profile switching e2e", () => {
     await recoveryDialog.waitFor({ state: "hidden" });
     expect(await recoveryTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
 
-    const codexCard = page.getByRole("article", { name: "Agent Codex" });
     await codexCard.getByRole("button", { name: "Open Codex in Profiles" }).click();
     await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply", exact: true }).waitFor({ state: "visible" });

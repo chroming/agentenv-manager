@@ -763,7 +763,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Resource rows expose at most one direct contextual command plus a trailing overflow menu. Destructive, settings, and infrequent commands belong in that menu. Inline icon commands use shared `32px` hit targets and always have accessible names and tooltips.
 - Accent fill identifies only the current page-level primary command or the next commit action. Lists MUST NOT contain repeated primary-filled actions unless each row is an independent queued workflow.
 - Library pages use the resource name as the interactive page title (`Skills` or `MCPs`); `Library` is neutral scope text and MUST NOT resemble a clickable breadcrumb.
-- Agent cards align Diagnostics with their content track. Expanding one card MUST NOT stretch or visually open its grid-row sibling, and opening a second Diagnostics region closes the first.
+- Agents use one ordered management list at every supported width. Diagnostics expands to the full width of its owning Agent, shifts only later rows, leaves no peer-column void, and opening a second Diagnostics region closes the first.
 - Comparable actions in one command group use the same control height; Profile Save and Apply also reserve the same width so lifecycle state changes do not shift surrounding content.
 - A related command group MAY move below its heading at narrower supported widths, but its individual controls MUST remain together rather than orphan-wrapping one control onto another line.
 - Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.

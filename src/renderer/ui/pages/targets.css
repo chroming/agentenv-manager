@@ -78,7 +78,7 @@
   align-items: start;
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .target-card--workflow {
@@ -103,7 +103,7 @@
   align-items: center;
   display: grid;
   gap: 8px 10px;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(160px, 1fr) auto auto;
   min-width: 0;
 }
 
@@ -111,7 +111,7 @@
   align-items: center;
   display: flex;
   gap: 8px;
-  grid-column: 2 / -1;
+  grid-column: auto;
   justify-self: end;
 }
 
@@ -223,10 +223,6 @@
 }
 
 @container (max-width: 780px) {
-  .target-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .target-workflow-header {
     grid-template-columns: 32px minmax(100px, 1fr) auto auto;
   }
