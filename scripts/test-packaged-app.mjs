@@ -26,20 +26,26 @@ const root = await mkdtemp(join(tmpdir(), "agentenv-packaged-e2e-"));
 const appDataRoot = join(root, "app-data");
 const homeDir = join(root, "home");
 const fakeHomeRoot = join(root, "fake-home");
-const binDir = join(root, "bin");
 const opencodeDir = join(homeDir, ".config", "opencode");
 const repositoryRemote = join(root, "repository.git");
 const repositoryWork = join(root, "repository-work");
 let application;
 
 try {
-  await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(repositoryRemote, { recursive: true });
   await mkdir(repositoryWork, { recursive: true });
-  const opencodeExecutable = join(binDir, "opencode");
-  await writeFile(opencodeExecutable, "#!/bin/sh\necho packaged-e2e-opencode\n", "utf8");
-  await chmod(opencodeExecutable, 0o755);
+  const packagedAgentCommands = [
+    [join(homeDir, ".local", "bin", "opencode"), "opencode"],
+    [join(homeDir, ".bun", "bin", "claude"), "claude"],
+    [join(homeDir, ".cargo", "bin", "codex"), "codex"],
+    [join(homeDir, "Library", "pnpm", "agy"), "agy"]
+  ];
+  for (const [executablePath, name] of packagedAgentCommands) {
+    await mkdir(dirname(executablePath), { recursive: true });
+    await writeFile(executablePath, `#!/bin/sh\necho packaged-e2e-${name}\n`, "utf8");
+    await chmod(executablePath, 0o755);
+  }
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Before packaged takeover\n", "utf8");
   await writeFile(join(opencodeDir, "opencode.jsonc"), "{}\n", "utf8");
 
@@ -73,12 +79,19 @@ try {
       AGENTENV_CACHE_ROOT: join(root, "cache"),
       AGENTENV_FAKE_HOME: fakeHomeRoot,
       AGENTENV_HOME: homeDir,
-      PATH: `${binDir}:/usr/bin:/bin:/usr/sbin:/sbin`
+      PATH: "/usr/bin:/bin:/usr/sbin:/sbin"
     }
   });
   const page = await application.firstWindow();
   await page.setViewportSize({ width: 1180, height: 728 });
   await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Agents", exact: true }).click();
+  for (const agentName of ["OpenCode", "Claude Code", "Codex", "Antigravity CLI"]) {
+    const agent = page.getByRole("article", { name: `Agent ${agentName}` });
+    await agent.waitFor({ state: "visible" });
+    assert.match((await agent.textContent()) ?? "", /Ready/);
+  }
+  await page.getByRole("button", { name: "Skills", exact: true }).click();
   await page.getByRole("button", { name: "Import skills" }).click();
   const importDialog = page.getByRole("dialog", { name: "Import skills" });
   await importDialog.getByRole("tab", { name: "Repository" }).click();

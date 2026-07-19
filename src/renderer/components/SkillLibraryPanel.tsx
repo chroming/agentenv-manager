@@ -1578,7 +1578,7 @@ export const SkillLibraryPanel = ({
                       }}
                     >
                       <RefreshCw size={13} strokeWidth={2.2} />
-                      <span>{t("Update available")}</span>
+                      <span>{t("Review")}</span>
                     </button>
                   ) : hasError ? (
                     <button
@@ -1592,7 +1592,7 @@ export const SkillLibraryPanel = ({
                       }}
                     >
                       <TriangleAlert size={13} strokeWidth={2.2} />
-                      <span>{t("Check failed")}</span>
+                      <span>{t("Retry")}</span>
                     </button>
                   ) : staleCopies.length > 0 ? (
                     <button

@@ -618,6 +618,23 @@ try {
     () => page.getByRole("region", { name: "Profiles", exact: true })
   );
 
+  await page.getByRole("button", { name: /^Daily Coding/ }).click();
+  await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
+  await app.evaluate(() => {
+    process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID = "code-review";
+    process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS = "350";
+  });
+  await page.getByRole("button", { name: /^Code Review/ }).click();
+  const loadingProfile = page.getByRole("status", { name: "Loading profile Code Review" });
+  await loadingProfile.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "profile-loading-920x620.png"));
+  await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
+  await loadingProfile.waitFor({ state: "hidden" });
+  await app.evaluate(() => {
+    delete process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID;
+    delete process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS;
+  });
+
   await page.getByRole("button", { name: "New Profile" }).click();
   const sparseProfileDialog = page.getByRole("dialog", { name: "New profile" });
   await sparseProfileDialog.waitFor({ state: "visible" });

@@ -14,11 +14,6 @@ export interface SkillLibraryViewState {
   scrollTop: number;
 }
 
-export interface McpLibraryViewState {
-  search: string;
-  scrollTop: number;
-}
-
 export const defaultSkillLibraryViewState: SkillLibraryViewState = {
   search: "",
   sourceFilter: "all",
@@ -28,20 +23,10 @@ export const defaultSkillLibraryViewState: SkillLibraryViewState = {
   scrollTop: 0
 };
 
-export const defaultMcpLibraryViewState: McpLibraryViewState = {
-  search: "",
-  scrollTop: 0
-};
-
 export const updateSkillLibraryControls = (
   current: SkillLibraryViewState,
   patch: Partial<Omit<SkillLibraryViewState, "scrollTop">>
 ): SkillLibraryViewState => ({ ...current, ...patch, scrollTop: 0 });
-
-export const updateMcpLibraryControls = (
-  current: McpLibraryViewState,
-  patch: Partial<Omit<McpLibraryViewState, "scrollTop">>
-): McpLibraryViewState => ({ ...current, ...patch, scrollTop: 0 });
 
 export const matchesSkillStatusFilter = (
   statusFilter: SkillLibraryViewState["statusFilter"],

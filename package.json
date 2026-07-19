@@ -13,10 +13,13 @@
     "pack": "npm run icons:mac && npm run build && electron-builder --dir",
     "dist": "npm run icons:mac && npm run build && electron-builder",
     "dist:mac": "npm run icons:mac && npm run build && electron-builder --mac",
+    "dist:mac:signed": "node scripts/build-signed-mac.mjs",
     "audit:styles": "node scripts/audit-renderer-css.mjs --check",
     "audit:styles:report": "node scripts/audit-renderer-css.mjs",
     "audit:modules": "node scripts/audit-module-budgets.mjs",
     "audit:targets": "node scripts/audit-target-boundaries.mjs",
+    "audit:translations": "node scripts/audit-translations.mjs",
+    "verify:product": "node scripts/verify-product.mjs",
     "target:new": "node scripts/create-target-integration.mjs",
     "capture:ui": "npm run build && node scripts/capture-profiles.mjs --output /tmp/agentenv-ui-captures/current",
     "capture:profiles": "npm run build && node scripts/capture-profiles.mjs",
@@ -70,8 +73,8 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
-      "identity": "-",
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
+      "notarize": true,
       "target": [
         "dmg",
         "zip"

@@ -244,7 +244,7 @@ Rules:
 
 - Save MUST persist the complete Profile, not an individual accordion section.
 - Save MUST expose local working feedback immediately. Once persistence succeeds, the editor becomes clean and Apply availability is recalculated from the returned saved Profile without waiting for Target discovery, inventory scanning, update checks, usage aggregation, or a full-page refresh.
-- Save, Apply, and Target selection MUST appear as one compact action group in the selected Profile context. Save and Apply remain adjacent; the Profile-scoped destination selector sits immediately beside Apply. Page creation controls MUST NOT separate these lifecycle commands.
+- Save, Apply, and Target selection MUST appear as one compact action group in the selected Profile context. The Profile-scoped destination selector sits immediately before Apply, with Save in the same compact group. Page creation controls MUST NOT separate these lifecycle commands.
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
 - Readiness text describes the current state; it is not a second workflow. Only a condition that requires another product area exposes an inline remediation link: unavailable Target opens Targets, local validation opens Advanced, and required recovery opens Recovery. Preview blockers and drift do not expose a separate Review command because Apply already creates the authoritative fresh preview.
 - Readiness remediation links MUST show a visible verb and object. Icon-only arrows and backend phase labels such as `Review preview` are not executable product intents and MUST NOT appear as commands.
@@ -677,6 +677,7 @@ Status: local, recursive GitHub, and System Git Repository import/update; in-pla
 - If activation already matches the saved Profile, Preview is a no-op: no write, Backup, history event, or timestamp update.
 - Create from Target captures every discovered connection as a Target-specific activation selection and imports no MCP definition into Library.
 - Existing MCP Library storage and IPC MAY remain readable during migration, but the primary navigation MUST NOT expose a global MCP Library or create new Profile definition references.
+- The renderer MUST NOT expose create, edit, delete, search, or usage-review surfaces for the legacy MCP Library. MCP interaction exists only inside a selected Profile as native Agent discovery and activation choice.
 
 Status: native discovery across all four Agents, target-specific three-state Profile editing, Codex and OpenCode activation, read-only Claude Code and Antigravity visibility, missing-setup warnings, no-op, definition preservation, and legacy reference migration are `Implemented`.
 
@@ -733,6 +734,7 @@ Idle -> Pressed -> Working -> Success | Warning | Error | Partial failure
 - Press feedback is immediate.
 - Local commands report progress near their control or affected region.
 - Cross-page or background operations use the shared global feedback region.
+- Workspace-owned completion feedback remains scoped to its originating workspace and disappears when the user navigates away. When a command intentionally navigates to the object it created, that result workspace inherits the completion feedback. Errors remain globally visible because they may require recovery outside the origin surface.
 - Success feedback expires after approximately five seconds.
 - Errors persist until dismissed or resolved.
 - A newer warning or error replaces stale success feedback.
@@ -756,6 +758,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - The Electron compositor, document root, and application shell MUST paint the complete content viewport with the page background; short pages and navigation transitions MUST NOT expose an unpainted window background.
 - Electron MUST NOT expose an empty renderer frame during cold start. Its compositor background matches the application surface, and the HTML shell provides a branded, reduced-motion-aware launch state before React mounts without delaying foreground renderer scheduling.
 - Startup loads Library Skills independently from Target discovery. Local core data for Skills, Profiles, Targets, and Settings becomes usable before GitHub update checks, native MCP discovery, local inventory scans, and derived Profile usage finish; those background enrichments MUST merge into the visible UI without replacing it with an empty state.
+- Switching Profiles keeps the selected Profile surface painted while the next Profile loads. The list may show the pending selection, but the editor MUST render a stable named loading surface with unchanged bounds and MUST NOT flash `No profile selected`.
 - Renderer startup MUST NOT synchronously open duplicate browser-side persistence. Locale begins from the operating system and then adopts the authoritative local Settings value during core loading.
 - Packaged macOS PNG and ICNS assets MUST preserve transparent corners around the app-icon silhouette so Finder volumes and Dock icons do not render an opaque square frame.
 - macOS uses an inset hidden title bar with the native traffic-light controls. AgentEnv MUST NOT recreate window controls in renderer content; the sidebar and primary content share one top safe inset, the complete empty top strip on both sides plus page-heading whitespace provide draggable regions, and every interactive descendant remains clickable through explicit no-drag regions.
@@ -918,6 +921,7 @@ AgentEnv Manager supports English (`en`), Simplified Chinese (`zh_CN`), and Trad
 - User-authored names, descriptions, instructions, paths, source URLs, command output, and third-party error details MUST remain unchanged.
 - Dates and numbers MUST use the resolved locale. Product identity, Target names, protocol names, file names, and code tokens MAY remain untranslated.
 - Missing translations MUST fall back to the English source message and MUST NOT render an empty label or localization key.
+- Every statically discoverable renderer message MUST have a Simplified Chinese entry with the same interpolation placeholders. The translation audit is a release gate; Traditional Chinese continues to derive from that complete dictionary plus explicit terminology overrides.
 - Packaged builds MUST retain only the Electron locale bundles required by the supported interface languages.
 
 ## 24. Required Acceptance Matrix
@@ -1011,6 +1015,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Profile Skill toggles respond from the in-memory draft without a data reload; Save immediately shows working feedback and enables Apply after persistence; Preview immediately shows working feedback and opens without duplicate inventory scans.
 - System locale detection, explicit `en`/`zh_CN`/`zh_TW` switching, persisted reload, and unsupported-locale fallback.
 - Default and minimum viewport containment in all supported interface languages, including long Traditional Chinese labels.
+- Profile switching at the minimum viewport preserves editor geometry through loading and never exposes a false empty state.
 
 E2E assertions MUST verify persisted files and state, not only successful clicks.
 
@@ -1028,16 +1033,17 @@ AgentEnv Manager is production-ready only when all of these are true:
 - All supported Targets pass native and cross-Target contract tests.
 - Default and minimum desktop viewports pass containment and overlay checks.
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
+- The packaged Agent discovery smoke runs with a Finder-style minimal `PATH` and proves fallback discovery for OpenCode, Claude Code, Codex, and Antigravity CLI.
 
 Current verdict: **Needs refinement**. Core Skill Library, Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target payload review, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, compatible same-format drift adoption, active-Profile deletion recovery, Stop Managing workflows, and native MCP discovery and activation are functional. Persisted `nativeTargetId` terminology migration, broader Skill identity edge coverage, and signed/notarized distribution remain release work.
 
 ### 25.1 Verification Snapshot
 
-Last verified: 2026-07-18 against the current working tree at the time of this snapshot.
+The current machine-readable totals, source commit, dirty state, viewport list, capture count, audit results, and packaged-smoke status are generated by `npm run verify:product` in [`verification-snapshot.json`](verification-snapshot.json). Run `npm run verify:product -- --packaged` for a release candidate so the same snapshot also records the packaged workflow.
 
-- `547` automated tests pass across `63` test files; the `92`-test Electron UI suite and `105` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- The automated suite covers native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence and completeness, stable Profile loading, scoped feedback, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
 - The CSS architecture gate passed with fourteen named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
-- All `50` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including sidebar Agent overflow, Profile icon selection, Profile Skill selection and applied revisions, native MCP Profile states, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, Agent Diagnostics, and focused update-setting states.
+- Fixed-state visual captures are regenerated through the Electron compositor at the supported default and minimum viewports, including the stable Profile loading state, sidebar Agent overflow, Profile icon selection, Profile Skill selection and applied revisions, native MCP Profile states, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, Agent Diagnostics, and focused update-setting states.
 - Skills, Profiles, Agents, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - The macOS inset hidden title bar, native-control safe area, full-width draggable top chrome, draggable page headings, and no-drag interactive controls passed main-process configuration and real Electron geometry assertions.
 - Shared page headers, vertically centered navigation rows, uninterrupted work-surface edges, contained composite search fields, `32px` resource identities, compact/default row heights, Profile commit controls, MCP rows, Cleanup state/action lanes, `220px` context menus, and Apply resource rows passed cross-workspace geometry and overflow assertions.
@@ -1064,7 +1070,7 @@ Last verified: 2026-07-18 against the current working tree at the time of this s
 - Same-format drift recovery adopts compatible Instructions, native config, disabled-Skill paths, and native MCP activation choices into a backed-up Profile while naming excluded or unmapped items.
 - Production dependency audit reported zero known vulnerabilities.
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
-- Signed and notarized distribution verification remains outstanding; the local packaged primary-workflow smoke uses an unsigned `.app`.
+- The signed release entry point requires a Developer ID Application identity and Apple notarization credentials, then verifies `codesign`, Gatekeeper assessment, and the stapled DMG. Signed and notarized artifact verification remains outstanding until those external credentials are available; the local packaged primary-workflow smoke uses an unsigned `.app`.
 
 ## 26. Current Priority Gaps
 

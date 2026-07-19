@@ -108,6 +108,7 @@ describe("package metadata", () => {
           target?: string[];
           identity?: string;
           hardenedRuntime?: boolean;
+          notarize?: boolean;
         };
       };
     };
@@ -125,6 +126,9 @@ describe("package metadata", () => {
     expect(packageJson.scripts?.["dist:mac"]).toBe(
       "npm run icons:mac && npm run build && electron-builder --mac"
     );
+    expect(packageJson.scripts?.["dist:mac:signed"]).toBe(
+      "node scripts/build-signed-mac.mjs"
+    );
     expect(packageJson.scripts?.["test:e2e:packaged"]).toBe(
       "npm run pack && node scripts/test-packaged-app.mjs"
     );
@@ -135,10 +139,11 @@ describe("package metadata", () => {
       mac: {
         icon: "build/icon.icns",
         target: ["dmg", "zip"],
-        identity: "-",
-        hardenedRuntime: false
+        hardenedRuntime: true,
+        notarize: true
       }
     });
+    expect(packageJson.build?.mac?.identity).toBeUndefined();
     await expect(stat(join(process.cwd(), "build", "icon.icns"))).resolves.toMatchObject({
       size: expect.any(Number)
     });

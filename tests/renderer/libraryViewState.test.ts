@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  defaultMcpLibraryViewState,
   defaultSkillLibraryViewState,
   matchesSkillStatusFilter,
   matchesSkillUsageFilter,
   updateLibraryScroll,
-  updateMcpLibraryControls,
   updateSkillLibraryControls
 } from "../../src/renderer/libraryViewState";
 
 describe("library view state", () => {
-  it("defines independent defaults for Skills and MCP", () => {
+  it("defines the Skills Library defaults", () => {
     expect(defaultSkillLibraryViewState).toEqual({
       search: "",
       sourceFilter: "all",
@@ -19,7 +17,6 @@ describe("library view state", () => {
       usageFilter: "all",
       scrollTop: 0
     });
-    expect(defaultMcpLibraryViewState).toEqual({ search: "", scrollTop: 0 });
   });
 
   it("resets Skills scroll when a query or filter changes", () => {
@@ -36,15 +33,6 @@ describe("library view state", () => {
       scrollTop: 0
     });
     expect(current.scrollTop).toBe(240);
-  });
-
-  it("resets MCP scroll when search changes", () => {
-    expect(
-      updateMcpLibraryControls(
-        { ...defaultMcpLibraryViewState, scrollTop: 180 },
-        { search: "github" }
-      )
-    ).toEqual({ search: "github", scrollTop: 0 });
   });
 
   it("normalizes stored scroll without mutating other fields", () => {

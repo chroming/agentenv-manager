@@ -829,7 +829,7 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("opens the Library workspace as the global app area", async () => {
-    const { page } = await launchApp();
+    const { app: electronApp, page } = await launchApp();
 
     await page
       .getByRole("region", { name: "Skill library", exact: true })
@@ -863,7 +863,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
     await selectProfile(page, "UI OpenCode alpha");
-    expect(await applyActionButton(page, "OpenCode").count()).toBe(1);
+    await expect.poll(() => applyActionButton(page, "OpenCode").count()).toBe(1);
     expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
   }, 30_000);
 
@@ -2156,13 +2156,18 @@ describe("Electron UI profile switching e2e", () => {
       const save = group.querySelector<HTMLElement>(".save-button")!;
       const apply = group.querySelector<HTMLElement>(".profile-apply-button")!;
       const target = group.querySelector<HTMLElement>(".profile-target-workspace-button")!;
-      const boxes = [save, apply, target].map((item) => item.getBoundingClientRect());
+      const boxes = [save, target, apply].map((item) => item.getBoundingClientRect());
       return {
         ordered: boxes[0].right < boxes[1].left && boxes[1].right < boxes[2].left,
+        applyUsesDestinationIcon: apply.querySelector(".profile-target-logo") !== null,
         targetFits: target.scrollWidth <= target.clientWidth + 1
       };
     });
-    expect(profileCommitGeometry).toEqual({ ordered: true, targetFits: true });
+    expect(profileCommitGeometry).toEqual({
+      ordered: true,
+      applyUsesDestinationIcon: false,
+      targetFits: true
+    });
 
     const shellMetrics = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
@@ -2479,6 +2484,39 @@ describe("Electron UI profile switching e2e", () => {
       .toMatch(/^220px /);
   }, 30_000);
 
+  it("keeps the Profile editor painted while a different Profile is loading", async () => {
+    const { app: electronApp, page } = await launchApp();
+    await page.setViewportSize({ width: 920, height: 620 });
+    await selectProfile(page, "UI OpenCode alpha");
+    const editor = page.locator(".profile-editor-surface");
+    const composer = page.locator(".profile-composer");
+    const before = await editor.boundingBox();
+    const composerBefore = await composer.boundingBox();
+    expect(before).not.toBeNull();
+    expect(composerBefore).not.toBeNull();
+
+    await electronApp.evaluate(() => {
+      process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID = "ui-opencode-beta";
+      process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS = "350";
+    });
+
+    await page.getByRole("button", { name: /^UI OpenCode beta/ }).click();
+    const loading = page.getByRole("status", { name: "Loading profile UI OpenCode beta" });
+    await loading.waitFor({ state: "visible" });
+    expect(await page.getByText("No profile selected", { exact: true }).count()).toBe(0);
+    const during = await editor.boundingBox();
+    expect(during).toEqual(before);
+    const composerDuring = await composer.boundingBox();
+    expect(composerDuring?.y).toBe(composerBefore?.y);
+    expect(await page.locator(".profile-loading-row").count()).toBe(4);
+
+    await page.getByRole("heading", { name: "UI OpenCode beta" }).waitFor({
+      state: "visible",
+      timeout: 5_000
+    });
+    await loading.waitFor({ state: "hidden" });
+  }, 30_000);
+
   it("keeps Profile columns aligned when a long name becomes selected", async () => {
     const longProfileName =
       "UI OpenCode beta for a deliberately long production review environment";
@@ -2592,15 +2630,18 @@ describe("Electron UI profile switching e2e", () => {
       }
       expect(await page.locator(".profile-readiness-strip").count()).toBe(0);
 
-      const [titleBox, applyBox, saveBox, applyButtonBox] = await Promise.all([
+      const targetSelector = commitActions.locator(".profile-target-workspace-control");
+      const [titleBox, applyBox, saveBox, targetSelectorBox, applyButtonBox] = await Promise.all([
         profileTitle.boundingBox(),
         applyControl.boundingBox(),
         saveButton.boundingBox(),
+        targetSelector.boundingBox(),
         commitActions.locator(".profile-apply-button").boundingBox()
       ]);
       expect(titleBox).not.toBeNull();
       expect(applyBox).not.toBeNull();
       expect(saveBox).not.toBeNull();
+      expect(targetSelectorBox).not.toBeNull();
       expect(applyButtonBox).not.toBeNull();
       const titleOverlapsApply = !(
         titleBox!.x + titleBox!.width <= applyBox!.x ||
@@ -2609,7 +2650,14 @@ describe("Electron UI profile switching e2e", () => {
         applyBox!.y + applyBox!.height <= titleBox!.y
       );
       expect(titleOverlapsApply).toBe(false);
-      expect(applyButtonBox!.x - (saveBox!.x + saveBox!.width)).toBeLessThanOrEqual(10);
+      expect(targetSelectorBox!.x).toBeGreaterThanOrEqual(saveBox!.x + saveBox!.width);
+      expect(targetSelectorBox!.x - (saveBox!.x + saveBox!.width)).toBeLessThanOrEqual(10);
+      expect(applyButtonBox!.x).toBeGreaterThanOrEqual(
+        targetSelectorBox!.x + targetSelectorBox!.width
+      );
+      expect(
+        applyButtonBox!.x - (targetSelectorBox!.x + targetSelectorBox!.width)
+      ).toBeLessThanOrEqual(10);
       expect(Math.abs(saveBox!.y - applyButtonBox!.y)).toBeLessThanOrEqual(1);
       expect(Math.abs(saveBox!.height - applyButtonBox!.height)).toBeLessThanOrEqual(1);
       expect(Math.abs(saveBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
@@ -3325,7 +3373,7 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("edits and persists Instructions from the default-collapsed Composer", async () => {
-    const { appDataRoot, page } = await launchApp();
+    const { app: electronApp, appDataRoot, page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
     await selectProfile(page, "UI OpenCode alpha");
 
@@ -5461,14 +5509,26 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("switches, persists, and contains all supported interface languages", async () => {
-    const { appDataRoot, page } = await launchApp();
+    const { app: electronApp, appDataRoot, page } = await launchApp();
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByTestId("locale-select").selectOption("zh_CN");
     await page.getByRole("heading", { name: "设置", exact: true }).waitFor();
+    await page.getByRole("status").filter({ hasText: "设置已保存" }).waitFor();
     await expect
       .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
       .toMatchObject({ locale: "zh_CN" });
+    await page.getByRole("button", { name: "配置方案", exact: true }).click();
+    await expect.poll(() => page.locator(".app-feedback").count()).toBe(0);
+    await page.getByRole("button", { name: /^UI OpenCode alpha/ }).click();
+    await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor();
+    await electronApp.evaluate(() => {
+      process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID = "ui-opencode-beta";
+      process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS = "250";
+    });
+    await page.getByRole("button", { name: /^UI OpenCode beta/ }).click();
+    await page.getByText("正在加载 Profile...", { exact: true }).waitFor();
+    await page.getByRole("heading", { name: "UI OpenCode beta" }).waitFor();
 
     await page.reload();
     await page.getByRole("button", { name: "设置", exact: true }).waitFor();

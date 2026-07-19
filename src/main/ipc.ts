@@ -701,9 +701,19 @@ export const registerIpcHandlers = ({
     shell.openExternal(parseExternalUrl(url))
   );
   ipcMain.handle("profiles:list", () => profileStore.listProfiles());
-  ipcMain.handle("profiles:read", (_event, id: unknown) =>
-    profileStore.readProfile(parseId(id, "profile id"))
-  );
+  ipcMain.handle("profiles:read", async (_event, id: unknown) => {
+    const profileId = parseId(id, "profile id");
+    const testDelayMs = Number(process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS ?? 0);
+    if (
+      process.env.AGENTENV_AUTOMATION === "1" &&
+      process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID === profileId &&
+      Number.isFinite(testDelayMs) &&
+      testDelayMs > 0
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, testDelayMs));
+    }
+    return profileStore.readProfile(profileId);
+  });
   handleMutation("profiles:save", (_event, input: SaveProfileInput) =>
     profileStore.saveProfile(input)
   );

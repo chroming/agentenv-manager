@@ -23,16 +23,13 @@ const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.u
 const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
 
 export type AppWorkspace = "library" | "profiles" | "targets" | "settings";
-export type LibraryTab = "skills" | "mcp";
 
 interface ProfileSidebarProps {
   targets: TargetInfo[];
   profiles: ProfileSummary[];
   activeWorkspace: AppWorkspace;
-  activeLibraryTab: LibraryTab;
   isLoading: boolean;
   onWorkspaceSelect(workspace: AppWorkspace): void;
-  onLibraryTabSelect(tab: LibraryTab): void;
 }
 
 type TargetIconFlavor = "opencode" | "codex" | "claude" | "antigravity" | "generic";
@@ -222,10 +219,8 @@ export const ProfileSidebar = ({
   targets,
   profiles,
   activeWorkspace,
-  activeLibraryTab,
   isLoading,
-  onWorkspaceSelect,
-  onLibraryTabSelect
+  onWorkspaceSelect
 }: ProfileSidebarProps) => {
   const { t } = useI18n();
   const readyTargets = targets.filter((target) => target.health.status === "ready").length;
@@ -234,19 +229,6 @@ export const ProfileSidebar = ({
   const statusTargets = orderedTargets.slice(0, 3);
   const hiddenTargets = orderedTargets.slice(statusTargets.length);
 
-  const libraryItems: Array<{
-    id: LibraryTab;
-    label: string;
-    detail: string;
-    icon: LucideIcon;
-  }> = [
-    {
-      id: "skills",
-      label: t("Skills"),
-      detail: t("Skill library"),
-      icon: BookOpen
-    }
-  ];
   const workspaceItems: Array<{
     id: AppWorkspace;
     label: string;
@@ -274,26 +256,18 @@ export const ProfileSidebar = ({
       </div>
       <nav className="workspace-nav" aria-label={t("Workspace")}>
         <div className="nav-section-label">{t("Library")}</div>
-        {libraryItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              aria-label={item.label}
-              className={`workspace-button${
-                activeWorkspace === "library" && activeLibraryTab === item.id ? " is-active" : ""
-              }`}
-              type="button"
-              key={item.id}
-              onClick={() => onLibraryTabSelect(item.id)}
-            >
-              <span className="workspace-button__icon" aria-hidden="true">
-                <Icon size={16} strokeWidth={2.2} />
-              </span>
-              <span>{item.label}</span>
-              <small>{item.detail}</small>
-            </button>
-          );
-        })}
+        <button
+          aria-label={t("Skills")}
+          className={`workspace-button${activeWorkspace === "library" ? " is-active" : ""}`}
+          type="button"
+          onClick={() => onWorkspaceSelect("library")}
+        >
+          <span className="workspace-button__icon" aria-hidden="true">
+            <BookOpen size={16} strokeWidth={2.2} />
+          </span>
+          <span>{t("Skills")}</span>
+          <small>{t("Skill library")}</small>
+        </button>
         <div className="nav-section-label">{t("Workspace")}</div>
         {workspaceItems.map((item) => {
           const Icon = item.icon;

@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-07-19T05:10:24.768Z",
+  "source": {
+    "commit": "bea3a3fe82650df7b7e915e620cb7d2a1395da69",
+    "dirty": true
+  },
+  "tests": {
+    "passed": true,
+    "files": 67,
+    "assertions": 582,
+    "e2eFiles": 7,
+    "e2eAssertions": 109,
+    "electronUiFiles": 1,
+    "electronUiAssertions": 94
+  },
+  "audits": {
+    "styles": "passed",
+    "modules": "passed",
+    "targets": "passed",
+    "translations": "passed"
+  },
+  "captures": {
+    "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
+    "files": 53,
+    "viewports": [
+      "1180x728",
+      "920x620"
+    ],
+    "includesProfileLoadingState": true
+  },
+  "packagedSmoke": "passed"
+}

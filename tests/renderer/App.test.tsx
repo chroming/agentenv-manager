@@ -802,7 +802,7 @@ describe("App", () => {
     expect(
       within(screen.getByRole("group", { name: "Library item github-reviewer" }))
         .getByRole("button", { name: "Review update github-reviewer" })
-    ).toHaveTextContent("Update");
+    ).toHaveTextContent("Review");
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
@@ -1876,7 +1876,9 @@ describe("App", () => {
     expect(openCodeTarget.querySelector("img")).toHaveClass("profile-target-logo--opencode");
     expect(codexTargetItem.querySelector("img")).toHaveClass("profile-target-logo--codex");
     expect(screen.getByRole("button", { name: "Apply" }).querySelector("img"))
-      .toHaveClass("profile-target-logo--opencode");
+      .toBeNull();
+    expect(screen.getByRole("button", { name: "Apply" }).querySelector("svg"))
+      .not.toBeNull();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menu", { name: "Apply Agents" })).not.toBeInTheDocument();
     expect(menuButton).toHaveFocus();
@@ -1890,14 +1892,13 @@ describe("App", () => {
     menu = screen.getByRole("menu", { name: "Apply Agents" });
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Codex" }));
     expect(within(profileList).getByText("Daily Coding")).toBeInTheDocument();
-    const compatibleRow = within(profileList).getByRole("button", { name: /Codex Review/ });
     expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
     expect(profileOrder()).toEqual(["Codex Review", "Daily Coding"]);
 
-    fireEvent.click(compatibleRow);
+    fireEvent.click(within(profileList).getByRole("button", { name: /Codex Review/ }));
+    await waitFor(() => expect(api.readProfile).toHaveBeenCalledWith("codex-review"));
     expect(await screen.findByRole("heading", { name: "Codex Review" })).toBeInTheDocument();
-    expect(api.readProfile).toHaveBeenCalledWith("codex-review");
     expect(profileOrder()).toEqual(["Codex Review", "Daily Coding"]);
     menuButton = screen.getByRole("button", { name: "Select apply Agent" });
     fireEvent.click(menuButton);
@@ -2058,7 +2059,9 @@ describe("App", () => {
       profileBRead.resolve(profileB);
       await profileBRead.promise;
     });
-    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    expect(screen.getByRole("status", { name: "Loading profile Profile C" }))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
 
     await act(async () => {
       profileCRead.resolve(profileC);
@@ -2105,7 +2108,9 @@ describe("App", () => {
     });
 
     expect(screen.queryByRole("dialog", { name: "Preview" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    expect(screen.getByRole("status", { name: "Loading profile Profile C" }))
+      .toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
 
     await act(async () => {
       profileCRead.resolve(profileC);

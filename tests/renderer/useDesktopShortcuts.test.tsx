@@ -33,13 +33,11 @@ describe("useDesktopShortcuts", () => {
       ({ isProfileSaving }) =>
         useDesktopShortcuts({
           activeWorkspace: "profiles",
-          activeLibraryTab: "skills",
           isProfileSaving,
           onSaveProfile,
           onRefreshSkills: vi.fn(),
           profileSearchRef: createSearchRef("daily"),
           skillSearchRef: createSearchRef("skill"),
-          mcpSearchRef: createSearchRef("mcp"),
           platform: "MacIntel"
         }),
       { initialProps: { isProfileSaving: false } }
@@ -64,13 +62,11 @@ describe("useDesktopShortcuts", () => {
     renderHook(() =>
       useDesktopShortcuts({
         activeWorkspace: "profiles",
-        activeLibraryTab: "skills",
         isProfileSaving: false,
         onSaveProfile,
         onRefreshSkills: vi.fn(),
         profileSearchRef: createSearchRef("daily"),
         skillSearchRef: createSearchRef("skill"),
-        mcpSearchRef: createSearchRef("mcp"),
         platform: "Win32"
       })
     );
@@ -81,25 +77,21 @@ describe("useDesktopShortcuts", () => {
   });
 
   it.each([
-    ["profiles", "skills", "profile"],
-    ["library", "skills", "skill"],
-    ["library", "mcp", "mcp"]
-  ] as const)("focuses and selects the %s/%s search", (activeWorkspace, activeLibraryTab, target) => {
+    ["profiles", "profile"],
+    ["library", "skill"]
+  ] as const)("focuses and selects the %s search", (activeWorkspace, target) => {
     const refs = {
       profile: createSearchRef("daily coding"),
-      skill: createSearchRef("review skill"),
-      mcp: createSearchRef("github mcp")
+      skill: createSearchRef("review skill")
     };
     renderHook(() =>
       useDesktopShortcuts({
         activeWorkspace,
-        activeLibraryTab,
         isProfileSaving: false,
         onSaveProfile: vi.fn(),
         onRefreshSkills: vi.fn(),
         profileSearchRef: refs.profile,
         skillSearchRef: refs.skill,
-        mcpSearchRef: refs.mcp,
         platform: "MacIntel"
       })
     );
@@ -117,13 +109,11 @@ describe("useDesktopShortcuts", () => {
     renderHook(() =>
       useDesktopShortcuts({
         activeWorkspace,
-        activeLibraryTab: "skills",
         isProfileSaving: false,
         onSaveProfile: vi.fn(),
         onRefreshSkills: vi.fn(),
         profileSearchRef,
         skillSearchRef: createSearchRef("skill"),
-        mcpSearchRef: createSearchRef("mcp"),
         platform: "MacIntel"
       })
     );
@@ -138,13 +128,11 @@ describe("useDesktopShortcuts", () => {
     renderHook(() =>
       useDesktopShortcuts({
         activeWorkspace: "library",
-        activeLibraryTab: "skills",
         isProfileSaving: false,
         onSaveProfile: vi.fn(),
         onRefreshSkills,
         profileSearchRef: createSearchRef("daily"),
         skillSearchRef: createSearchRef("skill"),
-        mcpSearchRef: createSearchRef("mcp"),
         platform: "MacIntel"
       })
     );
@@ -164,13 +152,11 @@ describe("useDesktopShortcuts", () => {
     renderHook(() =>
       useDesktopShortcuts({
         activeWorkspace: "profiles",
-        activeLibraryTab: "skills",
         isProfileSaving: false,
         onSaveProfile,
         onRefreshSkills: vi.fn(),
         profileSearchRef,
         skillSearchRef: createSearchRef("skill"),
-        mcpSearchRef: createSearchRef("mcp"),
         platform: "MacIntel"
       })
     );

@@ -64,7 +64,6 @@ import type {
   RetireSharedSkillInput,
   SharedSkillRetentionInput,
   McpLibraryEntry,
-  SaveMcpServerInput,
   SkillInventoryEntry,
   SkillImportConflictResolution,
   SkillImportInput,
@@ -100,7 +99,6 @@ import { DiffViewer } from "./components/DiffViewer";
 import { HistoryView } from "./components/HistoryView";
 import { InfoTip } from "./components/InfoTip";
 import { McpEditor } from "./components/McpEditor";
-import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
 import { ProfileList } from "./components/ProfileList";
@@ -109,8 +107,7 @@ import { ResourceIconPicker } from "./components/ResourceIconPicker";
 import {
   ProfileSidebar,
   targetIconFor,
-  type AppWorkspace,
-  type LibraryTab
+  type AppWorkspace
 } from "./components/ProfileSidebar";
 import {
   type GitHubSkillImportProgress,
@@ -128,11 +125,7 @@ import {
   deriveApplyActionLabel,
   deriveProfileReadiness
 } from "./profileReadiness";
-import {
-  defaultMcpLibraryViewState,
-  defaultSkillLibraryViewState,
-  updateLibraryScroll
-} from "./libraryViewState";
+import { defaultSkillLibraryViewState, updateLibraryScroll } from "./libraryViewState";
 import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration";
 import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
@@ -635,11 +628,11 @@ const AppContent = ({
   const isProfileDirtyRef = useRef(false);
   const [pendingProfileAction, setPendingProfileAction] = useState<PendingProfileAction>();
   const [skillUsage, setSkillUsage] = useState<Record<string, string[]>>({});
-  const [mcpUsage, setMcpUsage] = useState<Record<string, string[]>>({});
   const [backups, setBackups] = useState<BackupSummary[]>([]);
   const [selectedTargetId, setSelectedTargetId] = useState<string>();
   const [profileTargetSelections, setProfileTargetSelections] = useState<Record<string, string>>({});
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
+  const [profileLoadingId, setProfileLoadingId] = useState<string>();
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
   const [replaceProtectedTargetChanges, setReplaceProtectedTargetChanges] = useState(false);
@@ -648,17 +641,14 @@ const AppContent = ({
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
-  const [activeLibraryTab, setActiveLibraryTab] = useState<LibraryTab>("skills");
   const [skillLibraryViewState, setSkillLibraryViewState] = useState(
     defaultSkillLibraryViewState
   );
-  const [mcpLibraryViewState, setMcpLibraryViewState] = useState(
-    defaultMcpLibraryViewState
-  );
-  const [mcpCreateRequest, setMcpCreateRequest] = useState(0);
   const [skillLibraryTool, setSkillLibraryTool] = useState<"import" | "discoveries">();
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
+  const [skillUpdateFeedbackWorkspace, setSkillUpdateFeedbackWorkspace] =
+    useState<"library" | "profiles">("library");
   const [checkingProfileSkillUpdates, setCheckingProfileSkillUpdates] = useState(false);
   const [importingOwnedSkillIndex, setImportingOwnedSkillIndex] = useState<number>();
   const [isProfileDirty, setIsProfileDirty] = useState(false);
@@ -708,8 +698,6 @@ const AppContent = ({
   const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
   const profileSearchInputRef = useRef<HTMLInputElement>(null);
   const skillSearchInputRef = useRef<HTMLInputElement>(null);
-  const mcpSearchInputRef = useRef<HTMLInputElement>(null);
-  const mcpCreateButtonRef = useRef<HTMLButtonElement>(null);
   const dataRefreshRequestRef = useRef(0);
   const profileFlowRequestRef = useRef(0);
   const activeProfileFlowRequestRef = useRef<number | undefined>(undefined);
@@ -720,7 +708,7 @@ const AppContent = ({
   const appModalDialogRef = useRef<HTMLElement>(null);
   const appModalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const appModalFallbackFocusRef = useRef<HTMLElement>(null);
-  const activeLibraryView = activeWorkspace === "library" ? activeLibraryTab : undefined;
+  const activeLibraryView = activeWorkspace === "library" ? "skills" : undefined;
   const refreshManagedBackups = useCallback(async () => {
     setManagedBackupsLoading(true);
     try {
@@ -746,23 +734,11 @@ const AppContent = ({
   }, []);
   const libraryScroll = useLibraryScrollRestoration({
     activeView: activeLibraryView,
-    scrollTop:
-      activeLibraryView === "skills"
-        ? skillLibraryViewState.scrollTop
-        : activeLibraryView === "mcp"
-          ? mcpLibraryViewState.scrollTop
-          : 0,
-    restoreKey:
-      activeLibraryView === "skills"
-        ? librarySkills
-        : activeLibraryView === "mcp"
-          ? mcpServers
-          : activeWorkspace,
+    scrollTop: activeLibraryView === "skills" ? skillLibraryViewState.scrollTop : 0,
+    restoreKey: activeLibraryView === "skills" ? librarySkills : activeWorkspace,
     onScrollTopChange: (scrollTop) => {
       if (activeLibraryView === "skills") {
         setSkillLibraryViewState((current) => updateLibraryScroll(current, scrollTop));
-      } else if (activeLibraryView === "mcp") {
-        setMcpLibraryViewState((current) => updateLibraryScroll(current, scrollTop));
       }
     }
   });
@@ -971,7 +947,6 @@ const AppContent = ({
         .map((profile) => window.agentEnv.readProfile(profile.id))
     );
     const usage: Record<string, string[]> = {};
-    const nextMcpUsage: Record<string, string[]> = {};
     const nextProfileResourceCounts: Record<string, ProfileResourceSummary> = {};
     const nextProfileLibraryVersions: Record<string, LibraryResourceVersions> = {};
     for (const profile of profileDetails) {
@@ -995,11 +970,6 @@ const AppContent = ({
           profile.manifest.name
         );
       }
-      for (const mcpRef of profile.assetPolicy.mcpRefs ?? []) {
-        nextMcpUsage[mcpRef.libraryId] = (nextMcpUsage[mcpRef.libraryId] ?? []).concat(
-          profile.manifest.name
-        );
-      }
     }
     if (!shouldApply()) {
       return { skillUpdateItems };
@@ -1008,7 +978,6 @@ const AppContent = ({
     setSkillInventory(skillInventoryItems);
     setGithubAuthStatus(githubStatus);
     setSkillUsage(usage);
-    setMcpUsage(nextMcpUsage);
     setProfileResourceCounts(nextProfileResourceCounts);
     setProfileLibraryVersions(nextProfileLibraryVersions);
     return { skillUpdateItems };
@@ -1258,13 +1227,11 @@ const AppContent = ({
     setPreview(undefined);
     setRollbackPreview(undefined);
     if (isDifferentProfile) {
-      setDraftProfile(undefined);
-      setIsProfileDirty(false);
+      setProfileLoadingId(profileId);
       setProfileSaveStatus("");
     }
     setActiveComposerSection(composerSection);
     setActiveWorkspace("profiles");
-    setSelectedProfileId(profileId);
     try {
       const profile = await window.agentEnv.readProfile(profileId);
       if (requestId !== profileFlowRequestRef.current) {
@@ -1278,6 +1245,7 @@ const AppContent = ({
         profileTargetSelections[profile.id]
       );
       setSelectedTargetId(profileTargetId);
+      setSelectedProfileId(profileId);
       if (profileTargetId) {
         setProfileTargetSelections((current) => ({
           ...current,
@@ -1294,6 +1262,7 @@ const AppContent = ({
     } finally {
       if (requestId === profileFlowRequestRef.current) {
         activeProfileFlowRequestRef.current = undefined;
+        setProfileLoadingId(undefined);
         setBusy(false);
       }
     }
@@ -1315,22 +1284,18 @@ const AppContent = ({
     if (workspace === activeWorkspace) {
       return;
     }
-    const label = workspace === "profiles" ? "open Profiles" : `open ${workspace}`;
+    const label = {
+      library: "open Skills",
+      profiles: "open Profiles",
+      targets: "open Agents",
+      settings: "open Settings"
+    }[workspace];
     guardProfileAction(label, () => {
       libraryScroll.captureScroll();
+      if (workspace === "library") {
+        setSkillUpdateFeedbackWorkspace("library");
+      }
       setActiveWorkspace(workspace);
-    });
-  };
-
-  const selectLibraryTab = (tab: LibraryTab) => {
-    if (activeWorkspace === "library" && activeLibraryTab === tab) {
-      return;
-    }
-    const label = tab === "skills" ? "open Skills" : "open MCPs";
-    guardProfileAction(label, () => {
-      libraryScroll.captureScroll();
-      setActiveLibraryTab(tab);
-      setActiveWorkspace("library");
     });
   };
 
@@ -1456,6 +1421,7 @@ const AppContent = ({
           })
         }
       });
+      setSkillUpdateFeedbackWorkspace("profiles");
       setSkillUpdateCheckStatus({
         state: "success",
         message: result.sourceUpdated
@@ -1497,13 +1463,6 @@ const AppContent = ({
       current,
       Object.keys(versions?.skills ?? {}),
       Object.keys(versions?.skills ?? {}),
-      previousName,
-      saved.manifest.name
-    ));
-    setMcpUsage((current) => reconcileProfileUsage(
-      current,
-      Object.keys(versions?.mcp ?? {}),
-      Object.keys(versions?.mcp ?? {}),
       previousName,
       saved.manifest.name
     ));
@@ -1611,13 +1570,6 @@ const AppContent = ({
         previousName,
         saved.manifest.name
       ));
-      setMcpUsage((current) => reconcileProfileUsage(
-        current,
-        Object.keys(previousLibraryVersions?.mcp ?? {}),
-        saved.assetPolicy.mcpRefs.map((reference) => reference.libraryId),
-        previousName,
-        saved.manifest.name
-      ));
       setTargetStates((current) =>
         current.map((state) => {
           if (state.activeProfileId !== saved.id) return state;
@@ -1670,13 +1622,11 @@ const AppContent = ({
 
   useDesktopShortcuts({
     activeWorkspace,
-    activeLibraryTab,
     isProfileSaving,
     onSaveProfile: saveSelectedProfile,
     onRefreshSkills: refreshSkills,
     profileSearchRef: profileSearchInputRef,
-    skillSearchRef: skillSearchInputRef,
-    mcpSearchRef: mcpSearchInputRef
+    skillSearchRef: skillSearchInputRef
   });
 
   const openCreateProfileDialogNow = () => {
@@ -2124,6 +2074,9 @@ const AppContent = ({
   }, [isProfileActionsOpen, isTargetMenuOpen]);
 
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
+  const loadingProfileSummary = profileLoadingId
+    ? profiles.find((profile) => profile.id === profileLoadingId)
+    : undefined;
   const installedTargets = targets.filter((target) => isTargetInstalled(target.health));
   const profileTarget = supportedTargets.find(
     (target) => target.id === draftProfile?.manifest.targetId
@@ -2710,16 +2663,6 @@ const AppContent = ({
     }
   };
 
-  const reviewMcpUsage = (id: string) => {
-    const firstProfileName = mcpUsage[id]?.[0];
-    const profile = profiles.find((item) => item.name === firstProfileName);
-    if (profile) {
-      selectProfile(profile.id, "mcp");
-    } else {
-      setActiveWorkspace("profiles");
-    }
-  };
-
   const updateAllLibrarySkills = async (plans: SkillUpdatePlan[]) => {
     const applicablePlans = plans.filter((plan) => Boolean(plan.previewId));
     if (applicablePlans.length === 0) {
@@ -2856,6 +2799,7 @@ const AppContent = ({
     }
     setCheckingProfileSkillUpdates(true);
     setError(undefined);
+    setSkillUpdateFeedbackWorkspace("profiles");
     setSkillUpdateCheckStatus({ state: "checking", message: "Checking profile skills..." });
     try {
       const updates = await window.agentEnv.checkSkillLibraryUpdates(ids);
@@ -3682,33 +3626,6 @@ const AppContent = ({
     }
   };
 
-  const saveMcpServer = async (input: SaveMcpServerInput) => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      await window.agentEnv.saveMcpServer(input);
-      await refreshProfiles();
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      throw unknownError;
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeMcpServer = async (id: string) => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      await window.agentEnv.removeMcpServer(id);
-      await refreshProfiles();
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const dismissAppFeedback = () => {
     setError(undefined);
     setSkillUpdateCheckStatus(undefined);
@@ -3732,6 +3649,9 @@ const AppContent = ({
   const showGitHubRecovery =
     Boolean(error && isGitHubRateLimitError(error)) &&
     githubAuthStatus.state !== "signed-in";
+  const captureFeedbackVisible = profileCaptureOrigin === "targets"
+    ? activeWorkspace === "targets" || activeWorkspace === "profiles"
+    : activeWorkspace === "profiles";
   const appFeedback: AppFeedbackMessage | undefined = error
     ? {
         kind: "error",
@@ -3747,9 +3667,9 @@ const AppContent = ({
           ? { label: "Connect GitHub", onClick: openGitHubConnectionSettings }
           : undefined
       }
-    : profileCaptureStatus
+    : profileCaptureStatus && captureFeedbackVisible
       ? { kind: "success", title: profileCaptureStatus }
-    : skillCleanupResult
+    : skillCleanupResult && activeWorkspace === "library"
       ? {
           kind: "success",
           title:
@@ -3787,17 +3707,17 @@ const AppContent = ({
             onClick: () => void undoSkillCleanup()
           }
         }
-    : skillRefreshStatus
+    : skillRefreshStatus && activeWorkspace === "library"
       ? {
           kind: skillRefreshStatus === "refreshing" ? "loading" : "success",
           title: skillRefreshStatus === "refreshing" ? "Refreshing skills" : "Skills refreshed"
         }
-    : targetRefreshStatus
+    : targetRefreshStatus && activeWorkspace === "targets"
       ? {
           kind: targetRefreshStatus === "refreshing" ? "loading" : "success",
           title: targetRefreshStatus === "refreshing" ? "Refreshing Agents" : "Agents refreshed"
         }
-    : skillUpdateCheckStatus
+    : skillUpdateCheckStatus && activeWorkspace === skillUpdateFeedbackWorkspace
       ? {
           kind:
             skillUpdateCheckStatus.state === "checking"
@@ -3809,7 +3729,7 @@ const AppContent = ({
                   : "success",
           title: skillUpdateCheckStatus.message
         }
-      : profileSaveStatus
+      : profileSaveStatus && activeWorkspace === "profiles"
         ? {
             kind:
               profileSaveStatus === "Profile saved" ||
@@ -3821,12 +3741,12 @@ const AppContent = ({
                   : "info",
             title: profileSaveStatus
           }
-        : dataBackupStatus
+        : dataBackupStatus && activeWorkspace === "settings"
           ? {
               kind: dataBackupStatus === "Creating data export" ? "loading" : "success",
               title: dataBackupStatus
             }
-        : settingsSaveStatus
+        : settingsSaveStatus && activeWorkspace === "settings"
           ? {
               kind: settingsSaveStatus === "Settings saved" ? "success" : "loading",
               title: settingsSaveStatus
@@ -3850,14 +3770,8 @@ const AppContent = ({
             strokeWidth={2.2}
             aria-hidden="true"
           />
-        ) : selectedTargetIcon?.assetUrl ? (
-          <img
-            className={`profile-target-logo profile-target-logo--${selectedTargetIcon.flavor}`}
-            src={selectedTargetIcon.assetUrl}
-            alt=""
-          />
         ) : (
-          <Monitor size={17} strokeWidth={2.2} aria-hidden="true" />
+          <ArrowRight size={17} strokeWidth={2.2} aria-hidden="true" />
         )}
         <strong>
           {t("Apply")}
@@ -3954,9 +3868,7 @@ const AppContent = ({
         profiles={profiles}
         isLoading={isLoading}
         activeWorkspace={activeWorkspace}
-        activeLibraryTab={activeLibraryTab}
         onWorkspaceSelect={selectWorkspace}
-        onLibraryTabSelect={selectLibraryTab}
       />
 
       <section
@@ -3975,7 +3887,7 @@ const AppContent = ({
           <>
             <PageHeader
               className="page-header library-page-header"
-              title={t(activeLibraryTab === "skills" ? "Skills" : "MCPs")}
+              title={t("Skills")}
               help={
                 <InfoTip
                   label={t(
@@ -3988,64 +3900,48 @@ const AppContent = ({
                   className="page-actions"
                   aria-label={t("Library actions")}
                 >
-                  {activeLibraryTab === "skills" ? (
-                    <>
-                      <Button
-                        className="primary-inline-action"
-                        size="prominent"
-                        variant="primary"
-                        aria-label={t("Import skills")}
-                        icon={<Plus size={16} strokeWidth={2.4} />}
-                        onClick={() => setSkillLibraryTool("import")}
-                      >
-                        {t("Import")}
-                      </Button>
-                      <Button
-                        className="secondary-action"
-                        size="prominent"
-                        icon={<ScanLine size={15} strokeWidth={2.2} />}
-                        onClick={() => {
-                          void openSkillDiscoveries();
-                        }}
-                      >
-                        {t("Scan local")}
-                      </Button>
-                      <Button
-                        className="secondary-action"
-                        size="prominent"
-                        aria-label={t("Refresh skills")}
-                        disabled={skillRefreshStatus === "refreshing"}
-                        icon={(
-                          <RefreshCw
-                            className={skillRefreshStatus === "refreshing" ? "is-spinning" : ""}
-                            size={15}
-                            strokeWidth={2.2}
-                          />
-                        )}
-                        onClick={() => {
-                          void refreshSkills();
-                        }}
-                      >
-                        {t("Refresh")}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      ref={mcpCreateButtonRef}
-                      className="primary-inline-action"
-                      size="prominent"
-                      variant="primary"
-                      icon={<Plus size={16} strokeWidth={2.4} />}
-                      onClick={() => setMcpCreateRequest((current) => current + 1)}
-                    >
-                      {t("Add MCP")}
-                    </Button>
-                  )}
+                  <Button
+                    className="primary-inline-action"
+                    size="prominent"
+                    variant="primary"
+                    aria-label={t("Import skills")}
+                    icon={<Plus size={16} strokeWidth={2.4} />}
+                    onClick={() => setSkillLibraryTool("import")}
+                  >
+                    {t("Import")}
+                  </Button>
+                  <Button
+                    className="secondary-action"
+                    size="prominent"
+                    icon={<ScanLine size={15} strokeWidth={2.2} />}
+                    onClick={() => {
+                      void openSkillDiscoveries();
+                    }}
+                  >
+                    {t("Scan local")}
+                  </Button>
+                  <Button
+                    className="secondary-action"
+                    size="prominent"
+                    aria-label={t("Refresh skills")}
+                    disabled={skillRefreshStatus === "refreshing"}
+                    icon={(
+                      <RefreshCw
+                        className={skillRefreshStatus === "refreshing" ? "is-spinning" : ""}
+                        size={15}
+                        strokeWidth={2.2}
+                      />
+                    )}
+                    onClick={() => {
+                      void refreshSkills();
+                    }}
+                  >
+                    {t("Refresh")}
+                  </Button>
                 </ControlGroup>
               }
             />
-            {activeLibraryTab === "skills" ? (
-              <SkillLibraryPanel
+            <SkillLibraryPanel
                 isLoading={isLoading}
                 isBusy={busy}
                 librarySkills={librarySkills}
@@ -4122,25 +4018,7 @@ const AppContent = ({
                 }}
                 searchInputRef={skillSearchInputRef}
                 scrollOwnerRef={libraryScroll.setScrollOwner}
-              />
-            ) : (
-              <McpLibraryPanel
-                mcpServers={mcpServers}
-                mcpUsage={mcpUsage}
-                createRequest={mcpCreateRequest}
-                createTriggerRef={mcpCreateButtonRef}
-                viewState={mcpLibraryViewState}
-                onViewStateChange={(next) => {
-                  libraryScroll.resetScrollNow();
-                  setMcpLibraryViewState(next);
-                }}
-                searchInputRef={mcpSearchInputRef}
-                scrollOwnerRef={libraryScroll.setScrollOwner}
-                onSave={saveMcpServer}
-                onRemove={removeMcpServer}
-                onReviewUsage={reviewMcpUsage}
-              />
-            )}
+            />
           </>
         ) : activeWorkspace === "profiles" ? (
           <>
@@ -4168,7 +4046,7 @@ const AppContent = ({
                 profiles={profiles}
                 search={profileSearch}
                 searchInputRef={profileSearchInputRef}
-                selectedProfileId={selectedProfileId}
+                selectedProfileId={profileLoadingId ?? selectedProfileId}
                 draftProfile={draftProfile}
                 isProfileDirty={isProfileDirty}
                 profileResourceCounts={profileResourceCounts}
@@ -4180,7 +4058,46 @@ const AppContent = ({
                 onIconChange={changeProfileIcon}
               />
               <div className="profile-editor-surface">
-                {draftProfile ? (
+                {profileLoadingId ? (
+                  <div
+                    className="profile-loading-surface"
+                    role="status"
+                    aria-live="polite"
+                    aria-label={t("Loading profile {{name}}", {
+                      name: loadingProfileSummary?.name ?? t("Profile")
+                    })}
+                  >
+                    <header className="profile-hero profile-hero--loading">
+                      <span className="profile-hero__icon" aria-hidden="true">
+                        <FolderKanban size={19} strokeWidth={2.1} />
+                      </span>
+                      <div className="profile-hero__body">
+                        <div className="profile-hero__title">
+                          <h2>{loadingProfileSummary?.name ?? t("Profile")}</h2>
+                        </div>
+                        <p className="profile-description">{t("Loading profile...")}</p>
+                      </div>
+                      <LoaderCircle
+                        className="is-spinning profile-loading-indicator"
+                        size={18}
+                        strokeWidth={2.2}
+                        aria-hidden="true"
+                      />
+                    </header>
+                    <div className="profile-composer profile-composer--loading" aria-hidden="true">
+                      {["Instructions", "Skills", "MCPs", "Advanced"].map((section) => (
+                        <div className="profile-loading-row" key={section}>
+                          <span className="profile-loading-row__icon" />
+                          <span>
+                            <strong>{t(section)}</strong>
+                            <small>{t("Loading...")}</small>
+                          </span>
+                          <span className="profile-loading-row__line" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : draftProfile ? (
                   <>
                     <header className="profile-hero">
                       <ResourceIconPicker
@@ -4250,8 +4167,8 @@ const AppContent = ({
                               {t(isProfileSaving ? "Saving..." : "Save")}
                             </button>
                           </div>
-                          {profileApplyControl}
                           {targetWorkspaceControl}
+                          {profileApplyControl}
                           <button
                             ref={profileActionsButtonRef}
                             className="icon-action"

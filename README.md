@@ -8,7 +8,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 
 这是一个本地优先的 Electron 客户端，目前已经可以用于真实测试 OpenCode、Claude Code、Codex 和 Antigravity 的 profile 切换流程。
 
-项目仍处在早期阶段，但已经接入 `electron-builder`。`npm run build` 用来生成 Electron/Vite 运行产物，`npm run pack` / `npm run dist` 用来生成本地可运行程序或安装包。
+项目使用 `electron-builder` 生成本地应用和安装包。`npm run build` 生成 Electron/Vite 运行产物，`npm run pack` / `npm run dist` 生成本地可运行程序或安装包。
 
 ## 功能
 
@@ -108,6 +108,12 @@ npm test
 npm run test:e2e
 ```
 
+运行完整产品门禁并刷新 `docs/verification-snapshot.json`：
+
+```bash
+npm run verify:product
+```
+
 ## 构建
 
 生成 Electron/Vite 构建产物：
@@ -165,9 +171,17 @@ npm run dist:mac
 release/
 ```
 
-当前 macOS 目标包含 `.dmg` 和 `.zip`，并使用项目内的应用图标。正式对外分发前仍需使用 Apple Developer ID 签名并完成 notarization；本地自用可以先直接运行 `.app`。
+当前 macOS 目标包含 `.dmg` 和 `.zip`，并使用项目内的应用图标。本地自用可以先直接运行 `.app`。
 
-验证实际打包后的 `.app` 能在 Finder 风格的精简 `PATH` 下发现系统 Git、导入 Repository Skill，并完成一次 OpenCode Profile 接管：
+正式发布需要先在 Keychain 安装 `Developer ID Application` 证书，并配置 electron-builder 支持的 Apple notarization 凭据，然后运行：
+
+```bash
+npm run dist:mac:signed
+```
+
+该命令会在打包后校验应用签名、Gatekeeper 评估和 DMG stapling；任一项失败都会终止发布。
+
+验证实际打包后的 `.app` 能在 Finder 风格的精简 `PATH` 下发现 OpenCode、Claude Code、Codex、Antigravity CLI 和系统 Git，导入 Repository Skill，并完成一次 OpenCode Profile 接管：
 
 ```bash
 npm run test:e2e:packaged
@@ -257,10 +271,8 @@ AGENTENV_DATA_ROOT=.agentenv-runtime npm run dev
 
 ## 下一步
 
-比较值得继续补的事情：
+当前明确的发布后续：
 
-- 补应用图标、macOS 签名和 notarization。
-- 清理界面里还没有真实动作的占位控件。
-- 完善 Settings 中和真实写入、安全边界相关的说明。
-- 为新增 target adapter 写更明确的开发文档。
-- 增加首次启动引导，让用户更清楚 Library、Profile、Target 三层关系。
+- 使用真实 Apple Developer 账号完成签名和 notarization，并在干净 Mac 上复测。
+- 将持久化 Profile 字段 `targetId` 平滑迁移为语义更准确的 `nativeTargetId`。
+- 继续补充少见但内容确实不同的同名 Skill 冲突样例。

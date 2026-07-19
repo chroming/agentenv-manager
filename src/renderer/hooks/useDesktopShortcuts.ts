@@ -1,15 +1,13 @@
 import { type RefObject, useEffect } from "react";
-import type { AppWorkspace, LibraryTab } from "../components/ProfileSidebar";
+import type { AppWorkspace } from "../components/ProfileSidebar";
 
 interface DesktopShortcutOptions {
   activeWorkspace: AppWorkspace;
-  activeLibraryTab: LibraryTab;
   isProfileSaving: boolean;
   onSaveProfile(): void | Promise<void>;
   onRefreshSkills(): void | Promise<void>;
   profileSearchRef: RefObject<HTMLInputElement | null>;
   skillSearchRef: RefObject<HTMLInputElement | null>;
-  mcpSearchRef: RefObject<HTMLInputElement | null>;
   platform?: string;
 }
 
@@ -26,13 +24,11 @@ const hasVisibleBlockingModal = () =>
 
 export const useDesktopShortcuts = ({
   activeWorkspace,
-  activeLibraryTab,
   isProfileSaving,
   onSaveProfile,
   onRefreshSkills,
   profileSearchRef,
   skillSearchRef,
-  mcpSearchRef,
   platform = navigator.platform
 }: DesktopShortcutOptions) => {
   useEffect(() => {
@@ -54,8 +50,7 @@ export const useDesktopShortcuts = ({
       const isFindContext =
         key === "f" &&
         (activeWorkspace === "profiles" || activeWorkspace === "library");
-      const isRefreshContext =
-        key === "r" && activeWorkspace === "library" && activeLibraryTab === "skills";
+      const isRefreshContext = key === "r" && activeWorkspace === "library";
       if (!isSaveContext && !isFindContext && !isRefreshContext) {
         return;
       }
@@ -80,9 +75,7 @@ export const useDesktopShortcuts = ({
       const searchInput =
         activeWorkspace === "profiles"
           ? profileSearchRef.current
-          : activeLibraryTab === "skills"
-            ? skillSearchRef.current
-            : mcpSearchRef.current;
+          : skillSearchRef.current;
       searchInput?.focus();
       searchInput?.select();
     };
@@ -90,10 +83,8 @@ export const useDesktopShortcuts = ({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [
-    activeLibraryTab,
     activeWorkspace,
     isProfileSaving,
-    mcpSearchRef,
     onSaveProfile,
     onRefreshSkills,
     platform,

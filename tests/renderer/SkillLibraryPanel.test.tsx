@@ -578,7 +578,7 @@ describe("SkillLibraryPanel", () => {
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
     expect(
       within(githubRow).getByRole("button", { name: "Review update github-reviewer" })
-    ).toHaveTextContent("Update available");
+    ).toHaveTextContent("Review");
     const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
     expect(githubSource).not.toHaveAttribute("title");
     fireEvent.mouseEnter(githubSource);

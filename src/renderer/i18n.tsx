@@ -7,11 +7,13 @@ import {
   useMemo
 } from "react";
 import type { AppLocale } from "../shared/types";
+import { generatedZhCN } from "./i18n.zhCN.generated";
 
 export type ResolvedAppLocale = Exclude<AppLocale, "system">;
 export type TranslationValues = Record<string, string | number>;
 
 const zhCN: Record<string, string> = {
+  ...generatedZhCN,
   "System default": "跟随系统",
   "English": "English",
   "Simplified Chinese": "简体中文",
