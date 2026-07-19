@@ -1,13 +1,13 @@
 :root {
-  --text: #2f302e;
-  --muted: #6f716c;
-  --subtle: #969791;
-  --border: #e9e8e5;
-  --border-strong: #d9d8d4;
-  --page: #f7f7f5;
+  --text: #20242b;
+  --muted: #667085;
+  --subtle: #98a2b3;
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
+  --page: #f6f7f9;
   --surface: #ffffff;
-  --surface-muted: #f7f7f5;
-  --surface-pressed: #efefed;
+  --surface-muted: #f7f8fa;
+  --surface-pressed: #edf0f3;
   --accent: #1769f5;
   --accent-strong: #0b5bd3;
   --success: #2f7d57;
@@ -24,6 +24,14 @@
   --space-5: 20px;
   --space-6: 24px;
 
+  --font-size-page-title: 22px;
+  --font-size-section-title: 14px;
+  --font-size-body: 13px;
+  --font-size-metadata: 12px;
+  --font-size-caption: 11px;
+  --line-height-tight: 1.2;
+  --line-height-body: 1.45;
+
   --control-height-compact: 32px;
   --control-height-default: 36px;
   --control-height-prominent: 40px;
@@ -33,6 +41,11 @@
   --radius-control: 6px;
   --radius-surface: 8px;
   --radius-pill: 999px;
+  --resource-row-compact: 52px;
+  --resource-row-default: 60px;
+  --resource-row-comfortable: 68px;
+  --resource-icon-box: 32px;
+  --page-header-height: 48px;
 
   --shadow-soft: 0 8px 24px rgba(15, 15, 15, 0.07);
   --motion-fast: 140ms ease-out;

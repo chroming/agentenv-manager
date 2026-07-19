@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, LoaderCircle } from "lucide-react";
+import { Bot, ChevronDown, FileText, Folder, LoaderCircle, Puzzle } from "lucide-react";
 import type {
   ActivationPreview,
   RollbackPreview,
@@ -92,6 +92,13 @@ const changeKind = (change: ActivationPreview["changes"][number]) => {
     return "Remove";
   }
   return "Replace";
+};
+
+const resourceChangeIcon = (kind: ActivationPreview["resourceChanges"][number]["kind"]) => {
+  if (kind === "skill") return <Puzzle size={16} strokeWidth={2.1} />;
+  if (kind === "agent") return <Bot size={16} strokeWidth={2.1} />;
+  if (kind === "directory") return <Folder size={16} strokeWidth={2.1} />;
+  return <FileText size={16} strokeWidth={2.1} />;
 };
 
 export const PreviewDialog = ({
@@ -321,14 +328,8 @@ export const PreviewDialog = ({
       >
         {resourceChanges.map((change) => (
           <article role="listitem" key={`${change.action}:${change.path}`}>
-            <span className={`change-kind change-kind--${change.action}`}>
-              {t(
-                change.action === "install"
-                  ? "Install"
-                  : change.action === "replace"
-                    ? "Replace"
-                    : "Remove"
-              )}
+            <span className="preview-resource-plan__icon" aria-hidden="true">
+              {resourceChangeIcon(change.kind)}
             </span>
             <span className="preview-resource-plan__identity">
               <strong>{change.name}</strong>
@@ -339,6 +340,15 @@ export const PreviewDialog = ({
               />
             </span>
             <span className="preview-resource-plan__kind">{change.kind}</span>
+            <span className={`change-kind change-kind--${change.action}`}>
+              {t(
+                change.action === "install"
+                  ? "Install"
+                  : change.action === "replace"
+                    ? "Replace"
+                    : "Remove"
+              )}
+            </span>
           </article>
         ))}
       </div>
@@ -360,7 +370,7 @@ export const PreviewDialog = ({
       aria-modal={hasActions ? true : undefined}
       onClick={(event) => event.stopPropagation()}
     >
-      <header className="preview-header">
+      <header className="preview-header ui-dialog-header">
         <div>
           <div className="section-title">{t(title)}</div>
           <p className="preview-outcome">{outcomeText}</p>
@@ -525,7 +535,7 @@ export const PreviewDialog = ({
         </p>
       ) : null}
       {hasActions ? (
-        <footer className="preview-actions">
+        <footer className="preview-actions ui-dialog-footer">
           <button
             ref={cancelButtonRef}
             className="secondary-action"

@@ -2,7 +2,16 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { RefreshCw } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Badge, Button, ControlGroup, IconButton, ModalFrame, Switch } from "../../src/renderer/components/ui";
+import {
+  Badge,
+  Button,
+  ControlGroup,
+  IconButton,
+  ModalFrame,
+  PageHeader,
+  ResourceRow,
+  Switch
+} from "../../src/renderer/components/ui";
 import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 
 afterEach(cleanup);
@@ -93,5 +102,42 @@ describe("renderer UI primitives", () => {
     expect(tooltip).toBeInTheDocument();
     expect(tooltip).toHaveTextContent("A complete long value that the user needs to copy");
     vi.useRealTimers();
+  });
+
+  it("keeps page identity and page actions in one shared header contract", () => {
+    render(
+      <PageHeader
+        title="Skills"
+        description="Manage shared resources."
+        actions={<Button variant="primary">Import</Button>}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "Skills" })).toBeInTheDocument();
+    expect(screen.getByText("Manage shared resources.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import" }).closest(".ui-page-header__actions"))
+      .toBeInTheDocument();
+  });
+
+  it("uses one resource row anatomy for identity, metadata, state, and actions", () => {
+    render(
+      <ResourceRow
+        aria-label="Skill reviewer"
+        icon={<RefreshCw />}
+        title="reviewer"
+        description="Review changes"
+        metadata="GitHub · main"
+        state={<Badge tone="warning">Update</Badge>}
+        actions={<IconButton label="More"><RefreshCw /></IconButton>}
+      />
+    );
+
+    const row = screen.getByLabelText("Skill reviewer");
+    expect(row).toHaveClass("ui-resource-row--default");
+    expect(row.querySelector(".ui-resource-row__identity")).toHaveTextContent(
+      "reviewerReview changes"
+    );
+    expect(row.querySelector(".ui-resource-row__metadata")).toHaveTextContent("GitHub · main");
+    expect(screen.getByText("Update")).toHaveClass("ui-badge--warning");
   });
 });

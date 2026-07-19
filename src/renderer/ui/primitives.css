@@ -9,15 +9,18 @@
 }
 
 .ui-button--compact {
+  height: var(--control-height-compact);
   min-height: var(--control-height-compact);
   padding-inline: 10px;
 }
 
 .ui-button--default {
+  height: var(--control-height-default);
   min-height: var(--control-height-default);
 }
 
 .ui-button--prominent {
+  height: var(--control-height-prominent);
   min-height: var(--control-height-prominent);
   padding-inline: var(--space-4);
 }
@@ -49,6 +52,20 @@
 .ui-button--danger,
 .ui-icon-button--danger {
   color: var(--danger);
+}
+
+.ui-button--danger:hover:not(:disabled),
+.ui-icon-button--danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+  border-color: #edc9c5;
+}
+
+.ui-button:disabled,
+.ui-icon-button:disabled {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--subtle);
+  opacity: 1;
 }
 
 .ui-button__icon {

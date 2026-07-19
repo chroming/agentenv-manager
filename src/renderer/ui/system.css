@@ -1,0 +1,786 @@
+/* Cross-product visual contract. Page styles may arrange these primitives but do not resize them. */
+.ui-page-header {
+  align-items: flex-start;
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-4);
+  justify-content: space-between;
+  min-height: var(--page-header-height);
+  min-width: 0;
+}
+
+.ui-page-header__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ui-page-header__copy h2 {
+  align-items: center;
+  color: var(--text);
+  display: flex;
+  font-size: var(--font-size-page-title);
+  font-weight: 650;
+  gap: 7px;
+  line-height: var(--line-height-tight);
+  margin: 0;
+}
+
+.ui-page-header__copy p {
+  color: var(--muted);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  margin: 0;
+  max-width: 680px;
+}
+
+.ui-page-header__actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-2);
+  min-height: var(--control-height-prominent);
+}
+
+.ui-page-header__actions > .ui-button,
+.ui-page-header__actions > .ui-icon-button {
+  height: var(--control-height-prominent);
+}
+
+.ui-resource-row {
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: var(--resource-icon-box) minmax(0, 1fr) minmax(0, auto) auto auto;
+  min-width: 0;
+  padding: 8px 12px;
+}
+
+.ui-resource-row--compact {
+  min-height: var(--resource-row-compact);
+}
+
+.ui-resource-row--default {
+  min-height: var(--resource-row-default);
+}
+
+.ui-resource-row--comfortable {
+  min-height: var(--resource-row-comfortable);
+}
+
+.ui-resource-row--disabled {
+  background: var(--surface-muted);
+  color: var(--subtle);
+}
+
+.ui-resource-row--attention {
+  box-shadow: inset 2px 0 var(--warning);
+}
+
+.ui-resource-row__icon {
+  align-items: center;
+  background: var(--surface-muted);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  display: inline-flex;
+  height: var(--resource-icon-box);
+  justify-content: center;
+  width: var(--resource-icon-box);
+  grid-column: 1;
+}
+
+.ui-resource-row__identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  grid-column: 2;
+}
+
+.ui-resource-row__identity > strong,
+.ui-resource-row__identity > span,
+.ui-resource-row__metadata {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-resource-row__identity > strong {
+  color: var(--text);
+  font-size: var(--font-size-body);
+  font-weight: 650;
+  line-height: 18px;
+}
+
+.ui-resource-row__identity > span,
+.ui-resource-row__metadata,
+.ui-resource-row__state {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  line-height: 17px;
+}
+
+.ui-resource-row__state {
+  align-items: flex-start;
+  display: grid;
+  justify-items: start;
+  min-width: 96px;
+  grid-column: 4;
+}
+
+.ui-resource-row__metadata {
+  grid-column: 3;
+}
+
+.ui-resource-row__actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  min-width: var(--icon-box-compact);
+  grid-column: 5;
+}
+
+.ui-action-menu {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 2px;
+  padding: 5px;
+  width: 220px;
+  z-index: var(--z-popover);
+}
+
+.ui-action-menu > button,
+.ui-action-menu__item {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  gap: var(--space-2);
+  justify-content: flex-start;
+  min-height: var(--control-height-compact);
+  padding: 6px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.ui-action-menu > button:hover:not(:disabled),
+.ui-action-menu__item:hover:not(:disabled),
+.ui-action-menu > button:focus-visible,
+.ui-action-menu__item:focus-visible {
+  background: var(--surface-muted);
+}
+
+.ui-action-menu > .is-danger,
+.ui-action-menu__item--danger {
+  color: var(--danger);
+}
+
+.ui-action-menu > .is-danger:hover:not(:disabled),
+.ui-action-menu__item--danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
+.ui-dialog-header,
+.ui-dialog-footer {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding: 16px 18px;
+}
+
+.ui-dialog-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.ui-dialog-header__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ui-dialog-header__copy h2,
+.ui-dialog-header__copy strong {
+  font-size: 16px;
+  line-height: 20px;
+  margin: 0;
+}
+
+.ui-dialog-header__copy p,
+.ui-dialog-header__copy small {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  line-height: 17px;
+  margin: 0;
+}
+
+.ui-dialog-footer {
+  border-top: 1px solid var(--border);
+  justify-content: flex-end;
+  min-height: 64px;
+}
+
+@container skill-library (max-width: 760px) {
+  .ui-page-header__copy p {
+    display: none;
+  }
+}
+
+/* Shared page identity and action hierarchy. */
+.page-header.ui-page-header {
+  align-items: flex-start;
+  margin: 0;
+  min-height: var(--page-header-height);
+  padding: 0;
+}
+
+.page-header.ui-page-header .page-actions,
+.page-header.ui-page-header .profile-page-actions,
+.page-header.ui-page-header .target-page-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.page-header.ui-page-header .ui-button {
+  font-size: var(--font-size-body);
+  font-weight: 650;
+}
+
+.workspace-button.is-active {
+  background: #eaf1ff;
+  color: #1558c0;
+}
+
+.workspace-button.is-active .workspace-button__icon {
+  color: #1558c0;
+}
+
+/* Dense Library rows share the same identity, state, and action rhythm. */
+.skill-library-panel .library-table__head {
+  background: var(--surface-muted);
+  color: var(--muted);
+  min-height: 40px;
+}
+
+.skill-library-panel .library-table-row {
+  border-bottom-color: var(--border);
+}
+
+.skill-library-panel .library-table-row:hover,
+.skill-library-panel--mcp .resource-row:hover {
+  background: #f8faff;
+}
+
+.skill-library-panel .library-resource-cell .resource-avatar,
+.skill-library-panel--mcp .ui-resource-row__icon {
+  background: #eef4ff;
+  color: #2764b9;
+}
+
+.skill-library-panel .library-actions-cell .icon-action,
+.skill-library-panel--mcp .resource-row__actions {
+  opacity: 1;
+}
+
+.skill-library-panel .library-actions-cell .icon-action,
+.skill-library-panel--mcp .resource-row__actions .icon-action {
+  background: transparent;
+  border-color: transparent;
+}
+
+.skill-library-panel .library-actions-cell .icon-action:hover:not(:disabled),
+.skill-library-panel--mcp .resource-row__actions .icon-action:hover:not(:disabled) {
+  background: var(--surface-pressed);
+  border-color: var(--border);
+}
+
+.skill-library-panel .library-table-row.is-globally-disabled,
+.skill-library-panel .library-table-row.is-globally-disabled:hover {
+  background: #f4f5f7;
+  box-shadow: inset 3px 0 #98a2b3;
+}
+
+.skill-library-panel .library-table-row.is-globally-disabled .library-global-state {
+  background: #e4e7ec;
+  color: #475467;
+}
+
+.skill-library-panel--mcp .mcp-library-row.ui-resource-row {
+  border-bottom: 1px solid var(--border);
+  grid-template-columns: 32px minmax(0, 1fr) minmax(96px, 126px) minmax(88px, 110px) 72px;
+  min-height: var(--resource-row-default);
+  padding: 8px 12px;
+}
+
+.skill-library-panel--mcp .mcp-library-row .resource-row__main {
+  gap: 2px;
+}
+
+.skill-library-panel--mcp .mcp-library-row .mcp-row-name,
+.skill-library-panel--mcp .mcp-library-row .mcp-row-endpoint,
+.skill-library-panel--mcp .mcp-library-row .mcp-row-meta-item,
+.skill-library-panel--mcp .mcp-library-row .mcp-row-usage {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-library-panel--mcp .mcp-library-row .mcp-row-meta-item,
+.skill-library-panel--mcp .mcp-library-row .mcp-row-usage {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  font-weight: 500;
+}
+
+.skill-library-panel--mcp .mcp-library-row .resource-row__actions {
+  gap: 4px;
+}
+
+/* Profile list and selected-object header use one stable desktop geometry. */
+.profile-row {
+  align-items: start;
+  grid-template-columns: var(--profile-icon-slot) minmax(0, 1fr);
+  min-height: 82px;
+  padding: 7px 9px;
+}
+
+.profile-row__content {
+  display: grid;
+  gap: 1px 8px;
+  grid-template-areas:
+    "title title"
+    "description description"
+    "stats stats"
+    "deployments deployments";
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.profile-row__title {
+  grid-area: title;
+}
+
+.profile-row__description {
+  grid-area: description;
+}
+
+.profile-row__stats {
+  grid-area: stats;
+}
+
+.profile-row__stats > span + span::before {
+  margin-inline: 4px;
+}
+
+.profile-row__deployments {
+  grid-area: deployments;
+  justify-self: start;
+  max-width: 100%;
+  width: 100%;
+}
+
+.profile-row.is-active {
+  background: #eef4ff;
+}
+
+.profile-hero {
+  align-items: start;
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  min-height: 0;
+  padding: 12px 14px;
+}
+
+.profile-hero__icon {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.profile-hero__body {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.profile-hero__title {
+  min-height: 26px;
+}
+
+.profile-hero__title h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-hero .profile-description {
+  -webkit-line-clamp: 1;
+  max-width: 72ch;
+}
+
+.profile-action-stack {
+  align-items: center;
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-content: space-between;
+  justify-self: stretch;
+  width: 100%;
+}
+
+.profile-commit-actions {
+  flex: 0 0 auto;
+}
+
+.profile-commit-actions .save-button,
+.profile-commit-actions .profile-apply-button {
+  flex-basis: 104px;
+  min-width: 104px;
+  width: 104px;
+}
+
+.profile-action-status {
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.profile-composer-section__icon {
+  border-radius: var(--radius-control);
+  height: 32px;
+  width: 32px;
+}
+
+.profile-composer-section[data-profile-composer-id="instructions"] .profile-composer-section__icon {
+  background: #eef4ff;
+  color: #2764b9;
+}
+
+.profile-composer-section[data-profile-composer-id="skills"] .profile-composer-section__icon {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.profile-composer-section[data-profile-composer-id="mcp"] .profile-composer-section__icon {
+  background: #f3effb;
+  color: #6b4eb5;
+}
+
+.profile-composer-section[data-profile-composer-id="advanced"] .profile-composer-section__icon {
+  background: var(--surface-pressed);
+  color: #475467;
+}
+
+.profile-skill-row,
+.profile-composer-section[data-profile-composer-id="mcp"] .profile-mcp-row {
+  min-height: var(--resource-row-compact);
+}
+
+.profile-skill-icon,
+.profile-mcp-row__icon {
+  height: var(--resource-icon-box);
+  width: var(--resource-icon-box);
+}
+
+/* Local cleanup is a review list, not a stack of independent cards. */
+.skill-library-panel .resource-list--unmanaged {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  gap: 0;
+}
+
+.skill-library-panel .cleanup-group-row,
+.skill-library-panel .cleanup-history-row {
+  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+  gap: 10px;
+  grid-template-columns: 32px minmax(0, 1fr) 88px 170px;
+  min-height: 76px;
+  padding: 8px 10px;
+}
+
+.skill-library-panel .cleanup-group-row:last-child,
+.skill-library-panel .cleanup-history-row:last-child {
+  border-bottom: 0;
+}
+
+.skill-library-panel .cleanup-group-row:hover,
+.skill-library-panel .cleanup-history-row:hover {
+  background: #f8faff;
+  transform: none;
+}
+
+.cleanup-group-icon,
+.cleanup-history-icon {
+  align-self: start;
+  background: #eef4ff;
+  color: #2764b9;
+  height: 32px;
+  margin-top: 2px;
+  width: 32px;
+}
+
+.skill-library-panel .cleanup-group-row > .resource-row__main,
+.skill-library-panel .cleanup-history-row > .resource-row__main {
+  align-self: center;
+  gap: 2px;
+}
+
+.skill-library-panel .cleanup-group-row .cleanup-group-state {
+  align-self: center;
+  grid-column: 3;
+  justify-self: start;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.skill-library-panel .cleanup-group-row > .cleanup-group-actions,
+.skill-library-panel .cleanup-history-row > .cleanup-group-actions {
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  grid-column: 4;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  justify-self: stretch;
+  width: 170px;
+}
+
+.skill-library-panel .cleanup-history-row {
+  grid-template-columns: 32px minmax(0, 1fr) 132px;
+  min-height: var(--resource-row-default);
+}
+
+.skill-library-panel .cleanup-history-row > .cleanup-group-actions {
+  display: flex;
+  grid-column: 3;
+  justify-content: flex-end;
+  width: 132px;
+}
+
+.cleanup-group-row .resource-row__main:has(.cleanup-shared-progress) .cleanup-group-owner,
+.cleanup-group-row .resource-row__main:has(.cleanup-shared-progress) .cleanup-group-summary,
+.cleanup-group-row .resource-row__main:has(.cleanup-group-owner) .cleanup-group-summary {
+  display: none;
+}
+
+.cleanup-history-section {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 14px;
+}
+
+/* Menus and dialogs keep the same hit targets and edge treatment everywhere. */
+.ui-action-menu.row-action-popover,
+.ui-action-menu.profile-skill-menu,
+.ui-action-menu.profile-actions-menu,
+.ui-action-menu.profile-target-menu,
+.ui-action-menu.mcp-row-action-menu {
+  border-color: var(--border-strong);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-soft);
+  padding: 5px;
+  width: 220px;
+}
+
+.ui-action-menu .row-action-item,
+.ui-action-menu > button {
+  align-items: center;
+  border-radius: var(--radius-control);
+  display: flex;
+  font-size: var(--font-size-metadata);
+  font-weight: 600;
+  min-height: var(--control-height-default);
+  padding: 7px 9px;
+}
+
+.ui-action-menu .row-action-item span,
+.ui-action-menu > button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-dialog-header,
+.preview-header,
+.capture-dialog__header,
+.library-drawer__header {
+  border-bottom: 1px solid var(--border);
+  min-height: 64px;
+  padding: 14px 18px;
+}
+
+.preview-actions,
+.capture-dialog__footer,
+.library-drawer__footer {
+  border-top: 1px solid var(--border);
+  gap: var(--space-2);
+  min-height: 64px;
+  padding: 12px 18px;
+}
+
+.preview-actions button,
+.capture-dialog__footer button,
+.library-drawer__footer button {
+  height: var(--control-height-prominent);
+  min-height: var(--control-height-prominent);
+}
+
+.preview-resource-plan__list > article {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 32px minmax(0, 1fr) 64px 68px;
+  min-height: var(--resource-row-compact);
+  padding: 7px 12px;
+}
+
+.preview-resource-plan__icon {
+  align-items: center;
+  background: #eef4ff;
+  border-radius: var(--radius-control);
+  color: #2764b9;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.preview-resource-plan__kind {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  justify-self: start;
+  text-transform: capitalize;
+}
+
+.preview-resource-plan__list .change-kind {
+  justify-self: end;
+}
+
+.preview-summary-grid {
+  align-items: start;
+}
+
+.preview-summary-card {
+  align-content: start;
+  align-self: start;
+}
+
+/* Agents and Settings reuse the same object-row scale. */
+.target-card--workflow {
+  border-radius: var(--radius-surface);
+  padding: 12px 14px;
+}
+
+.target-workflow-header {
+  grid-template-columns: 36px minmax(190px, 1fr) auto auto;
+}
+
+.target-workflow-icon {
+  border-radius: var(--radius-control);
+  height: 36px;
+  width: 36px;
+}
+
+.target-workflow-actions .secondary-action {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
+}
+
+.settings-page > .resource-section {
+  border-color: var(--border);
+}
+
+.backup-settings-icon {
+  border-radius: var(--radius-control);
+  height: var(--resource-icon-box);
+  width: var(--resource-icon-box);
+}
+
+@container profile-workspace (max-width: 760px) {
+  .profile-row {
+    min-height: 82px;
+  }
+
+  .profile-hero {
+    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    min-height: 0;
+  }
+
+  .profile-action-stack {
+    align-items: stretch;
+    display: grid;
+    gap: 5px;
+    grid-template-columns: minmax(0, 1fr);
+    justify-self: stretch;
+  }
+
+  .profile-commit-actions {
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .profile-commit-actions .save-button,
+  .profile-commit-actions .profile-apply-button {
+    flex-basis: 92px;
+    min-width: 92px;
+    width: 92px;
+  }
+
+  .profile-action-status {
+    grid-row: 2;
+    justify-self: start;
+    width: 100%;
+  }
+}
+
+@container skill-library (max-width: 760px) {
+  .skill-library-panel--mcp .mcp-library-row.ui-resource-row {
+    grid-template-columns: 32px minmax(0, 1fr) 92px 72px;
+  }
+
+  .skill-library-panel--mcp .mcp-library-row .ui-resource-row__metadata {
+    display: none;
+  }
+
+  .skill-library-panel--mcp .mcp-library-row .ui-resource-row__state {
+    grid-column: 3;
+  }
+
+  .skill-library-panel--mcp .mcp-library-row .ui-resource-row__actions {
+    grid-column: 4;
+  }
+}
+
+@container skill-library (max-width: 560px) {
+  .skill-library-panel .cleanup-group-row {
+    grid-template-columns: 32px minmax(0, 1fr) 88px;
+  }
+
+  .skill-library-panel .cleanup-group-row .cleanup-group-state {
+    grid-column: 3;
+  }
+
+  .skill-library-panel .cleanup-group-row > .cleanup-group-actions {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    justify-self: end;
+  }
+}

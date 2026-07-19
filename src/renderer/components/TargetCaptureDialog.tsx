@@ -104,7 +104,7 @@ export const TargetCaptureDialog = ({
           : t("Create profile from {{name}}", { name: target?.name ?? t("Agent") })}
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="capture-dialog__header">
+        <header className="capture-dialog__header ui-dialog-header">
           <div>
             <span className="capture-dialog__eyebrow">{t(isReview ? "Step 2 of 2" : "Step 1 of 2")}</span>
             <h2>{isReview ? t("Review captured Profile") : t("Create profile from {{name}}", { name: target?.name ?? t("Agent") })}</h2>
@@ -252,7 +252,7 @@ export const TargetCaptureDialog = ({
           ) : null}
         </div>
 
-        <footer className="capture-dialog__footer">
+        <footer className="capture-dialog__footer ui-dialog-footer">
           <div>
             {isReview ? (
               <button className="secondary-action" type="button" disabled={isBusy} onClick={onBack}>

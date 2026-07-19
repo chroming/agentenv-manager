@@ -24,6 +24,7 @@ import { PreviewDialog } from "./PreviewDialog";
 import { targetIconFor } from "./ProfileSidebar";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
+import { Button, ControlGroup, PageHeader } from "./ui";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
@@ -120,38 +121,37 @@ export const TargetWorkspace = ({
 
   return (
     <section className="target-page" aria-label={t("Agents")}>
-      <header className="page-header workspace-page-header">
-        <div>
-          <h2 aria-label={t("Agents")}>
-            {t("Agents")}
-            <InfoTip label={t("Agents are local coding tools. Manage environments from Profiles and inspect runtime paths here only when diagnosing a problem.")} />
-          </h2>
-          <p>{t("Inspect local Agents, management state, and recovery points.")}</p>
-        </div>
-        <div className="target-page-actions">
-          <button
-            ref={recoveryTriggerRef}
-            className="secondary-action target-recovery-trigger"
-            type="button"
-            aria-haspopup="dialog"
-            disabled={busy}
-            onClick={() => setIsRecoveryOpen(true)}
-          >
-            <ArchiveRestore size={15} strokeWidth={2.2} />
-            {t("Recovery")}
-            <span aria-label={t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}>{backups.length}</span>
-          </button>
-          <button
-            className="secondary-action"
-            type="button"
-            disabled={busy}
-            onClick={() => { void onRefresh(); }}
-          >
-            <RefreshCw size={15} strokeWidth={2.2} />
-            {busy ? t("Refreshing...") : t("Refresh")}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        className="page-header workspace-page-header"
+        title={t("Agents")}
+        description={t("Inspect local Agents, management state, and recovery points.")}
+        help={<InfoTip label={t("Agents are local coding tools. Manage environments from Profiles and inspect runtime paths here only when diagnosing a problem.")} />}
+        actions={(
+          <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
+            <Button
+              ref={recoveryTriggerRef}
+              className="secondary-action target-recovery-trigger"
+              size="prominent"
+              aria-haspopup="dialog"
+              disabled={busy}
+              icon={<ArchiveRestore size={15} strokeWidth={2.2} />}
+              onClick={() => setIsRecoveryOpen(true)}
+            >
+              {t("Recovery")}
+              <span aria-label={t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}>{backups.length}</span>
+            </Button>
+            <Button
+              className="secondary-action"
+              size="prominent"
+              disabled={busy}
+              icon={<RefreshCw size={15} strokeWidth={2.2} />}
+              onClick={() => { void onRefresh(); }}
+            >
+              {busy ? t("Refreshing...") : t("Refresh")}
+            </Button>
+          </ControlGroup>
+        )}
+      />
 
       <div className="target-list">
         {targets.length === 0 ? (
@@ -276,7 +276,7 @@ export const TargetWorkspace = ({
             aria-label={t("Recovery")}
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header target-recovery-dialog__header">
+            <header className="profile-dialog-header target-recovery-dialog__header ui-dialog-header">
               <div>
                 <div className="section-title">{t("Recovery")}</div>
                 <p className="muted">{t("Backups created before managed applies.")}</p>
@@ -295,7 +295,7 @@ export const TargetWorkspace = ({
                 onRestoreRollback={onRestoreRollback}
               />
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button
                 ref={recoveryCloseRef}
                 className="secondary-action"
@@ -324,7 +324,7 @@ export const TargetWorkspace = ({
       {stopManagingTargetId ? (
         <div className="preview-modal-backdrop" onClick={() => setStopManagingTargetId(undefined)}>
           <section ref={stopManagingDialogRef} className="profile-form-dialog stop-managing-dialog" role="dialog" aria-modal="true" aria-label={t("Stop managing Agent")} onClick={(event) => event.stopPropagation()}>
-            <header className="profile-dialog-header">
+            <header className="profile-dialog-header ui-dialog-header">
               <div>
                 <div className="section-title">{t("Stop managing {{name}}", { name: targets.find((target) => target.id === stopManagingTargetId)?.name ?? "" })}</div>
                 <p className="muted">{t("Choose what should happen to the current Agent environment.")}</p>
@@ -340,7 +340,7 @@ export const TargetWorkspace = ({
                 <span><strong>{t("Restore environment before takeover")}</strong><small>{t("Replace current managed files with the earliest pre-takeover backup.")}</small></span>
               </label>
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button ref={stopManagingCancelRef} className="secondary-action" type="button" onClick={() => setStopManagingTargetId(undefined)}>{t("Cancel")}</button>
               <button className="danger-action" type="button" disabled={busy} onClick={() => {
                 onPreviewStopManaging(stopManagingTargetId, stopManagingMode);

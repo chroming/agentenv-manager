@@ -100,10 +100,6 @@
   color: var(--text);
 }
 
-.profile-page-heading p {
-  font-size: 13px;
-}
-
 .profile-page-actions button {
   min-height: var(--control-height-default);
 }

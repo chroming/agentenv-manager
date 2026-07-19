@@ -9,6 +9,7 @@ import {
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { useI18n } from "../i18n";
+import { ResourceRow } from "./ui";
 
 interface McpLibraryPanelProps {
   mcpServers: McpLibraryEntry[];
@@ -320,113 +321,127 @@ export const McpLibraryPanel = ({
       >
         <div className="resource-list library-list">
           {visibleServers.map((server) => (
-            <div
+            <ResourceRow
               aria-label={t("MCP library item {{id}}", { id: server.id })}
-              className="resource-row library-row"
+              className="resource-row library-row mcp-library-row"
               key={server.id}
               role="group"
-            >
-              <span className="resource-avatar mcp-row-icon" aria-hidden="true">
-                <Network size={18} strokeWidth={2.1} />
-              </span>
-              <div className="resource-row__main">
+              icon={(
+                <span className="mcp-row-icon">
+                  <Network size={18} strokeWidth={2.1} />
+                </span>
+              )}
+              title={(
                 <OverflowTooltip
                   ariaLabel={t("Full MCP name {{id}}", { id: server.id })}
                   className="mcp-row-name"
                   text={server.name}
                 />
-                <small>
-                  <OverflowTooltip
-                    ariaLabel={t("Full MCP endpoint {{id}}", { id: server.id })}
-                    className="mcp-row-endpoint"
-                    text={`${server.transport} · ${commandLabel(server)}`}
-                    tooltipClassName="library-source-tooltip"
-                  />
-                </small>
-                <small className="mcp-row-meta">
-                  <OverflowTooltip
-                    ariaLabel={t("Environment summary for {{id}}", { id: server.id })}
-                    className="mcp-row-meta-item"
-                    text={Object.keys(server.env ?? {}).length > 0
-                      ? t(
-                          Object.keys(server.env ?? {}).length === 1
-                            ? "{{count}} env variable"
-                            : "{{count}} env variables",
-                          { count: Object.keys(server.env ?? {}).length }
-                        )
-                      : t("No env variables")}
-                  />
-                  <OverflowTooltip
-                    ariaLabel={t("Full MCP usage {{id}}", { id: server.id })}
-                    className="mcp-row-meta-item"
-                    text={(mcpUsage[server.id] ?? []).length > 0
-                      ? t("Used by {{profiles}}", { profiles: (mcpUsage[server.id] ?? []).join(", ") })
-                      : t("Not used by any profile")}
-                  />
-                </small>
-              </div>
-              <div className="resource-row__actions">
-                <button
-                  className="icon-action"
-                  type="button"
-                  aria-label={t("Edit {{name}}", { name: server.id })}
-                  onClick={(event) => {
-                    editorTriggerRef.current = event.currentTarget;
-                    editServer(server);
-                  }}
-                >
-                  <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
-                </button>
-                <button
-                  className="icon-action"
-                  type="button"
-                  aria-label={t("More actions for {{id}}", { id: server.id })}
-                  aria-expanded={openAction?.id === server.id}
-                  onClick={(event) => {
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    const width = 196;
-                    setOpenAction((current) =>
-                      current?.id === server.id
-                        ? undefined
-                        : {
-                            id: server.id,
-                            left: Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12)),
-                            top: Math.min(rect.bottom + 6, window.innerHeight - 58)
-                          }
-                    );
-                  }}
-                >
-                  <MoreHorizontal size={16} strokeWidth={2.2} aria-hidden="true" />
-                </button>
-                {openAction?.id === server.id
-                  ? createPortal(
-                      <div
-                        className="mcp-row-action-menu"
-                        role="menu"
-                        aria-label={t("Actions for {{id}}", { id: server.id })}
-                        style={{ left: openAction.left, top: openAction.top }}
-                      >
-                        <button
-                          type="button"
-                          role="menuitem"
-                          aria-label={t("Remove {{name}}", { name: server.id })}
-                          onClick={() => {
-                            deleteTriggerRef.current = document.querySelector(
-                              `[aria-label="${CSS.escape(t("More actions for {{id}}", { id: server.id }))}"]`
-                            );
-                            setDeleteCandidate(server);
-                            setOpenAction(undefined);
-                          }}
+              )}
+              description={(
+                <OverflowTooltip
+                  ariaLabel={t("Full MCP endpoint {{id}}", { id: server.id })}
+                  className="mcp-row-endpoint"
+                  text={`${server.transport} · ${commandLabel(server)}`}
+                  tooltipClassName="library-source-tooltip"
+                />
+              )}
+              metadata={(
+                <OverflowTooltip
+                  ariaLabel={t("Environment summary for {{id}}", { id: server.id })}
+                  className="mcp-row-meta-item"
+                  text={Object.keys(server.env ?? {}).length > 0
+                    ? t(
+                        Object.keys(server.env ?? {}).length === 1
+                          ? "{{count}} env variable"
+                          : "{{count}} env variables",
+                        { count: Object.keys(server.env ?? {}).length }
+                      )
+                    : t("No env variables")}
+                />
+              )}
+              state={(
+                <OverflowTooltip
+                  ariaLabel={t("Full MCP usage {{id}}", { id: server.id })}
+                  className="mcp-row-usage"
+                  displayText={(mcpUsage[server.id] ?? []).length > 0
+                    ? t(
+                        (mcpUsage[server.id] ?? []).length === 1
+                          ? "{{count}} profile"
+                          : "{{count}} profiles",
+                        { count: (mcpUsage[server.id] ?? []).length }
+                      )
+                    : t("Not referenced")}
+                  text={(mcpUsage[server.id] ?? []).length > 0
+                    ? t("Used by {{profiles}}", { profiles: (mcpUsage[server.id] ?? []).join(", ") })
+                    : t("Not used by any profile")}
+                />
+              )}
+              actions={(
+                <>
+                  <button
+                    className="icon-action"
+                    type="button"
+                    aria-label={t("Edit {{name}}", { name: server.id })}
+                    onClick={(event) => {
+                      editorTriggerRef.current = event.currentTarget;
+                      editServer(server);
+                    }}
+                  >
+                    <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
+                  </button>
+                  <button
+                    className="icon-action"
+                    type="button"
+                    aria-label={t("More actions for {{id}}", { id: server.id })}
+                    aria-expanded={openAction?.id === server.id}
+                    onClick={(event) => {
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      const width = 220;
+                      setOpenAction((current) =>
+                        current?.id === server.id
+                          ? undefined
+                          : {
+                              id: server.id,
+                              left: Math.max(12, Math.min(rect.right - width, window.innerWidth - width - 12)),
+                              top: Math.min(rect.bottom + 6, window.innerHeight - 58)
+                            }
+                      );
+                    }}
+                  >
+                    <MoreHorizontal size={16} strokeWidth={2.2} aria-hidden="true" />
+                  </button>
+                  {openAction?.id === server.id
+                    ? createPortal(
+                        <div
+                          className="mcp-row-action-menu ui-action-menu"
+                          role="menu"
+                          aria-label={t("Actions for {{id}}", { id: server.id })}
+                          style={{ left: openAction.left, top: openAction.top }}
                         >
-                          <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />
-                          {t("Delete server")}
-                        </button>
-                      </div>,
-                      document.body
-                    )
-                  : null}
-              </div>
-            </div>
+                          <button
+                            className="is-danger"
+                            type="button"
+                            role="menuitem"
+                            aria-label={t("Remove {{name}}", { name: server.id })}
+                            onClick={() => {
+                              deleteTriggerRef.current = document.querySelector(
+                                `[aria-label="${CSS.escape(t("More actions for {{id}}", { id: server.id }))}"]`
+                              );
+                              setDeleteCandidate(server);
+                              setOpenAction(undefined);
+                            }}
+                          >
+                            <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />
+                            {t("Delete server")}
+                          </button>
+                        </div>,
+                        document.body
+                      )
+                    : null}
+                </>
+              )}
+            />
           ))}
           {visibleServers.length === 0 ? (
             <div className="inline-state inline-state--panel library-empty-state">

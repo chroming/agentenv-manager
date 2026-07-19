@@ -717,7 +717,7 @@ export const SkillLibraryPanel = ({
     }
 
     const rect = button.getBoundingClientRect();
-    const popoverWidth = Math.min(268, window.innerWidth - 32);
+    const popoverWidth = Math.min(220, window.innerWidth - 32);
     const estimatedHeight = 190;
     const left = Math.min(window.innerWidth - popoverWidth - 16, Math.max(16, rect.right - popoverWidth));
     const belowTop = rect.bottom + 8;
@@ -1627,7 +1627,7 @@ export const SkillLibraryPanel = ({
                   {openActionId === skill.id && openAction
                     ? createPortal(
                         <div
-                          className="row-action-popover"
+                          className="row-action-popover ui-action-menu"
                           data-skill-action-popover={skill.id}
                           role="menu"
                           aria-label={t("Actions for {{id}}", { id: skill.id })}
@@ -2970,6 +2970,9 @@ export const SkillLibraryPanel = ({
                     key={group.skillKey}
                     role="group"
                   >
+                    <span className="resource-avatar cleanup-group-icon" aria-hidden="true">
+                      <Folder size={17} strokeWidth={2.1} />
+                    </span>
                     <div className="resource-row__main">
                       <div className="cleanup-group-heading">
                         <PreviewText
@@ -3042,7 +3045,7 @@ export const SkillLibraryPanel = ({
                       {openActionId === cleanupActionId && openAction
                         ? createPortal(
                             <div
-                              className="row-action-popover cleanup-action-popover"
+                              className="row-action-popover cleanup-action-popover ui-action-menu"
                               data-skill-action-popover={cleanupActionId}
                               role="menu"
                               aria-label={t("Cleanup actions for {{id}}", { id: group.skillKey })}
@@ -3135,6 +3138,9 @@ export const SkillLibraryPanel = ({
                 <div className="resource-list resource-list--unmanaged cleanup-history-list">
                   {cleanupBackups.map((backup) => (
                     <div className="resource-row cleanup-history-row" key={backup.id}>
+                      <span className="resource-avatar cleanup-history-icon" aria-hidden="true">
+                        <RotateCcw size={16} strokeWidth={2.1} />
+                      </span>
                       <div className="resource-row__main">
                         <PreviewText
                           ariaLabel={t("Full cleanup history name {{id}}", { id: backup.libraryId })}

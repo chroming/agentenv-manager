@@ -854,7 +854,7 @@ export const SkillsEditor = ({
         {profileSkillMenu
           ? createPortal(
               <div
-                className="row-action-menu profile-skill-menu"
+                className="row-action-menu profile-skill-menu ui-action-menu"
                 role="menu"
                 aria-label={t("Profile skill actions")}
                 style={{ left: profileSkillMenu.left, top: profileSkillMenu.top }}

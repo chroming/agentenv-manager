@@ -86,6 +86,7 @@ describe("PreviewDialog", () => {
     expect(plan).toHaveTextContent("shared");
     expect(plan).toHaveTextContent("old.md");
     expect(screen.getByText("1 install · 1 replace · 1 remove")).toBeInTheDocument();
+    expect(plan.querySelectorAll(".preview-resource-plan__icon")).toHaveLength(3);
   });
 
   it("describes shared Skill changes as final cleanup outcomes", () => {

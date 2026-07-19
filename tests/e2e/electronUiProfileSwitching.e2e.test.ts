@@ -2317,7 +2317,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(mcpRowGeometry.length).toBeGreaterThan(0);
     expect(mcpRowGeometry.every((row) => row.contained)).toBe(true);
     expect(mcpRowGeometry.every((row) => row.height <= 54)).toBe(true);
-    expect(mcpRowGeometry.every((row) => row.iconHeight === 30 && row.iconWidth === 30)).toBe(true);
+    expect(mcpRowGeometry.every((row) => row.iconHeight === 32 && row.iconWidth === 32)).toBe(true);
     await expectInViewport(
       page,
       profileMcpServers.getByRole("button", { name: "Remove shared-docs from profile" })
@@ -5267,8 +5267,8 @@ describe("Electron UI profile switching e2e", () => {
             minHeight: style.minHeight
           };
         });
-        expect(mcpRowGeometry.gridTemplateColumns).toMatch(/^36px /);
-        expect(mcpRowGeometry.minHeight).toBe("58px");
+        expect(mcpRowGeometry.gridTemplateColumns).toMatch(/^32px /);
+        expect(mcpRowGeometry.minHeight).toBe("60px");
         expect(mcpRowGeometry.height).toBeLessThanOrEqual(72);
       }
       const containment = await page.evaluate(() => ({
@@ -5628,10 +5628,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(await libraryRow.getAttribute("class")).toContain("is-globally-disabled");
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).backgroundColor))
-      .toBe("rgb(245, 245, 243)");
+      .toBe("rgb(244, 245, 247)");
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
-      .toContain("rgb(155, 156, 151)");
+      .toContain("rgb(152, 162, 179)");
     const disabledTab = page.getByRole("tab", { name: /Disabled 1/ });
     await disabledTab.click();
     expect(await disabledTab.getAttribute("aria-selected")).toBe("true");
@@ -6287,4 +6287,116 @@ describe("Electron UI profile switching e2e", () => {
       readFile(join(codexDir, "skills", "ui-codex-beta-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("beta Codex skill prompt");
   }, 30_000);
+
+  it("keeps the shared desktop visual contract stable across workspaces and review surfaces", async () => {
+    const { page } = await launchApp();
+    await resizeAppWindow(page, 920, 620);
+    const sidebar = page.locator(".global-sidebar");
+
+    const headerMetrics: Array<{ fontSize: string; left: number }> = [];
+    for (const workspace of ["Skills", "MCP Servers", "Profiles", "Agents", "Settings"]) {
+      await sidebar.getByRole("button", { name: workspace, exact: true }).click();
+      const header = page.locator(".ui-page-header").first();
+      await header.waitFor({ state: "visible" });
+      const metrics = await header.evaluate((element) => {
+        const title = element.querySelector<HTMLElement>("h2")!;
+        const titleBox = title.getBoundingClientRect();
+        const actionHeights = Array.from(
+          element.querySelectorAll<HTMLElement>(".ui-page-header__actions button")
+        ).map((button) => button.getBoundingClientRect().height);
+        return {
+          actionHeights,
+          fontSize: getComputedStyle(title).fontSize,
+          left: Math.round(titleBox.left),
+          contained: element.scrollWidth <= element.clientWidth + 1
+        };
+      });
+      expect(metrics.contained).toBe(true);
+      expect(metrics.actionHeights.every((height) => Math.abs(height - 40) <= 1)).toBe(true);
+      headerMetrics.push({ fontSize: metrics.fontSize, left: metrics.left });
+    }
+    expect(new Set(headerMetrics.map((metric) => metric.fontSize))).toEqual(new Set(["22px"]));
+    expect(Math.max(...headerMetrics.map((metric) => metric.left)) - Math.min(...headerMetrics.map((metric) => metric.left))).toBeLessThanOrEqual(1);
+
+    await sidebar.getByRole("button", { name: "MCP Servers", exact: true }).click();
+    const mcpRow = page.locator(".mcp-library-row").first();
+    await mcpRow.waitFor({ state: "visible" });
+    const mcpGeometry = await mcpRow.evaluate((row) => {
+      const icon = row.querySelector<HTMLElement>(".ui-resource-row__icon")!.getBoundingClientRect();
+      const actions = row.querySelector<HTMLElement>(".ui-resource-row__actions")!.getBoundingClientRect();
+      const box = row.getBoundingClientRect();
+      return {
+        actionsContained: actions.right <= box.right + 1,
+        iconHeight: icon.height,
+        iconWidth: icon.width,
+        rowHeight: box.height,
+        rowContained: row.scrollWidth <= row.clientWidth + 1
+      };
+    });
+    expect(mcpGeometry).toEqual({
+      actionsContained: true,
+      iconHeight: 32,
+      iconWidth: 32,
+      rowHeight: 60,
+      rowContained: true
+    });
+
+    await mcpRow.getByRole("button", { name: /More actions for/ }).click();
+    const mcpMenu = page.locator(".mcp-row-action-menu.ui-action-menu");
+    await mcpMenu.waitFor({ state: "visible" });
+    const mcpMenuWidth = await mcpMenu.evaluate((menu) => menu.getBoundingClientRect().width);
+    expect(mcpMenuWidth).toBe(220);
+    await page.keyboard.press("Escape");
+
+    await sidebar.getByRole("button", { name: "Profiles", exact: true }).click();
+    await page.locator(".profile-hero").waitFor({ state: "visible" });
+    const profileActionGeometry = await page.locator(".profile-action-stack").evaluate((stack) => {
+      const status = stack.querySelector<HTMLElement>(".profile-action-status")!;
+      const actions = stack.querySelector<HTMLElement>(".profile-commit-actions")!;
+      const statusBox = status.getBoundingClientRect();
+      const actionsBox = actions.getBoundingClientRect();
+      const overlaps = !(
+        statusBox.right <= actionsBox.left ||
+        actionsBox.right <= statusBox.left ||
+        statusBox.bottom <= actionsBox.top ||
+        actionsBox.bottom <= statusBox.top
+      );
+      return {
+        actionsContained: actionsBox.right <= stack.getBoundingClientRect().right + 1,
+        overlaps,
+        statusFits: status.scrollWidth <= status.clientWidth + 1
+      };
+    });
+    expect(profileActionGeometry).toEqual({
+      actionsContained: true,
+      overlaps: false,
+      statusFits: true
+    });
+
+    await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const cleanupRow = page.locator(".cleanup-group-row").first();
+    await cleanupRow.waitFor({ state: "visible" });
+    const cleanupGeometry = await cleanupRow.evaluate((row) => {
+      const state = row.querySelector<HTMLElement>(".cleanup-group-state")!;
+      const actions = row.querySelector<HTMLElement>(".cleanup-group-actions")!;
+      const stateBox = state.getBoundingClientRect();
+      const actionsBox = actions.getBoundingClientRect();
+      const rowBox = row.getBoundingClientRect();
+      return {
+        aligned: Math.abs(
+          stateBox.top + stateBox.height / 2 - (actionsBox.top + actionsBox.height / 2)
+        ) <= 1,
+        contained: actionsBox.right <= rowBox.right + 1 && row.scrollWidth <= row.clientWidth + 1,
+        separated: actionsBox.left >= stateBox.right + 6,
+        stateFits: state.scrollWidth <= state.clientWidth + 1
+      };
+    });
+    expect(cleanupGeometry).toEqual({
+      aligned: true,
+      contained: true,
+      separated: true,
+      stateFits: true
+    });
+  }, 60_000);
 });

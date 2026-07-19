@@ -272,18 +272,9 @@
   min-height: 44px;
 }
 
-.profile-page-heading {
-  gap: 4px;
-}
-
 .profile-page-header h2 {
   font-size: 22px;
   line-height: 1.15;
-}
-
-.profile-page-heading p {
-  font-size: 12px;
-  line-height: 18px;
 }
 
 .profile-page-actions,

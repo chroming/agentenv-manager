@@ -388,15 +388,6 @@
   white-space: nowrap;
 }
 
-.mcp-row-meta {
-  align-items: center;
-  display: flex;
-  font-family: inherit;
-  font-weight: 500;
-  gap: 8px;
-  min-width: 0;
-}
-
 .mcp-row-meta-item {
   display: block;
   font-size: inherit;
@@ -406,12 +397,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.mcp-row-meta-item + .mcp-row-meta-item::before {
-  color: #c1c9d6;
-  content: "·";
-  margin-right: 8px;
 }
 
 .mcp-row-action-menu {

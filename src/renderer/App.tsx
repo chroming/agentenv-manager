@@ -119,7 +119,7 @@ import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
 import { SkillsEditor } from "./components/SkillsEditor";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
-import { Switch } from "./components/ui";
+import { Button, ControlGroup, PageHeader, Switch } from "./components/ui";
 import {
   deriveApplyActionLabel,
   deriveProfileReadiness
@@ -3839,7 +3839,7 @@ const AppContent = ({
         <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
       </button>
       {isTargetMenuOpen ? (
-        <div className="profile-target-menu" role="menu" aria-label={t("Apply Agents")}>
+        <div className="profile-target-menu ui-action-menu" role="menu" aria-label={t("Apply Agents")}>
           {targets.map((target) => {
             const targetIcon = targetIconFor(target);
             return (
@@ -3909,66 +3909,68 @@ const AppContent = ({
         <AppFeedback feedback={appFeedback} onDismiss={dismissAppFeedback} />
         {activeWorkspace === "library" ? (
           <>
-            <header className="page-header library-page-header">
-              <div className="library-page-title">
-                <span className="page-eyebrow">{t("Library")}</span>
-                <h2 aria-label={t(activeLibraryTab === "skills" ? "Skills" : "MCP Servers")}>
-                  <span>{t(activeLibraryTab === "skills" ? "Skills" : "MCP Servers")}</span>
-                  <InfoTip label={t("Library is the shared resource layer. Profiles reference these skills and MCP servers instead of duplicating files in every profile.")} />
-                </h2>
-              </div>
-              <div className="page-actions">
-                {activeLibraryTab === "skills" ? (
-                  <>
-                    <button
-                      className={librarySkills.length === 0 ? "primary-inline-action" : "secondary-action"}
-                      type="button"
-                      aria-label={t("Import skills")}
-                      onClick={() => setSkillLibraryTool("import")}
+            <PageHeader
+              className="page-header library-page-header"
+              title={t(activeLibraryTab === "skills" ? "Skills" : "MCP Servers")}
+              help={<InfoTip label={t("Library is the shared resource layer. Profiles reference these skills and MCP servers instead of duplicating files in every profile.")} />}
+              actions={(
+                <ControlGroup className="page-actions" aria-label={t("Library actions")}>
+                  {activeLibraryTab === "skills" ? (
+                    <>
+                      <Button
+                        className="primary-inline-action"
+                        size="prominent"
+                        variant="primary"
+                        aria-label={t("Import skills")}
+                        icon={<Plus size={16} strokeWidth={2.4} />}
+                        onClick={() => setSkillLibraryTool("import")}
+                      >
+                        {t("Import")}
+                      </Button>
+                      <Button
+                        className="secondary-action"
+                        size="prominent"
+                        icon={<ScanLine size={15} strokeWidth={2.2} />}
+                        onClick={() => {
+                          void openSkillDiscoveries();
+                        }}
+                      >
+                        {t("Scan local")}
+                      </Button>
+                      <Button
+                        className="secondary-action"
+                        size="prominent"
+                        aria-label={t("Refresh skills")}
+                        disabled={skillRefreshStatus === "refreshing"}
+                        icon={(
+                          <RefreshCw
+                            className={skillRefreshStatus === "refreshing" ? "is-spinning" : ""}
+                            size={15}
+                            strokeWidth={2.2}
+                          />
+                        )}
+                        onClick={() => {
+                          void refreshSkills();
+                        }}
+                      >
+                        {t("Refresh")}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      ref={mcpCreateButtonRef}
+                      className="primary-inline-action"
+                      size="prominent"
+                      variant="primary"
+                      icon={<Plus size={16} strokeWidth={2.4} />}
+                      onClick={() => setMcpCreateRequest((current) => current + 1)}
                     >
-                      <Plus size={16} strokeWidth={2.4} />
-                      {t("Import")}
-                    </button>
-                    <button
-                      className="secondary-action"
-                      type="button"
-                      onClick={() => {
-                        void openSkillDiscoveries();
-                      }}
-                    >
-                      <ScanLine size={15} strokeWidth={2.2} />
-                      {t("Scan local")}
-                    </button>
-                    <button
-                      className="secondary-action"
-                      type="button"
-                      aria-label={t("Refresh skills")}
-                      disabled={skillRefreshStatus === "refreshing"}
-                      onClick={() => {
-                        void refreshSkills();
-                      }}
-                    >
-                      <RefreshCw
-                        className={skillRefreshStatus === "refreshing" ? "is-spinning" : ""}
-                        size={15}
-                        strokeWidth={2.2}
-                      />
-                      {t("Refresh")}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    ref={mcpCreateButtonRef}
-                    className="primary-inline-action"
-                    type="button"
-                    onClick={() => setMcpCreateRequest((current) => current + 1)}
-                  >
-                    <Plus size={16} strokeWidth={2.4} />
-                    {t("Add MCP server")}
-                  </button>
-                )}
-              </div>
-            </header>
+                      {t("Add MCP server")}
+                    </Button>
+                  )}
+                </ControlGroup>
+              )}
+            />
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
                 isLoading={isLoading}
@@ -4069,22 +4071,24 @@ const AppContent = ({
           </>
         ) : activeWorkspace === "profiles" ? (
           <>
-            <header className="page-header profile-page-header">
-              <div className="profile-page-heading">
-                <h2 aria-label={t("Profiles")}>{t("Profiles")}</h2>
-                <p>{t("Compose reusable environments and apply them safely to local Agents.")}</p>
-              </div>
-              <div className="profile-page-actions" ref={profilePageActionsRef}>
-                <button
-                  className={`profile-new-button${profiles.length === 0 ? " is-primary" : ""}`}
-                  type="button"
-                  onClick={openCreateProfileDialog}
-                >
-                  <Plus size={15} strokeWidth={2.3} aria-hidden="true" />
-                  {t("New Profile")}
-                </button>
-              </div>
-            </header>
+            <PageHeader
+              className="page-header profile-page-header"
+              title={t("Profiles")}
+              description={t("Compose reusable environments and apply them safely to local Agents.")}
+              actions={(
+                <div className="profile-page-actions" ref={profilePageActionsRef}>
+                  <Button
+                    className="profile-new-button is-primary"
+                    size="prominent"
+                    variant="primary"
+                    icon={<Plus size={15} strokeWidth={2.3} />}
+                    onClick={openCreateProfileDialog}
+                  >
+                    {t("New Profile")}
+                  </Button>
+                </div>
+              )}
+            />
             <section className="profile-workbench" aria-label={t("Profiles")}>
               <aside className="profile-index" aria-label={t("Profile list")}>
                 <div className="profile-list-toolbar">
@@ -4316,7 +4320,7 @@ const AppContent = ({
                             <MoreHorizontal size={16} strokeWidth={2.2} />
                           </button>
                           {isProfileActionsOpen ? (
-                            <div className="profile-actions-menu" role="menu" aria-label={t("Profile actions")}>
+                            <div className="profile-actions-menu ui-action-menu" role="menu" aria-label={t("Profile actions")}>
                               <button
                                 type="button"
                                 role="menuitem"
@@ -4824,12 +4828,11 @@ const AppContent = ({
           />
         ) : activeWorkspace === "settings" ? (
           <section className="settings-page" aria-label={t("Settings")}>
-            <header className="page-header">
-              <div>
-                <h2 aria-label={t("Settings")}>{t("Settings")}</h2>
-                <p>{t("Local defaults and connected services.")}</p>
-              </div>
-            </header>
+            <PageHeader
+              className="page-header"
+              title={t("Settings")}
+              description={t("Local defaults and connected services.")}
+            />
             <section className="resource-section settings-section" aria-labelledby="appearance-heading">
               <div className="settings-section-title">
                 <div>

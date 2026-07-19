@@ -750,6 +750,12 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Switching workspaces MUST NOT resize or reposition global chrome. Sidebar, brand lockup, navigation rows, status card, page gutter, first-level page titles, and page-header control height use shared geometry at a given viewport.
 - Workspace-specific content MAY use its own density only inside the stable page content region.
 - Page-level creation and import commands remain in the page header. A resource list MUST NOT repeat the page title and primary command inside a nested header.
+- First-level pages use the shared page-header anatomy: one title, optional concise context or help, then one right-aligned command group. Page titles use the same type scale and left origin across workspaces.
+- Reusable resources use one reading order: `identity -> metadata -> lifecycle state -> contextual actions`. Identity includes a fixed `32px` icon box, name, and at most one visible supporting line; longer content remains available through the selectable overflow tooltip.
+- Standard resource rows use the shared `52px`, `60px`, or `68px` density tokens. A page MAY choose a denser table only when comparison across named columns is the primary task, as in Skills Library.
+- A lifecycle state owns a stable lane and MUST NOT move into the action lane when another value is absent. State labels MUST fit without ellipsis; long explanations belong in a tooltip or focused review surface.
+- Resource rows expose at most one direct contextual command plus a trailing overflow menu. Destructive, settings, and infrequent commands belong in that menu. Inline icon commands use shared `32px` hit targets and always have accessible names and tooltips.
+- Accent fill identifies only the current page-level primary command or the next commit action. Lists MUST NOT contain repeated primary-filled actions unless each row is an independent queued workflow.
 - Library pages use the resource name as the interactive page title (`Skills` or `MCP Servers`); `Library` is neutral scope text and MUST NOT resemble a clickable breadcrumb.
 - Comparable actions in one command group use the same control height; Profile Save and Apply also reserve the same width so lifecycle state changes do not shift surrounding content.
 - A related command group MAY move below its heading at narrower supported widths, but its individual controls MUST remain together rather than orphan-wrapping one control onto another line.
@@ -763,11 +769,15 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Collapsed Profile Composer rows stay content-sized and compact; they MUST NOT expand merely to fill unused editor height. The resource rows themselves provide sufficient context, so the Composer MUST NOT add a redundant visible title block above them.
 - Target recovery history is a low-frequency safety workflow. Targets exposes it through a page-level Recovery command and a focused modal, rather than permanently consuming the primary Target list viewport.
 - Profile Save and Apply remain visible while the selected Profile's Composer owns internal scrolling.
+- The selected Profile header separates object identity from commit controls at widths where they cannot coexist without truncation. Save, Apply, Agent selection, and overflow remain one unbroken command group; readiness text receives its own line instead of shrinking into an unreadable fragment.
+- Local Skill Cleanup is a review list, not a secondary resource library. Its rows show Skill identity, one compact state, the current safe next action, and overflow. Full paths, duplicate details, and alternate versions belong in Details or Review; History is an integrated list section rather than a visually unrelated card.
 - Buttons do not wrap at supported desktop widths.
 - Text line boxes, icon boxes, and control padding MUST fit inside their controls without vertical clipping.
 - Apply Preview keeps its header and footer stable. The modal owns the primary vertical scroll; large resource plans remain bounded, and long diff lines own only their horizontal overflow.
 - Create from Target keeps its step header and action footer visible at both supported viewports. Only the dialog body scrolls; resource groups MUST NOT introduce a second nested scroll region.
 - Menus, tooltips, and dialogs remain above rows and inside the visible viewport.
+- Context menus use one surface, `220px` width, shared item height, icon alignment, and danger treatment. Selection grids such as icon pickers are the only intentional menu-layout exception.
+- Focused dialogs use one stable header/body/footer anatomy. The header identifies the task, the body owns scrolling, and the footer keeps neutral cancellation beside one primary continuation or destructive confirmation.
 - Peer actions with equal consequence use the same neutral treatment. Accent fill is reserved for the current primary commit or flow-advance action; Target `Capture` and `Profiles` are neutral peers.
 - Settings switches sit beside the setting label they control, with supporting copy on the following line; they MUST NOT float as visually detached controls at the far edge of a wide row.
 - Hover/focus tooltips are mutually exclusive. Long-text tooltips allow pointer entry and native text selection for copying, then close after the pointer leaves both trigger and tooltip.
@@ -776,7 +786,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Primary workflows work with keyboard only.
 - Status is never communicated through color alone.
 - Dynamic visible copy and accessible labels use the active locale. Truncated Profile descriptions use the shared selectable overflow detail instead of native browser title tooltips.
-- Renderer styling follows one ordered cascade contract: accessibility, tokens, base, frozen legacy, primitives, shell, pages, and overlays.
+- Renderer styling follows one ordered cascade contract: accessibility, tokens, base, frozen legacy, primitives, shell, pages, shared system contracts, and overlays.
 - New page behavior MUST be owned by its page stylesheet or a shared primitive; the frozen legacy stylesheet MUST NOT grow and the retired product-level override file MUST NOT return.
 - Skills and Profiles respond to their actual content containers, not only the outer window width.
 
@@ -968,12 +978,13 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 ### 25.1 Verification Snapshot
 
-Last verified: 2026-07-17 against the current `main` tree at the time of this snapshot.
+Last verified: 2026-07-18 against the current working tree at the time of this snapshot.
 
-- `461` automated tests passed across `52` test files; the `89`-test Electron UI suite and `97` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
-- The CSS architecture gate passed with six named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
+- `507` automated tests passed across `58` test files; the `91`-test Electron UI suite and `100` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- The CSS architecture gate passed with eleven named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `51` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, and focused update-setting states.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
+- Shared page headers, `32px` resource identities, compact/default row heights, Profile commit controls, MCP rows, Cleanup state/action lanes, `220px` context menus, and Apply resource rows passed cross-workspace geometry and overflow assertions.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
