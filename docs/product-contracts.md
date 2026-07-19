@@ -854,6 +854,8 @@ Registration MUST occur in the Target registry. Renderer components MUST NOT req
 
 Target Skill drivers report facts only. They MUST NOT import Library content, mutate Profile state, deploy files, remove legacy paths, or create backups. The core owns Save, Preview, Backup, atomic Apply, post-write verification, and Rollback through one Agent-neutral operation model. Agent-specific behavior belongs behind the adapter; Agent-specific buttons and Target ID branches do not belong in the renderer.
 
+Runtime snapshots are the single source for Skill discovery, runtime identity, availability, location role, and runtime issues. Library inventory MAY enrich those observations with Library relationships, ignore rules, content hashes, and external-manager evidence, but MUST NOT independently reinterpret Agent runtime behavior. Broken links and unreadable Skill manifests remain visible as unavailable, review-only inventory and MUST NOT enter automatic import, cleanup, replacement, or deletion flows.
+
 Legacy migration eligibility is both path- and Target-owned. A shared copy carrying another Target's AgentEnv ownership marker is observable but MUST NOT be removed, replaced, or claimed by the current Target.
 
 Antigravity's implemented global scope manages `~/.gemini/GEMINI.md` and
@@ -935,6 +937,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Missing executable and missing directory are distinguished.
 - Copy mode keeps Library updates pending; Live link mode visibly propagates them immediately.
 - Create from Target captures portable resources, reuses exact Library matches, and leaves Target files and deployment state unchanged.
+- Create from Target MUST retain AgentEnv-owned legacy Skills as migration inputs so the first Apply cannot remove a legacy copy without installing the captured Skill into its current runtime location.
 - Ignored resources and unsupported native data remain Target-owned after Create from Target.
 - Applying the same Library Skill to OpenCode, Codex, Claude Code, and Antigravity creates isolated Target-specific runtime copies.
 - Create from Target followed by first Apply isolates a Target Skills root that aliases a shared directory, preserves the shared destination byte-for-byte, installs Target-owned child references, and restores the original root link through Rollback.
@@ -948,6 +951,8 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Zero effective payload is blocked and material omissions require confirmation.
 - Unsupported portable resources block with remediation.
 - Native MCP discovery includes credential-bearing entries without copying secrets; Codex and OpenCode change only activation state; Claude Code and Antigravity remain read-only.
+- Read-only MCP observations do not count as effective Apply payload and Preview MUST describe them as remaining Agent-controlled.
+- Codex native disabled Skill detection accepts both runtime-name and manifest-path entries; either form blocks a Profile that expects the disabled Skill to run.
 - Source Target remains unchanged.
 
 ### Drift and stale data

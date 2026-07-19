@@ -258,11 +258,13 @@ const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "shared-copy-replaceable") return "Shared copy can be replaced";
   if (state === "kept-shared") return "Kept shared";
   if (state === "ignored") return "Ignored";
+  if (state === "unavailable") return "Unavailable";
   return "Managed";
 };
 
 const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState) => {
   if (state === "duplicate-copies") return "Duplicate";
+  if (state === "unavailable") return "Unavailable";
   if (state === "multiple-versions" || state === "local-changes-found") return "Conflict";
   if (state === "managed-copy-changed") return "Changed";
   if (state === "managed-elsewhere") return "External";
@@ -282,6 +284,7 @@ const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) => {
   if (state === "managed-copy-changed") return "stale";
   if (state === "shared-copy-in-use") return "pending";
   if (state === "duplicate-copies") return "library";
+  if (state === "unavailable") return "stale";
   return "unmanaged";
 };
 
@@ -293,6 +296,7 @@ const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
   if (action === "review-ownership") return "Review ownership";
   if (action === "open-profiles") return "Review shared copy";
   if (action === "review-replacement") return "Review replacement";
+  if (action === "review-details") return "Review details";
   return "";
 };
 
@@ -306,7 +310,8 @@ const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
   if (
     action === "review-differences" ||
     action === "review-drift" ||
-    action === "review-ownership"
+    action === "review-ownership" ||
+    action === "review-details"
   ) {
     return "Review";
   }
@@ -2581,6 +2586,27 @@ export const SkillLibraryPanel = ({
                     {t("Content {{hash}}", { hash: item.contentHash ? item.contentHash.slice(0, 7) : t("unavailable") })}
                   </small>
                   {item.sharedLocation ? <small>{t("Shared compatibility location")}</small> : null}
+                  {(item.runtimeStates ?? []).map((state) =>
+                    state.availability !== "enabled" || state.issues.length > 0 ? (
+                      <div className="cleanup-runtime-state" key={state.targetId}>
+                        <small>
+                          {t("{{target}} runtime: {{state}}", {
+                            target: targetNameFor(state.targetId, targetNames, "Unknown Agent"),
+                            state: t(state.availability)
+                          })}
+                        </small>
+                        {state.issues.map((issue) => (
+                          <PreviewText
+                            ariaLabel={t("Full runtime issue for {{path}}", { path: item.path })}
+                            className="cleanup-option-path"
+                            key={`${issue.code}:${issue.message}`}
+                            text={issue.message}
+                            tooltipClassName="library-source-tooltip"
+                          />
+                        ))}
+                      </div>
+                    ) : null
+                  )}
                 </div>
               ))}
             </div>
@@ -2966,6 +2992,10 @@ export const SkillLibraryPanel = ({
                     group.presentation.action === "review-drift"
                   ) {
                     openCleanupReview(group);
+                    return;
+                  }
+                  if (group.presentation.action === "review-details") {
+                    setCleanupDetailsKey(group.skillKey);
                     return;
                   }
                   if (group.presentation.action === "review-ownership") {

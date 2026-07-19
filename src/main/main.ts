@@ -21,6 +21,7 @@ import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetCaptureService } from "./targetCaptureService";
 import { createTargetRegistry } from "./targets/registry";
+import { createFilesystemSkillDriver } from "./targets/shared/skillRuntime";
 import { createTargetScope } from "./targets/targetScope";
 import { findExecutable } from "./executableDiscovery";
 import { createGitCliSkillSource } from "./skillSources/gitCliSource";
@@ -352,6 +353,15 @@ const createServices = async () => {
           fakeHomeRoot: paths.fakeHomeRoot
         })
       ),
+      runtimeSnapshotProvider: (targetPaths) => {
+        const adapter = targetRegistry.listAdapters().find(
+          (candidate) => candidate.descriptor.id === targetPaths.targetId
+        );
+        return adapter
+          ? adapter.skills.inspectRuntime(targetPaths)
+          : createFilesystemSkillDriver({ targetId: targetPaths.targetId })
+              .inspectRuntime(targetPaths);
+      },
       repositorySource,
       ...(process.env.AGENTENV_GITHUB_FIXTURE_ROOT
         ? { fetch: createGitHubFixtureFetch(process.env.AGENTENV_GITHUB_FIXTURE_ROOT) }

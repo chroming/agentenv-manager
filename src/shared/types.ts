@@ -407,6 +407,7 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   runtimeAvailability?: SkillRuntimeAvailability;
   runtimeConfidence?: SkillRuntimeConfidence;
   runtimeIssues?: SkillRuntimeIssue[];
+  runtimeStates?: SkillRuntimeTargetState[];
   contentHash: string;
   ignoreRuleId?: string;
   installMethod?: "linked" | "copied";
@@ -435,8 +436,16 @@ export interface SkillRuntimeIssue {
   message: string;
 }
 
+export interface SkillRuntimeTargetState {
+  targetId: string;
+  availability: SkillRuntimeAvailability;
+  confidence: SkillRuntimeConfidence;
+  issues: SkillRuntimeIssue[];
+}
+
 export interface SkillRuntimeObservation {
   targetId: string;
+  locationPath: string;
   path: string;
   runtimeName: string;
   deploymentName: string;
@@ -962,6 +971,7 @@ export interface EffectiveProfilePayload {
   instructions: number;
   skills: number;
   mcpServers: number;
+  observedMcpServers?: number;
   agents: number;
   nativeConfig: number;
   total: number;

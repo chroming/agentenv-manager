@@ -220,6 +220,11 @@ describe("Claude Code profile switching e2e", () => {
     const alpha = await createClaudeProfile(profileStore, "alpha");
     const beta = await createClaudeProfile(profileStore, "beta");
 
+    const readOnlyPreview = await activationService.previewProfile(alpha.id);
+    expect(readOnlyPreview.effectivePayload).toMatchObject({
+      mcpServers: 0,
+      observedMcpServers: 1
+    });
     await expectApplyOk(activationService, alpha.id);
     const betaApply = await expectApplyOk(activationService, beta.id);
     if (!betaApply.ok) {

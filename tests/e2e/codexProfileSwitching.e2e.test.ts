@@ -145,6 +145,30 @@ afterEach(async () => {
 });
 
 describe("Codex profile switching e2e", () => {
+  it("blocks a Profile Skill disabled by Codex runtime name", async () => {
+    const { paths, profileStore, activationService } = await makeEnv();
+    const codexDir = join(paths.homeDir, ".codex");
+    await mkdir(codexDir, { recursive: true });
+    await writeFile(join(codexDir, "AGENTS.md"), "# Existing Codex\n", "utf8");
+    await writeFile(
+      join(codexDir, "config.toml"),
+      [
+        "[[skills.config]]",
+        'name = "agentenv-alpha-skill"',
+        "enabled = false",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    const profile = await createCodexProfile(profileStore, "alpha");
+
+    const preview = await activationService.previewProfile(profile.id, "codex");
+
+    expect(preview.errors).toContain(
+      "Codex has Skill agentenv-alpha-skill disabled in native settings; enable it there before applying this Profile"
+    );
+  });
+
   it("switches native MCP activation and managed resources while preserving definitions and auth", async () => {
     const { paths, profileStore, activationService, listTargets } =
       await makeEnv();

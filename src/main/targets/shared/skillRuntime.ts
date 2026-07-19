@@ -157,10 +157,26 @@ export const createFilesystemSkillDriver = (
       );
       for (const candidate of candidates) {
         if (candidate.brokenLink) {
-          snapshotIssues.push({
+          const issue: SkillRuntimeIssue = {
             code: "unreadable-skill",
             severity: "warning",
             message: `Skill link target is unavailable: ${candidate.path}`
+          };
+          snapshotIssues.push(issue);
+          observations.push({
+            targetId: options.targetId,
+            locationPath: location.path,
+            path: candidate.path,
+            runtimeName: candidate.deploymentName,
+            deploymentName: candidate.deploymentName,
+            scope: location.scope ?? (location.shared ? "shared" : "user"),
+            owner: location.scope === "builtin" ? "agent" : "user",
+            availability: "unknown",
+            confidence: "inferred",
+            locationRole: location.role,
+            shared: location.shared,
+            legacy: location.management === "legacy",
+            issues: [issue]
           });
           continue;
         }
@@ -169,10 +185,26 @@ export const createFilesystemSkillDriver = (
         try {
           content = await readFile(join(candidate.path, "SKILL.md"), "utf8");
         } catch {
-          snapshotIssues.push({
+          const issue: SkillRuntimeIssue = {
             code: "unreadable-skill",
             severity: "warning",
             message: `Skill manifest is unreadable: ${join(candidate.path, "SKILL.md")}`
+          };
+          snapshotIssues.push(issue);
+          observations.push({
+            targetId: options.targetId,
+            locationPath: location.path,
+            path: candidate.path,
+            runtimeName: candidate.deploymentName,
+            deploymentName: candidate.deploymentName,
+            scope: location.scope ?? (location.shared ? "shared" : "user"),
+            owner: location.scope === "builtin" ? "agent" : "user",
+            availability: "unknown",
+            confidence: "inferred",
+            locationRole: location.role,
+            shared: location.shared,
+            legacy: location.management === "legacy",
+            issues: [issue]
           });
           continue;
         }
@@ -213,6 +245,7 @@ export const createFilesystemSkillDriver = (
 
         observations.push({
           targetId: options.targetId,
+          locationPath: location.path,
           path: candidate.path,
           runtimeName,
           deploymentName: candidate.deploymentName,

@@ -1053,6 +1053,19 @@
   line-height: 1.35;
 }
 
+.cleanup-details-location > .cleanup-runtime-state {
+  align-items: stretch;
+  display: grid;
+  gap: 4px;
+  justify-content: stretch;
+}
+
+.cleanup-runtime-state small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .cleanup-details-dialog .preview-actions button {
   height: 40px;
   min-height: 40px;

@@ -118,7 +118,9 @@ export const createTargetCaptureService = ({
       librarySkills
     );
     const runtimeInventory = inventory.filter(
-      (entry) => entry.locationRole !== "discovery-only"
+      (entry) =>
+        entry.locationRole !== "discovery-only" ||
+        (entry.legacyLocation && entry.status === "managed" && entry.managedByTarget === true)
     );
     const ignoredInventory = runtimeInventory.filter((entry) => entry.status === "ignored");
     const externalInventory = runtimeInventory.filter((entry) => entry.status === "external");

@@ -20,6 +20,27 @@ const inventoryItem = (
 });
 
 describe("skill cleanup groups", () => {
+  it("keeps unreadable Skill links review-only", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        contentHash: "",
+        runtimeAvailability: "unknown",
+        runtimeIssues: [{
+          code: "unreadable-skill",
+          severity: "warning",
+          message: "Skill link target is unavailable"
+        }]
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "broken",
+      resolution: "manual",
+      presentation: { state: "unavailable", action: "review-details" }
+    });
+    expect(automaticSkillCleanupRequest(group)).toBeUndefined();
+  });
+
   it("marks a single unmanaged copy and identical duplicates as auto-ready", () => {
     const groups = buildSkillCleanupGroups([
       inventoryItem(),

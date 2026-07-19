@@ -324,6 +324,37 @@ description: >
       externalOwnership: { state: "broken-link" }
     });
   });
+
+  it("keeps an unclaimed broken Skill link visible and non-automatic", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const targetSkillsDir = join(paths.homeDir, ".config", "opencode", "skills");
+    const targetDir = join(targetSkillsDir, "missing-local");
+    await mkdir(targetSkillsDir, { recursive: true });
+    await symlink(join(root, "removed-source"), targetDir, "dir");
+    const store = createSkillLibraryStore(paths);
+
+    const inventory = await store.scanInventory([{
+      targetId: "opencode",
+      configDir: dirname(targetSkillsDir),
+      instructionsPath: "",
+      configPath: "",
+      skillsDir: targetSkillsDir
+    }]);
+    const group = buildSkillCleanupGroups(inventory)[0];
+
+    expect(inventory[0]).toMatchObject({
+      id: "missing-local",
+      status: "unmanaged",
+      runtimeAvailability: "unknown",
+      runtimeIssues: [expect.objectContaining({ code: "unreadable-skill" })]
+    });
+    expect(group).toMatchObject({
+      state: "broken",
+      resolution: "manual",
+      presentation: { state: "unavailable", action: "review-details" }
+    });
+  });
   it("lists reusable skills from the central library directory", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: root });
@@ -392,6 +423,61 @@ description: >
           importable: false
         })
       })
+    ]);
+  });
+
+  it("preserves per-Agent runtime state for one shared Skill copy", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const homeDir = join(root, "home");
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir });
+    const sharedRoot = join(homeDir, ".agents", "skills");
+    const sharedSkill = join(sharedRoot, "reviewer");
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(join(sharedSkill, "SKILL.md"), "---\nname: reviewer\n---\n# Reviewer\n");
+    const targetPaths = ["codex", "opencode"].map((targetId) => ({
+      targetId,
+      configDir: join(homeDir, `.${targetId}`),
+      instructionsPath: join(homeDir, `.${targetId}`, "AGENTS.md"),
+      configPath: join(homeDir, `.${targetId}`, "config.json"),
+      skillsDir: sharedRoot,
+      skillLocations: [{
+        path: sharedRoot,
+        role: "compatibility-runtime" as const,
+        shared: true,
+        scope: "shared" as const,
+        scanDepth: "direct" as const,
+        management: "observed" as const
+      }]
+    }));
+    const store = createSkillLibraryStore(paths, undefined, {
+      runtimeSnapshotProvider: async (target) => ({
+        targetId: target.targetId,
+        issues: [],
+        observations: [{
+          targetId: target.targetId,
+          locationPath: sharedRoot,
+          path: sharedSkill,
+          runtimeName: "reviewer",
+          deploymentName: "reviewer",
+          scope: "shared",
+          owner: "user",
+          availability: target.targetId === "codex" ? "disabled" : "enabled",
+          confidence: "verified",
+          locationRole: "compatibility-runtime",
+          shared: true,
+          legacy: false,
+          issues: []
+        }]
+      })
+    });
+
+    const inventory = await store.scanInventory(targetPaths);
+
+    expect(inventory).toHaveLength(1);
+    expect(inventory[0].foundIn).toEqual(["codex", "opencode"]);
+    expect(inventory[0].runtimeStates).toEqual([
+      expect.objectContaining({ targetId: "codex", availability: "disabled" }),
+      expect.objectContaining({ targetId: "opencode", availability: "enabled" })
     ]);
   });
 

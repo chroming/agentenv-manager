@@ -394,13 +394,21 @@ const readCodexDisabledSkillNames = async (targetPaths: TargetPaths) => {
       : undefined;
   if (!Array.isArray(skillsConfig)) return new Set<string>();
 
+  const disabledEntries: Array<{ name?: string; path?: string }> = [];
+  for (const entry of skillsConfig) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const item = entry as Record<string, unknown>;
+    if (item.enabled !== false) continue;
+    if (typeof item.name === "string" && item.name.trim()) {
+      disabledEntries.push({ name: item.name.trim() });
+    } else if (typeof item.path === "string") {
+      disabledEntries.push({ path: item.path });
+    }
+  }
   const disabledNames = await Promise.all(
-    skillsConfig.flatMap((entry) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-      const item = entry as Record<string, unknown>;
-      if (item.enabled !== false || typeof item.path !== "string") return [];
-      return [item.path];
-    }).map(async (path) => {
+    disabledEntries.map(async (entry) => {
+      if (entry.name) return entry.name;
+      const path = entry.path ?? "";
       const manifestPath = path.endsWith("SKILL.md") ? path : join(path, "SKILL.md");
       const frontmatter = parseSkillFrontmatter(await readTextIfExists(manifestPath));
       return frontmatter.name || basename(path.endsWith("SKILL.md") ? dirname(path) : path);
@@ -528,13 +536,19 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       parsed.skills && typeof parsed.skills === "object" && !Array.isArray(parsed.skills)
         ? (parsed.skills as Record<string, unknown>)
         : {};
-    const disabledSkillPaths = Array.isArray(skills.config)
+    const disabledSkillEntries = Array.isArray(skills.config)
       ? skills.config.flatMap((entry) => {
           if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
           const item = entry as Record<string, unknown>;
-          return item.enabled === false && typeof item.path === "string" ? [item.path] : [];
+          return item.enabled === false ? [item] : [];
         })
       : [];
+    const disabledSkillPaths = disabledSkillEntries.flatMap((item) =>
+      typeof item.path === "string" ? [item.path] : []
+    );
+    const disabledSkillNames = disabledSkillEntries.flatMap((item) =>
+      typeof item.name === "string" && item.name.trim() ? [item.name.trim()] : []
+    );
     const managedKeys = new Set(["mcp_servers", "skills"]);
     const nativeKeys = Object.keys(parsed).filter((key) => !managedKeys.has(key));
     return {
@@ -548,9 +562,17 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
           ? [
               `Codex native settings remain Target-owned: ${nativeKeys.join(", ")}`
             ]
+          : []),
+        ...(disabledSkillNames.length > 0
+          ? [
+              `Codex native disabled Skills remain Target-owned: ${disabledSkillNames.join(", ")}`
+            ]
           : [])
       ],
-      excluded: nativeKeys.map((key) => `config.toml.${key}`)
+      excluded: [
+        ...nativeKeys.map((key) => `config.toml.${key}`),
+        ...disabledSkillNames.map((name) => `config.toml.skills.config.${name}`)
+      ]
     };
   },
   ...profileFiles,

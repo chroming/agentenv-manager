@@ -5,6 +5,7 @@ export type SkillCleanupGroupState =
   | "managed"
   | "stale"
   | "external"
+  | "broken"
   | "conflict"
   | "duplicate"
   | "unmanaged"
@@ -23,6 +24,7 @@ export type SkillCleanupDisplayState =
   | "shared-copy-in-use"
   | "shared-copy-replaceable"
   | "kept-shared"
+  | "unavailable"
   | "managed"
   | "ignored";
 
@@ -34,6 +36,7 @@ export type SkillCleanupRecommendedAction =
   | "review-ownership"
   | "open-profiles"
   | "review-replacement"
+  | "review-details"
   | "none";
 
 export interface SkillCleanupPresentation {
@@ -100,6 +103,9 @@ export const buildSkillCleanupGroups = (
           item.contentMatchesLibrary !== true
       );
       const hasExternal = statuses.has("external");
+      const hasUnreadable = activeItems.some((item) =>
+        item.runtimeIssues?.some((issue) => issue.code === "unreadable-skill")
+      );
       const unresolvedExternal = activeItems.some(
         (item) =>
           item.status === "external" &&
@@ -154,7 +160,9 @@ export const buildSkillCleanupGroups = (
 
       const state: SkillCleanupGroupState = allIgnored
         ? "ignored"
-        : allManaged && !staleManaged
+        : hasUnreadable
+          ? "broken"
+          : allManaged && !staleManaged
           ? "managed"
           : hasExternal
             ? "external"
@@ -173,7 +181,7 @@ export const buildSkillCleanupGroups = (
       const resolution: SkillCleanupResolution =
         state === "ignored" || state === "managed" || (state === "external" && !unresolvedExternal)
           ? "resolved"
-          : state === "external" || state === "conflict" || missingTarget
+          : state === "external" || state === "conflict" || state === "broken" || missingTarget
             ? "manual"
             : "automatic";
       const resolutionReason =
@@ -191,50 +199,54 @@ export const buildSkillCleanupGroups = (
                 : state === "library"
                   ? "The local copy already matches the Library version."
                   : "A single local copy can become the Library version."
-            : state === "external"
-              ? "An external manager owns at least one detected copy."
-              : missingTarget
-                ? "A destination Agent could not be identified."
-                : "Detected copies differ and require a version choice.";
+            : state === "broken"
+              ? "The Skill path is unavailable and must be reviewed before any cleanup action."
+              : state === "external"
+                ? "An external manager owns at least one detected copy."
+                : missingTarget
+                  ? "A destination Agent could not be identified."
+                  : "Detected copies differ and require a version choice.";
 
       const presentation: SkillCleanupPresentation = allIgnored
         ? sharedKept
           ? { state: "kept-shared", action: "none" }
           : { state: "ignored", action: "none" }
-        : hasExternal
-          ? {
-              state: "managed-elsewhere",
-              action: "review-ownership"
-            }
-          : sharedMigration?.state === "ready"
-            ? { state: "shared-copy-replaceable", action: "review-replacement" }
-            : sharedMigration?.state === "waiting"
-              ? { state: "shared-copy-in-use", action: "open-profiles" }
-              : sharedMigration?.state === "kept"
-                ? { state: "kept-shared", action: "none" }
-                : sharedMigration?.state === "external"
-                  ? { state: "managed-elsewhere", action: "review-ownership" }
-                  : sharedMigration
-                    ? hasLibraryCopy
-                      ? { state: "local-changes-found", action: "review-differences" }
-                      : hashes.size > 1
-                        ? { state: "multiple-versions", action: "add-to-library" }
-                        : activeItems.length > 1
-                          ? { state: "duplicate-copies", action: "add-to-library" }
-                          : { state: "not-in-library", action: "add-to-library" }
-                    : !hasLibraryCopy
-                      ? hashes.size > 1
-                        ? { state: "multiple-versions", action: "add-to-library" }
-                        : activeItems.length > 1
-                          ? { state: "duplicate-copies", action: "add-to-library" }
-                          : { state: "not-in-library", action: "add-to-library" }
-                      : staleManaged
-                        ? { state: "managed-copy-changed", action: "review-drift" }
-                        : allManaged
-                          ? { state: "managed", action: "none" }
-                          : state === "conflict"
-                            ? { state: "local-changes-found", action: "review-differences" }
-                            : { state: "copies-not-managed", action: "manage-copies" };
+        : hasUnreadable
+          ? { state: "unavailable", action: "review-details" }
+          : hasExternal
+            ? {
+                state: "managed-elsewhere",
+                action: "review-ownership"
+              }
+            : sharedMigration?.state === "ready"
+              ? { state: "shared-copy-replaceable", action: "review-replacement" }
+              : sharedMigration?.state === "waiting"
+                ? { state: "shared-copy-in-use", action: "open-profiles" }
+                : sharedMigration?.state === "kept"
+                  ? { state: "kept-shared", action: "none" }
+                  : sharedMigration?.state === "external"
+                    ? { state: "managed-elsewhere", action: "review-ownership" }
+                    : sharedMigration
+                      ? hasLibraryCopy
+                        ? { state: "local-changes-found", action: "review-differences" }
+                        : hashes.size > 1
+                          ? { state: "multiple-versions", action: "add-to-library" }
+                          : activeItems.length > 1
+                            ? { state: "duplicate-copies", action: "add-to-library" }
+                            : { state: "not-in-library", action: "add-to-library" }
+                      : !hasLibraryCopy
+                        ? hashes.size > 1
+                          ? { state: "multiple-versions", action: "add-to-library" }
+                          : activeItems.length > 1
+                            ? { state: "duplicate-copies", action: "add-to-library" }
+                            : { state: "not-in-library", action: "add-to-library" }
+                        : staleManaged
+                          ? { state: "managed-copy-changed", action: "review-drift" }
+                          : allManaged
+                            ? { state: "managed", action: "none" }
+                            : state === "conflict"
+                              ? { state: "local-changes-found", action: "review-differences" }
+                              : { state: "copies-not-managed", action: "manage-copies" };
 
       return {
         skillKey,

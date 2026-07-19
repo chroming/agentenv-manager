@@ -161,6 +161,35 @@ describe("PreviewDialog", () => {
     expect(onAcknowledgedChange).toHaveBeenCalledWith(true);
   });
 
+  it("describes read-only MCP connections without claiming they will be applied", () => {
+    render(
+      <PreviewDialog
+        targetNames={{ "claude-code": "Claude Code" }}
+        preview={{
+          ...preview,
+          targetId: "claude-code",
+          effectivePayload: {
+            instructions: 1,
+            skills: 0,
+            mcpServers: 0,
+            observedMcpServers: 2,
+            agents: 0,
+            nativeConfig: 0,
+            total: 1
+          }
+        }}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        "Claude Code will receive 1 instruction file. 2 MCP connections remain Agent-controlled."
+      )
+    ).toBeInTheDocument();
+  });
+
   it("presents an unmanaged Skill destination as an explicit backup replacement", () => {
     const path = "/Users/test/.claude/skills/bytedcli";
     const onAcknowledgedChange = vi.fn();

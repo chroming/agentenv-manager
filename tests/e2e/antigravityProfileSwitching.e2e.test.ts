@@ -3,13 +3,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createActivationService } from "../../src/main/activationService";
+import { createMcpLibraryStore } from "../../src/main/mcpLibraryStore";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
+import { createSettingsStore } from "../../src/main/settingsStore";
+import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
+import { createTargetCaptureService } from "../../src/main/targetCaptureService";
 import { createTargetDiscoveryService } from "../../src/main/targetDiscovery";
 import { createAntigravityTargetAdapter } from "../../src/main/targets/integrations/antigravity";
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import type { ActivationService } from "../../src/main/activationService";
 import type { ProfileStore } from "../../src/main/profileStore";
+import type { TargetInfo } from "../../src/shared/types";
 
 let root = "";
 
@@ -66,6 +71,98 @@ afterEach(async () => {
 });
 
 describe("Antigravity Profile switching e2e", () => {
+  it("captures an AgentEnv-owned legacy Skill before migrating it to the CLI root", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-capture-legacy-e2e-"));
+    const homeDir = join(root, "home");
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir });
+    const registry = createTargetRegistry([createAntigravityTargetAdapter()]);
+    const settingsStore = createSettingsStore(paths);
+    const profileStore = createProfileStore({ appDataRoot: paths.appDataRoot, homeDir }, registry);
+    const skillLibraryStore = createSkillLibraryStore(paths, settingsStore, {
+      runtimeSnapshotProvider: (targetPaths) =>
+        registry.get(targetPaths.targetId).skills.inspectRuntime(targetPaths)
+    });
+    const mcpLibraryStore = createMcpLibraryStore(paths);
+    const targetPaths = registry.get("antigravity").createTargetPaths({ homeDir });
+    const legacyPath = join(homeDir, ".gemini", "config", "skills", "legacy-review");
+    await mkdir(legacyPath, { recursive: true });
+    await writeFile(
+      join(legacyPath, "SKILL.md"),
+      "---\nname: legacy-review\ndescription: Legacy review\n---\n# Legacy\n"
+    );
+    await writeFile(
+      join(legacyPath, ".agentenv-owner.json"),
+      `${JSON.stringify({
+        owner: "agentenv-manager",
+        profileId: "legacy-profile",
+        targetId: "antigravity",
+        kind: "skill",
+        source: "skills/legacy-review"
+      }, null, 2)}\n`
+    );
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.instructionsPath, "# Existing Antigravity\n");
+    await writeFile(targetPaths.configPath, '{"mcpServers":{}}\n');
+    const captureService = createTargetCaptureService({
+      paths,
+      profileStore,
+      targetRegistry: registry,
+      skillLibraryStore,
+      mcpLibraryStore,
+      targetDiscoveryService: {
+        listTargets: async () => [
+          { id: "antigravity", health: { executableFound: true } } as TargetInfo
+        ]
+      }
+    });
+
+    const capturePreview = await captureService.previewTarget("antigravity");
+    expect(capturePreview.resources).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      name: "legacy-review",
+      action: "import"
+    }));
+    const captured = await captureService.createFromTarget({
+      previewId: capturePreview.id,
+      name: "Captured Antigravity"
+    });
+    expect(captured.profile.assetPolicy.skillRefs).toEqual([
+      { libraryId: "legacy-review", targetName: "legacy-review" }
+    ]);
+
+    const activationService = createActivationService({
+      paths,
+      profileStore,
+      targetRegistry: registry,
+      settingsStore,
+      skillLibraryStore,
+      mcpLibraryStore
+    });
+    const applyPreview = await activationService.previewProfile(
+      captured.profile.id,
+      "antigravity"
+    );
+    expect(applyPreview.errors).toEqual([]);
+    expect(applyPreview.resourceChanges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "remove", path: legacyPath }),
+      expect.objectContaining({
+        action: "install",
+        path: join(targetPaths.skillsDir ?? "", "legacy-review")
+      })
+    ]));
+    const result = await activationService.applyProfile(captured.profile.id, applyPreview.id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.errors.join("\n"));
+    await expect(readFile(join(legacyPath, "SKILL.md"), "utf8")).rejects.toThrow();
+    await expect(
+      readFile(join(targetPaths.skillsDir ?? "", "legacy-review", "SKILL.md"), "utf8")
+    ).resolves.toContain("# Legacy");
+
+    await activationService.previewRollback(result.backupId);
+    await expect(activationService.rollback(result.backupId)).resolves.toEqual({ ok: true });
+    await expect(readFile(join(legacyPath, "SKILL.md"), "utf8")).resolves.toContain("# Legacy");
+  });
+
   it("switches rules and skills while preserving Antigravity-owned MCP definitions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-e2e-"));
     const homeDir = join(root, "home");

@@ -296,7 +296,7 @@ export const PreviewDialog = ({
         payload.nativeConfig > 0 ? plural(payload.nativeConfig, "native config") : undefined
       ].filter((item): item is string => Boolean(item))
     : [];
-  const outcomeText = isActivationPreview
+  const managedOutcomeText = isActivationPreview
     ? payloadParts.length > 0
       ? t("{{target}} will receive {{payload}}.", { target: targetName, payload: payloadParts.join(", ") })
       : t("{{target}} has no effective Profile payload.", { target: targetName })
@@ -305,6 +305,14 @@ export const PreviewDialog = ({
         ? t("{{target}} files will stay in place and AgentEnv ownership will be removed.", { target: targetName })
         : t("{{target}} will be restored to its pre-takeover environment.", { target: targetName })
       : t("{{files}} reviewed before restore.", { files: fileCountLabel });
+  const outcomeText = isActivationPreview && (payload?.observedMcpServers ?? 0) > 0
+    ? `${managedOutcomeText} ${t(
+        payload?.observedMcpServers === 1
+          ? "1 MCP connection remains Agent-controlled."
+          : "{{count}} MCP connections remain Agent-controlled.",
+        { count: payload?.observedMcpServers ?? 0 }
+      )}`
+    : managedOutcomeText;
   const resourcePlan = resourceChanges.length > 0 ? (
     <section className="preview-resource-plan" aria-label={t("Resource changes")}>
       <header>

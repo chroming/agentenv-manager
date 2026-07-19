@@ -58,6 +58,10 @@ describe("Codex target adapter", () => {
         `path = ${JSON.stringify(join(reviewerDir, "SKILL.md"))}`,
         "enabled = false",
         "",
+        "[[skills.config]]",
+        'name = "named-reviewer"',
+        "enabled = false",
+        "",
         "# BEGIN AgentEnv Manager: skills",
         "[[skills.config]]",
         `path = ${JSON.stringify(join(managedDir, "SKILL.md"))}`,
@@ -70,7 +74,7 @@ describe("Codex target adapter", () => {
     const nativeState = await adapter.skills.readNativeState(targetPaths);
     const snapshot = await adapter.skills.inspectRuntime(targetPaths);
 
-    expect(nativeState.disabledRuntimeNames).toEqual(["reviewer"]);
+    expect(nativeState.disabledRuntimeNames).toEqual(["named-reviewer", "reviewer"]);
     expect(snapshot.observations).toEqual(expect.arrayContaining([
       expect.objectContaining({ runtimeName: "reviewer", availability: "disabled" }),
       expect.objectContaining({ runtimeName: "managed-skill", availability: "enabled" })
@@ -114,6 +118,10 @@ describe("Codex target adapter", () => {
         "[mcp_servers.context7]",
         'command = "npx"',
         'args = ["-y", "@upstash/context7-mcp"]',
+        "enabled = false",
+        "",
+        "[[skills.config]]",
+        'name = "named-disabled"',
         "enabled = false",
         ""
       ].join("\n"),
@@ -299,6 +307,10 @@ describe("Codex target adapter", () => {
         "[[skills.config]]",
         'path = "/tmp/disabled/SKILL.md"',
         "enabled = false",
+        "",
+        "[[skills.config]]",
+        'name = "named-disabled"',
+        "enabled = false",
         ""
       ].join("\n"),
       "utf8"
@@ -318,6 +330,10 @@ describe("Codex target adapter", () => {
       })
     ]);
     expect(captured.disabledSkillPaths).toEqual(["/tmp/disabled/SKILL.md"]);
+    expect(captured.warnings).toContain(
+      "Codex native disabled Skills remain Target-owned: named-disabled"
+    );
+    expect(captured.excluded).toContain("config.toml.skills.config.named-disabled");
     expect(captured.excluded).toContain("config.toml.model");
   });
 });

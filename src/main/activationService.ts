@@ -415,7 +415,10 @@ const applyLibrarySkillAvailability = (
   };
 };
 
-const effectivePayloadFor = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>): EffectiveProfilePayload => {
+const effectivePayloadFor = (
+  profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+  mcpActivationSupported: boolean
+): EffectiveProfilePayload => {
   const compactConfig = profile.configText.replace(/\s/g, "");
   const instructions =
     profile.manifest.managed.instructions && profile.instructions.trim().length > 0 ? 1 : 0;
@@ -428,17 +431,20 @@ const effectivePayloadFor = (profile: Awaited<ReturnType<ProfileStore["readProfi
     ? profile.assetPolicy.ownedDirs.filter((asset) => asset.kind === "agent").length +
       profile.assetPolicy.ownedFiles.filter((asset) => asset.kind === "agent").length
     : 0;
-  const mcpServers = profile.manifest.managed.config
+  const selectedMcpCount = profile.manifest.managed.config
     ? (profile.assetPolicy.mcpSelections ?? []).filter(
         (selection) => selection.targetId === profile.manifest.targetId
       ).length
     : 0;
+  const mcpServers = mcpActivationSupported ? selectedMcpCount : 0;
+  const observedMcpServers = mcpActivationSupported ? 0 : selectedMcpCount;
   const nativeConfig =
     profile.manifest.managed.config && compactConfig.length > 0 && compactConfig !== "{}" ? 1 : 0;
   return {
     instructions,
     skills,
     mcpServers,
+    observedMcpServers,
     agents,
     nativeConfig,
     total: instructions + skills + mcpServers + agents + nativeConfig
@@ -459,7 +465,9 @@ export const createActivationService = ({
         homeDir: paths.homeDir,
         fakeHomeRoot: paths.fakeHomeRoot
       })
-    )
+    ),
+    runtimeSnapshotProvider: (targetPaths) =>
+      targetRegistry.get(targetPaths.targetId).skills.inspectRuntime(targetPaths)
   })
 }: ActivationServiceOptions): ActivationService => {
   const backupStore = createBackupStore(paths);
@@ -1201,7 +1209,10 @@ export const createActivationService = ({
           skillLibrary.find((skill) => skill.id === reference.libraryId)?.globallyEnabled === false
       )
       .map((reference) => reference.libraryId);
-    const effectivePayload = effectivePayloadFor(profile);
+    const effectivePayload = effectivePayloadFor(
+      profile,
+      adapter.descriptor.capabilities.mcpActivation === true
+    );
     const targetPaths = adapter.createTargetPaths({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
