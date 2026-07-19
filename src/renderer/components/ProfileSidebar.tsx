@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   BookOpen,
   Boxes,
@@ -69,6 +71,153 @@ const targetDisplayRank = (target: TargetInfo) => {
   return target.displayOrder ?? Number.MAX_SAFE_INTEGER;
 };
 
+const targetStatusMessage = (status: TargetHealthStatus) =>
+  ({
+    ready: "Ready",
+    "needs-setup": "Needs setup",
+    missing: "Missing",
+    guarded: "Guarded"
+  } satisfies Record<TargetHealthStatus, string>)[status];
+
+const AgentOverflowPopover = ({ targets }: { targets: TargetInfo[] }) => {
+  const { t } = useI18n();
+  const popoverId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<number | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<CSSProperties>();
+
+  const cancelClose = () => {
+    if (closeTimerRef.current !== undefined) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = undefined;
+    }
+  };
+
+  const close = () => {
+    cancelClose();
+    setOpen(false);
+  };
+
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimerRef.current = window.setTimeout(close, 120);
+  };
+
+  const show = () => {
+    cancelClose();
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const popoverWidth = 190;
+      const popoverHeight = Math.min(16 + targets.length * 42, window.innerHeight - 20);
+      setPosition({
+        left: Math.max(10, Math.min(rect.left, window.innerWidth - popoverWidth - 10)),
+        top:
+          rect.top - popoverHeight - 8 >= 10
+            ? rect.top - popoverHeight - 8
+            : Math.min(window.innerHeight - popoverHeight - 10, rect.bottom + 8)
+      });
+    }
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const dismiss = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !triggerRef.current?.contains(target) &&
+        !popoverRef.current?.contains(target)
+      ) {
+        close();
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  useEffect(() => () => cancelClose(), []);
+
+  const label = t("{{count}} more Agents", { count: targets.length });
+  const triggerLabel = t(
+    targets.length === 1
+      ? "Show hidden Agent list, {{count}} item"
+      : "Show hidden Agent list, {{count}} items",
+    { count: targets.length }
+  );
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        className="agent-chip agent-chip--more"
+        type="button"
+        aria-label={triggerLabel}
+        aria-describedby={open ? popoverId : undefined}
+        aria-expanded={open}
+        title={label}
+        onBlur={scheduleClose}
+        onClick={show}
+        onFocus={show}
+        onMouseEnter={show}
+        onMouseLeave={scheduleClose}
+      >
+        +{targets.length}
+      </button>
+      {open
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              className="agent-overflow-popover"
+              id={popoverId}
+              role="tooltip"
+              style={position}
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
+            >
+              {targets.map((target) => {
+                const targetIcon = targetIconFor(target);
+                const status = t(targetStatusMessage(target.health.status));
+                return (
+                  <div className="agent-overflow-popover__item" key={target.id}>
+                    <span
+                      className={`agent-chip agent-chip--${target.health.status} agent-chip--${targetIcon.flavor}`}
+                      aria-hidden="true"
+                    >
+                      {targetIcon.assetUrl ? (
+                        <img className="agent-chip__logo" src={targetIcon.assetUrl} alt="" />
+                      ) : (
+                        targetInitials(target)
+                      )}
+                    </span>
+                    <span className="agent-overflow-popover__copy">
+                      <strong>{target.name}</strong>
+                      <small>{status}</small>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  );
+};
+
 export const ProfileSidebar = ({
   targets,
   profiles,
@@ -83,7 +232,7 @@ export const ProfileSidebar = ({
   const orderedTargets = [...targets]
     .sort((left, right) => targetDisplayRank(left) - targetDisplayRank(right));
   const statusTargets = orderedTargets.slice(0, 3);
-  const hiddenTargetCount = Math.max(0, orderedTargets.length - statusTargets.length);
+  const hiddenTargets = orderedTargets.slice(statusTargets.length);
 
   const libraryItems: Array<{
     id: LibraryTab;
@@ -197,14 +346,7 @@ export const ProfileSidebar = ({
             return (
               <span
                 className={`agent-chip agent-chip--${target.health.status} agent-chip--${targetIcon.flavor}`}
-                title={`${target.name} · ${t(
-                  ({
-                    ready: "Ready",
-                    "needs-setup": "Needs setup",
-                    missing: "Missing",
-                    guarded: "Guarded"
-                  } satisfies Record<TargetHealthStatus, string>)[target.health.status]
-                )}`}
+                title={`${target.name} · ${t(targetStatusMessage(target.health.status))}`}
                 key={target.id}
               >
                 {targetIcon.assetUrl ? (
@@ -215,15 +357,7 @@ export const ProfileSidebar = ({
               </span>
             );
           })}
-          {hiddenTargetCount > 0 ? (
-            <span
-              className="agent-chip agent-chip--more"
-              aria-label={t("{{count}} more Agents", { count: hiddenTargetCount })}
-              title={t("{{count}} more Agents", { count: hiddenTargetCount })}
-            >
-              +{hiddenTargetCount}
-            </span>
-          ) : null}
+          {hiddenTargets.length > 0 ? <AgentOverflowPopover targets={hiddenTargets} /> : null}
         </div>
       </section> : null}
     </aside>

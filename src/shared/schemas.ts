@@ -43,6 +43,11 @@ export const ResourceIconKeySchema = z.enum([
   "pen",
   "terminal",
   "database",
+  "search",
+  "workflow",
+  "book",
+  "palette",
+  "bot",
   "sparkles"
 ]);
 

@@ -1863,18 +1863,30 @@ describe("Electron UI profile switching e2e", () => {
       const glyph = icon.querySelector<SVGElement>("svg")!;
       const iconBox = icon.getBoundingClientRect();
       const glyphBox = glyph.getBoundingClientRect();
+      const resourceCellBox = icon.closest<HTMLElement>(".library-resource-cell")!.getBoundingClientRect();
+      const rowBox = icon.closest<HTMLElement>(".library-table-row")!.getBoundingClientRect();
       return {
         iconSize: [iconBox.width, iconBox.height],
         glyphSize: [glyphBox.width, glyphBox.height],
+        backgroundColor: getComputedStyle(icon).backgroundColor,
         centerDelta: [
           Math.abs(iconBox.left + iconBox.width / 2 - (glyphBox.left + glyphBox.width / 2)),
           Math.abs(iconBox.top + iconBox.height / 2 - (glyphBox.top + glyphBox.height / 2))
-        ]
+        ],
+        identityCenterDelta: Math.abs(
+          iconBox.top + iconBox.height / 2 - (resourceCellBox.top + resourceCellBox.height / 2)
+        ),
+        rowCenterDelta: Math.abs(
+          iconBox.top + iconBox.height / 2 - (rowBox.top + rowBox.height / 2)
+        )
       };
     });
-    expect(skillIconGeometry.iconSize).toEqual([26, 26]);
-    expect(skillIconGeometry.glyphSize).toEqual([17, 17]);
+    expect(skillIconGeometry.iconSize).toEqual([32, 32]);
+    expect(skillIconGeometry.glyphSize).toEqual([18, 18]);
+    expect(skillIconGeometry.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
     expect(skillIconGeometry.centerDelta.every((delta) => delta <= 0.5)).toBe(true);
+    expect(skillIconGeometry.identityCenterDelta).toBeLessThanOrEqual(0.5);
+    expect(skillIconGeometry.rowCenterDelta).toBeLessThanOrEqual(0.5);
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
     const popover = page.getByRole("menu", { name: "Actions for shared-reviewer" });
     await popover.waitFor({ state: "visible" });
@@ -4455,14 +4467,14 @@ describe("Electron UI profile switching e2e", () => {
       .click();
     await page
       .getByRole("menu", { name: "Icons for UI OpenCode alpha" })
-      .getByRole("menuitemradio", { name: "Rocket" })
+      .getByRole("menuitemradio", { name: "Design" })
       .click();
     expect(await page.getByRole("button", { name: "Save", exact: true }).isDisabled()).toBe(true);
     await expect.poll(async () =>
       (await readJson<{ iconKey?: string }>(
         join(appDataRoot, "profiles", "ui-opencode-alpha", "profile.json")
       )).iconKey
-    ).toBe("rocket");
+    ).toBe("palette");
   }, 30_000);
 
   it("adds and removes reusable MCP servers through the rendered MCP library", async () => {
@@ -5273,6 +5285,49 @@ describe("Electron UI profile switching e2e", () => {
         skillAutoCheckEnabled: true,
         skillAutoCheckIntervalMinutes: 15
       });
+  }, 30_000);
+
+  it("reveals sidebar Agents hidden behind the overflow count", async () => {
+    const { page } = await launchApp();
+    const overflow = page.getByRole("button", { name: "Show hidden Agent list, 1 item" });
+    await overflow.waitFor({ state: "visible" });
+
+    await overflow.hover();
+    const popover = page.getByRole("tooltip");
+    await popover.waitFor({ state: "visible" });
+    await expect.poll(() => popover.textContent()).toContain("Antigravity");
+    expect(await popover.locator(".agent-chip--antigravity .agent-chip__logo").count()).toBe(1);
+    await expectTopmost(popover);
+
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      await overflow.hover();
+      const box = await popover.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    }
+
+    await popover.hover();
+    await expect.poll(() => popover.isVisible()).toBe(true);
+    await page.getByRole("heading", { name: "Skills" }).hover();
+    await popover.waitFor({ state: "hidden" });
+
+    await overflow.focus();
+    await popover.waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    await popover.waitFor({ state: "hidden" });
+    await expect.poll(() => overflow.evaluate((element) => element === document.activeElement)).toBe(true);
+
+    await overflow.click();
+    await popover.waitFor({ state: "visible" });
+    await page.getByRole("heading", { name: "Skills" }).click();
+    await popover.waitFor({ state: "hidden" });
   }, 30_000);
 
   it("persists enabled Agents and excludes disabled Agents from operations", async () => {

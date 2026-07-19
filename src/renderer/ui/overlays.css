@@ -109,6 +109,36 @@
   color: #087da8;
 }
 
+.resource-icon-trigger[data-icon="search"],
+.resource-icon-option[data-icon="search"] {
+  background: #eef4ff;
+  color: #1769f5;
+}
+
+.resource-icon-trigger[data-icon="workflow"],
+.resource-icon-option[data-icon="workflow"] {
+  background: #f2edff;
+  color: #7047d8;
+}
+
+.resource-icon-trigger[data-icon="book"],
+.resource-icon-option[data-icon="book"] {
+  background: #fff3e3;
+  color: #a15c00;
+}
+
+.resource-icon-trigger[data-icon="palette"],
+.resource-icon-option[data-icon="palette"] {
+  background: #fff0f3;
+  color: #c44569;
+}
+
+.resource-icon-trigger[data-icon="bot"],
+.resource-icon-option[data-icon="bot"] {
+  background: #eaf7ff;
+  color: #087da8;
+}
+
 .resource-icon-trigger[data-icon="sparkles"],
 .resource-icon-option[data-icon="sparkles"] {
   background: #fff8df;
@@ -120,7 +150,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   box-sizing: border-box;
-  box-shadow: 0 10px 28px rgba(15, 15, 15, 0.16);
+  box-shadow: var(--shadow-popover);
   display: grid;
   gap: 6px;
   grid-template-columns: repeat(5, 34px);

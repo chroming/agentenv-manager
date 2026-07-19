@@ -756,6 +756,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Primary commands and lifecycle state remain visible.
 - Switching workspaces MUST NOT resize or reposition global chrome. Sidebar, brand lockup, navigation rows, status card, page gutter, first-level page titles, and page-header control height use shared geometry at a given viewport.
 - Sidebar navigation icons and labels MUST share the vertical center of their fixed selection surface. Padding, icon slots, and text line boxes MUST fit inside that height rather than enlarging or overflowing it.
+- The sidebar Agent summary shows at most three Agent icons inline. Additional Agents collapse into a `+N` disclosure whose hover and keyboard-focus popover shows every hidden Agent's icon, name, and current status without becoming a second navigation entry.
 - Workspace-specific content MAY use its own density only inside the stable page content region.
 - Page-level creation and import commands remain in the page header. A resource list MUST NOT repeat the page title and primary command inside a nested header.
 - First-level pages use the shared page-header anatomy: one title, optional concise context or help, then one right-aligned command group. Page titles use the same type scale and left origin across workspaces.
@@ -778,7 +779,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.
 - Every Profile row shares fixed icon and content columns. Selection, dirty/current badges, hover, and long-name truncation MUST NOT move the icon, name, description, counts, or deployment text origin.
 - Profile list icons use one consistent compact slot and icon family. Decorative per-row icon colors MUST NOT imply unsupported categories or state.
-- Profile icons MAY use the shared built-in icon set. Changing a Profile icon modifies the Profile draft, follows dirty-navigation protection, and is persisted only by whole-Profile Save.
+- Profile icons MAY use the shared built-in task-oriented icon set. Changing a Profile icon auto-saves identity metadata, preserves any unsaved environment draft, and MUST NOT enable or bypass whole-Profile Save.
 - Icon pickers MUST use one shared component, expose the selected state without color alone, remain topmost inside the viewport, and close on selection, Escape, or safe outside click.
 - Lists and expanded editors own intentional internal scrolling. In Library/Skills, page chrome, metrics, tabs, filters, and table header stay fixed; only the Skill table body scrolls, with no document or editor-panel scrolling.
 - Expanding a Profile Composer section MUST expose a practically editable panel at the minimum viewport; presence of a clipped panel alone does not satisfy the interaction contract.
@@ -955,7 +956,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
 - Library global disable persistence, update-check exclusion, Add Skill picker filtering, existing-reference visibility, and Apply-time managed-copy removal.
 - In-place toolbar and `Cmd/Ctrl+R` Refresh preserve current Skill view state and do not contact update sources.
-- Skill source-default and custom icons persist across refresh and content update; Profile icon changes remain dirty until whole-Profile Save.
+- Skill source-default and custom icons persist across refresh and content update; Profile icon changes auto-save independently without clearing or committing a dirty environment draft.
 - Skills CLI v3 lock detection, corrupt and unsupported lock fallback, directory and broken symlink discovery, independent external import, lock preservation, and external Apply conflicts.
 - Update marks affected deployments pending without deploying.
 - Duplicate, conflict, ignored, linked, copied, and stale-copy states.
@@ -1007,9 +1008,9 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-18 against the current working tree at the time of this snapshot.
 
-- `527` automated tests passed across `61` test files; the `91`-test Electron UI suite and `102` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- `528` automated tests passed across `61` test files; the `92`-test Electron UI suite and `103` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
 - The CSS architecture gate passed with fourteen named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
-- All `54` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, Agent Diagnostics, MCPs, and focused update-setting states.
+- All `55` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including sidebar Agent overflow, Profile icon selection, Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, Agent Diagnostics, MCPs, and focused update-setting states.
 - Skills, MCPs, Profiles, Agents, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - The macOS inset hidden title bar, native-control safe area, full-width draggable top chrome, draggable page headings, and no-drag interactive controls passed main-process configuration and real Electron geometry assertions.
 - Shared page headers, vertically centered navigation rows, uninterrupted work-surface edges, contained composite search fields, `32px` resource identities, compact/default row heights, Profile commit controls, MCP rows, Cleanup state/action lanes, `220px` context menus, and Apply resource rows passed cross-workspace geometry and overflow assertions.

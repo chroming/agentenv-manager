@@ -424,6 +424,17 @@ try {
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("group", { name: "Library item react-best-practices" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-1180x728.png"));
+  const hiddenAgents = page.getByRole("button", { name: "Show hidden Agent list, 1 item" });
+  await hiddenAgents.hover();
+  const hiddenAgentsPopover = page.getByRole("tooltip").filter({ hasText: "Antigravity" });
+  await hiddenAgentsPopover.waitFor({ state: "visible" });
+  await capturePage(
+    page,
+    join(outputDir, "sidebar-agent-overflow-1180x728.png"),
+    { preservePointer: true }
+  );
+  await page.getByRole("heading", { name: "Skills" }).hover();
+  await hiddenAgentsPopover.waitFor({ state: "hidden" });
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
     .getByRole("button", { name: "Change icon for react-best-practices" })

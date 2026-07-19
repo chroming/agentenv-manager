@@ -1618,21 +1618,21 @@ describe("App", () => {
     fireEvent.click(
       within(screen.getByRole("menu", { name: "Icons for Daily Coding" })).getByRole(
         "menuitemradio",
-        { name: "Rocket" }
+        { name: "Design" }
       )
     );
 
     await waitFor(() =>
       expect(api.updateProfileMetadata).toHaveBeenCalledWith({
         id: "daily-coding",
-        iconKey: "rocket"
+        iconKey: "palette"
       })
     );
     expect(screen.getAllByText("Saving profile details").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     act(() => metadataSave.resolve({
       ...profile,
-      manifest: { ...profile.manifest, iconKey: "rocket" }
+      manifest: { ...profile.manifest, iconKey: "palette" }
     }));
     expect(await screen.findByText("Profile details saved")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();

@@ -1,16 +1,21 @@
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
+  BookOpen,
+  Bot,
   Code2,
   Database,
   FlaskConical,
   Folder,
   GitBranch,
+  Palette,
   PenLine,
   Rocket,
+  SearchCheck,
   ShieldCheck,
   Sparkles,
   TerminalSquare,
+  Workflow,
   type LucideIcon
 } from "lucide-react";
 import type { ResourceIconKey } from "../../shared/types";
@@ -20,14 +25,22 @@ const iconOptions: Array<{ key: ResourceIconKey; label: string; icon: LucideIcon
   { key: "github", label: "Repository", icon: GitBranch },
   { key: "folder", label: "Folder", icon: Folder },
   { key: "code", label: "Code", icon: Code2 },
-  { key: "rocket", label: "Rocket", icon: Rocket },
-  { key: "shield", label: "Shield", icon: ShieldCheck },
-  { key: "flask", label: "Experiment", icon: FlaskConical },
-  { key: "pen", label: "Writing", icon: PenLine },
   { key: "terminal", label: "Terminal", icon: TerminalSquare },
   { key: "database", label: "Database", icon: Database },
+  { key: "rocket", label: "Rocket", icon: Rocket },
+  { key: "workflow", label: "Automation", icon: Workflow },
+  { key: "shield", label: "Shield", icon: ShieldCheck },
+  { key: "search", label: "Code review", icon: SearchCheck },
+  { key: "flask", label: "Experiment", icon: FlaskConical },
+  { key: "pen", label: "Writing", icon: PenLine },
+  { key: "book", label: "Documentation", icon: BookOpen },
+  { key: "palette", label: "Design", icon: Palette },
+  { key: "bot", label: "Assistant", icon: Bot },
   { key: "sparkles", label: "Sparkles", icon: Sparkles }
 ];
+
+const iconMenuRows = Math.ceil(iconOptions.length / 5);
+const iconMenuHeight = 20 + iconMenuRows * 34 + Math.max(0, iconMenuRows - 1) * 6;
 
 const iconByKey = new Map(iconOptions.map((option) => [option.key, option.icon]));
 
@@ -103,7 +116,7 @@ export const ResourceIconPicker = ({
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       const menuWidth = 214;
-      const menuHeight = 104;
+      const menuHeight = iconMenuHeight;
       setPosition({
         left: Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12)),
         top:

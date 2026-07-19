@@ -109,6 +109,8 @@ const zhCN: Record<string, string> = {
   "Installation detected": "已检测到安装",
   "Installation not detected": "未检测到安装",
   "{{count}} more Agents": "另外 {{count}} 个 Agent",
+  "Show hidden Agent list, {{count}} item": "显示折叠的 Agent 列表，共 {{count}} 项",
+  "Show hidden Agent list, {{count}} items": "显示折叠的 Agent 列表，共 {{count}} 项",
   "Protected": "受保护",
   "Loading": "正在加载",
   "{{count}} profile": "{{count}} 个配置方案",
@@ -1057,6 +1059,11 @@ Object.assign(zhCN, {
   "Writing": "写作",
   "Terminal": "终端",
   "Database": "数据库",
+  "Code review": "代码评审",
+  "Automation": "自动化",
+  "Documentation": "文档",
+  "Design": "设计",
+  "Assistant": "助理",
   "Sparkles": "灵感"
 });
 

@@ -248,6 +248,7 @@
 }
 
 .skill-library-panel .library-resource-cell {
+  align-items: center;
   grid-area: auto;
 }
 
@@ -395,19 +396,20 @@
 }
 
 .skill-library-panel .library-resource-cell .resource-avatar {
-  background: transparent;
-  color: var(--muted);
-  height: 26px;
-  width: 26px;
+  align-self: center;
+  border-radius: 7px;
+  height: 32px;
+  justify-self: center;
+  width: 32px;
 }
 
 .skill-library-panel .library-resource-cell {
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 32px minmax(0, 1fr);
 }
 
 .skill-library-panel .library-resource-cell .resource-avatar svg {
-  height: 17px;
-  width: 17px;
+  height: 18px;
+  width: 18px;
 }
 
 .skill-library-panel .library-table__head > span:last-child {
@@ -1782,11 +1784,6 @@
   background: var(--surface-muted);
   color: var(--muted);
   min-height: 40px;
-}
-
-.skill-library-panel .library-resource-cell .resource-avatar {
-  background: transparent;
-  color: var(--muted);
 }
 
 .skill-library-panel .resource-list--unmanaged {
