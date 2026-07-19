@@ -3,6 +3,7 @@ import {
   defaultMcpLibraryViewState,
   defaultSkillLibraryViewState,
   matchesSkillStatusFilter,
+  matchesSkillUsageFilter,
   updateLibraryScroll,
   updateMcpLibraryControls,
   updateSkillLibraryControls
@@ -15,6 +16,7 @@ describe("library view state", () => {
       sourceFilter: "all",
       statusFilter: "all",
       targetFilter: "all",
+      usageFilter: "all",
       scrollTop: 0
     });
     expect(defaultMcpLibraryViewState).toEqual({ search: "", scrollTop: 0 });
@@ -24,13 +26,13 @@ describe("library view state", () => {
     const current = { ...defaultSkillLibraryViewState, scrollTop: 240 };
     const next = updateSkillLibraryControls(current, {
       search: "review",
-      statusFilter: "referenced"
+      usageFilter: "referenced"
     });
 
     expect(next).toEqual({
       ...current,
       search: "review",
-      statusFilter: "referenced",
+      usageFilter: "referenced",
       scrollTop: 0
     });
     expect(current.scrollTop).toBe(240);
@@ -74,15 +76,15 @@ describe("library view state", () => {
       latestRevision: "latest"
     };
 
-    expect(matchesSkillStatusFilter("updates", enabledSkill, false, availableUpdate)).toBe(true);
-    expect(matchesSkillStatusFilter("referenced", enabledSkill, true, availableUpdate)).toBe(true);
-    expect(matchesSkillStatusFilter("unreferenced", enabledSkill, false, availableUpdate)).toBe(true);
-    expect(matchesSkillStatusFilter("disabled", enabledSkill, true, availableUpdate)).toBe(false);
+    expect(matchesSkillStatusFilter("updates", enabledSkill, availableUpdate)).toBe(true);
+    expect(matchesSkillStatusFilter("disabled", enabledSkill, availableUpdate)).toBe(false);
+    expect(matchesSkillUsageFilter("referenced", true)).toBe(true);
+    expect(matchesSkillUsageFilter("referenced", false)).toBe(false);
+    expect(matchesSkillUsageFilter("unreferenced", false)).toBe(true);
+    expect(matchesSkillUsageFilter("referenced", true, false)).toBe(false);
 
     const disabledSkill = { ...enabledSkill, globallyEnabled: false };
-    expect(matchesSkillStatusFilter("updates", disabledSkill, true, availableUpdate)).toBe(false);
-    expect(matchesSkillStatusFilter("disabled", disabledSkill, true, availableUpdate)).toBe(true);
-    expect(matchesSkillStatusFilter("referenced", disabledSkill, true, availableUpdate)).toBe(false);
-    expect(matchesSkillStatusFilter("unreferenced", disabledSkill, false, availableUpdate)).toBe(false);
+    expect(matchesSkillStatusFilter("updates", disabledSkill, availableUpdate)).toBe(false);
+    expect(matchesSkillStatusFilter("disabled", disabledSkill, availableUpdate)).toBe(true);
   });
 });

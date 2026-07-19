@@ -15,8 +15,8 @@ import {
   ExternalLink,
   Folder,
   GitBranch,
-  Link2,
   Link2Off,
+  ListFilter,
   LoaderCircle,
   MoreHorizontal,
   Power,
@@ -67,6 +67,7 @@ import { SkillUpdateDialog } from "./SkillUpdateDialog";
 import { DiffViewer } from "./DiffViewer";
 import {
   matchesSkillStatusFilter,
+  matchesSkillUsageFilter,
   type SkillLibraryViewState,
   updateSkillLibraryControls
 } from "../libraryViewState";
@@ -398,7 +399,8 @@ export const SkillLibraryPanel = ({
     Record<string, RepositorySkillImportInput>
   >({});
   const [githubApiRetryAvailable, setGithubApiRetryAvailable] = useState(false);
-  const { search, sourceFilter, statusFilter, targetFilter } = viewState;
+  const { search, sourceFilter, statusFilter, targetFilter, usageFilter } = viewState;
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const updateControls = (
     patch: Partial<Omit<SkillLibraryViewState, "scrollTop">>
   ) => onViewStateChange(updateSkillLibraryControls(viewState, patch));
@@ -440,6 +442,7 @@ export const SkillLibraryPanel = ({
   const importFallbackFocusRef = useRef<HTMLElement>(null);
   const modalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const modalFallbackFocusRef = useRef<HTMLElement>(null);
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
   const skillsById = new Map(librarySkills.map((skill) => [skill.id, skill]));
   const skillNameCounts = librarySkills.reduce((counts, skill) => {
@@ -586,6 +589,11 @@ export const SkillLibraryPanel = ({
         setOpenAction(undefined);
         return;
       }
+      if (filtersOpen) {
+        setFiltersOpen(false);
+        window.requestAnimationFrame(() => filterTriggerRef.current?.focus());
+        return;
+      }
       if (activeTool) {
         if (activeTool === "import" && githubOperation && !repositoryOperationCancelable) {
           return;
@@ -600,7 +608,7 @@ export const SkillLibraryPanel = ({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, githubOperation, modalOpen, onCloseTool, openActionId, repositoryOperationCancelable]);
+  }, [activeTool, filtersOpen, githubOperation, modalOpen, onCloseTool, openActionId, repositoryOperationCancelable]);
   useModalDialog({
     open: modalOpen,
     dialogRef: modalDialogRef,
@@ -695,18 +703,21 @@ export const SkillLibraryPanel = ({
       matchesSkillStatusFilter(
         statusFilter,
         skill,
-        usage.length > 0,
         updatesById.get(skill.id)
       ) &&
+      (statusFilter === "disabled" || matchesSkillUsageFilter(
+        usageFilter,
+        usage.length > 0,
+        skill.globallyEnabled !== false
+      )) &&
       matchesTarget
     );
   });
-  const resetFilters = () => {
+  const resetAdvancedFilters = () => {
     updateControls({
-      search: "",
       sourceFilter: "all",
-      statusFilter: "all",
-      targetFilter: "all"
+      targetFilter: "all",
+      usageFilter: "all"
     });
   };
 
@@ -727,16 +738,9 @@ export const SkillLibraryPanel = ({
         : belowTop;
     setOpenAction({ id: skillId, left, top });
   };
-  const hasActiveFilters =
-    search.trim().length > 0 ||
-    sourceFilter !== "all" ||
-    statusFilter !== "all" ||
-    targetFilter !== "all";
-  const enabledSkills = librarySkills.filter((skill) => skill.globallyEnabled !== false);
-  const referencedSkillCount = enabledSkills.filter(
-    (skill) => (skillUsage[skill.id] ?? []).length > 0
+  const advancedFilterCount = [sourceFilter, targetFilter, usageFilter].filter(
+    (value) => value !== "all"
   ).length;
-  const unreferencedSkillCount = Math.max(enabledSkills.length - referencedSkillCount, 0);
   const disabledSkillCount = librarySkills.filter(
     (skill) => skill.globallyEnabled === false
   ).length;
@@ -1219,24 +1223,6 @@ export const SkillLibraryPanel = ({
             {t("Updates")} <strong>{availableUpdateCount}</strong>
           </button>
           <button
-            className={`library-quick-tab${statusFilter === "referenced" ? " is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={statusFilter === "referenced"}
-            onClick={() => updateControls({ statusFilter: "referenced" })}
-          >
-            {t("Referenced")} <strong>{referencedSkillCount}</strong>
-          </button>
-          <button
-            className={`library-quick-tab${statusFilter === "unreferenced" ? " is-active" : ""}`}
-            type="button"
-            role="tab"
-            aria-selected={statusFilter === "unreferenced"}
-            onClick={() => updateControls({ statusFilter: "unreferenced" })}
-          >
-            {t("Unreferenced")} <strong>{unreferencedSkillCount}</strong>
-          </button>
-          <button
             className={`library-quick-tab${statusFilter === "disabled" ? " is-active" : ""}`}
             type="button"
             role="tab"
@@ -1258,44 +1244,21 @@ export const SkillLibraryPanel = ({
               onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
           </label>
-          {hasActiveFilters ? (
-            <button
-              className="secondary-action library-reset-action"
-              type="button"
-              aria-label={t("Reset filters")}
-              title={t("Reset filters")}
-              onClick={resetFilters}
-            >
-              <RotateCcw size={15} strokeWidth={2.2} />
-              <span>{t("Reset filters")}</span>
-            </button>
-          ) : null}
-          <select
-            aria-label={t("Skill source filter")}
-            value={sourceFilter}
-            onChange={(event) =>
-              updateControls({ sourceFilter: event.currentTarget.value as typeof sourceFilter })
-            }
+          <button
+            aria-expanded={filtersOpen}
+            className={`secondary-action library-filter-trigger${advancedFilterCount > 0 ? " has-filters" : ""}`}
+            ref={filterTriggerRef}
+            type="button"
+            onClick={() => setFiltersOpen((current) => !current)}
           >
-            <option value="all">{t("Source: All")}</option>
-            <option value="github">GitHub</option>
-            <option value="git">{t("Repository")}</option>
-            <option value="local">{t("Local")}</option>
-          </select>
-          <select
-            aria-label={t("Skill Agent filter")}
-            value={targetFilter}
-            onChange={(event) =>
-              updateControls({ targetFilter: event.currentTarget.value as typeof targetFilter })
-            }
-          >
-            <option value="all">{t("Agent: All")}</option>
-            <option value="managed">{t("Managed")}</option>
-            <option value="library">{t("Imported")}</option>
-            <option value="unmanaged">{t("Unmanaged")}</option>
-            <option value="ignored">{t("Ignored")}</option>
-            <option value="not-installed">{t("Not installed")}</option>
-          </select>
+            <ListFilter size={15} strokeWidth={2.2} />
+            <span>{t("Filters")}</span>
+            {advancedFilterCount > 0 ? (
+              <strong aria-label={t("{{count}} active filters", { count: advancedFilterCount })}>
+                {advancedFilterCount}
+              </strong>
+            ) : null}
+          </button>
           <button
             className="secondary-action library-toolbar-action"
             type="button"
@@ -1311,47 +1274,96 @@ export const SkillLibraryPanel = ({
             )}
             <span>{t(updateCheckStatus?.state === "checking" ? "Checking..." : "Check updates")}</span>
           </button>
-          <button
-            className="secondary-action library-toolbar-action"
-            type="button"
-            aria-label={t("Update all skills")}
-            title={t("Update all skills")}
-            disabled={updateableSkillIds.length === 0}
-            onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
-          >
-            <Sparkles size={15} strokeWidth={2.2} />
-            <span>{t("Update all")}</span>
-          </button>
+          {updateableSkillIds.length > 0 ? (
+            <button
+              className="secondary-action library-toolbar-action"
+              type="button"
+              aria-label={t("Update all skills")}
+              title={t("Update all skills")}
+              onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
+            >
+              <Sparkles size={15} strokeWidth={2.2} />
+              <span>{t("Update all")}</span>
+            </button>
+          ) : null}
+          {filtersOpen ? (
+            <div className="library-filter-panel" role="group" aria-label={t("Skill filters")}>
+              <label>
+                <span>{t("Source")}</span>
+                <select
+                  aria-label={t("Skill source filter")}
+                  value={sourceFilter}
+                  onChange={(event) =>
+                    updateControls({ sourceFilter: event.currentTarget.value as typeof sourceFilter })
+                  }
+                >
+                  <option value="all">{t("All sources")}</option>
+                  <option value="github">GitHub</option>
+                  <option value="git">{t("Repository")}</option>
+                  <option value="local">{t("Local")}</option>
+                </select>
+              </label>
+              <label>
+                <span>{t("Usage")}</span>
+                <select
+                  aria-label={t("Skill usage filter")}
+                  value={usageFilter}
+                  onChange={(event) =>
+                    updateControls({ usageFilter: event.currentTarget.value as typeof usageFilter })
+                  }
+                >
+                  <option value="all">{t("All usage")}</option>
+                  <option value="referenced">{t("Referenced")}</option>
+                  <option value="unreferenced">{t("Unreferenced")}</option>
+                </select>
+              </label>
+              <label>
+                <span>{t("Agents")}</span>
+                <select
+                  aria-label={t("Skill Agent filter")}
+                  value={targetFilter}
+                  onChange={(event) =>
+                    updateControls({ targetFilter: event.currentTarget.value as typeof targetFilter })
+                  }
+                >
+                  <option value="all">{t("All Agents")}</option>
+                  <option value="managed">{t("Managed")}</option>
+                  <option value="library">{t("Imported")}</option>
+                  <option value="unmanaged">{t("Unmanaged")}</option>
+                  <option value="ignored">{t("Ignored")}</option>
+                  <option value="not-installed">{t("Not installed")}</option>
+                </select>
+              </label>
+              <button
+                className="secondary-action library-filter-reset"
+                type="button"
+                disabled={advancedFilterCount === 0}
+                onClick={resetAdvancedFilters}
+              >
+                <RotateCcw size={15} strokeWidth={2.2} />
+                <span>{t("Reset")}</span>
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
 
       <section className="library-table" aria-label={t("Library skills")}>
-        <div className="library-table__head library-table__head--full">
+        <div className="library-table__head">
           <span>{t("Skill")}</span>
           <span>{t("Source")}</span>
-          <span>{t("Version")}</span>
           <span className="library-column-label">
-            {t("Updates")}
-            <InfoTip label={t("Shows whether this skill tracks its source and whether an update is available.")} />
-          </span>
-          <span className="library-column-label">
-            {t("Profiles")}
+            {t("Usage")}
             <InfoTip
               label={t(
-                "Shows Profiles that reference this skill, including disabled references."
+                "Shows Profile references and Agent installs for this skill."
               )}
             />
           </span>
           <span className="library-column-label">
-            {t("Installs")}
-            <InfoTip label={t("Shows whether each Agent install matches the Library copy. This is separate from source updates.")} />
+            {t("Status")}
+            <InfoTip label={t("Shows the next maintenance action for this skill.")} />
           </span>
-          <span>{t("Actions")}</span>
-        </div>
-        <div className="library-table__head library-table__head--compact">
-          <span>{t("Skill")}</span>
-          <span>{t("Source")} · {t("Version")} · {t("Profiles")}</span>
-          <span>{t("Updates")} · {t("Installs")}</span>
           <span>{t("Actions")}</span>
         </div>
         <div className="library-table__body" ref={scrollOwnerRef}>
@@ -1369,42 +1381,59 @@ export const SkillLibraryPanel = ({
           ) : null}
           {filteredSkills.map((skill) => {
             const updateInfo = updatesById.get(skill.id);
-                const installs = installsFor(skill.id);
-                const staleCopies = installs.filter(
-                  (install) => install.installMethod === "copied" && install.contentMatchesLibrary === false
-                );
+            const installs = installsFor(skill.id);
+            const staleCopies = installs.filter(
+              (install) => install.installMethod === "copied" && install.contentMatchesLibrary === false
+            );
             const hasUpdateSource = Boolean(skill.source);
             const isTracked = skill.updatePolicy === "tracked";
             const globallyEnabled = skill.globallyEnabled !== false;
             const availabilityIsChanging = availabilityOperation?.id === skill.id;
-            const updateLabel = !globallyEnabled
-              ? "Not checked"
-              : !isTracked
-              ? "Not tracked"
-              : updateInfo?.error
-                ? "Check failed"
-                : updateInfo?.updateAvailable
-                  ? "Available"
-                  : updateInfo
-                    ? "Up to date"
-                    : hasUpdateSource
-                      ? "Not checked"
-                      : "Library only";
             const hasUpdate = globallyEnabled && isTracked && Boolean(updateInfo?.updateAvailable);
             const hasError = globallyEnabled && isTracked && Boolean(updateInfo?.error);
-            const updateAction = hasUpdate ? "update" : hasError ? "retry" : undefined;
             const usageCount = (skillUsage[skill.id] ?? []).length;
             const revisionLabel = shortRevision(skill);
             const versionLabel = skill.version ?? skill.remoteRef ?? revisionLabel;
-            const versionDetail = skill.version
-              ? revisionLabel
-              : skill.remoteRef
-                ? revisionLabel
-              : hasUpdateSource
-                ? isTracked
-                  ? "Tracked"
-                  : "Source"
-                : "Revision";
+            const installedAgentNames = Array.from(new Set(
+              installs.flatMap((install) =>
+                install.foundIn.map((targetId) => targetNameFor(targetId, targetNames, targetId))
+              )
+            ));
+            const installedAgentCount = installedAgentNames.length || installs.length;
+            const sourceTypeLabel = skill.sourceType === "github"
+              ? "GitHub"
+              : skill.sourceType === "git"
+                ? t("Repository")
+                : t("Local");
+            const sourceMeta = `${sourceTypeLabel} · ${versionLabel}`;
+            const sourceDetail = [sourceLabel(skill), skill.version, revisionLabel]
+              .filter(Boolean)
+              .join(" · ");
+            const staleInstallDetail = staleCopies.length > 0
+              ? t("{{count}} out of sync", { count: staleCopies.length })
+              : undefined;
+            const statusDetail = availabilityIsChanging
+              ? t("Saving...")
+              : !globallyEnabled
+                ? t("Hidden from Profile selection")
+                : hasUpdate
+                  ? [
+                      updateInfo?.latestRevision
+                        ? `${updateInfo.latestRevision.slice(0, 7)} ${t("available")}`
+                        : undefined,
+                      staleInstallDetail
+                    ].filter(Boolean).join(" · ")
+                  : hasError
+                    ? t("Source check failed")
+                    : staleCopies.length > 0
+                      ? staleInstallDetail
+                      : isTracked && updateInfo
+                        ? `${(updateInfo.latestRevision ?? revisionLabel).slice(0, 7)} ${t("current")}`
+                        : isTracked && hasUpdateSource
+                          ? t("Tracked source")
+                          : hasUpdateSource
+                            ? t("Source retained")
+                            : t("No update source");
             return (
               <div
                 aria-label={t("Library item {{id}}", { id: skill.id })}
@@ -1425,20 +1454,6 @@ export const SkillLibraryPanel = ({
                       {(skillNameCounts.get(skill.name.normalize("NFKC").trim().toLowerCase()) ?? 0) > 1 ? (
                         <span className="library-duplicate-id">{skill.id}</span>
                       ) : null}
-                      {!globallyEnabled || availabilityIsChanging ? (
-                        <span className={`library-global-state${availabilityIsChanging ? " is-working" : ""}`}>
-                          {availabilityIsChanging ? (
-                            <LoaderCircle className="is-spinning" size={12} strokeWidth={2.2} />
-                          ) : null}
-                          {t(
-                            availabilityIsChanging
-                              ? availabilityOperation.enabled
-                                ? "Enabling..."
-                                : "Disabling..."
-                              : "Disabled"
-                          )}
-                        </span>
-                      ) : null}
                     </span>
                     <PreviewText className="skill-description" text={skill.description || skill.id} />
                   </div>
@@ -1446,170 +1461,154 @@ export const SkillLibraryPanel = ({
                 <div className="library-source-cell">
                   {(skill.sourceType === "github" || skill.sourceType === "git") && /^https?:\/\//i.test(skill.source ?? "") ? (
                     <button
-                      className="resource-chip resource-chip--github library-source-open"
+                      className="library-source-primary is-interactive"
                       type="button"
                       aria-label={t("Open repository source for {{id}}", { id: skill.id })}
                       onClick={() => onOpenSource(skill.source!)}
                     >
                       <GitBranch size={13} strokeWidth={2.2} />
-                      <span>{skill.sourceType === "github" ? "GitHub" : t("Repository")}</span>
+                      <PreviewText
+                        ariaLabel={t("Full source for {{id}}", { id: skill.id })}
+                        className="library-source-name"
+                        displayText={t(sourceName(skill))}
+                        text={sourceLabel(skill)}
+                        tooltipClassName="library-source-tooltip"
+                      />
                       <ExternalLink size={11} strokeWidth={2.2} />
                     </button>
                   ) : skill.sourceType === "git" && skill.source ? (
                     <button
-                      className="resource-chip resource-chip--git library-source-open"
+                      className="library-source-primary is-interactive"
                       type="button"
                       aria-label={t("Copy repository source for {{id}}", { id: skill.id })}
                       onClick={() => onCopySource(skill.source!)}
                     >
                       <GitBranch size={13} strokeWidth={2.2} />
-                      <span>{t("Repository")}</span>
+                      <PreviewText
+                        ariaLabel={t("Full source for {{id}}", { id: skill.id })}
+                        className="library-source-name"
+                        displayText={t(sourceName(skill))}
+                        text={sourceLabel(skill)}
+                        tooltipClassName="library-source-tooltip"
+                      />
                       <Copy size={11} strokeWidth={2.2} />
                     </button>
                   ) : (
-                    <span className={`resource-chip resource-chip--${skill.sourceType}`}>
+                    <span className="library-source-primary">
                       <Folder size={13} strokeWidth={2.2} />
-                      {skill.sourceType === "github"
-                        ? "GitHub"
-                        : skill.sourceType === "git"
-                          ? t("Repository")
-                          : t("Local")}
+                      <PreviewText
+                        ariaLabel={t("Full source for {{id}}", { id: skill.id })}
+                        className="library-source-name"
+                        displayText={t(sourceName(skill))}
+                        text={sourceLabel(skill)}
+                        tooltipClassName="library-source-tooltip"
+                      />
                     </span>
                   )}
                   <PreviewText
-                    ariaLabel={t("Full source for {{id}}", { id: skill.id })}
-                    className="library-source-address"
-                    displayText={t(sourceName(skill))}
-                    text={sourceLabel(skill)}
-                    tooltipClassName="library-source-tooltip"
+                    ariaLabel={t("Source details for {{id}}", { id: skill.id })}
+                    className="library-source-meta"
+                    displayText={sourceMeta}
+                    text={sourceDetail}
                   />
-                </div>
-                <div className="library-version-cell">
-                  <strong>{versionLabel}</strong>
-                  <small>{t(versionDetail)}</small>
-                </div>
-                <div className="library-update-cell">
-                  {updateAction ? (
-                    <button
-                      className={`library-row-inline-action${
-                        updateAction === "update" ? " is-update" : " is-error"
-                      }`}
-                      type="button"
-                      aria-label={
-                        updateAction === "update"
-                          ? t("Review update {{id}}", { id: skill.id })
-                          : t("Retry update check {{id}}", { id: skill.id })
-                      }
-                      disabled={updateCheckStatus?.state === "checking"}
-                      onClick={(event) => {
-                        modalFallbackFocusRef.current = event.currentTarget;
-                        onPreviewLibrarySkillUpdate(skill.id);
-                      }}
-                    >
-                      {updateAction === "update" ? (
-                        <RefreshCw size={14} strokeWidth={2.2} />
-                      ) : (
-                        <TriangleAlert size={14} strokeWidth={2.2} />
-                      )}
-                      <span>{t(updateAction === "update" ? "Update" : "Retry")}</span>
-                    </button>
-                  ) : (
-                    <strong
-                      aria-label={updateLabel}
-                      className="resource-status"
-                    >
-                      {!globallyEnabled ? (
-                        <Link2Off size={13} strokeWidth={2.2} />
-                      ) : !isTracked ? (
-                        <Link2Off size={13} strokeWidth={2.2} />
-                      ) : !hasUpdateSource ? (
-                        <Folder size={13} strokeWidth={2.2} />
-                      ) : (
-                        <CheckCircle2 size={13} strokeWidth={2.2} />
-                      )}
-                      <span>{t(updateLabel)}</span>
-                    </strong>
-                  )}
-                  {globallyEnabled && updateInfo?.latestRevision ? (
-                    <PreviewText
-                      ariaLabel={t("Full update status for {{id}}", { id: skill.id })}
-                      className="library-update-detail"
-                      text={`${updateInfo.latestRevision.slice(0, 7)} ${t(hasUpdate ? "available" : "current")}`}
-                    />
-                  ) : hasError ? (
-                    <PreviewText
-                      ariaLabel={t("Full update status for {{id}}", { id: skill.id })}
-                      className="library-update-detail"
-                      text={t("Source check failed")}
-                    />
-                  ) : null}
                 </div>
                 <div className="library-usage-cell">
                   <strong className="usage-summary">
                     <Users size={13} strokeWidth={2.2} />
                     {t(usageCount === 1 ? "{{count}} profile" : "{{count}} profiles", { count: usageCount })}
                   </strong>
-                  <small>
-                    {(skillUsage[skill.id] ?? []).length > 0
-                      ? (skillUsage[skill.id] ?? []).join(", ")
-                      : t("Not referenced")}
-                  </small>
+                  <PreviewText
+                    ariaLabel={t("Usage details for {{id}}", { id: skill.id })}
+                    className="library-usage-detail"
+                    displayText={installedAgentCount > 0
+                      ? t(installedAgentCount === 1 ? "{{count}} Agent" : "{{count}} Agents", { count: installedAgentCount })
+                      : t("No Agent installs")}
+                    text={`${t("Profiles")}: ${(skillUsage[skill.id] ?? []).join(", ") || t("Not referenced")} · ${t("Agents")}: ${installedAgentNames.join(", ") || t("Not installed")}`}
+                  />
                 </div>
-                <div className="library-installs-cell">
-                  {staleCopies.length > 0 ? (
-                    <>
-                      <button
-                        className="library-row-inline-action"
-                        type="button"
-                        aria-label={t(
-                          staleCopies.length === 1
-                            ? "Sync install of {{id}}"
-                            : "Sync {{count}} installs of {{id}}",
-                          { count: staleCopies.length, id: skill.id }
-                        )}
-                        onClick={() => onSyncSkillInstalls(skill.id)}
-                      >
-                        <RefreshCw size={14} strokeWidth={2.2} />
-                        <span>{t("Sync")}</span>
-                      </button>
-                      <PreviewText
-                        ariaLabel={t("Full install status for {{id}}", { id: skill.id })}
-                        className="library-install-detail"
-                        text={t("{{count}} out of sync", { count: staleCopies.length })}
-                      />
-                    </>
+                <div className="library-status-cell">
+                  {availabilityIsChanging ? (
+                    <strong className="library-primary-status is-working">
+                      <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
+                      <span>{t(availabilityOperation.enabled ? "Enabling..." : "Disabling...")}</span>
+                    </strong>
+                  ) : !globallyEnabled ? (
+                    <strong className="library-primary-status is-disabled">
+                      <CircleSlash2 size={13} strokeWidth={2.2} />
+                      <span>{t("Disabled")}</span>
+                    </strong>
+                  ) : hasUpdate ? (
+                    <button
+                      className="library-status-action is-update"
+                      type="button"
+                      aria-label={t("Review update {{id}}", { id: skill.id })}
+                      disabled={updateCheckStatus?.state === "checking"}
+                      onClick={(event) => {
+                        modalFallbackFocusRef.current = event.currentTarget;
+                        onPreviewLibrarySkillUpdate(skill.id);
+                      }}
+                    >
+                      <RefreshCw size={13} strokeWidth={2.2} />
+                      <span>{t("Update available")}</span>
+                    </button>
+                  ) : hasError ? (
+                    <button
+                      className="library-status-action is-error"
+                      type="button"
+                      aria-label={t("Retry update check {{id}}", { id: skill.id })}
+                      disabled={updateCheckStatus?.state === "checking"}
+                      onClick={(event) => {
+                        modalFallbackFocusRef.current = event.currentTarget;
+                        onPreviewLibrarySkillUpdate(skill.id);
+                      }}
+                    >
+                      <TriangleAlert size={13} strokeWidth={2.2} />
+                      <span>{t("Check failed")}</span>
+                    </button>
+                  ) : staleCopies.length > 0 ? (
+                    <button
+                      className="library-status-action is-warning"
+                      type="button"
+                      aria-label={t(
+                        staleCopies.length === 1
+                          ? "Sync install of {{id}}"
+                          : "Sync {{count}} installs of {{id}}",
+                        { count: staleCopies.length, id: skill.id }
+                      )}
+                      onClick={() => onSyncSkillInstalls(skill.id)}
+                    >
+                      <RefreshCw size={13} strokeWidth={2.2} />
+                      <span>{t("Needs sync")}</span>
+                    </button>
+                  ) : (
+                    <strong className="library-primary-status">
+                      {isTracked && updateInfo ? (
+                        <CheckCircle2 size={13} strokeWidth={2.2} />
+                      ) : hasUpdateSource && !isTracked ? (
+                        <Link2Off size={13} strokeWidth={2.2} />
+                      ) : isTracked && hasUpdateSource ? (
+                        <Circle size={13} strokeWidth={2.2} />
+                      ) : (
+                        <CheckCircle2 size={13} strokeWidth={2.2} />
+                      )}
+                      <span>{t(
+                        isTracked && updateInfo
+                          ? "Up to date"
+                          : isTracked && hasUpdateSource
+                            ? "Not checked"
+                            : hasUpdateSource
+                              ? "Checks disabled"
+                              : "Ready"
+                      )}</span>
+                    </strong>
+                  )}
+                  {statusDetail ? (
+                    <PreviewText
+                      ariaLabel={t("Status details for {{id}}", { id: skill.id })}
+                      className="library-status-detail"
+                      text={statusDetail}
+                    />
                   ) : null}
-                  {installs.length === 0 ? <strong className="library-install-empty">{t("Not installed")}</strong> : null}
-                  {staleCopies.length === 0 ? installs.slice(0, 1).map((install) => (
-                    <span className="library-install-entry" key={install.path}>
-                      <span title={install.foundIn.map((targetId) => targetNameFor(targetId, targetNames, targetId)).join(", ")}>
-                        {install.foundIn.map((targetId) => targetNameFor(targetId, targetNames, targetId)).join(", ")}
-                        {installs.length > 1 ? ` +${installs.length - 1}` : ""}
-                      </span>
-                      <strong className={`resource-chip resource-chip--${install.status}`}>
-                        {install.status === "managed" && install.installMethod === "linked" ? (
-                          <Link2 size={13} strokeWidth={2.2} />
-                        ) : install.status === "managed" && install.contentMatchesLibrary === false ? (
-                          <RefreshCw size={13} strokeWidth={2.2} />
-                        ) : install.status === "managed" ? (
-                          <CheckCircle2 size={13} strokeWidth={2.2} />
-                        ) : (
-                          <SlidersHorizontal size={13} strokeWidth={2.2} />
-                        )}
-                        {install.status === "managed"
-                          ? install.installMethod === "linked"
-                            ? t("Live link")
-                            : install.contentMatchesLibrary === false
-                              ? t("Needs sync")
-                              : t("Synced")
-                          : install.status === "library"
-                            ? t("Imported")
-                            : install.status === "ignored"
-                              ? t("Ignored")
-                              : t("Unmanaged")}
-                      </strong>
-                    </span>
-                  )) : null}
                 </div>
                 <div className="library-actions-cell">
                   <div className="row-action-menu">

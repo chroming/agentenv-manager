@@ -8,8 +8,9 @@ import type {
 export interface SkillLibraryViewState {
   search: string;
   sourceFilter: "all" | SkillSourceType;
-  statusFilter: "all" | "updates" | "referenced" | "unreferenced" | "disabled";
+  statusFilter: "all" | "updates" | "disabled";
   targetFilter: "all" | SkillInventoryEntry["status"] | "not-installed";
+  usageFilter: "all" | "referenced" | "unreferenced";
   scrollTop: number;
 }
 
@@ -23,6 +24,7 @@ export const defaultSkillLibraryViewState: SkillLibraryViewState = {
   sourceFilter: "all",
   statusFilter: "all",
   targetFilter: "all",
+  usageFilter: "all",
   scrollTop: 0
 };
 
@@ -44,19 +46,26 @@ export const updateMcpLibraryControls = (
 export const matchesSkillStatusFilter = (
   statusFilter: SkillLibraryViewState["statusFilter"],
   skill: SkillLibraryEntry,
-  referenced: boolean,
   update?: SkillUpdateInfo
 ) => {
   if (statusFilter === "all") return true;
   if (statusFilter === "disabled") return skill.globallyEnabled === false;
   if (skill.globallyEnabled === false) return false;
-  if (statusFilter === "referenced") return referenced;
-  if (statusFilter === "unreferenced") return !referenced;
   return (
     skill.updatePolicy === "tracked" &&
     Boolean(update?.updateAvailable) &&
     !update?.error
   );
+};
+
+export const matchesSkillUsageFilter = (
+  usageFilter: SkillLibraryViewState["usageFilter"],
+  referenced: boolean,
+  enabled = true
+) => {
+  if (usageFilter === "all") return true;
+  if (!enabled) return false;
+  return usageFilter === "referenced" ? referenced : !referenced;
 };
 
 export const updateLibraryScroll = <T extends { scrollTop: number }>(

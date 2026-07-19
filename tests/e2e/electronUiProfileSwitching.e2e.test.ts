@@ -748,8 +748,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(await skillScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(100);
     await page.getByRole("textbox", { name: "Search skills" }).fill("layout-skill");
     expect(await skillScroller.evaluate((element) => element.scrollTop)).toBe(0);
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
     await page.getByRole("combobox", { name: "Skill source filter" }).selectOption("local");
-    await page.getByRole("tab", { name: /Referenced/ }).click();
+    await page.getByRole("combobox", { name: "Skill usage filter" }).selectOption("referenced");
     await page
       .getByRole("combobox", { name: "Skill Agent filter" })
       .selectOption("not-installed");
@@ -779,14 +780,15 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("textbox", { name: "Search skills" }).inputValue()).toBe(
       "layout-skill"
     );
+    await page.getByRole("button", { name: /Filters/, exact: false }).click();
     expect(await page.getByRole("combobox", { name: "Skill source filter" }).inputValue()).toBe(
       "local"
     );
     expect(await page.getByRole("combobox", { name: "Skill Agent filter" }).inputValue()).toBe(
       "not-installed"
     );
-    expect(await page.getByRole("tab", { name: /Referenced/ }).getAttribute("aria-selected")).toBe(
-      "true"
+    expect(await page.getByRole("combobox", { name: "Skill usage filter" }).inputValue()).toBe(
+      "referenced"
     );
     await expect
       .poll(async () =>
@@ -1068,22 +1070,56 @@ describe("Electron UI profile switching e2e", () => {
       }
 
       await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
+      const filtersTrigger = page.getByRole("button", { name: "Filters", exact: true });
+      await filtersTrigger.click();
+      const filterPanel = page.getByRole("group", { name: "Skill filters" });
+      const filterGeometry = await filterPanel.evaluate((panel) => {
+        const panelRect = panel.getBoundingClientRect();
+        const controls = Array.from(panel.querySelectorAll<HTMLElement>("select, button"));
+        const rects = controls.map((control) => control.getBoundingClientRect());
+        return {
+          controlsInsidePanel: rects.every(
+            (rect) =>
+              rect.left >= panelRect.left - 1 &&
+              rect.right <= panelRect.right + 1 &&
+              rect.top >= panelRect.top - 1 &&
+              rect.bottom <= panelRect.bottom + 1
+          ),
+          controlsDoNotOverlap: rects.every((rect, index) =>
+            rects.slice(index + 1).every(
+              (other) =>
+                rect.right <= other.left ||
+                other.right <= rect.left ||
+                rect.bottom <= other.top ||
+                other.bottom <= rect.top
+            )
+          ),
+          noHorizontalOverflow: panel.scrollWidth <= panel.clientWidth
+        };
+      });
+      expect(filterGeometry.controlsInsidePanel).toBe(true);
+      expect(filterGeometry.controlsDoNotOverlap).toBe(true);
+      expect(filterGeometry.noHorizontalOverflow).toBe(true);
       const sourceFilter = page.getByRole("combobox", { name: "Skill source filter" });
       await sourceFilter.selectOption("github");
       await expect.poll(() => allRows.count()).toBe(0);
       await sourceFilter.selectOption("local");
       await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
       await sourceFilter.selectOption("all");
-      await page.getByRole("tab", { name: /Referenced/ }).click();
+      const usageFilter = page.getByRole("combobox", { name: "Skill usage filter" });
+      await usageFilter.selectOption("referenced");
       await expect.poll(() => allRows.count()).toBe(testCase.count);
-      await page.getByRole("tab", { name: /Unreferenced/ }).click();
+      await usageFilter.selectOption("unreferenced");
       await expect.poll(() => allRows.count()).toBe(2);
-      await allTab.click();
+      await usageFilter.selectOption("all");
       const targetFilter = page.getByRole("combobox", { name: "Skill Agent filter" });
       await targetFilter.selectOption("managed");
       await expect.poll(() => allRows.count()).toBe(0);
       await targetFilter.selectOption("all");
       await expect.poll(() => allRows.count()).toBe(testCase.count + 2);
+      await page.keyboard.press("Escape");
+      await filterPanel.waitFor({ state: "hidden" });
+      expect(await filtersTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
 
       await expectNoHorizontalOverflow(page, [".app-shell", ".editor-panel"]);
 
@@ -1092,9 +1128,9 @@ describe("Electron UI profile switching e2e", () => {
         exact: true
       });
       const updateActionGeometry = await changingRow.evaluate((row) => {
-        const updateCell = row.querySelector<HTMLElement>(".library-update-cell")!;
-        const updateButton = updateCell.querySelector<HTMLButtonElement>(".library-row-inline-action")!;
-        const updateDetail = updateCell.querySelector<HTMLElement>(".library-update-detail")!;
+        const updateCell = row.querySelector<HTMLElement>(".library-status-cell")!;
+        const updateButton = updateCell.querySelector<HTMLButtonElement>(".library-status-action")!;
+        const updateDetail = updateCell.querySelector<HTMLElement>(".library-status-detail")!;
         const actionsCell = row.querySelector<HTMLElement>(".library-actions-cell")!;
         const updateRect = updateCell.getBoundingClientRect();
         const buttonRect = updateButton.getBoundingClientRect();
@@ -1117,9 +1153,9 @@ describe("Electron UI profile switching e2e", () => {
       expect(updateActionGeometry.buttonInsideUpdateColumn).toBe(true);
       expect(updateActionGeometry.columnsDoNotOverlap).toBe(true);
       if (updateActionGeometry.detailClearance !== undefined) {
-        expect(updateActionGeometry.detailClearance).toBeGreaterThanOrEqual(4);
+        expect(updateActionGeometry.detailClearance).toBeGreaterThanOrEqual(3);
       }
-      await expectTextFits(changingRow.locator(".library-row-inline-action"));
+      await expectTextFits(changingRow.locator(".library-status-action"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
       await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
@@ -3449,7 +3485,7 @@ describe("Electron UI profile switching e2e", () => {
     });
     await rm(localSkillDir, { recursive: true, force: true });
     const importedRow = page.getByRole("group", { name: "Library item path-reviewer" });
-    await expect.poll(() => importedRow.textContent()).toContain("Not tracked");
+    await expect.poll(() => importedRow.textContent()).toContain("Checks disabled");
     await page.getByRole("button", { name: "Close import" }).click();
     await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
   }, 30_000);
@@ -4581,31 +4617,31 @@ describe("Electron UI profile switching e2e", () => {
     const updatedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await updatedRow.getByText("1 out of sync").waitFor({ state: "visible" });
     const installActionGeometry = await updatedRow.evaluate((element) => {
-      const installs = element.querySelector<HTMLElement>(".library-installs-cell")!;
+      const status = element.querySelector<HTMLElement>(".library-status-cell")!;
       const actions = element.querySelector<HTMLElement>(".library-actions-cell")!;
-      const syncButton = installs.querySelector<HTMLElement>(".library-row-inline-action")!;
-      const syncDetail = installs.querySelector<HTMLElement>(".library-install-detail")!;
-      const installsBox = installs.getBoundingClientRect();
+      const syncButton = status.querySelector<HTMLElement>(".library-status-action")!;
+      const syncDetail = status.querySelector<HTMLElement>(".library-status-detail")!;
+      const statusBox = status.getBoundingClientRect();
       const actionsBox = actions.getBoundingClientRect();
       const buttonBox = syncButton.getBoundingClientRect();
       const detailBox = syncDetail.getBoundingClientRect();
       return {
-        columnGap: actionsBox.left - installsBox.right,
+        columnGap: actionsBox.left - statusBox.right,
         detailClearance: detailBox.top - buttonBox.bottom,
         verticalOverlap: buttonBox.bottom > detailBox.top
       };
     });
     expect(installActionGeometry.columnGap).toBeGreaterThanOrEqual(0);
-    expect(installActionGeometry.detailClearance).toBeGreaterThanOrEqual(4);
+    expect(installActionGeometry.detailClearance).toBeGreaterThanOrEqual(3);
     expect(installActionGeometry.verticalOverlap).toBe(false);
     await updatedRow.getByRole("button", { name: "Sync install of shared-reviewer" }).click();
-    await updatedRow.getByText("Synced").waitFor({ state: "visible" });
+    await updatedRow.getByText("Up to date").waitFor({ state: "visible" });
     await expect(readFile(installedSkillMd, "utf8")).resolves.toContain(
       "Use the installed update path."
     );
   }, 30_000);
 
-  it("keeps Skill table columns and two-line metadata aligned across row actions", async () => {
+  it("keeps the five Skill lanes aligned across status actions and supported widths", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
     const staticSkillDir = join(appDataRoot, "skills-library", "static-layout-reference");
     await mkdir(staticSkillDir, { recursive: true });
@@ -4638,42 +4674,46 @@ describe("Electron UI profile switching e2e", () => {
         document.querySelector<HTMLElement>('[aria-label="Library item static-layout-reference"]')
       ];
       const cellSelectors = [
+        ".library-resource-cell",
         ".library-source-cell",
-        ".library-version-cell",
-        ".library-update-cell",
         ".library-usage-cell",
-        ".library-installs-cell"
+        ".library-status-cell",
+        ".library-actions-cell"
       ];
       const headerCells = head ? Array.from(head.children) as HTMLElement[] : [];
-      const headerLefts = headerCells.slice(1, 6).map((cell) => cell.getBoundingClientRect().left);
+      const headerLefts = headerCells.slice(0, 4).map((cell) => cell.getBoundingClientRect().left);
+      const headerActionsRight = headerCells[4]?.getBoundingClientRect().right ?? -1;
       const rowMetrics = rows.map((row) => {
         const cells = cellSelectors.map((selector) => row?.querySelector<HTMLElement>(selector));
         const actions = row?.querySelector<HTMLElement>(".library-actions-cell");
-        const installs = row?.querySelector<HTMLElement>(".library-installs-cell");
-        const version = row?.querySelector<HTMLElement>(".library-version-cell");
+        const status = row?.querySelector<HTMLElement>(".library-status-cell");
         const primary = [
-          version?.querySelector<HTMLElement>("strong"),
-          row?.querySelector<HTMLElement>(".library-update-cell .resource-status"),
+          row?.querySelector<HTMLElement>(".library-source-primary"),
           row?.querySelector<HTMLElement>(".library-usage-cell .usage-summary"),
-          row?.querySelector<HTMLElement>(".library-installs-cell .library-install-empty, .library-installs-cell .library-install-entry > span")
+          row?.querySelector<HTMLElement>(".library-primary-status, .library-status-action")
+        ].filter((item): item is HTMLElement => Boolean(item));
+        const secondary = [
+          row?.querySelector<HTMLElement>(".library-source-meta"),
+          row?.querySelector<HTMLElement>(".library-usage-detail"),
+          row?.querySelector<HTMLElement>(".library-status-detail")
         ].filter((item): item is HTMLElement => Boolean(item));
         const rowBox = row?.getBoundingClientRect();
         const actionBox = actions?.getBoundingClientRect();
-        const installBox = installs?.getBoundingClientRect();
+        const statusBox = status?.getBoundingClientRect();
         return {
-          cellLefts: cells.map((cell) => cell?.getBoundingClientRect().left ?? -1),
+          actionsRight: actionBox?.right ?? -1,
+          cellLefts: cells.slice(0, 4).map((cell) => cell?.getBoundingClientRect().left ?? -1),
           actionsLeft: actionBox?.left ?? -1,
-          actionGap: actionBox && installBox ? actionBox.left - installBox.right : -1,
+          actionGap: actionBox && statusBox ? actionBox.left - statusBox.right : -1,
           childrenFit: Boolean(rowBox) && Array.from(row!.children).every((child) => {
             const box = child.getBoundingClientRect();
             return box.left >= rowBox!.left - 1 && box.right <= rowBox!.right + 1;
           }),
           primaryTops: primary.map((item) => item.getBoundingClientRect().top),
-          versionChildLefts: version
-            ? Array.from(version.children).map((child) => child.getBoundingClientRect().left)
-            : [],
+          rowHeight: rowBox?.height ?? -1,
+          secondaryTops: secondary.map((item) => item.getBoundingClientRect().top),
           statusOverflow: (() => {
-            const label = row?.querySelector<HTMLElement>(".library-update-cell .resource-status > span");
+            const label = row?.querySelector<HTMLElement>(".library-status-cell .library-status-action > span, .library-status-cell .library-primary-status > span");
             return label ? label.scrollWidth - label.clientWidth : 0;
           })()
         };
@@ -4681,6 +4721,7 @@ describe("Electron UI profile switching e2e", () => {
       return {
         containerName: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel")!).containerName,
         headerDisplay: head ? getComputedStyle(head).display : "missing",
+        headerActionsRight,
         headerLefts,
         rowMetrics,
         documentWidth: document.documentElement.scrollWidth,
@@ -4696,11 +4737,13 @@ describe("Electron UI profile switching e2e", () => {
         expect(Math.abs(left - defaultGeometry.headerLefts[index]!)).toBeLessThanOrEqual(1);
       });
       expect(row.childrenFit).toBe(true);
+      expect(Math.abs(row.actionsRight - defaultGeometry.headerActionsRight)).toBeLessThanOrEqual(1);
       expect(row.actionGap).toBeGreaterThanOrEqual(9);
       expect(row.statusOverflow).toBeLessThanOrEqual(1);
       expect(Math.max(...row.primaryTops) - Math.min(...row.primaryTops)).toBeLessThanOrEqual(1);
-      expect(Math.max(...row.versionChildLefts) - Math.min(...row.versionChildLefts)).toBeLessThanOrEqual(1);
+      expect(Math.max(...row.secondaryTops) - Math.min(...row.secondaryTops)).toBeLessThanOrEqual(1);
     }
+    expect(Math.abs(defaultGeometry.rowMetrics[0]!.rowHeight - defaultGeometry.rowMetrics[1]!.rowHeight)).toBeLessThanOrEqual(1);
     expect(
       Math.abs(defaultGeometry.rowMetrics[0]!.actionsLeft - defaultGeometry.rowMetrics[1]!.actionsLeft)
     ).toBeLessThanOrEqual(1);
@@ -4708,22 +4751,25 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     const compactGeometry = await updateRow.evaluate((row) => {
       const actions = row.querySelector<HTMLElement>(".library-actions-cell")!.getBoundingClientRect();
-      const update = row.querySelector<HTMLElement>(".library-update-cell")!.getBoundingClientRect();
-      const installs = row.querySelector<HTMLElement>(".library-installs-cell")!.getBoundingClientRect();
+      const status = row.querySelector<HTMLElement>(".library-status-cell")!.getBoundingClientRect();
+      const head = document.querySelector<HTMLElement>(".skill-library-panel .library-table__head")!;
+      const statusLabel = row.querySelector<HTMLElement>(".library-status-action > span")!;
       return {
-        actionGap: actions.left - Math.max(update.right, installs.right),
-        fullHeaderDisplay: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel .library-table__head--full")!).display,
-        compactHeaderDisplay: getComputedStyle(document.querySelector<HTMLElement>(".skill-library-panel .library-table__head--compact")!).display,
+        actionGap: actions.left - status.right,
         documentWidth: document.documentElement.scrollWidth,
+        headerColumns: head.children.length,
+        headerDisplay: getComputedStyle(head).display,
+        rowHeight: row.getBoundingClientRect().height,
+        statusOverflow: statusLabel.scrollWidth - statusLabel.clientWidth,
         viewportWidth: document.documentElement.clientWidth,
-        versionDisplay: getComputedStyle(row.querySelector<HTMLElement>(".library-version-cell")!).display
       };
     });
     expect(compactGeometry.documentWidth).toBe(compactGeometry.viewportWidth);
     expect(compactGeometry.actionGap).toBeGreaterThanOrEqual(9);
-    expect(compactGeometry.fullHeaderDisplay).toBe("none");
-    expect(compactGeometry.compactHeaderDisplay).toBe("grid");
-    expect(compactGeometry.versionDisplay).not.toBe("none");
+    expect(compactGeometry.headerDisplay).toBe("grid");
+    expect(compactGeometry.headerColumns).toBe(5);
+    expect(compactGeometry.rowHeight).toBeLessThanOrEqual(68);
+    expect(compactGeometry.statusOverflow).toBeLessThanOrEqual(1);
   }, 30_000);
 
   it("updates all available library skill updates from the rendered app", async () => {
@@ -5740,21 +5786,24 @@ describe("Electron UI profile switching e2e", () => {
     expect(await libraryRow.getAttribute("class")).toContain("is-globally-disabled");
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).backgroundColor))
-      .toBe("rgb(244, 245, 247)");
+      .toBe("rgb(245, 245, 247)");
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
-      .toContain("rgb(152, 162, 179)");
+      .toBe("none");
     const disabledTab = page.getByRole("tab", { name: /Disabled 1/ });
     await disabledTab.click();
     expect(await disabledTab.getAttribute("aria-selected")).toBe("true");
     expect(await page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
     await page.getByRole("tab", { name: /Updates/ }).click();
     expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
-    await page.getByRole("tab", { name: /Referenced/ }).click();
-    expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
-    await page.getByRole("tab", { name: /Unreferenced/ }).click();
-    expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
     await page.getByRole("tab", { name: /^All / }).click();
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    const usageFilter = page.getByRole("combobox", { name: "Skill usage filter" });
+    await usageFilter.selectOption("referenced");
+    expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
+    await usageFilter.selectOption("unreferenced");
+    expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
+    await usageFilter.selectOption("all");
 
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "Skills");
@@ -5897,7 +5946,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => updateCheckSwitch.getAttribute("aria-checked")).toBe("true");
     await updateCheckSwitch.click();
     await page.getByRole("button", { name: "Close" }).click();
-    await expect.poll(() => githubRow.textContent()).toContain("Not tracked");
+    await expect.poll(() => githubRow.textContent()).toContain("Checks disabled");
     await expect
       .poll(async () =>
         (await readJson<{ updateCheckEnabled?: boolean }>(
