@@ -2356,6 +2356,13 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp();
     await resizeAppWindow(page, 1180, 728);
     await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Advanced");
+    await page.getByLabel("OpenCode settings (opencode.jsonc)").fill("{");
+    await saveProfile(page);
+    await page.getByRole("button", { name: "Advanced", exact: true }).click();
+    await expect
+      .poll(() => page.getByRole("button", { name: "Open Advanced" }).isVisible())
+      .toBe(true);
 
     const profileTitle = page.locator(".profile-hero__title");
     const commitActions = page.getByRole("group", { name: "Selected profile actions" });
@@ -2403,6 +2410,33 @@ describe("Electron UI profile switching e2e", () => {
         })
       );
       expect(controlsFitText).toBe(true);
+
+      const statusGeometry = await page.locator(".profile-action-status").evaluate((status) => {
+        const copy = status.querySelector<HTMLElement>(".profile-action-status__copy");
+        const remediation = status.querySelector<HTMLElement>(".profile-action-status__action");
+        const statusBox = status.getBoundingClientRect();
+        const actionBox = remediation?.getBoundingClientRect();
+        const copyBox = copy?.getBoundingClientRect();
+        return {
+          actionFits:
+            !actionBox ||
+            (actionBox.left >= statusBox.left &&
+              actionBox.right <= statusBox.right &&
+              actionBox.top >= statusBox.top &&
+              actionBox.bottom <= statusBox.bottom),
+          actionTextFits: !remediation || remediation.scrollWidth <= remediation.clientWidth,
+          copyDoesNotOverlapAction:
+            !actionBox || !copyBox || copyBox.right <= actionBox.left + 1
+        };
+      });
+      expect(statusGeometry).toEqual({
+        actionFits: true,
+        actionTextFits: true,
+        copyDoesNotOverlapAction: true
+      });
+      expect(await page.getByRole("button", { name: "Open Advanced" }).textContent()).toContain(
+        "Open Advanced"
+      );
 
       const profileGeometry = await page.locator(".profile-row.is-active").evaluate((row) => {
         const icon = row.querySelector<HTMLElement>(".profile-row__icon");

@@ -749,6 +749,7 @@
 .profile-action-status__copy {
   align-items: center;
   display: inline-flex;
+  flex: 1 1 auto;
   gap: 5px;
   min-width: 0;
 }
@@ -766,12 +767,16 @@
   color: var(--accent);
   cursor: pointer;
   display: inline-flex;
-  height: 18px;
+  flex: 0 0 auto;
+  font: inherit;
+  gap: 2px;
+  height: 22px;
   justify-content: center;
   margin: 0;
-  min-height: 18px;
-  padding: 0;
-  width: 18px;
+  min-height: 22px;
+  padding: 0 2px;
+  white-space: nowrap;
+  width: auto;
 }
 
 .profile-action-status__action:hover:not(:disabled) {

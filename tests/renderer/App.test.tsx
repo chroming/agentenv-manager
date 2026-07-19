@@ -1949,7 +1949,7 @@ describe("App", () => {
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("Select a Target");
-    expect(screen.getByRole("button", { name: "Open Targets" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Targets" })).not.toBeInTheDocument();
     action = screen.getByRole("button", { name: "Apply" });
     expect(action).toBeDisabled();
     expect(action).toHaveAccessibleDescription("Select a target before previewing changes");
@@ -2007,8 +2007,8 @@ describe("App", () => {
     action = screen.getByRole("button", { name: "Apply" });
     expect(action).toHaveAttribute("title", "Resolve OpenCode drift");
     readiness = screen.getByRole("status", { name: "Profile readiness" });
-    expect(readiness).toHaveTextContent("Review blocking issues");
-    expect(screen.getByRole("button", { name: "Review preview" })).toBeInTheDocument();
+    expect(readiness).toHaveTextContent("Changes need review on OpenCode");
+    expect(screen.queryByRole("button", { name: "Review preview" })).not.toBeInTheDocument();
     dialog = screen.getByRole("dialog", { name: "Preview" });
     const driftConfirm = within(dialog).getByRole("button", { name: "Apply profile" });
     expect(driftConfirm).toBeDisabled();
@@ -2042,6 +2042,45 @@ describe("App", () => {
     expect(action).toHaveTextContent("Apply");
     fireEvent.click(action);
     expect(api.previewApply).not.toHaveBeenCalled();
+  });
+
+  it("uses explicit destinations only for readiness issues outside the apply flow", async () => {
+    installApi({
+      readProfile: vi.fn().mockResolvedValue({ ...profile, configText: "{" })
+    });
+    render(<App />);
+
+    await openProfiles();
+    expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
+      "Profile configuration needs review"
+    );
+    const openAdvanced = screen.getByRole("button", { name: "Open Advanced" });
+    expect(openAdvanced).toHaveTextContent("Open Advanced");
+    fireEvent.click(openAdvanced);
+    expect(screen.getByRole("button", { name: "Advanced" })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+
+    cleanup();
+    installApi({
+      listTargetStates: vi.fn().mockResolvedValue([
+        managedState({ lifecycleStatus: "recovery-required" })
+      ])
+    });
+    render(<App />);
+
+    await openProfiles();
+    expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
+      "Recovery required on OpenCode"
+    );
+    const openRecovery = screen.getByRole("button", { name: "Open Recovery" });
+    expect(openRecovery).toHaveTextContent("Open Recovery");
+    fireEvent.click(openRecovery);
+    expect(screen.getByRole("button", { name: "Advanced" })).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
   });
 
   it("lists every active target and routes profile deletion recovery to Targets", async () => {

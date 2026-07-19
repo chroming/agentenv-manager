@@ -59,8 +59,7 @@ describe("profile readiness", () => {
     ).toEqual({
       status: "no-target",
       label: "No target",
-      message: "Select a target to continue",
-      remediationLabel: "Open Targets"
+      message: "Select a target to continue"
     });
   });
 
@@ -169,7 +168,7 @@ describe("profile readiness", () => {
       },
       {
         input: { profile, isDirty: true },
-        expected: ["no-target", "Select a target to continue", "Open Targets"]
+        expected: ["no-target", "Select a target to continue", undefined]
       },
       {
         input: { profile, target, isDirty: true },
@@ -187,7 +186,7 @@ describe("profile readiness", () => {
           localValidationErrors: ["Instructions are empty"],
           preview: previewWith("Preview blocked")
         },
-        expected: ["validation-error", "This profile has validation issues", "Review Advanced"]
+        expected: ["validation-error", "This profile has validation issues", "Open Advanced"]
       },
       {
         input: {
@@ -196,7 +195,7 @@ describe("profile readiness", () => {
           isDirty: false,
           preview: previewWith("Preview blocked")
         },
-        expected: ["preview-error", "Preview found blocking issues", "Review preview"]
+        expected: ["preview-error", "Preview found blocking issues", undefined]
       },
       {
         input: { profile, target, targetState: unmanagedState, isDirty: false },
@@ -222,12 +221,27 @@ describe("profile readiness", () => {
     ).toEqual({
       status: "preview-error",
       label: "Needs review",
-      message: "Codex changed outside AgentEnv",
-      remediationLabel: "Review preview"
+      message: "Codex changed outside AgentEnv"
     });
     expect(
       deriveApplyActionLabel({ profile, target, targetState: driftedState, isDirty: false })
     ).toBe("Review Codex issues");
+  });
+
+  it("offers a distinct recovery destination only when target recovery is required", () => {
+    expect(
+      deriveProfileReadiness({
+        profile,
+        target,
+        targetState: { ...managedState, lifecycleStatus: "recovery-required" },
+        isDirty: false
+      })
+    ).toEqual({
+      status: "preview-error",
+      label: "Needs review",
+      message: "Codex requires recovery",
+      remediationLabel: "Open Recovery"
+    });
   });
 
   it("reviews unavailable and locally invalid targets before lifecycle labels", () => {

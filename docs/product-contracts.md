@@ -208,7 +208,9 @@ The Profile editor MUST distinguish these states:
 | Saved, never applied | Profile is valid but has no deployment on selected Target. | Preview Apply. |
 | Saved, changes pending | Selected Target has an older Profile or Library version. | Preview Apply. |
 | Applied | Saved Profile, referenced Library versions, and managed Target files match. | No Apply action. |
-| Drifted | Managed Target files changed outside AgentEnv. | Review drift. |
+| Validation blocked | Saved Profile configuration needs correction before Apply. | Open Advanced. |
+| Drifted | Managed Target files changed outside AgentEnv. | Apply to create a fresh preview. |
+| Recovery required | Target history requires intervention before normal Apply. | Open Recovery. |
 
 Rules:
 
@@ -216,6 +218,9 @@ Rules:
 - Save MUST expose local working feedback immediately. Once persistence succeeds, the editor becomes clean and Apply availability is recalculated from the returned saved Profile without waiting for Target discovery, inventory scanning, update checks, usage aggregation, or a full-page refresh.
 - Save, Apply, and Target selection MUST appear as one compact action group in the selected Profile context. Save and Apply remain adjacent; the Profile-scoped destination selector sits immediately beside Apply. Page creation controls MUST NOT separate these lifecycle commands.
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
+- Readiness text describes the current state; it is not a second workflow. Only a condition that requires another product area exposes an inline remediation link: unavailable Target opens Targets, local validation opens Advanced, and required recovery opens Recovery. Preview blockers and drift do not expose a separate Review command because Apply already creates the authoritative fresh preview.
+- Readiness remediation links MUST show a visible verb and object. Icon-only arrows and backend phase labels such as `Review preview` are not executable product intents and MUST NOT appear as commands.
+- When no Target is selected, the visible Target selector remains the single selection entry point. When the Profile is dirty, the visible Save button remains the single persistence action.
 - Edit, Duplicate, Delete, Save, Target selection, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation.
 - Every Profile row MUST list all Targets currently using that Profile, even when legacy deployment state has no application timestamp. Each Target is visibly distinguished as current, pending, or needing attention.
 - The Profile list is always ordered by persisted creation time, newest first. Selection, the chosen Apply Target, Current state, Save, and Apply MUST NOT reorder it.

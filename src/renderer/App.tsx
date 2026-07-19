@@ -2101,9 +2101,11 @@ const AppContent = ({
                   : readiness.status === "target-unavailable"
                     ? t("{{name}} unavailable", { name: readinessTargetName })
                     : readiness.status === "validation-error"
-                      ? t("Review profile configuration")
+                      ? t("Profile configuration needs review")
                       : readiness.status === "preview-error"
-                        ? t("Review blocking issues")
+                        ? readiness.remediationLabel === "Open Recovery"
+                          ? t("Recovery required on {{name}}", { name: readinessTargetName })
+                          : t("Changes need review on {{name}}", { name: readinessTargetName })
                         : readiness.status === "no-target"
                           ? t("Select a Target")
                           : t(readiness.message);
@@ -2195,16 +2197,11 @@ const AppContent = ({
       void saveSelectedProfile();
       return;
     }
-    if (readiness.remediationLabel === "Review Advanced") {
+    if (
+      readiness.remediationLabel === "Open Advanced" ||
+      readiness.remediationLabel === "Open Recovery"
+    ) {
       setActiveComposerSection("advanced");
-      return;
-    }
-    if (readiness.remediationLabel === "Review preview") {
-      document
-        .querySelector<HTMLButtonElement>(
-          '[role="dialog"][aria-label="Preview"] .secondary-action'
-        )
-        ?.focus();
     }
   };
 
@@ -4166,6 +4163,7 @@ const AppContent = ({
                               disabled={busy}
                               onClick={runReadinessRemediation}
                             >
+                              <span>{t(readiness.remediationLabel)}</span>
                               <ArrowRight size={12} strokeWidth={2.3} aria-hidden="true" />
                             </button>
                           ) : null}

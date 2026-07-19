@@ -23,7 +23,7 @@ export interface ProfileReadiness {
   status: ProfileReadinessStatus;
   label: "No profile" | "No target" | "Unsaved" | "Target unavailable" | "Needs review" | "Apply pending" | "Applied" | "Ready";
   message: string;
-  remediationLabel?: "Open Targets" | "Save now" | "Review Advanced" | "Review preview";
+  remediationLabel?: "Open Targets" | "Save now" | "Open Advanced" | "Open Recovery";
 }
 
 export interface ProfileReadinessInput {
@@ -60,8 +60,7 @@ export const deriveProfileReadiness = ({
     return {
       status: "no-target",
       label: "No target",
-      message: "Select a target to continue",
-      remediationLabel: "Open Targets"
+      message: "Select a target to continue"
     };
   }
 
@@ -88,7 +87,7 @@ export const deriveProfileReadiness = ({
       status: "validation-error",
       label: "Needs review",
       message: "This profile has validation issues",
-      remediationLabel: "Review Advanced"
+      remediationLabel: "Open Advanced"
     };
   }
 
@@ -96,8 +95,7 @@ export const deriveProfileReadiness = ({
     return {
       status: "preview-error",
       label: "Needs review",
-      message: "Preview found blocking issues",
-      remediationLabel: "Review preview"
+      message: "Preview found blocking issues"
     };
   }
 
@@ -114,7 +112,7 @@ export const deriveProfileReadiness = ({
       status: "preview-error",
       label: "Needs review",
       message: `${target.name} requires recovery`,
-      remediationLabel: "Review preview"
+      remediationLabel: "Open Recovery"
     };
   }
 
@@ -122,8 +120,7 @@ export const deriveProfileReadiness = ({
     return {
       status: "preview-error",
       label: "Needs review",
-      message: `${target.name} changed outside AgentEnv`,
-      remediationLabel: "Review preview"
+      message: `${target.name} changed outside AgentEnv`
     };
   }
 
