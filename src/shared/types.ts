@@ -37,6 +37,9 @@ export interface AgentEnvApi {
   importGitHubSkillToLibrary(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   importGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
+  scanRepositorySkills(input: RepositorySkillSourceInput): Promise<RepositorySkillScanResult>;
+  importRepositorySkillToLibrary(input: RepositorySkillImportInput): Promise<SkillLibraryEntry>;
+  importRepositorySkills(inputs: RepositorySkillImportInput[]): Promise<RepositorySkillImportResult>;
   removeSkillFromLibrary(id: string): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
   consolidateSkillGroup(input: SkillCleanupRequest): Promise<SkillCleanupResult>;
@@ -157,7 +160,8 @@ export interface SkillImportInput {
 
 export type SkillImportPreviewInput =
   | { kind: "local"; input: SkillImportInput }
-  | { kind: "github"; input: GitHubSkillImportInput };
+  | { kind: "github"; input: GitHubSkillImportInput }
+  | { kind: "repository"; input: RepositorySkillImportInput };
 
 export interface SkillImportSnapshot {
   id: string;
@@ -292,6 +296,12 @@ export interface RepositorySkillSourceInput {
   transport?: RepositorySkillTransport;
 }
 
+export interface RepositorySkillImportInput extends RepositorySkillSourceInput {
+  id?: string;
+  expectedContentHash?: string;
+  conflictResolution?: SkillImportConflictResolution;
+}
+
 export interface RepositorySkillCandidate {
   id: string;
   name: string;
@@ -313,6 +323,18 @@ export interface RepositorySkillScanResult {
   candidates: RepositorySkillCandidate[];
 }
 
+export interface RepositorySkillImportFailure {
+  id: string;
+  repository: string;
+  directory?: string;
+  error: string;
+}
+
+export interface RepositorySkillImportResult {
+  imported: SkillLibraryEntry[];
+  failed: RepositorySkillImportFailure[];
+}
+
 export interface SkillUpdateInfo {
   id: string;
   name: string;
@@ -327,6 +349,8 @@ export interface SkillUpdateSourceInput {
   id: string;
   sourceType: SkillSourceType;
   source: string;
+  ref?: string;
+  directory?: string;
 }
 
 export interface SkillUpdatePolicyInput {

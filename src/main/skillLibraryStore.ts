@@ -10,6 +10,10 @@ import type {
   GitHubSkillImportResult,
   GitHubSkillScanResult,
   PlannedFileChange,
+  RepositorySkillImportInput,
+  RepositorySkillImportResult,
+  RepositorySkillScanResult,
+  RepositorySkillSourceInput,
   SkillCleanupIgnoreRule,
   SkillCleanupBackupSummary,
   SkillCleanupResult,
@@ -49,6 +53,8 @@ import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
 import { deploySkillDirectory, removeSkillDeployment } from "./skillDeployment";
 import { createTargetRegistry } from "./targets/registry";
+import type { GitCliSkillSource } from "./skillSources/contract";
+import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
 
 interface SkillMetadataFile {
   sourceType?: SkillSourceType;
@@ -160,6 +166,9 @@ export interface SkillLibraryStore {
   importGitHubSkill(input: GitHubSkillImportInput): Promise<SkillLibraryEntry>;
   scanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   importGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
+  scanRepositorySkills(input: RepositorySkillSourceInput): Promise<RepositorySkillScanResult>;
+  importRepositorySkill(input: RepositorySkillImportInput): Promise<SkillLibraryEntry>;
+  importRepositorySkills(inputs: RepositorySkillImportInput[]): Promise<RepositorySkillImportResult>;
   removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   deployLibrarySkill(input: DeployLibrarySkillStoreInput): Promise<void>;
@@ -194,6 +203,7 @@ interface SkillLibraryStoreOptions {
   skillsCliLockPaths?: string[];
   profileStore?: Pick<ProfileStore, "listProfiles" | "readProfile" | "saveProfile">;
   targetPathsProvider?: () => TargetPaths[];
+  repositorySource?: GitCliSkillSource;
 }
 
 interface ParsedGitHubSkillSource {
@@ -493,6 +503,13 @@ export const createSkillLibraryStore = (
   const fetchImpl = options.fetch ?? fetch;
   const authTokenProvider = options.authTokenProvider;
   const profileStore = options.profileStore;
+  const repositorySource = options.repositorySource;
+  const requireRepositorySource = () => {
+    if (!repositorySource) {
+      throw new Error("System Git is unavailable. Install Git and retry the Repository operation.");
+    }
+    return repositorySource;
+  };
   const targetPathsProvider = options.targetPathsProvider ?? (() =>
     createTargetRegistry().listAdapters().map((adapter) =>
       adapter.createTargetPaths({
@@ -808,13 +825,17 @@ export const createSkillLibraryStore = (
         );
         const contentIdentical = existing.contentHash === incoming.contentHash;
         const normalizedSource = (value: string) => value.trim().replace(/\/+$/, "");
+        const onlineSourceKey = (snapshot: SkillImportSnapshot) =>
+          [
+            snapshot.sourceType,
+            normalizedSource(snapshot.source),
+            snapshot.upstream?.ref ?? "",
+            snapshot.upstream?.subpath ?? ""
+          ].join("\0");
         const sourceUpdateAvailable =
           contentIdentical &&
-          incoming.sourceType === "github" &&
-          (
-            existing.sourceType !== "github" ||
-            normalizedSource(existing.source) !== normalizedSource(incoming.source)
-          );
+          (incoming.sourceType === "github" || incoming.sourceType === "git") &&
+          onlineSourceKey(existing) !== onlineSourceKey(incoming);
         const identical = contentIdentical && !sourceUpdateAvailable;
         const nameMatches = normalizedSkillName(skill.name) === normalizedIncomingName;
         const idMatches = skill.id === safeRequestedId;
@@ -864,6 +885,27 @@ export const createSkillLibraryStore = (
               upstream: source.input.upstream ?? { kind: "local", locator: sourceDir }
             }
       );
+    }
+
+    if (source.kind === "repository") {
+      const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-preview-"));
+      try {
+        const materialized = await requireRepositorySource().materialize(
+          source.input,
+          tempDir
+        );
+        const frontmatter = await validateSkillFrontmatter(tempDir);
+        const requestedId =
+          source.input.id ??
+          normalizeSkillKey(frontmatter.name || basename(materialized.directory) || "skill");
+        return await previewDirectoryImport(source, tempDir, requestedId, {
+          sourceType: "git",
+          source: materialized.repository,
+          upstream: materialized.upstream
+        });
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
     }
 
     const parsedSource = parseGitHubSkillUrl(source.input.url, {
@@ -939,7 +981,7 @@ export const createSkillLibraryStore = (
                 : "untracked"
               : Object.keys(current).length > 0
                 ? updatePolicyFor(current)
-                : sourceType === "github"
+                : sourceType === "github" || sourceType === "git"
                   ? "tracked"
                   : "untracked"),
           updateCheckEnabled:
@@ -950,7 +992,7 @@ export const createSkillLibraryStore = (
                   : "untracked"
                 : Object.keys(current).length > 0
                   ? updatePolicyFor(current)
-                  : sourceType === "github"
+                  : sourceType === "github" || sourceType === "git"
                     ? "tracked"
                     : "untracked")) === "tracked",
           contentHash,
@@ -1790,6 +1832,147 @@ export const createSkillLibraryStore = (
     return { imported, failed };
   };
 
+  const scanRepositorySkills = async (
+    input: RepositorySkillSourceInput
+  ): Promise<RepositorySkillScanResult> => {
+    const result = await requireRepositorySource().scan(input);
+    const existingSkills = await listSkills();
+    const reservedIds = new Set(existingSkills.map((skill) => skill.id));
+    return {
+      ...result,
+      candidates: result.candidates.map((candidate) => {
+        const existingSource = existingSkills.find(
+          (skill) =>
+            skill.sourceType === "git" &&
+            skill.source === candidate.source.locator &&
+            skill.remoteRef === candidate.source.ref &&
+            (skill.upstream?.subpath ?? "") === (candidate.source.subpath ?? "")
+        );
+        const duplicate = existingSkills.find(
+          (skill) => !existingSource && skill.remoteRevision === candidate.contentRevision
+        );
+        let id = existingSource?.id ?? duplicate?.id ?? candidate.id;
+        const baseId = id;
+        for (
+          let suffix = 2;
+          !existingSource && !duplicate && reservedIds.has(id);
+          suffix += 1
+        ) {
+          id = `${baseId}-${suffix}`;
+        }
+        if (!existingSource && !duplicate) reservedIds.add(id);
+        return {
+          ...candidate,
+          id,
+          status: existingSource ? "already-imported" : duplicate ? "duplicate" : "ready",
+          existingLibraryId: existingSource?.id ?? duplicate?.id
+        };
+      })
+    };
+  };
+
+  const importRepositorySkill = async (
+    input: RepositorySkillImportInput
+  ): Promise<SkillLibraryEntry> => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-"));
+    try {
+      const materialized = await requireRepositorySource().materialize(input, tempDir);
+      const frontmatter = await validateSkillFrontmatter(tempDir);
+      const requestedId =
+        input.id ??
+        normalizeSkillKey(frontmatter.name || basename(materialized.directory) || "skill");
+      const previewSource: SkillImportPreviewInput = { kind: "repository", input };
+      const preview = await previewDirectoryImport(
+        previewSource,
+        tempDir,
+        requestedId,
+        {
+          sourceType: "git",
+          source: materialized.repository,
+          upstream: materialized.upstream
+        }
+      );
+      const plan = resolveImportPlan(
+        preview,
+        input.conflictResolution,
+        input.expectedContentHash
+      );
+      if (plan.reused) {
+        const existing = (await listSkills()).find((skill) => skill.id === plan.id);
+        if (!existing) throw new Error(`Library skill does not exist: ${plan.id}`);
+        return existing;
+      }
+
+      const targetDir = join(await libraryDir(), plan.id);
+      const previousMetadata = plan.replace || plan.sourceOnly
+        ? await readLibraryMetadata(targetDir)
+        : undefined;
+      const metadata: Pick<
+        SkillMetadataFile,
+        | "sourceType"
+        | "source"
+        | "remoteRef"
+        | "remotePath"
+        | "remoteRevision"
+        | "updatePolicy"
+        | "globallyEnabled"
+        | "iconKey"
+        | "upstream"
+        | "provenance"
+      > = {
+        sourceType: "git",
+        source: materialized.repository,
+        remoteRef: materialized.ref,
+        remotePath: materialized.directory,
+        remoteRevision: materialized.contentRevision,
+        updatePolicy: "tracked",
+        iconKey: previousMetadata?.iconKey,
+        globallyEnabled: previousMetadata?.globallyEnabled,
+        upstream: materialized.upstream,
+        provenance: previousMetadata?.provenance ?? { importedVia: "agentenv" }
+      };
+      if (plan.sourceOnly) {
+        await writeMetadata(targetDir, metadata);
+        return entryFor(plan.id, targetDir);
+      }
+
+      const backup = plan.replace
+        ? await createLibraryUpdateBackup(plan.id, targetDir)
+        : undefined;
+      try {
+        await removeAndCopy(tempDir, targetDir);
+        await writeMetadata(targetDir, metadata);
+        return entryFor(plan.id, targetDir);
+      } catch (error) {
+        if (backup) return failAfterCleanupRollback(backup, `Replacing ${plan.id}`, error);
+        await rm(targetDir, { recursive: true, force: true });
+        throw error;
+      }
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  };
+
+  const importRepositorySkills = async (
+    inputs: RepositorySkillImportInput[]
+  ): Promise<RepositorySkillImportResult> => {
+    const imported: SkillLibraryEntry[] = [];
+    const failed: RepositorySkillImportResult["failed"] = [];
+    for (const input of inputs) {
+      try {
+        imported.push(await importRepositorySkill(input));
+      } catch (error) {
+        failed.push({
+          id: input.id ?? "skill",
+          repository: input.repository,
+          directory: input.directory,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+    return { imported, failed };
+  };
+
   const deployLibrarySkill = async ({
     targetPaths,
     targetName,
@@ -2344,25 +2527,24 @@ export const createSkillLibraryStore = (
   const checkUpdates = async (ids?: string[]): Promise<SkillUpdateInfo[]> => {
     const skills = await listSkills();
     const selectedIds = ids ? new Set(ids.map((id) => SafeIdSchema.parse(id))) : undefined;
-    const updates: SkillUpdateInfo[] = [];
-    for (const skill of skills.filter(
+    const selectedSkills = skills.filter(
       (item) =>
         (!selectedIds || selectedIds.has(item.id)) &&
         item.updatePolicy === "tracked" &&
         item.globallyEnabled &&
         Boolean(item.source)
-    )) {
+    );
+    return Promise.all(selectedSkills.map(async (skill): Promise<SkillUpdateInfo> => {
       const metadata = await readLibraryMetadata(skill.path);
       if (!metadata.source) {
-        updates.push({
+        return {
           id: skill.id,
           name: skill.name,
           sourceType: skill.sourceType,
           currentRevision: metadata.remoteRevision,
           updateAvailable: false,
-          error: "Missing GitHub source URL"
-        });
-        continue;
+          error: "Missing update source"
+        };
       }
 
       try {
@@ -2371,47 +2553,66 @@ export const createSkillLibraryStore = (
             throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
           }
           const latestRevision = await computeContentHash(metadata.source);
-          updates.push({
+          return {
             id: skill.id,
             name: skill.name,
             sourceType: "local",
             currentRevision: metadata.contentHash,
             latestRevision,
             updateAvailable: latestRevision !== metadata.contentHash
+          };
+        }
+        if (metadata.sourceType === "git") {
+          const latest = await requireRepositorySource().resolve({
+            repository: metadata.source,
+            ref: metadata.remoteRef,
+            directory: metadata.remotePath,
+            transport: "system-git"
           });
-          continue;
+          return {
+            id: skill.id,
+            name: skill.name,
+            sourceType: "git",
+            currentRevision: metadata.remoteRevision,
+            latestRevision: latest.contentRevision,
+            updateAvailable: latest.contentRevision !== metadata.remoteRevision
+          };
+        }
+        if (metadata.sourceType !== "github") {
+          throw new Error(`Skill update source type is not supported: ${metadata.sourceType}`);
         }
         const source = parseGitHubSkillUrl(metadata.source, {
           ref: metadata.remoteRef,
           remotePath: metadata.remotePath
         });
         const latest = await readGitHubTree(source);
-        updates.push({
+        return {
           id: skill.id,
           name: skill.name,
           sourceType: "github",
           currentRevision: metadata.remoteRevision,
           latestRevision: latest.revision,
           updateAvailable: latest.revision !== metadata.remoteRevision
-        });
+        };
       } catch (error) {
-        updates.push({
+        return {
           id: skill.id,
           name: skill.name,
           sourceType: metadata.sourceType ?? skill.sourceType,
           currentRevision: metadata.remoteRevision ?? metadata.contentHash,
           updateAvailable: false,
           error: error instanceof Error ? error.message : String(error)
-        });
+        };
       }
-    }
-    return updates;
+    }));
   };
 
   const setUpdateSource = async ({
     id,
     sourceType,
-    source
+    source,
+    ref,
+    directory
   }: SkillUpdateSourceInput): Promise<SkillLibraryEntry> => {
     const safeId = SafeIdSchema.parse(id);
     const targetDir = join(await libraryDir(), safeId);
@@ -2434,6 +2635,27 @@ export const createSkillLibraryStore = (
         }
       });
       return entryFor(safeId, targetDir);
+    }
+    if (sourceType === "git") {
+      const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-source-"));
+      try {
+        const materialized = await requireRepositorySource().materialize(
+          { repository: source, ref, directory, transport: "system-git" },
+          tempDir
+        );
+        await writeMetadata(targetDir, {
+          sourceType: "git",
+          source: materialized.repository,
+          remoteRef: materialized.ref,
+          remotePath: materialized.directory,
+          remoteRevision: materialized.contentRevision,
+          updatePolicy: "tracked",
+          upstream: materialized.upstream
+        });
+        return entryFor(safeId, targetDir);
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
     }
     if (sourceType !== "local") {
       throw new Error(`Skill update source type is not supported yet: ${sourceType}`);
@@ -2473,6 +2695,9 @@ export const createSkillLibraryStore = (
           ref: metadata.remoteRef,
           remotePath: metadata.remotePath
         });
+      }
+      if (sourceType === "git") {
+        parseRepositoryLocation(metadata.source, { allowLocal: true });
       }
     }
     await writeMetadata(targetDir, {
@@ -2579,6 +2804,35 @@ export const createSkillLibraryStore = (
           source: metadata.source,
           currentRevision: metadata.remoteRevision,
           latestRevision: revision,
+          updateAvailable: changes.length > 0,
+          changes,
+          errors: []
+        };
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    }
+
+    if (metadata.sourceType === "git") {
+      const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-preview-"));
+      try {
+        const materialized = await requireRepositorySource().materialize(
+          {
+            repository: metadata.source,
+            ref: metadata.remoteRef,
+            directory: metadata.remotePath,
+            transport: "system-git"
+          },
+          tempDir
+        );
+        const changes = await createSkillChanges(targetDir, tempDir);
+        return {
+          id: skill.id,
+          name: skill.name,
+          sourceType: "git",
+          source: metadata.source,
+          currentRevision: metadata.remoteRevision,
+          latestRevision: materialized.contentRevision,
           updateAvailable: changes.length > 0,
           changes,
           errors: []
@@ -2698,6 +2952,45 @@ export const createSkillLibraryStore = (
         await rm(tempDir, { recursive: true, force: true });
       }
     }
+    if (metadata.sourceType === "git" && metadata.source) {
+      const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-"));
+      try {
+        const materialized = await requireRepositorySource().materialize(
+          {
+            repository: metadata.source,
+            ref: metadata.remoteRef,
+            directory: metadata.remotePath,
+            transport: "system-git"
+          },
+          tempDir
+        );
+        const backup = await createLibraryUpdateBackup(safeId, targetDir);
+        try {
+          await removeAndCopy(tempDir, targetDir);
+          await writeMetadata(targetDir, {
+            sourceType: "git",
+            source: materialized.repository,
+            remoteRef: materialized.ref,
+            remotePath: materialized.directory,
+            remoteRevision: materialized.contentRevision,
+            updatePolicy: "tracked",
+            iconKey: metadata.iconKey,
+            upstream: materialized.upstream,
+            provenance: metadata.provenance
+          });
+        } catch (error) {
+          await restoreCleanupBackup(backup);
+          throw new Error(
+            `Updating ${safeId} failed and restored the previous Library version: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+        }
+        return entryFor(safeId, targetDir);
+      } finally {
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    }
     if (metadata.sourceType !== "local" || !metadata.source) {
       throw new Error(`Skill ${safeId} cannot be updated without a local source`);
     }
@@ -2741,6 +3034,9 @@ export const createSkillLibraryStore = (
     importGitHubSkill,
     scanGitHubSkills,
     importGitHubSkills,
+    scanRepositorySkills,
+    importRepositorySkill,
+    importRepositorySkills,
     removeSkill,
     manageTargetSkill,
     deployLibrarySkill,

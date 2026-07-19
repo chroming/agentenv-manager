@@ -370,6 +370,26 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       candidates: []
     }),
     importGitHubSkills: vi.fn().mockResolvedValue({ imported: [], failed: [] }),
+    scanRepositorySkills: vi.fn().mockResolvedValue({
+      repository: "git@example.test:team/skills.git",
+      ref: "main",
+      directory: "",
+      transport: "system-git",
+      truncated: false,
+      candidates: []
+    }),
+    importRepositorySkillToLibrary: vi.fn().mockResolvedValue({
+      id: "repository-reviewer",
+      name: "Repository Reviewer",
+      description: "",
+      path: "/tmp/repository-reviewer",
+      sourceType: "git",
+      source: "git@example.test:team/skills.git",
+      updatePolicy: "tracked",
+      contentHash: "hash",
+      updatedAt: "2026-07-17T00:00:00.000Z"
+    }),
+    importRepositorySkills: vi.fn().mockResolvedValue({ imported: [], failed: [] }),
     removeSkillFromLibrary: vi.fn().mockResolvedValue({
       backupId: "remove-backup",
       libraryId: "skill",

@@ -16,6 +16,8 @@ import type {
   CreateProfileFromTargetInput,
   DeleteManagedBackupInput,
   GitHubSkillImportInput,
+  RepositorySkillImportInput,
+  RepositorySkillSourceInput,
   ManageTargetSkillInput,
   RetireSharedSkillInput,
   SharedSkillRetentionInput,
@@ -189,8 +191,11 @@ export const registerIpcHandlers = ({
       .then((targets) => skillLibraryStore.scanUnmanaged(targets.map((target) => target.paths)))
   );
   ipcMain.handle("skills:preview-import", (_event, input: SkillImportPreviewInput) => {
-    if (!input || (input.kind !== "local" && input.kind !== "github")) {
-      throw new Error("Skill import preview requires a local or GitHub source");
+    if (
+      !input ||
+      (input.kind !== "local" && input.kind !== "github" && input.kind !== "repository")
+    ) {
+      throw new Error("Skill import preview requires a local or Repository source");
     }
     return skillLibraryStore.previewImport(input);
   });
@@ -324,6 +329,23 @@ export const registerIpcHandlers = ({
   );
   ipcMain.handle("skills:import-github-batch", (_event, inputs: GitHubSkillImportInput[]) =>
     skillLibraryStore.importGitHubSkills(Array.isArray(inputs) ? inputs : [])
+  );
+  ipcMain.handle("skills:scan-repository", (_event, input: RepositorySkillSourceInput) => {
+    if (!input || typeof input !== "object" || typeof input.repository !== "string") {
+      throw new Error("Repository scan requires a repository address");
+    }
+    return skillLibraryStore.scanRepositorySkills(input);
+  });
+  ipcMain.handle("skills:import-repository", (_event, input: RepositorySkillImportInput) => {
+    if (!input || typeof input !== "object" || typeof input.repository !== "string") {
+      throw new Error("Repository import requires a repository address");
+    }
+    return skillLibraryStore.importRepositorySkill(input);
+  });
+  ipcMain.handle(
+    "skills:import-repository-batch",
+    (_event, inputs: RepositorySkillImportInput[]) =>
+      skillLibraryStore.importRepositorySkills(Array.isArray(inputs) ? inputs : [])
   );
   ipcMain.handle("skills:remove-library", async (_event, id: unknown) => {
     const skillId = parseId(id, "skill id");

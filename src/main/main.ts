@@ -21,6 +21,11 @@ import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetCaptureService } from "./targetCaptureService";
 import { createTargetRegistry } from "./targets/registry";
+import { findExecutable } from "./executableDiscovery";
+import { createGitCliSkillSource } from "./skillSources/gitCliSource";
+import { createGitCommandRunner, type GitCommandRunner } from "./skillSources/gitCommandRunner";
+import { createGitRepositoryCache } from "./skillSources/gitRepositoryCache";
+import type { GitCliSkillSource } from "./skillSources/contract";
 import { preloadScriptName, windowBackgroundColor } from "./windowConfig";
 import { recoverPendingReplacementsInDirectory } from "./fileUtils";
 
@@ -161,6 +166,7 @@ const approvedWindowCloses = new WeakSet<BrowserWindow>();
 const guardedWindowCloses = new WeakSet<BrowserWindow>();
 let appQuitRequested = false;
 let servicesInitialized = false;
+let disposeServices: (() => void) | undefined;
 
 ipcMain.on("window:set-close-guard", (event, enabled: unknown) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -265,6 +271,39 @@ const createServices = async () => {
     fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });
   const targetRegistry = createTargetRegistry();
+  let gitRunner: GitCommandRunner | undefined;
+  let repositorySourcePromise: Promise<GitCliSkillSource> | undefined;
+  let repositoryServicesDisposed = false;
+  const loadRepositorySource = () => {
+    if (repositoryServicesDisposed) {
+      return Promise.reject(new Error("Repository service is shutting down"));
+    }
+    repositorySourcePromise ??= findExecutable("git", { homeDir: paths.homeDir }).then(
+      (executablePath) => {
+        if (repositoryServicesDisposed) {
+          throw new Error("Repository service is shutting down");
+        }
+        if (!executablePath) {
+          throw new Error(
+            "System Git is unavailable. Install Xcode Command Line Tools or Git, then retry."
+          );
+        }
+        gitRunner = createGitCommandRunner({ executablePath });
+        const cache = createGitRepositoryCache({
+          cacheRoot: paths.repositoryCacheDir,
+          runner: gitRunner
+        });
+        return createGitCliSkillSource({ cache, runner: gitRunner });
+      }
+    );
+    return repositorySourcePromise;
+  };
+  const repositorySource: GitCliSkillSource = {
+    resolve: async (input, signal) => (await loadRepositorySource()).resolve(input, signal),
+    scan: async (input, signal) => (await loadRepositorySource()).scan(input, signal),
+    materialize: async (input, destination, signal) =>
+      (await loadRepositorySource()).materialize(input, destination, signal)
+  };
   const replacementRoots = new Set([paths.profilesDir, paths.skillsLibraryDir]);
   for (const adapter of targetRegistry.listAdapters()) {
     const targetPaths = adapter.createTargetPaths({
@@ -304,6 +343,7 @@ const createServices = async () => {
           fakeHomeRoot: paths.fakeHomeRoot
         })
       ),
+      repositorySource,
       ...(process.env.AGENTENV_GITHUB_FIXTURE_ROOT
         ? { fetch: createGitHubFixtureFetch(process.env.AGENTENV_GITHUB_FIXTURE_ROOT) }
         : {})
@@ -351,13 +391,18 @@ const createServices = async () => {
     activationService,
     targetCaptureService,
     targetRegistry,
-    targetDiscoveryService
+    targetDiscoveryService,
+    dispose: () => {
+      repositoryServicesDisposed = true;
+      gitRunner?.dispose();
+    }
   };
 };
 
 void app.whenReady().then(() => {
   void createServices()
     .then((services) => {
+      disposeServices = services.dispose;
       registerIpcHandlers(services);
       if (process.env.AGENTENV_AUTOMATION !== "1") {
         const runBackupCleanup = async () => {
@@ -396,6 +441,8 @@ app.on("activate", () => {
 
 app.on("before-quit", () => {
   appQuitRequested = true;
+  disposeServices?.();
+  disposeServices = undefined;
 });
 
 app.on("window-all-closed", () => {

@@ -1,12 +1,17 @@
-import { chmod, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPaths } from "../../src/main/paths";
+import { findExecutable } from "../../src/main/executableDiscovery";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
+import { createGitCliSkillSource } from "../../src/main/skillSources/gitCliSource";
+import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRunner";
+import { createGitRepositoryCache } from "../../src/main/skillSources/gitRepositoryCache";
 import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
 import { buildSkillCleanupGroups } from "../../src/shared/skillCleanup";
+import { createGitTestRepository } from "./skillSources/gitTestRepository";
 
 let root = "";
 
@@ -516,6 +521,104 @@ description: >
     );
     await expect(store.checkUpdates()).resolves.toEqual([]);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("imports and updates a system Git skill without modifying a deployed Target copy", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-git-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir: join(root, "home"),
+      repositoryCacheDir: join(root, "cache", "repositories")
+    });
+    const repository = await createGitTestRepository(root, {
+      "README.md": "Initial notes\n",
+      "skills/review/SKILL.md":
+        "---\nname: repository-review\ndescription: Review code.\nversion: 1.0.0\n---\n# Review\n",
+      "skills/review/prompt.md": "Review carefully.\n"
+    });
+    const executablePath = await findExecutable("git", { homeDir: paths.homeDir });
+    if (!executablePath) throw new Error("Git is required for repository source tests");
+    const runner = createGitCommandRunner({ executablePath });
+    const repositorySource = createGitCliSkillSource({
+      runner,
+      cache: createGitRepositoryCache({ cacheRoot: paths.repositoryCacheDir, runner })
+    });
+    const store = createSkillLibraryStore(paths, undefined, { repositorySource });
+    const input = {
+      repository: repository.remoteDir,
+      ref: "main",
+      directory: "skills/review",
+      id: "repository-review"
+    };
+
+    await expect(store.scanRepositorySkills({ repository: repository.remoteDir })).resolves.toMatchObject({
+      transport: "system-git",
+      candidates: [expect.objectContaining({ id: "repository-review" })]
+    });
+    const preview = await store.previewImport({ kind: "repository", input });
+    expect(preview).toMatchObject({
+      incoming: { id: "repository-review", sourceType: "git" },
+      conflicts: []
+    });
+    const imported = await store.importRepositorySkill({
+      ...input,
+      expectedContentHash: preview.incoming.contentHash
+    });
+    expect(imported).toMatchObject({
+      id: "repository-review",
+      sourceType: "git",
+      source: repository.remoteDir,
+      remoteRef: "main",
+      updatePolicy: "tracked",
+      upstream: {
+        kind: "git",
+        locator: repository.remoteDir,
+        ref: "main",
+        subpath: "skills/review"
+      }
+    });
+
+    const targetCopy = join(root, "target", "skills", "repository-review");
+    await cp(imported.path, targetCopy, { recursive: true });
+    await repository.write("README.md", "Unrelated notes changed\n");
+    await repository.commit("unrelated repository update");
+    await expect(store.checkUpdates([imported.id])).resolves.toEqual([
+      expect.objectContaining({ id: imported.id, updateAvailable: false })
+    ]);
+
+    await repository.write("skills/review/prompt.md", "Review the new behavior.\n");
+    await repository.commit("update repository skill");
+    await expect(store.checkUpdates([imported.id])).resolves.toEqual([
+      expect.objectContaining({ id: imported.id, sourceType: "git", updateAvailable: true })
+    ]);
+    await expect(store.previewUpdate(imported.id)).resolves.toMatchObject({
+      sourceType: "git",
+      updateAvailable: true,
+      changes: [expect.objectContaining({ path: "prompt.md" })],
+      errors: []
+    });
+    const updated = await store.updateSkill(imported.id);
+
+    await expect(readFile(join(updated.path, "prompt.md"), "utf8")).resolves.toBe(
+      "Review the new behavior.\n"
+    );
+    await expect(readFile(join(targetCopy, "prompt.md"), "utf8")).resolves.toBe(
+      "Review carefully.\n"
+    );
+    await expect(store.listCleanupBackups()).resolves.toEqual([
+      expect.objectContaining({ libraryId: imported.id, operation: "update" })
+    ]);
+    await rm(repository.remoteDir, { recursive: true, force: true });
+    await expect(store.checkUpdates([imported.id])).resolves.toEqual([
+      expect.objectContaining({
+        id: imported.id,
+        updateAvailable: false,
+        error: expect.stringContaining("Git command failed")
+      })
+    ]);
+    await expect(readFile(join(updated.path, "prompt.md"), "utf8")).resolves.toBe(
+      "Review the new behavior.\n"
+    );
   });
 
   it("persists a custom skill icon across source updates", async () => {

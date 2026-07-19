@@ -30,6 +30,11 @@ const api: AgentEnvApi = {
   importGitHubSkillToLibrary: (input) => ipcRenderer.invoke("skills:import-github", input),
   scanGitHubSkills: (url) => ipcRenderer.invoke("skills:scan-github", url),
   importGitHubSkills: (inputs) => ipcRenderer.invoke("skills:import-github-batch", inputs),
+  scanRepositorySkills: (input) => ipcRenderer.invoke("skills:scan-repository", input),
+  importRepositorySkillToLibrary: (input) =>
+    ipcRenderer.invoke("skills:import-repository", input),
+  importRepositorySkills: (inputs) =>
+    ipcRenderer.invoke("skills:import-repository-batch", inputs),
   removeSkillFromLibrary: (id) => ipcRenderer.invoke("skills:remove-library", id),
   manageTargetSkill: (input) => ipcRenderer.invoke("skills:manage-target", input),
   consolidateSkillGroup: (input) => ipcRenderer.invoke("skills:consolidate-group", input),
