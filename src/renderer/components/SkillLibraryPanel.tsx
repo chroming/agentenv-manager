@@ -11,6 +11,7 @@ import {
   Circle,
   CircleSlash2,
   Combine,
+  Copy,
   ExternalLink,
   Folder,
   GitBranch,
@@ -38,6 +39,10 @@ import type {
   GitHubSkillImportInput,
   GitHubSkillImportResult,
   GitHubSkillScanResult,
+  RepositorySkillImportInput,
+  RepositorySkillImportResult,
+  RepositorySkillScanResult,
+  RepositorySkillSourceInput,
   ManageTargetSkillInput,
   RetireSharedSkillInput,
   SharedSkillRetentionInput,
@@ -94,6 +99,10 @@ export interface GitHubSkillImportProgress {
   error?: string;
 }
 
+export const repositoryImportProgressKey = (
+  input: Pick<RepositorySkillImportInput, "repository" | "ref" | "directory">
+) => `${input.repository}\0${input.ref ?? ""}\0${input.directory ?? ""}`;
+
 export interface PreparedSkillTarget {
   targetId: string;
   targetName: string;
@@ -124,6 +133,11 @@ interface SkillLibraryPanelProps {
     inputs: GitHubSkillImportInput[],
     onProgress?: (progress: GitHubSkillImportProgress) => void
   ): Promise<GitHubSkillImportResult>;
+  onScanRepositorySkills(input: RepositorySkillSourceInput): Promise<RepositorySkillScanResult>;
+  onImportRepositorySkills(
+    inputs: RepositorySkillImportInput[],
+    onProgress?: (progress: GitHubSkillImportProgress) => void
+  ): Promise<RepositorySkillImportResult>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): Promise<boolean>;
   onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<void>;
@@ -144,6 +158,7 @@ interface SkillLibraryPanelProps {
   onReviewSkillUsage(id: string): void;
   onCheckUpdates(): void;
   onOpenSource(url: string): void;
+  onCopySource(source: string): void;
   onIgnoreSkillGroup(skillKey: string): void;
   onUnignoreSkillGroup(skillKey: string): void;
   onSetSharedSkillRetention(input: SharedSkillRetentionInput): Promise<boolean>;
@@ -165,6 +180,10 @@ const sourceLabel = (skill: SkillLibraryEntry) => {
   if (skill.sourceType === "local") {
     return skill.source ?? skill.path;
   }
+  if (skill.sourceType === "git" && skill.source) {
+    const scope = [skill.remoteRef, skill.upstream?.subpath].filter(Boolean).join(":");
+    return scope ? `${skill.source}#${scope}` : skill.source;
+  }
   return skill.source ?? skill.sourceType;
 };
 
@@ -178,6 +197,20 @@ const sourceName = (skill: SkillLibraryEntry) => {
   const source = sourceLabel(skill);
   if (source.startsWith("https://github.com/")) {
     return source.replace("https://github.com/", "").replace("/tree/", "/");
+  }
+  if (skill.sourceType === "git" && skill.source) {
+    let repository = skill.source;
+    try {
+      const url = new URL(repository);
+      repository = `${url.hostname}${url.pathname}`;
+    } catch {
+      const scpLike = repository.match(/^(?:[^@]+@)?([^:]+):(.+)$/);
+      if (scpLike) {
+        repository = `${scpLike[1]}/${scpLike[2]}`;
+      }
+    }
+    repository = repository.replace(/\.git$/, "").replace(/^\/+/, "");
+    return [repository, skill.upstream?.subpath].filter(Boolean).join("/");
   }
   return source;
 };
@@ -294,6 +327,8 @@ export const SkillLibraryPanel = ({
   onImportExternal,
   onScanGitHubSkills,
   onImportGitHubSkills,
+  onScanRepositorySkills,
+  onImportRepositorySkills,
   onManageTargetSkill,
   onConsolidateSkillGroup,
   onAutoConsolidateSkillGroups,
@@ -314,6 +349,7 @@ export const SkillLibraryPanel = ({
   onReviewSkillUsage,
   onCheckUpdates,
   onOpenSource,
+  onCopySource,
   onIgnoreSkillGroup,
   onUnignoreSkillGroup,
   onSetSharedSkillRetention,
@@ -348,6 +384,15 @@ export const SkillLibraryPanel = ({
   const [githubOperationError, setGithubOperationError] = useState("");
   const [localSkillPath, setLocalSkillPath] = useState("");
   const [importSource, setImportSource] = useState<"local" | "github">("local");
+  const [repositoryRef, setRepositoryRef] = useState("");
+  const [repositoryDirectory, setRepositoryDirectory] = useState("");
+  const [repositoryConnection, setRepositoryConnection] = useState<"auto" | "system-git">("auto");
+  const [repositoryScanKind, setRepositoryScanKind] = useState<"github-api" | "system-git">();
+  const [repositoryScanSummary, setRepositoryScanSummary] = useState("");
+  const [repositoryCandidateInputs, setRepositoryCandidateInputs] = useState<
+    Record<string, RepositorySkillImportInput>
+  >({});
+  const [githubApiRetryAvailable, setGithubApiRetryAvailable] = useState(false);
   const { search, sourceFilter, statusFilter, targetFilter } = viewState;
   const updateControls = (
     patch: Partial<Omit<SkillLibraryViewState, "scrollTop">>
@@ -383,7 +428,7 @@ export const SkillLibraryPanel = ({
     }
   }, [importConflictOpen]);
   const [sourceDrafts, setSourceDrafts] = useState<
-    Record<string, { sourceType: SkillSourceType; source: string }>
+    Record<string, { sourceType: SkillSourceType; source: string; ref: string; directory: string }>
   >({});
   const modalDialogRef = useRef<HTMLElement>(null);
   const importDialogRef = useRef<HTMLElement>(null);
@@ -603,6 +648,13 @@ export const SkillLibraryPanel = ({
     setGithubImportProgress({});
     setGithubOperationError("");
     setGithubOperation(undefined);
+    setRepositoryRef("");
+    setRepositoryDirectory("");
+    setRepositoryConnection("auto");
+    setRepositoryScanKind(undefined);
+    setRepositoryScanSummary("");
+    setRepositoryCandidateInputs({});
+    setGithubApiRetryAvailable(false);
   }, [activeTool]);
 
   const installsFor = (libraryId: string) =>
@@ -754,7 +806,9 @@ export const SkillLibraryPanel = ({
   const sourceCandidateDraft = sourceCandidate
     ? sourceDrafts[sourceCandidate.id] ?? {
         sourceType: sourceCandidate.sourceType,
-        source: sourceCandidate.source ?? ""
+        source: sourceCandidate.source ?? "",
+        ref: sourceCandidate.remoteRef ?? sourceCandidate.upstream?.ref ?? "",
+        directory: sourceCandidate.upstream?.subpath ?? ""
       }
     : undefined;
   const cleanupCandidate = cleanupDraft
@@ -810,7 +864,7 @@ export const SkillLibraryPanel = ({
     });
   };
 
-  const scanGitHub = async () => {
+  const scanRepository = async (forceSystemGit = false) => {
     const url = githubUrl.trim();
     if (!url) {
       return;
@@ -819,8 +873,74 @@ export const SkillLibraryPanel = ({
     setGithubOperationError("");
     setGithubImportResult(undefined);
     setGithubImportProgress({});
+    setGithubApiRetryAvailable(false);
     try {
-      const result = await onScanGitHubSkills(url);
+      let useGitHubApi = false;
+      if (!forceSystemGit && repositoryConnection === "auto" && !repositoryRef.trim() && !repositoryDirectory.trim()) {
+        try {
+          const parsed = new URL(url);
+          const [, owner, repo] = parsed.pathname.split("/");
+          useGitHubApi =
+            parsed.protocol === "https:" &&
+            parsed.hostname.toLowerCase() === "github.com" &&
+            Boolean(owner && repo) &&
+            !repo.toLowerCase().endsWith(".git");
+        } catch {
+          useGitHubApi = false;
+        }
+      }
+
+      let result: GitHubSkillScanResult;
+      if (useGitHubApi) {
+        const githubResult = await onScanGitHubSkills(url);
+        result = githubResult;
+        setRepositoryScanKind("github-api");
+        setRepositoryScanSummary(`${githubResult.owner}/${githubResult.repo} · ${githubResult.ref}`);
+        setRepositoryCandidateInputs({});
+      } else {
+        const repositoryResult = await onScanRepositorySkills({
+          repository: url,
+          ref: repositoryRef.trim() || undefined,
+          directory: repositoryDirectory.trim() || undefined,
+          transport: "system-git"
+        });
+        const inputs = Object.fromEntries(
+          repositoryResult.candidates.map((candidate) => {
+            const input: RepositorySkillImportInput = {
+              repository: repositoryResult.repository,
+              ref: repositoryResult.ref,
+              directory: candidate.directory,
+              transport: "system-git"
+            };
+            return [repositoryImportProgressKey(input), input];
+          })
+        );
+        result = {
+          owner: "Repository",
+          repo: repositoryResult.repository,
+          ref: repositoryResult.ref,
+          rootPath: repositoryResult.directory,
+          truncated: repositoryResult.truncated,
+          candidates: repositoryResult.candidates.map((candidate) => ({
+            id: candidate.id,
+            name: candidate.name,
+            description: candidate.description,
+            remotePath: candidate.directory,
+            sourceUrl: repositoryImportProgressKey({
+              repository: repositoryResult.repository,
+              ref: repositoryResult.ref,
+              directory: candidate.directory
+            }),
+            ref: repositoryResult.ref,
+            revision: candidate.contentRevision,
+            status: candidate.status,
+            existingLibraryId: candidate.existingLibraryId
+          }))
+        };
+        setRepositoryScanKind("system-git");
+        setRepositoryScanSummary(`${repositoryResult.repository} · ${repositoryResult.ref}`);
+        setRepositoryCandidateInputs(inputs);
+      }
       setGithubScanResult(result);
       setGithubSelectedIds(
         result.candidates.filter((candidate) => candidate.status === "ready").map((candidate) => candidate.id)
@@ -830,6 +950,9 @@ export const SkillLibraryPanel = ({
       );
     } catch (error) {
       setGithubOperationError(error instanceof Error ? error.message : String(error));
+      setGithubApiRetryAvailable(
+        !forceSystemGit && repositoryConnection === "auto" && /^https:\/\/github\.com\//i.test(url)
+      );
     } finally {
       setGithubOperation(undefined);
     }
@@ -860,22 +983,39 @@ export const SkillLibraryPanel = ({
       ])
     );
     try {
-      const result = await onImportGitHubSkills(
-        selected.map((candidate) => ({
-          url: candidate.sourceUrl,
-          id: githubCandidateIds[candidate.id] || candidate.id,
-          ref: candidate.ref,
-          remotePath: candidate.remotePath
-        })),
-        (progress) => {
-          latestProgress.set(progress.sourceUrl, progress);
-          setGithubImportProgress((current) => ({
-            ...current,
-            [progress.sourceUrl]: progress
-          }));
-        }
-      );
-      setGithubImportResult(result);
+      const onProgress = (progress: GitHubSkillImportProgress) => {
+        latestProgress.set(progress.sourceUrl, progress);
+        setGithubImportProgress((current) => ({
+          ...current,
+          [progress.sourceUrl]: progress
+        }));
+      };
+      if (repositoryScanKind === "system-git") {
+        const inputs = selected.map((candidate) => ({
+          ...repositoryCandidateInputs[candidate.sourceUrl],
+          id: githubCandidateIds[candidate.id] || candidate.id
+        }));
+        const result = await onImportRepositorySkills(inputs, onProgress);
+        setGithubImportResult({
+          imported: result.imported,
+          failed: result.failed.map((failure) => ({
+            id: failure.id,
+            sourceUrl: repositoryImportProgressKey(failure),
+            error: failure.error
+          }))
+        });
+      } else {
+        const result = await onImportGitHubSkills(
+          selected.map((candidate) => ({
+            url: candidate.sourceUrl,
+            id: githubCandidateIds[candidate.id] || candidate.id,
+            ref: candidate.ref,
+            remotePath: candidate.remotePath
+          })),
+          onProgress
+        );
+        setGithubImportResult(result);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const failed = selected.filter((candidate) =>
@@ -1118,6 +1258,7 @@ export const SkillLibraryPanel = ({
           >
             <option value="all">{t("Source: All")}</option>
             <option value="github">GitHub</option>
+            <option value="git">{t("Repository")}</option>
             <option value="local">{t("Local")}</option>
           </select>
           <select
@@ -1200,7 +1341,7 @@ export const SkillLibraryPanel = ({
             </div>
           ) : null}
           {!isLoading && librarySkills.length === 0 ? (
-            <p className="muted library-empty">{t("Import a skill from a folder or GitHub to start the library.")}</p>
+            <p className="muted library-empty">{t("Import a skill from a folder or repository to start the library.")}</p>
           ) : null}
           {librarySkills.length > 0 && filteredSkills.length === 0 ? (
             <p className="muted library-empty">{t("No skills match the current filters.")}</p>
@@ -1253,7 +1394,7 @@ export const SkillLibraryPanel = ({
                 <div className="library-resource-cell">
                   <ResourceIconPicker
                     className="resource-avatar"
-                    iconKey={skill.iconKey ?? (skill.sourceType === "github" ? "github" : "folder")}
+                    iconKey={skill.iconKey ?? (skill.sourceType === "github" || skill.sourceType === "git" ? "github" : "folder")}
                     label={skill.name}
                     onChange={(iconKey) => onSetIcon({ id: skill.id, iconKey })}
                   />
@@ -1282,21 +1423,36 @@ export const SkillLibraryPanel = ({
                   </div>
                 </div>
                 <div className="library-source-cell">
-                  {skill.sourceType === "github" && /^https?:\/\//i.test(skill.source ?? "") ? (
+                  {(skill.sourceType === "github" || skill.sourceType === "git") && /^https?:\/\//i.test(skill.source ?? "") ? (
                     <button
                       className="resource-chip resource-chip--github library-source-open"
                       type="button"
-                      aria-label={t("Open GitHub source for {{id}}", { id: skill.id })}
+                      aria-label={t("Open repository source for {{id}}", { id: skill.id })}
                       onClick={() => onOpenSource(skill.source!)}
                     >
                       <GitBranch size={13} strokeWidth={2.2} />
-                      <span>GitHub</span>
+                      <span>{skill.sourceType === "github" ? "GitHub" : t("Repository")}</span>
                       <ExternalLink size={11} strokeWidth={2.2} />
+                    </button>
+                  ) : skill.sourceType === "git" && skill.source ? (
+                    <button
+                      className="resource-chip resource-chip--git library-source-open"
+                      type="button"
+                      aria-label={t("Copy repository source for {{id}}", { id: skill.id })}
+                      onClick={() => onCopySource(skill.source!)}
+                    >
+                      <GitBranch size={13} strokeWidth={2.2} />
+                      <span>{t("Repository")}</span>
+                      <Copy size={11} strokeWidth={2.2} />
                     </button>
                   ) : (
                     <span className={`resource-chip resource-chip--${skill.sourceType}`}>
                       <Folder size={13} strokeWidth={2.2} />
-                      {skill.sourceType === "github" ? "GitHub" : t("Local")}
+                      {skill.sourceType === "github"
+                        ? "GitHub"
+                        : skill.sourceType === "git"
+                          ? t("Repository")
+                          : t("Local")}
                     </span>
                   )}
                   <PreviewText
@@ -1775,6 +1931,7 @@ export const SkillLibraryPanel = ({
                   >
                     <option value="local">{t("Local folder")}</option>
                     <option value="github">{t("GitHub directory")}</option>
+                    <option value="git">{t("Git repository")}</option>
                   </select>
                 </label>
                 <label>
@@ -1784,6 +1941,8 @@ export const SkillLibraryPanel = ({
                     placeholder={
                       sourceCandidateDraft.sourceType === "github"
                         ? "https://github.com/owner/repo/tree/main/path/to/skill"
+                        : sourceCandidateDraft.sourceType === "git"
+                          ? "git@host:team/repo.git"
                         : "/path/to/skill"
                     }
                     value={sourceCandidateDraft.source}
@@ -1798,9 +1957,47 @@ export const SkillLibraryPanel = ({
                     }
                   />
                 </label>
+                {sourceCandidateDraft.sourceType === "git" ? (
+                  <>
+                    <label>
+                      <span>{t("Ref")}</span>
+                      <input
+                        aria-label={t("Update source ref for {{id}}", { id: sourceCandidate.id })}
+                        placeholder={t("Default branch")}
+                        value={sourceCandidateDraft.ref}
+                        onChange={(event) =>
+                          setSourceDrafts({
+                            ...sourceDrafts,
+                            [sourceCandidate.id]: {
+                              ...sourceCandidateDraft,
+                              ref: event.currentTarget.value
+                            }
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      <span>{t("Directory")}</span>
+                      <input
+                        aria-label={t("Update source directory for {{id}}", { id: sourceCandidate.id })}
+                        placeholder="skills/review"
+                        value={sourceCandidateDraft.directory}
+                        onChange={(event) =>
+                          setSourceDrafts({
+                            ...sourceDrafts,
+                            [sourceCandidate.id]: {
+                              ...sourceCandidateDraft,
+                              directory: event.currentTarget.value
+                            }
+                          })
+                        }
+                      />
+                    </label>
+                  </>
+                ) : null}
               </div>
               <p className="skill-update-settings-help">
-                <InfoTip label={t("Use a local skill folder or a GitHub tree directory. The library stores the source path, not duplicated skill copies per profile.")} />
+                <InfoTip label={t("Use a local skill folder, GitHub tree directory, or Git clone address. Repository credentials stay with System Git.")} />
                 {t("Source changes are saved independently from update tracking.")}
               </p>
             </div>
@@ -1821,7 +2018,13 @@ export const SkillLibraryPanel = ({
                   onSetUpdateSource({
                     id: sourceCandidate.id,
                     sourceType: sourceCandidateDraft.sourceType,
-                    source: sourceCandidateDraft.source.trim()
+                    source: sourceCandidateDraft.source.trim(),
+                    ...(sourceCandidateDraft.sourceType === "git"
+                      ? {
+                          ref: sourceCandidateDraft.ref.trim() || undefined,
+                          directory: sourceCandidateDraft.directory.trim() || undefined
+                        }
+                      : {})
                   });
                   setSourceCandidate(undefined);
                 }}
@@ -2989,7 +3192,7 @@ export const SkillLibraryPanel = ({
                     onClick={() => setImportSource("github")}
                   >
                     <GitBranch size={15} strokeWidth={2.2} aria-hidden="true" />
-                    GitHub
+                    {t("Repository")}
                   </button>
                 </div>
 
@@ -3042,19 +3245,61 @@ export const SkillLibraryPanel = ({
                   <div className="library-import-content">
                     <section className="resource-section library-import-panel">
                       <div className="resource-heading">
-                        {t("Scan GitHub")}
-                        <InfoTip label={t("Paste a skill, directory, or repository URL.")} />
+                        {t("Scan repository")}
+                        <InfoTip label={t("Paste a GitHub URL or a Git HTTPS/SSH clone address. Repository scans never modify your checkout.")} />
                       </div>
                       <label className="github-scan-field">
-                        <span>{t("GitHub URL")}</span>
+                        <span>{t("Repository")}</span>
                         <input
-                          aria-label={t("GitHub skill URL")}
-                          placeholder="https://github.com/owner/repo"
+                          aria-label={t("Repository address")}
+                          placeholder="https://github.com/owner/repo or git@host:team/repo.git"
                           disabled={localImportOperation}
                           value={githubUrl}
                           onChange={(event) => setGithubUrl(event.currentTarget.value)}
                         />
                       </label>
+                      <details className="repository-advanced">
+                        <summary>
+                          <Settings2 size={14} strokeWidth={2.1} aria-hidden="true" />
+                          {t("Advanced")}
+                        </summary>
+                        <div className="repository-advanced-grid">
+                          <label>
+                            <span>{t("Ref")}</span>
+                            <input
+                              aria-label={t("Repository ref")}
+                              placeholder={t("Default branch")}
+                              disabled={Boolean(githubOperation)}
+                              value={repositoryRef}
+                              onChange={(event) => setRepositoryRef(event.currentTarget.value)}
+                            />
+                          </label>
+                          <label>
+                            <span>{t("Directory")}</span>
+                            <input
+                              aria-label={t("Repository directory")}
+                              placeholder="skills/review"
+                              disabled={Boolean(githubOperation)}
+                              value={repositoryDirectory}
+                              onChange={(event) => setRepositoryDirectory(event.currentTarget.value)}
+                            />
+                          </label>
+                          <label>
+                            <span>{t("Connection")}</span>
+                            <select
+                              aria-label={t("Repository connection")}
+                              disabled={Boolean(githubOperation)}
+                              value={repositoryConnection}
+                              onChange={(event) =>
+                                setRepositoryConnection(event.currentTarget.value as "auto" | "system-git")
+                              }
+                            >
+                              <option value="auto">{t("Automatic")}</option>
+                              <option value="system-git">{t("System Git")}</option>
+                            </select>
+                          </label>
+                        </div>
+                      </details>
                     </section>
                   </div>
                 ) : (
@@ -3062,7 +3307,12 @@ export const SkillLibraryPanel = ({
                     <div className="github-scan-summary">
                       <div>
                         <strong>{t("{{count}} found", { count: githubScanResult.candidates.length })}</strong>
-                        <span>{githubScanResult.owner}/{githubScanResult.repo} · {githubScanResult.ref}</span>
+                        <PreviewText
+                          ariaLabel={t("Repository scan source")}
+                          className="repository-scan-summary-path"
+                          text={repositoryScanSummary || `${githubScanResult.owner}/${githubScanResult.repo} · ${githubScanResult.ref}`}
+                          tooltipClassName="library-source-tooltip"
+                        />
                       </div>
                       <button
                         className="secondary-action"
@@ -3072,6 +3322,9 @@ export const SkillLibraryPanel = ({
                           setGithubScanResult(undefined);
                           setGithubImportResult(undefined);
                           setGithubOperationError("");
+                          setRepositoryScanKind(undefined);
+                          setRepositoryScanSummary("");
+                          setRepositoryCandidateInputs({});
                         }}
                       >
                         {t("Change")}
@@ -3080,7 +3333,7 @@ export const SkillLibraryPanel = ({
                     {githubScanResult.truncated ? (
                       <div className="inline-state inline-state--warning" role="status">
                         <TriangleAlert size={15} aria-hidden="true" />
-                        {t("Results are incomplete. GitHub truncated this repository tree.")}
+                        {t("Results are incomplete. Narrow the repository directory and scan again.")}
                       </div>
                     ) : null}
                     <div className="github-selection-bar">
@@ -3202,7 +3455,7 @@ export const SkillLibraryPanel = ({
                             <span className="github-candidate-main">
                               <strong>{candidate.name}</strong>
                               <PreviewText
-                                ariaLabel={t("Full GitHub path {{id}}", { id: candidate.id })}
+                                ariaLabel={t("Full repository path {{id}}", { id: candidate.id })}
                                 className="github-candidate-path"
                                 text={candidate.remotePath || "/"}
                                 tooltipClassName="library-source-tooltip"
@@ -3244,6 +3497,19 @@ export const SkillLibraryPanel = ({
                   <div className="inline-state inline-state--error import-inline-error" role="alert">
                     <TriangleAlert size={15} aria-hidden="true" />
                     <span>{githubOperationError}</span>
+                    {githubApiRetryAvailable ? (
+                      <button
+                        className="inline-state-action"
+                        type="button"
+                        disabled={Boolean(githubOperation)}
+                        onClick={() => {
+                          setRepositoryConnection("system-git");
+                          void scanRepository(true);
+                        }}
+                      >
+                        {t("Try with System Git")}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 <footer className="preview-actions import-dialog-actions">
@@ -3275,7 +3541,7 @@ export const SkillLibraryPanel = ({
                         type="button"
                         disabled={!githubUrl.trim() || Boolean(githubOperation) || localImportOperation}
                         onClick={() => {
-                          void scanGitHub();
+                          void scanRepository();
                         }}
                       >
                         {t(githubOperation === "scanning" ? "Scanning..." : "Scan")}

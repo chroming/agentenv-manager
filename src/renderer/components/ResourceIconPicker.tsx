@@ -17,7 +17,7 @@ import type { ResourceIconKey } from "../../shared/types";
 import { useI18n } from "../i18n";
 
 const iconOptions: Array<{ key: ResourceIconKey; label: string; icon: LucideIcon }> = [
-  { key: "github", label: "GitHub", icon: GitBranch },
+  { key: "github", label: "Repository", icon: GitBranch },
   { key: "folder", label: "Folder", icon: Folder },
   { key: "code", label: "Code", icon: Code2 },
   { key: "rocket", label: "Rocket", icon: Rocket },

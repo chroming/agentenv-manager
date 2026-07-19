@@ -1965,6 +1965,7 @@ export const createSkillLibraryStore = (
         failed.push({
           id: input.id ?? "skill",
           repository: input.repository,
+          ref: input.ref,
           directory: input.directory,
           error: error instanceof Error ? error.message : String(error)
         });

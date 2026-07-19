@@ -326,6 +326,7 @@ export interface RepositorySkillScanResult {
 export interface RepositorySkillImportFailure {
   id: string;
   repository: string;
+  ref?: string;
   directory?: string;
   error: string;
 }

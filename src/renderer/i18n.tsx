@@ -1032,6 +1032,34 @@ Object.assign(zhCN, {
   "Updates the shared Library copy used by {{profiles}}. Linked Target installs may change immediately after this update.": "更新被 {{profiles}} 使用的共享资源库副本；使用链接的目标安装可能会立即变化。"
 });
 
+Object.assign(zhCN, {
+  "Repository": "代码仓库",
+  "Scan repository": "扫描代码仓库",
+  "Paste a GitHub URL or a Git HTTPS/SSH clone address. Repository scans never modify your checkout.": "粘贴 GitHub 地址或 Git HTTPS/SSH 克隆地址。扫描不会修改你的现有检出目录。",
+  "Repository address": "代码仓库地址",
+  "Ref": "分支或标签",
+  "Repository ref": "代码仓库分支或标签",
+  "Default branch": "默认分支",
+  "Directory": "目录",
+  "Repository directory": "代码仓库目录",
+  "Connection": "连接方式",
+  "Repository connection": "代码仓库连接方式",
+  "Automatic": "自动选择",
+  "System Git": "系统 Git",
+  "Repository scan source": "代码仓库扫描来源",
+  "Results are incomplete. Narrow the repository directory and scan again.": "结果不完整，请缩小代码仓库目录范围后重新扫描。",
+  "Full repository path {{id}}": "{{id}} 的完整代码仓库路径",
+  "Try with System Git": "改用系统 Git",
+  "Open repository source for {{id}}": "打开 {{id}} 的代码仓库来源",
+  "Copy repository source for {{id}}": "复制 {{id}} 的代码仓库来源",
+  "Import a skill from a folder or repository to start the library.": "从文件夹或代码仓库导入技能以开始使用资源库。",
+  "Git repository": "Git 代码仓库",
+  "Update source ref for {{id}}": "{{id}} 的更新来源分支或标签",
+  "Update source directory for {{id}}": "{{id}} 的更新来源目录",
+  "Use a local skill folder, GitHub tree directory, or Git clone address. Repository credentials stay with System Git.": "可使用本地技能文件夹、GitHub 目录或 Git 克隆地址。代码仓库凭据始终由系统 Git 管理。",
+  "Repository address copied": "代码仓库地址已复制"
+});
+
 const toTraditionalChinese = (value: string) => {
   const phrases: Array<[string, string]> = [
     ["配置方案", "設定檔"],

@@ -52,6 +52,10 @@ import type {
   GitHubSkillImportInput,
   GitHubSkillImportResult,
   GitHubSkillScanResult,
+  RepositorySkillImportInput,
+  RepositorySkillImportResult,
+  RepositorySkillScanResult,
+  RepositorySkillSourceInput,
   LibraryResourceVersions,
   ManageTargetSkillInput,
   ManagedBackupInventory,
@@ -104,6 +108,7 @@ import {
 } from "./components/ProfileSidebar";
 import {
   type GitHubSkillImportProgress,
+  repositoryImportProgressKey,
   SkillLibraryPanel,
   type PreparedSkillTarget,
   type SkillUpdateCheckStatus
@@ -2898,6 +2903,10 @@ const AppContent = ({
   const scanGitHubSkills = (url: string): Promise<GitHubSkillScanResult> =>
     window.agentEnv.scanGitHubSkills(url);
 
+  const scanRepositorySkills = (
+    input: RepositorySkillSourceInput
+  ): Promise<RepositorySkillScanResult> => window.agentEnv.scanRepositorySkills(input);
+
   const importGitHubSkills = async (
     inputs: GitHubSkillImportInput[],
     onProgress?: (progress: GitHubSkillImportProgress) => void
@@ -2932,6 +2941,70 @@ const AppContent = ({
             error: message
           });
           onProgress?.({ sourceUrl: input.url, status: "failed", error: message });
+        }
+      }
+      setSelectedSkillUpdatePlan(undefined);
+      try {
+        await refreshProfiles({ checkSkillUpdates: false });
+      } catch (refreshError) {
+        setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
+      }
+      if (result.imported.length > 0) {
+        setSkillUpdateCheckStatus({
+          state: result.failed.length > 0 ? "info" : "success",
+          message:
+            result.failed.length > 0
+              ? `Imported ${result.imported.length} · ${result.failed.length} failed`
+              : updatedSourceCount === result.imported.length
+                ? `Updated ${updatedSourceCount} ${updatedSourceCount === 1 ? "skill source" : "skill sources"}`
+                : updatedSourceCount > 0
+                  ? `Imported ${result.imported.length - updatedSourceCount} · Updated ${updatedSourceCount} ${updatedSourceCount === 1 ? "source" : "sources"}`
+                  : `Imported ${result.imported.length} ${result.imported.length === 1 ? "skill" : "skills"}`
+        });
+      }
+      return result;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importRepositorySkills = async (
+    inputs: RepositorySkillImportInput[],
+    onProgress?: (progress: GitHubSkillImportProgress) => void
+  ): Promise<RepositorySkillImportResult> => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const result: RepositorySkillImportResult = { imported: [], failed: [] };
+      let updatedSourceCount = 0;
+      for (const input of inputs) {
+        const sourceUrl = repositoryImportProgressKey(input);
+        try {
+          onProgress?.({ sourceUrl, status: "reviewing" });
+          const prepared = await prepareSkillImport({ kind: "repository", input });
+          if (!prepared || prepared.kind !== "repository") {
+            onProgress?.({ sourceUrl, status: "skipped" });
+            continue;
+          }
+          if (prepared.input.conflictResolution?.action === "update-source") {
+            updatedSourceCount += 1;
+          }
+          onProgress?.({ sourceUrl, status: "importing" });
+          const imported = await window.agentEnv.importRepositorySkillToLibrary(prepared.input);
+          result.imported.push(imported);
+          onProgress?.({ sourceUrl, status: "imported" });
+          setPendingSkillImport(undefined);
+        } catch (importError) {
+          setPendingSkillImport(undefined);
+          const message = importError instanceof Error ? importError.message : String(importError);
+          result.failed.push({
+            id: input.id ?? "skill",
+            repository: input.repository,
+            ref: input.ref,
+            directory: input.directory,
+            error: message
+          });
+          onProgress?.({ sourceUrl, status: "failed", error: message });
         }
       }
       setSelectedSkillUpdatePlan(undefined);
@@ -3877,6 +3950,8 @@ const AppContent = ({
                 onImportExternal={importExternalSkill}
                 onScanGitHubSkills={scanGitHubSkills}
                 onImportGitHubSkills={importGitHubSkills}
+                onScanRepositorySkills={scanRepositorySkills}
+                onImportRepositorySkills={importRepositorySkills}
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={consolidateSkillGroup}
                 onAutoConsolidateSkillGroups={autoConsolidateSkillGroups}
@@ -3898,6 +3973,13 @@ const AppContent = ({
                 onCheckUpdates={checkSkillUpdates}
                 onOpenSource={(url) => {
                   void window.agentEnv.openExternalUrl(url).catch((unknownError) => {
+                    setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+                  });
+                }}
+                onCopySource={(source) => {
+                  void window.agentEnv.copyText(source).then(() => {
+                    setSkillUpdateCheckStatus({ state: "success", message: t("Repository address copied") });
+                  }).catch((unknownError) => {
                     setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
                   });
                 }}

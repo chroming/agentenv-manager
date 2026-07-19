@@ -6,7 +6,10 @@ import {
   type GitHubSkillImportProgress
 } from "../../src/renderer/components/SkillLibraryPanel";
 import { defaultSkillLibraryViewState } from "../../src/renderer/libraryViewState";
-import type { GitHubSkillImportInput } from "../../src/shared/types";
+import type {
+  GitHubSkillImportInput,
+  RepositorySkillImportInput
+} from "../../src/shared/types";
 
 afterEach(() => {
   cleanup();
@@ -90,6 +93,8 @@ describe("SkillLibraryPanel", () => {
         }]
       };
     });
+    const onScanRepositorySkills = vi.fn();
+    const onImportRepositorySkills = vi.fn();
     const onPreviewLibrarySkillUpdate = vi.fn();
     const onCloseUpdatePreview = vi.fn();
     const onUpdateLibrarySkill = vi.fn();
@@ -101,6 +106,7 @@ describe("SkillLibraryPanel", () => {
     const onReviewSkillUsage = vi.fn();
     const onCheckUpdates = vi.fn();
     const onOpenSource = vi.fn();
+    const onCopySource = vi.fn();
     const onSetUpdateSource = vi.fn();
     const onImportExternal = vi.fn().mockResolvedValue(true);
     const onSetUpdatePolicy = vi.fn();
@@ -186,6 +192,25 @@ describe("SkillLibraryPanel", () => {
             updatePolicy: "untracked",
             contentHash: "ghi789",
             updatedAt: "2026-07-02T00:00:00.000Z"
+          },
+          {
+            id: "internal-review",
+            name: "Internal Review",
+            description: "Review internal code",
+            path: "/tmp/skills-library/internal-review",
+            sourceType: "git",
+            source: "git@code.example:platform/agent-skills.git",
+            updatePolicy: "tracked",
+            remoteRef: "release/v2",
+            remoteRevision: "tree-123",
+            contentHash: "tree-123",
+            updatedAt: "2026-07-17T00:00:00.000Z",
+            upstream: {
+              kind: "git",
+              locator: "git@code.example:platform/agent-skills.git",
+              ref: "release/v2",
+              subpath: "skills/engineering/review"
+            }
           }
         ]}
         skillInventory={[
@@ -441,6 +466,8 @@ describe("SkillLibraryPanel", () => {
         onImportExternal={onImportExternal}
         onScanGitHubSkills={onScanGitHubSkills}
         onImportGitHubSkills={onImportGitHubSkills}
+        onScanRepositorySkills={onScanRepositorySkills}
+        onImportRepositorySkills={onImportRepositorySkills}
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
         onCloseUpdatePreview={onCloseUpdatePreview}
         onUpdateLibrarySkill={onUpdateLibrarySkill}
@@ -454,6 +481,7 @@ describe("SkillLibraryPanel", () => {
         onReviewSkillUsage={onReviewSkillUsage}
         onCheckUpdates={onCheckUpdates}
         onOpenSource={onOpenSource}
+        onCopySource={onCopySource}
         onSetUpdateSource={onSetUpdateSource}
         onSetUpdatePolicy={onSetUpdatePolicy}
         onSetAvailability={onSetAvailability}
@@ -524,11 +552,37 @@ describe("SkillLibraryPanel", () => {
     );
     fireEvent.mouseLeave(githubSource);
     fireEvent.click(
-      within(githubRow).getByRole("button", { name: "Open GitHub source for github-reviewer" })
+      within(githubRow).getByRole("button", { name: "Open repository source for github-reviewer" })
     );
     expect(onOpenSource).toHaveBeenCalledWith(
       "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
     );
+    const repositoryRow = screen.getByRole("group", { name: "Library item internal-review" });
+    expect(within(repositoryRow).getByLabelText("Full source for internal-review")).toHaveTextContent(
+      "code.example/platform/agent-skills/skills/engineering/review"
+    );
+    fireEvent.click(
+      within(repositoryRow).getByRole("button", { name: "Copy repository source for internal-review" })
+    );
+    expect(onCopySource).toHaveBeenCalledWith("git@code.example:platform/agent-skills.git");
+    fireEvent.click(within(repositoryRow).getByRole("button", { name: "More actions for internal-review" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Update settings" }));
+    expect(screen.getByLabelText("Update source type for internal-review")).toHaveValue("git");
+    expect(screen.getByLabelText("Update source ref for internal-review")).toHaveValue("release/v2");
+    expect(screen.getByLabelText("Update source directory for internal-review")).toHaveValue(
+      "skills/engineering/review"
+    );
+    fireEvent.change(screen.getByLabelText("Update source ref for internal-review"), {
+      target: { value: "main" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save source" }));
+    expect(onSetUpdateSource).toHaveBeenCalledWith({
+      id: "internal-review",
+      sourceType: "git",
+      source: "git@code.example:platform/agent-skills.git",
+      ref: "main",
+      directory: "skills/engineering/review"
+    });
     const localSource = within(
       screen.getByRole("group", { name: "Library item shared-reviewer" })
     ).getByLabelText("Full source for shared-reviewer");
@@ -661,8 +715,8 @@ describe("SkillLibraryPanel", () => {
       "/tmp/opencode/skills/target-only-reviewer"
     );
 
-    fireEvent.click(screen.getByRole("tab", { name: "GitHub" }));
-    fireEvent.change(screen.getByLabelText("GitHub skill URL"), {
+    fireEvent.click(screen.getByRole("tab", { name: "Repository" }));
+    fireEvent.change(screen.getByLabelText("Repository address"), {
       target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
     });
     fireEvent.click(screen.getByRole("button", { name: /^Scan$/ }));
@@ -1002,6 +1056,137 @@ describe("SkillLibraryPanel", () => {
     expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith(["shared-reviewer"]);
   });
 
+  it("scans and imports skills from an SSH repository ref and directory", async () => {
+    const onScanRepositorySkills = vi.fn().mockResolvedValue({
+      repository: "git@code.example:platform/agent-skills.git",
+      ref: "release/v2",
+      directory: "skills/engineering",
+      transport: "system-git" as const,
+      truncated: false,
+      candidates: [
+        {
+          id: "review-internal",
+          name: "Internal Review",
+          description: "Company review workflow",
+          directory: "skills/engineering/review",
+          source: {
+            kind: "git" as const,
+            locator: "git@code.example:platform/agent-skills.git",
+            ref: "release/v2",
+            subpath: "skills/engineering/review"
+          },
+          contentRevision: "tree-123",
+          resolvedCommit: "commit-123",
+          status: "ready" as const
+        }
+      ]
+    });
+    const onImportRepositorySkills = vi.fn().mockImplementation(async (
+      inputs: RepositorySkillImportInput[],
+      onProgress?: (progress: GitHubSkillImportProgress) => void
+    ) => {
+      const sourceUrl = `${inputs[0].repository}\0${inputs[0].ref}\0${inputs[0].directory}`;
+      onProgress?.({ sourceUrl, status: "imported" });
+      return {
+        imported: [{
+          id: "review-internal",
+          name: "Internal Review",
+          description: "Company review workflow",
+          path: "/tmp/library/review-internal",
+          sourceType: "git" as const,
+          source: inputs[0].repository,
+          updatePolicy: "tracked" as const,
+          remoteRef: inputs[0].ref,
+          contentHash: "tree-123",
+          updatedAt: "2026-07-17T00:00:00.000Z"
+        }],
+        failed: []
+      };
+    });
+    const noop = vi.fn();
+
+    render(
+      <SkillLibraryPanel
+        librarySkills={[]}
+        skillUpdates={[]}
+        skillInventory={[]}
+        cleanupBackups={[]}
+        skillUsage={{}}
+        activeTool="import"
+        onCloseTool={noop}
+        onRefreshInventory={vi.fn().mockResolvedValue(undefined)}
+        onSelectLocalSkillFolder={vi.fn().mockResolvedValue(undefined)}
+        onImportUnmanaged={vi.fn().mockResolvedValue(false)}
+        onImportExternal={vi.fn().mockResolvedValue(false)}
+        onScanGitHubSkills={vi.fn()}
+        onImportGitHubSkills={vi.fn()}
+        onScanRepositorySkills={onScanRepositorySkills}
+        onImportRepositorySkills={onImportRepositorySkills}
+        onManageTargetSkill={noop}
+        onConsolidateSkillGroup={vi.fn().mockResolvedValue(false)}
+        onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue(undefined)}
+        onSetUpdateSource={noop}
+        onSetUpdatePolicy={noop}
+        onSetAvailability={vi.fn().mockResolvedValue(true)}
+        onSetIcon={noop}
+        onPreviewLibrarySkillUpdate={noop}
+        onCloseUpdatePreview={noop}
+        onUpdateLibrarySkill={noop}
+        onUpdateAllLibrarySkills={noop}
+        onPreviewAllLibrarySkillUpdates={noop}
+        onCloseBulkUpdatePreview={noop}
+        onSyncSkillInstalls={noop}
+        onRemoveLibrarySkill={noop}
+        onPreviewSkillMerge={vi.fn()}
+        onMergeLibrarySkills={vi.fn().mockResolvedValue(false)}
+        onReviewSkillUsage={noop}
+        onCheckUpdates={noop}
+        onOpenSource={noop}
+        onCopySource={noop}
+        onIgnoreSkillGroup={noop}
+        onUnignoreSkillGroup={noop}
+        onSetSharedSkillRetention={vi.fn().mockResolvedValue(false)}
+        onRetireSharedSkill={vi.fn().mockResolvedValue(false)}
+        onOpenProfiles={noop}
+        onRestoreCleanup={noop}
+        viewState={defaultSkillLibraryViewState}
+        onViewStateChange={noop}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Repository" }));
+    fireEvent.change(screen.getByLabelText("Repository address"), {
+      target: { value: "git@code.example:platform/agent-skills.git" }
+    });
+    fireEvent.click(screen.getByText("Advanced"));
+    fireEvent.change(screen.getByLabelText("Repository ref"), {
+      target: { value: "release/v2" }
+    });
+    fireEvent.change(screen.getByLabelText("Repository directory"), {
+      target: { value: "skills/engineering" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Scan" }));
+
+    await screen.findByRole("checkbox", { name: "Select Internal Review" });
+    expect(onScanRepositorySkills).toHaveBeenCalledWith({
+      repository: "git@code.example:platform/agent-skills.git",
+      ref: "release/v2",
+      directory: "skills/engineering",
+      transport: "system-git"
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import 1" }));
+    await waitFor(() => expect(onImportRepositorySkills).toHaveBeenCalledWith([
+      {
+        repository: "git@code.example:platform/agent-skills.git",
+        ref: "release/v2",
+        directory: "skills/engineering/review",
+        transport: "system-git",
+        id: "review-internal"
+      }
+    ], expect.any(Function)));
+    expect(await screen.findByText("All 1 skills imported")).toBeInTheDocument();
+  });
+
   it("reviews same-name Library differences and keeps content and source choices independent", async () => {
     const preview = {
       name: "reviewer",
@@ -1082,6 +1267,8 @@ describe("SkillLibraryPanel", () => {
         onImportExternal={vi.fn().mockResolvedValue(false)}
         onScanGitHubSkills={vi.fn()}
         onImportGitHubSkills={vi.fn()}
+        onScanRepositorySkills={vi.fn()}
+        onImportRepositorySkills={vi.fn()}
         onManageTargetSkill={noop}
         onConsolidateSkillGroup={vi.fn().mockResolvedValue(false)}
         onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue(undefined)}
@@ -1102,6 +1289,7 @@ describe("SkillLibraryPanel", () => {
         onReviewSkillUsage={noop}
         onCheckUpdates={noop}
         onOpenSource={noop}
+        onCopySource={noop}
         onIgnoreSkillGroup={noop}
         onUnignoreSkillGroup={noop}
         onSetSharedSkillRetention={vi.fn().mockResolvedValue(true)}
