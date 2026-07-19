@@ -1380,6 +1380,50 @@ describe("App", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps ambiguous MCP definitions Agent-controlled on an otherwise manageable Agent", async () => {
+    installApi({
+      listNativeMcpConnections: vi.fn().mockResolvedValue({ connections: [
+        {
+          targetId: "opencode",
+          name: "docs",
+          scope: "user",
+          transport: "stdio",
+          enabled: true,
+          controllable: false,
+          sourcePath: "/tmp/home/.config/opencode/a.json · /tmp/home/.config/opencode/b.json",
+          detail: "duplicate-user-sources"
+        }
+      ], issues: [] }),
+      readProfile: vi.fn().mockResolvedValue({
+        ...profile,
+        resources: {
+          ...profile.resources,
+          mcpByTarget: {
+            opencode: {
+              mode: "manage",
+              selections: [{ name: "docs", enabled: true }]
+            }
+          }
+        }
+      })
+    });
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Profile composer" }))
+        .getByRole("button", { name: "MCPs" })
+    );
+
+    const row = (await screen.findByText("docs", {
+      selector: ".profile-mcp-name"
+    })).closest(".profile-mcp-row");
+    expect(row).toHaveTextContent("Defined in multiple Agent files · Leave unchanged");
+    expect(screen.queryByLabelText("docs Profile behavior")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use Agent setting" }));
+    expect(screen.getByText("Agent controlled")).toBeInTheDocument();
+  });
+
   it("refreshes target discovery from the Targets page", async () => {
     const refreshedTarget = {
       ...target,

@@ -51,6 +51,8 @@ const zhCN: Record<string, string> = {
   "{{name}} Profile behavior": "{{name}} 的配置方案行为",
   "Use Agent setting": "沿用 Agent 设置",
   "Agent controlled": "由 Agent 控制",
+  "Defined in multiple Agent files · Leave unchanged":
+    "在多个 Agent 文件中重复定义 · 保持不变",
   "Manage only the MCP switches selected below. Definitions and credentials stay in the Agent.":
     "仅管理下方选中的 MCP 开关；定义和凭据仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":
@@ -1363,6 +1365,8 @@ const zhTW: Record<string, string> = {
   "{{name}} Profile behavior": "{{name}} 的設定檔行為",
   "Use Agent setting": "沿用 Agent 設定",
   "Agent controlled": "由 Agent 控制",
+  "Defined in multiple Agent files · Leave unchanged":
+    "在多個 Agent 檔案中重複定義 · 保持不變",
   "Manage only the MCP switches selected below. Definitions and credentials stay in the Agent.":
     "僅管理下方選取的 MCP 開關；定義與憑證仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":

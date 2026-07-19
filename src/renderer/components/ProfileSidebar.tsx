@@ -21,6 +21,7 @@ const antigravityIconUrl = new URL("../assets/target-icons/antigravity.png", imp
 const claudeIconUrl = new URL("../assets/target-icons/claude.svg", import.meta.url).href;
 const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.url).href;
 const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
+const traeIconUrl = new URL("../assets/target-icons/trae.png", import.meta.url).href;
 
 export type AppWorkspace = "library" | "profiles" | "targets" | "settings";
 
@@ -32,7 +33,13 @@ interface ProfileSidebarProps {
   onWorkspaceSelect(workspace: AppWorkspace): void;
 }
 
-type TargetIconFlavor = "opencode" | "codex" | "claude" | "antigravity" | "generic";
+type TargetIconFlavor =
+  | "opencode"
+  | "codex"
+  | "claude"
+  | "antigravity"
+  | "trae"
+  | "generic";
 
 const targetInitials = (target: Pick<TargetDescriptor, "id" | "name">) => {
   const source = target.name || target.id;
@@ -59,6 +66,9 @@ export const targetIconFor = (
   }
   if (target.iconKey === "antigravity") {
     return { flavor: "antigravity", assetUrl: antigravityIconUrl };
+  }
+  if (target.iconKey === "trae") {
+    return { flavor: "trae", assetUrl: traeIconUrl };
   }
 
   return { flavor: "generic" };

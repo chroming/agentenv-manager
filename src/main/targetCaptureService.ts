@@ -311,7 +311,9 @@ export const createTargetCaptureService = ({
       });
       profileId = created.id;
       const adapter = targetRegistry.get(capture.preview.targetId);
-      const capturedMcp = capture.captured.mcpConnections ?? [];
+      const capturedMcp = (capture.captured.mcpConnections ?? []).filter(
+        (connection) => connection.controllable
+      );
       const mcpPolicy = adapter.descriptor.capabilities.mcpActivation && capturedMcp.length > 0
         ? {
             mode: "manage" as const,

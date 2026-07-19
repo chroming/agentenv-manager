@@ -93,7 +93,7 @@ const createChecks = async (paths: TargetPaths): Promise<TargetPathCheck[]> => {
     checkPath("instructions", "Instructions", paths.instructionsPath, true),
     checkPath("config", "Config", paths.configPath, true),
     paths.mcpConfigPath
-      ? checkPath("mcpConfig", "MCP config", paths.mcpConfigPath, true)
+      ? checkPath("mcpConfig", "MCP config", paths.mcpConfigPath, false)
       : undefined,
     paths.agentsDir
       ? checkPath("agentsDir", "Agents directory", paths.agentsDir, false)

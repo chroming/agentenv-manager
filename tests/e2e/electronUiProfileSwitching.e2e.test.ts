@@ -181,6 +181,37 @@ const writeClaudeProfile = async (appDataRoot: string) => {
   });
 };
 
+const writeTraeProfile = async (appDataRoot: string) => {
+  const profileId = "ui-trae-daily";
+  const profileDir = join(appDataRoot, "profiles", profileId);
+  await mkdir(profileDir, { recursive: true });
+  await writeJson(join(profileDir, "profile.json"), {
+    id: profileId,
+    name: "UI Trae daily",
+    description: "UI Trae portable profile",
+    preferredTargetId: "trae-cli",
+    createdFromTargetId: "trae-cli",
+    version: 2
+  });
+  await writeFile(
+    join(profileDir, "INSTRUCTIONS.md"),
+    "# UI Trae daily\n\n- Use the managed Trae CLI environment.\n",
+    "utf8"
+  );
+  await writeJson(join(profileDir, "resources.json"), {
+    skills: [{ libraryId: "ui-alpha-skill", targetName: "ui-alpha-skill", enabled: true }],
+    mcpByTarget: {
+      "trae-cli": {
+        mode: "manage",
+        selections: [
+          { name: "docs", enabled: true },
+          { name: "browser", enabled: false }
+        ]
+      }
+    }
+  });
+};
+
 const writeLibrarySkill = async (appDataRoot: string) => {
   const sourceDir = join(appDataRoot, "source-skills", "shared-reviewer");
   const libraryDir = join(appDataRoot, "skills-library", "shared-reviewer");
@@ -374,6 +405,7 @@ const launchApp = async (
     testCloseGuard?: boolean;
     migratedBackupFixtures?: boolean;
     includeClaudeTarget?: boolean;
+    includeTraeTarget?: boolean;
     openCodeBetaProfileName?: string;
     malformedProfile?: boolean;
     malformedOpenCodeConfig?: boolean;
@@ -389,6 +421,7 @@ const launchApp = async (
   const opencodeDir = join(homeDir, ".config", "opencode");
   const codexDir = join(homeDir, ".codex");
   const claudeDir = join(homeDir, ".claude");
+  const traeDir = join(homeDir, ".trae");
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
@@ -405,6 +438,12 @@ const launchApp = async (
     await writeFile(claudeExecutable, "#!/bin/sh\necho fake-claude\n", "utf8");
     await chmod(claudeExecutable, 0o755);
     await mkdir(claudeDir, { recursive: true });
+  }
+  if (options.includeTraeTarget) {
+    const traeExecutable = join(binDir, "traecli");
+    await writeFile(traeExecutable, "#!/bin/sh\necho fake-traecli\n", "utf8");
+    await chmod(traeExecutable, 0o755);
+    await mkdir(traeDir, { recursive: true });
   }
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Existing UI OpenCode\n", "utf8");
   if (options.malformedOpenCodeConfig) {
@@ -481,6 +520,30 @@ const launchApp = async (
       }
     });
   }
+  if (options.includeTraeTarget) {
+    await writeTraeProfile(appDataRoot);
+    await writeFile(join(traeDir, "AGENTS.md"), "# Existing UI Trae\n", "utf8");
+    await writeFile(join(traeDir, "trae_cli.yaml"), [
+      "model: fast",
+      "mcp_servers:",
+      "  - name: docs",
+      "    command: docs",
+      "    disabled: true",
+      "    env:",
+      "      TOKEN: keep-trae-yaml-secret",
+      ""
+    ].join("\n"), "utf8");
+    await writeFile(join(traeDir, "mcp.json"), `{
+  "telemetry": false,
+  "mcpServers": {
+    "browser": {
+      "url": "https://example.test/browser",
+      "headers": { "Authorization": "keep-trae-json-secret" },
+      "disabled": false
+    }
+  }
+}\n`, "utf8");
+  }
   const librarySkill = await writeLibrarySkill(appDataRoot);
   if (options.openCodeAlphaLibrarySkillCount) {
     await addOpenCodeAlphaLibrarySkills(appDataRoot, options.openCodeAlphaLibrarySkillCount);
@@ -533,6 +596,7 @@ const launchApp = async (
     opencodeDir,
     codexDir,
     claudeDir,
+    traeDir,
     librarySkill,
     githubFixtureRoot,
     page
@@ -589,12 +653,14 @@ const openSkillLibrary = async (page: Page) => {
     .click();
 };
 
-const applyActionButton = (page: Page, _targetName: "OpenCode" | "Codex" | "Claude Code") =>
+type ApplyTargetName = "OpenCode" | "Codex" | "Claude Code" | "Trae CLI";
+
+const applyActionButton = (page: Page, _targetName: ApplyTargetName) =>
   page.getByRole("button", { name: "Apply", exact: true }).first();
 
 const previewAndApply = async (
   page: Page,
-  targetName: "OpenCode" | "Codex" | "Claude Code"
+  targetName: ApplyTargetName
 ) => {
   await applyActionButton(page, targetName).click();
   const previewDialog = page.getByRole("dialog", { name: "Preview" });
@@ -4506,6 +4572,31 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(mcpPath, "utf8")).resolves.toBe(originalMcp);
   }, 30_000);
 
+  it("applies Trae CLI Instructions, Skills, and sparse native MCP switches", async () => {
+    const { page, traeDir } = await launchApp({ includeTraeTarget: true });
+
+    await selectProfile(page, "UI Trae daily");
+    await selectTarget(page, "Trae CLI");
+    await expandComposerSection(page, "MCPs");
+    const editor = page.locator(".profile-mcp-editor");
+    await editor.waitFor({ state: "visible" });
+    await expect.poll(() => editor.getByLabel("docs Profile behavior").inputValue()).toBe("on");
+    await expect.poll(() => editor.getByLabel("browser Profile behavior").inputValue()).toBe("off");
+
+    await previewAndApply(page, "Trae CLI");
+
+    await expect(readFile(join(traeDir, "AGENTS.md"), "utf8"))
+      .resolves.toContain("Use the managed Trae CLI environment");
+    await expect(readFile(join(traeDir, "skills", "ui-alpha-skill", "SKILL.md"), "utf8"))
+      .resolves.toContain("UI alpha Profile Skill");
+    const yaml = await readFile(join(traeDir, "trae_cli.yaml"), "utf8");
+    expect(yaml).toContain("disabled: false");
+    expect(yaml).toContain("TOKEN: keep-trae-yaml-secret");
+    const json = await readFile(join(traeDir, "mcp.json"), "utf8");
+    expect(json).toContain('"disabled": true');
+    expect(json).toContain('"Authorization": "keep-trae-json-secret"');
+  }, 30_000);
+
   it("installs a shared library skill into an OpenCode profile from the rendered app", async () => {
     const { librarySkill, opencodeDir, page } = await launchApp();
 
@@ -5256,14 +5347,16 @@ describe("Electron UI profile switching e2e", () => {
 
   it("reveals sidebar Agents hidden behind the overflow count", async () => {
     const { page } = await launchApp();
-    const overflow = page.getByRole("button", { name: "Show hidden Agent list, 1 item" });
+    const overflow = page.getByRole("button", { name: "Show hidden Agent list, 2 items" });
     await overflow.waitFor({ state: "visible" });
 
     await overflow.hover();
     const popover = page.getByRole("tooltip");
     await popover.waitFor({ state: "visible" });
     await expect.poll(() => popover.textContent()).toContain("Antigravity");
+    await expect.poll(() => popover.textContent()).toContain("Trae CLI");
     expect(await popover.locator(".agent-chip--antigravity .agent-chip__logo").count()).toBe(1);
+    expect(await popover.locator(".agent-chip--trae .agent-chip__logo").count()).toBe(1);
     await expectTopmost(popover);
 
     for (const viewport of [
@@ -5340,7 +5433,7 @@ describe("Electron UI profile switching e2e", () => {
           };
         })
       );
-      expect(rowGeometry).toHaveLength(4);
+      expect(rowGeometry).toHaveLength(5);
       for (const geometry of rowGeometry) {
         for (const child of geometry.children) {
           expect(child.left).toBeGreaterThanOrEqual(geometry.row.left);
@@ -5385,6 +5478,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("switch", { name: "Turn off Codex" }).click();
     await page.getByRole("switch", { name: "Turn off Claude Code" }).click();
     await page.getByRole("switch", { name: "Turn off Antigravity" }).click();
+    await page.getByRole("switch", { name: "Turn off Trae CLI" }).click();
     await expect
       .poll(async () => {
         const settings = await readJson<{ enabledTargetIds?: string[] }>(

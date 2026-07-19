@@ -116,6 +116,12 @@
   justify-self: end;
 }
 
+.profile-mcp-reset {
+  justify-self: stretch;
+  min-height: 34px;
+  width: 100%;
+}
+
 .profile-mcp-empty {
   align-items: center;
   display: flex;

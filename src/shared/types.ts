@@ -739,7 +739,7 @@ export interface TargetDescriptor {
   defaultProfileId?: string;
   instructionsLabel: string;
   configLabel: string;
-  configLanguage: "json" | "jsonc" | "toml" | "text";
+  configLanguage: "json" | "jsonc" | "toml" | "yaml" | "text";
   mcpConfigKey?: string;
   realWritesEnabled: boolean;
   executableName?: string;
@@ -750,7 +750,7 @@ export interface TargetCapabilities {
   instructions: boolean;
   skills: boolean;
   mcpTransports: McpTransport[];
-  agentFormat?: "opencode" | "claude-code" | "codex";
+  agentFormat?: "opencode" | "claude-code" | "codex" | "trae-cli";
   disabledSkillPaths: boolean;
   nativeConfig?: boolean;
   mcpEnvironmentReferences?: boolean;

@@ -165,7 +165,7 @@ const prepareFixture = async (root) => {
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
 
-  for (const command of ["opencode", "codex", "claude"]) {
+  for (const command of ["opencode", "codex", "claude", "traecli"]) {
     const executable = join(binDir, command);
     await writeFile(executable, `#!/bin/sh\necho fake-${command}\n`, "utf8");
     await chmod(executable, 0o755);
@@ -449,9 +449,11 @@ try {
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("group", { name: "Library item react-best-practices" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-1180x728.png"));
-  const hiddenAgents = page.getByRole("button", { name: "Show hidden Agent list, 1 item" });
+  const hiddenAgents = page.getByRole("button", { name: "Show hidden Agent list, 2 items" });
   await hiddenAgents.hover();
-  const hiddenAgentsPopover = page.getByRole("tooltip").filter({ hasText: "Antigravity" });
+  const hiddenAgentsPopover = page.getByRole("tooltip")
+    .filter({ hasText: "Antigravity" })
+    .filter({ hasText: "Trae CLI" });
   await hiddenAgentsPopover.waitFor({ state: "visible" });
   await capturePage(
     page,

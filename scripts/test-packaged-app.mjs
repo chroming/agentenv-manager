@@ -39,7 +39,8 @@ try {
     [join(homeDir, ".local", "bin", "opencode"), "opencode"],
     [join(homeDir, ".bun", "bin", "claude"), "claude"],
     [join(homeDir, ".cargo", "bin", "codex"), "codex"],
-    [join(homeDir, "Library", "pnpm", "agy"), "agy"]
+    [join(homeDir, "Library", "pnpm", "agy"), "agy"],
+    [join(homeDir, ".local", "bin", "traecli"), "traecli"]
   ];
   for (const [executablePath, name] of packagedAgentCommands) {
     await mkdir(dirname(executablePath), { recursive: true });
@@ -86,7 +87,7 @@ try {
   await page.setViewportSize({ width: 1180, height: 728 });
   await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Agents", exact: true }).click();
-  for (const agentName of ["OpenCode", "Claude Code", "Codex", "Antigravity CLI"]) {
+  for (const agentName of ["OpenCode", "Claude Code", "Codex", "Antigravity CLI", "Trae CLI"]) {
     const agent = page.getByRole("article", { name: `Agent ${agentName}` });
     await agent.waitFor({ state: "visible" });
     assert.match((await agent.textContent()) ?? "", /Ready/);

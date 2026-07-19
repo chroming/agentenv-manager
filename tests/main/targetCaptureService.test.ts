@@ -176,4 +176,36 @@ describe("target capture service v2", () => {
       selections: []
     });
   });
+
+  it("shows ambiguous Trae MCPs for review without capturing them as Profile switches", async () => {
+    const { homeDir, service } = await setup("trae-cli");
+    const traeDir = join(homeDir, ".trae");
+    await mkdir(traeDir, { recursive: true });
+    await writeFile(join(traeDir, "AGENTS.md"), "# Trae\n");
+    await writeFile(join(traeDir, "trae_cli.yaml"), [
+      "mcp_servers:",
+      "  - name: docs",
+      "    command: docs",
+      ""
+    ].join("\n"));
+    await writeFile(join(traeDir, "mcp.json"), JSON.stringify({
+      mcpServers: { docs: { url: "https://example.test/mcp" } }
+    }));
+
+    const preview = await service.previewTarget("trae-cli");
+    expect(preview.resources).toContainEqual(expect.objectContaining({
+      kind: "mcp",
+      id: "docs",
+      detail: "Enabled; remains Agent-controlled"
+    }));
+
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "Trae Existing"
+    });
+    expect(result.profile.resources.mcpByTarget["trae-cli"]).toEqual({
+      mode: "ignore",
+      selections: []
+    });
+  });
 });

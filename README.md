@@ -6,7 +6,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 
 ## 当前状态
 
-这是一个本地优先的 Electron 客户端，目前已经可以用于真实测试 OpenCode、Claude Code、Codex 和 Antigravity 的 profile 切换流程。
+这是一个本地优先的 Electron 客户端，目前已经可以用于真实测试 OpenCode、Claude Code、Codex、Antigravity 和 Trae CLI 的 profile 切换流程。
 
 项目使用 `electron-builder` 生成本地应用和安装包。`npm run build` 生成 Electron/Vite 运行产物，`npm run pack` / `npm run dist` 生成本地可运行程序或安装包。
 
@@ -15,14 +15,11 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 ### Profile 管理
 
 - 创建、编辑、复制、删除 profile。
-- 每个 profile 使用一种原生 Target 格式编辑高级配置，但可以应用到 OpenCode、Claude Code 或 Codex 等任意兼容 Target。
+- 每个 profile 是可移植的环境配方，可以应用到任意兼容 Agent；首选 Agent 只决定默认上下文，不限制应用目标。
 - Profile 可以管理：
   - 指令文件，例如 `AGENTS.md`、`CLAUDE.md`
-  - agent 配置文件，例如 JSONC / TOML 配置
-  - profile 自带 Skills / Agents
   - 来自统一 Library 的 Skills
-  - 各 Target 原生 MCP 的启停选择
-  - Codex disabled skill paths
+  - 各 Agent 原生 MCP 的稀疏启停选择；定义、凭据与其他原生配置仍归 Agent 所有
 - 应用 profile 前会先生成 diff preview。
 - 确认 preview 后才会写入目标 agent 目录。
 - 每次应用前会自动创建 backup。
@@ -47,8 +44,8 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 
 - 自动发现各 Agent 已配置的 MCP，不复制定义或凭据。
 - Profile 按 Target 保存 `Use Agent setting`、`On` 或 `Off` 三态选择。
-- Codex 和 OpenCode 支持通过原生 `enabled` 字段切换；Claude Code 和 Antigravity 当前只读展示。
-- 缺少的 MCP 显示 Setup required 警告，但不会阻止 Instructions 或 Skills 应用。
+- Codex 和 OpenCode 通过原生 `enabled` 字段切换；Trae CLI 只修改已有用户 MCP 的 `disabled` 字段；Claude Code 和 Antigravity 当前只读展示。
+- Profile 要求开启但 Agent 中缺少的 MCP 会阻止 Apply；要求关闭但已不存在的 MCP 是 no-op。
 
 ### Target 支持
 
@@ -58,6 +55,7 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 - Claude Code
 - Codex
 - Antigravity CLI (`agy`)
+- Trae CLI (`traecli` / `trae-cli` / `trae-agent`)
 
 新增 agent 的理想方式是写一个独立 integration 模块，然后注册到 `src/main/targets/integrations/index.ts`。安装检测、路径、Profile、Skill 运行时扫描规则、原生 MCP 发现与启停能力和资源部署都由该模块声明。适配器只报告 Agent 特有事实，Preview、备份、原子 Apply、校验和回滚仍由统一核心完成。
 
@@ -181,7 +179,7 @@ npm run dist:mac:signed
 
 该命令会在打包后校验应用签名、Gatekeeper 评估和 DMG stapling；任一项失败都会终止发布。
 
-验证实际打包后的 `.app` 能在 Finder 风格的精简 `PATH` 下发现 OpenCode、Claude Code、Codex、Antigravity CLI 和系统 Git，导入 Repository Skill，并完成一次 OpenCode Profile 接管：
+验证实际打包后的 `.app` 能在 Finder 风格的精简 `PATH` 下发现 OpenCode、Claude Code、Codex、Antigravity CLI、Trae CLI 和系统 Git，导入 Repository Skill，并完成一次 OpenCode Profile 接管：
 
 ```bash
 npm run test:e2e:packaged

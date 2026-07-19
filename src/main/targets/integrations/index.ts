@@ -5,6 +5,7 @@ import type { AgentTargetAdapter } from "../types";
 import { defineTargetIntegration } from "../defineTargetIntegration";
 import { createCommandInstallationDriver } from "../installationDiscovery";
 import { createAntigravityTargetAdapter } from "./antigravity";
+import { createTraeCliTargetAdapter } from "./trae-cli";
 
 const composeBuiltInIntegration = (
   adapter: AgentTargetAdapter
@@ -36,5 +37,6 @@ export const createBuiltInTargetAdapters = (): AgentTargetAdapter[] => [
   composeBuiltInIntegration(createOpenCodeTargetAdapter()),
   composeBuiltInIntegration(createClaudeCodeTargetAdapter()),
   composeBuiltInIntegration(createCodexTargetAdapter()),
-  createAntigravityTargetAdapter()
+  createAntigravityTargetAdapter(),
+  createTraeCliTargetAdapter()
 ];

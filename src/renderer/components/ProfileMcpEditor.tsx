@@ -157,6 +157,7 @@ export const ProfileMcpEditor = ({
         <div className="profile-mcp-list">
           {rows.map((connection) => {
             const missing = connection.detail === "setup-required";
+            const duplicate = connection.detail === "duplicate-user-sources";
             const mode = modeFor(connection.name);
             return (
               <div className="profile-mcp-row" key={`${target.id}:${connection.name}`}>
@@ -165,7 +166,9 @@ export const ProfileMcpEditor = ({
                     <OverflowTooltip className="profile-mcp-name" text={connection.name} />
                   </strong>
                   <small>
-                    {missing
+                    {duplicate
+                      ? t("Defined in multiple Agent files · Leave unchanged")
+                      : missing
                       ? mode === "on"
                         ? t("Missing in Agent · Apply blocked")
                         : t("Not configured · No change")
@@ -173,7 +176,7 @@ export const ProfileMcpEditor = ({
                     {connection.transport ? ` · ${connection.transport}` : ""}
                   </small>
                 </span>
-                {canManage ? (
+                {canManage && connection.controllable ? (
                   <select
                     className="profile-mcp-mode"
                     aria-label={t("{{name}} Profile behavior", { name: connection.name })}
@@ -184,9 +187,19 @@ export const ProfileMcpEditor = ({
                     <option value="on">{t("On")}</option>
                     <option value="off">{t("Off")}</option>
                   </select>
+                ) : mode !== "agent" ? (
+                  <button
+                    className="secondary-action profile-mcp-reset"
+                    type="button"
+                    onClick={() => updateMode(connection.name, "agent")}
+                  >
+                    {t("Use Agent setting")}
+                  </button>
                 ) : (
                   <span className="profile-mcp-agent-state">
-                    {t(connection.enabled ? "On in Agent" : "Off in Agent")}
+                    {t(!connection.controllable && canManage
+                      ? "Agent controlled"
+                      : connection.enabled ? "On in Agent" : "Off in Agent")}
                   </span>
                 )}
               </div>
