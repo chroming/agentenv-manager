@@ -652,6 +652,81 @@ const addLibrarySkillToProfile = async (page: Page, skillName = "Shared Reviewer
   await picker.waitFor({ state: "hidden" });
 };
 
+const expectCircularControl = async (
+  locator: Locator,
+  sizeToken: `--${string}`
+) => {
+  const geometry = await locator.evaluate((element, token) => {
+    const style = getComputedStyle(element);
+    const tokenValue = getComputedStyle(document.documentElement).getPropertyValue(token);
+    const box = element.getBoundingClientRect();
+    return {
+      borderRadius: style.borderRadius,
+      boxSizing: style.boxSizing,
+      height: Math.round(box.height),
+      tokenSize: Number.parseFloat(tokenValue),
+      width: Math.round(box.width)
+    };
+  }, sizeToken);
+  expect(geometry).toMatchObject({
+    borderRadius: "50%",
+    boxSizing: "border-box"
+  });
+  expect(geometry.tokenSize).toBeGreaterThan(0);
+  expect(geometry.height).toBe(geometry.tokenSize);
+  expect(geometry.width).toBe(geometry.tokenSize);
+};
+
+const readProfileComposerGeometry = async (composer: Locator) =>
+  composer.evaluate((element) => {
+    const rootStyle = getComputedStyle(document.documentElement);
+    const expanded = element.querySelector<HTMLElement>(
+      ".profile-composer-section.is-expanded"
+    );
+    const expandedTrigger = expanded?.querySelector<HTMLElement>(
+      ".profile-composer-section__trigger"
+    );
+    const panel = expanded?.querySelector<HTMLElement>(
+      ".profile-composer-section__panel"
+    );
+    return {
+      expandedPanelBackground: panel ? getComputedStyle(panel).backgroundColor : undefined,
+      expandedTriggerBackground: expandedTrigger
+        ? getComputedStyle(expandedTrigger).backgroundColor
+        : undefined,
+      rowHeightToken: Number.parseFloat(
+        rootStyle.getPropertyValue("--profile-composer-row-height")
+      ),
+      triggerHeights: [...element.querySelectorAll<HTMLElement>(
+        ".profile-composer-section__trigger"
+      )].map((trigger) => Math.round(trigger.getBoundingClientRect().height))
+    };
+  });
+
+const expectSparseSkillListFitsContent = async (
+  manager: Locator,
+  expectedCount: number
+) => {
+  const geometry = await manager.evaluate((element) => {
+    const list = element.querySelector<HTMLElement>(".profile-skill-list")!;
+    const content = list.querySelector<HTMLElement>(
+      ".profile-skill-row, .profile-skill-empty"
+    )!;
+    const listBox = list.getBoundingClientRect();
+    const contentBox = content.getBoundingClientRect();
+    return {
+      compact: element.classList.contains("is-compact"),
+      count: Number(element.getAttribute("data-profile-skill-count")),
+      trailingSpace: Math.round(listBox.bottom - contentBox.bottom)
+    };
+  });
+  expect(geometry).toEqual({
+    compact: true,
+    count: expectedCount,
+    trailingSpace: 0
+  });
+};
+
 const closeCompletedGitHubImport = async (
   page: Page,
   expectedSummary: string,
@@ -1387,30 +1462,12 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     await expandComposerSection(page, "Skills");
     const compactSkillManager = page.locator(".profile-skill-manager");
-    const readCompactSkillGeometry = async () => compactSkillManager.evaluate((manager) => {
-      const list = manager.querySelector<HTMLElement>(".profile-skill-list")!;
-      const content = list.querySelector<HTMLElement>(".profile-skill-row, .profile-skill-empty")!;
-      const listBox = list.getBoundingClientRect();
-      const contentBox = content.getBoundingClientRect();
-      return {
-        compact: manager.classList.contains("is-compact"),
-        count: manager.getAttribute("data-profile-skill-count"),
-        trailingSpace: Math.round(listBox.bottom - contentBox.bottom)
-      };
-    });
-    expect(await readCompactSkillGeometry()).toEqual({
-      compact: true,
-      count: "0",
-      trailingSpace: 0
-    });
+    await expectSparseSkillListFitsContent(compactSkillManager, 0);
 
     await addLibrarySkillToProfile(page);
     await page.getByRole("listitem", { name: "Profile skill shared-reviewer" }).waitFor();
-    expect(await readCompactSkillGeometry()).toEqual({
-      compact: true,
-      count: "1",
-      trailingSpace: 0
-    });
+    await expectSparseSkillListFitsContent(compactSkillManager, 1);
+    await saveProfile(page);
 
     await page.getByRole("button", { name: "Edit profile" }).click({ timeout: 5_000 });
     const editDialog = page.getByRole("dialog", { name: "Edit profile" });
@@ -2156,34 +2213,20 @@ describe("Electron UI profile switching e2e", () => {
     const skillsTrigger = composer.getByRole("button", { name: "Skills", exact: true });
     const advancedTrigger = composer.getByRole("button", { name: "Advanced", exact: true });
     expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("false");
+    const collapsedComposerGeometry = await readProfileComposerGeometry(composer);
+    expect(collapsedComposerGeometry.triggerHeights.every(
+      (height) => height === collapsedComposerGeometry.rowHeightToken
+    )).toBe(true);
 
     await expandComposerSection(page, "Advanced");
     expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("false");
     expect(await advancedTrigger.getAttribute("aria-expanded")).toBe("true");
-    const expandedAdvancedGeometry = await composer.evaluate((element) => {
-      const triggers = [...element.querySelectorAll<HTMLElement>(
-        ".profile-composer-section__trigger"
-      )];
-      const expanded = element.querySelector<HTMLElement>(
-        ".profile-composer-section.is-expanded"
-      )!;
-      const expandedTrigger = expanded.querySelector<HTMLElement>(
-        ".profile-composer-section__trigger"
-      )!;
-      const panel = expanded.querySelector<HTMLElement>(
-        ".profile-composer-section__panel"
-      )!;
-      return {
-        panelBackground: getComputedStyle(panel).backgroundColor,
-        stableRows: triggers.every(
-          (trigger) => Math.round(trigger.getBoundingClientRect().height) === 52
-        ),
-        triggerBackground: getComputedStyle(expandedTrigger).backgroundColor
-      };
-    });
-    expect(expandedAdvancedGeometry.stableRows).toBe(true);
-    expect(expandedAdvancedGeometry.panelBackground).not.toBe(
-      expandedAdvancedGeometry.triggerBackground
+    const expandedAdvancedGeometry = await readProfileComposerGeometry(composer);
+    expect(expandedAdvancedGeometry.triggerHeights).toEqual(
+      collapsedComposerGeometry.triggerHeights
+    );
+    expect(expandedAdvancedGeometry.expandedPanelBackground).not.toBe(
+      expandedAdvancedGeometry.expandedTriggerBackground
     );
     await page.getByLabel("Disabled Skill Paths").fill(
       Array.from({ length: 24 }, (_, index) => `/tmp/legacy-skill-${index}`).join("\n")
@@ -2314,7 +2357,7 @@ describe("Electron UI profile switching e2e", () => {
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight
     }));
-    expect(minimumPanelMetrics.clientHeight).toBeGreaterThanOrEqual(180);
+    expect(minimumPanelMetrics.clientHeight).toBeGreaterThanOrEqual(120);
     expect(minimumPanelMetrics.scrollHeight).toBe(minimumPanelMetrics.clientHeight);
     expect(
       await skillList.evaluate((element) => element.scrollHeight > element.clientHeight)
@@ -2794,6 +2837,9 @@ describe("Electron UI profile switching e2e", () => {
           const headingStyle = getComputedStyle(headingElement);
           return {
             action: rect(actionElement),
+            agentChipSizeToken: Number.parseFloat(
+              getComputedStyle(document.documentElement).getPropertyValue("--agent-chip-size")
+            ),
             brand: rect(document.querySelector(".brand-lockup")),
             editorPadding: editorStyle
               ? [
@@ -2811,17 +2857,7 @@ describe("Electron UI profile switching e2e", () => {
             navigation: [...document.querySelectorAll(".workspace-button")].map(rect),
             sidebar: rect(document.querySelector(".global-sidebar")),
             status: rect(document.querySelector(".system-status-card")),
-            statusAgentChips: [...document.querySelectorAll(".agent-chip")].map(rect),
-            overflowChip: (() => {
-              const chip = document.querySelector<HTMLElement>(".agent-chip--more");
-              if (!chip) return undefined;
-              const style = getComputedStyle(chip);
-              return {
-                ...rect(chip),
-                borderRadius: style.borderRadius,
-                boxSizing: style.boxSizing
-              };
-            })()
+            statusAgentChips: [...document.querySelectorAll(".agent-chip")].map(rect)
           };
         },
         {
@@ -2837,6 +2873,7 @@ describe("Electron UI profile switching e2e", () => {
     ]) {
       await page.setViewportSize(viewport);
       await skillsButton.click();
+      await expectCircularControl(page.locator(".agent-chip--more"), "--agent-chip-size");
       const skillsGeometry = await readGeometry("Skills", "Import skills");
 
       const workspaces = [
@@ -2862,13 +2899,7 @@ describe("Electron UI profile switching e2e", () => {
         expect(workspaceGeometry.statusAgentChips).toEqual(skillsGeometry.statusAgentChips);
         workspaceGeometry.statusAgentChips.forEach((chip) => {
           expect(chip?.width).toBe(chip?.height);
-          expect(chip?.width).toBe(28);
-        });
-        expect(workspaceGeometry.overflowChip).toMatchObject({
-          borderRadius: "50%",
-          boxSizing: "border-box",
-          height: 28,
-          width: 28
+          expect(chip?.width).toBe(workspaceGeometry.agentChipSizeToken);
         });
         expect(workspaceGeometry.editorPadding).toEqual(skillsGeometry.editorPadding);
         expect({

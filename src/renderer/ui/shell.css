@@ -61,9 +61,9 @@ html[data-platform="darwin"] {
 
 .agent-chip-row > .agent-chip {
   aspect-ratio: 1;
-  flex: 0 0 28px;
-  max-width: 28px;
-  min-width: 28px;
+  flex: 0 0 var(--agent-chip-size);
+  max-width: var(--agent-chip-size);
+  min-width: var(--agent-chip-size);
 }
 
 .agent-chip--more {
@@ -71,18 +71,18 @@ html[data-platform="darwin"] {
   background: #f8fafc;
   border-color: #d9e2ef;
   border-radius: 50%;
-  block-size: 28px;
+  block-size: var(--agent-chip-size);
   box-sizing: border-box;
   color: #64748b;
   cursor: pointer;
   display: grid;
-  flex: 0 0 28px;
+  flex: 0 0 var(--agent-chip-size);
   font-size: 9px;
-  inline-size: 28px;
-  max-block-size: 28px;
-  max-inline-size: 28px;
-  min-block-size: 28px;
-  min-inline-size: 28px;
+  inline-size: var(--agent-chip-size);
+  max-block-size: var(--agent-chip-size);
+  max-inline-size: var(--agent-chip-size);
+  min-block-size: var(--agent-chip-size);
+  min-inline-size: var(--agent-chip-size);
   padding: 0;
   place-items: center;
 }

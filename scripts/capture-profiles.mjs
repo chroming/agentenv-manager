@@ -617,6 +617,51 @@ try {
     "profiles",
     () => page.getByRole("region", { name: "Profiles", exact: true })
   );
+
+  await page.getByRole("button", { name: "New Profile" }).click();
+  const sparseProfileDialog = page.getByRole("dialog", { name: "New profile" });
+  await sparseProfileDialog.waitFor({ state: "visible" });
+  await sparseProfileDialog.getByLabel("Profile name").fill("Sparse Capture");
+  await sparseProfileDialog
+    .getByLabel("Description")
+    .fill("Visual fixture for sparse resource states.");
+  await sparseProfileDialog.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("heading", { name: "Sparse Capture" }).waitFor({ state: "visible" });
+  const sparseSkillsSection = page.locator('[data-profile-composer-id="skills"]');
+  await sparseSkillsSection.getByRole("button", { name: "Skills", exact: true }).click();
+  await sparseSkillsSection
+    .locator(".profile-composer-section__panel")
+    .waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "profile-skills-empty-920x620.png"));
+
+  await page.getByRole("button", { name: "Add library skill" }).click();
+  const sparseSkillPicker = page.getByRole("dialog", { name: "Add library skills" });
+  await sparseSkillPicker.waitFor({ state: "visible" });
+  await sparseSkillPicker.getByLabel("git-workflow", { exact: true }).check();
+  await sparseSkillPicker.getByRole("button", { name: "Add selected skills" }).click();
+  await sparseSkillPicker.waitFor({ state: "hidden" });
+  await page.getByRole("listitem", { name: "Profile skill git-workflow" }).waitFor();
+
+  const sparseSaveButton = page.getByRole("button", { name: "Save", exact: true });
+  await sparseSaveButton.click();
+  await sparseSaveButton.waitFor({ state: "visible" });
+  await page.waitForFunction(() => {
+    const save = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Save"
+    );
+    return save instanceof HTMLButtonElement && save.disabled;
+  });
+  await page.waitForTimeout(5_200);
+  await capturePage(page, join(outputDir, "profile-skills-single-920x620.png"));
+  await page.getByRole("button", { name: "More profile actions" }).click();
+  await page.getByRole("menuitem", { name: "Delete profile" }).click();
+  const sparseDeleteDialog = page.getByRole("dialog", { name: "Delete profile" });
+  await sparseDeleteDialog.waitFor({ state: "visible" });
+  await sparseDeleteDialog.getByRole("button", { name: "Remove profile" }).click();
+  await sparseDeleteDialog.waitFor({ state: "hidden" });
+
+  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await page
     .getByRole("group", { name: "Profile Code Review" })
     .getByRole("button", { name: "Change icon for profile code-review" })

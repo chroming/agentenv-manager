@@ -769,25 +769,9 @@
   padding: 6px 12px;
 }
 
-.profile-composer-section__trigger {
-  height: 52px;
-}
-
-.profile-composer-section.is-expanded > .profile-composer-section__trigger {
-  background: #f6f9fe;
-  box-shadow: inset 2px 0 0 #6f9ee8;
-}
-
-.profile-composer-section.is-expanded > .profile-composer-section__trigger
-  .profile-composer-section__icon,
-.profile-composer-section.is-expanded > .profile-composer-section__trigger
-  .profile-composer-section__chevron {
-  color: #356fca;
-}
-
 .profile-composer-section.is-expanded > .profile-composer-section__panel {
-  background: #f3f6fa;
-  border-top-color: #dbe3ed;
+  background: var(--profile-expanded-surface);
+  border-top-color: var(--profile-expanded-border);
   padding: 8px;
 }
 
@@ -1215,10 +1199,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .profile-hero__title .icon-action {
-    display: none;
   }
 
   .profile-hero .profile-description {
