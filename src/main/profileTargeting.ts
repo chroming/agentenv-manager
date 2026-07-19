@@ -26,17 +26,17 @@ export const targetProfile = (
   const omissions: PlannedOmission[] = [];
 
   if (hasNativeConfig) {
-    const reason = `${source.manifest.targetId} Advanced config is target-specific and is not applied to ${adapter.descriptor.name}`;
+    const reason = `${source.manifest.targetId} Advanced config is Agent-specific and is not applied to ${adapter.descriptor.name}`;
     warnings.push(reason);
     omissions.push({ kind: "config", name: "Advanced config", reason });
   }
   if (omittedAgents > 0) {
-    const reason = `${omittedAgents} target-specific agent ${omittedAgents === 1 ? "asset is" : "assets are"} not applied to ${adapter.descriptor.name}`;
+    const reason = `${omittedAgents} native agent ${omittedAgents === 1 ? "asset is" : "assets are"} not applied to ${adapter.descriptor.name}`;
     warnings.push(reason);
     omissions.push({ kind: "agent", name: `${omittedAgents} agent ${omittedAgents === 1 ? "asset" : "assets"}`, reason });
   }
   if (hasDisabledSkills) {
-    const reason = `Disabled skill paths are target-specific and are not applied to ${adapter.descriptor.name}`;
+    const reason = `Disabled Skill paths are Agent-specific and are not applied to ${adapter.descriptor.name}`;
     warnings.push(reason);
     omissions.push({ kind: "setting", name: "Disabled skill paths", reason });
   }

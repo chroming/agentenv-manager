@@ -911,7 +911,7 @@ export const SkillsEditor = ({
                 <div className="section-title">{t("Edit install name")}</div>
               </header>
               <label className="field-block">
-                <span>{t("Target name")}</span>
+                <span>{t("Install name")}</span>
                 <input
                   ref={ownedSkillInputRef}
                   value={editingOwnedSkillTarget}
@@ -1057,7 +1057,7 @@ export const SkillsEditor = ({
             <div>
               <div className="section-title">
                 {t("Resources")}
-                <InfoTip label={t("Attach shared library skills and MCP servers to this profile. Preview before apply verifies target paths and ownership.")} />
+                <InfoTip label={t("Attach shared Library Skills and MCP servers to this Profile. Preview before Apply verifies Agent paths and ownership.")} />
               </div>
             </div>
           ) : null}
@@ -1106,7 +1106,7 @@ export const SkillsEditor = ({
           <div>
             <div className="resource-heading">
               {t("Advanced resource settings")}
-              <InfoTip label={t("Use absolute target paths here to disable skills that should be ignored when this profile is applied.")} />
+              <InfoTip label={t("Use absolute Agent paths here for Skills that should be disabled when this Profile is applied.")} />
             </div>
           </div>
           <label className="field-block">
@@ -1186,9 +1186,9 @@ export const SkillsEditor = ({
                         />
                       </label>
                       <label>
-                        <span>{t("Target name")}</span>
+                        <span>{t("Install name")}</span>
                         <input
-                          aria-label={t("Target name")}
+                          aria-label={t("Install name")}
                           value={asset.targetName}
                           onChange={(event) =>
                             updateOwnedDir(index, { targetName: event.currentTarget.value })

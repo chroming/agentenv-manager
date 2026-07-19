@@ -3,11 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPaths } from "../../src/main/paths";
+import { createSettingsStore } from "../../src/main/settingsStore";
 import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
 import { createTargetDiscoveryService } from "../../src/main/targetDiscovery";
 import { createCodexTargetAdapter } from "../../src/main/targets/codexTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
 import { createTargetRegistry } from "../../src/main/targets/registry";
+import { createTargetScope } from "../../src/main/targets/targetScope";
 
 let root = "";
 
@@ -25,13 +27,18 @@ const makeService = async () => {
     createClaudeCodeTargetAdapter(),
     createCodexTargetAdapter()
   ]);
+  const settingsStore = createSettingsStore(paths, {
+    supportedTargetIds: targetRegistry.list().map((target) => target.id)
+  });
+  const targetScope = createTargetScope(targetRegistry, settingsStore);
   const service = createTargetDiscoveryService({
     paths,
     targetRegistry,
+    targetScope,
     pathEnv: binDir
   });
 
-  return { binDir, paths, service };
+  return { binDir, paths, service, settingsStore, targetScope };
 };
 
 afterEach(async () => {
@@ -42,6 +49,19 @@ afterEach(async () => {
 });
 
 describe("target discovery", () => {
+  it("does not detect or return Agents that are turned off", async () => {
+    const { service, settingsStore, targetScope } = await makeService();
+    await settingsStore.updateSettings({ enabledTargetIds: ["opencode"] });
+
+    await expect(targetScope.listEnabledIds()).resolves.toEqual(["opencode"]);
+    await expect(service.listTargets()).resolves.toEqual([
+      expect.objectContaining({ id: "opencode" })
+    ]);
+    await expect(targetScope.assertEnabled("codex")).rejects.toThrow(
+      "Codex is turned off in Settings"
+    );
+  });
+
   it("reports a missing OpenCode CLI and missing config paths without creating them", async () => {
     const { service } = await makeService();
 

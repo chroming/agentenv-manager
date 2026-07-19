@@ -1,5 +1,6 @@
 .settings-page {
   align-content: start;
+  container-type: inline-size;
   display: grid;
   gap: 0;
   max-width: 900px;
@@ -357,6 +358,113 @@
   align-items: center;
   display: flex;
   justify-content: space-between;
+}
+
+.agent-settings-list {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  display: grid;
+}
+
+.agent-settings-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 36px minmax(0, 1fr) minmax(118px, auto) 40px;
+  min-height: 64px;
+  padding: 8px 2px;
+}
+
+.agent-settings-row + .agent-settings-row {
+  border-top: 1px solid var(--border);
+}
+
+.agent-settings-icon {
+  align-items: center;
+  background: var(--surface-muted);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.agent-settings-icon img {
+  height: 19px;
+  object-fit: contain;
+  width: 19px;
+}
+
+.agent-settings-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agent-settings-copy strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.agent-settings-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-settings-state {
+  align-items: flex-end;
+  display: grid;
+  gap: 1px;
+  justify-items: end;
+  min-width: 0;
+}
+
+.agent-settings-status {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 12px;
+  gap: 5px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.agent-settings-status.is-warning {
+  color: var(--warning);
+}
+
+.agent-settings-state .text-action {
+  font-size: 11px;
+  min-height: 20px;
+  padding: 0;
+}
+
+.agent-settings-row > .ui-switch {
+  justify-self: end;
+}
+
+@container (max-width: 560px) {
+  .agent-settings-row {
+    grid-template-columns: 36px minmax(0, 1fr) 40px;
+  }
+
+  .agent-settings-state {
+    align-items: start;
+    grid-column: 2;
+    grid-row: 2;
+    justify-items: start;
+  }
+
+  .agent-settings-row > .ui-switch {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
 }
 
 .settings-page .resource-settings-grid > label {

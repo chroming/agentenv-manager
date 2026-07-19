@@ -6,7 +6,12 @@ import {
   Settings,
   type LucideIcon
 } from "lucide-react";
-import type { ProfileSummary, TargetHealthStatus, TargetInfo } from "../../shared/types";
+import type {
+  ProfileSummary,
+  TargetDescriptor,
+  TargetHealthStatus,
+  TargetInfo
+} from "../../shared/types";
 import { useI18n } from "../i18n";
 
 const appIconUrl = new URL("../assets/app-icon.png", import.meta.url).href;
@@ -29,7 +34,7 @@ interface ProfileSidebarProps {
 
 type TargetIconFlavor = "opencode" | "codex" | "claude" | "generic";
 
-const targetInitials = (target: TargetInfo) => {
+const targetInitials = (target: Pick<TargetDescriptor, "id" | "name">) => {
   const source = target.name || target.id;
   const words = source.split(/[\s-_]+/).filter(Boolean);
   const initials = words
@@ -40,7 +45,9 @@ const targetInitials = (target: TargetInfo) => {
   return initials || "A";
 };
 
-export const targetIconFor = (target: TargetInfo): { flavor: TargetIconFlavor; assetUrl?: string } => {
+export const targetIconFor = (
+  target: Pick<TargetDescriptor, "id" | "name" | "iconKey">
+): { flavor: TargetIconFlavor; assetUrl?: string } => {
   if (target.iconKey === "opencode") {
     return { flavor: "opencode", assetUrl: openCodeIconUrl };
   }
@@ -89,7 +96,9 @@ export const ProfileSidebar = ({
     icon: LucideIcon;
   }> = [
     { id: "profiles", label: t("Profiles"), detail: t("Compose environments"), icon: Boxes },
-    { id: "targets", label: t("Targets"), detail: t("Local agent runtimes"), icon: Monitor }
+    ...(targets.length > 0
+      ? [{ id: "targets" as const, label: t("Agents"), detail: t("Local agent tools"), icon: Monitor }]
+      : [])
   ];
 
   return (
@@ -160,13 +169,13 @@ export const ProfileSidebar = ({
           <small>{t("Storage and safety")}</small>
         </button>
       </nav>
-      <section className="system-status-card" aria-label={t("System status")}>
+      {targets.length > 0 ? <section className="system-status-card" aria-label={t("System status")}>
         <div>
           <span className="status-dot is-ready" />
-          <strong>{t("Local agents")}</strong>
+          <strong>{t("Local Agents")}</strong>
         </div>
         <small>
-          {t("{{ready}}/{{total}} targets · {{profiles}}", {
+          {t("{{ready}}/{{total}} Agents · {{profiles}}", {
             ready: readyTargets,
             total: targets.length,
             profiles: isLoading
@@ -176,7 +185,7 @@ export const ProfileSidebar = ({
                 })
           })}
         </small>
-        <div className="agent-chip-row" aria-label={t("Connected targets")}>
+        <div className="agent-chip-row" aria-label={t("Enabled Agents")}>
           {statusTargets.map((target) => {
             const targetIcon = targetIconFor(target);
 
@@ -202,7 +211,7 @@ export const ProfileSidebar = ({
             );
           })}
         </div>
-      </section>
+      </section> : null}
     </aside>
   );
 };

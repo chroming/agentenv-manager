@@ -5,6 +5,8 @@ import type { AgentEnvPaths } from "./paths";
 import { isMissingFileError, pathExists } from "./fileUtils";
 import { findExecutable } from "./executableDiscovery";
 import type { TargetRegistry } from "./targets/registry";
+import { createTargetScope, type TargetScope } from "./targets/targetScope";
+import { createSettingsStore } from "./settingsStore";
 import type {
   TargetHealth,
   TargetHealthStatus,
@@ -16,6 +18,7 @@ import type {
 export interface TargetDiscoveryOptions {
   paths: AgentEnvPaths;
   targetRegistry: TargetRegistry;
+  targetScope?: TargetScope;
   pathEnv?: string;
   systemPathLookup?: boolean;
   shellPathLookup?: boolean;
@@ -131,6 +134,7 @@ export const createTargetDiscoveryService = (
   const {
     paths,
     targetRegistry,
+    targetScope = createTargetScope(targetRegistry, createSettingsStore(paths)),
     pathEnv = process.env.PATH ?? "",
     systemPathLookup = options.pathEnv === undefined,
     shellPathLookup = options.pathEnv === undefined
@@ -158,9 +162,10 @@ export const createTargetDiscoveryService = (
   };
   const listTargets = async (
     listOptions: { forceRefresh?: boolean } = {}
-  ): Promise<TargetInfo[]> =>
-    Promise.all(
-      targetRegistry.listAdapters().map(async (adapter) => {
+  ): Promise<TargetInfo[]> => {
+    const enabledAdapters = await targetScope.listEnabledAdapters();
+    return Promise.all(
+      enabledAdapters.map(async (adapter) => {
         const targetPaths = adapter.createTargetPaths({
           homeDir: paths.homeDir,
           fakeHomeRoot: paths.fakeHomeRoot
@@ -207,6 +212,7 @@ export const createTargetDiscoveryService = (
         };
       })
     );
+  };
 
   return { listTargets };
 };

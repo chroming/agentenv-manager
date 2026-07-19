@@ -484,7 +484,7 @@ try {
   await capturePage(page, join(outputDir, "skills-import-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-import-920x620.png"));
-  await importDialog.getByRole("tab", { name: "GitHub" }).click();
+  await importDialog.getByRole("tab", { name: "Repository" }).click();
   await capturePage(page, join(outputDir, "skills-import-github-920x620.png"));
   await importDialog.getByRole("button", { name: "Close import" }).click();
   await importDialog.waitFor({ state: "hidden" });
@@ -652,9 +652,9 @@ try {
     .click();
   await capturePage(page, join(outputDir, "profiles-applied-1180x728.png"));
   await captureWorkspace(
-    "Targets",
+    "Agents",
     "targets",
-    () => page.getByRole("region", { name: "Targets", exact: true })
+    () => page.getByRole("region", { name: "Agents", exact: true })
   );
   await page.getByRole("button", { name: /Recovery/ }).click();
   const recoveryDialog = page.getByRole("dialog", { name: "Recovery" });
@@ -665,7 +665,7 @@ try {
   await recoveryDialog.getByRole("button", { name: "Close" }).click();
   await recoveryDialog.waitFor({ state: "hidden" });
   await page
-    .getByRole("article", { name: "Target OpenCode" })
+    .getByRole("article", { name: "Agent OpenCode" })
     .getByRole("button", { name: "Create profile from OpenCode" })
     .click();
   const targetCaptureDialog = page.getByRole("dialog", { name: "Create profile from OpenCode" });
@@ -696,7 +696,7 @@ try {
   await page.getByRole("button", { name: "Profiles" }).click();
   await page.getByRole("button", { name: /Daily Coding/ }).click();
   await page.getByRole("heading", { name: "Daily Coding" }).waitFor({ state: "visible" });
-  await page.getByRole("button", { name: "Select apply target" }).click();
+  await page.getByRole("button", { name: "Select apply Agent" }).click();
   await page.waitForTimeout(250);
   await capturePage(page, join(outputDir, "implementation-1536x1024.png"));
 

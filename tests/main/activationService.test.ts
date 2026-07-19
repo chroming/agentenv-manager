@@ -15,6 +15,7 @@ import { createActivationService } from "../../src/main/activationService";
 import { createBackupStore } from "../../src/main/backupStore";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
+import { createSettingsStore } from "../../src/main/settingsStore";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import type { AgentTargetAdapter } from "../../src/main/targets/types";
@@ -88,10 +89,16 @@ const makeEnv = async () => {
     codexHome: paths.codexHome,
     userSkillsDir: paths.userSkillsDir
   });
+  const settingsStore = createSettingsStore(paths);
   const skillLibraryStore = createSkillLibraryStore(paths);
-  const service = createActivationService({ paths, profileStore, skillLibraryStore });
+  const service = createActivationService({
+    paths,
+    profileStore,
+    settingsStore,
+    skillLibraryStore
+  });
 
-  return { paths, profileStore, service, skillLibraryStore };
+  return { paths, profileStore, service, settingsStore, skillLibraryStore };
 };
 
 afterEach(async () => {
@@ -102,6 +109,24 @@ afterEach(async () => {
 });
 
 describe("activation service", () => {
+  it("hides deployment state and blocks Apply after an Agent is turned off", async () => {
+    const { paths, service, settingsStore } = await makeEnv();
+    await writeFile(paths.globalAgentsPath, "# Old agents\n");
+    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n');
+
+    const preview = await service.previewProfile("daily-coding");
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual(
+      expect.objectContaining({ ok: true })
+    );
+    await settingsStore.updateSettings({ enabledTargetIds: [] });
+
+    await expect(service.listTargetStates()).resolves.toEqual([]);
+    await expect(service.previewProfile("daily-coding")).rejects.toThrow(
+      "Codex is turned off in Settings"
+    );
+    await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe("# New agents\n");
+  });
+
   it("scans Target Skill inventory once per preview", async () => {
     const { service, skillLibraryStore } = await makeEnv();
     const scanInventory = vi.spyOn(skillLibraryStore, "scanInventory");
@@ -501,7 +526,7 @@ describe("activation service", () => {
     const preview = await service.previewProfile("daily-coding", "opencode");
     expect(preview.targetId).toBe("opencode");
     expect(preview.warnings).toContain(
-      "codex Advanced config is target-specific and is not applied to OpenCode"
+      "codex Advanced config is Agent-specific and is not applied to OpenCode"
     );
     expect(preview.effectivePayload).toMatchObject({
       instructions: 1,
@@ -517,7 +542,7 @@ describe("activation service", () => {
     );
     await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
       ok: false,
-      errors: ["Cross-target omissions must be acknowledged before Apply"]
+      errors: ["Compatibility omissions must be acknowledged before Apply"]
     });
     expect(preview.changes.map(({ path }) => path)).toContain(openCodeInstructions);
     expect(preview.resourceChanges).toContainEqual(

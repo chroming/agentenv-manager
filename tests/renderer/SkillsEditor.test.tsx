@@ -257,7 +257,7 @@ describe("SkillsEditor", () => {
     );
     fireEvent.click(screen.getByRole("menuitem", { name: "Edit install name" }));
     const editDialog = screen.getByRole("dialog", { name: "Edit profile-owned skill" });
-    fireEvent.change(within(editDialog).getByLabelText("Target name"), {
+    fireEvent.change(within(editDialog).getByLabelText("Install name"), {
       target: { value: "agentenv-updated-reviewer" }
     });
     fireEvent.click(within(editDialog).getByRole("button", { name: "Save" }));

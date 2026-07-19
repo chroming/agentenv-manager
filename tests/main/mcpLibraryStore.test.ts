@@ -95,7 +95,7 @@ describe("MCP library store", () => {
         url: "https://example.com/mcp",
         env: { TOKEN: "TOKEN" }
       })
-    ).rejects.toThrow("Remote MCP credentials must be configured in the Target");
+    ).rejects.toThrow("Remote MCP credentials must be configured in the Agent");
     await expect(
       store.saveServer({
         id: "local-docs",

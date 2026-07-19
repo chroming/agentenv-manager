@@ -81,6 +81,7 @@ import type {
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdateSourceInput,
+  TargetDescriptor,
   TargetInfo,
   TargetCapturePreview,
   TargetManagementState
@@ -91,6 +92,7 @@ import {
   libraryResourceVersionsEqual
 } from "../shared/libraryVersions";
 import { AgentsEditor } from "./components/AgentsEditor";
+import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { DiffViewer } from "./components/DiffViewer";
 import { HistoryView } from "./components/HistoryView";
 import { InfoTip } from "./components/InfoTip";
@@ -217,9 +219,9 @@ const managedBackupTitle = (item: ManagedBackupItem, t: Translate): string =>
     : item.profileName
       ? t("{{profile}} · {{target}}", {
           profile: item.profileName,
-          target: item.targetId ?? t("Target")
+          target: item.targetId ?? t("Agent")
         })
-      : t("Target recovery · {{target}}", { target: item.targetId ?? t("Unknown Target") });
+      : t("Agent recovery · {{target}}", { target: item.targetId ?? t("Unknown Agent") });
 
 const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate): string => {
   if (item.requiredReason === "recovery-required") return t("Required for recovery");
@@ -441,14 +443,14 @@ const validateConfig = (
     };
   }
 
-  return { value: "Pending", detail: "Preview checks this target format", level: "pending" };
+  return { value: "Pending", detail: "Preview checks this Agent format", level: "pending" };
 };
 
 const createValidationRows = (
   profile: ProfileDetail,
   target?: TargetInfo,
   preview?: ActivationPreview,
-  profileTarget: TargetInfo | undefined = target
+  profileTarget: TargetDescriptor | undefined = target
 ): ValidationRow[] => {
   const configValidation = profile.manifest.managed.config
     ? validateConfig(profile.configText, profileTarget?.configLanguage)
@@ -464,7 +466,7 @@ const createValidationRows = (
 
   return [
     {
-      label: `${target?.name ?? "Target"} access`,
+      label: `${target?.name ?? "Agent"} access`,
       value:
         target?.health.status === "ready"
           ? "OK"
@@ -499,11 +501,11 @@ const createValidationRows = (
       label: `${profileTarget?.name ?? "Native"} native config`,
       detail:
         target && profileTarget && target.id !== profileTarget.id
-          ? `Only applied when the destination Target is ${profileTarget.name}`
+          ? `Only applied when the destination Agent is ${profileTarget.name}`
           : configValidation.detail
     },
     {
-      label: `${target?.name ?? "Target"} compatibility`,
+      label: `${target?.name ?? "Agent"} compatibility`,
       value:
         target && profileTarget && target.id !== profileTarget.id
           ? preview
@@ -517,7 +519,7 @@ const createValidationRows = (
           ? preview
             ? `${preview.effectivePayload?.total ?? 0} resources included; ${preview.omissions?.length ?? 0} native items omitted`
             : "Preview calculates the portable payload and native-only omissions"
-          : "Native configuration is supported by this Target",
+          : "Native configuration is supported by this Agent",
       level:
         preview && (preview.omissions?.length ?? 0) > 0
           ? "warning"
@@ -535,7 +537,7 @@ const createValidationRows = (
       detail:
         profile.manifest.managed.assets &&
         profile.assetPolicy.ownedDirs.some((ownedDir) => ownedDir.kind === "skill")
-          ? "Preview verifies source directories and target ownership"
+          ? "Preview verifies source directories and Agent ownership"
           : undefined,
       level:
         profile.manifest.managed.assets &&
@@ -562,8 +564,15 @@ const AppContent = ({
   onLocalePreferenceChange(locale: AppLocale): void;
 }) => {
   const { t, formatDate, formatNumber } = useI18n();
+  const [supportedTargets, setSupportedTargets] = useState<TargetDescriptor[]>([]);
   const [targets, setTargets] = useState<TargetInfo[]>([]);
-  const targetNames = useMemo(() => createTargetNameIndex(targets), [targets]);
+  const targetNames = useMemo(
+    () => ({
+      ...createTargetNameIndex(supportedTargets),
+      "shared-compatibility": t("Shared Skills")
+    }),
+    [supportedTargets, t]
+  );
   const [targetStates, setTargetStates] = useState<TargetManagementState[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
@@ -801,6 +810,7 @@ const AppContent = ({
   ) => {
     const skillItemsPromise = window.agentEnv.listSkillLibrary();
     const corePromise = Promise.all([
+      window.agentEnv.listSupportedTargets(),
       window.agentEnv.listTargets(forceTargetRefresh),
       window.agentEnv.listTargetStates(),
       window.agentEnv.listProfiles(),
@@ -817,6 +827,7 @@ const AppContent = ({
     }
 
     const [
+      supportedTargetItems,
       targetItems,
       targetStateItems,
       profileItems,
@@ -829,6 +840,7 @@ const AppContent = ({
 
     if (!shouldApply()) {
       return {
+        supportedTargetItems,
         targetItems,
         targetStateItems,
         profileItems,
@@ -839,6 +851,7 @@ const AppContent = ({
       };
     }
 
+    setSupportedTargets(supportedTargetItems);
     setTargets(targetItems);
     setTargetStates(
       targetStateItems.map((targetState) => ({
@@ -854,9 +867,14 @@ const AppContent = ({
     setMcpServers(mcpItems);
     setSkillSettings(settings);
     onLocalePreferenceChange(settings.locale);
-    setSelectedTargetId((current) => current ?? targetItems[0]?.id);
+    setSelectedTargetId((current) =>
+      current && targetItems.some((target) => target.id === current)
+        ? current
+        : targetItems[0]?.id
+    );
 
     return {
+      supportedTargetItems,
       targetItems,
       targetStateItems,
       profileItems,
@@ -873,7 +891,14 @@ const AppContent = ({
     shouldApply: () => boolean = () => true,
     forceSkillUpdateCheck = false
   ) => {
-    const { targetItems, profileItems, skillItems, mcpItems, settings } = core;
+    const {
+      supportedTargetItems,
+      targetItems,
+      profileItems,
+      skillItems,
+      mcpItems,
+      settings
+    } = core;
     const [skillUpdatesResult, skillInventoryResult, githubStatusResult] =
       await Promise.allSettled([
         checkSkillUpdates && (forceSkillUpdateCheck || settings.skillAutoCheckEnabled)
@@ -906,7 +931,7 @@ const AppContent = ({
         skillItems,
         mcpItems
       );
-      const profileTarget = targetItems.find(
+      const profileTarget = supportedTargetItems.find(
         (targetItem) => targetItem.id === profile.manifest.targetId
       );
       if (profileTarget) {
@@ -1599,7 +1624,7 @@ const AppContent = ({
   const openCreateProfileDialogNow = () => {
     const targetId = selectedTargetId ?? targets[0]?.id;
     if (!targetId) {
-      setError("No target available");
+      setError("No enabled Agent available");
       return;
     }
     setProfileForm({ targetId, name: "", description: "" });
@@ -1635,7 +1660,7 @@ const AppContent = ({
   };
 
   const openCreateFromTargetDialog = (targetId: string) => {
-    const targetName = targets.find((item) => item.id === targetId)?.name ?? "Target";
+    const targetName = targets.find((item) => item.id === targetId)?.name ?? "Agent";
     guardProfileAction(`create a profile from ${targetName}`, () => openCreateFromTargetDialogNow(targetId));
   };
 
@@ -1726,7 +1751,7 @@ const AppContent = ({
         setSelectedProfileId(saved.id);
         setDraftProfile(saved);
         if (profileCreateSource === "target") {
-          setProfileCaptureStatus(t("{{name}} created. Target unchanged.", { name: saved.manifest.name }));
+          setProfileCaptureStatus(t("{{name}} created. Agent unchanged.", { name: saved.manifest.name }));
         }
       } else if (draftProfile) {
         setProfileSaveStatus("Saving profile details");
@@ -1919,7 +1944,7 @@ const AppContent = ({
       setIsTargetMenuOpen(false);
       return;
     }
-    const targetName = targets.find((target) => target.id === targetId)?.name ?? "target";
+    const targetName = targets.find((target) => target.id === targetId)?.name ?? "Agent";
     guardProfileAction(`apply to ${targetName}`, () => selectTargetNow(targetId));
   };
 
@@ -2040,7 +2065,7 @@ const AppContent = ({
 
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
   const installedTargets = targets.filter((target) => target.health.executableFound);
-  const profileTarget = targets.find(
+  const profileTarget = supportedTargets.find(
     (target) => target.id === draftProfile?.manifest.targetId
   );
   const normalizedProfileSearch = profileSearch.trim().toLowerCase();
@@ -2053,7 +2078,7 @@ const AppContent = ({
       return `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedProfileSearch);
     })
     .sort(compareProfilesByCreationTime);
-  const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "target";
+  const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "Agent";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const preparedSkillTargetsBySkill = useMemo(
     () =>
@@ -2078,8 +2103,8 @@ const AppContent = ({
   const selectedSkillUpdateImpact = selectedSkillUpdatePlan
     ? t(
         skillSettings.skillSyncMethod === "copy"
-          ? "Updates the shared Library copy used by {{profiles}}. Copied Target installs remain unchanged until their Profiles are applied."
-          : "Updates the shared Library copy used by {{profiles}}. Linked Target installs may change immediately after this update.",
+          ? "Updates the shared Library copy used by {{profiles}}. Copied Agent installs remain unchanged until their Profiles are applied."
+          : "Updates the shared Library copy used by {{profiles}}. Linked Agent installs may change immediately after this update.",
         {
           profiles: plural(skillUsage[selectedSkillUpdatePlan.id]?.length ?? 0, "profile")
         }
@@ -2102,7 +2127,7 @@ const AppContent = ({
   const localValidationErrors = validationRows
     .filter(
       (row) =>
-        row.level === "error" && row.label !== "Target access" && row.label !== "Live conflicts"
+        row.level === "error" && row.label !== "Agent access" && row.label !== "Live conflicts"
     )
     .map((row) => row.detail ?? `${row.label} is invalid`);
   const resourceSummary =
@@ -2142,7 +2167,7 @@ const AppContent = ({
         ? RefreshCw
         : TriangleAlert;
   const selectedTargetIcon = selectedTarget ? targetIconFor(selectedTarget) : undefined;
-  const readinessTargetName = selectedTarget?.name ?? t("Target");
+  const readinessTargetName = selectedTarget?.name ?? t("Agent");
   const readinessActionText =
     isProfilePreviewing
       ? t("Reviewing changes")
@@ -2167,7 +2192,7 @@ const AppContent = ({
                           ? t("Recovery required on {{name}}", { name: readinessTargetName })
                           : t("Changes need review on {{name}}", { name: readinessTargetName })
                         : readiness.status === "no-target"
-                          ? t("Select a Target")
+                          ? t("Select an Agent")
                           : t(readiness.message);
   const applyDisabled =
     !draftProfile ||
@@ -2179,7 +2204,7 @@ const AppContent = ({
   const applyDescription = !draftProfile
     ? t("Select a profile before previewing changes")
     : !selectedTarget
-      ? t("Select a target before previewing changes")
+      ? t("Select an Agent before previewing changes")
       : busy
         ? t("An action is in progress")
         : profileMetadataSavingId === draftProfile.id
@@ -2240,7 +2265,7 @@ const AppContent = ({
       }
       const rendererBlockers = [
         ...(!selectedTarget?.health.canWrite
-          ? [selectedTarget?.health.summary || `${selectedTarget?.name ?? "Target"} is unavailable`]
+          ? [selectedTarget?.health.summary || `${selectedTarget?.name ?? "Agent"} is unavailable`]
           : []),
         ...localValidationErrors
       ];
@@ -2264,7 +2289,7 @@ const AppContent = ({
   };
 
   const runReadinessRemediation = () => {
-    if (readiness.remediationLabel === "Open Targets") {
+    if (readiness.remediationLabel === "Open Agents") {
       setActiveWorkspace("targets");
       return;
     }
@@ -3271,6 +3296,15 @@ const AppContent = ({
       setSkillSettings(nextSettings);
       onLocalePreferenceChange(nextSettings.locale);
       if ("backupRetentionDays" in input) await refreshManagedBackups();
+      if ("enabledTargetIds" in input) {
+        setPreview(undefined);
+        setRollbackPreview(undefined);
+        await refreshProfiles({
+          checkSkillUpdates: false,
+          forceTargetRefresh: true,
+          settingsOverride: nextSettings
+        });
+      }
       setSettingsSaveStatus("Settings saved");
     } catch (unknownError) {
       setSettingsSaveStatus("");
@@ -3278,6 +3312,15 @@ const AppContent = ({
     } finally {
       setBusy(false);
     }
+  };
+
+  const setAgentEnabled = async (targetId: string, enabled: boolean) => {
+    const currentIds =
+      skillSettings.enabledTargetIds ?? supportedTargets.map((target) => target.id);
+    const nextIds = enabled
+      ? [...new Set([...currentIds, targetId])]
+      : currentIds.filter((id) => id !== targetId);
+    await updateSkillSettings({ enabledTargetIds: nextIds });
   };
 
   const openBackupManager = () => {
@@ -3659,8 +3702,8 @@ const AppContent = ({
           message:
             skillCleanupResult.operation === "remove"
               ? skillCleanupResult.managedLocations.length === 0
-                ? t("Removed from the Library. No Target installs were affected.")
-                : t("Removed from the Library and {{count}} managed Target installs.", {
+                ? t("Removed from the Library. No Agent installs were affected.")
+                : t("Removed from the Library and {{count}} managed Agent installs.", {
                     count: skillCleanupResult.managedLocations.length
                   })
               : skillCleanupResult.operation === "merge"
@@ -3689,7 +3732,7 @@ const AppContent = ({
     : targetRefreshStatus
       ? {
           kind: targetRefreshStatus === "refreshing" ? "loading" : "success",
-          title: targetRefreshStatus === "refreshing" ? "Refreshing targets" : "Targets refreshed"
+          title: targetRefreshStatus === "refreshing" ? "Refreshing Agents" : "Agents refreshed"
         }
     : skillUpdateCheckStatus
       ? {
@@ -3726,7 +3769,7 @@ const AppContent = ({
               title: settingsSaveStatus
             }
         : undefined;
-  const profileApplyControl = (
+  const profileApplyControl = targets.length > 0 ? (
     <div className="profile-apply-control" ref={profileApplyControlRef}>
       <button
         className="profile-apply-button"
@@ -3759,11 +3802,11 @@ const AppContent = ({
       </button>
       <span id="profile-apply-description" hidden>{applyDescription}</span>
     </div>
-  );
-  const targetWorkspaceControl = installedTargets.length === 1 && selectedTarget ? (
+  ) : null;
+  const targetWorkspaceControl = targets.length === 0 ? null : installedTargets.length === 1 && selectedTarget ? (
     <div
       className="profile-target-workspace-button is-static"
-      aria-label={t("Current target {{name}}", { name: selectedTarget.name })}
+      aria-label={t("Current Agent {{name}}", { name: selectedTarget.name })}
     >
       {selectedTargetIcon?.assetUrl ? (
         <img
@@ -3784,8 +3827,8 @@ const AppContent = ({
         type="button"
         aria-expanded={isTargetMenuOpen}
         aria-haspopup="menu"
-        aria-label={t("Select apply target")}
-        title={t("Select apply target")}
+        aria-label={t("Select apply Agent")}
+        title={t("Select apply Agent")}
         onClick={() => {
           setIsProfileActionsOpen(false);
           setIsTargetMenuOpen((current) => !current);
@@ -3796,7 +3839,7 @@ const AppContent = ({
         <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
       </button>
       {isTargetMenuOpen ? (
-        <div className="profile-target-menu" role="menu" aria-label={t("Apply targets")}>
+        <div className="profile-target-menu" role="menu" aria-label={t("Apply Agents")}>
           {targets.map((target) => {
             const targetIcon = targetIconFor(target);
             return (
@@ -4029,7 +4072,7 @@ const AppContent = ({
             <header className="page-header profile-page-header">
               <div className="profile-page-heading">
                 <h2 aria-label={t("Profiles")}>{t("Profiles")}</h2>
-                <p>{t("Compose reusable environments and apply them safely to local agent targets.")}</p>
+                <p>{t("Compose reusable environments and apply them safely to local Agents.")}</p>
               </div>
               <div className="profile-page-actions" ref={profilePageActionsRef}>
                 <button
@@ -4417,7 +4460,7 @@ const AppContent = ({
                 id="advanced"
                 icon={<Settings2 size={18} strokeWidth={2.2} />}
                 title={t("Advanced")}
-                description={t("Target settings, validation, and recovery")}
+                description={t("Agent settings, validation, and recovery")}
                 count={draftProfile.assetPolicy.disabledSkillPaths.length}
                 chipNames={draftProfile.assetPolicy.disabledSkillPaths}
                 expanded={activeComposerSection === "advanced"}
@@ -4637,14 +4680,14 @@ const AppContent = ({
                                   }
                                 }}
                               >
-                                {t("From Target")}
+                                {t("From Agent")}
                               </button>
                             </div>
                           ) : null}
                           <label>
-                            <span>{t("Native Target")}</span>
+                            <span>{t("Native format")}</span>
                             <select
-                              aria-label={t("Profile target")}
+                              aria-label={t("Profile native format")}
                               value={profileForm.targetId}
                               onChange={(event) => {
                                 setProfileForm({ ...profileForm, targetId: event.currentTarget.value });
@@ -4723,8 +4766,8 @@ const AppContent = ({
                         <div className="section-title">{t("Delete profile")}</div>
                         <p className="muted">
                           {isSelectedProfileActive
-                            ? t("{{name}} is active on {{targets}}. Apply another profile or stop managing each Target before removing it.", { name: draftProfile.manifest.name, targets: selectedProfileActiveTargets.join(", ") })
-                            : t("Remove {{name}}? Applied target files and backups are not removed.", { name: draftProfile.manifest.name })}
+                            ? t("{{name}} is active on {{targets}}. Apply another profile or stop managing each Agent before removing it.", { name: draftProfile.manifest.name, targets: selectedProfileActiveTargets.join(", ") })
+                            : t("Remove {{name}}? Applied Agent files and backups are not removed.", { name: draftProfile.manifest.name })}
                         </p>
                       </div>
                     </header>
@@ -4745,7 +4788,7 @@ const AppContent = ({
                             setActiveWorkspace("targets");
                           }}
                         >
-                          {t("Open Targets")}
+                          {t("Open Agents")}
                         </button>
                       )}
                     </footer>
@@ -4816,6 +4859,17 @@ const AppContent = ({
                 </label>
               </div>
             </section>
+            <AgentSettingsSection
+              supportedAgents={supportedTargets}
+              enabledAgentIds={
+                skillSettings.enabledTargetIds ?? supportedTargets.map((target) => target.id)
+              }
+              agents={targets}
+              agentStates={targetStates}
+              busy={busy}
+              onSetEnabled={setAgentEnabled}
+              onOpenRecovery={() => setActiveWorkspace("targets")}
+            />
             <section className="resource-section settings-section" aria-labelledby="library-defaults-heading">
               <div className="settings-section-title">
                 <div>
@@ -4844,7 +4898,7 @@ const AppContent = ({
                       ? t("Library updates stay pending until installs are explicitly synchronized.")
                       : skillSettings.skillSyncMethod === "auto"
                         ? t("Uses live links when supported and falls back to copied installs.")
-                        : t("Library updates immediately change linked Target skills without another Apply preview.")}
+                        : t("Library updates immediately change linked Agent Skills without another Apply preview.")}
                   </small>
                 </label>
                 <label>
@@ -5087,7 +5141,7 @@ const AppContent = ({
                       </header>
                       <div className="backup-confirm-summary">
                         <strong>{formatBytes(backupDeleteCandidate.sizeBytes)}</strong>
-                        <p>{t("This recovery point cannot be restored after deletion. Profiles, Library resources, and current Target files are unchanged.")}</p>
+                        <p>{t("This recovery point cannot be restored after deletion. Profiles, Library resources, and current Agent files are unchanged.")}</p>
                       </div>
                       <footer className="preview-actions">
                         <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setBackupDeleteCandidate(undefined)}>

@@ -12,7 +12,8 @@ const SettingsSchema = z.object({
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
   skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
-  backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null)
+  backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
+  enabledTargetIds: z.array(z.string().min(1)).optional()
 });
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
@@ -23,6 +24,10 @@ const DEFAULT_SETTINGS: AgentEnvSettings = {
   skillAutoCheckIntervalMinutes: 60,
   backupRetentionDays: null
 };
+
+export interface SettingsStoreOptions {
+  supportedTargetIds?: string[];
+}
 
 export interface SettingsStore {
   readSettings(): Promise<AgentEnvSettings>;
@@ -100,18 +105,39 @@ const migrateSkillStorage = async (
   }
 };
 
-export const createSettingsStore = (paths: AgentEnvPaths): SettingsStore => {
+export const createSettingsStore = (
+  paths: AgentEnvPaths,
+  options: SettingsStoreOptions = {}
+): SettingsStore => {
+  const normalizeEnabledTargets = (settings: AgentEnvSettings): AgentEnvSettings => ({
+    ...settings,
+    enabledTargetIds:
+      settings.enabledTargetIds ??
+      (options.supportedTargetIds ? [...new Set(options.supportedTargetIds)] : undefined)
+  });
+
   const readSettings = async (): Promise<AgentEnvSettings> => {
     try {
-      const current = SettingsSchema.parse(JSON.parse(await readFile(settingsPathFor(paths), "utf8")));
-      if (current.skillStorageLocation !== "agents") return current;
-      const next = { ...current, skillStorageLocation: "appData" as const };
-      await migrateSkillStorage(paths, current, next);
-      await writeAtomic(settingsPathFor(paths), `${JSON.stringify(next, null, 2)}\n`);
+      const parsed = SettingsSchema.parse(JSON.parse(await readFile(settingsPathFor(paths), "utf8")));
+      const current = normalizeEnabledTargets(parsed);
+      const next = current.skillStorageLocation === "agents"
+        ? { ...current, skillStorageLocation: "appData" as const }
+        : current;
+      if (
+        next.skillStorageLocation !== parsed.skillStorageLocation ||
+        JSON.stringify(next.enabledTargetIds) !== JSON.stringify(parsed.enabledTargetIds)
+      ) {
+        await migrateSkillStorage(paths, parsed, next);
+        await writeAtomic(settingsPathFor(paths), `${JSON.stringify(next, null, 2)}\n`);
+      }
       return next;
     } catch (error) {
       if (isMissingFileError(error)) {
-        return DEFAULT_SETTINGS;
+        const defaults = normalizeEnabledTargets(DEFAULT_SETTINGS);
+        if (options.supportedTargetIds) {
+          await writeAtomic(settingsPathFor(paths), `${JSON.stringify(defaults, null, 2)}\n`);
+        }
+        return defaults;
       }
       throw error;
     }
@@ -124,7 +150,9 @@ export const createSettingsStore = (paths: AgentEnvPaths): SettingsStore => {
     if (input.skillStorageLocation === "agents") {
       throw new Error("~/.agents/skills is reserved for shared runtime installs");
     }
-    const next = SettingsSchema.parse({ ...current, ...input, skillStorageLocation: "appData" });
+    const next = normalizeEnabledTargets(
+      SettingsSchema.parse({ ...current, ...input, skillStorageLocation: "appData" })
+    );
     await migrateSkillStorage(paths, current, next);
     const settingsPath = settingsPathFor(paths);
     await writeAtomic(settingsPath, `${JSON.stringify(next, null, 2)}\n`);

@@ -680,7 +680,7 @@ describe("SkillLibraryPanel", () => {
     );
     fireEvent.click(screen.getByRole("menuitem", { name: /Remove from library/ }));
     const installedDeleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });
-    expect(installedDeleteDialog).toHaveTextContent("1 managed target install");
+    expect(installedDeleteDialog).toHaveTextContent("1 managed Agent install");
     fireEvent.click(
       within(installedDeleteDialog).getByRole("button", { name: "Remove skill and installs" })
     );
@@ -701,7 +701,7 @@ describe("SkillLibraryPanel", () => {
       )
     );
     expect(screen.getByRole("status")).toHaveTextContent(
-      "back up this Target copy"
+      "back up this Agent copy"
     );
     const localImportButton = screen.getByRole("button", { name: "Import & manage" });
     fireEvent.click(localImportButton);
@@ -789,7 +789,7 @@ describe("SkillLibraryPanel", () => {
       name: "Cleanup group compat-reviewer"
     });
     expect(sharedMigrationGroup).toHaveTextContent("Ready");
-    expect(sharedMigrationGroup).toHaveTextContent("All consumer Targets are ready");
+    expect(sharedMigrationGroup).toHaveTextContent("All consumer Agents are ready");
     fireEvent.click(
       within(sharedMigrationGroup).getByRole("button", {
         name: "More cleanup actions for compat-reviewer"

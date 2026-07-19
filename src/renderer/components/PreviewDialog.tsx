@@ -242,8 +242,8 @@ export const PreviewDialog = ({
     "targetName" in preview
       ? preview.targetName
       : "targetId" in preview
-        ? targetNameFor(preview.targetId, targetNames, "Target")
-        : "Target";
+        ? targetNameFor(preview.targetId, targetNames, "Agent")
+        : "Agent";
   const isActivationPreview = "profileId" in preview;
   const blockedItems = preview.errors.map((error) => prettifyIssue(error, targetName, t));
   const managedDriftErrors = preview.errors.filter((error) =>
@@ -419,7 +419,7 @@ export const PreviewDialog = ({
                 <small>
                   {preparation.disposition === "install"
                     ? t("After cleanup: install as {{name}}", { name: preparation.targetName })
-                    : t("After cleanup: remove from this Target")}
+                    : t("After cleanup: remove from this Agent")}
                 </small>
               </p>
             ))}
@@ -449,10 +449,10 @@ export const PreviewDialog = ({
         </details>
       ) : null}
       {protectedReplacementErrors.length > 0 && onReplacementAcknowledgedChange ? (
-        <section className="preview-drift-recovery" aria-label={t("Protected target changes")}>
+        <section className="preview-drift-recovery" aria-label={t("Protected Agent changes")}>
           <div>
-            <strong>{t("Existing target resources are protected")}</strong>
-            <p>{t("Cancel keeps the target unchanged. Continuing creates a backup, then replaces the resources shown above.")}</p>
+            <strong>{t("Existing Agent resources are protected")}</strong>
+            <p>{t("Cancel keeps the Agent unchanged. Continuing creates a backup, then replaces the resources shown above.")}</p>
           </div>
           <label>
             <input
@@ -477,10 +477,10 @@ export const PreviewDialog = ({
         </section>
       ) : null}
       {preview && "omissions" in preview && (preview.omissions?.length ?? 0) > 0 ? (
-        <section className="preview-drift-recovery preview-omission-review" aria-label={t("Cross-target omissions")}>
+        <section className="preview-drift-recovery preview-omission-review" aria-label={t("Compatibility omissions")}>
           <div>
             <strong>{t("Not included for {{target}}", { target: targetName })}</strong>
-            <p>{t("These native Profile resources are not compatible with the selected Target.")}</p>
+            <p>{t("These native Profile resources are not compatible with the selected Agent.")}</p>
           </div>
           <ul>
             {preview.omissions?.map((omission) => (

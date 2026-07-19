@@ -194,7 +194,7 @@ export const buildSkillCleanupGroups = (
             : state === "external"
               ? "An external manager owns at least one detected copy."
               : missingTarget
-                ? "A destination Target could not be identified."
+                ? "A destination Agent could not be identified."
                 : "Detected copies differ and require a version choice.";
 
       const presentation: SkillCleanupPresentation = allIgnored

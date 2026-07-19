@@ -4,6 +4,7 @@ import type {
   ProfileDetail,
   ProfileSummary,
   SkillLibraryEntry,
+  TargetDescriptor,
   TargetInfo,
   TargetManagementState
 } from "../shared/types";
@@ -83,7 +84,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const unique = (names: readonly string[]): string[] => [...new Set(names)];
 
-type ProfileTargetSchema = Pick<TargetInfo, "id" | "configLanguage" | "mcpConfigKey">;
+type ProfileTargetSchema = Pick<TargetDescriptor, "id" | "configLanguage" | "mcpConfigKey">;
 
 const jsoncMcpNames = (
   configText: string,

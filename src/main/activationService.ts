@@ -31,6 +31,7 @@ import {
   createTargetRegistry,
   type TargetRegistry
 } from "./targets/registry";
+import { createTargetScope, type TargetScope } from "./targets/targetScope";
 import type {
   ActivationPreview,
   AdoptTargetChangesResult,
@@ -84,6 +85,7 @@ export interface ActivationServiceOptions {
   targetRegistry?: TargetRegistry;
   allowRealHomeWrites?: boolean;
   settingsStore?: SettingsStore;
+  targetScope?: TargetScope;
   mcpLibraryStore?: McpLibraryStore;
   skillLibraryStore?: SkillLibraryStore;
 }
@@ -446,6 +448,7 @@ export const createActivationService = ({
   targetRegistry = createTargetRegistry(),
   allowRealHomeWrites = false,
   settingsStore = createSettingsStore(paths),
+  targetScope = createTargetScope(targetRegistry, settingsStore),
   mcpLibraryStore = createMcpLibraryStore(paths),
   skillLibraryStore = createSkillLibraryStore(paths, settingsStore, {
     targetPathsProvider: () => targetRegistry.listAdapters().map((adapter) =>
@@ -536,13 +539,19 @@ export const createActivationService = ({
       return [];
     }
     const entries = await readdir(paths.targetStatesDir, { withFileTypes: true });
+    const enabledTargetIds = new Set(await targetScope.listEnabledIds());
     const [skillLibrary, mcpLibrary] = await Promise.all([
       skillLibraryStore.listSkills(),
       mcpLibraryStore.listServers()
     ]);
     const states = await Promise.all(
       entries
-        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            entry.name.endsWith(".json") &&
+            enabledTargetIds.has(entry.name.replace(/\.json$/, ""))
+        )
         .map(async (entry): Promise<TargetManagementState | undefined> => {
           const targetId = entry.name.replace(/\.json$/, "");
           const { state } = await readTargetStateFile(targetId);
@@ -670,7 +679,7 @@ export const createActivationService = ({
       );
       if (profileOwnedConflict) {
         errors.push(
-          `Cannot prepare shared Skill ${shared.skillKey}: Profile-owned Skill ${targetName} uses the same Target name.`
+          `Cannot prepare shared Skill ${shared.skillKey}: Profile-owned Skill ${targetName} uses the same install name.`
         );
         continue;
       }
@@ -705,7 +714,7 @@ export const createActivationService = ({
       });
       warnings.push(
         reference
-          ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory until Replace shared copy installs the Target-specific copy.`
+          ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory until Replace shared copy installs the Agent-specific copy.`
           : `Shared Skill ${shared.skillKey} stays active until Replace shared copy removes the compatibility copy; this Profile will omit it afterward.`
       );
     }
@@ -1090,9 +1099,11 @@ export const createActivationService = ({
     requestedTargetId?: string
   ): Promise<ActivationPreview> => {
     const sourceProfile = await profileStore.readProfile(profileId);
+    const targetId = requestedTargetId ?? sourceProfile.manifest.targetId;
+    await targetScope.assertEnabled(targetId);
     const mcpLibrary = await mcpLibraryStore.listServers();
     const skillLibrary = await skillLibraryStore.listSkills();
-    const adapter = targetRegistry.get(requestedTargetId ?? sourceProfile.manifest.targetId);
+    const adapter = targetRegistry.get(targetId);
     const targeted = targetProfile(sourceProfile, adapter);
     const profile = applyLibrarySkillAvailability(targeted.profile, skillLibrary);
     const disabledLibrarySkills = targeted.profile.assetPolicy.skillRefs
@@ -1260,7 +1271,7 @@ export const createActivationService = ({
         externallyResolved.warnings,
         ...(skillRootTransition
           ? [
-              `${adapter.descriptor.name} Skills folder is linked to ${skillRootTransition.resolvedPath}. Apply will preserve that directory and replace only the Target root link with a private Skills folder.`
+              `${adapter.descriptor.name} Skills folder is linked to ${skillRootTransition.resolvedPath}. Apply will preserve that directory and replace only the Agent root link with a private Skills folder.`
             ]
           : [])
       ),
@@ -1306,6 +1317,11 @@ export const createActivationService = ({
     if (!preview || preview.profileId !== profileId) {
       return { ok: false, errors: ["Preview not found for profile"] };
     }
+    try {
+      await targetScope.assertEnabled(preview.targetId);
+    } catch (error) {
+      return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+    }
     const replaceableTargetPaths = new Set(preview.replaceableTargetPaths ?? []);
     const blockingErrors = preview.errors.filter((error) => {
       if (options.allowManagedDrift && error.startsWith(MANAGED_DRIFT_PREFIX)) {
@@ -1333,7 +1349,7 @@ export const createActivationService = ({
     if (preview.requiresOmissionAcknowledgement && !options.allowOmissions) {
       return {
         ok: false,
-        errors: ["Cross-target omissions must be acknowledged before Apply"]
+        errors: ["Compatibility omissions must be acknowledged before Apply"]
       };
     }
     if (activeTargetOperations.has(preview.targetId)) {
@@ -1626,8 +1642,9 @@ export const createActivationService = ({
   }): Promise<SkillCleanupResult> => {
     const targetIds = [...new Set(consumerTargetIds)].sort();
     if (targetIds.length === 0) {
-      throw new Error(`${skillKey} has no installed Target consumers to migrate.`);
+      throw new Error(`${skillKey} has no installed Agent consumers to migrate.`);
     }
+    await Promise.all(targetIds.map((targetId) => targetScope.assertEnabled(targetId)));
     const busyTarget = targetIds.find((targetId) => activeTargetOperations.has(targetId));
     if (busyTarget) {
       throw new Error(`Another operation is already running for ${busyTarget}`);
@@ -1818,7 +1835,7 @@ export const createActivationService = ({
         for (const context of contexts) {
           const shouldExist = context.preparation.disposition === "install";
           if ((await pathExists(join(context.targetPath, "SKILL.md"))) !== shouldExist) {
-            throw new Error(`Target Skill verification failed: ${context.targetPath}`);
+            throw new Error(`Agent Skill verification failed: ${context.targetPath}`);
           }
           const targetStats = shouldExist
             ? await lstat(context.targetPath).catch(() => undefined)
@@ -1838,7 +1855,7 @@ export const createActivationService = ({
                   source: `skills-library/${libraryId}`
                 }))
           ) {
-            throw new Error(`Target Skill ownership verification failed: ${context.targetPath}`);
+            throw new Error(`Agent Skill ownership verification failed: ${context.targetPath}`);
           }
         }
         await appendHistory(paths, {
@@ -1908,6 +1925,7 @@ export const createActivationService = ({
       throw new Error(`Backup is not a shared Skill migration: ${backupId}`);
     }
     const targetIds = backup.targetIds ?? [];
+    await Promise.all(targetIds.map((targetId) => targetScope.assertEnabled(targetId)));
     const busyTarget = targetIds.find((targetId) => activeTargetOperations.has(targetId));
     if (busyTarget) {
       throw new Error(`Another operation is already running for ${busyTarget}`);
@@ -1927,6 +1945,10 @@ export const createActivationService = ({
 
   const previewRollback = async (backupId: string): Promise<RollbackPreview> => {
     const backup = await backupStore.readBackup(backupId);
+    const targetIds = [...new Set([backup.targetId, ...(backup.targetIds ?? [])])].filter(
+      (targetId): targetId is string => Boolean(targetId)
+    );
+    await Promise.all(targetIds.map((targetId) => targetScope.assertEnabled(targetId)));
     const changes = await Promise.all(backup.entries.map(createRollbackChange));
     rollbackPreviewFingerprints.set(
       backup.id,
@@ -1948,6 +1970,14 @@ export const createActivationService = ({
 
   const rollback = async (backupId: string): Promise<RollbackResult> => {
     const backup = await backupStore.readBackup(backupId);
+    const targetIds = [...new Set([backup.targetId, ...(backup.targetIds ?? [])])].filter(
+      (targetId): targetId is string => Boolean(targetId)
+    );
+    try {
+      await Promise.all(targetIds.map((targetId) => targetScope.assertEnabled(targetId)));
+    } catch (error) {
+      return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+    }
     const previewFingerprints = rollbackPreviewFingerprints.get(backupId);
     if (!previewFingerprints) {
       return { ok: false, errors: ["Preview this rollback before restoring files"] };
@@ -1957,7 +1987,7 @@ export const createActivationService = ({
         rollbackPreviewFingerprints.delete(backupId);
         return {
           ok: false,
-          errors: ["Target files changed after the rollback preview. Review a fresh preview before restoring"]
+          errors: ["Agent files changed after the rollback preview. Review a fresh preview before restoring"]
         };
       }
     }
@@ -2051,6 +2081,7 @@ export const createActivationService = ({
     targetId: string,
     mode: StopManagingMode
   ): Promise<StopManagingPreview> => {
+    await targetScope.assertEnabled(targetId);
     const adapter = targetRegistry.get(targetId);
     const stateFile = await readTargetStateFile(targetId);
     const errors: string[] = [];
@@ -2083,8 +2114,8 @@ export const createActivationService = ({
       createdAt: new Date().toISOString(),
       warnings:
         mode === "keep-current"
-          ? ["Current Target files will be kept and AgentEnv ownership will be removed"]
-          : ["Current Target files will be replaced with the environment captured before takeover"],
+          ? ["Current Agent files will be kept and AgentEnv ownership will be removed"]
+          : ["Current Agent files will be replaced with the environment captured before takeover"],
       errors,
       changes
     };
@@ -2097,6 +2128,11 @@ export const createActivationService = ({
     if (!preview) {
       return { ok: false, errors: ["Stop managing preview not found"] };
     }
+    try {
+      await targetScope.assertEnabled(preview.targetId);
+    } catch (error) {
+      return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+    }
     if (preview.errors.length > 0) {
       return { ok: false, errors: preview.errors };
     }
@@ -2107,7 +2143,7 @@ export const createActivationService = ({
     try {
       const stateFile = await readTargetStateFile(preview.targetId);
       if (hashText(stateFile.content) !== preview.stateFingerprint) {
-        return { ok: false, errors: ["Target management state changed after preview"] };
+        return { ok: false, errors: ["Agent management state changed after preview"] };
       }
       const managedPaths = (stateFile.state.managedResources ?? []).map((resource) => resource.path);
       const safetyBackup = await backupStore.createBackup(
@@ -2170,9 +2206,10 @@ export const createActivationService = ({
     profileId: string,
     targetId: string
   ): Promise<AdoptTargetChangesResult> => {
+    await targetScope.assertEnabled(targetId);
     const profile = await profileStore.readProfile(profileId);
     if (profile.manifest.targetId !== targetId) {
-      throw new Error("Live changes can only be adopted into a Profile with the same native Target format");
+      throw new Error("Live changes can only be adopted into a Profile with the same native Agent format");
     }
     if (activeTargetOperations.has(targetId)) {
       throw new Error(`Another ${targetId} operation is already running`);

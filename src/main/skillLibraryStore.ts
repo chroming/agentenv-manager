@@ -1981,7 +1981,7 @@ export const createSkillLibraryStore = (
     profileId
   }: DeployLibrarySkillStoreInput): Promise<void> => {
     if (!targetPaths.skillsDir) {
-      throw new Error("Target does not expose a skills directory");
+      throw new Error("Agent does not expose a Skills directory");
     }
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(targetName)) {
       throw new Error(`Invalid target skill name: ${targetName}`);
@@ -2013,7 +2013,7 @@ export const createSkillLibraryStore = (
       ? join(input.targetPaths.skillsDir, input.targetName)
       : "";
     if (!targetDir || !(await pathExists(join(targetDir, "SKILL.md")))) {
-      throw new Error(`Target skill does not exist: ${targetDir}`);
+      throw new Error(`Agent Skill does not exist: ${targetDir}`);
     }
     const backupId = `cleanup-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const backupDir = join(cleanupBackupRoot(), backupId);

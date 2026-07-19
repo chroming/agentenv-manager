@@ -184,7 +184,7 @@ describe("PreviewDialog", () => {
 
     expect(screen.getByText("Existing unmanaged Skill will be replaced")).toBeInTheDocument();
     expect(screen.getAllByText(path).length).toBeGreaterThan(0);
-    expect(screen.getByText("Existing target resources are protected")).toBeInTheDocument();
+    expect(screen.getByText("Existing Agent resources are protected")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("checkbox", {
         name: "I understand; back up and replace these changes"

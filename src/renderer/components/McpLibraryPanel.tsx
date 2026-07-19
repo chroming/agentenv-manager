@@ -470,7 +470,7 @@ export const McpLibraryPanel = ({
                 <p className="muted">
                   {draft.transport === "stdio"
                     ? t("Reference environment variables without storing secret values.")
-                    : t("Remote credentials are configured in the Target after Apply.")}
+                    : t("Remote credentials are configured in the Agent after Apply.")}
                 </p>
               </div>
               <button

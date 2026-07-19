@@ -12,6 +12,7 @@ const api: AgentEnvApi = {
   cancelWindowClose: () => ipcRenderer.send("window:cancel-close"),
   copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),
+  listSupportedTargets: () => ipcRenderer.invoke("targets:list-supported"),
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),

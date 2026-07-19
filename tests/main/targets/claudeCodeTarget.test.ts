@@ -271,7 +271,7 @@ describe("Claude Code target adapter", () => {
 
     expect(preview.errors).toEqual([]);
     expect(preview.warnings).toContain(
-      "Claude Code env contains Target-owned values and will be preserved"
+      "Claude Code env contains Agent-owned values and will be preserved"
     );
     expect(preview.changes).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ path: targetPaths.configPath })])

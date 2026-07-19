@@ -51,6 +51,32 @@ describe("settings store", () => {
     );
   });
 
+  it("initializes the enabled Agent list once and preserves explicit choices", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-agents-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const store = createSettingsStore(paths, {
+      supportedTargetIds: ["opencode", "claude-code", "codex"]
+    });
+
+    await expect(store.readSettings()).resolves.toEqual(
+      expect.objectContaining({
+        enabledTargetIds: ["opencode", "claude-code", "codex"]
+      })
+    );
+
+    await store.updateSettings({ enabledTargetIds: ["opencode"] });
+    await expect(store.readSettings()).resolves.toEqual(
+      expect.objectContaining({ enabledTargetIds: ["opencode"] })
+    );
+
+    const upgradedStore = createSettingsStore(paths, {
+      supportedTargetIds: ["opencode", "claude-code", "codex", "future-agent"]
+    });
+    await expect(upgradedStore.readSettings()).resolves.toEqual(
+      expect.objectContaining({ enabledTargetIds: ["opencode"] })
+    );
+  });
+
   it("migrates legacy Library originals out of the shared runtime without deleting it", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

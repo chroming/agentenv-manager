@@ -19,6 +19,7 @@ export interface AgentEnvApi {
   cancelWindowClose(): void;
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
+  listSupportedTargets(): Promise<TargetDescriptor[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
@@ -503,6 +504,7 @@ export interface AgentEnvSettings {
   skillAutoCheckEnabled: boolean;
   skillAutoCheckIntervalMinutes: number;
   backupRetentionDays: BackupRetentionDays;
+  enabledTargetIds?: string[];
 }
 
 export type BackupRetentionDays = 7 | 30 | 90 | null;

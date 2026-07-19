@@ -1,5 +1,5 @@
 import { BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
-import { basename, dirname, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import type { ActivationService } from "./activationService";
 import type { BackupMaintenanceService } from "./backupMaintenanceService";
 import type { BackupStore } from "./backupStore";
@@ -31,7 +31,8 @@ import type {
   UpdateProfileMetadataInput,
   SkillUpdatePolicyInput,
   SkillAvailabilityInput,
-  SkillUpdateSourceInput
+  SkillUpdateSourceInput,
+  TargetPaths
 } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
 import type { AgentEnvPaths } from "./paths";
@@ -86,6 +87,27 @@ export const registerIpcHandlers = ({
   paths,
   cancelRepositoryOperations
 }: IpcServices) => {
+  const sharedSkillTargetPaths: TargetPaths = {
+    targetId: "shared-compatibility",
+    configDir: dirname(paths.userSkillsDir),
+    instructionsPath: join(dirname(paths.userSkillsDir), "AGENTS.md"),
+    configPath: join(dirname(paths.userSkillsDir), "config.json"),
+    skillsDir: paths.userSkillsDir,
+    skillScanDirs: [paths.userSkillsDir],
+    skillLocations: [
+      { path: paths.userSkillsDir, role: "compatibility-runtime", shared: true }
+    ]
+  };
+  const inventoryPathsFor = (targets: Awaited<ReturnType<TargetDiscoveryService["listTargets"]>>) => {
+    const targetPaths = targets.map((target) => target.paths);
+    const sharedRoot = resolve(paths.userSkillsDir);
+    const includesSharedRoot = targetPaths.some((target) =>
+      (target.skillLocations ?? []).some(
+        (location) => location.shared && resolve(location.path) === sharedRoot
+      )
+    );
+    return includesSharedRoot ? targetPaths : [...targetPaths, sharedSkillTargetPaths];
+  };
   const automationBackgroundDelayMs =
     process.env.AGENTENV_AUTOMATION === "1"
       ? Math.max(0, Number(process.env.AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS ?? 0))
@@ -112,13 +134,14 @@ export const registerIpcHandlers = ({
       throw new Error("At least one shared Skill path is required");
     }
     const targets = await targetDiscoveryService.listTargets();
-    const sharedRoots = new Set(
-      targets.flatMap((target) =>
+    const sharedRoots = new Set([
+      resolve(paths.userSkillsDir),
+      ...targets.flatMap((target) =>
         (target.paths.skillLocations ?? [])
           .filter((location) => location.shared && location.role === "compatibility-runtime")
           .map((location) => resolve(location.path))
       )
-    );
+    ]);
     return [...new Set(values.map((value) => resolve(String(value))))].map((path) => {
       const root = dirname(path);
       if (!sharedRoots.has(root) || !basename(path)) {
@@ -146,12 +169,13 @@ export const registerIpcHandlers = ({
   ipcMain.handle("targets:list", (_event, forceRefresh: unknown) =>
     targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true })
   );
+  ipcMain.handle("targets:list-supported", () => targetRegistry.list());
   ipcMain.handle("targets:list-states", () => activationService.listTargetStates());
   ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
   ipcMain.handle("skills:scan-inventory", async () => {
     await waitForAutomationBackgroundDelay();
     const targets = await targetDiscoveryService.listTargets();
-    return skillLibraryStore.scanInventory(targets.map((target) => target.paths));
+    return skillLibraryStore.scanInventory(inventoryPathsFor(targets));
   });
   ipcMain.handle("skills:list-cleanup-backups", async () =>
     (await Promise.all([
@@ -190,7 +214,7 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:scan-unmanaged", () =>
     targetDiscoveryService
       .listTargets()
-      .then((targets) => skillLibraryStore.scanUnmanaged(targets.map((target) => target.paths)))
+      .then((targets) => skillLibraryStore.scanUnmanaged(inventoryPathsFor(targets)))
   );
   ipcMain.handle("skills:preview-import", (_event, input: SkillImportPreviewInput) => {
     if (
@@ -227,7 +251,7 @@ export const registerIpcHandlers = ({
     const libraryId = SafeIdSchema.parse(input.id ?? basename(sourcePath));
     const targets = await targetDiscoveryService.listTargets();
     const inventory = await skillLibraryStore.scanInventory(
-      targets.map((target) => target.paths)
+      inventoryPathsFor(targets)
     );
     const localInstall = inventory.find((item) => resolve(item.path) === sourcePath);
 
@@ -288,7 +312,7 @@ export const registerIpcHandlers = ({
           return Number(rightPreferred) - Number(leftPreferred);
         })[0];
       if (!target) {
-        throw new Error(`No supported Target owns the local skill path: ${sourcePath}`);
+        throw new Error(`No enabled Agent owns the local Skill path: ${sourcePath}`);
       }
       const cleanup = await skillLibraryStore.consolidateSkillGroup({
         skillKey: localInstall.skillKey,
@@ -380,7 +404,7 @@ export const registerIpcHandlers = ({
     const targets = await targetDiscoveryService.listTargets();
     const target = targets.find((item) => item.id === targetId);
     if (!target) {
-      throw new Error(`Target not found: ${targetId}`);
+      throw new Error(`Agent not found: ${targetId}`);
     }
     return skillLibraryStore.manageTargetSkill({
       targetPaths: target.paths,
@@ -405,7 +429,7 @@ export const registerIpcHandlers = ({
     }
     const targets = await targetDiscoveryService.listTargets();
     const inventory = await skillLibraryStore.scanInventory(
-      targets.map((target) => target.paths)
+      inventoryPathsFor(targets)
     );
     const inventoryByPath = new Map(
       inventory.map((item) => [resolve(item.path), item])
@@ -414,7 +438,7 @@ export const registerIpcHandlers = ({
       const targetId = parseId(location.targetId, "target id");
       const target = targets.find((item) => item.id === targetId);
       if (!target) {
-        throw new Error(`Target not found: ${targetId}`);
+        throw new Error(`Agent not found: ${targetId}`);
       }
       const targetDir = resolve(String(location.path));
       const allowedRoots = [target.paths.skillsDir, ...(target.paths.skillScanDirs ?? [])]
@@ -500,7 +524,7 @@ export const registerIpcHandlers = ({
     const sharedPaths = await resolveSharedSkillPaths(input?.paths);
     const targets = await targetDiscoveryService.listTargets();
     const inventory = await skillLibraryStore.scanInventory(
-      targets.map((target) => target.paths)
+      inventoryPathsFor(targets)
     );
     const sharedPathSet = new Set(sharedPaths);
     const sharedEntries = inventory.filter(

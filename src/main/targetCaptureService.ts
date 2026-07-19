@@ -17,6 +17,7 @@ import { hashComparableResource } from "./resourceHash";
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetRegistry } from "./targets/registry";
+import type { TargetScope } from "./targets/targetScope";
 import type { CapturedTargetProfile } from "./targets/types";
 import { semanticMcpDefinition } from "./mcpIdentity";
 
@@ -64,6 +65,7 @@ interface TargetCaptureServiceOptions {
   skillLibraryStore: SkillLibraryStore;
   mcpLibraryStore: McpLibraryStore;
   targetDiscoveryService: TargetDiscoveryService;
+  targetScope?: TargetScope;
 }
 
 const safeName = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -101,15 +103,17 @@ export const createTargetCaptureService = ({
   profileStore,
   skillLibraryStore,
   mcpLibraryStore,
-  targetDiscoveryService
+  targetDiscoveryService,
+  targetScope
 }: TargetCaptureServiceOptions): TargetCaptureService => {
   const previews = new Map<string, InternalCapture>();
 
   const buildCapture = async (targetId: string): Promise<InternalCapture> => {
+    await targetScope?.assertEnabled(targetId);
     const discoveredTargets = await targetDiscoveryService.listTargets();
     const target = discoveredTargets.find((item) => item.id === targetId);
     if (!target?.health.executableFound) {
-      throw new Error("Target command is not installed or cannot be found in the app PATH");
+      throw new Error("Agent command is not installed or cannot be found in the app PATH");
     }
     const adapter = targetRegistry.get(targetId);
     const targetPaths = adapter.createTargetPaths({
@@ -154,7 +158,7 @@ export const createTargetCaptureService = ({
         action: "exclude",
         detail: "Ignored; kept in its current location"
       });
-      warnings.push(`Ignored skill ${entry.name} will remain Target-owned`);
+      warnings.push(`Ignored Skill ${entry.name} will remain Agent-owned`);
     }
     for (const entry of externalInventory) {
       resources.push({
@@ -218,7 +222,7 @@ export const createTargetCaptureService = ({
         libraryId,
         action: existing ? "reuse" : "import",
         detail: conflictResolution
-          ? `Import Target copy as ${libraryId}; existing same-name Library Skill stays unchanged`
+          ? `Import Agent copy as ${libraryId}; existing same-name Library Skill stays unchanged`
           : sourcePaths.length > 1
             ? `${sourcePaths.length} source copies stay unchanged`
             : undefined
@@ -254,7 +258,7 @@ export const createTargetCaptureService = ({
       for (const entry of await readdir(targetPaths.agentsDir, { withFileTypes: true })) {
         if (entry.name.startsWith(".") || entry.name.endsWith(".agentenv-owner.json")) continue;
         if (!safeName.test(entry.name)) {
-          warnings.push(`Agent ${entry.name} was left Target-owned because its name is not portable`);
+          warnings.push(`Agent ${entry.name} was left outside AgentEnv because its name is not portable`);
           continue;
         }
         if (!entry.isDirectory() && !entry.isFile()) continue;
@@ -336,6 +340,7 @@ export const createTargetCaptureService = ({
   ): Promise<TargetCaptureResult> => {
     const capture = previews.get(input.previewId);
     if (!capture) throw new Error("Capture preview is missing or expired");
+    await targetScope?.assertEnabled(capture.preview.targetId);
     if (capture.preview.errors.length > 0) {
       throw new Error(capture.preview.errors.join("; "));
     }
@@ -343,7 +348,7 @@ export const createTargetCaptureService = ({
     if (!profileName) throw new Error("Profile name is required");
     for (const [path, fingerprint] of Object.entries(capture.fingerprints)) {
       if (await fingerprintPath(path) !== fingerprint) {
-        throw new Error(`Target changed after capture preview: ${path}`);
+        throw new Error(`Agent changed after capture preview: ${path}`);
       }
     }
 
@@ -425,7 +430,7 @@ export const createTargetCaptureService = ({
       for (const id of importedMcpIds) await mcpLibraryStore.removeServer(id);
       for (const path of importedSkillPaths) await rm(path, { recursive: true, force: true });
       throw new Error(
-        `Create from Target failed: ${
+        `Create from Agent failed: ${
           error instanceof Error ? error.message : String(error)
         }`
       );

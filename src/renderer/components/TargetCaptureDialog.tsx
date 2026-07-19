@@ -100,18 +100,18 @@ export const TargetCaptureDialog = ({
         role="dialog"
         aria-modal="true"
         aria-label={isReview
-          ? t("Review {{name}} capture", { name: target?.name ?? t("Target") })
-          : t("Create profile from {{name}}", { name: target?.name ?? t("Target") })}
+          ? t("Review {{name}} capture", { name: target?.name ?? t("Agent") })
+          : t("Create profile from {{name}}", { name: target?.name ?? t("Agent") })}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="capture-dialog__header">
           <div>
             <span className="capture-dialog__eyebrow">{t(isReview ? "Step 2 of 2" : "Step 1 of 2")}</span>
-            <h2>{isReview ? t("Review captured Profile") : t("Create profile from {{name}}", { name: target?.name ?? t("Target") })}</h2>
+            <h2>{isReview ? t("Review captured Profile") : t("Create profile from {{name}}", { name: target?.name ?? t("Agent") })}</h2>
             <p>
               {isReview
-                ? t("Confirm what AgentEnv will save from {{name}}.", { name: target?.name ?? t("this Target") })
-                : t("Save the current environment as a reusable Profile without changing the Target.")}
+                ? t("Confirm what AgentEnv will save from {{name}}.", { name: target?.name ?? t("this Agent") })
+                : t("Save the current environment as a reusable Profile without changing the Agent.")}
             </p>
           </div>
         </header>
@@ -121,9 +121,9 @@ export const TargetCaptureDialog = ({
             <div className="capture-setup">
               {origin === "profiles" ? (
                 <label className="capture-field">
-                  <span>{t("Source Target")}</span>
+                  <span>{t("Source Agent")}</span>
                   <select
-                    aria-label={t("Profile target")}
+                    aria-label={t("Profile source Agent")}
                     value={target?.id ?? ""}
                     disabled={isBusy}
                     onChange={(event) => onTargetChange(event.currentTarget.value)}
@@ -140,13 +140,13 @@ export const TargetCaptureDialog = ({
                   </select>
                 </label>
               ) : (
-                <div className="capture-target-row" aria-label={t("Source Target")}>
+                <div className="capture-target-row" aria-label={t("Source Agent")}>
                   <span className={`capture-target-row__icon capture-target-row__icon--${targetIcon?.flavor ?? "blue"}`} aria-hidden="true">
                     {targetIcon?.assetUrl ? <img src={targetIcon.assetUrl} alt="" /> : <Monitor size={18} />}
                   </span>
                   <span>
-                    <small>{t("Source Target")}</small>
-                    <strong>{target?.name ?? t("Target")}</strong>
+                    <small>{t("Source Agent")}</small>
+                    <strong>{target?.name ?? t("Agent")}</strong>
                     <em>{t(target?.health.executableFound ? "Command detected" : "Command missing")}</em>
                   </span>
                 </div>
@@ -177,7 +177,7 @@ export const TargetCaptureDialog = ({
                 <span className={`capture-target-row__icon capture-target-row__icon--${targetIcon?.flavor ?? "blue"}`} aria-hidden="true">
                   {targetIcon?.assetUrl ? <img src={targetIcon.assetUrl} alt="" /> : <Monitor size={18} />}
                 </span>
-                <span><small>{t("Target")}</small><strong>{target?.name ?? preview?.targetName}</strong></span>
+                <span><small>{t("Agent")}</small><strong>{target?.name ?? preview?.targetName}</strong></span>
                 <span><small>{t("New Profile")}</small><strong>{name}</strong></span>
               </div>
 
@@ -198,7 +198,7 @@ export const TargetCaptureDialog = ({
                 <details className="capture-advisory">
                   <summary>
                     <TriangleAlert size={16} strokeWidth={2.1} aria-hidden="true" />
-                    <span><strong>{t("{{count}} items will remain outside AgentEnv", { count: preview.warnings.length })}</strong><small>{t("These files may still be used by another installed Target.")}</small></span>
+                    <span><strong>{t("{{count}} items will remain outside AgentEnv", { count: preview.warnings.length })}</strong><small>{t("These files may still be used by another installed Agent.")}</small></span>
                   </summary>
                   <ul>{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
                 </details>
@@ -207,8 +207,8 @@ export const TargetCaptureDialog = ({
               <div className="capture-safety-note">
                 <ShieldCheck size={18} strokeWidth={2.1} aria-hidden="true" />
                 <span>
-                  <strong>{t("Target stays unchanged")}</strong>
-                  <small>{t("After saving, review the Profile and use Apply when you are ready to take over this Target.")}</small>
+                  <strong>{t("Agent stays unchanged")}</strong>
+                  <small>{t("After saving, review the Profile and use Apply when you are ready to take over this Agent.")}</small>
                 </span>
               </div>
 
@@ -219,12 +219,12 @@ export const TargetCaptureDialog = ({
                     {group.resources.map((resource) => {
                       const sourceCopyMatch = resource.detail?.match(/^(\d+) source copies stay unchanged$/);
                       const alternateImportMatch = resource.detail?.match(
-                        /^Import Target copy as (.+); existing same-name Library Skill stays unchanged$/
+                        /^Import Agent copy as (.+); existing same-name Library Skill stays unchanged$/
                       );
                       const detail = sourceCopyMatch
                         ? t("{{count}} source copies stay unchanged", { count: sourceCopyMatch[1] })
                         : alternateImportMatch
-                          ? t("Import Target copy as {{id}}; existing same-name Library Skill stays unchanged", {
+                          ? t("Import Agent copy as {{id}}; existing same-name Library Skill stays unchanged", {
                               id: alternateImportMatch[1]
                             })
                           : resource.detail;

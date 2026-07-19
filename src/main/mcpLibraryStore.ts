@@ -86,7 +86,7 @@ export const createMcpLibraryStore = (paths: AgentEnvPaths): McpLibraryStore => 
     const server = McpServerSchema.parse(definition);
     const envEntries = Object.entries(server.env ?? {});
     if (server.transport !== "stdio" && envEntries.length > 0) {
-      throw new Error("Remote MCP credentials must be configured in the Target");
+      throw new Error("Remote MCP credentials must be configured in the Agent");
     }
     for (const [name, sourceName] of envEntries) {
       EnvironmentNameSchema.parse(name);

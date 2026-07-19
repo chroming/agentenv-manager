@@ -41,9 +41,9 @@ describe("profile target adaptation", () => {
     expect(result.profile.assetPolicy.mcpRefs).toEqual(source.assetPolicy.mcpRefs);
     expect(result.profile.assetPolicy.disabledSkillPaths).toEqual([]);
     expect(result.warnings).toEqual([
-      "opencode Advanced config is target-specific and is not applied to Codex",
-      "2 target-specific agent assets are not applied to Codex",
-      "Disabled skill paths are target-specific and are not applied to Codex"
+      "opencode Advanced config is Agent-specific and is not applied to Codex",
+      "2 native agent assets are not applied to Codex",
+      "Disabled Skill paths are Agent-specific and are not applied to Codex"
     ]);
   });
 

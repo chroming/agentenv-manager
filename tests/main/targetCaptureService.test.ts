@@ -57,7 +57,7 @@ describe("target capture service", () => {
       }
     });
 
-    await expect(service.previewTarget("opencode")).rejects.toThrow("Target command is not installed");
+    await expect(service.previewTarget("opencode")).rejects.toThrow("Agent command is not installed");
     await expect(profileStore.listProfiles()).resolves.toEqual([]);
   });
 
@@ -205,7 +205,7 @@ describe("target capture service", () => {
       libraryId: "codex-bytedcli",
       action: "import",
       detail:
-        "Import Target copy as codex-bytedcli; existing same-name Library Skill stays unchanged"
+        "Import Agent copy as codex-bytedcli; existing same-name Library Skill stays unchanged"
     }));
 
     const result = await service.createFromTarget({
@@ -252,7 +252,7 @@ describe("target capture service", () => {
 
     await expect(
       service.createFromTarget({ previewId: preview.id, name: "Stale" })
-    ).rejects.toThrow("Target changed after capture preview");
+    ).rejects.toThrow("Agent changed after capture preview");
     await expect(profileStore.listProfiles()).resolves.toEqual([]);
   });
 
@@ -415,7 +415,7 @@ describe("target capture service", () => {
       "open-browser-use is already provided by Skills CLI with matching content and will be preserved"
     );
     expect(applyPreview.warnings).toContain(
-      "Claude Code env contains Target-owned values and will be preserved"
+      "Claude Code env contains Agent-owned values and will be preserved"
     );
     expect(applyPreview.resourceChanges).not.toEqual(
       expect.arrayContaining([

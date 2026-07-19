@@ -21,6 +21,7 @@ import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetCaptureService } from "./targetCaptureService";
 import { createTargetRegistry } from "./targets/registry";
+import { createTargetScope } from "./targets/targetScope";
 import { findExecutable } from "./executableDiscovery";
 import { createGitCliSkillSource } from "./skillSources/gitCliSource";
 import { createGitCommandRunner, type GitCommandRunner } from "./skillSources/gitCommandRunner";
@@ -318,7 +319,10 @@ const createServices = async () => {
   for (const root of replacementRoots) {
     await recoverPendingReplacementsInDirectory(root);
   }
-  const settingsStore = createSettingsStore(paths);
+  const settingsStore = createSettingsStore(paths, {
+    supportedTargetIds: targetRegistry.list().map((target) => target.id)
+  });
+  const targetScope = createTargetScope(targetRegistry, settingsStore);
   const githubAuthService = createGitHubAuthService({
     tokenStore: createFileGitHubTokenStore(paths, {
       decryptString: (value) => safeStorage.decryptString(value),
@@ -360,13 +364,15 @@ const createServices = async () => {
     paths,
     profileStore,
     targetRegistry,
+    targetScope,
     settingsStore,
     mcpLibraryStore,
     skillLibraryStore
   });
   const targetDiscoveryService = createTargetDiscoveryService({
     paths,
-    targetRegistry
+    targetRegistry,
+    targetScope
   });
   const targetCaptureService = createTargetCaptureService({
     paths,
@@ -374,7 +380,8 @@ const createServices = async () => {
     profileStore,
     skillLibraryStore,
     mcpLibraryStore,
-    targetDiscoveryService
+    targetDiscoveryService,
+    targetScope
   });
 
   await seedDefaultProfiles(paths, targetRegistry);

@@ -21,9 +21,9 @@ export type ProfileReadinessStatus =
 
 export interface ProfileReadiness {
   status: ProfileReadinessStatus;
-  label: "No profile" | "No target" | "Unsaved" | "Target unavailable" | "Needs review" | "Apply pending" | "Applied" | "Ready";
+  label: "No profile" | "No Agent" | "Unsaved" | "Agent unavailable" | "Needs review" | "Apply pending" | "Applied" | "Ready";
   message: string;
-  remediationLabel?: "Open Targets" | "Save now" | "Open Advanced" | "Open Recovery";
+  remediationLabel?: "Open Agents" | "Save now" | "Open Advanced" | "Open Recovery";
 }
 
 export interface ProfileReadinessInput {
@@ -59,8 +59,8 @@ export const deriveProfileReadiness = ({
   if (!target) {
     return {
       status: "no-target",
-      label: "No target",
-      message: "Select a target to continue"
+      label: "No Agent",
+      message: "Select an Agent to continue"
     };
   }
 
@@ -76,9 +76,9 @@ export const deriveProfileReadiness = ({
   if (!target.health.canWrite) {
     return {
       status: "target-unavailable",
-      label: "Target unavailable",
+      label: "Agent unavailable",
       message: `${target.name} is unavailable`,
-      remediationLabel: "Open Targets"
+      remediationLabel: "Open Agents"
     };
   }
 

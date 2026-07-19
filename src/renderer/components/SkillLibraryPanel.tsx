@@ -222,12 +222,12 @@ const cleanupLocationLabel = (
   targetNames: TargetNameIndex
 ) => {
   const names = item.foundIn.map((targetId) =>
-    targetNameFor(targetId, targetNames, "Unknown Target")
+    targetNameFor(targetId, targetNames, "Unknown Agent")
   );
   if (names.length > 1) {
     return `Shared: ${names.join(" + ")}`;
   }
-  return names[0] ?? "Unknown Target";
+  return names[0] ?? "Unknown Agent";
 };
 
 const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
@@ -807,7 +807,7 @@ export const SkillLibraryPanel = ({
   const localImportImpact = !selectedLocalInventory
     ? undefined
     : selectedLocalInventory.status === "managed"
-      ? "This Target copy is already managed by AgentEnv and is present in Library."
+      ? "This Agent copy is already managed by AgentEnv and is present in Library."
       : selectedLocalInventory.status === "ignored"
         ? "This group is ignored. Restore it in Scan local before managing it."
         : selectedLocalConflict
@@ -815,7 +815,7 @@ export const SkillLibraryPanel = ({
           : selectedLocalInventory.status === "external"
             ? "This installation is owned by Skills CLI. AgentEnv will import an independent Library copy and leave it unchanged."
             : selectedLocalCanManage
-              ? "AgentEnv will back up this Target copy, import it to Library, then replace the folder with a managed copy."
+              ? "AgentEnv will back up this Agent copy, import it to Library, then replace the folder with a managed copy."
               : undefined;
   const localImportLabel = selectedLocalCanManage ? "Import & manage" : "Import copy";
   const sourceCandidateDraft = sourceCandidate
@@ -1283,13 +1283,13 @@ export const SkillLibraryPanel = ({
             <option value="local">{t("Local")}</option>
           </select>
           <select
-            aria-label={t("Skill target filter")}
+            aria-label={t("Skill Agent filter")}
             value={targetFilter}
             onChange={(event) =>
               updateControls({ targetFilter: event.currentTarget.value as typeof targetFilter })
             }
           >
-            <option value="all">{t("Target: All")}</option>
+            <option value="all">{t("Agent: All")}</option>
             <option value="managed">{t("Managed")}</option>
             <option value="library">{t("Imported")}</option>
             <option value="unmanaged">{t("Unmanaged")}</option>
@@ -1344,7 +1344,7 @@ export const SkillLibraryPanel = ({
           </span>
           <span className="library-column-label">
             {t("Installs")}
-            <InfoTip label={t("Shows whether each Target install matches the Library copy. This is separate from source updates.")} />
+            <InfoTip label={t("Shows whether each Agent install matches the Library copy. This is separate from source updates.")} />
           </span>
           <span>{t("Actions")}</span>
         </div>
@@ -2084,8 +2084,8 @@ export const SkillLibraryPanel = ({
                         return installCount > 0
                           ? t(
                               installCount === 1
-                                ? "Remove {{name}} and 1 managed target install? Unmanaged copies are kept."
-                                : "Remove {{name}} and {{count}} managed target installs? Unmanaged copies are kept.",
+                                ? "Remove {{name}} and 1 managed Agent install? Unmanaged copies are kept."
+                                : "Remove {{name}} and {{count}} managed Agent installs? Unmanaged copies are kept.",
                               { name: deleteCandidate.name, count: installCount }
                             )
                           : t("Remove {{name}} from the shared library?", { name: deleteCandidate.name });
@@ -2146,7 +2146,7 @@ export const SkillLibraryPanel = ({
               <div>
                 <div className="section-title">{t("Review ready skills")}</div>
                 <p className="muted">
-                  {t("These Skills have one clear canonical version. AgentEnv will add or reuse Library content and normalize the detected Target copies.")}
+                  {t("These Skills have one clear canonical version. AgentEnv will add or reuse Library content and normalize the detected Agent copies.")}
                 </p>
               </div>
             </header>
@@ -2191,9 +2191,9 @@ export const SkillLibraryPanel = ({
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">{t("Choose how Targets use this Skill")}</div>
+                <div className="section-title">{t("Choose how Agents use this Skill")}</div>
                 <p className="muted">
-                  {t("{{name}} is still loaded by {{count}} Targets from one shared folder.", {
+                  {t("{{name}} is still loaded by {{count}} Agents from one shared folder.", {
                     name: sharedTargetReview.primary?.name ?? sharedTargetReview.skillKey,
                     count: sharedTargetReview.sharedMigration.pendingConsumers.length
                   })}
@@ -2205,9 +2205,9 @@ export const SkillLibraryPanel = ({
                 <span key={targetId}>{t(targetNameFor(targetId, targetNames, targetId))}</span>
               ))}
               <p className="shared-target-review-guidance">
-                {t("Apply the intended Profile to each Target, then return here to replace the shared copy.")}
+                {t("Apply the intended Profile to each Agent, then return here to replace the shared copy.")}
               </p>
-              <small>{t("Profiles without this Skill will remove it from that Target when the shared copy is replaced.")}</small>
+              <small>{t("Profiles without this Skill will remove it from that Agent when the shared copy is replaced.")}</small>
             </div>
             <footer className="preview-actions">
               <button
@@ -2260,7 +2260,7 @@ export const SkillLibraryPanel = ({
               <div>
                 <div className="section-title">{t("Replace shared copy")}</div>
                 <p className="muted">
-                  {t("Each Target will use its saved Profile instead of the shared {{name}} copy.", {
+                  {t("Each Agent will use its saved Profile instead of the shared {{name}} copy.", {
                     name: sharedRetireCandidate.primary?.name ?? sharedRetireCandidate.skillKey
                   })}
                 </p>
@@ -2296,7 +2296,7 @@ export const SkillLibraryPanel = ({
                   tooltipClassName="library-source-tooltip"
                 />
               ))}
-              <small>{t("The Library copy is kept. One backup covers the shared copy, Target copies, and saved Target decisions; any failed step restores all of them.")}</small>
+              <small>{t("The Library copy is kept. One backup covers the shared copy, Agent copies, and saved Agent decisions; any failed step restores all of them.")}</small>
             </div>
             <footer className="preview-actions">
               <button
@@ -2344,8 +2344,8 @@ export const SkillLibraryPanel = ({
                   {(skillUsage[disableCandidate.id] ?? []).length > 0
                     ? t(
                         (skillUsage[disableCandidate.id] ?? []).length === 1
-                          ? "This skill stays in Library and in 1 Profile, but it will be excluded from Apply. Its managed Target installs are removed the next time that Profile is applied."
-                          : "This skill stays in Library and in {{count}} Profiles, but it will be excluded from Apply. Managed Target installs are removed the next time each Profile is applied.",
+                          ? "This skill stays in Library and in 1 Profile, but it will be excluded from Apply. Its managed Agent installs are removed the next time that Profile is applied."
+                          : "This skill stays in Library and in {{count}} Profiles, but it will be excluded from Apply. Managed Agent installs are removed the next time each Profile is applied.",
                         { count: (skillUsage[disableCandidate.id] ?? []).length }
                       )
                     : t("This skill stays in Library but cannot be added to or applied by Profiles until it is enabled again.")}
@@ -2597,7 +2597,7 @@ export const SkillLibraryPanel = ({
                   {cleanupUsesExistingLibrary
                     ? t("Review the differences, choose the canonical Library version, then confirm which local copies to normalize.")
                     : cleanupCandidate.sharedMigration
-                      ? t("Choose the version to keep. AgentEnv will add it to Library, keep one shared copy active, and remove redundant Target copies after backup.")
+                      ? t("Choose the version to keep. AgentEnv will add it to Library, keep one shared copy active, and remove redundant Agent copies after backup.")
                       : t("Choose the local copy to keep in Library, then choose which copies become managed deployments.")}
                 </p>
               </div>
@@ -2712,7 +2712,7 @@ export const SkillLibraryPanel = ({
                   {t(cleanupCandidate.sharedMigration ? "Copies to clean up" : "Locations to manage")}
                   <small>
                     {t(cleanupCandidate.sharedMigration
-                      ? "The shared copy stays active until Profiles are ready. Redundant Target copies are removed."
+                      ? "The shared copy stays active until Profiles are ready. Redundant Agent copies are removed."
                       : "Selected copies are backed up, then replaced by the Library version.")}
                   </small>
                 </legend>
@@ -2900,7 +2900,7 @@ export const SkillLibraryPanel = ({
             <div className="resource-list resource-list--unmanaged">
               {cleanupGroups.length === 0 ? (
                 <p className="muted library-empty">
-                  {t("No target skills detected. Install skills into a supported target and scan again.")}
+                  {t("No Agent Skills detected. Install Skills for an enabled Agent and scan again.")}
                 </p>
               ) : null}
               {cleanupGroups.map((group) => {
@@ -2924,11 +2924,11 @@ export const SkillLibraryPanel = ({
                   : undefined;
                 const groupIsWorking = sharedOperation?.skillKey === group.skillKey;
                 const sharedProgressText = sharedMigration?.state === "waiting"
-                  ? t("{{count}} Targets still load this shared copy", {
+                  ? t("{{count}} Agents still load this shared copy", {
                       count: sharedMigration.pendingConsumers.length
                     })
                   : sharedMigration?.state === "ready"
-                    ? t("All consumer Targets are ready")
+                    ? t("All consumer Agents are ready")
                     : undefined;
                 const cleanupActionId = `cleanup:${group.skillKey}`;
                 const runPrimaryAction = () => {

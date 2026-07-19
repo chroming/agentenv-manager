@@ -119,14 +119,14 @@ export const TargetWorkspace = ({
   });
 
   return (
-    <section className="target-page" aria-label={t("Targets")}>
+    <section className="target-page" aria-label={t("Agents")}>
       <header className="page-header workspace-page-header">
         <div>
-          <h2 aria-label={t("Targets")}>
-            {t("Targets")}
-            <InfoTip label={t("Targets are local agent runtimes. Manage profiles from Profiles and inspect runtime paths here only when diagnosing a problem.")} />
+          <h2 aria-label={t("Agents")}>
+            {t("Agents")}
+            <InfoTip label={t("Agents are local coding tools. Manage environments from Profiles and inspect runtime paths here only when diagnosing a problem.")} />
           </h2>
-          <p>{t("Inspect local agent runtimes, management state, and recovery points.")}</p>
+          <p>{t("Inspect local Agents, management state, and recovery points.")}</p>
         </div>
         <div className="target-page-actions">
           <button
@@ -157,7 +157,7 @@ export const TargetWorkspace = ({
         {targets.length === 0 ? (
           <div className="inline-state inline-state--panel">
             <span className="inline-state__icon" aria-hidden="true"><Monitor size={15} /></span>
-            <span>{t("No supported targets detected")}</span>
+            <span>{t("No enabled Agents")}</span>
           </div>
         ) : null}
         {targets.map((target) => {
@@ -166,7 +166,7 @@ export const TargetWorkspace = ({
           const isExpanded = expandedTargetId === target.id;
           const icon = targetIconFor(target);
           return (
-            <article aria-label={t("Target {{name}}", { name: target.name })} className="target-card target-card--workflow" key={target.id}>
+            <article aria-label={t("Agent {{name}}", { name: target.name })} className="target-card target-card--workflow" key={target.id}>
               <header className="target-workflow-header">
                 <span className={`target-workflow-icon target-workflow-icon--${icon.flavor}`} aria-hidden="true">
                   {icon.assetUrl ? <img src={icon.assetUrl} alt="" /> : <TerminalSquare size={20} />}
@@ -323,11 +323,11 @@ export const TargetWorkspace = ({
       ) : null}
       {stopManagingTargetId ? (
         <div className="preview-modal-backdrop" onClick={() => setStopManagingTargetId(undefined)}>
-          <section ref={stopManagingDialogRef} className="profile-form-dialog stop-managing-dialog" role="dialog" aria-modal="true" aria-label={t("Stop managing Target")} onClick={(event) => event.stopPropagation()}>
+          <section ref={stopManagingDialogRef} className="profile-form-dialog stop-managing-dialog" role="dialog" aria-modal="true" aria-label={t("Stop managing Agent")} onClick={(event) => event.stopPropagation()}>
             <header className="profile-dialog-header">
               <div>
                 <div className="section-title">{t("Stop managing {{name}}", { name: targets.find((target) => target.id === stopManagingTargetId)?.name ?? "" })}</div>
-                <p className="muted">{t("Choose what should happen to the current Target environment.")}</p>
+                <p className="muted">{t("Choose what should happen to the current Agent environment.")}</p>
               </div>
             </header>
             <div className="stop-managing-options" role="radiogroup" aria-label={t("Stop managing behavior")}>

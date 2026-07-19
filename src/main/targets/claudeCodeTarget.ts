@@ -399,7 +399,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
         Object.entries(settings).filter(([key]) => key !== "env")
       );
       warnings.push(
-        "Claude Code env contains Target-owned values and will be preserved"
+        "Claude Code env contains Agent-owned values and will be preserved"
       );
     }
 

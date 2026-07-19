@@ -12,10 +12,15 @@ The product succeeds when a user can answer all of these questions without inspe
 
 1. Which resources are canonical and reusable?
 2. What does this Profile contain?
-3. Which Target will receive it?
+3. Which Agent will receive it?
 4. What exactly will be added, replaced, removed, or preserved?
-5. Is the deployed Target still identical to the saved Profile?
+5. Is the deployed Agent still identical to the saved Profile?
 6. How can the user recover or stop AgentEnv management?
+
+User-facing product language uses **Agent** for a local coding tool such as OpenCode, Codex, or
+Claude Code. The implementation keeps `Target`, `TargetAdapter`, and `targetId` as stable internal
+architecture terms. Internal names MUST NOT leak into navigation, commands, status, confirmation,
+or recovery copy.
 
 This document defines the behavior those answers require. Existing code and tests must conform to this contract. A feature is not complete merely because its happy-path control works.
 
@@ -118,15 +123,31 @@ Each Library Skill reference has a Profile-scoped enabled state. Missing legacy 
 - A disabled Skill MUST NOT be deployed, validated as a desired Target resource, counted as an effective resource, or recorded in applied Library versions.
 - Enable and disable are Profile edits: they become durable on Save and affect a Target only after Preview and Apply.
 
-### 4.4 Target
+### 4.4 Agent (internal Target)
 
-A Target is a detected local agent tool and its deployment locations. OpenCode, Codex, and Claude Code are Targets.
+An Agent is a supported local coding tool and its deployment locations. OpenCode, Codex, and Claude Code are Agents.
 
 - Target files are deployed copies, links, or serialized output.
 - Target files are never the canonical Library source.
 - A Target can have at most one active Profile at a time.
 - One Profile can be active on multiple Targets simultaneously.
 - A Target can be modified by AgentEnv Manager, the agent itself, or another local process.
+
+### 4.4.1 Enabled Agent Scope
+
+Settings owns the explicit set of enabled Agents.
+
+- Existing installations without an Agent scope MUST migrate with every currently supported Agent enabled.
+- Once the scope is persisted, a newly added adapter MUST remain off until the user enables it.
+- Turning an Agent off MUST remove it from navigation, status summaries, Profile destination choices, discovery results, lifecycle scans, Capture, Apply, rollback, stop-management, and Agent-specific Skill scans.
+- Every write or recovery entry point MUST re-check the enabled scope in the main process. Hiding a renderer control is not sufficient authorization.
+- Turning an Agent off MUST NOT edit or delete its files, deployment state, Profiles, Library resources, or Backups, and MUST NOT end an existing management relationship.
+- Turning off a managed Agent requires an impact confirmation. An Agent in `Recovery required` cannot be turned off through the UI until recovery is resolved.
+- Turning an Agent on MUST run fresh executable and lifecycle discovery before restoring operational controls.
+- An enabled Agent remains visible when its command is missing, with a clear missing-command state. Configuration directories alone do not make an Agent installed.
+- Shared Library data and global compatibility locations remain global concerns; disabling one Agent MUST only remove that Agent's identity and dedicated paths from consideration.
+
+Status: explicit persisted scope, discovery filtering, renderer filtering, operation guards, managed-Agent confirmation, and recovery lock are `Implemented`.
 
 ### 4.5 Backup
 
@@ -842,8 +863,14 @@ AgentEnv Manager supports English (`en`), Simplified Chinese (`zh_CN`), and Trad
 
 Every release that changes Profile, Library, Target, or Apply behavior MUST verify these scenarios:
 
-### Profile and Target
+### Profile and Agent
 
+- First launch enables every currently supported Agent and persists the explicit scope.
+- Turning one Agent off removes only that Agent from navigation, Profile destinations, discovery, Capture, Apply, lifecycle state, and Agent-specific Skill scans; its files and saved state remain byte-for-byte unchanged.
+- Turning every Agent off leaves Library and Profiles usable while hiding Agent-only navigation and deployment commands.
+- A disabled Agent rejects direct IPC Preview, Apply, Capture, rollback, and stop-management requests.
+- Reload preserves the enabled Agent scope; re-enabling an Agent performs fresh discovery and restores its controls.
+- A managed Agent requires confirmation before being turned off, and an Agent requiring recovery cannot be turned off.
 - Native Profile applied to each compatible Target.
 - One Profile active on multiple Targets.
 - Different Profiles active on different Targets.

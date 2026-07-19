@@ -58,8 +58,8 @@ describe("profile readiness", () => {
       })
     ).toEqual({
       status: "no-target",
-      label: "No target",
-      message: "Select a target to continue"
+      label: "No Agent",
+      message: "Select an Agent to continue"
     });
   });
 
@@ -168,7 +168,7 @@ describe("profile readiness", () => {
       },
       {
         input: { profile, isDirty: true },
-        expected: ["no-target", "Select a target to continue", undefined]
+        expected: ["no-target", "Select an Agent to continue", undefined]
       },
       {
         input: { profile, target, isDirty: true },
@@ -176,7 +176,7 @@ describe("profile readiness", () => {
       },
       {
         input: { profile, target: unavailableTarget, isDirty: false },
-        expected: ["target-unavailable", "Codex is unavailable", "Open Targets"]
+        expected: ["target-unavailable", "Codex is unavailable", "Open Agents"]
       },
       {
         input: {
