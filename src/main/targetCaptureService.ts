@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { cp, lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { lstat, readFile, rm } from "node:fs/promises";
 import type {
   CreateProfileFromTargetInput,
   TargetCapturePreview,
@@ -9,7 +8,6 @@ import type {
   SkillImportConflictResolution
 } from "../shared/types";
 import { pathExists } from "./fileUtils";
-import type { McpLibraryStore } from "./mcpLibraryStore";
 import type { AgentEnvPaths } from "./paths";
 import type { ProfileStore } from "./profileStore";
 import { hashComparableResource } from "./resourceHash";
@@ -30,17 +28,10 @@ interface CapturedSkill {
   conflictResolution?: SkillImportConflictResolution;
 }
 
-interface CapturedAgent {
-  targetName: string;
-  sourcePath: string;
-  kind: "file" | "directory";
-}
-
 interface InternalCapture {
   preview: TargetCapturePreview;
   captured: CapturedTargetProfile;
   skills: CapturedSkill[];
-  agents: CapturedAgent[];
   fingerprints: Record<string, string>;
 }
 
@@ -54,7 +45,6 @@ interface TargetCaptureServiceOptions {
   targetRegistry: TargetRegistry;
   profileStore: ProfileStore;
   skillLibraryStore: SkillLibraryStore;
-  mcpLibraryStore: McpLibraryStore;
   targetDiscoveryService: TargetDiscoveryService;
   targetScope?: TargetScope;
 }
@@ -93,7 +83,6 @@ export const createTargetCaptureService = ({
   targetRegistry,
   profileStore,
   skillLibraryStore,
-  mcpLibraryStore: _mcpLibraryStore,
   targetDiscoveryService,
   targetScope
 }: TargetCaptureServiceOptions): TargetCaptureService => {
@@ -244,31 +233,6 @@ export const createTargetCaptureService = ({
       });
     }
 
-    const agents: CapturedAgent[] = [];
-    if (targetPaths.agentsDir && await pathExists(targetPaths.agentsDir)) {
-      for (const entry of await readdir(targetPaths.agentsDir, { withFileTypes: true })) {
-        if (entry.name.startsWith(".") || entry.name.endsWith(".agentenv-owner.json")) continue;
-        if (!safeName.test(entry.name)) {
-          warnings.push(`Agent ${entry.name} was left outside AgentEnv because its name is not portable`);
-          continue;
-        }
-        if (!entry.isDirectory() && !entry.isFile()) continue;
-        const sourcePath = join(targetPaths.agentsDir, entry.name);
-        agents.push({
-          targetName: entry.name,
-          sourcePath,
-          kind: entry.isDirectory() ? "directory" : "file"
-        });
-        resources.push({
-          kind: "agent",
-          id: entry.name,
-          name: entry.name,
-          sourcePath,
-          action: "include"
-        });
-      }
-    }
-
     if (captured.instructions.trim()) {
       resources.unshift({
         kind: "instructions",
@@ -278,31 +242,15 @@ export const createTargetCaptureService = ({
         action: "include"
       });
     }
-    if (captured.configText.trim()) {
-      resources.push({
-        kind: "config",
-        id: "config",
-        name: adapter.descriptor.configLabel,
-        sourcePath: targetPaths.configPath,
-        action: "include"
-      });
-    }
     for (const excluded of captured.excluded) {
-      resources.push({
-        kind: "config",
-        id: excluded,
-        name: excluded,
-        action: "exclude",
-        detail: "Sensitive, unsupported, or runtime-owned"
-      });
+      warnings.push(`${excluded} remains Agent-owned`);
     }
 
     const fingerprintPaths = new Set([
       targetPaths.instructionsPath,
       targetPaths.configPath,
       ...(targetPaths.mcpConfigPath ? [targetPaths.mcpConfigPath] : []),
-      ...skills.flatMap((skill) => skill.sourcePaths),
-      ...agents.map((agent) => agent.sourcePath)
+      ...skills.flatMap((skill) => skill.sourcePaths)
     ]);
     const fingerprints = Object.fromEntries(
       await Promise.all([...fingerprintPaths].map(async (path) => [path, await fingerprintPath(path)]))
@@ -317,7 +265,7 @@ export const createTargetCaptureService = ({
       warnings,
       errors
     };
-    return { preview, captured, skills, agents, fingerprints };
+    return { preview, captured, skills, fingerprints };
   };
 
   const previewTarget = async (targetId: string) => {
@@ -357,53 +305,40 @@ export const createTargetCaptureService = ({
         importedSkillPaths.push(imported.path);
       }
       const created = await profileStore.createProfile({
-        targetId: capture.preview.targetId,
+        preferredTargetId: capture.preview.targetId,
         name: profileName,
         description: `Captured from ${capture.preview.targetName}`
       });
       profileId = created.id;
-      const profileDir = created.profileDir;
-      if (!profileDir) throw new Error("Created Profile has no storage directory");
-      const ownedDirs = [];
-      const ownedFiles = [];
-      for (const agent of capture.agents) {
-        const relativeSource = `agents/${agent.targetName}`;
-        const destination = join(profileDir, relativeSource);
-        await mkdir(dirname(destination), { recursive: true });
-        await cp(agent.sourcePath, destination, {
-          recursive: agent.kind === "directory",
-          dereference: true
-        });
-        if (agent.kind === "directory") {
-          ownedDirs.push({ kind: "agent" as const, source: relativeSource, targetName: agent.targetName });
-        } else {
-          ownedFiles.push({ kind: "agent" as const, source: relativeSource, targetName: agent.targetName });
-        }
-      }
+      const adapter = targetRegistry.get(capture.preview.targetId);
+      const capturedMcp = capture.captured.mcpConnections ?? [];
+      const mcpPolicy = adapter.descriptor.capabilities.mcpActivation && capturedMcp.length > 0
+        ? {
+            mode: "manage" as const,
+            selections: capturedMcp.map((connection) => ({
+              name: connection.name,
+              enabled: connection.enabled
+            }))
+          }
+        : { mode: "ignore" as const, selections: [] };
       const saved = await profileStore.saveProfile({
         manifest: {
           ...created.manifest,
           name: profileName,
-          description: `Captured from ${capture.preview.targetName}`
+          description: `Captured from ${capture.preview.targetName}`,
+          preferredTargetId: capture.preview.targetId,
+          createdFromTargetId: capture.preview.targetId
         },
         instructions: capture.captured.instructions,
-        configText: capture.captured.configText,
-        assetPolicy: {
-          ownedDirs,
-          ownedFiles,
-          skillRefs: capture.skills.map((skill) => ({
+        resources: {
+          skills: capture.skills.map((skill) => ({
             libraryId: skill.libraryId,
-            targetName: skill.targetName
+            targetName: skill.targetName,
+            enabled: true
           })),
-          mcpRefs: [],
-          mcpSelections: (capture.captured.mcpConnections ?? []).map(
-            (connection) => ({
-              targetId: connection.targetId,
-              name: connection.name,
-              enabled: connection.enabled
-            })
-          ),
-          disabledSkillPaths: capture.captured.disabledSkillPaths
+          mcpByTarget: {
+            [capture.preview.targetId]: mcpPolicy
+          }
         }
       });
       previews.delete(input.previewId);

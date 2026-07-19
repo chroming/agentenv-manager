@@ -186,7 +186,7 @@ describe("profile readiness", () => {
           localValidationErrors: ["Instructions are empty"],
           preview: previewWith("Preview blocked")
         },
-        expected: ["validation-error", "This profile has validation issues", "Open Advanced"]
+        expected: ["validation-error", "This profile has validation issues", undefined]
       },
       {
         input: {

@@ -1,55 +1,27 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  applyEdits,
-  modify,
   parse,
   printParseErrorCode,
   type ParseError
 } from "jsonc-parser";
 import type {
   PlannedFileChange,
-  ProfileDetail,
   TargetActivationPreview,
   TargetState
 } from "../../shared/types";
 import { createUnifiedDiff } from "../diff";
-import { pathExists, readTextIfExists } from "../fileUtils";
+import { readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
-import type { AgentTargetAdapter } from "./types";
-import {
-  captureNativeJsonMcpConnections,
-  isJsonSubset,
-  sameJsonValue,
-  sanitizeCapturedJson
-} from "./capture";
-import { createProfileFileDriver } from "./shared/profileFiles";
+import { captureNativeJsonMcpConnections } from "./capture";
+import { createCommandInstallationDriver } from "./installationDiscovery";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
 import { createFilesystemSkillDriver } from "./shared/skillRuntime";
-import { createCommandInstallationDriver } from "./installationDiscovery";
+import type { AgentTargetAdapter } from "./types";
 
 const DEFAULT_STATE: TargetState = {
-  managedConfigKeys: [],
+  formatVersion: 2,
   managedMcpNames: []
-};
-
-const profileFiles = createProfileFileDriver({
-  instructionsFile: "CLAUDE.md",
-  configFile: "claude-code.json"
-});
-
-const assets = createDirectoryAssetDriver({
-  targetName: "Claude Code",
-  markerTargetId: ({ profile }) => profile.manifest.targetId
-});
-
-const METADATA_CONFIG_KEYS = new Set(["$schema"]);
-
-const formattingOptions = {
-  insertSpaces: true,
-  tabSize: 2,
-  eol: "\n"
 };
 
 const hashText = (content: string): string =>
@@ -58,16 +30,33 @@ const hashText = (content: string): string =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
+const parseJsoncObject = (
+  content: string,
+  label: string
+): { ok: true; value: Record<string, unknown> } | { ok: false; message: string } => {
+  if (content.trim().length === 0) return { ok: true, value: {} };
+  const errors: ParseError[] = [];
+  const parsed = parse(content, errors, { allowTrailingComma: true });
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      message: `${label}: ${errors
+        .map((error) => printParseErrorCode(error.error))
+        .join(", ")}`
+    };
+  }
+  return isRecord(parsed)
+    ? { ok: true, value: parsed }
+    : { ok: false, message: `${label}: expected a JSON object` };
+};
+
 const addChange = (
   changes: PlannedFileChange[],
   path: string,
   before: string,
   after: string
 ) => {
-  if (before === after) {
-    return;
-  }
-
+  if (before === after) return;
   changes.push({
     path,
     before,
@@ -76,153 +65,18 @@ const addChange = (
   });
 };
 
-const parseJsoncObject = (
-  content: string,
-  label: string
-): { ok: true; value: Record<string, unknown> } | { ok: false; message: string } => {
-  if (content.trim().length === 0) {
-    return { ok: true, value: {} };
-  }
-
-  const errors: ParseError[] = [];
-  const parsed = parse(content, errors, { allowTrailingComma: true });
-  if (errors.length > 0) {
-    const message = errors
-      .map((error) => printParseErrorCode(error.error))
-      .join(", ");
-    return { ok: false, message: `${label}: ${message}` };
-  }
-  if (!isRecord(parsed)) {
-    return { ok: false, message: `${label}: expected a JSON object` };
-  }
-  return { ok: true, value: parsed };
-};
-
-const readClaudeDisabledSkillNames = async (
-  targetPaths: ReturnType<AgentTargetAdapter["createTargetPaths"]>
-) => {
-  const settings = parseJsoncObject(
-    await readTextIfExists(targetPaths.configPath),
-    "Invalid Claude Code settings"
-  );
-  if (!settings.ok) {
-    return {
-      disabledRuntimeNames: new Set<string>(),
-      issues: [{
-        code: "unreadable-native-state" as const,
-        severity: "error" as const,
-        message: `${settings.message} (${targetPaths.configPath})`
-      }]
-    };
-  }
-  if (!isRecord(settings.value.skillOverrides)) {
-    return { disabledRuntimeNames: new Set<string>(), issues: [] };
-  }
-  const disabled = Object.entries(settings.value.skillOverrides).flatMap(([name, value]) => {
-    if (value === false || value === "off") return [name];
-    if (isRecord(value) && value.enabled === false) return [name];
-    return [];
-  });
-  return { disabledRuntimeNames: new Set(disabled), issues: [] };
-};
-
-const skills = createFilesystemSkillDriver({
-  targetId: "claude-code",
-  readNativeState: readClaudeDisabledSkillNames
-});
-
-const setJsoncProperty = (content: string, path: string[], value: unknown) => {
-  const source = content.trim().length === 0 ? "{}\n" : content;
-  return applyEdits(
-    source,
-    modify(source, path, value, {
-      formattingOptions,
-      getInsertionIndex: (properties) => properties.length
-    })
-  );
-};
-
-const parseProfileConfig = (profileConfig: Record<string, unknown>) => ({
-  settings:
-    "settings" in profileConfig || "mcpServers" in profileConfig
-      ? isRecord(profileConfig.settings)
-        ? profileConfig.settings
-        : ({} as Record<string, unknown>)
-      : profileConfig,
-  mcpServers: isRecord(profileConfig.mcpServers)
-    ? profileConfig.mcpServers
-    : ({} as Record<string, unknown>)
-});
-
-const applySettingsOverlay = (
-  liveContent: string,
-  liveSettings: Record<string, unknown>,
-  profileSettings: Record<string, unknown>,
-  state: TargetState
-) => {
-  let nextContent = liveContent.trim().length === 0 ? "{}\n" : liveContent;
-  const profileConfigKeys = Object.keys(profileSettings).filter(
-    (key) => !METADATA_CONFIG_KEYS.has(key)
-  );
-  const profileMetadataKeys = Object.keys(profileSettings).filter((key) =>
-    METADATA_CONFIG_KEYS.has(key)
-  );
-
-  for (const key of state.managedConfigKeys) {
-    if (!METADATA_CONFIG_KEYS.has(key) && !profileConfigKeys.includes(key)) {
-      nextContent = setJsoncProperty(nextContent, [key], undefined);
-    }
-  }
-
-  if (profileConfigKeys.length > 0) {
-    for (const key of profileMetadataKeys) {
-      nextContent = setJsoncProperty(nextContent, [key], profileSettings[key]);
-    }
-  }
-
-  for (const key of profileConfigKeys) {
-    nextContent = setJsoncProperty(nextContent, [key], profileSettings[key]);
-  }
-
-  return {
-    nextContent,
-    managedConfigKeys: profileConfigKeys
-  };
-};
-
-const findOverlayConflicts = (
-  liveSettings: Record<string, unknown>,
-  profileSettings: Record<string, unknown>,
-  state: TargetState,
-  allowMatchingUnmanaged = false
-) => {
-  const errors: string[] = [];
-  const managedConfigKeys = new Set(state.managedConfigKeys);
-
-  for (const key of Object.keys(profileSettings).filter(
-    (name) => !METADATA_CONFIG_KEYS.has(name)
-  )) {
-    if (
-      key in liveSettings &&
-      !managedConfigKeys.has(key) &&
-      !(allowMatchingUnmanaged && sameJsonValue(liveSettings[key], profileSettings[key]))
-    ) {
-      errors.push(`Config key ${key} already exists outside AgentEnv management`);
-    }
-  }
-
-  return errors;
-};
+const assets = createDirectoryAssetDriver({ targetName: "Claude Code" });
+const skills = createFilesystemSkillDriver({ targetId: "claude-code" });
 
 export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
   descriptor: {
     id: "claude-code",
     name: "Claude Code",
-    description: "Manage global Claude Code memory, settings, user MCP, agents, and skills.",
+    description: "Manage Claude Code instructions and Skills.",
     iconKey: "claude",
     displayOrder: 2,
     instructionsLabel: "CLAUDE.md",
-    configLabel: "settings + user MCP JSONC",
+    configLabel: "settings.json",
     configLanguage: "jsonc",
     mcpConfigKey: "mcpServers",
     realWritesEnabled: true,
@@ -246,7 +100,6 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       instructionsPath: join(claudeDir, "CLAUDE.md"),
       configPath: join(claudeDir, "settings.json"),
       mcpConfigPath: join(homeDir, ".claude.json"),
-      agentsDir: join(claudeDir, "agents"),
       skillsDir,
       skillLocations: [{
         path: skillsDir,
@@ -270,25 +123,14 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     id,
     manifest: {
       id,
-      targetId: "claude-code",
       name: "Claude Code Daily Coding",
-      description: "Default Claude Code environment",
-      version: 1,
-      managed: { instructions: true, config: true, assets: true }
+      description: "Default coding environment",
+      preferredTargetId: "claude-code",
+      version: 2
     },
     instructions:
-      "# Claude Code Guidance\n\n- Keep changes scoped and reversible.\n- Preview environment changes before applying them.\n",
-    configText: `${JSON.stringify(
-      {
-        settings: {
-          $schema: "https://json.schemastore.org/claude-code-settings.json"
-        },
-        mcpServers: {}
-      },
-      null,
-      2
-    )}\n`,
-    assetPolicy: { ownedDirs: [], ownedFiles: [], skillRefs: [], mcpRefs: [], disabledSkillPaths: [] }
+      "# Agent Guidance\n\n- Keep changes scoped and reversible.\n- Preview environment changes before applying them.\n",
+    resources: { skills: [], mcpByTarget: {} }
   }),
   captureProfile: async (targetPaths) => {
     const [instructions, settingsText, mcpText] = await Promise.all([
@@ -308,166 +150,46 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       sourcePath: targetPaths.mcpConfigPath ?? targetPaths.configPath,
       controllable: false
     });
-    const sanitized = sanitizeCapturedJson(settings.value, "claude.settings");
+    const excluded = [
+      ...Object.keys(settings.value).map((key) => `settings.json.${key}`),
+      ...(Object.keys(liveMcp).length > 0 ? [".claude.json.mcpServers"] : [])
+    ];
     return {
       instructions,
-      configText: `${JSON.stringify({ settings: sanitized.value, mcpServers: {} }, null, 2)}\n`,
-      mcpServers: [],
       mcpConnections,
-      disabledSkillPaths: [],
-      warnings: [],
-      excluded: sanitized.excluded
+      warnings: excluded.length > 0
+        ? ["Claude Code settings and MCP definitions remain Agent-owned"]
+        : [],
+      excluded
     };
   },
-  ...profileFiles,
-  materializeMcpRefs: (profile) => profile,
-  hasMeaningfulNativeConfig: (configText) => {
-    const parsed = parseJsoncObject(configText, "Invalid Claude Code Profile config");
-    if (!parsed.ok) return true;
-    if (Object.keys(parsed.value).some(
-      (key) => key !== "settings" && key !== "mcpServers"
-    )) return true;
-    const settings = parsed.value.settings;
-    if (settings === undefined) return false;
-    if (!isRecord(settings)) return true;
-    return Object.keys(settings).some((key) => key !== "$schema");
-  },
-  createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
-    const activeState = state ?? DEFAULT_STATE;
-    const warnings = findSecretWarnings(profile.instructions).concat(
-      findSecretWarnings(profile.configText)
-    );
+  createPreview: async ({
+    profile,
+    targetPaths,
+    state = DEFAULT_STATE
+  }): Promise<TargetActivationPreview> => {
+    const warnings = findSecretWarnings(profile.instructions);
     const errors: string[] = [];
     const changes: PlannedFileChange[] = [];
-    const [liveInstructions, liveSettingsText, liveMcpText] = await Promise.all([
-      readTextIfExists(targetPaths.instructionsPath),
-      readTextIfExists(targetPaths.configPath),
-      readTextIfExists(targetPaths.mcpConfigPath ?? "")
-    ]);
-
-    addChange(
-      changes,
-      targetPaths.instructionsPath,
-      liveInstructions,
-      profile.instructions
-    );
-
-    const profileConfig = profile.manifest.managed.config
-      ? parseJsoncObject(profile.configText, "Invalid profile Claude Code config")
-      : { ok: true as const, value: {} };
-    let targetState: TargetState = activeState;
-
-    if (!profileConfig.ok) {
-      errors.push(profileConfig.message);
-    }
-
-    const { settings } = profileConfig.ok
-      ? parseProfileConfig(profileConfig.value)
-      : { settings: {} };
-    const profileSettingKeys = Object.keys(settings).filter(
-      (key) => !METADATA_CONFIG_KEYS.has(key)
-    );
-    const shouldInspectSettings =
-      profile.manifest.managed.config && profileSettingKeys.length > 0;
-    const selectedMcpNames = new Set(
-      (profile.assetPolicy.mcpSelections ?? [])
-        .filter((selection) => selection.targetId === "claude-code")
-        .map((selection) => selection.name)
-    );
-    const liveSettings = shouldInspectSettings
-      ? parseJsoncObject(liveSettingsText, "Invalid live settings.json")
-      : { ok: true as const, value: {} };
-    const liveMcp = parseJsoncObject(liveMcpText, "Invalid live .claude.json");
-    if (!liveSettings.ok) {
-      errors.push(liveSettings.message);
-    }
-    if (!liveMcp.ok) {
-      warnings.push(
-        `${liveMcp.message}; MCP selections remain Claude Code-controlled`
-      );
-    }
-
-    let effectiveSettings = settings;
-    if (
-      profileConfig.ok &&
-      liveSettings.ok &&
-      allowMatchingUnmanagedConfig &&
-      !activeState.managedConfigKeys.includes("env") &&
-      "env" in settings &&
-      "env" in liveSettings.value &&
-      isJsonSubset(settings.env, liveSettings.value.env) &&
-      !sameJsonValue(settings.env, liveSettings.value.env)
-    ) {
-      effectiveSettings = Object.fromEntries(
-        Object.entries(settings).filter(([key]) => key !== "env")
-      );
-      warnings.push(
-        "Claude Code env contains Agent-owned values and will be preserved"
-      );
-    }
-
-    const effectiveSettingKeys = Object.keys(effectiveSettings).filter(
-      (key) => !METADATA_CONFIG_KEYS.has(key)
-    );
-    const shouldManageSettings =
-      profile.manifest.managed.config &&
-      effectiveSettingKeys.length > 0;
-
-    if (profileConfig.ok && liveSettings.ok) {
-      const liveMcpServers =
-        liveMcp.ok && isRecord(liveMcp.value.mcpServers)
-          ? liveMcp.value.mcpServers
-          : {};
-      for (const name of selectedMcpNames) {
-        if (!(name in liveMcpServers)) {
-          warnings.push(
-            `MCP server ${name} is not configured in Claude Code; set it up in Claude Code`
-          );
-        }
-      }
+    const liveInstructions = await readTextIfExists(targetPaths.instructionsPath);
+    addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
+    if (profile.resources.mcpByTarget["claude-code"]?.mode === "manage") {
       errors.push(
-        ...findOverlayConflicts(
-          liveSettings.value,
-          effectiveSettings,
-          { ...activeState, managedMcpNames: [] },
-          allowMatchingUnmanagedConfig
-        )
+        "Claude Code MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Claude Code."
       );
-      if (errors.length === 0) {
-        const plannedSettings = shouldManageSettings
-          ? applySettingsOverlay(
-              liveSettingsText,
-              liveSettings.value,
-              effectiveSettings,
-              activeState
-            )
-          : { nextContent: liveSettingsText, managedConfigKeys: [] };
-        targetState = {
-          managedConfigKeys: plannedSettings.managedConfigKeys,
-          managedMcpNames: []
-        };
-        if (shouldManageSettings) {
-          addChange(
-            changes,
-            targetPaths.configPath,
-            liveSettingsText,
-            plannedSettings.nextContent
-          );
-        }
-      }
     }
-
     return {
       warnings,
       errors,
       changes,
       liveFingerprints: {
-        [targetPaths.instructionsPath]: hashText(liveInstructions),
-        ...(shouldManageSettings
-          ? { [targetPaths.configPath]: hashText(liveSettingsText) }
-          : {})
+        [targetPaths.instructionsPath]: hashText(liveInstructions)
       },
-      targetState
+      targetState: {
+        ...state,
+        formatVersion: 2,
+        managedMcpNames: []
+      }
     };
   },
   ...assets

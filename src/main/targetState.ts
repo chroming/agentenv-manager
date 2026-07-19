@@ -27,13 +27,11 @@ const TargetRecoverySchema = z.object({
 });
 
 const LibraryResourceVersionsSchema = z.object({
-  skills: z.record(z.string(), z.string()),
-  mcp: z.record(z.string(), z.string())
+  skills: z.record(z.string(), z.string())
 });
 
 export const TargetStateSchema = z.object({
-  formatVersion: z.literal(1).default(1),
-  managedConfigKeys: z.array(z.string()).default([]),
+  formatVersion: z.literal(2),
   managedMcpNames: z.array(z.string()).default([]),
   activeProfileId: z.string().optional(),
   appliedProfileHash: z.string().optional(),
@@ -48,8 +46,7 @@ export const parseTargetState = (value: unknown): TargetState =>
   TargetStateSchema.parse(value);
 
 export const defaultTargetState = (): TargetState => ({
-  formatVersion: 1,
-  managedConfigKeys: [],
+  formatVersion: 2,
   managedMcpNames: [],
   managedResources: [],
   sharedSkillPreparations: []

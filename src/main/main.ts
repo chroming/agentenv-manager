@@ -11,7 +11,6 @@ import {
 import { createBackupStore } from "./backupStore";
 import { createBackupMaintenanceService } from "./backupMaintenanceService";
 import { createFileGitHubTokenStore, createGitHubAuthService } from "./githubAuthService";
-import { createMcpLibraryStore } from "./mcpLibraryStore";
 import { registerIpcHandlers } from "./ipc";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
@@ -36,6 +35,7 @@ import {
 import { recoverPendingReplacementsInDirectory } from "./fileUtils";
 import { createMutationCoordinator } from "./mutationCoordinator";
 import { ensureAppDataFormat } from "./appDataFormat";
+import { migrateAppDataToV2 } from "./appDataMigration";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -288,10 +288,11 @@ const createServices = async () => {
     homeDir,
     fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });
-  await mutationCoordinator.runExclusive("Initialize AgentEnv data format", () =>
-    ensureAppDataFormat(paths)
-  );
   const targetRegistry = createTargetRegistry();
+  await mutationCoordinator.runExclusive("Migrate AgentEnv data", async () => {
+    await migrateAppDataToV2(paths, targetRegistry);
+    await ensureAppDataFormat(paths);
+  });
   let gitRunner: GitCommandRunner | undefined;
   let repositorySourcePromise: Promise<GitCliSkillSource> | undefined;
   let repositoryServicesDisposed = false;
@@ -393,14 +394,12 @@ const createServices = async () => {
     skillLibraryStore,
     settingsStore
   );
-  const mcpLibraryStore = createMcpLibraryStore(paths);
   const activationService = createActivationService({
     paths,
     profileStore,
     targetRegistry,
     targetScope,
     settingsStore,
-    mcpLibraryStore,
     skillLibraryStore
   });
   const targetDiscoveryService = createTargetDiscoveryService({
@@ -413,7 +412,6 @@ const createServices = async () => {
     targetRegistry,
     profileStore,
     skillLibraryStore,
-    mcpLibraryStore,
     targetDiscoveryService,
     targetScope
   });
@@ -430,7 +428,6 @@ const createServices = async () => {
     githubAuthService,
     settingsStore,
     skillLibraryStore,
-    mcpLibraryStore,
     activationService,
     targetCaptureService,
     targetRegistry,

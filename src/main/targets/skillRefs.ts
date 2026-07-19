@@ -21,18 +21,14 @@ const isOwnedSkillDir = async (targetDir: string, targetPaths: TargetPaths) =>
 const contentMatches = async (sourceDir: string, targetDir: string) =>
   (await pathExists(sourceDir)) &&
   (await pathExists(targetDir)) &&
-  (await hashComparableResource(sourceDir)) === (await hashComparableResource(targetDir));
+  (await hashComparableResource(sourceDir)) ===
+    (await hashComparableResource(targetDir));
 
 export const skillTargetNames = ({ profile }: TargetAssetInput) =>
   new Set(
-    profile.assetPolicy.ownedDirs
-      .filter((ownedDir) => ownedDir.kind === "skill")
-      .map((ownedDir) => ownedDir.targetName)
-      .concat(
-        (profile.assetPolicy.skillRefs ?? [])
-          .filter((skillRef) => skillRef.enabled !== false)
-          .map((skillRef) => skillRef.targetName)
-      )
+    profile.resources.skills
+      .filter((skill) => skill.enabled)
+      .map((skill) => skill.targetName)
   );
 
 export const validateSkillRefs = async ({
@@ -44,51 +40,44 @@ export const validateSkillRefs = async ({
   isolateSkillRoot
 }: TargetAssetInput) => {
   const errors: string[] = [];
-  const skillRefs = (profile.assetPolicy.skillRefs ?? []).filter(
-    (skillRef) => skillRef.enabled !== false
-  );
-  if (skillRefs.length === 0) {
-    return errors;
-  }
+  const skillRefs = profile.resources.skills;
+  if (skillRefs.length === 0) return errors;
   if (!targetPaths.skillsDir) {
-    return ["Target does not expose a skills directory"];
+    return skillRefs.some((skill) => skill.enabled)
+      ? ["Agent does not expose a Skills directory"]
+      : [];
   }
   if (!skillLibraryDir) {
-    return ["Skill library directory is required for shared skill references"];
-  }
-
-  const declaredTargets = new Map<string, string>();
-  for (const ownedDir of profile.assetPolicy.ownedDirs) {
-    if (ownedDir.kind === "skill") {
-      declaredTargets.set(ownedDir.targetName, ownedDir.source);
-    }
+    return ["Skill Library directory is required for Profile Skills"];
   }
 
   for (const skillRef of skillRefs) {
-    const previousSource = declaredTargets.get(skillRef.targetName);
-    if (previousSource) {
-      errors.push(
-        `Skill target ${skillRef.targetName} is declared more than once: ${previousSource} and skills-library/${skillRef.libraryId}`
-      );
-      continue;
-    }
-    declaredTargets.set(skillRef.targetName, `skills-library/${skillRef.libraryId}`);
-
     const sourceDir = librarySourceFor(skillLibraryDir, skillRef.libraryId);
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
-    if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
-      errors.push(`Library skill does not exist: ${sourceDir}`);
+    const targetExists = !isolateSkillRoot && await pathEntryExists(targetDir);
+    const owned = targetExists && await isOwnedSkillDir(targetDir, targetPaths);
+    if (!skillRef.enabled) {
+      if (targetExists && !owned) {
+        errors.push(
+          `Cannot turn off Skill ${skillRef.targetName} because the active copy is outside AgentEnv ownership: ${targetDir}`
+        );
+      }
+      continue;
     }
-    const exists = !isolateSkillRoot && await pathExists(targetDir);
-    const owned = exists && await isOwnedSkillDir(targetDir, targetPaths);
+
+    if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
+      errors.push(`Library Skill does not exist: ${sourceDir}`);
+      continue;
+    }
     const matchingUnmanaged =
-      exists && allowMatchingUnmanagedSkills && await contentMatches(sourceDir, targetDir);
+      targetExists &&
+      allowMatchingUnmanagedSkills &&
+      await contentMatches(sourceDir, targetDir);
     const replaceable = replaceablePaths?.has(targetDir) === true;
-    if (exists && !owned && !matchingUnmanaged && !replaceable) {
+    if (targetExists && !owned && !matchingUnmanaged && !replaceable) {
       errors.push(`Skill target already exists and is not AgentEnv-owned: ${targetDir}`);
     }
   }
-
   return errors;
 };
 
@@ -97,14 +86,11 @@ export const addSkillRefBackupPaths = (
   targetPaths: TargetPaths,
   input: TargetAssetInput
 ) => {
-  if (!targetPaths.skillsDir || input.isolateSkillRoot) {
-    return;
-  }
-  for (const skillRef of (input.profile.assetPolicy.skillRefs ?? []).filter(
-    (reference) => reference.enabled !== false
-  )) {
-    paths.add(join(targetPaths.skillsDir, skillRef.targetName));
-    paths.add(`${join(targetPaths.skillsDir, skillRef.targetName)}.agentenv-owner.json`);
+  if (!targetPaths.skillsDir || input.isolateSkillRoot) return;
+  for (const skillRef of input.profile.resources.skills) {
+    const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
+    paths.add(targetDir);
+    paths.add(`${targetDir}.agentenv-owner.json`);
   }
 };
 
@@ -116,26 +102,23 @@ export const applySkillRefs = async ({
   allowMatchingUnmanagedSkills,
   replaceablePaths
 }: TargetAssetInput) => {
-  if (!targetPaths.skillsDir || !skillLibraryDir) {
-    return;
-  }
+  if (!targetPaths.skillsDir || !skillLibraryDir) return;
 
-  for (const skillRef of (profile.assetPolicy.skillRefs ?? []).filter(
-    (reference) => reference.enabled !== false
-  )) {
+  for (const skillRef of profile.resources.skills.filter((skill) => skill.enabled)) {
     const sourceDir = librarySourceFor(skillLibraryDir, skillRef.libraryId);
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
     const targetExists = await pathEntryExists(targetDir);
     const owned = targetExists && await isOwnedSkillDir(targetDir, targetPaths);
     const matchingUnmanaged =
-      targetExists && allowMatchingUnmanagedSkills && await contentMatches(sourceDir, targetDir);
+      targetExists &&
+      allowMatchingUnmanagedSkills &&
+      await contentMatches(sourceDir, targetDir);
     const replaceable = replaceablePaths?.has(targetDir) === true;
     if (targetExists && !owned && !matchingUnmanaged && !replaceable) {
       throw new Error(
         `Skill target changed after preview and is not AgentEnv-owned: ${targetDir}`
       );
     }
-
     await deploySkillDirectory({
       sourceDir,
       targetDir,

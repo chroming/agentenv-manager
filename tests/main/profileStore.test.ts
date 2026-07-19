@@ -13,158 +13,95 @@ const writeProfile = async (
   const id = input.id ?? "daily-coding";
   const profileDir = join(profileRoot, "profiles", id);
   await mkdir(profileDir, { recursive: true });
-  await writeFile(
-    join(profileDir, "profile.json"),
-      JSON.stringify({
-        id,
-        targetId: "codex",
-        name: input.name ?? "Daily Coding",
-        description: "Default",
-        iconKey: "rocket",
-        ...(input.createdAt ? { createdAt: input.createdAt } : {}),
-        version: 1,
-        managed: { instructions: true, config: true, assets: true }
-      })
-  );
-  await writeFile(join(profileDir, "AGENTS.md"), "# Agent\n");
-  await writeFile(join(profileDir, "mcp.toml"), "[mcp_servers.docs]\n");
-  await writeFile(
-    join(profileDir, "skills.json"),
-    JSON.stringify({
-      ownedSkillDirs: [],
-      disabledSkillPaths: []
-    })
-  );
+  await writeFile(join(profileDir, "profile.json"), JSON.stringify({
+    id,
+    preferredTargetId: "codex",
+    name: input.name ?? "Daily Coding",
+    description: "Default",
+    iconKey: "rocket",
+    ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+    version: 2
+  }));
+  await writeFile(join(profileDir, "INSTRUCTIONS.md"), "# Agent\n");
+  await writeFile(join(profileDir, "resources.json"), JSON.stringify({
+    skills: [{ libraryId: "review", targetName: "review", enabled: true }],
+    mcpByTarget: {
+      codex: { mode: "manage", selections: [{ name: "docs", enabled: true }] }
+    }
+  }));
 };
 
 afterEach(async () => {
-  if (root) {
-    await rm(root, { recursive: true, force: true });
-    root = "";
-  }
+  if (root) await rm(root, { recursive: true, force: true });
+  root = "";
 });
 
-describe("profile store", () => {
-  it("lists valid profiles", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-"));
+describe("profile store v2", () => {
+  it("lists valid profiles with per-target hashes", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-v2-"));
     await writeProfile(root);
 
-    const store = createProfileStore({ appDataRoot: root });
+    const [profile] = await createProfileStore({ appDataRoot: root }).listProfiles();
 
-    await expect(store.listProfiles()).resolves.toEqual([
-      {
-        id: "daily-coding",
-        targetId: "codex",
-        name: "Daily Coding",
-        description: "Default",
-        createdAt: expect.any(String),
-        iconKey: "rocket",
-        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-        targetContentHashes: {
-          antigravity: expect.stringMatching(/^[a-f0-9]{64}$/),
-          opencode: expect.stringMatching(/^[a-f0-9]{64}$/),
-          "claude-code": expect.stringMatching(/^[a-f0-9]{64}$/),
-          codex: expect.stringMatching(/^[a-f0-9]{64}$/)
-        }
-      }
-    ]);
+    expect(profile).toMatchObject({
+      id: "daily-coding",
+      preferredTargetId: "codex",
+      name: "Daily Coding",
+      iconKey: "rocket",
+      contentHash: expect.stringMatching(/^[a-f0-9]{64}$/)
+    });
+    expect(profile.targetContentHashes).toMatchObject({
+      codex: expect.stringMatching(/^[a-f0-9]{64}$/),
+      opencode: expect.stringMatching(/^[a-f0-9]{64}$/)
+    });
   });
 
-  it("lists profiles by persisted creation time newest first", async () => {
+  it("orders Profiles by persisted creation time", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-profile-order-"));
-    await writeProfile(root, {
-      id: "newer-profile",
-      name: "A Newer Profile",
-      createdAt: "2026-07-16T10:00:00.000Z"
-    });
-    await writeProfile(root, {
-      id: "older-profile",
-      name: "Z Older Profile",
-      createdAt: "2026-07-15T10:00:00.000Z"
-    });
+    await writeProfile(root, { id: "newer", createdAt: "2026-07-16T10:00:00.000Z" });
+    await writeProfile(root, { id: "older", createdAt: "2026-07-15T10:00:00.000Z" });
 
-    const store = createProfileStore({ appDataRoot: root });
-
-    expect((await store.listProfiles()).map((profile) => profile.id)).toEqual([
-      "newer-profile",
-      "older-profile"
-    ]);
+    expect((await createProfileStore({ appDataRoot: root }).listProfiles()).map(({ id }) => id))
+      .toEqual(["newer", "older"]);
   });
 
-  it("keeps valid Profiles available when another stored Profile is malformed", async () => {
+  it("keeps valid Profiles visible when another Profile is malformed", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-profile-recovery-"));
     await writeProfile(root);
     const brokenDir = join(root, "profiles", "broken-profile");
     await mkdir(brokenDir, { recursive: true });
     await writeFile(join(brokenDir, "profile.json"), "{}\n");
-    await writeFile(join(root, "profiles", ".DS_Store"), "finder metadata");
 
     const profiles = await createProfileStore({ appDataRoot: root }).listProfiles();
 
     expect(profiles[0]).toMatchObject({ id: "daily-coding" });
-    expect(profiles[0].loadError).toBeUndefined();
-    expect(profiles[1]).toMatchObject({
-      id: "broken-profile",
-      targetId: "unknown",
-      loadError: expect.any(String)
-    });
+    expect(profiles[0]).not.toHaveProperty("loadError");
+    expect(profiles[1]).toMatchObject({ id: "broken-profile", loadError: expect.any(String) });
   });
 
-  it("reads a profile with managed files", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-"));
+  it("reads and atomically saves only the v2 Profile files", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-save-"));
     await writeProfile(root);
-
     const store = createProfileStore({ appDataRoot: root });
     const profile = await store.readProfile("daily-coding");
+    await writeFile(join(profile.profileDir!, "stale-native-config.json"), "do not retain");
 
-    expect(profile.manifest.name).toBe("Daily Coding");
-    expect(profile.instructions).toBe("# Agent\n");
-    expect(profile.configText).toBe("[mcp_servers.docs]\n");
-    expect(profile.assetPolicy.ownedDirs).toEqual([]);
-    await store.saveProfile({
+    const saved = await store.saveProfile({
       manifest: { ...profile.manifest, createdAt: undefined },
-      instructions: profile.instructions,
-      configText: profile.configText,
-      assetPolicy: profile.assetPolicy
+      instructions: "# Updated\n",
+      resources: profile.resources
     });
-    expect(
-      JSON.parse(await readFile(join(root, "profiles", "daily-coding", "profile.json"), "utf8"))
-    ).toMatchObject({ createdAt: profile.manifest.createdAt });
-  });
 
-  it("migrates legacy MCP Library references to native Target selections", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-legacy-mcp-profile-"));
-    await writeProfile(root);
-    await writeFile(
-      join(root, "profiles", "daily-coding", "assets.json"),
-      JSON.stringify({
-        ownedDirs: [],
-        ownedFiles: [],
-        skillRefs: [],
-        mcpRefs: [{ libraryId: "docs", targetName: "context7" }],
-        disabledSkillPaths: []
-      })
-    );
-    const store = createProfileStore({ appDataRoot: root });
-
-    const profile = await store.readProfile("daily-coding");
-
-    expect(profile.assetPolicy.mcpRefs).toEqual([]);
-    expect(profile.assetPolicy.mcpSelections).toEqual([
-      { targetId: "codex", name: "context7" }
+    expect(saved.instructions).toBe("# Updated\n");
+    expect(saved.manifest.createdAt).toBe(profile.manifest.createdAt);
+    await expect(readdir(profile.profileDir!)).resolves.toEqual([
+      "INSTRUCTIONS.md",
+      "profile.json",
+      "resources.json"
     ]);
-    await store.saveProfile(profile);
-    expect(
-      JSON.parse(
-        await readFile(join(root, "profiles", "daily-coding", "assets.json"), "utf8")
-      )
-    ).toMatchObject({
-      mcpRefs: [],
-      mcpSelections: [{ targetId: "codex", name: "context7" }]
-    });
   });
 
-  it("updates profile metadata without persisting unsaved environment content", async () => {
+  it("updates metadata without changing environment content", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-profile-metadata-"));
     await writeProfile(root);
     const store = createProfileStore({ appDataRoot: root });
@@ -181,94 +118,71 @@ describe("profile store", () => {
       description: "Review metadata",
       iconKey: "shield"
     });
-    await expect(
-      readFile(join(root, "profiles", "daily-coding", "AGENTS.md"), "utf8")
-    ).resolves.toBe("# Agent\n");
-    await expect(
-      readFile(join(root, "profiles", "daily-coding", "mcp.toml"), "utf8")
-    ).resolves.toBe("[mcp_servers.docs]\n");
+    expect(updated.instructions).toBe("# Agent\n");
+    expect(updated.resources.skills).toHaveLength(1);
   });
 
-  it("rejects unsafe profile ids", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-"));
-    const store = createProfileStore({ appDataRoot: root });
-
-    await expect(store.readProfile("../bad")).rejects.toThrow("Invalid profile id");
-  });
-
-  it("rejects literal credentials before writing a Profile", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-secret-profile-"));
+  it("rejects unsafe ids, duplicate resources, and literal credentials", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-validation-"));
     await writeProfile(root);
     const store = createProfileStore({ appDataRoot: root });
     const profile = await store.readProfile("daily-coding");
 
-    await expect(
-      store.saveProfile({
-        manifest: profile.manifest,
-        instructions: profile.instructions,
-        configText: '{ "api_key": "sk-1234567890abcdefghijklmnop" }',
-        assetPolicy: profile.assetPolicy
-      })
-    ).rejects.toThrow("Reference environment variables instead");
-    await expect(
-      readFile(join(root, "profiles", "daily-coding", "mcp.toml"), "utf8")
-    ).resolves.toBe("[mcp_servers.docs]\n");
+    await expect(store.readProfile("../bad")).rejects.toThrow("Invalid profile id");
+    await expect(store.saveProfile({
+      manifest: profile.manifest,
+      instructions: "api_key: sk-1234567890abcdefghijklmnop",
+      resources: profile.resources
+    })).rejects.toThrow("literal credentials");
+    await expect(store.saveProfile({
+      manifest: profile.manifest,
+      instructions: profile.instructions,
+      resources: {
+        ...profile.resources,
+        skills: [
+          { libraryId: "one", targetName: "same", enabled: true },
+          { libraryId: "two", targetName: "same", enabled: true }
+        ]
+      }
+    })).rejects.toThrow("more than once");
   });
 
-  it("duplicates a profile including profile-owned files", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-"));
+  it("duplicates canonical Profile content", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-copy-"));
     await writeProfile(root);
-    await mkdir(join(root, "profiles", "daily-coding", "skills", "reviewer"), {
-      recursive: true
-    });
-    await writeFile(
-      join(root, "profiles", "daily-coding", "skills", "reviewer", "SKILL.md"),
-      "# Reviewer\n"
-    );
-
     const store = createProfileStore({ appDataRoot: root });
+
     const duplicate = await store.duplicateProfile("daily-coding");
 
     expect(duplicate.id).not.toBe("daily-coding");
     expect(duplicate.manifest.name).toBe("Daily Coding Copy");
-    expect(Date.parse(duplicate.manifest.createdAt ?? "")).toBeGreaterThanOrEqual(
-      Date.parse((await store.readProfile("daily-coding")).manifest.createdAt ?? "")
-    );
-    await expect(
-      readFile(join(duplicate.profileDir ?? "", "skills", "reviewer", "SKILL.md"), "utf8")
-    ).resolves.toBe("# Reviewer\n");
-    await expect(store.listProfiles()).resolves.toHaveLength(2);
+    expect(duplicate.instructions).toBe("# Agent\n");
+    expect(duplicate.resources.skills).toEqual([
+      { libraryId: "review", targetName: "review", enabled: true }
+    ]);
   });
 
-  it("deletes a profile directory", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-"));
+  it("moves deleted Profiles to recovery trash", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-delete-"));
     await writeProfile(root);
-
     const store = createProfileStore({ appDataRoot: root });
+
     await store.deleteProfile("daily-coding");
 
     await expect(store.listProfiles()).resolves.toEqual([]);
-    await expect(store.readProfile("daily-coding")).rejects.toThrow();
     await expect(readdir(join(root, "trash", "profiles"))).resolves.toEqual([
       expect.stringMatching(/^daily-coding-/)
     ]);
   });
 
-  it("refuses to follow a profile directory symlink outside app data", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-"));
-    const outsideDir = join(root, "outside");
-    const profileRoot = join(root, "profiles");
-    await mkdir(outsideDir, { recursive: true });
-    await mkdir(profileRoot, { recursive: true });
-    await writeFile(join(outsideDir, "profile.json"), "keep me\n", "utf8");
-    await symlink(outsideDir, join(profileRoot, "daily-coding"), "dir");
-    const store = createProfileStore({ appDataRoot: root });
+  it("refuses to follow a Profile directory symlink", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-symlink-"));
+    const outside = join(root, "outside");
+    await writeProfile(outside, { id: "linked" });
+    await mkdir(join(root, "profiles"), { recursive: true });
+    await symlink(join(outside, "profiles", "linked"), join(root, "profiles", "linked"));
 
-    await expect(store.readProfile("daily-coding")).rejects.toThrow(
-      "Profile storage must be a real directory"
-    );
-    await expect(readFile(join(outsideDir, "profile.json"), "utf8")).resolves.toBe(
-      "keep me\n"
-    );
+    await expect(createProfileStore({ appDataRoot: root }).readProfile("linked"))
+      .rejects.toThrow("real directory");
   });
 });

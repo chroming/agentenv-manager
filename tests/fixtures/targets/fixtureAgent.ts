@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ProfileDetail } from "../../../src/shared/types";
 import type { AgentTargetIntegration } from "../../../src/main/targets/contract";
@@ -29,7 +29,8 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
       instructions: true,
       skills: true,
       mcpTransports: ["stdio"],
-      disabledSkillPaths: false
+      disabledSkillPaths: false,
+      mcpActivation: true
     }
   },
   discovery: {
@@ -37,9 +38,7 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
       const path = await input.findExecutable("fixture-agent");
       return {
         found: Boolean(path),
-        evidence: path
-          ? [{ kind: "command", label: "fixture-agent command", path }]
-          : []
+        evidence: path ? [{ kind: "command", label: "fixture-agent command", path }] : []
       };
     }
   },
@@ -60,70 +59,29 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
       id,
       manifest: {
         id,
-        targetId: "fixture-agent",
+        preferredTargetId: "fixture-agent",
         name: "Fixture Profile",
         description: "Fixture profile",
-        version: 1,
-        managed: { instructions: true, config: true, assets: true }
+        version: 2
       },
       instructions: "",
-      configText: "{}\n",
-      assetPolicy: {
-        ownedDirs: [],
-        ownedFiles: [],
-        skillRefs: [],
-        mcpRefs: [],
-        disabledSkillPaths: []
-      }
+      resources: { skills: [], mcpByTarget: {} }
     }),
     captureProfile: async (targetPaths) => ({
       instructions: await readText(targetPaths.instructionsPath),
-      configText: await readText(targetPaths.configPath),
-      mcpServers: [],
-      disabledSkillPaths: [],
+      mcpConnections: [],
       warnings: [],
       excluded: []
-    }),
-    readProfileFiles: async (profileDir, manifest) => ({
-      id: manifest.id,
-      profileDir,
-      manifest,
-      instructions: await readText(join(profileDir, "AGENT.md")),
-      configText: await readText(join(profileDir, "fixture.json")),
-      assetPolicy: {
-        ownedDirs: [],
-        ownedFiles: [],
-        skillRefs: [],
-        mcpRefs: [],
-        disabledSkillPaths: []
-      }
-    }),
-    writeProfileFiles: async (profileDir, profile) => {
-      await mkdir(profileDir, { recursive: true });
-      await writeFile(
-        join(profileDir, "AGENT.md"),
-        profile.instructions,
-        "utf8"
-      );
-      await writeFile(
-        join(profileDir, "fixture.json"),
-        profile.configText,
-        "utf8"
-      );
-    }
+    })
   },
-  config: {
-    hasMeaningfulNativeConfig: (configText) => configText.trim().length > 0,
+  preview: {
     createPreview: async () => ({
       changes: [],
       warnings: [],
       errors: [],
       liveFingerprints: {},
-      targetState: { managedConfigKeys: [], managedMcpNames: [] }
+      targetState: { managedMcpNames: [] }
     })
-  },
-  mcp: {
-    materializeMcpRefs: (profile) => profile
   },
   skills: {
     readNativeState: async () => ({ disabledRuntimeNames: [], issues: [] }),
@@ -140,8 +98,7 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
   }
 };
 
-export const createFixtureAgentAdapter = () =>
-  defineTargetIntegration(fixtureAgentIntegration);
+export const createFixtureAgentAdapter = () => defineTargetIntegration(fixtureAgentIntegration);
 
 export const createFixtureProfile = (
   profileDir: string,

@@ -2,14 +2,9 @@ import { describe, expect, it } from "vitest";
 import { parseTargetState } from "../../src/main/targetState";
 
 describe("Target state schema", () => {
-  it("migrates versionless state into the current format", () => {
-    expect(parseTargetState({ managedConfigKeys: [], managedMcpNames: [] })).toEqual({
-      formatVersion: 1,
-      managedConfigKeys: [],
-      managedMcpNames: [],
-      managedResources: [],
-      sharedSkillPreparations: []
-    });
+  it("rejects versionless legacy state outside startup migration", () => {
+    expect(() => parseTargetState({ managedConfigKeys: [], managedMcpNames: [] }))
+      .toThrow();
   });
 
   it("rejects malformed safety fields instead of filtering them out", () => {
@@ -22,7 +17,7 @@ describe("Target state schema", () => {
 
   it("rejects unsupported future formats", () => {
     expect(() => parseTargetState({
-      formatVersion: 2,
+      formatVersion: 3,
       managedConfigKeys: [],
       managedMcpNames: []
     })).toThrow();

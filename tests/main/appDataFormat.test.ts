@@ -17,22 +17,30 @@ afterEach(async () => {
 });
 
 describe("AgentEnv data format", () => {
-  it("registers an existing unversioned data directory without rewriting its data", async () => {
+  it("registers an empty data directory", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-format-"));
+    const paths = createPaths({ appDataRoot: root });
+
+    await expect(ensureAppDataFormat(paths)).resolves.toEqual({ formatVersion: 2 });
+    await expect(readAppDataManifest(root)).resolves.toEqual({ formatVersion: 2 });
+  });
+
+  it("requires migration before registering a non-empty unversioned directory", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-data-format-"));
     const paths = createPaths({ appDataRoot: root });
     await writeFile(join(root, "existing.txt"), "keep\n");
 
-    await expect(ensureAppDataFormat(paths)).resolves.toEqual({ formatVersion: 1 });
+    await expect(ensureAppDataFormat(paths)).rejects.toThrow("startup migration");
 
     await expect(readFile(join(root, "existing.txt"), "utf8")).resolves.toBe("keep\n");
-    await expect(readAppDataManifest(root)).resolves.toEqual({ formatVersion: 1 });
+    await expect(readAppDataManifest(root)).resolves.toBeUndefined();
   });
 
   it("fails closed for a future data format", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-data-format-"));
     await writeFile(
       join(root, APP_DATA_MANIFEST_NAME),
-      '{"formatVersion":2}\n'
+      '{"formatVersion":3}\n'
     );
 
     await expect(readAppDataManifest(root)).rejects.toThrow(

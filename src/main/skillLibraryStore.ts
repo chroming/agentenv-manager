@@ -2185,7 +2185,7 @@ export const createSkillLibraryStore = (
           updatePolicy: skill.updatePolicy,
           profileNames: profiles
             .filter((profile) =>
-              profile.assetPolicy.skillRefs.some((reference) => reference.libraryId === skill.id)
+              profile.resources.skills.some((reference) => reference.libraryId === skill.id)
             )
             .map((profile) => profile.manifest.name)
             .sort(),
@@ -2215,7 +2215,7 @@ export const createSkillLibraryStore = (
       entries,
       comparisons,
       profileCount: profiles.filter((profile) =>
-        profile.assetPolicy.skillRefs.some((reference) => matchingIds.has(reference.libraryId))
+        profile.resources.skills.some((reference) => matchingIds.has(reference.libraryId))
       ).length,
       installCount: inventory.filter(
         (item) => item.status === "managed" && item.libraryId && matchingIds.has(item.libraryId)
@@ -2262,7 +2262,7 @@ export const createSkillLibraryStore = (
       "Skill merge"
     );
     const affectedProfiles = profileDetails.filter((profile) =>
-      profile.assetPolicy.skillRefs.some((reference) => removedIdSet.has(reference.libraryId))
+      profile.resources.skills.some((reference) => removedIdSet.has(reference.libraryId))
     );
     const inventory = targetPaths.length > 0 ? await scanInventory(targetPaths) : [];
     const affectedInstalls = inventory.filter(
@@ -2328,10 +2328,10 @@ export const createSkillLibraryStore = (
       );
 
       for (const profile of affectedProfiles) {
-        const hasKeptReference = profile.assetPolicy.skillRefs.some(
+        const hasKeptReference = profile.resources.skills.some(
           (reference) => reference.libraryId === keepId
         );
-        const mappedReferences = profile.assetPolicy.skillRefs
+        const mappedReferences = profile.resources.skills
           .filter((reference) => !(hasKeptReference && removedIdSet.has(reference.libraryId)))
           .map((reference) =>
             removedIdSet.has(reference.libraryId)
@@ -2357,8 +2357,7 @@ export const createSkillLibraryStore = (
         await profileStore.saveProfile({
           manifest: profile.manifest,
           instructions: profile.instructions,
-          configText: profile.configText,
-          assetPolicy: { ...profile.assetPolicy, skillRefs: nextReferences }
+          resources: { ...profile.resources, skills: nextReferences }
         });
       }
       for (const install of affectedInstalls) {
@@ -2835,7 +2834,7 @@ export const createSkillLibraryStore = (
           profileStore,
           "Skill update preview"
         )).flatMap((profile) =>
-          profile.assetPolicy.skillRefs.some(
+          profile.resources.skills.some(
             (reference) => reference.libraryId === id && reference.enabled !== false
           )
             ? [profile.manifest.name]

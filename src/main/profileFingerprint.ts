@@ -3,31 +3,31 @@ import type { ProfileDetail } from "../shared/types";
 
 type ProfileFingerprintInput = Pick<
   ProfileDetail,
-  "manifest" | "instructions" | "configText" | "assetPolicy"
+  "manifest" | "instructions" | "resources"
 >;
 
-const byIdentity = <T extends { targetName: string }>(left: T, right: T) =>
-  left.targetName.localeCompare(right.targetName);
-
-export const createProfileContentHash = (profile: ProfileFingerprintInput): string => {
+export const createProfileContentHash = (
+  profile: ProfileFingerprintInput,
+  targetId?: string
+): string => {
+  const mcpPolicy = targetId ? profile.resources.mcpByTarget[targetId] : undefined;
   const deployment = {
-    targetId: profile.manifest.targetId,
-    managed: profile.manifest.managed,
+    version: profile.manifest.version,
+    targetId: targetId ?? null,
     instructions: profile.instructions,
-    configText: profile.configText,
-    assetPolicy: {
-      ownedDirs: [...profile.assetPolicy.ownedDirs].sort(byIdentity),
-      ownedFiles: [...profile.assetPolicy.ownedFiles].sort(byIdentity),
-      skillRefs: [...profile.assetPolicy.skillRefs].sort(byIdentity),
-      mcpRefs: [...profile.assetPolicy.mcpRefs].sort(byIdentity),
-      mcpSelections: [...(profile.assetPolicy.mcpSelections ?? [])].sort(
-        (left, right) =>
-          left.targetId.localeCompare(right.targetId) ||
-          left.name.localeCompare(right.name)
-      ),
-      disabledSkillPaths: [...profile.assetPolicy.disabledSkillPaths].sort()
-    }
+    skills: [...profile.resources.skills].sort(
+      (left, right) =>
+        left.targetName.localeCompare(right.targetName) ||
+        left.libraryId.localeCompare(right.libraryId)
+    ),
+    mcp: mcpPolicy?.mode === "manage"
+      ? {
+          mode: mcpPolicy.mode,
+          selections: [...mcpPolicy.selections].sort((left, right) =>
+            left.name.localeCompare(right.name)
+          )
+        }
+      : { mode: "ignore", selections: [] }
   };
-
   return createHash("sha256").update(JSON.stringify(deployment)).digest("hex");
 };

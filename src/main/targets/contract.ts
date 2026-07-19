@@ -28,23 +28,10 @@ export interface TargetProfileDriver {
   captureProfile(
     targetPaths: ReturnType<AgentTargetAdapter["createTargetPaths"]>
   ): Promise<CapturedTargetProfile>;
-  readProfileFiles(
-    profileDir: string,
-    manifest: ProfileDetail["manifest"]
-  ): Promise<ProfileDetail>;
-  writeProfileFiles(profileDir: string, profile: ProfileDetail): Promise<void>;
 }
 
-export interface TargetConfigDriver {
-  hasMeaningfulNativeConfig(configText: string): boolean;
+export interface TargetPreviewDriver {
   createPreview(input: TargetPreviewInput): ReturnType<AgentTargetAdapter["createPreview"]>;
-}
-
-export interface TargetMcpDriver {
-  materializeMcpRefs(
-    profile: ProfileDetail,
-    mcpLibrary: Parameters<AgentTargetAdapter["materializeMcpRefs"]>[1]
-  ): ProfileDetail;
 }
 
 /** Read-only facts about how an Agent discovers and identifies Skills. */
@@ -72,8 +59,7 @@ export interface AgentTargetIntegration {
   discovery: TargetDiscoveryDriver;
   paths: TargetPathDriver;
   profile: TargetProfileDriver;
-  config: TargetConfigDriver;
-  mcp: TargetMcpDriver;
+  preview: TargetPreviewDriver;
   skills: TargetSkillDriver;
   assets: TargetAssetDriver;
 }

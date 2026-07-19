@@ -40,15 +40,7 @@ export const defineTargetIntegration = (
     skills: integration.skills,
     createDefaultProfile: (id) => integration.profile.createDefaultProfile(id),
     captureProfile: (targetPaths) => integration.profile.captureProfile(targetPaths),
-    readProfileFiles: (profileDir, manifest) =>
-      integration.profile.readProfileFiles(profileDir, manifest),
-    writeProfileFiles: (profileDir, profile) =>
-      integration.profile.writeProfileFiles(profileDir, profile),
-    materializeMcpRefs: (profile, mcpLibrary) =>
-      integration.mcp.materializeMcpRefs(profile, mcpLibrary),
-    hasMeaningfulNativeConfig: (configText) =>
-      integration.config.hasMeaningfulNativeConfig(configText),
-    createPreview: (input) => integration.config.createPreview(input),
+    createPreview: (input) => integration.preview.createPreview(input),
     validateAssets: (input) => integration.assets.validateAssets(input),
     getAssetBackupPaths: (input) => integration.assets.getAssetBackupPaths(input),
     applyAssets: (input) => integration.assets.applyAssets(input)

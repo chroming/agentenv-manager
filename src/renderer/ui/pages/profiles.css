@@ -1544,10 +1544,6 @@
   white-space: nowrap;
 }
 
-.profile-owned-skill-dialog {
-  max-width: 440px;
-}
-
 .skill-update-impact {
   color: #52617a;
   font-size: 12px;
@@ -1704,8 +1700,7 @@
 
 .profile-composer-section[data-profile-composer-id="instructions"] .profile-composer-section__icon,
 .profile-composer-section[data-profile-composer-id="skills"] .profile-composer-section__icon,
-.profile-composer-section[data-profile-composer-id="mcp"] .profile-composer-section__icon,
-.profile-composer-section[data-profile-composer-id="advanced"] .profile-composer-section__icon {
+.profile-composer-section[data-profile-composer-id="mcp"] .profile-composer-section__icon {
   background: transparent;
   color: var(--muted);
 }
@@ -1797,139 +1792,4 @@
     justify-self: start;
     width: 100%;
   }
-}
-.profile-mcp-editor {
-  display: grid;
-  min-width: 0;
-}
-
-.profile-mcp-editor__header {
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
-  min-height: 56px;
-  padding: 10px 14px;
-}
-
-.profile-mcp-editor__header > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.profile-mcp-editor__header strong {
-  color: var(--text);
-  font-size: 13px;
-}
-
-.profile-mcp-editor__header span,
-.profile-mcp-empty {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.profile-mcp-list {
-  display: grid;
-}
-
-.profile-mcp-row {
-  align-items: center;
-  border-bottom: 1px solid var(--border-subtle, var(--border));
-  display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(0, 1fr) 154px;
-  min-height: 54px;
-  padding: 8px 14px;
-}
-
-.profile-mcp-row:last-child {
-  border-bottom: 0;
-}
-
-.profile-mcp-row__identity {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.profile-mcp-row__identity strong,
-.profile-mcp-row__identity small {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-mcp-row__identity strong {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.profile-mcp-row__identity small,
-.profile-mcp-readonly {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.profile-mcp-mode {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-  height: 36px;
-  min-height: 36px;
-  min-width: 0;
-  padding: 0 28px 0 10px;
-  width: 100%;
-}
-
-.profile-mcp-readonly {
-  justify-self: end;
-}
-
-.profile-mcp-empty {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  min-height: 64px;
-  padding: 12px 14px;
-}
-
-.profile-mcp-inspection-error {
-  align-items: center;
-  color: var(--warning-text, #8a4b08);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  min-height: 68px;
-  padding: 12px 14px;
-}
-
-.profile-mcp-inspection-error > span {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.profile-mcp-inspection-error strong,
-.profile-mcp-inspection-error small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-mcp-inspection-error strong {
-  color: var(--text);
-  font-size: 12px;
-}
-
-.profile-mcp-inspection-error small {
-  color: var(--muted);
-  font-size: 11px;
 }

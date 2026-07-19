@@ -44,7 +44,7 @@ Product ratings:
 Avoid:
 
 - Treating Target file layouts as the user's primary mental model.
-- Implying that a Profile can only be used by its native Target.
+- Implying that a Profile can only be used by its preferred or created-from Target.
 - Silent writes, ambiguous replacement, and success-only feedback.
 - Destructive actions without affected-object counts or recovery.
 - Inferring major lifecycle states from unrelated counters or prose.
@@ -100,19 +100,18 @@ Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data ro
 A Profile is a saved environment recipe. It owns:
 
 - Instructions.
-- References to Library Skills.
-- Target-specific activation choices for MCP servers already configured by that Agent.
-- Optional Profile-owned Skills.
-- Optional native Advanced configuration.
-- Optional native Target-specific resources such as Agents or disabled Skill paths.
+- References to Library Skills, each with an install name and enabled state.
+- An independent MCP policy for each Target: `Leave unchanged` or a sparse set of `On` and `Off` choices for MCP servers already defined by that Agent.
 
-A Profile has one **native Target format** used to edit and validate native Advanced data. It MAY be applied to any supported Target. Native Target does not mean exclusive deployment Target.
+A Profile MAY record a preferred Target for default UI context and the Target it was created from for provenance. Neither field binds deployment: the same Profile MAY be applied to every compatible Target, and each Target still has at most one active Profile.
 
 Source of truth: the saved Profile directory in AgentEnv data.
 
+A v2 Profile directory contains exactly `profile.json`, `INSTRUCTIONS.md`, and `resources.json`. It MUST NOT store arbitrary native configuration, credentials, private Skill copies, Agent definitions, hooks, environment variables, or disabled-path lists.
+
 Profile name, description, and icon are identity metadata rather than environment payload. Editing
 them MUST persist immediately and independently without saving a dirty Instructions, Skills, MCP activation,
-or Advanced draft, changing deployment readiness, or writing any Target. Environment content keeps
+or resource draft, changing deployment readiness, or writing any Target. Environment content keeps
 the explicit whole-Profile Save contract below.
 
 Each Library Skill reference has a Profile-scoped enabled state. Missing legacy state means enabled.
@@ -121,6 +120,16 @@ Each Library Skill reference has a Profile-scoped enabled state. Missing legacy 
 - Turning a Skill back on MUST restore the same reference without another Library import or picker flow.
 - A disabled Skill MUST NOT be deployed, validated as a desired Target resource, counted as an effective resource, or recorded in applied Library versions.
 - Enable and disable are Profile edits: they become durable on Save and affect a Target only after Preview and Apply.
+- An enabled reference whose Library Skill is missing blocks Apply. A disabled missing reference remains visible for repair but is an effective no-op.
+- Disabling a Skill removes only an AgentEnv-owned deployment. If an active same-name copy is outside AgentEnv ownership, Preview blocks instead of pretending it can turn that copy off.
+
+Each Target MCP policy follows these rules:
+
+- `Leave unchanged` means Apply MUST NOT inspect, parse, hash, diff, back up, write, or retain ownership of that Target's MCP configuration. Retained inactive selections are editor convenience only and MUST NOT affect the Target-specific Profile hash.
+- `Managed by Profile` is sparse. A connection absent from the selections remains Agent-owned.
+- `On` plus an existing native definition updates only the adapter's verified activation field. `On` plus a missing definition blocks Apply and tells the user to configure it in the Agent or turn it Off.
+- `Off` plus an existing native definition updates only the verified activation field. `Off` plus a missing definition is a no-op.
+- A Target without a verified activation mechanism is Agent-controlled. Its Profile policy MUST remain `Leave unchanged`, and Apply MUST NOT write its MCP configuration.
 
 ### 4.4 Agent (internal Target)
 
@@ -194,7 +203,7 @@ It MUST include enough information to distinguish:
 - A Profile MUST NOT copy one Target's MCP definition to another Target.
 - A Profile selection is three-state: missing means `Use Agent setting`, `enabled: true` means `On`, and `enabled: false` means `Off`.
 - Returning a previously selected MCP to `Use Agent setting` MUST preserve its current native value and remove it from AgentEnv deployment state. It MUST NOT implicitly turn the connection off.
-- Legacy MCP Library references MAY be retained in storage for recovery, but are migrated to native Target selections when their Target and name are known. They MUST NOT be written as new definitions.
+- The external v1 migration backup MAY retain legacy MCP Library references for recovery. Conversion maps known Target/name pairs to native Target selections once; v2 runtime MUST NOT read or write legacy definition references.
 
 ### 5.4 Target Identity
 
@@ -236,7 +245,7 @@ The Profile editor MUST distinguish these states:
 | Saved, never applied | Profile is valid but has no deployment on selected Target. | Preview Apply. |
 | Saved, changes pending | Selected Target has an older Profile or Library version. | Preview Apply. |
 | Applied | Saved Profile, referenced Library versions, and managed Target files match. | No Apply action. |
-| Validation blocked | Saved Profile configuration needs correction before Apply. | Open Advanced. |
+| Validation blocked | Saved Profile resources need correction before Apply. | Fix the named row or open the owning product area. |
 | Drifted | Managed Target files changed outside AgentEnv. | Apply to create a fresh preview. |
 | Recovery required | Target history requires intervention before normal Apply. | Open Recovery. |
 
@@ -246,7 +255,7 @@ Rules:
 - Save MUST expose local working feedback immediately. Once persistence succeeds, the editor becomes clean and Apply availability is recalculated from the returned saved Profile without waiting for Target discovery, inventory scanning, update checks, usage aggregation, or a full-page refresh.
 - Save, Apply, and Target selection MUST appear as one compact action group in the selected Profile context. The Profile-scoped destination selector sits immediately before Apply, with Save in the same compact group. Page creation controls MUST NOT separate these lifecycle commands.
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
-- Readiness text describes the current state; it is not a second workflow. Only a condition that requires another product area exposes an inline remediation link: unavailable Target opens Targets, local validation opens Advanced, and required recovery opens Recovery. Preview blockers and drift do not expose a separate Review command because Apply already creates the authoritative fresh preview.
+- Readiness text describes the current state; it is not a second workflow. Only a condition that requires another product area exposes an inline remediation link: unavailable Target opens Agents and required recovery opens Recovery. Resource validation stays beside the affected Instructions, Skill, or MCP row. Preview blockers and drift do not expose a separate Review command because Apply already creates the authoritative fresh preview.
 - Readiness remediation links MUST show a visible verb and object. Icon-only arrows and backend phase labels such as `Review preview` are not executable product intents and MUST NOT appear as commands.
 - When no Target is selected, the visible Target selector remains the single selection entry point. When the Profile is dirty, the visible Save button remains the single persistence action.
 - Edit, Duplicate, Delete, Save, Target selection, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation.
@@ -256,17 +265,16 @@ Rules:
 - Unsaved changes MUST block Preview and Apply.
 - Switching Profile, Target, workspace, or closing the window with a dirty draft MUST offer Save, Discard, or Cancel.
 - Failed validation or Save MUST preserve all draft input.
-- Applying a Profile MUST NOT change its native Target format.
+- Applying a Profile MUST NOT rewrite Agent-native configuration outside explicitly managed MCP activation fields.
 - When exactly one installed Target is available, Profiles MUST show it as stable context instead of an option menu. When multiple installed Targets are available, Target selection remains available.
-- Target selection is scoped to the selected Profile rather than the Profiles page. During an app session, each Profile remembers its own selected Target; otherwise the most recent active Target for that Profile is preferred, followed by its native Target. Choosing a Target for one Profile MUST NOT change another Profile's destination context.
+- Target selection is scoped to the selected Profile rather than the Profiles page. During an app session, each Profile remembers its own selected Target; otherwise the most recent active Target for that Profile is preferred, followed by its persisted preferred Target. Choosing a Target for one Profile MUST NOT change another Profile's destination context.
 - An empty managed Instructions value is a valid complete Profile state. Preview MUST describe it as clearing the managed instruction file rather than blocking Apply.
 - On entry, Profiles SHOULD select the chosen Target's active Profile and open its Skills section for the common single-Target workflow. Selection MUST NOT add a redundant `Current` badge or pin and reorder the row; the row's Target deployment badges remain the source of application state.
 - Profile name, description, and icon changes auto-save as identity metadata. They MUST preserve any unsaved environment draft and MUST NOT enable the environment Save button by themselves.
 - Profile Skills MUST expose enabled and disabled Library references in one compact list. Each row shows its display name, Library path, exact Library content revision, source kind, install name when different, and current state without forcing a details dialog. When the selected Target currently runs that Profile, the row also shows its applied content revision; a mismatch, missing install, or pending removal is `Apply pending`. Ownership, update-source policy, source-check result, Profile availability, and Target deployment are separate dimensions: the action-state column shows only exceptional or currently actionable states, while routine ownership and revisions remain metadata. `Not tracked` MUST NOT be presented as an ownership or management state. Check checks only enabled tracked references in that Profile; Add opens a searchable Library-only picker that identifies source, revision, and path and omits already attached or globally disabled Skills; Remove detaches a reference from the Profile without deleting Library content. A missing reference disables its availability control and offers Relink or Remove. Row menus MUST fit their longest localized command at the minimum viewport.
-- Legacy Profile-owned Skills MUST be labeled as Profile-only with revision unavailable. `Import to Library` creates an independent canonical Library copy, replaces the draft entry with a Library reference, preserves the existing Profile file, exposes local working and error states, and still requires Save before changing the persisted Profile.
 - Updating from Profile Skills still updates the global Library copy. The update confirmation MUST disclose how many Profiles reference it and whether Copy or Live link mode changes installed Targets immediately.
 
-Status: whole-Profile Save, dirty protection, per-Target applied hashes, active-Profile focus, and Profile-scoped Skill enablement are `Implemented`. Same-format adoption of compatible live Instructions, native configuration, disabled-Skill paths, and MCP definitions already represented in Library is `Implemented`; Target-owned Skills, agents, excluded credentials, and MCP definitions absent from Library remain explicit non-adoptable items.
+Status: v2 whole-Profile Save, dirty protection, per-Target applied hashes, active-Profile focus, Profile-scoped Skill enablement, and per-Target MCP policy are `Implemented`. Compatible live Instructions can be adopted. Native configuration, Agent definitions, hooks, environment variables, credentials, and MCP definitions remain Target-owned.
 
 ## 8. Target Lifecycle
 
@@ -316,26 +324,22 @@ Status: canonical persisted lifecycle derivation, operation locking, and `Recove
 
 Every adapter MUST declare capabilities. Cross-Target behavior MUST follow this matrix rather than renderer conditionals.
 
-| Profile resource | Native Target | Different Target | Preview requirement |
+| Profile resource | Selected Target | Another compatible Target | Preview requirement |
 | --- | --- | --- | --- |
 | Instructions | Serialize to native instruction path. | Reuse content and serialize to destination instruction path. | Show destination file and diff. |
 | Library Skill | Install through destination Skill capability. | Portable when destination supports Skills. | Show install, replace, remove, or conflict. |
-| Profile-owned Skill | Install through destination Skill capability. | Portable when its format is generic and destination supports Skills. | Show source and destination. |
-| Native MCP activation | Apply only to the named Target when its adapter supports safe activation control. | Never portable. | Show On, Off, Agent controlled, or Setup required. |
-| Raw Advanced config | Apply only to native Target. | Omit. | Warning naming source, destination, and omitted surface. |
-| Target-specific Agent | Apply only when destination adapter declares compatible Agent format. | Omit by default. | Warning with omitted count and names. |
-| Disabled Skill paths | Apply only when destination supports equivalent semantics. | Omit by default. | Warning with omitted setting. |
+| Native MCP activation | Apply only the destination Target's own policy when its adapter supports safe activation control. | Policies for other Targets are irrelevant. | Show On, Off, Agent controlled, or blocking missing definition. |
 | Unmanaged local resource | Never becomes Profile content automatically. | Preserve unless it conflicts with a desired managed path. | Show preserved warning or blocking conflict. |
 
 Rules:
 
-- Unsupported portable content MUST either block Apply or be explicitly omitted with a warning. It MUST NOT be silently coerced.
-- Cross-Target Preview MUST calculate an effective payload. A zero-payload deployment is blocked, and material omissions require explicit acknowledgement.
+- Unsupported portable content MUST block Apply with remediation. It MUST NOT be silently coerced.
+- Cross-Target Preview MUST calculate an effective payload from the managed Instructions file, enabled Library Skills, and only the selected Target's MCP policy. Empty Instructions still represent one explicit managed file state, and Off still represents one managed MCP switch.
 - Cross-Target Preview MUST show the final destination representation, not only the source Profile.
 - Adding a Target MUST require a single adapter plus contract tests for capabilities, paths, serialization, preview, Apply, drift, and rollback.
-- An adapter MUST NOT receive raw Advanced configuration from another Target.
+- An adapter MUST NOT receive arbitrary native configuration from a Profile.
 
-Status: adapter capability declaration, effective-payload review, omission acknowledgement, cross-Target Instructions and Skills, and Target-specific native MCP activation are `Implemented`.
+Status: adapter capability declaration, effective-payload review, cross-Target Instructions and Skills, and Target-specific native MCP activation are `Implemented`.
 
 ## 10. Preview Contract
 
@@ -344,7 +348,7 @@ Preview is the sole write gate for Profile deployment.
 Preview MUST:
 
 1. Use the latest saved Profile.
-2. Resolve current canonical Skill Library versions and native MCP availability.
+2. Resolve current canonical Skill Library versions and, only for a managed destination policy, the selected native MCP definitions.
 3. Read current Target files and deployment state.
 4. Describe every managed text and resource change.
 5. Group changes as add, replace, remove, preserve, omit, warning, or blocking conflict.
@@ -357,7 +361,7 @@ Preview hierarchy MUST put concrete resource identities and actions before secon
 A Preview becomes stale when any of these changes:
 
 - Saved Profile content.
-- Referenced Library Skill content or native MCP availability.
+- Referenced enabled Library Skill content or a native MCP definition inspected by the selected Target's managed policy.
 - Any live file or resource included in the plan.
 - Deployment state.
 - Selected Target.
@@ -377,9 +381,9 @@ Status: stale checks and no-op detection are `Implemented`.
 
 Apply means complete replacement of the AgentEnv-managed portion of one Target with one saved Profile.
 
-Target configuration files have shared ownership when the effective Profile has native Advanced configuration, MCP activation choices, or Target-specific Skill settings. AgentEnv MUST patch only the fields declared by the adapter. A config file that has no planned semantic change MUST NOT be rewritten or backed up. Configuration files MUST NOT be recorded as whole-file AgentEnv-managed resources: unrelated Agent-native edits remain valid, while whole-file Preview freshness still protects the interval between confirmation and Apply.
+Instructions and dedicated Skill deployments may be fully AgentEnv-owned paths. Agent native configuration remains shared and Agent-owned except for explicit sparse MCP activation fields. OpenCode may patch only `mcp.<name>.enabled`; Codex may patch only `mcp_servers.<name>.enabled`. Claude Code, Antigravity, and any adapter without a verified activation field MUST NOT write MCP configuration.
 
-Native Advanced ownership is explicit and non-sticky. When a Profile contains no native Advanced values, Apply MUST preserve the live native settings byte-for-byte, clear their prior AgentEnv ownership metadata, and MUST NOT interpret omission as deletion. When a Profile explicitly contains native Advanced values, replacement semantics MAY remove keys that were managed by the previously active Profile but are absent from the new explicit Advanced payload. Releasing ownership metadata alone is a valid Apply operation even when no live file content changes.
+When the selected Target's MCP policy is `Leave unchanged`, Apply MUST preserve its configuration byte-for-byte, omit the path from Preview freshness and Backup, and clear prior MCP ownership metadata. When the policy is managed, the adapter parses the current file, patches only named existing activation fields, preserves every definition and unknown field, and includes that file in freshness and Backup only when a semantic change is planned. Configuration files MUST NOT be recorded as whole-file AgentEnv-managed resources.
 
 It MUST:
 
@@ -392,7 +396,7 @@ It MUST:
 7. Record one history entry only after success.
 8. Refresh visible Profile and Target state after completion.
 
-Switching Profiles MUST remove managed external resources owned by the previously active Profile when they are absent from the new Profile. Omitted native Advanced settings follow the ownership-release rule above and remain in place. Unmanaged resources MUST remain untouched unless they occupy a required destination. A fresh Preview MAY offer `Back up and replace` for an exact unmanaged Skill destination required by the Profile; without that explicit acknowledgement Apply remains blocked.
+Switching Profiles MUST remove managed external resources owned by the previously active Profile when they are absent or disabled in the new Profile. MCP choices absent from the new sparse policy remain Agent-owned and unchanged. Unmanaged resources MUST remain untouched unless they occupy a required destination. A fresh Preview MAY offer `Back up and replace` for an exact unmanaged Skill destination required by the Profile; without that explicit acknowledgement Apply remains blocked.
 
 An unmanaged same-name Skill replacement MUST be scoped to exact paths named by the fresh Preview,
 included in the operation Backup, and installed atomically as an AgentEnv-owned resource. A Skill
@@ -446,9 +450,9 @@ A drifted Target MUST NOT appear Applied. The user MUST be offered these explici
 
 One drifted path MUST produce one ownership problem. If an external tool replaces a previously managed Skill or agent and removes its ownership marker, Preview MUST report the managed drift instead of also reporting a generic unmanaged-destination collision. `Back up and replace` MAY bypass ownership validation only for the exact drifted paths recorded by the fresh Preview; unrelated unmanaged destinations remain blocking conflicts.
 
-Cross-Target deployments MUST NOT adopt native Advanced data into a Profile of another format automatically.
+Drift adoption MAY update portable Instructions and the existing sparse MCP selections for that same Target. It MUST NOT adopt arbitrary native configuration, create MCP definitions, or add Target-owned Skills automatically.
 
-Status: detection, diff inspection, explicit overwrite with Backup, compatible same-format Instructions/configuration/disabled-path/Library-MCP adoption, and detach choices are `Implemented`. Target-owned Skills, agents, excluded credentials, and MCP definitions absent from Library are intentionally not adopted by this recovery action.
+Status: detection, diff inspection, explicit overwrite with Backup, compatible Instructions and managed MCP activation adoption, and detach choices are `Implemented`. Target-owned Skills, native configuration, excluded credentials, and MCP definitions remain intentionally non-adoptable.
 
 ## 14. Stop Managing Contract
 
@@ -669,17 +673,17 @@ Status: local, recursive GitHub, and System Git Repository import/update; in-pla
 - Each Agent is the source of truth for MCP definitions, installation, sign-in, authentication, and credentials.
 - AgentEnv discovers only user/global MCP names, activation state, transport hint, source path, and control capability. Project, plugin, workspace, and policy-managed MCPs MAY be observed but MUST NOT be adopted or mutated.
 - Discovery MUST include credential-bearing definitions such as `computer-use` and `node_repl`; secret values MUST NOT enter Profile data, renderer payloads, logs, or diagnostics.
-- A Profile stores Target-specific three-state activation choices. `Use Agent setting` performs no mutation, while `On` and `Off` update only a verified native activation field.
+- A Profile stores a policy per Target. `Leave unchanged` opts that Target entirely out of MCP management. Managed mode stores sparse three-state rows: an absent or `Use Agent setting` row performs no mutation, while `On` and `Off` update only a verified native activation field.
 - Codex and OpenCode activation control are `Implemented`. Claude Code and Antigravity are read-only until an official, reliable user-scope activation mechanism is verified.
 - Apply MUST preserve command, URL, arguments, headers, environment, OAuth state, and every unknown definition field byte-for-byte or semantically unchanged.
-- A selected MCP missing from the Target is `Setup required`. It produces a warning with Agent-owned remediation and MUST NOT block unrelated Instructions, Skills, Agents, or Advanced changes.
+- A managed `On` selection missing from the Target is `Setup required` and blocks Apply because AgentEnv cannot create definitions. A managed `Off` selection missing from the Target is equivalent to Off and is a no-op.
 - A new native MCP added outside AgentEnv remains valid. Whole-file drift MUST NOT block it or remove it.
 - If activation already matches the saved Profile, Preview is a no-op: no write, Backup, history event, or timestamp update.
-- Create from Target captures every discovered connection as a Target-specific activation selection and imports no MCP definition into Library.
-- Existing MCP Library storage and IPC MAY remain readable during migration, but the primary navigation MUST NOT expose a global MCP Library or create new Profile definition references.
-- The renderer MUST NOT expose create, edit, delete, search, or usage-review surfaces for the legacy MCP Library. MCP interaction exists only inside a selected Profile as native Agent discovery and activation choice.
+- Create from Target captures discovered connections as Target-specific activation selections only when that adapter supports safe activation. Read-only Targets capture `Leave unchanged` and import no MCP definition into Library.
+- Profile v2 has no MCP Library store or IPC. Legacy MCP definitions survive only inside the external one-time migration backup and report; runtime MUST NOT read, mutate, or delete that old file.
+- MCP interaction exists only inside a selected Profile as native Agent discovery and activation choice.
 
-Status: native discovery across all four Agents, target-specific three-state Profile editing, Codex and OpenCode activation, read-only Claude Code and Antigravity visibility, missing-setup warnings, no-op, definition preservation, and legacy reference migration are `Implemented`.
+Status: native discovery across all four Agents, per-Target opt-in and sparse editing, Codex and OpenCode activation, read-only Claude Code and Antigravity visibility, blocking missing-On remediation, no-op, definition preservation, and one-time legacy reference migration are `Implemented`.
 
 ## 18. Create From Target Contract
 
@@ -695,14 +699,12 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Capture resource outcomes such as `Import to Library` and `Use Library copy` are neutral status badges, not link-colored commands.
 - Blocking errors and excluded-resource advisories MUST appear before long resource details. Repeated warnings MUST be aggregated with expandable details.
 - Review and Save expose local working and error states. Review MUST enter a visible animated busy state immediately, keep the action geometry stable, expose `aria-busy`, and block duplicate submission until the preview resolves. A stale or failed review remains in the dialog and offers `Refresh review`.
-- Profile Instructions and Advanced configuration remain in the source Target's native format. Reusable Skills become Library references. MCP definitions remain in the source Agent and only their Target-specific activation state is captured.
+- Instructions become portable Profile text. Reusable Skills become Library references. MCP definitions and every other native setting remain in the source Agent; only safe Target-specific activation state is captured when supported.
 - Existing Library Skill content is reused only when its comparable content hash matches exactly.
 - If a captured Skill has the same normalized name or requested ID as an existing Library Skill, Capture MUST resolve it during Preview rather than failing during Save. Matching content reuses the existing Library identity. Different content is previewed as an explicit unique Library ID while the existing same-name entry remains unchanged.
 - Sensitive values, credentials, caches, history, runtime state, and unsupported native fields MUST remain Target-owned and MUST be named as excluded.
 - Ignored Skills remain in place and are excluded from the new Profile.
 - Skills identified as owned by an external manager remain in place and are excluded from the captured Profile. Capture review MUST name the external manager; later Apply MUST NOT unexpectedly turn that external installation into a blocking desired resource.
-- Exact matching native configuration values MAY be adopted into AgentEnv management without a content-conflict error. A differing unmanaged value remains a blocking conflict.
-- A captured Claude Code `env` subset MUST NOT overwrite additional Target-owned values that were omitted during secret sanitization. When every captured value still matches, Apply preserves the complete live `env` outside AgentEnv ownership; a changed captured value remains a blocking conflict.
 - An existing Profile reference that resolves to an externally managed Skill with exactly matching Library content is preserved as external during Apply and MUST NOT block or be replaced. Different content remains a blocking ownership conflict.
 - Duplicate active runtime copies with identical content MAY be represented by one Library reference, but every source copy remains unchanged. Same-name copies with different content block capture because the canonical content is ambiguous.
 - Preview becomes stale when any captured source path changes before confirmation.
@@ -830,7 +832,7 @@ Status: supported viewport containment, topmost overlays, modal focus trapping, 
 - Renderer-requested external links MUST be validated by the main process and limited to `http` and `https` URLs.
 - GitHub OAuth tokens are stored using the operating system's secure credential facility when available.
 - Secrets MUST NOT appear in renderer logs, main-process logs, Preview diff, screenshots, or global feedback.
-- Profile Save MUST reject literal credentials detected in JSON/JSONC, TOML, YAML, or assignment-style Instructions and direct the user to environment references. Legacy content is redacted before any Preview crosses the preload boundary.
+- Profile Save MUST reject literal credentials detected in Instructions and direct the user to environment references. Legacy native content is excluded during v2 migration, and every Preview is redacted before crossing the preload boundary.
 - Preview redaction MUST replace sensitive before/after values and regenerate the rendered diff from those redacted values while the main process retains the original internal plan only for the guarded Apply operation.
 - Managed Backup roots and individual Backup directories MUST be enforced as owner-only (`0700`) storage.
 - File writes use validated IDs and paths and MUST prevent path traversal.
@@ -844,21 +846,18 @@ A new Target adapter MUST define:
 
 - Stable Target ID and display metadata.
 - Platform-aware installation discovery with one or more authoritative evidence probes.
-- All managed and scanned paths.
-- Default native Profile representation.
-- Read/write and validation behavior.
-- Instructions capability.
+- All managed and scanned instruction and Skill paths.
+- A default v2 Profile representation.
+- Instructions read, preview, and write behavior.
 - Skill capability and install methods.
 - A read-only Skill runtime driver declaring roots, scan depth, scope, runtime identity, native disable facts, and external ownership markers.
 - Native MCP discovery scope and safe activation capability.
-- Agent capability, if any.
-- Native Advanced configuration ownership.
+- An exact allowlist for any MCP activation field the adapter may patch; no generic native-config payload is accepted.
 - Preview generation.
 - Managed-resource ownership markers.
 - Backup path enumeration.
 - Apply, drift, and rollback behavior.
 - Cross-Target capability declarations.
-- A semantic native-config predicate that distinguishes metadata-only or MCP-only defaults from Agent-specific Advanced configuration.
 
 Registration MUST occur in the Target registry. Renderer components MUST NOT require Target-specific branches for ordinary lifecycle behavior.
 
@@ -879,13 +878,16 @@ environment values, and all other MCP definition fields remain Agent-owned.
 
 ## 23.1 AgentEnv Data Lifecycle
 
-- AgentEnv data has an explicit format version and migration path.
-- Legacy storage migration MUST preserve Profiles, Library content, deployment state, Settings, and Backups.
+- AgentEnv data has an explicit format version. Runtime Profile reads accept only v2.
+- A v1 or unversioned non-empty data root MUST be fully copied to an external sibling migration-backup directory before conversion. Profile conversion writes only the three canonical v2 files atomically; legacy Profile-owned Skills become self-contained Library copies; native configuration and unsupported resources remain only in the backup and migration report.
+- Migration MUST write the v2 root manifest last. An unsafe path, unsupported future version, backup failure, or global conversion failure leaves the old version marker intact so startup fails closed or can retry without interpreting partial data as v2. A malformed individual Profile or Target state remains byte-for-byte intact, is recorded in the migration report, and enters the normal repair/recovery state without blocking valid data from moving to v2.
+- Partially completed conversion steps MUST be idempotent: already converted Profiles and Target states are accepted on retry, and imported Skills are reused by comparable content hash.
+- The application MUST NOT retain an active v1 execution path after successful migration.
 - The user can create a private directory backup from Settings.
 - Backups include a manifest with format version and creation time.
 - GitHub credentials remain encrypted for the originating Mac and MUST NOT be presented as portable plaintext.
 - Corrupt or unsupported future data MUST fail closed with recovery guidance rather than being partially loaded.
-- A restore/import flow MUST deeply validate Profiles, Skills, MCP storage, Settings, and deployment state before mutation; create a safety backup before replacing current canonical data; reject unsafe links or unsupported formats; validate the active data again after replacement; automatically restore the safety backup if that validation fails; and refresh all visible canonical state after success.
+- A restore/import flow MUST deeply validate Profiles, Skills, Settings, and deployment state before mutation; create a safety backup before replacing current canonical data; reject unsafe links or unsupported formats; validate the active data again after replacement; automatically restore the safety backup if that validation fails; and refresh all visible canonical state after success. Unknown legacy files remain inert and are preserved by whole-data backups.
 - One malformed Profile MUST remain visible as needing repair without hiding usable Profiles or blocking creation of a valid first Profile. It MUST NOT be silently interpreted as an empty Profile.
 - Malformed deployment state MUST surface `Recovery required` and block Preview, Apply, rollback, and ownership changes until repaired. It MUST NOT be treated as an unmanaged Target.
 - Malformed native Skill or MCP state MUST surface an inspection error and block unsafe mutation. It MUST NOT be rendered or planned as a confirmed empty state.
@@ -905,7 +907,7 @@ The first useful journey is:
 3. Consolidate, ignore, or leave discovered Skills unmanaged.
 4. Create or select a Profile.
 5. Choose a deployment Target.
-6. Review effective payload, omissions, conflicts, and takeover impact.
+6. Review the effective payload, conflicts, ownership changes, and takeover impact.
 7. Apply and verify the persisted Target result.
 
 The product MAY use contextual empty states for this journey; it MUST NOT require a marketing-style onboarding page.
@@ -936,13 +938,13 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - A disabled Agent rejects direct IPC Preview, Apply, Capture, rollback, and stop-management requests.
 - Reload preserves the enabled Agent scope; re-enabling an Agent performs fresh discovery and restores its controls.
 - A managed Agent requires confirmation before being turned off, and an Agent requiring recovery cannot be turned off.
-- Native Profile applied to each compatible Target.
+- One v2 Profile applied to each compatible Target; preferred Target changes default context only.
 - One Profile active on multiple Targets.
 - Different Profiles active on different Targets.
 - Switching active Profile removes only previous managed resources.
 - Identical second Preview produces no changes and no Apply action.
 - Dirty Profile blocks Preview and preserves draft.
-- Active Profile is selected and pinned for the chosen Target; a single installed Target is static context.
+- Active Profile is selected for the chosen Target without changing persisted creation-time ordering; a single installed Target is static context.
 - Disabling a Skill in Library preserves its content and every existing Profile reference, hides it from every Add Skill picker, excludes it from update checks and effective Apply payloads, and leaves it visible but locked in Profiles until globally enabled again.
 - Library status views are mutually exclusive. `Updates` includes only enabled, tracked Skills with a confirmed available update; `Referenced` and `Unreferenced` describe only enabled Skills and Profile references without claiming deployment state; globally disabled Skills appear only in `All` and `Disabled`. Disabled rows MUST differ from active rows through surface, edge, icon treatment, and state text rather than a badge alone.
 - Enabling or disabling a Library Skill MUST expose row-local working feedback, lock duplicate availability commands, and update both the visible row and persisted metadata before reporting success.
@@ -962,18 +964,19 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 
 ### Cross-Target
 
-- Instructions, Library Skills, and Profile-owned Skills serialize correctly; native MCP selections remain Target-specific.
-- Native Advanced config, incompatible Agents, and disabled paths are omitted with named warnings.
-- Zero effective payload is blocked and material omissions require confirmation.
+- Instructions and Library Skills serialize correctly; native MCP policies remain Target-specific.
+- Preferred Target and created-from provenance never restrict compatible deployment.
+- Empty Instructions and all-Off resource choices remain valid complete replacement states and Preview their removals or disable operations explicitly.
 - Unsupported portable resources block with remediation.
-- Native MCP discovery includes credential-bearing entries without copying secrets; Codex and OpenCode change only activation state; Claude Code and Antigravity remain read-only.
-- Read-only MCP observations do not count as effective Apply payload and Preview MUST describe them as remaining Agent-controlled.
+- `Leave unchanged` performs no MCP read, hash, diff, Backup, write, or ownership retention and ignores retained editor selections in the Profile hash.
+- Native MCP discovery includes credential-bearing entries without copying secrets; Codex and OpenCode change only activation state; Claude Code and Antigravity remain Agent-controlled.
+- Managed MCP On/present, On/missing, Off/present, Off/missing, and absent-selection cases follow the sparse policy matrix.
 - Codex native disabled Skill detection accepts both runtime-name and manifest-path entries; either form blocks a Profile that expects the disabled Skill to run.
 - Source Target remains unchanged.
 
 ### Drift and stale data
 
-- External edits to Instructions, managed Skill, Agent, and ownership state are detected. Shared configuration files expose managed-field changes through Preview without treating unrelated Agent-owned edits as drift.
+- External edits to Instructions, managed Skill, managed MCP activation fields, and ownership state are detected. Shared configuration files expose managed-field changes through Preview without treating unrelated Agent-owned edits as drift.
 - Preview becomes stale after Profile, Library, Target, or state changes.
 - Explicit overwrite backs up drift.
 - Rollback restores both content and lifecycle state.
@@ -1035,13 +1038,13 @@ AgentEnv Manager is production-ready only when all of these are true:
 - Packaged Electron application passes a real startup and primary-workflow smoke test.
 - The packaged Agent discovery smoke runs with a Finder-style minimal `PATH` and proves fallback discovery for OpenCode, Claude Code, Codex, and Antigravity CLI.
 
-Current verdict: **Needs refinement**. Core Skill Library, Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target payload review, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, compatible same-format drift adoption, active-Profile deletion recovery, Stop Managing workflows, and native MCP discovery and activation are functional. Persisted `nativeTargetId` terminology migration, broader Skill identity edge coverage, and signed/notarized distribution remain release work.
+Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, transactional Apply, backup, retention, rollback, stale rollback protection, no-op, cross-Target Instructions and Skills, Create from Target, Target-specific Skill deployment, compatibility-copy consolidation, canonical Target lifecycle, data backup and restore, active-Profile deletion recovery, Stop Managing workflows, and sparse native MCP activation are functional. Broader Skill identity edge coverage and signed/notarized distribution remain release work.
 
 ### 25.1 Verification Snapshot
 
 The current machine-readable totals, source commit, dirty state, viewport list, capture count, audit results, and packaged-smoke status are generated by `npm run verify:product` in [`verification-snapshot.json`](verification-snapshot.json). Run `npm run verify:product -- --packaged` for a release candidate so the same snapshot also records the packaged workflow.
 
-- The automated suite covers native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence and completeness, stable Profile loading, scoped feedback, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- The automated suite covers preferred-Target and cross-Target use, Create from Target, real Electron UI, progressive startup, localization persistence and completeness, stable Profile loading, scoped feedback, stale Preview, rollback, recovery, MCP ownership release, and externally replaced managed-Skill recovery scenarios.
 - The CSS architecture gate passed with fourteen named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - Fixed-state visual captures are regenerated through the Electron compositor at the supported default and minimum viewports, including the stable Profile loading state, sidebar Agent overflow, Profile icon selection, Profile Skill selection and applied revisions, native MCP Profile states, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, Agent Diagnostics, and focused update-setting states.
 - Skills, Profiles, Agents, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
@@ -1059,21 +1062,21 @@ The current machine-readable totals, source commit, dirty state, viewport list, 
 - Skill table headers, compact grouped headers, retained version metadata, mixed-action rows, aligned metadata, empty install states, update labels, action-to-detail clearance, compact non-truncating Cleanup badges, equal-width Cleanup actions, and status-tooltip clearance passed coordinate, overlap, and overflow assertions at both supported viewports.
 - Target-local import now creates a transactional managed install, shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
 - Codex Capture now reuses identical Library Skills and previews a stable alternate ID for different same-name content instead of failing during Save. Unmanaged same-name OpenCode and Claude Code Skill destinations remain blocked until an exact fresh Preview is acknowledged, then pass Backup, atomic replacement, ownership, and recovery assertions; Skills CLI-owned paths remain protected.
-- Shared compatibility migration now distinguishes imported, preparing, ready, retained, external, and conflict states; Apply records per-Target install or omit intent without duplicate runtime copies, and Electron E2E verifies early-switch blocking, transactional cutover, backup history, and full restore.
-- Native MCP discovery includes all configured names without copying credential values. OpenCode and Codex Apply change only native activation fields, preserve definitions added outside AgentEnv, warn rather than block when setup is missing, and produce a real no-op when states already match.
+- Local Skill cleanup distinguishes Library-managed, external, retained, and conflict states; consolidation remains transactional, preserves backup history, and never treats a cleanup choice as a Profile Apply omission.
+- Native MCP discovery includes all configured names without copying credential values. OpenCode and Codex Apply change only native activation fields, preserve definitions added outside AgentEnv, block an enabled missing definition, treat a disabled missing definition as a no-op, and produce a real no-op when states already match.
 - Claude Code and Antigravity expose Agent-owned MCPs read-only. Antigravity CLI requires `agy`, applies and rolls back `GEMINI.md` and dedicated CLI Skills, transactionally migrates AgentEnv-owned legacy Skill copies, and leaves `mcp_config.json` unchanged.
-- All four built-in adapters expose the same read-only Skill runtime contract. Tests cover direct and recursive discovery, symlink-cycle safety, frontmatter runtime identity, duplicate declarations, Claude plugin ownership, Claude and Codex native disable state, duplicate desired runtime names, and Antigravity legacy migration with rollback.
+- All four built-in adapters expose the same read-only Skill runtime contract. Tests cover direct and recursive discovery, symlink-cycle safety, frontmatter runtime identity, duplicate declarations, Claude plugin ownership, duplicate desired runtime names, and Antigravity legacy migration with rollback. Profile Skill On/Off is represented only by managed install presence, never by an Agent configuration switch.
 - GitHub Device Flow respects server polling intervals, absorbs `slow_down` as a longer pending interval, blocks overlapping token requests, and refreshes connected account state after browser authorization.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards; Configuration changes is a keyboard-focusable review action that opens the first collapsed diff without widening the dialog.
 - Profile list icon and content columns remain aligned at the minimum viewport, and a deliberately long truncated Profile name keeps the same text origin before and after selection.
 - JSON/JSONC, TOML, YAML, assignment-style, token-prefix, and private-key detection reject new literal credentials; legacy Preview before/after/diff payloads are redacted before reaching the renderer.
-- Same-format drift recovery adopts compatible Instructions, native config, disabled-Skill paths, and native MCP activation choices into a backed-up Profile while naming excluded or unmapped items.
+- Drift recovery adopts compatible Instructions and existing managed MCP activation choices into a backed-up Profile while naming excluded native configuration and unmapped items.
 - Production dependency audit reported zero known vulnerabilities.
 - The packaged arm64 macOS application completed an isolated OpenCode Profile takeover at `1180 x 728` without document overflow or writes to the real Agent environment.
 - The signed release entry point requires a Developer ID Application identity and Apple notarization credentials, then verifies `codesign`, Gatekeeper assessment, and the stapled DMG. Signed and notarized artifact verification remains outstanding until those external credentials are available; the local packaged primary-workflow smoke uses an unsigned `.app`.
 
 ## 26. Current Priority Gaps
 
-1. Migrate persisted Profile terminology from `targetId` to `nativeTargetId` with backward compatibility.
+1. Validate the one-time v1-to-v2 migration against an anonymized production-shaped data export and a packaged startup.
 2. Extend the conditional duplicate review with more uncommon intentionally distinct same-name Skill fixtures.
 3. Sign and notarize macOS distribution, then repeat packaged primary-workflow verification on a clean Mac.

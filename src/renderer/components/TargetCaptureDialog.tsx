@@ -41,17 +41,13 @@ interface TargetCaptureDialogProps {
 const resourceKindOrder: TargetCaptureResource["kind"][] = [
   "instructions",
   "skill",
-  "mcp",
-  "agent",
-  "config"
+  "mcp"
 ];
 
 const resourceKindLabels: Record<TargetCaptureResource["kind"], string> = {
   instructions: "Instructions",
   skill: "Skills",
-  mcp: "MCP servers",
-  agent: "Agents",
-  config: "Configuration"
+  mcp: "MCPs"
 };
 
 const resourceActionLabels: Record<TargetCaptureResource["action"], string> = {

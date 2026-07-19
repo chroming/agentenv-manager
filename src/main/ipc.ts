@@ -4,7 +4,6 @@ import type { ActivationService } from "./activationService";
 import type { BackupMaintenanceService } from "./backupMaintenanceService";
 import type { BackupStore } from "./backupStore";
 import type { GitHubAuthService } from "./githubAuthService";
-import type { McpLibraryStore } from "./mcpLibraryStore";
 import type { ProfileStore } from "./profileStore";
 import type { SettingsStore } from "./settingsStore";
 import type { SkillLibraryStore } from "./skillLibraryStore";
@@ -26,7 +25,6 @@ import type {
   SkillImportPreviewInput,
   SkillIconInput,
   SkillMergeInput,
-  SaveMcpServerInput,
   SaveProfileInput,
   UpdateProfileMetadataInput,
   SkillUpdatePolicyInput,
@@ -52,7 +50,6 @@ export interface IpcServices {
   githubAuthService: GitHubAuthService;
   settingsStore: SettingsStore;
   skillLibraryStore: SkillLibraryStore;
-  mcpLibraryStore: McpLibraryStore;
   targetRegistry: TargetRegistry;
   targetDiscoveryService: TargetDiscoveryService;
   targetCaptureService: TargetCaptureService;
@@ -86,7 +83,6 @@ export const registerIpcHandlers = ({
   githubAuthService,
   settingsStore,
   skillLibraryStore,
-  mcpLibraryStore,
   targetRegistry,
   targetDiscoveryService,
   targetCaptureService,
@@ -250,28 +246,6 @@ export const registerIpcHandlers = ({
   handleMutation("skills:unignore-group", (_event, skillKey: unknown) =>
     skillLibraryStore.unignoreSkillGroup(String(skillKey))
   );
-  ipcMain.handle("mcp:list-library", () => mcpLibraryStore.listServers());
-  handleMutation("mcp:save-library", (_event, input: SaveMcpServerInput) =>
-    mcpLibraryStore.saveServer(input)
-  );
-  handleMutation("mcp:remove-library", async (_event, id: unknown) => {
-    const serverId = parseId(id, "MCP server id");
-    const references: string[] = [];
-    for (const detail of await readAllProfilesForResourceMutation(
-      profileStore,
-      "MCP removal"
-    )) {
-      if (detail.assetPolicy.mcpRefs?.some((reference) => reference.libraryId === serverId)) {
-        references.push(detail.manifest.name);
-      }
-    }
-    if (references.length > 0) {
-      throw new Error(
-        `MCP server ${serverId} is used by ${references.join(", ")}. Remove it from those profiles first.`
-      );
-    }
-    return mcpLibraryStore.removeServer(serverId);
-  });
   ipcMain.handle("skills:scan-unmanaged", () =>
     targetDiscoveryService
       .listTargets()
@@ -453,7 +427,7 @@ export const registerIpcHandlers = ({
     );
     const references = [] as string[];
     for (const profile of profiles) {
-      if (profile.assetPolicy.skillRefs?.some((reference) => reference.libraryId === skillId)) {
+      if (profile.resources.skills.some((reference) => reference.libraryId === skillId)) {
         references.push(profile.manifest.name);
       }
     }
@@ -723,7 +697,7 @@ export const registerIpcHandlers = ({
   );
   handleMutation("profiles:create", (_event, input: CreateProfileInput | string) =>
     profileStore.createProfile(
-      typeof input === "string" ? { targetId: parseId(input, "target id") } : input
+      typeof input === "string" ? { preferredTargetId: parseId(input, "target id") } : input
     )
   );
   ipcMain.handle("profiles:preview-create-from-target", (_event, targetId: unknown) =>
@@ -763,9 +737,7 @@ export const registerIpcHandlers = ({
                 (options as { allowManagedDrift?: unknown }).allowManagedDrift === true,
               allowUnmanagedSkillReplacement:
                 (options as { allowUnmanagedSkillReplacement?: unknown })
-                  .allowUnmanagedSkillReplacement === true,
-              allowOmissions:
-                (options as { allowOmissions?: unknown }).allowOmissions === true
+                  .allowUnmanagedSkillReplacement === true
             }
           : undefined
       )

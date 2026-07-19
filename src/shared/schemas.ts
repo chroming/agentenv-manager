@@ -4,35 +4,6 @@ export const SafeIdSchema = z
   .string()
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/);
 
-const RelativeAssetSourceSchema = z
-  .string()
-  .regex(/^(agents|skills)\/[a-zA-Z0-9._/-]+$/)
-  .refine(
-    (value) => !value.split("/").includes(".."),
-    "Asset source cannot traverse directories"
-  );
-
-const ManagedSurfaceSchema = z
-  .union([
-    z.object({
-      instructions: z.boolean(),
-      config: z.boolean(),
-      assets: z.boolean()
-    }),
-    z
-      .object({
-        agents: z.boolean(),
-        mcp: z.boolean(),
-        skills: z.boolean()
-      })
-      .transform((value) => ({
-        instructions: value.agents,
-        config: value.mcp,
-        assets: value.skills
-      }))
-  ])
-  .default({ instructions: true, config: true, assets: true });
-
 export const ResourceIconKeySchema = z.enum([
   "github",
   "folder",
@@ -53,97 +24,78 @@ export const ResourceIconKeySchema = z.enum([
 
 export const ProfileManifestSchema = z.object({
   id: SafeIdSchema,
-  targetId: SafeIdSchema.default("codex"),
   name: z.string().min(1),
   description: z.string().default(""),
   iconKey: ResourceIconKeySchema.optional(),
   createdAt: z.string().datetime().optional(),
-  version: z.literal(1),
-  managed: ManagedSurfaceSchema
+  preferredTargetId: SafeIdSchema.optional(),
+  createdFromTargetId: SafeIdSchema.optional(),
+  version: z.literal(2)
 });
 
-export const AssetPolicySchema = z.object({
-  ownedDirs: z
-    .array(
-      z.object({
-        kind: z.enum(["agent", "skill"]),
-        source: RelativeAssetSourceSchema,
-        targetName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
-      })
-    )
-    .default([]),
-  ownedFiles: z
-    .array(
-      z.object({
-        kind: z.enum(["agent", "skill"]),
-        source: RelativeAssetSourceSchema,
-        targetName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
-      })
-    )
-    .default([]),
-  skillRefs: z
-    .array(
-      z.object({
-        libraryId: SafeIdSchema,
-        targetName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/),
-        enabled: z.boolean().optional()
-      })
-    )
-    .default([]),
-  mcpRefs: z
-    .array(
-      z.object({
-        libraryId: SafeIdSchema,
-        targetName: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
-      })
-    )
-    .default([]),
-  mcpSelections: z
-    .array(
-      z.object({
-        targetId: SafeIdSchema,
-        name: z.string().trim().min(1),
-        enabled: z.boolean().optional()
-      })
-    )
-    .optional(),
-  disabledSkillPaths: z.array(z.string().min(1)).default([])
+const TargetResourceNameSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/);
+
+export const ProfileSkillSchema = z.object({
+  libraryId: SafeIdSchema,
+  targetName: TargetResourceNameSchema,
+  enabled: z.boolean().default(true)
 });
 
-export const LegacySkillsPolicySchema = z
-  .object({
-    ownedSkillDirs: z
-      .array(
-        z.object({
-          source: z
-            .string()
-            .regex(/^skills\/[a-zA-Z0-9._/-]+$/)
-            .refine(
-              (value) => !value.split("/").includes(".."),
-              "Skill source cannot traverse directories"
-            ),
-          targetName: z.string().regex(/^agentenv-[a-zA-Z0-9._-]+$/)
-        })
-      )
-      .default([]),
-    disabledSkillPaths: z.array(z.string().min(1)).default([])
-  })
-  .transform((value) => ({
-    ownedDirs: value.ownedSkillDirs.map((entry) => ({
-      kind: "skill" as const,
-      source: entry.source,
-      targetName: entry.targetName
-    })),
-    ownedFiles: [],
-    skillRefs: [],
-    mcpRefs: [],
-    mcpSelections: [],
-    disabledSkillPaths: value.disabledSkillPaths
-  }));
+export const ProfileMcpSelectionSchema = z.object({
+  name: z.string().trim().min(1),
+  enabled: z.boolean()
+});
 
-export const SkillsPolicySchema = LegacySkillsPolicySchema;
+export const ProfileMcpPolicySchema = z.object({
+  mode: z.enum(["ignore", "manage"]),
+  selections: z.array(ProfileMcpSelectionSchema).default([])
+});
+
+export const ProfileResourcesSchema = z.object({
+  skills: z.array(ProfileSkillSchema).default([]),
+  mcpByTarget: z.record(SafeIdSchema, ProfileMcpPolicySchema).default({})
+}).superRefine((resources, context) => {
+  const libraryIds = new Set<string>();
+  const targetNames = new Set<string>();
+  resources.skills.forEach((skill, index) => {
+    if (libraryIds.has(skill.libraryId)) {
+      context.addIssue({
+        code: "custom",
+        path: ["skills", index, "libraryId"],
+        message: `Library Skill ${skill.libraryId} is referenced more than once`
+      });
+    }
+    if (targetNames.has(skill.targetName)) {
+      context.addIssue({
+        code: "custom",
+        path: ["skills", index, "targetName"],
+        message: `Skill target ${skill.targetName} is declared more than once`
+      });
+    }
+    libraryIds.add(skill.libraryId);
+    targetNames.add(skill.targetName);
+  });
+  for (const [targetId, policy] of Object.entries(resources.mcpByTarget)) {
+    const names = new Set<string>();
+    policy.selections.forEach((selection, index) => {
+      if (names.has(selection.name)) {
+        context.addIssue({
+          code: "custom",
+          path: ["mcpByTarget", targetId, "selections", index, "name"],
+          message: `${targetId} MCP ${selection.name} is declared more than once`
+        });
+      }
+      names.add(selection.name);
+    });
+  }
+});
 
 export type ProfileManifest = z.infer<typeof ProfileManifestSchema>;
-export type AssetPolicy = z.infer<typeof AssetPolicySchema>;
-export type SkillsPolicy = AssetPolicy;
+export type ProfileSkill = z.infer<typeof ProfileSkillSchema>;
+export type ProfileMcpSelection = z.infer<typeof ProfileMcpSelectionSchema>;
+export type ProfileMcpPolicy = z.infer<typeof ProfileMcpPolicySchema>;
+export type ProfileResources = z.infer<typeof ProfileResourcesSchema>;
 export type ResourceIconKey = z.infer<typeof ResourceIconKeySchema>;

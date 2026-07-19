@@ -1,631 +1,95 @@
-import {
-  chmod,
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readlink,
-  rm,
-  symlink,
-  writeFile
-} from "node:fs/promises";
-import { constants } from "node:fs";
-import { access } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "jsonc-parser";
 import { afterEach, describe, expect, it } from "vitest";
 import { createActivationService } from "../../src/main/activationService";
-import { createBackupStore } from "../../src/main/backupStore";
-import { createPaths, type AgentEnvPaths } from "../../src/main/paths";
-import { createProfileStore, type ProfileStore } from "../../src/main/profileStore";
-import { createTargetDiscoveryService } from "../../src/main/targetDiscovery";
-import { createTargetRegistry } from "../../src/main/targets/registry";
-import type { ActivationService } from "../../src/main/activationService";
-import type { ProfileDetail, TargetInfo } from "../../src/shared/types";
-
-interface E2EEnv {
-  paths: AgentEnvPaths;
-  profileStore: ProfileStore;
-  activationService: ActivationService;
-  listTargets(): Promise<TargetInfo[]>;
-}
+import { createPaths } from "../../src/main/paths";
+import { createProfileStore } from "../../src/main/profileStore";
+import { createSettingsStore } from "../../src/main/settingsStore";
+import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
 
 let root = "";
-
-const fileExists = async (path: string) => {
-  try {
-    await access(path, constants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const readJsonc = async (path: string) =>
-  parse(await readFile(path, "utf8")) as Record<string, unknown>;
-
-const makeEnv = async (): Promise<E2EEnv> => {
-  root = await mkdtemp(join(tmpdir(), "agentenv-opencode-e2e-"));
-  const binDir = join(root, "bin");
-  const homeDir = join(root, "home");
-  const appDataRoot = join(root, "app-data");
-  const fakeHomeRoot = join(root, "fake-home");
-  await mkdir(binDir, { recursive: true });
-  await mkdir(homeDir, { recursive: true });
-  const executable = join(binDir, "opencode");
-  await writeFile(executable, "#!/bin/sh\necho fake-opencode\n", "utf8");
-  await chmod(executable, 0o755);
-
-  const paths = createPaths({ appDataRoot, homeDir, fakeHomeRoot });
-  const targetRegistry = createTargetRegistry();
-  const profileStore = createProfileStore(
-    { appDataRoot, homeDir, fakeHomeRoot },
-    targetRegistry
-  );
-  const activationService = createActivationService({
-    paths,
-    profileStore,
-    targetRegistry
-  });
-  const targetDiscoveryService = createTargetDiscoveryService({
-    paths,
-    targetRegistry,
-    pathEnv: binDir
-  });
-
-  return {
-    paths,
-    profileStore,
-    activationService,
-    listTargets: () => targetDiscoveryService.listTargets()
-  };
-};
-
-const createOpenCodeProfile = async (
-  profileStore: ProfileStore,
-  variant: "alpha" | "beta"
-): Promise<ProfileDetail> => {
-  const profile = await profileStore.saveProfile({
-    manifest: {
-      id: `opencode-${variant}`,
-      targetId: "opencode",
-      name: `OpenCode ${variant}`,
-      description: `Temporary ${variant} profile`,
-      version: 1,
-      managed: { instructions: true, config: true, assets: true }
-    },
-    instructions: `# ${variant.toUpperCase()} Instructions\n\n- Active profile: ${variant}.\n`,
-    configText: `${JSON.stringify(
-      {
-        $schema: "https://opencode.ai/config.json",
-        username: `agentenv-${variant}`,
-        permission: {
-          edit: variant === "alpha" ? "deny" : "ask"
-        }
-      },
-      null,
-      2
-    )}\n`,
-    assetPolicy: {
-      ownedDirs: [
-        {
-          kind: "agent",
-          source: `agents/agentenv-${variant}-agent`,
-          targetName: `agentenv-${variant}-agent`
-        },
-        {
-          kind: "skill",
-          source: `skills/agentenv-${variant}-skill`,
-          targetName: `agentenv-${variant}-skill`
-        }
-      ],
-      ownedFiles: [],
-      skillRefs: [],
-      mcpRefs: [],
-      mcpSelections: [
-        {
-          targetId: "opencode",
-          name: "agentenv-alpha-mcp",
-          enabled: variant === "alpha"
-        },
-        {
-          targetId: "opencode",
-          name: "agentenv-beta-mcp",
-          enabled: variant === "beta"
-        }
-      ],
-      disabledSkillPaths: []
-    }
-  });
-
-  await mkdir(join(profile.profileDir ?? "", "agents", `agentenv-${variant}-agent`), {
-    recursive: true
-  });
-  await writeFile(
-    join(profile.profileDir ?? "", "agents", `agentenv-${variant}-agent`, "agent.md"),
-    `---\nname: agentenv-${variant}-agent\ndescription: ${variant} switching test agent.\nmode: subagent\npermission:\n  edit: deny\n---\n\n${variant} agent prompt.\n`,
-    "utf8"
-  );
-  await mkdir(join(profile.profileDir ?? "", "skills", `agentenv-${variant}-skill`), {
-    recursive: true
-  });
-  await writeFile(
-    join(profile.profileDir ?? "", "skills", `agentenv-${variant}-skill`, "SKILL.md"),
-    `---\nname: agentenv-${variant}-skill\ndescription: Use when verifying ${variant} AgentEnv OpenCode switching.\n---\n\n# ${variant} skill\n`,
-    "utf8"
-  );
-
-  return profile;
-};
-
-const expectApplyOk = async (
-  activationService: ActivationService,
-  profileId: string
-) => {
-  const preview = await activationService.previewProfile(profileId);
-  expect(preview.errors).toEqual([]);
-  const result = await activationService.applyProfile(profileId, preview.id);
-  expect(result.ok).toBe(true);
-  return result;
-};
-
 afterEach(async () => {
-  if (root) {
-    await rm(root, { recursive: true, force: true });
-    root = "";
-  }
+  if (root) await rm(root, { recursive: true, force: true });
+  root = "";
 });
 
-describe("OpenCode profile switching e2e", () => {
-  it("switches instructions, native MCP activation, agents, and skills between profiles", async () => {
-    const { paths, profileStore, activationService, listTargets } =
-      await makeEnv();
-    const targetDir = join(paths.homeDir, ".config", "opencode");
-    const skillsDir = join(targetDir, "skills");
-    await mkdir(targetDir, { recursive: true });
-    await writeFile(
-      join(targetDir, "opencode.jsonc"),
-      `${JSON.stringify(
-        {
-          $schema: "https://opencode.ai/config.json",
-          shell: "/bin/zsh",
-          mcp: {
-            "user-managed": {
-              type: "remote",
-              url: "https://example.com/mcp"
-            },
-            "agentenv-alpha-mcp": {
-              type: "local",
-              command: ["node", "--version"],
-              enabled: false
-            },
-            "agentenv-beta-mcp": {
-              type: "local",
-              command: ["node", "--version"],
-              enabled: false
+describe("OpenCode Profile v2 switching e2e", () => {
+  it("switches Instructions, Library Skills, and selected MCP activation only", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-v2-e2e-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const profileStore = createProfileStore({ appDataRoot: paths.appDataRoot, homeDir: paths.homeDir });
+    const settingsStore = createSettingsStore(paths);
+    const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+    for (const id of ["alpha", "beta"]) {
+      const source = join(root, "sources", id);
+      await mkdir(source, { recursive: true });
+      await writeFile(join(source, "SKILL.md"), `---\nname: ${id}\ndescription: ${id}\n---\n# ${id}\n`);
+      await skillLibraryStore.importSkill({ sourcePath: source, id });
+      await profileStore.saveProfile({
+        manifest: {
+          id: `opencode-${id}`,
+          name: `OpenCode ${id}`,
+          description: "",
+          preferredTargetId: "opencode",
+          version: 2
+        },
+        instructions: `# ${id.toUpperCase()}\n`,
+        resources: {
+          skills: [{ libraryId: id, targetName: id, enabled: true }],
+          mcpByTarget: {
+            opencode: {
+              mode: "manage",
+              selections: [
+                { name: "alpha", enabled: id === "alpha" },
+                { name: "beta", enabled: id === "beta" }
+              ]
             }
           }
-        },
-        null,
-        2
-      )}\n`,
-      "utf8"
-    );
-    await writeFile(join(targetDir, "AGENTS.md"), "# Existing OpenCode\n", "utf8");
-
-    const alpha = await createOpenCodeProfile(profileStore, "alpha");
-    const beta = await createOpenCodeProfile(profileStore, "beta");
-
-    await expectApplyOk(activationService, alpha.id);
-    const alphaConfig = await readJsonc(join(targetDir, "opencode.jsonc"));
-    expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toContain(
-      "Active profile: alpha"
-    );
-    expect(alphaConfig).toMatchObject({
-      shell: "/bin/zsh",
-      username: "agentenv-alpha",
-      permission: { edit: "deny" },
-      mcp: {
-        "user-managed": { type: "remote", url: "https://example.com/mcp" },
-        "agentenv-alpha-mcp": {
-          type: "local",
-          command: ["node", "--version"],
-          enabled: true
-        },
-        "agentenv-beta-mcp": {
-          type: "local",
-          command: ["node", "--version"],
-          enabled: false
         }
-      }
-    });
-    await expect(
-      fileExists(join(targetDir, "agents", "agentenv-alpha-agent", "agent.md"))
-    ).resolves.toBe(true);
-    await expect(
-      fileExists(join(skillsDir, "agentenv-alpha-skill", "SKILL.md"))
-    ).resolves.toBe(true);
-
-    await expectApplyOk(activationService, beta.id);
-    const betaConfig = await readJsonc(join(targetDir, "opencode.jsonc"));
-    const backups = await createBackupStore(paths).listBackups();
-    const targets = await listTargets();
-    const opencode = targets.find((target) => target.id === "opencode");
-
-    expect(opencode?.health.status).toBe("ready");
-    expect(opencode?.health.canWrite).toBe(true);
-    expect(backups).toHaveLength(2);
-    expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toContain(
-      "Active profile: beta"
-    );
-    expect(betaConfig).toMatchObject({
-      shell: "/bin/zsh",
-      username: "agentenv-beta",
-      permission: { edit: "ask" },
-      mcp: {
-        "user-managed": { type: "remote", url: "https://example.com/mcp" },
-        "agentenv-beta-mcp": {
-          type: "local",
-          command: ["node", "--version"],
-          enabled: true
-        },
-        "agentenv-alpha-mcp": {
-          type: "local",
-          command: ["node", "--version"],
-          enabled: false
-        }
-      }
-    });
-    await expect(
-      fileExists(join(targetDir, "agents", "agentenv-alpha-agent"))
-    ).resolves.toBe(false);
-    await expect(
-      fileExists(join(skillsDir, "agentenv-alpha-skill"))
-    ).resolves.toBe(false);
-    await expect(
-      readFile(join(targetDir, "agents", "agentenv-beta-agent", "agent.md"), "utf8")
-    ).resolves.toContain("beta agent prompt");
-    await expect(
-      readFile(join(skillsDir, "agentenv-beta-skill", "SKILL.md"), "utf8")
-    ).resolves.toContain("name: agentenv-beta-skill");
-
-    const noOpPreview = await activationService.previewProfile(beta.id);
-    expect(noOpPreview.changes).toEqual([]);
-    expect(noOpPreview.resourceChanges).toEqual([]);
-  });
-
-  it("switches reusable library skill links without duplicating the library skill", async () => {
-    const { paths, profileStore, activationService } = await makeEnv();
-    const targetDir = join(paths.homeDir, ".config", "opencode");
-    const skillsDir = join(targetDir, "skills");
-    const librarySkillDir = join(paths.skillsLibraryDir, "shared-reviewer");
-    await mkdir(librarySkillDir, { recursive: true });
-    await writeFile(
-      join(librarySkillDir, "SKILL.md"),
-      "---\nname: shared-reviewer\ndescription: Shared reviewer skill.\n---\n\n# Shared reviewer\n",
-      "utf8"
-    );
-
-    const alpha = await profileStore.saveProfile({
-      manifest: {
-        id: "opencode-library-alpha",
-        targetId: "opencode",
-        name: "OpenCode Library Alpha",
-        description: "Temporary alpha profile",
-        version: 1,
-        managed: { instructions: true, config: true, assets: true }
-      },
-      instructions: "# Library Alpha\n",
-      configText: "{}\n",
-      assetPolicy: {
-        ownedDirs: [],
-        ownedFiles: [],
-        skillRefs: [{ libraryId: "shared-reviewer", targetName: "agentenv-alpha-shared" }],
-        mcpRefs: [],
-        disabledSkillPaths: []
-      }
-    });
-    const beta = await profileStore.saveProfile({
-      manifest: {
-        id: "opencode-library-beta",
-        targetId: "opencode",
-        name: "OpenCode Library Beta",
-        description: "Temporary beta profile",
-        version: 1,
-        managed: { instructions: true, config: true, assets: true }
-      },
-      instructions: "# Library Beta\n",
-      configText: "{}\n",
-      assetPolicy: {
-        ownedDirs: [],
-        ownedFiles: [],
-        skillRefs: [{ libraryId: "shared-reviewer", targetName: "agentenv-beta-shared" }],
-        mcpRefs: [],
-        disabledSkillPaths: []
-      }
-    });
-
-    await expectApplyOk(activationService, alpha.id);
-    const alphaSkillDir = join(skillsDir, "agentenv-alpha-shared");
-    const alphaSkillMd = join(alphaSkillDir, "SKILL.md");
-    await expect(readFile(alphaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
-    expect((await lstat(alphaSkillDir)).isSymbolicLink()).toBe(true);
-    await expect(readlink(alphaSkillDir)).resolves.toBe(librarySkillDir);
-
-    await expectApplyOk(activationService, beta.id);
-    await expect(fileExists(join(skillsDir, "agentenv-alpha-shared"))).resolves.toBe(
-      false
-    );
-    const betaSkillDir = join(skillsDir, "agentenv-beta-shared");
-    const betaSkillMd = join(betaSkillDir, "SKILL.md");
-    await expect(readFile(betaSkillMd, "utf8")).resolves.toContain("# Shared reviewer");
-    expect((await lstat(betaSkillDir)).isSymbolicLink()).toBe(true);
-    await expect(readlink(betaSkillDir)).resolves.toBe(librarySkillDir);
-    await expect(readFile(join(librarySkillDir, "SKILL.md"), "utf8")).resolves.toContain(
-      "name: shared-reviewer"
-    );
-  });
-
-  it("migrates a legacy file-linked Skill to a directory link and can roll it back", async () => {
-    const { paths, profileStore, activationService } = await makeEnv();
-    const targetDir = join(paths.homeDir, ".config", "opencode");
-    const legacySkillDir = join(targetDir, "skills", "shared-reviewer");
-    const librarySkillDir = join(paths.skillsLibraryDir, "shared-reviewer");
-    const librarySkillFile = join(librarySkillDir, "SKILL.md");
-    const libraryReferenceFile = join(librarySkillDir, "reference.md");
-    await mkdir(librarySkillDir, { recursive: true });
-    await writeFile(
-      librarySkillFile,
-      "---\nname: shared-reviewer\ndescription: Shared reviewer skill.\n---\n\n# Shared reviewer\n",
-      "utf8"
-    );
-    await writeFile(libraryReferenceFile, "# Review reference\n", "utf8");
-
-    await mkdir(legacySkillDir, { recursive: true });
-    await symlink(librarySkillFile, join(legacySkillDir, "SKILL.md"));
-    await symlink(libraryReferenceFile, join(legacySkillDir, "reference.md"));
-    await writeFile(
-      join(legacySkillDir, ".agentenv-owner.json"),
-      `${JSON.stringify(
-        {
-          owner: "agentenv-manager",
-          profileId: "legacy-profile",
-          targetId: "opencode",
-          kind: "skill",
-          source: "skills-library/shared-reviewer"
-        },
-        null,
-        2
-      )}\n`,
-      "utf8"
-    );
-
-    const profile = await profileStore.saveProfile({
-      manifest: {
-        id: "opencode-legacy-skill-migration",
-        targetId: "opencode",
-        name: "OpenCode Legacy Skill Migration",
-        description: "Migrates a legacy file-linked Skill",
-        version: 1,
-        managed: { instructions: true, config: true, assets: true }
-      },
-      instructions: "# Legacy Skill Migration\n",
-      configText: "{}\n",
-      assetPolicy: {
-        ownedDirs: [],
-        ownedFiles: [],
-        skillRefs: [{ libraryId: "shared-reviewer", targetName: "shared-reviewer" }],
-        mcpRefs: [],
-        disabledSkillPaths: []
-      }
-    });
-
-    const applyResult = await expectApplyOk(activationService, profile.id);
-    if (!applyResult.ok) {
-      throw new Error("Expected legacy Skill migration to succeed");
+      });
     }
-
-    expect((await lstat(legacySkillDir)).isSymbolicLink()).toBe(true);
-    await expect(readlink(legacySkillDir)).resolves.toBe(librarySkillDir);
-    await expect(readFile(join(legacySkillDir, "reference.md"), "utf8")).resolves.toBe(
-      "# Review reference\n"
-    );
-    await expect(
-      readFile(`${legacySkillDir}.agentenv-owner.json`, "utf8")
-    ).resolves.toContain('"source": "skills-library/shared-reviewer"');
-
-    const rollbackPreview = await activationService.previewRollback(applyResult.backupId);
-    expect(rollbackPreview.errors).toEqual([]);
-    expect(rollbackPreview.changes.map((change) => change.path)).toContain(legacySkillDir);
-    expect((await activationService.rollback(applyResult.backupId)).ok).toBe(true);
-
-    expect((await lstat(legacySkillDir)).isSymbolicLink()).toBe(false);
-    expect((await lstat(join(legacySkillDir, "SKILL.md"))).isSymbolicLink()).toBe(true);
-    expect((await lstat(join(legacySkillDir, "reference.md"))).isSymbolicLink()).toBe(true);
-    await expect(readlink(join(legacySkillDir, "SKILL.md"))).resolves.toBe(librarySkillFile);
-    await expect(
-      readFile(join(legacySkillDir, ".agentenv-owner.json"), "utf8")
-    ).resolves.toContain('"profileId": "legacy-profile"');
-    await expect(fileExists(`${legacySkillDir}.agentenv-owner.json`)).resolves.toBe(false);
-  });
-
-  it("preserves native MCP definitions added outside AgentEnv", async () => {
-    const { paths, profileStore, activationService } = await makeEnv();
     const targetDir = join(paths.homeDir, ".config", "opencode");
-    await mkdir(targetDir, { recursive: true });
-    await writeFile(
-      join(targetDir, "opencode.jsonc"),
-      `${JSON.stringify(
-        {
-          mcp: {
-            "agentenv-alpha-mcp": {
-              type: "local",
-              command: ["node", "--version"],
-              enabled: false
-            },
-            "agentenv-beta-mcp": {
-              type: "remote",
-              url: "https://example.com/user-beta",
-              headers: { Authorization: "{env:MCP_TOKEN}" },
-              enabled: false
-            }
-          }
-        },
-        null,
-        2
-      )}\n`,
-      "utf8"
-    );
-    const alpha = await createOpenCodeProfile(profileStore, "alpha");
-    const beta = await createOpenCodeProfile(profileStore, "beta");
-    await expectApplyOk(activationService, alpha.id);
+    await mkdir(join(targetDir, "skills", "manual"), { recursive: true });
+    await writeFile(join(targetDir, "AGENTS.md"), "# Before\n");
+    await writeFile(join(targetDir, "skills", "manual", "SKILL.md"), "---\nname: manual\n---\n# Manual\n");
+    await writeFile(join(targetDir, "opencode.jsonc"), `{
+  // must remain untouched
+  "username": "local-user",
+  "mcp": {
+    "alpha": { "type": "local", "command": ["alpha"], "enabled": false },
+    "beta": { "type": "local", "command": ["beta"], "enabled": true }
+  }
+}\n`);
+    const service = createActivationService({ paths, profileStore, settingsStore, skillLibraryStore });
 
-    const liveConfig = await readJsonc(join(targetDir, "opencode.jsonc"));
-    await writeFile(
-      join(targetDir, "opencode.jsonc"),
-      `${JSON.stringify(
-        {
-          ...liveConfig,
-          mcp: {
-            ...(liveConfig.mcp as Record<string, unknown>),
-            "late-added": {
-              type: "remote",
-              url: "https://example.com/late-added"
-            }
-          }
-        },
-        null,
-        2
-      )}\n`,
-      "utf8"
-    );
+    const apply = async (id: "alpha" | "beta") => {
+      const preview = await service.previewProfile(`opencode-${id}`, "opencode");
+      expect(preview.errors).toEqual([]);
+      const result = await service.applyProfile(`opencode-${id}`, preview.id);
+      expect(result.ok).toBe(true);
+    };
 
-    const preview = await activationService.previewProfile(beta.id);
-    expect(preview.errors).toEqual([]);
-    const result = await activationService.applyProfile(beta.id, preview.id);
+    await apply("alpha");
+    expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toBe("# ALPHA\n");
+    let config = parse(await readFile(join(targetDir, "opencode.jsonc"), "utf8")) as any;
+    expect(config.username).toBe("local-user");
+    expect(config.mcp.alpha.enabled).toBe(true);
+    expect(config.mcp.beta.enabled).toBe(false);
+    await expect(readFile(join(targetDir, "skills", "alpha", "SKILL.md"), "utf8"))
+      .resolves.toContain("# alpha");
 
-    expect(result.ok).toBe(true);
-    const configAfterSwitch = await readJsonc(
-      join(targetDir, "opencode.jsonc")
-    );
-    expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toContain(
-      "Active profile: beta"
-    );
-    expect(configAfterSwitch).toMatchObject({
-      username: "agentenv-beta",
-      mcp: {
-        "agentenv-alpha-mcp": {
-          type: "local",
-          command: ["node", "--version"],
-          enabled: false
-        },
-        "agentenv-beta-mcp": {
-          type: "remote",
-          url: "https://example.com/user-beta",
-          headers: { Authorization: "{env:MCP_TOKEN}" },
-          enabled: true
-        },
-        "late-added": {
-          type: "remote",
-          url: "https://example.com/late-added"
-        }
-      }
-    });
-  });
-
-  it("rolls back a profile switch including owned agents and skills", async () => {
-    const { paths, profileStore, activationService } = await makeEnv();
-    const targetDir = join(paths.homeDir, ".config", "opencode");
-    const skillsDir = join(targetDir, "skills");
-    await mkdir(targetDir, { recursive: true });
-    await writeFile(
-      join(targetDir, "opencode.jsonc"),
-      `${JSON.stringify(
-        {
-          $schema: "https://opencode.ai/config.json",
-          shell: "/bin/zsh",
-          mcp: {
-            "user-managed": {
-              type: "remote",
-              url: "https://example.com/mcp"
-            },
-            "agentenv-alpha-mcp": {
-              type: "local",
-              command: ["node", "--version"],
-              enabled: false
-            },
-            "agentenv-beta-mcp": {
-              type: "local",
-              command: ["node", "--version"],
-              enabled: false
-            }
-          }
-        },
-        null,
-        2
-      )}\n`,
-      "utf8"
-    );
-    await writeFile(join(targetDir, "AGENTS.md"), "# Existing OpenCode\n", "utf8");
-
-    const alpha = await createOpenCodeProfile(profileStore, "alpha");
-    const beta = await createOpenCodeProfile(profileStore, "beta");
-    await expectApplyOk(activationService, alpha.id);
-    const betaApply = await expectApplyOk(activationService, beta.id);
-    if (!betaApply.ok) {
-      throw new Error("Expected beta apply to succeed");
-    }
-
-    const rollbackPreview = await activationService.previewRollback(betaApply.backupId);
-    expect(rollbackPreview.errors).toEqual([]);
-    expect(rollbackPreview.changes.map((change) => change.path)).toEqual(
-      expect.arrayContaining([
-        join(targetDir, "AGENTS.md"),
-        join(targetDir, "opencode.jsonc"),
-        join(targetDir, "agents", "agentenv-alpha-agent"),
-        join(skillsDir, "agentenv-alpha-skill"),
-        join(targetDir, "agents", "agentenv-beta-agent"),
-        join(skillsDir, "agentenv-beta-skill")
-      ])
-    );
-
-    const rollbackResult = await activationService.rollback(betaApply.backupId);
-    expect(rollbackResult.ok).toBe(true);
-
-    const rolledBackConfig = await readJsonc(join(targetDir, "opencode.jsonc"));
-    expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toContain(
-      "Active profile: alpha"
-    );
-    expect(rolledBackConfig).toMatchObject({
-      shell: "/bin/zsh",
-      username: "agentenv-alpha",
-      permission: { edit: "deny" },
-      mcp: {
-        "user-managed": { type: "remote", url: "https://example.com/mcp" },
-        "agentenv-alpha-mcp": {
-          type: "local",
-          command: ["node", "--version"],
-          enabled: true
-        },
-        "agentenv-beta-mcp": {
-          type: "local",
-          command: ["node", "--version"],
-          enabled: false
-        }
-      }
-    });
-    await expect(
-      readFile(join(targetDir, "agents", "agentenv-alpha-agent", "agent.md"), "utf8")
-    ).resolves.toContain("alpha agent prompt");
-    await expect(
-      readFile(join(skillsDir, "agentenv-alpha-skill", "SKILL.md"), "utf8")
-    ).resolves.toContain("name: agentenv-alpha-skill");
-    await expect(
-      fileExists(join(targetDir, "agents", "agentenv-beta-agent"))
-    ).resolves.toBe(false);
-    await expect(
-      fileExists(join(skillsDir, "agentenv-beta-skill"))
-    ).resolves.toBe(false);
+    await apply("beta");
+    config = parse(await readFile(join(targetDir, "opencode.jsonc"), "utf8")) as any;
+    expect(config.username).toBe("local-user");
+    expect(config.mcp.alpha.enabled).toBe(false);
+    expect(config.mcp.beta.enabled).toBe(true);
+    await expect(readFile(join(targetDir, "skills", "alpha", "SKILL.md"), "utf8"))
+      .rejects.toThrow();
+    await expect(readFile(join(targetDir, "skills", "beta", "SKILL.md"), "utf8"))
+      .resolves.toContain("# beta");
+    await expect(readFile(join(targetDir, "skills", "manual", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Manual");
   });
 });

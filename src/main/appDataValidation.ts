@@ -4,7 +4,6 @@ import { z } from "zod";
 import { ResourceIconKeySchema, SafeIdSchema } from "../shared/schemas";
 import { readAppDataManifest } from "./appDataFormat";
 import { isMissingFileError } from "./fileUtils";
-import { createMcpLibraryStore } from "./mcpLibraryStore";
 import { createPaths } from "./paths";
 import { createProfileStore } from "./profileStore";
 import { parseSettingsData } from "./settingsStore";
@@ -96,8 +95,6 @@ export const validateAppDataRoot = async (
     join(appDataRoot, "skill-cleanup-ignore-rules.json")
   );
   if (ignoreRules !== undefined) SkillIgnoreRulesSchema.parse(ignoreRules);
-
-  await createMcpLibraryStore(paths).listServers();
 
   const profileStore = createProfileStore({
     appDataRoot,

@@ -1,119 +1,81 @@
 import { describe, expect, it } from "vitest";
-import {
-  AssetPolicySchema,
-  ProfileManifestSchema
-} from "../../src/shared/schemas";
+import { ProfileManifestSchema, ProfileResourcesSchema } from "../../src/shared/schemas";
 
-describe("profile schemas", () => {
-  it("accepts a valid manifest", () => {
-    expect(
-      ProfileManifestSchema.parse({
-        id: "daily-coding",
-        targetId: "opencode",
-        name: "Daily Coding",
-        description: "Default coding environment.",
-        iconKey: "rocket",
-        version: 1,
-        managed: { instructions: true, config: true, assets: true }
-      }).id
-    ).toBe("daily-coding");
-  });
+describe("Profile v2 schemas", () => {
+  it("accepts portable metadata and target-specific MCP policies", () => {
+    expect(ProfileManifestSchema.parse({
+      id: "daily-coding",
+      preferredTargetId: "opencode",
+      name: "Daily Coding",
+      description: "Default coding environment.",
+      iconKey: "rocket",
+      version: 2
+    }).id).toBe("daily-coding");
 
-  it("rejects unknown resource icons", () => {
-    expect(() =>
-      ProfileManifestSchema.parse({
-        id: "daily-coding",
-        targetId: "opencode",
-        name: "Daily Coding",
-        description: "",
-        iconKey: "random-icon",
-        version: 1,
-        managed: { instructions: true, config: true, assets: true }
-      })
-    ).toThrow();
-  });
-
-  it("rejects ids with path separators", () => {
-    expect(() =>
-      ProfileManifestSchema.parse({
-        id: "../bad",
-        targetId: "opencode",
-        name: "Bad",
-        description: "",
-        version: 1,
-        managed: { instructions: true, config: true, assets: true }
-      })
-    ).toThrow();
-  });
-
-  it("accepts explicit owned asset targets", () => {
-    const policy = AssetPolicySchema.parse({
-        ownedDirs: [
-          {
-            kind: "skill",
-            source: "skills/example",
-            targetName: "agentenv-daily-example"
-          }
-        ],
-        ownedFiles: [
-          {
-            kind: "agent",
-            source: "agents/reviewer.toml",
-            targetName: "reviewer.toml"
-          }
-        ],
-        skillRefs: [
-          {
-            libraryId: "shared-reviewer",
-            targetName: "agentenv-shared-reviewer"
-          }
-        ],
-        mcpRefs: [
-          {
-            libraryId: "context7",
-            targetName: "context7"
-          }
-        ],
-        disabledSkillPaths: ["/Users/example/.agents/skills/old/SKILL.md"]
-      });
-
-    expect(policy.ownedDirs).toHaveLength(1);
-    expect(policy.ownedFiles).toEqual([
-      {
-        kind: "agent",
-        source: "agents/reviewer.toml",
-        targetName: "reviewer.toml"
-      }
-    ]);
-    expect(policy.skillRefs).toEqual([
-      {
-        libraryId: "shared-reviewer",
-        targetName: "agentenv-shared-reviewer"
-      }
-    ]);
-    expect(policy.mcpRefs).toEqual([
-      {
-        libraryId: "context7",
-        targetName: "context7"
-      }
-    ]);
-  });
-
-  it("keeps legacy skill references enabled and accepts an explicit disabled state", () => {
-    const policy = AssetPolicySchema.parse({
-      ownedDirs: [],
-      ownedFiles: [],
-      skillRefs: [
-        { libraryId: "legacy", targetName: "legacy" },
+    expect(ProfileResourcesSchema.parse({
+      skills: [
+        { libraryId: "review", targetName: "review", enabled: true },
         { libraryId: "paused", targetName: "paused", enabled: false }
       ],
-      mcpRefs: [],
-      disabledSkillPaths: []
-    });
+      mcpByTarget: {
+        codex: {
+          mode: "manage",
+          selections: [
+            { name: "docs", enabled: true },
+            { name: "optional", enabled: false }
+          ]
+        },
+        opencode: { mode: "ignore", selections: [] }
+      }
+    })).toMatchObject({ skills: [{ enabled: true }, { enabled: false }] });
+  });
 
-    expect(policy.skillRefs).toEqual([
-      { libraryId: "legacy", targetName: "legacy" },
-      { libraryId: "paused", targetName: "paused", enabled: false }
-    ]);
+  it("rejects v1 manifests, unsafe ids, and unknown icons", () => {
+    expect(() => ProfileManifestSchema.parse({
+      id: "daily-coding",
+      targetId: "opencode",
+      name: "Old",
+      description: "",
+      version: 1
+    })).toThrow();
+    expect(() => ProfileManifestSchema.parse({
+      id: "../bad",
+      name: "Bad",
+      description: "",
+      version: 2
+    })).toThrow();
+    expect(() => ProfileManifestSchema.parse({
+      id: "daily-coding",
+      name: "Bad icon",
+      description: "",
+      iconKey: "random-icon",
+      version: 2
+    })).toThrow();
+  });
+
+  it("rejects duplicate Skill identities, install names, and MCP selections", () => {
+    expect(() => ProfileResourcesSchema.parse({
+      skills: [
+        { libraryId: "review", targetName: "review", enabled: true },
+        { libraryId: "review", targetName: "review-copy", enabled: true }
+      ]
+    })).toThrow("referenced more than once");
+    expect(() => ProfileResourcesSchema.parse({
+      skills: [
+        { libraryId: "review", targetName: "review", enabled: true },
+        { libraryId: "docs", targetName: "review", enabled: true }
+      ]
+    })).toThrow("declared more than once");
+    expect(() => ProfileResourcesSchema.parse({
+      mcpByTarget: {
+        codex: {
+          mode: "manage",
+          selections: [
+            { name: "docs", enabled: true },
+            { name: "docs", enabled: false }
+          ]
+        }
+      }
+    })).toThrow("declared more than once");
   });
 });

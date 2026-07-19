@@ -92,31 +92,32 @@ const writeProfile = async (appDataRoot, fixture) => {
   await mkdir(profileDir, { recursive: true });
   await writeJson(join(profileDir, "profile.json"), {
     id: fixture.id,
-    targetId: "opencode",
     name: fixture.name,
     description: fixture.description,
-    version: 1,
-    managed: { instructions: true, config: true, assets: true }
+    preferredTargetId: "opencode",
+    createdFromTargetId: "opencode",
+    version: 2
   });
   await writeFile(
-    join(profileDir, "AGENTS.md"),
+    join(profileDir, "INSTRUCTIONS.md"),
     `# ${fixture.name}\n\nUse the shared AgentEnv resources for this workflow.\n`,
     "utf8"
   );
-  await writeJson(join(profileDir, "opencode.jsonc"), {
-    $schema: "https://opencode.ai/config.json"
-  });
-  await writeJson(join(profileDir, "assets.json"), {
-    ownedDirs: [],
-    ownedFiles: [],
-    skillRefs: fixture.skills.map((name) => ({ libraryId: name, targetName: name })),
-    mcpRefs: [],
-    mcpSelections: fixture.mcp.map((name, index) => ({
-      targetId: "opencode",
-      name,
-      enabled: index !== 2
+  await writeJson(join(profileDir, "resources.json"), {
+    skills: fixture.skills.map((name) => ({
+      libraryId: name,
+      targetName: name,
+      enabled: true
     })),
-    disabledSkillPaths: []
+    mcpByTarget: {
+      opencode: {
+        mode: "manage",
+        selections: fixture.mcp.map((name, index) => ({
+          name,
+          enabled: index !== 2
+        }))
+      }
+    }
   });
 };
 
@@ -149,17 +150,6 @@ const writeLibrary = async (appDataRoot) => {
     }
   }
 
-  await writeJson(
-    join(appDataRoot, "mcp-library.json"),
-    ["filesystem", "github", "postgres", "shared-docs"].map((id) => ({
-      id,
-      name: id,
-      transport: "http",
-      url: `https://example.com/${id}/mcp`,
-      args: [],
-      env: {}
-    }))
-  );
 };
 
 const prepareFixture = async (root) => {
@@ -170,6 +160,7 @@ const prepareFixture = async (root) => {
   const opencodeDir = join(homeDir, ".config", "opencode");
   const codexDir = join(homeDir, ".codex");
   await mkdir(appDataRoot, { recursive: true });
+  await writeJson(join(appDataRoot, "agentenv-data.json"), { formatVersion: 2 });
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
@@ -651,11 +642,11 @@ try {
     .waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-skills-empty-920x620.png"));
 
-  await page.getByRole("button", { name: "Add library skill" }).click();
+  await sparseSkillsSection.getByRole("button", { name: "Add", exact: true }).click();
   const sparseSkillPicker = page.getByRole("dialog", { name: "Add library skills" });
   await sparseSkillPicker.waitFor({ state: "visible" });
   await sparseSkillPicker.getByLabel("git-workflow", { exact: true }).check();
-  await sparseSkillPicker.getByRole("button", { name: "Add selected skills" }).click();
+  await sparseSkillPicker.getByRole("button", { name: /^Add 1$/ }).click();
   await sparseSkillPicker.waitFor({ state: "hidden" });
   await page.getByRole("listitem", { name: "Profile skill git-workflow" }).waitFor();
 
@@ -686,7 +677,7 @@ try {
   await page.getByRole("menu", { name: "Icons for Code Review" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-icon-picker-920x620.png"));
   await page.keyboard.press("Escape");
-  for (const sectionName of ["Instructions", "Skills", "MCPs", "Advanced"]) {
+  for (const sectionName of ["Instructions", "Skills", "MCPs"]) {
     await page
       .locator(`[data-profile-composer-id="${sectionName === "MCPs" ? "mcp" : sectionName.toLowerCase()}"]`)
       .getByRole("button", { name: sectionName, exact: true })
@@ -704,7 +695,10 @@ try {
       await setWindowSize(page, windowHandle, 920, 620);
     }
     if (sectionName === "Skills") {
-      await page.getByRole("button", { name: "Add library skill" }).click();
+      await page
+        .getByRole("region", { name: "Profile skills" })
+        .getByRole("button", { name: "Add", exact: true })
+        .click();
       const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
       await skillPicker.waitFor({ state: "visible" });
       await capturePage(page, join(outputDir, "profile-skill-picker-920x620.png"));

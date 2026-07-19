@@ -9,7 +9,7 @@ const preview: ActivationPreview = {
   id: "preview-1",
   profileId: "daily-coding",
   profileContentHash: "profile-hash",
-  libraryVersions: { skills: {}, mcp: {} },
+  libraryVersions: { skills: {} },
   targetId: "opencode",
   createdAt: "2026-06-30T00:00:00.000Z",
   warnings: [],
@@ -26,7 +26,7 @@ const preview: ActivationPreview = {
   liveFingerprints: {},
   resourceFingerprints: {},
   sourceFingerprints: {},
-  targetState: { managedConfigKeys: [], managedMcpNames: [] }
+  targetState: { managedMcpNames: [] }
 };
 
 afterEach(() => {
@@ -119,49 +119,7 @@ describe("PreviewDialog", () => {
     expect(screen.queryByText(/preparation|migration decision/i)).not.toBeInTheDocument();
   });
 
-  it("requires an explicit acknowledgement for resources omitted on another Target", () => {
-    const onAcknowledgedChange = vi.fn();
-    render(
-      <PreviewDialog
-        targetNames={{ codex: "Codex" }}
-        preview={{
-          ...preview,
-          targetId: "codex",
-          effectivePayload: {
-            instructions: 1,
-            skills: 2,
-            mcpServers: 1,
-            agents: 0,
-            nativeConfig: 0,
-            total: 4
-          },
-          omissions: [
-            {
-              kind: "config",
-              name: "OpenCode Advanced config",
-              reason: "OpenCode Advanced config is not applied to Codex"
-            }
-          ],
-          requiresOmissionAcknowledgement: true
-        }}
-        omissionsAcknowledged={false}
-        onOmissionsAcknowledgedChange={onAcknowledgedChange}
-        onCancel={vi.fn()}
-        onConfirm={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText("OpenCode Advanced config")).toBeInTheDocument();
-    expect(screen.getByText("Codex will receive 1 instruction file, 2 Skills, 1 MCP server.")).toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("checkbox", {
-        name: "I understand these resources will not be applied to Codex"
-      })
-    );
-    expect(onAcknowledgedChange).toHaveBeenCalledWith(true);
-  });
-
-  it("describes read-only MCP connections without claiming they will be applied", () => {
+  it("does not include Agent-controlled MCPs in the effective payload", () => {
     render(
       <PreviewDialog
         targetNames={{ "claude-code": "Claude Code" }}
@@ -172,9 +130,6 @@ describe("PreviewDialog", () => {
             instructions: 1,
             skills: 0,
             mcpServers: 0,
-            observedMcpServers: 2,
-            agents: 0,
-            nativeConfig: 0,
             total: 1
           }
         }}
@@ -185,7 +140,7 @@ describe("PreviewDialog", () => {
 
     expect(
       screen.getByText(
-        "Claude Code will receive 1 instruction file. 2 MCP connections remain Agent-controlled."
+        "Claude Code will receive 1 instruction file."
       )
     ).toBeInTheDocument();
   });

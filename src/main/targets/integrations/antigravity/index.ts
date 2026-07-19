@@ -8,24 +8,20 @@ import type {
 import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
+import { captureNativeJsonMcpConnections } from "../../capture";
 import type { AgentTargetIntegration } from "../../contract";
 import { defineTargetIntegration } from "../../defineTargetIntegration";
 import { createAntigravityInstallationDriver } from "../../installationDiscovery";
 import { createDirectoryAssetDriver } from "../../shared/assetDeployment";
-import { createProfileFileDriver } from "../../shared/profileFiles";
 import { createFilesystemSkillDriver } from "../../shared/skillRuntime";
-import { captureNativeJsonMcpConnections } from "../../capture";
 
 const DEFAULT_STATE: TargetState = {
-  managedConfigKeys: [],
+  formatVersion: 2,
   managedMcpNames: []
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
-
-const hashText = (content: string) =>
-  createHash("sha256").update(content).digest("hex");
 
 const parseJsonObject = (
   content: string,
@@ -44,6 +40,9 @@ const parseJsonObject = (
   }
 };
 
+const hashText = (content: string) =>
+  createHash("sha256").update(content).digest("hex");
+
 const addChange = (
   changes: PlannedFileChange[],
   path: string,
@@ -54,11 +53,6 @@ const addChange = (
   changes.push({ path, before, after, diff: createUnifiedDiff(path, before, after) });
 };
 
-const profileFiles = createProfileFileDriver({
-  instructionsFile: "GEMINI.md",
-  configFile: "mcp_config.json"
-});
-
 const assets = createDirectoryAssetDriver({ targetName: "Antigravity" });
 const skills = createFilesystemSkillDriver({ targetId: "antigravity" });
 
@@ -66,7 +60,7 @@ export const antigravityIntegration: AgentTargetIntegration = {
   descriptor: {
     id: "antigravity",
     name: "Antigravity CLI",
-    description: "Manage global Antigravity CLI rules, MCPs, and skills.",
+    description: "Manage Antigravity instructions and Skills.",
     iconKey: "antigravity",
     displayOrder: 3,
     instructionsLabel: "GEMINI.md",
@@ -80,8 +74,6 @@ export const antigravityIntegration: AgentTargetIntegration = {
       skills: true,
       mcpTransports: ["stdio", "http", "sse"],
       disabledSkillPaths: false,
-      nativeConfig: false,
-      mcpEnvironmentReferences: false,
       mcpActivation: false
     }
   },
@@ -135,21 +127,13 @@ export const antigravityIntegration: AgentTargetIntegration = {
       id,
       manifest: {
         id,
-        targetId: "antigravity",
         name: "Antigravity Profile",
-        description: "Antigravity rules, MCPs, and skills",
-        version: 1,
-        managed: { instructions: true, config: true, assets: true }
+        description: "Default coding environment",
+        preferredTargetId: "antigravity",
+        version: 2
       },
-      instructions: "# Antigravity Guidance\n\n- Keep changes scoped and reversible.\n",
-      configText: "{\n  \"mcpServers\": {}\n}\n",
-      assetPolicy: {
-        ownedDirs: [],
-        ownedFiles: [],
-        skillRefs: [],
-        mcpRefs: [],
-        disabledSkillPaths: []
-      }
+      instructions: "# Agent Guidance\n\n- Keep changes scoped and reversible.\n",
+      resources: { skills: [], mcpByTarget: {} }
     }),
     captureProfile: async (targetPaths) => {
       const [instructions, configText] = await Promise.all([
@@ -166,88 +150,53 @@ export const antigravityIntegration: AgentTargetIntegration = {
           controllable: false
         }
       );
-      const rootKeys = Object.keys(parsed.value).filter(
-        (key) => key !== "mcpServers"
+      const excluded = Object.keys(parsed.value).map(
+        (key) => `mcp_config.json.${key}`
       );
       return {
         instructions,
-        configText: '{\n  "mcpServers": {}\n}\n',
-        mcpServers: [],
         mcpConnections,
-        disabledSkillPaths: [],
-        warnings: [],
-        excluded: rootKeys.map((key) => `mcp_config.json.${key}`)
+        warnings: excluded.length > 0
+          ? ["Antigravity MCP configuration remains Agent-owned"]
+          : [],
+        excluded
       };
-    },
-    ...profileFiles
+    }
   },
-  config: {
-    hasMeaningfulNativeConfig: (configText) => {
-      const parsed = parseJsonObject(configText, "Invalid Antigravity Profile config");
-      return !parsed.ok || Object.keys(parsed.value).some((key) => key !== "mcpServers");
-    },
+  preview: {
     createPreview: async ({
       profile,
       targetPaths,
-      state = DEFAULT_STATE,
-      allowMatchingUnmanagedConfig
+      state = DEFAULT_STATE
     }): Promise<TargetActivationPreview> => {
-      const warnings = findSecretWarnings(profile.instructions).concat(
-        findSecretWarnings(profile.configText)
-      );
+      const warnings = findSecretWarnings(profile.instructions);
       const errors: string[] = [];
       const changes: PlannedFileChange[] = [];
-      const [liveInstructions, liveConfigText] = await Promise.all([
-        readTextIfExists(targetPaths.instructionsPath),
-        readTextIfExists(targetPaths.configPath)
-      ]);
-      if (profile.manifest.managed.instructions && [...profile.instructions].length > 12_000) {
+      const liveInstructions = await readTextIfExists(targetPaths.instructionsPath);
+      if ([...profile.instructions].length > 12_000) {
         errors.push("Antigravity GEMINI.md exceeds the 12,000 character limit");
       }
-      if (profile.manifest.managed.instructions) {
-        addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
-      }
-
-      const liveConfig = parseJsonObject(
-        liveConfigText,
-        "Invalid live Antigravity MCP config"
-      );
-      if (!liveConfig.ok) {
-        warnings.push(
-          `${liveConfig.message}; MCP selections remain Antigravity-controlled`
+      addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
+      if (profile.resources.mcpByTarget.antigravity?.mode === "manage") {
+        errors.push(
+          "Antigravity MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Antigravity."
         );
       }
-      const liveServers =
-        liveConfig.ok && isRecord(liveConfig.value.mcpServers)
-          ? liveConfig.value.mcpServers
-          : {};
-      for (const selection of (profile.assetPolicy.mcpSelections ?? []).filter(
-        (item) => item.targetId === "antigravity"
-      )) {
-        if (!(selection.name in liveServers)) {
-          warnings.push(
-            `MCP server ${selection.name} is not configured in Antigravity; set it up in Antigravity`
-          );
-        }
-      }
-
       return {
         warnings,
         errors,
         changes,
         liveFingerprints: {
-          ...(profile.manifest.managed.instructions
-            ? { [targetPaths.instructionsPath]: hashText(liveInstructions) }
-            : {})
+          [targetPaths.instructionsPath]: hashText(liveInstructions)
         },
         targetState: {
-          managedConfigKeys: [],
+          ...state,
+          formatVersion: 2,
           managedMcpNames: []
         }
       };
     }
   },
-  mcp: { materializeMcpRefs: (profile) => profile },
   assets
 };
 

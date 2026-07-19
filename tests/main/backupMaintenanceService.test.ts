@@ -60,7 +60,7 @@ describe("backup maintenance service", () => {
     });
     await mkdir(paths.targetStatesDir, { recursive: true });
     await writeFile(join(paths.targetStatesDir, "opencode.json"), JSON.stringify({
-      managedConfigKeys: [],
+      formatVersion: 2,
       managedMcpNames: [],
       activeProfileId: "daily",
       recoveryRequired: {
@@ -148,7 +148,7 @@ describe("backup maintenance service", () => {
     await symlink(join(paths.backupsDir, backup.id), join(paths.backupsDir, backup.id, "cycle"));
     await mkdir(paths.targetStatesDir, { recursive: true });
     await writeFile(join(paths.targetStatesDir, "opencode.json"), JSON.stringify({
-      managedConfigKeys: [],
+      formatVersion: 2,
       managedMcpNames: [],
       activeProfileId: "daily"
     }));

@@ -56,7 +56,7 @@ export const listProfileApplications = (
 
 export const preferredTargetForProfile = (
   profileId: string,
-  nativeTargetId: string,
+  preferredTargetId: string | undefined,
   targetStates: readonly TargetManagementState[],
   targets: readonly TargetInfo[],
   rememberedTargetId?: string
@@ -71,8 +71,8 @@ export const preferredTargetForProfile = (
     return activeTargetId;
   }
 
-  if (availableTargetIds.has(nativeTargetId)) {
-    return nativeTargetId;
+  if (preferredTargetId && availableTargetIds.has(preferredTargetId)) {
+    return preferredTargetId;
   }
 
   return targets.find((target) => isTargetInstalled(target.health))?.id ?? targets[0]?.id;
@@ -80,38 +80,31 @@ export const preferredTargetForProfile = (
 
 const unique = (names: readonly string[]): string[] => [...new Set(names)];
 
-type ProfileTargetSchema = Pick<TargetDescriptor, "id" | "configLanguage" | "mcpConfigKey">;
+type ProfileTargetSchema = Pick<TargetDescriptor, "id">;
 
 export const summarizeProfile = (
-  profile: Pick<ProfileDetail, "manifest" | "instructions" | "configText" | "assetPolicy">,
+  profile: Pick<ProfileDetail, "instructions" | "resources">,
   target: ProfileTargetSchema,
   librarySkills: readonly Pick<SkillLibraryEntry, "id" | "globallyEnabled">[] = []
 ): ProfileResourceSummary => {
   const globallyDisabledIds = new Set(
     librarySkills.filter((skill) => skill.globallyEnabled === false).map((skill) => skill.id)
   );
-  const profileOwnedSkills = [...profile.assetPolicy.ownedDirs, ...profile.assetPolicy.ownedFiles]
-    .filter((asset) => asset.kind === "skill")
-    .map((asset) => asset.targetName);
-  const skillNames = unique([
-    ...profileOwnedSkills,
-    ...profile.assetPolicy.skillRefs
+  const skillNames = unique(
+    profile.resources.skills
       .filter(
         (skill) => skill.enabled !== false && !globallyDisabledIds.has(skill.libraryId)
       )
       .map((skill) => skill.targetName)
-  ]);
-  const mcpNames = unique([
-    ...(profile.assetPolicy.mcpSelections ?? [])
-      .filter((selection) => selection.targetId === target.id)
-      .map((selection) => selection.name),
-    ...profile.assetPolicy.mcpRefs.map((server) => server.targetName)
-  ]);
+  );
+  const mcpPolicy = profile.resources.mcpByTarget[target.id];
+  const mcpNames = mcpPolicy?.mode === "manage"
+    ? unique(mcpPolicy.selections.filter((selection) => selection.enabled).map((selection) => selection.name))
+    : [];
 
   return {
     instructions: {
-      count:
-        profile.manifest.managed.instructions && profile.instructions.trim().length > 0 ? 1 : 0
+      count: profile.instructions.trim().length > 0 ? 1 : 0
     },
     skills: { count: skillNames.length, names: skillNames },
     mcp: { count: mcpNames.length, names: mcpNames }

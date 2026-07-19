@@ -23,22 +23,13 @@ const profile: ProfileDetail = {
   profileDir: "/tmp/profiles/daily-coding",
   manifest: {
     id: "daily-coding",
-    targetId: "opencode",
+    preferredTargetId: "opencode",
     name: "Daily Coding",
     description: "Default",
-    version: 1,
-    managed: { instructions: true, config: true, assets: true }
+    version: 2
   },
   instructions: "# Agent\n",
-  configText: '{\n  "mcp": {}\n}\n',
-  assetPolicy: {
-    ownedDirs: [],
-    ownedFiles: [],
-    skillRefs: [],
-    mcpRefs: [],
-    mcpSelections: [],
-    disabledSkillPaths: []
-  },
+  resources: { skills: [], mcpByTarget: {} },
   contentHash: "profile-hash",
   targetContentHashes: {
     opencode: "profile-hash",
@@ -51,7 +42,7 @@ const preview = {
   id: "preview-1",
   profileId: "daily-coding",
   profileContentHash: "profile-hash",
-  libraryVersions: { skills: {}, mcp: {} },
+  libraryVersions: { skills: {} },
   targetId: "opencode",
   createdAt: "2026-06-30T00:00:00.000Z",
   warnings: [
@@ -76,7 +67,7 @@ const preview = {
   liveFingerprints: {},
   resourceFingerprints: {},
   sourceFingerprints: {},
-  targetState: { managedConfigKeys: [], managedMcpNames: [] }
+  targetState: { managedMcpNames: [] }
 };
 
 const backup = {
@@ -186,11 +177,10 @@ const codexProfile: ProfileDetail = {
   manifest: {
     ...profile.manifest,
     id: "codex-review",
-    targetId: "codex",
+    preferredTargetId: "codex",
     name: "Codex Review",
     description: "Review setup"
-  },
-  configText: "[mcp_servers.context7]\ncommand = \"npx\"\n"
+  }
 };
 
 const profileB: ProfileDetail = {
@@ -219,32 +209,29 @@ const profileC: ProfileDetail = {
 
 const richProfile: ProfileDetail = {
   ...profile,
-  configText: "{}\n",
-  assetPolicy: {
-    ownedDirs: [
-      { kind: "skill", source: "skills/review", targetName: "profile-review" }
+  resources: {
+    skills: [
+      { libraryId: "testing", targetName: "library-testing", enabled: true },
+      { libraryId: "docs", targetName: "library-docs", enabled: true }
     ],
-    ownedFiles: [
-      { kind: "skill", source: "skills/debug.md", targetName: "profile-debug" }
-    ],
-    skillRefs: [
-      { libraryId: "testing", targetName: "library-testing" },
-      { libraryId: "docs", targetName: "library-docs" }
-    ],
-    mcpRefs: [],
-    mcpSelections: [
-      { targetId: "opencode", name: "library-docs", enabled: true },
-      { targetId: "opencode", name: "shared-mcp", enabled: true },
-      { targetId: "opencode", name: "raw-search", enabled: false },
-      { targetId: "opencode", name: "raw-browser", enabled: true }
-    ],
-    disabledSkillPaths: ["legacy-skill"]
+    mcpByTarget: {
+      opencode: {
+        mode: "manage",
+        selections: [
+          { name: "library-docs", enabled: true },
+          { name: "shared-mcp", enabled: true },
+          { name: "raw-search", enabled: false },
+          { name: "raw-browser", enabled: true }
+        ]
+      }
+    }
   }
 };
 
 const summaryOf = (detail: ProfileDetail) => ({
   id: detail.id,
-  targetId: detail.manifest.targetId,
+  preferredTargetId: detail.manifest.preferredTargetId,
+  createdFromTargetId: detail.manifest.createdFromTargetId,
   name: detail.manifest.name,
   description: detail.manifest.description,
   createdAt: detail.manifest.createdAt,
@@ -268,7 +255,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
   activeProfileId: "daily-coding",
   activeProfileName: "Daily Coding",
   appliedProfileHash: "profile-hash",
-  appliedLibraryVersions: { skills: {}, mcp: {} },
+  appliedLibraryVersions: { skills: {} },
   status: "managed",
   lifecycleStatus: "applied",
   lastAppliedAt: "2026-07-09T00:00:00.000Z",
@@ -302,9 +289,6 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       updatedAt: "2026-07-09T00:00:00.000Z"
     }),
     unignoreSkillGroup: vi.fn().mockResolvedValue(undefined),
-    listMcpLibrary: vi.fn().mockResolvedValue([]),
-    saveMcpServer: vi.fn().mockImplementation(async (input) => input),
-    removeMcpServer: vi.fn().mockResolvedValue(undefined),
     scanUnmanagedSkills: vi.fn().mockResolvedValue([]),
     previewSkillImport: vi.fn().mockImplementation(async (source) => ({
       source,
@@ -535,7 +519,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       .mockResolvedValue([
         {
           id: "daily-coding",
-          targetId: "opencode",
+          preferredTargetId: "opencode",
           name: "Daily Coding",
           description: "Default",
           contentHash: "profile-hash"
@@ -558,11 +542,11 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     })),
     createProfile: vi.fn().mockImplementation(async (input) => ({
       ...profile,
-      id: `${input.targetId}-created`,
+      id: `${input.preferredTargetId}-created`,
       manifest: {
         ...profile.manifest,
-        id: `${input.targetId}-created`,
-        targetId: input.targetId,
+        id: `${input.preferredTargetId}-created`,
+        preferredTargetId: input.preferredTargetId,
         name: input.name ?? "New profile",
         description: input.description ?? ""
       }
@@ -669,6 +653,13 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
   };
 
+  const openRecoveryHistory = async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Recovery/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Recovery" });
+    return within(dialog).getByRole("region", { name: "History" });
+  };
+
   it("renders the profile composer instead of tabs", async () => {
     const api = installApi();
     const { container } = render(<App />);
@@ -691,20 +682,18 @@ describe("App", () => {
     );
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
-    expect(screen.getByText("Native: OpenCode")).toBeInTheDocument();
+    expect(screen.getByText("Preferred: OpenCode")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "MCPs" })).toBeInTheDocument();
-    expect(within(composer).getByRole("button", { name: "Advanced" })).toBeInTheDocument();
+    expect(within(composer).queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
     for (const oldTab of ["Overview", "Instructions", "Config", "Resources", "Validation"]) {
       expect(screen.queryByRole("tab", { name: oldTab })).not.toBeInTheDocument();
     }
 
     fireEvent.click(within(composer).getByRole("button", { name: "Instructions" }));
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
-    fireEvent.click(within(composer).getByRole("button", { name: "Advanced" }));
-    expect(screen.getByLabelText("OpenCode settings (opencode.jsonc)")).toHaveValue(
-      '{\n  "mcp": {}\n}\n'
-    );
+    fireEvent.click(within(composer).getByRole("button", { name: "MCPs" }));
+    expect(screen.getByText("Apply leaves every MCP setting in OpenCode unchanged.")).toBeInTheDocument();
   });
 
   it("renders Library Skills before startup discovery and update checks finish", async () => {
@@ -923,8 +912,7 @@ describe("App", () => {
       api.listProfiles,
       api.listBackups,
       api.listSkillLibrary,
-      api.scanSkillInventory,
-      api.listMcpLibrary
+      api.scanSkillInventory
     ];
     unrelatedReads.forEach((read) => vi.mocked(read).mockClear());
     vi.mocked(api.checkSkillLibraryUpdates).mockClear();
@@ -1109,8 +1097,7 @@ describe("App", () => {
       api.listProfiles,
       api.listBackups,
       api.listSkillLibrary,
-      api.scanSkillInventory,
-      api.listMcpLibrary
+      api.scanSkillInventory
     ];
     unrelatedReads.forEach((read) => vi.mocked(read).mockClear());
 
@@ -1293,6 +1280,7 @@ describe("App", () => {
         screen.getByRole("region", { name: "Profile composer" })
       ).getByRole("button", { name: "MCPs" })
     );
+    fireEvent.click(await screen.findByRole("switch", { name: "Manage MCPs for OpenCode" }));
     const behavior = await screen.findByLabelText("context7 Profile behavior");
     expect(behavior).toHaveValue("agent");
     fireEvent.change(behavior, { target: { value: "off" } });
@@ -1300,18 +1288,24 @@ describe("App", () => {
 
     await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
     expect(
-      vi.mocked(api.saveProfile).mock.calls.at(-1)?.[0].assetPolicy
-        .mcpSelections
-    ).toContainEqual({
-      targetId: "opencode",
-      name: "context7",
-      enabled: false
+      vi.mocked(api.saveProfile).mock.calls.at(-1)?.[0].resources.mcpByTarget.opencode
+    ).toEqual({
+      mode: "manage",
+      selections: [{ name: "context7", enabled: false }]
     });
-    expect(api.saveMcpServer).not.toHaveBeenCalled();
   });
 
   it("shows native MCP inspection failures instead of a false empty state", async () => {
     installApi({
+      readProfile: vi.fn().mockResolvedValue({
+        ...profile,
+        resources: {
+          ...profile.resources,
+          mcpByTarget: {
+            opencode: { mode: "manage", selections: [] }
+          }
+        }
+      }),
       listNativeMcpConnections: vi.fn().mockResolvedValue({
         connections: [],
         issues: [{
@@ -1369,7 +1363,7 @@ describe("App", () => {
       ], issues: [] }),
       readProfile: vi.fn().mockResolvedValue({
         ...profile,
-        manifest: { ...profile.manifest, targetId: "claude-code" }
+        manifest: { ...profile.manifest, preferredTargetId: "claude-code" }
       })
     });
     render(<App />);
@@ -1432,16 +1426,14 @@ describe("App", () => {
     const instructions = within(composer).getByRole("button", { name: "Instructions" });
     const skills = within(composer).getByRole("button", { name: "Skills" });
     const mcp = within(composer).getByRole("button", { name: "MCPs" });
-    const advanced = within(composer).getByRole("button", { name: "Advanced" });
 
     expect(instructions).toHaveAccessibleDescription(/1.*AGENTS\.md/);
     expect(skills).toHaveAccessibleDescription(
-      /4.*profile-review.*profile-debug.*\+2/
+      /2.*library-testing.*library-docs/
     );
     expect(mcp).toHaveAccessibleDescription(
-      /4.*library-docs.*shared-mcp.*\+2/
+      /3.*library-docs.*shared-mcp.*\+1/
     );
-    expect(advanced).toHaveAccessibleDescription(/1.*legacy-skill/);
     expect(skills).toHaveAttribute("aria-expanded", "false");
     expect(instructions).toHaveAttribute("aria-expanded", "false");
 
@@ -1449,15 +1441,8 @@ describe("App", () => {
     expect(mcp).toHaveAttribute("aria-expanded", "true");
     expect(skills).toHaveAttribute("aria-expanded", "false");
 
-    fireEvent.click(advanced);
-    expect(advanced).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(mcp);
     expect(mcp).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByLabelText("OpenCode settings (opencode.jsonc)")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "History" })).toBeInTheDocument();
-
-    fireEvent.click(advanced);
-    expect(advanced).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByLabelText("OpenCode settings (opencode.jsonc)")).not.toBeInTheDocument();
   });
 
   it("keeps usable Profiles available and surfaces a damaged stored Profile", async () => {
@@ -1495,10 +1480,10 @@ describe("App", () => {
   it("focuses the active profile without moving it ahead of newer profiles", async () => {
     const activeProfile: ProfileDetail = {
       ...richProfile,
-      assetPolicy: {
-        ...richProfile.assetPolicy,
-        skillRefs: [
-          { libraryId: "testing", targetName: "library-testing" },
+      resources: {
+        ...richProfile.resources,
+        skills: [
+          { libraryId: "testing", targetName: "library-testing", enabled: true },
           { libraryId: "docs", targetName: "library-docs", enabled: false }
         ]
       }
@@ -1569,8 +1554,8 @@ describe("App", () => {
     await waitFor(() =>
       expect(api.saveProfile).toHaveBeenCalledWith(
         expect.objectContaining({
-          assetPolicy: expect.objectContaining({
-            skillRefs: [
+          resources: expect.objectContaining({
+            skills: [
               { libraryId: "testing", targetName: "library-testing", enabled: false },
               { libraryId: "docs", targetName: "library-docs", enabled: false }
             ]
@@ -1588,16 +1573,14 @@ describe("App", () => {
         managedState({
           lastAppliedAt: "2026-07-09T08:00:00.000Z",
           appliedLibraryVersions: {
-            skills: { docs: "missing", testing: "missing" },
-            mcp: {}
+            skills: { docs: "missing", testing: "missing" }
           }
         }),
         managedState({
           targetId: "codex",
           lastAppliedAt: "2026-07-10T08:00:00.000Z",
           appliedLibraryVersions: {
-            skills: { docs: "missing", testing: "missing" },
-            mcp: {}
+            skills: { docs: "missing", testing: "missing" }
           }
         })
       ])
@@ -1608,8 +1591,8 @@ describe("App", () => {
     const profileList = screen.getByRole("complementary", { name: "Profile list" });
     const row = within(profileList).getByRole("button", { name: /Daily Coding/ });
     expect(row).toHaveAttribute("aria-current", "page");
-    expect(row).toHaveTextContent("4 skills");
-    expect(row).toHaveTextContent("4 MCP");
+    expect(row).toHaveTextContent("2 skills");
+    expect(row).toHaveTextContent("3 MCP");
     expect(row).toHaveTextContent("1 file");
     expect(within(row).getByLabelText("Active on: Codex, OpenCode")).toBeInTheDocument();
     expect(within(row).getByTitle("Codex is up to date")).toBeInTheDocument();
@@ -2233,11 +2216,7 @@ describe("App", () => {
     cleanup();
     const invalidProfile = {
       ...profile,
-      instructions: "",
-      manifest: {
-        ...profile.manifest,
-        managed: { ...profile.manifest.managed, config: false }
-      }
+      instructions: ""
     };
     const invalidApi = installApi({ readProfile: vi.fn().mockResolvedValue(invalidProfile) });
     render(<App />);
@@ -2282,8 +2261,7 @@ describe("App", () => {
     await waitFor(() =>
       expect(driftApi.applyProfile).toHaveBeenCalledWith("daily-coding", "preview-1", {
         allowManagedDrift: true,
-        allowUnmanagedSkillReplacement: true,
-        allowOmissions: false
+        allowUnmanagedSkillReplacement: true
       })
     );
   });
@@ -2305,25 +2283,7 @@ describe("App", () => {
     expect(api.previewApply).not.toHaveBeenCalled();
   });
 
-  it("uses explicit destinations only for readiness issues outside the apply flow", async () => {
-    installApi({
-      readProfile: vi.fn().mockResolvedValue({ ...profile, configText: "{" })
-    });
-    render(<App />);
-
-    await openProfiles();
-    expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
-      "Profile configuration needs review"
-    );
-    const openAdvanced = screen.getByRole("button", { name: "Open Advanced" });
-    expect(openAdvanced).toHaveTextContent("Open Advanced");
-    fireEvent.click(openAdvanced);
-    expect(screen.getByRole("button", { name: "Advanced" })).toHaveAttribute(
-      "aria-expanded",
-      "true"
-    );
-
-    cleanup();
+  it("routes recovery readiness to the backup manager", async () => {
     installApi({
       listTargetStates: vi.fn().mockResolvedValue([
         managedState({ lifecycleStatus: "recovery-required" })
@@ -2338,10 +2298,7 @@ describe("App", () => {
     const openRecovery = screen.getByRole("button", { name: "Open Recovery" });
     expect(openRecovery).toHaveTextContent("Open Recovery");
     fireEvent.click(openRecovery);
-    expect(screen.getByRole("button", { name: "Advanced" })).toHaveAttribute(
-      "aria-expanded",
-      "true"
-    );
+    expect(await screen.findByRole("dialog", { name: "Manage Backups" })).toBeInTheDocument();
   });
 
   it("lists every active target and routes profile deletion recovery to Targets", async () => {
@@ -2566,7 +2523,7 @@ describe("App", () => {
 
     await waitFor(() =>
       expect(api.createProfile).toHaveBeenCalledWith({
-        targetId: "opencode",
+        preferredTargetId: "opencode",
         name: "Docs Writing",
         description: "Writing setup"
       })
@@ -2836,12 +2793,10 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
-    const history = await screen.findByRole("region", { name: "History" });
+    const history = await openRecoveryHistory();
     const previewRollbackButton = within(history).getByRole("button", {
       name: "Preview restore Daily Coding"
     });
-    previewRollbackButton.focus();
     fireEvent.click(previewRollbackButton);
 
     await waitFor(() => expect(api.previewRollback).toHaveBeenCalledWith(backup.id));
@@ -2854,7 +2809,6 @@ describe("App", () => {
 
     await waitFor(() => expect(api.rollback).toHaveBeenCalledWith(backup.id));
     expect(screen.queryByText("Rollback preview")).not.toBeInTheDocument();
-    await waitFor(() => expect(previewRollbackButton).toHaveFocus());
   });
 
   it("uses the confirmation preview when recovery starts from Targets", async () => {
@@ -2891,8 +2845,7 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
-    const history = await screen.findByRole("region", { name: "History" });
+    const history = await openRecoveryHistory();
     fireEvent.click(
       within(history).getByRole("button", { name: "Preview restore Daily Coding" })
     );
@@ -2914,8 +2867,7 @@ describe("App", () => {
     render(<App />);
 
     await openProfiles();
-    fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
-    const history = await screen.findByRole("region", { name: "History" });
+    const history = await openRecoveryHistory();
     fireEvent.click(
       within(history).getByRole("button", { name: "Preview restore Daily Coding" })
     );

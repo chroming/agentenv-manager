@@ -25,17 +25,12 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import {
-  parse as parseJsonc,
-  printParseErrorCode,
-  type ParseError
-} from "jsonc-parser";
 import type {
   ActivationPreview,
-  AssetPolicy,
   BackupSummary,
   DataRestorePreview,
   ProfileDetail,
+  ProfileResources,
   ProfileSummary,
   ResourceIconKey,
   RollbackPreview,
@@ -63,7 +58,6 @@ import type {
   NativeMcpInspectionIssue,
   RetireSharedSkillInput,
   SharedSkillRetentionInput,
-  McpLibraryEntry,
   SkillInventoryEntry,
   SkillImportConflictResolution,
   SkillImportInput,
@@ -96,9 +90,7 @@ import { isExternalSkillImportable } from "../shared/skillIdentity";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { DiffViewer } from "./components/DiffViewer";
-import { HistoryView } from "./components/HistoryView";
 import { InfoTip } from "./components/InfoTip";
-import { McpEditor } from "./components/McpEditor";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
 import { ProfileList } from "./components/ProfileList";
@@ -135,13 +127,9 @@ import {
   type ProfileResourceSummary
 } from "./profileSummary";
 import { createTargetNameIndex } from "./targetPresentation";
-const emptyAssetPolicy: AssetPolicy = {
-  ownedDirs: [],
-  ownedFiles: [],
-  skillRefs: [],
-  mcpRefs: [],
-  mcpSelections: [],
-  disabledSkillPaths: []
+const emptyProfileResources: ProfileResources = {
+  skills: [],
+  mcpByTarget: {}
 };
 
 const reconcileProfileUsage = (
@@ -171,7 +159,7 @@ const reconcileProfileUsage = (
   return next;
 };
 
-type ComposerSection = "instructions" | "skills" | "mcp" | "advanced";
+type ComposerSection = "instructions" | "skills" | "mcp";
 type ProfileDialogMode = "create" | "edit";
 type ProfileCreateSource = "blank" | "target";
 type ProfileCaptureOrigin = "profiles" | "targets";
@@ -288,8 +276,7 @@ const summarizeSkillUpdateResult = (
 const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   manifest: profile.manifest,
   instructions: profile.instructions,
-  configText: profile.configText,
-  assetPolicy: profile.assetPolicy
+  resources: profile.resources
 });
 
 type AppFeedbackKind = "loading" | "success" | "error" | "info";
@@ -401,69 +388,11 @@ interface ValidationRow {
   level: ValidationLevel;
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value && typeof value === "object" && !Array.isArray(value));
-
-const validateConfig = (
-  configText: string,
-  language?: TargetInfo["configLanguage"]
-): Pick<ValidationRow, "value" | "detail" | "level"> => {
-  if (language === "json") {
-    try {
-      const parsed = JSON.parse(configText.trim().length === 0 ? "{}" : configText);
-      return isRecord(parsed)
-        ? { value: "OK", level: "ok" }
-        : { value: "Blocked", detail: "Expected a JSON object", level: "error" };
-    } catch (error) {
-      return {
-        value: "Blocked",
-        detail: error instanceof Error ? error.message : String(error),
-        level: "error"
-      };
-    }
-  }
-  if (language === "jsonc") {
-    const errors: ParseError[] = [];
-    const parsed = parseJsonc(configText.trim().length === 0 ? "{}" : configText, errors, {
-      allowTrailingComma: true
-    });
-    if (errors.length > 0) {
-      return {
-        value: "Blocked",
-        detail: errors.map((error) => printParseErrorCode(error.error)).join(", "),
-        level: "error"
-      };
-    }
-    if (!isRecord(parsed)) {
-      return {
-        value: "Blocked",
-        detail: "Expected a JSON object",
-        level: "error"
-      };
-    }
-    return { value: "OK", level: "ok" };
-  }
-
-  if (language === "toml") {
-    return {
-      value: "Preview",
-      detail: "Preview validates TOML in the main process",
-      level: "pending"
-    };
-  }
-
-  return { value: "Pending", detail: "Preview checks this Agent format", level: "pending" };
-};
-
 const createValidationRows = (
   profile: ProfileDetail,
   target?: TargetInfo,
-  preview?: ActivationPreview,
-  profileTarget: TargetDescriptor | undefined = target
+  preview?: ActivationPreview
 ): ValidationRow[] => {
-  const configValidation = profile.manifest.managed.config
-    ? validateConfig(profile.configText, profileTarget?.configLanguage)
-    : { value: "Disabled", level: "pending" as const };
   const targetLevel: ValidationLevel =
     target?.health.status === "ready"
       ? "ok"
@@ -490,69 +419,22 @@ const createValidationRows = (
       level: targetLevel
     },
     {
-      label: profileTarget?.instructionsLabel ?? "Instructions",
-      value: profile.manifest.managed.instructions
-        ? profile.instructions.trim().length > 0
-          ? "OK"
-          : "Empty"
-        : "Disabled",
+      label: target?.instructionsLabel ?? "Instructions",
+      value: profile.instructions.trim().length > 0 ? "OK" : "Empty",
       detail:
-        profile.manifest.managed.instructions && profile.instructions.trim().length === 0
+        profile.instructions.trim().length === 0
           ? "Applying this Profile clears managed instructions"
           : undefined,
       level:
-        profile.manifest.managed.instructions && profile.instructions.trim().length === 0
+        profile.instructions.trim().length === 0
           ? "warning"
           : "ok"
-    },
-    {
-      ...configValidation,
-      label: `${profileTarget?.name ?? "Native"} native config`,
-      detail:
-        target && profileTarget && target.id !== profileTarget.id
-          ? `Only applied when the destination Agent is ${profileTarget.name}`
-          : configValidation.detail
-    },
-    {
-      label: `${target?.name ?? "Agent"} compatibility`,
-      value:
-        target && profileTarget && target.id !== profileTarget.id
-          ? preview
-            ? (preview.omissions?.length ?? 0) > 0
-              ? "Review"
-              : "Compatible"
-            : "Preview"
-          : "Native",
-      detail:
-        target && profileTarget && target.id !== profileTarget.id
-          ? preview
-            ? `${preview.effectivePayload?.total ?? 0} resources included; ${preview.omissions?.length ?? 0} native items omitted`
-            : "Preview calculates the portable payload and native-only omissions"
-          : "Native configuration is supported by this Agent",
-      level:
-        preview && (preview.omissions?.length ?? 0) > 0
-          ? "warning"
-          : target && profileTarget && target.id !== profileTarget.id
-            ? "pending"
-            : "ok"
     },
     {
       label: "Skills",
-      value: profile.manifest.managed.assets
-        ? profile.assetPolicy.ownedDirs.some((ownedDir) => ownedDir.kind === "skill")
-          ? "Preview"
-          : "OK"
-        : "Disabled",
-      detail:
-        profile.manifest.managed.assets &&
-        profile.assetPolicy.ownedDirs.some((ownedDir) => ownedDir.kind === "skill")
-          ? "Preview verifies source directories and Agent ownership"
-          : undefined,
-      level:
-        profile.manifest.managed.assets &&
-        profile.assetPolicy.ownedDirs.some((ownedDir) => ownedDir.kind === "skill")
-          ? "pending"
-          : "ok"
+      value: `${profile.resources.skills.length}`,
+      detail: "Preview verifies Library availability and Agent ownership",
+      level: "pending"
     },
     {
       label: "Live conflicts",
@@ -588,7 +470,6 @@ const AppContent = ({
   const [nativeMcpIssues, setNativeMcpIssues] = useState<NativeMcpInspectionIssue[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
-  const [mcpServers, setMcpServers] = useState<McpLibraryEntry[]>([]);
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
   const [skillInventoryRefreshing, setSkillInventoryRefreshing] = useState(false);
@@ -636,7 +517,6 @@ const AppContent = ({
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
   const [replaceProtectedTargetChanges, setReplaceProtectedTargetChanges] = useState(false);
-  const [acceptCrossTargetOmissions, setAcceptCrossTargetOmissions] = useState(false);
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
@@ -650,7 +530,6 @@ const AppContent = ({
   const [skillUpdateFeedbackWorkspace, setSkillUpdateFeedbackWorkspace] =
     useState<"library" | "profiles">("library");
   const [checkingProfileSkillUpdates, setCheckingProfileSkillUpdates] = useState(false);
-  const [importingOwnedSkillIndex, setImportingOwnedSkillIndex] = useState<number>();
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileMetadataSavingId, setProfileMetadataSavingId] = useState<string>();
@@ -840,7 +719,6 @@ const AppContent = ({
       window.agentEnv.listBackups(),
       skillItemsPromise,
       window.agentEnv.listSkillCleanupBackups(),
-      window.agentEnv.listMcpLibrary(),
       settingsOverride ?? window.agentEnv.readSettings()
     ]);
 
@@ -857,7 +735,6 @@ const AppContent = ({
       backupItems,
       ,
       cleanupBackupItems,
-      mcpItems,
       settings
     ] = await corePromise;
 
@@ -869,7 +746,6 @@ const AppContent = ({
         profileItems,
         backupItems,
         skillItems,
-        mcpItems,
         settings
       };
     }
@@ -887,7 +763,6 @@ const AppContent = ({
     setProfiles(profileItems);
     setBackups(backupItems);
     setSkillCleanupBackups(cleanupBackupItems);
-    setMcpServers(mcpItems);
     setSkillSettings(settings);
     onLocalePreferenceChange(settings.locale);
     setSelectedTargetId((current) =>
@@ -903,7 +778,6 @@ const AppContent = ({
       profileItems,
       backupItems,
       skillItems,
-      mcpItems,
       settings
     };
   };
@@ -919,7 +793,6 @@ const AppContent = ({
       targetItems,
       profileItems,
       skillItems,
-      mcpItems,
       settings
     } = core;
     const [skillUpdatesResult, skillInventoryResult, githubStatusResult] =
@@ -952,12 +825,11 @@ const AppContent = ({
     for (const profile of profileDetails) {
       nextProfileLibraryVersions[profile.id] = collectLibraryResourceVersions(
         profile,
-        skillItems,
-        mcpItems
+        skillItems
       );
       const profileTarget = supportedTargetItems.find(
-        (targetItem) => targetItem.id === profile.manifest.targetId
-      );
+        (targetItem) => targetItem.id === profile.manifest.preferredTargetId
+      ) ?? supportedTargetItems[0];
       if (profileTarget) {
         nextProfileResourceCounts[profile.id] = summarizeProfile(
           profile,
@@ -965,7 +837,7 @@ const AppContent = ({
           skillItems
         );
       }
-      for (const skillRef of profile.assetPolicy.skillRefs ?? []) {
+      for (const skillRef of profile.resources.skills) {
         usage[skillRef.libraryId] = (usage[skillRef.libraryId] ?? []).concat(
           profile.manifest.name
         );
@@ -1165,9 +1037,12 @@ const AppContent = ({
         )?.activeProfileId;
         const initialProfile =
           usableProfiles.find((profile) => profile.id === activeProfileId) ??
-          usableProfiles.find((profile) => !initialTargetId || profile.targetId === initialTargetId) ??
+          usableProfiles.find(
+            (profile) => !initialTargetId || profile.preferredTargetId === initialTargetId
+          ) ??
           usableProfiles[0];
-        const initialProfileTargetId = initialTargetId ?? initialProfile.targetId;
+        const initialProfileTargetId =
+          initialTargetId ?? initialProfile.preferredTargetId ?? targetItems[0]?.id;
         setSelectedTargetId(initialProfileTargetId);
         setProfileTargetSelections({ [initialProfile.id]: initialProfileTargetId });
         setSelectedProfileId(initialProfile.id);
@@ -1217,7 +1092,7 @@ const AppContent = ({
 
   const selectProfileNow = async (
     profileId: string,
-    composerSection?: "instructions" | "skills" | "mcp" | "advanced"
+    composerSection?: ComposerSection
   ) => {
     const requestId = ++profileFlowRequestRef.current;
     activeProfileFlowRequestRef.current = requestId;
@@ -1239,7 +1114,7 @@ const AppContent = ({
       }
       const profileTargetId = preferredTargetForProfile(
         profile.id,
-        profile.manifest.targetId,
+        profile.manifest.preferredTargetId,
         targetStates,
         targets,
         profileTargetSelections[profile.id]
@@ -1301,7 +1176,7 @@ const AppContent = ({
 
   const selectProfile = (
     profileId: string,
-    composerSection?: "instructions" | "skills" | "mcp" | "advanced"
+    composerSection?: ComposerSection
   ) => {
     const summary = profiles.find((profile) => profile.id === profileId);
     if (summary?.loadError) {
@@ -1381,73 +1256,11 @@ const AppContent = ({
     );
   };
 
-  const importOwnedSkillToLibrary = async (
-    index: number,
-    asset: AssetPolicy["ownedDirs"][number]
-  ) => {
-    if (!draftProfile?.profileDir) {
-      setError("This Profile has no local storage directory");
-      return;
-    }
-    const baseId = asset.targetName
-      .trim()
-      .toLocaleLowerCase()
-      .replace(/[^a-z0-9_-]+/g, "-")
-      .replace(/^-+|-+$/g, "") || "profile-skill";
-    const sourcePath = `${draftProfile.profileDir.replace(/[\\/]+$/, "")}/${asset.source.replace(/^[\\/]+/, "")}`;
-
-    setImportingOwnedSkillIndex(index);
-    setError(undefined);
-    try {
-      const prepared = await prepareSkillImport({
-        kind: "local",
-        input: { sourcePath, id: baseId }
-      });
-      if (!prepared || prepared.kind !== "local") return;
-      const result = await window.agentEnv.importSkillToLibrary(prepared.input);
-      setPendingSkillImport(undefined);
-      await refreshProfiles({ checkSkillUpdates: false });
-      updateDraftProfile({
-        ...draftProfile,
-        assetPolicy: {
-          ...draftProfile.assetPolicy,
-          ownedDirs: draftProfile.assetPolicy.ownedDirs.filter(
-            (_, currentIndex) => currentIndex !== index
-          ),
-          skillRefs: (draftProfile.assetPolicy.skillRefs ?? []).concat({
-            libraryId: result.skill.id,
-            targetName: asset.targetName,
-            enabled: true
-          })
-        }
-      });
-      setSkillUpdateFeedbackWorkspace("profiles");
-      setSkillUpdateCheckStatus({
-        state: "success",
-        message: result.sourceUpdated
-          ? t("Updated the tracked source for {{name}}. Save the Profile to use this reference.", {
-              name: result.skill.name
-            })
-          : result.reused
-          ? t("Using the existing {{name}} Library entry. Save the Profile to use this reference.", {
-              name: result.skill.name
-            })
-          : t("{{name}} imported to Library. Save the Profile to use this reference.", {
-              name: result.skill.name
-            })
-      });
-    } catch (unknownError) {
-      setPendingSkillImport(undefined);
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setImportingOwnedSkillIndex(undefined);
-    }
-  };
-
   const acceptProfileMetadata = (saved: ProfileDetail, previousName: string) => {
     const summary: ProfileSummary = {
       id: saved.id,
-      targetId: saved.manifest.targetId,
+      preferredTargetId: saved.manifest.preferredTargetId,
+      createdFromTargetId: saved.manifest.createdFromTargetId,
       name: saved.manifest.name,
       description: saved.manifest.description,
       createdAt: saved.manifest.createdAt,
@@ -1537,7 +1350,8 @@ const AppContent = ({
       const saved = await window.agentEnv.saveProfile(toSaveInput(draftProfile));
       const summary: ProfileSummary = {
         id: saved.id,
-        targetId: saved.manifest.targetId,
+        preferredTargetId: saved.manifest.preferredTargetId,
+        createdFromTargetId: saved.manifest.createdFromTargetId,
         name: saved.manifest.name,
         description: saved.manifest.description,
         createdAt: saved.manifest.createdAt,
@@ -1550,23 +1364,23 @@ const AppContent = ({
           ? current.map((profile) => profile.id === saved.id ? summary : profile)
           : current.concat(summary)
       );
-      const nativeTarget = targets.find(
-        (target) => target.id === saved.manifest.targetId
-      );
-      if (nativeTarget) {
+      const preferredTarget = targets.find(
+        (target) => target.id === saved.manifest.preferredTargetId
+      ) ?? targets[0];
+      if (preferredTarget) {
         setProfileResourceCounts((current) => ({
           ...current,
-          [saved.id]: summarizeProfile(saved, nativeTarget, librarySkills)
+          [saved.id]: summarizeProfile(saved, preferredTarget, librarySkills)
         }));
       }
       setProfileLibraryVersions((current) => ({
         ...current,
-        [saved.id]: collectLibraryResourceVersions(saved, librarySkills, mcpServers)
+        [saved.id]: collectLibraryResourceVersions(saved, librarySkills)
       }));
       setSkillUsage((current) => reconcileProfileUsage(
         current,
         Object.keys(previousLibraryVersions?.skills ?? {}),
-        saved.assetPolicy.skillRefs.map((reference) => reference.libraryId),
+        saved.resources.skills.map((reference) => reference.libraryId),
         previousName,
         saved.manifest.name
       ));
@@ -1574,8 +1388,7 @@ const AppContent = ({
         current.map((state) => {
           if (state.activeProfileId !== saved.id) return state;
           const expectedHash =
-            saved.targetContentHashes?.[state.targetId] ??
-            (saved.manifest.targetId === state.targetId ? saved.contentHash : undefined);
+            saved.targetContentHashes?.[state.targetId];
           const contentChanged =
             !expectedHash || expectedHash !== state.appliedProfileHash;
           return {
@@ -1677,7 +1490,7 @@ const AppContent = ({
       return;
     }
     setProfileForm({
-      targetId: draftProfile.manifest.targetId,
+      targetId: draftProfile.manifest.preferredTargetId ?? selectedTargetId ?? targets[0]?.id ?? "",
       name: draftProfile.manifest.name,
       description: draftProfile.manifest.description
     });
@@ -1746,15 +1559,15 @@ const AppContent = ({
               name
             })).profile
           : await window.agentEnv.createProfile({
-              targetId: profileForm.targetId,
+              preferredTargetId: profileForm.targetId,
               name,
               description
             });
         await refreshProfiles();
-        setSelectedTargetId(saved.manifest.targetId);
+        setSelectedTargetId(saved.manifest.preferredTargetId ?? profileForm.targetId);
         setProfileTargetSelections((current) => ({
           ...current,
-          [saved.id]: saved.manifest.targetId
+          [saved.id]: saved.manifest.preferredTargetId ?? profileForm.targetId
         }));
         setSelectedProfileId(saved.id);
         setDraftProfile(saved);
@@ -1801,10 +1614,12 @@ const AppContent = ({
     try {
       const saved = await window.agentEnv.duplicateProfile(selectedProfileId);
       await refreshProfiles();
-      setSelectedTargetId(saved.manifest.targetId);
+      setSelectedTargetId(saved.manifest.preferredTargetId ?? selectedTargetId);
       setProfileTargetSelections((current) => ({
         ...current,
-        [saved.id]: saved.manifest.targetId
+        ...(saved.manifest.preferredTargetId
+          ? { [saved.id]: saved.manifest.preferredTargetId }
+          : {})
       }));
       setSelectedProfileId(saved.id);
       setDraftProfile(saved);
@@ -1827,22 +1642,24 @@ const AppContent = ({
       return;
     }
     const deletedProfileId = selectedProfileId;
-    const deletedTargetId = draftProfile?.manifest.targetId ?? selectedTargetId;
+    const deletedTargetId = draftProfile?.manifest.preferredTargetId ?? selectedTargetId;
     setBusy(true);
     setError(undefined);
     try {
       await window.agentEnv.deleteProfile(deletedProfileId);
       const { profileItems } = await refreshProfiles();
       const nextProfile = profileItems.find(
-        (profile) => !profile.loadError && profile.targetId === deletedTargetId
+        (profile) => !profile.loadError && profile.preferredTargetId === deletedTargetId
       );
       if (nextProfile) {
         const nextDetail = await window.agentEnv.readProfile(nextProfile.id);
         setSelectedProfileId(nextProfile.id);
-        setSelectedTargetId(nextProfile.targetId);
+        setSelectedTargetId(nextProfile.preferredTargetId ?? deletedTargetId);
         setProfileTargetSelections((current) => ({
           ...current,
-          [nextProfile.id]: nextProfile.targetId
+          ...(nextProfile.preferredTargetId
+            ? { [nextProfile.id]: nextProfile.preferredTargetId }
+            : {})
         }));
         setDraftProfile(nextDetail);
       } else {
@@ -2079,9 +1896,9 @@ const AppContent = ({
     : undefined;
   const installedTargets = targets.filter((target) => isTargetInstalled(target.health));
   const profileTarget = supportedTargets.find(
-    (target) => target.id === draftProfile?.manifest.targetId
+    (target) => target.id === selectedTargetId
   );
-  const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "Agent";
+  const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.preferredTargetId ?? "Agent";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const preparedSkillTargetsBySkill = useMemo(
     () =>
@@ -2115,7 +1932,7 @@ const AppContent = ({
         )
     : [];
   const validationRows = draftProfile
-    ? createValidationRows(draftProfile, selectedTarget, preview, profileTarget)
+    ? createValidationRows(draftProfile, selectedTarget, preview)
     : [];
   const localValidationErrors = validationRows
     .filter(
@@ -2129,8 +1946,7 @@ const AppContent = ({
       : undefined;
   const selectedTargetProfileHash =
     selectedTarget && draftProfile
-      ? draftProfile.targetContentHashes?.[selectedTarget.id] ??
-        (selectedTarget.id === draftProfile.manifest.targetId ? draftProfile.contentHash : undefined)
+      ? draftProfile.targetContentHashes?.[selectedTarget.id]
       : undefined;
   const readinessInput = {
     profile: draftProfile
@@ -2143,7 +1959,7 @@ const AppContent = ({
         ? libraryResourceVersionsEqual(
             selectedTargetState?.appliedLibraryVersions,
             draftProfile
-              ? collectLibraryResourceVersions(draftProfile, librarySkills, mcpServers)
+              ? collectLibraryResourceVersions(draftProfile, librarySkills)
               : undefined
           )
         : undefined,
@@ -2225,7 +2041,6 @@ const AppContent = ({
         preview.targetStateChanged) &&
       (preview.errors.length === 0 ||
         (previewHasOnlyReplaceableErrors && replaceProtectedTargetChanges)) &&
-      (!preview.requiresOmissionAcknowledgement || acceptCrossTargetOmissions) &&
       localValidationErrors.length === 0 &&
       !rollbackPreview &&
       (selectedTarget?.health.canWrite ?? false)
@@ -2263,7 +2078,6 @@ const AppContent = ({
         ...localValidationErrors
       ];
       setReplaceProtectedTargetChanges(false);
-      setAcceptCrossTargetOmissions(false);
       setPreview({
         ...nextPreview,
         errors: [...new Set([...rendererBlockers, ...nextPreview.errors])]
@@ -2290,11 +2104,9 @@ const AppContent = ({
       void saveSelectedProfile();
       return;
     }
-    if (
-      readiness.remediationLabel === "Open Advanced" ||
-      readiness.remediationLabel === "Open Recovery"
-    ) {
-      setActiveComposerSection("advanced");
+    if (readiness.remediationLabel === "Open Recovery") {
+      setActiveWorkspace("settings");
+      setBackupManagerOpen(true);
     }
   };
 
@@ -2314,8 +2126,7 @@ const AppContent = ({
     try {
       const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id, {
         allowManagedDrift: replaceProtectedTargetChanges,
-        allowUnmanagedSkillReplacement: replaceProtectedTargetChanges,
-        allowOmissions: acceptCrossTargetOmissions
+        allowUnmanagedSkillReplacement: replaceProtectedTargetChanges
       });
       if (!result.ok) {
         setError(result.errors.join("\n"));
@@ -2381,11 +2192,7 @@ const AppContent = ({
         t(
           kind === "instructions"
             ? "Instructions"
-            : kind === "config"
-              ? "Advanced"
-              : kind === "mcp"
-                ? "MCPs"
-                : "Disabled skills"
+            : "MCPs"
         )
       );
       setProfileSaveStatus(
@@ -3454,7 +3261,7 @@ const AppContent = ({
       const firstProfile = refreshed.profileItems.find((profile) => !profile.loadError);
       if (firstProfile) {
         setSelectedProfileId(firstProfile.id);
-        setSelectedTargetId(firstProfile.targetId);
+        setSelectedTargetId(firstProfile.preferredTargetId ?? targets[0]?.id);
         setDraftProfile(await window.agentEnv.readProfile(firstProfile.id));
       }
       setDataBackupStatus(`AgentEnv data restored; safety backup created at ${result.safetyBackupPath}`);
@@ -4085,7 +3892,7 @@ const AppContent = ({
                       />
                     </header>
                     <div className="profile-composer profile-composer--loading" aria-hidden="true">
-                      {["Instructions", "Skills", "MCPs", "Advanced"].map((section) => (
+                      {["Instructions", "Skills", "MCPs"].map((section) => (
                         <div className="profile-loading-row" key={section}>
                           <span className="profile-loading-row__icon" />
                           <span>
@@ -4124,13 +3931,13 @@ const AppContent = ({
                           {draftProfile.manifest.description || t("No description")}
                         </p>
                         <div className="profile-hero__meta">
-                          <span className="native-target-pill">
-                            {t("Native: {{name}}", { name: profileTarget?.name ?? draftProfile.manifest.targetId })}
-                          </span>
-                          {selectedTarget && selectedTarget.id !== profileTarget?.id ? (
-                            <span className="profile-hero__destination">
-                              <ArrowRight size={13} strokeWidth={2.2} aria-hidden="true" />
-                              {t("Deploying to {{name}}", { name: selectedTarget.name })}
+                          {draftProfile.manifest.preferredTargetId ? (
+                            <span className="native-target-pill">
+                              {t("Preferred: {{name}}", {
+                                name: targets.find(
+                                  (target) => target.id === draftProfile.manifest.preferredTargetId
+                                )?.name ?? draftProfile.manifest.preferredTargetId
+                              })}
                             </span>
                           ) : null}
                         </div>
@@ -4280,11 +4087,7 @@ const AppContent = ({
                         onToggle={() => toggleComposerSection("skills")}
                       >
                         <SkillsEditor
-                          mode="skills"
-                          value={draftProfile.assetPolicy ?? emptyAssetPolicy}
-                          configText={draftProfile.configText}
-                          configLanguage={profileTarget?.configLanguage}
-                          preview={preview}
+                          value={draftProfile.resources ?? emptyProfileResources}
                           librarySkills={librarySkills}
                           skillUpdates={skillUpdates}
                           checkingSkillUpdates={checkingProfileSkillUpdates}
@@ -4296,21 +4099,16 @@ const AppContent = ({
                               : undefined
                           }
                           selectedTargetName={selectedTarget?.name}
-                          importingOwnedSkillIndex={importingOwnedSkillIndex}
-                          mcpServers={mcpServers}
                           onCheckSkillUpdates={(ids) =>
                             void checkProfileSkillUpdates(ids)
                           }
                           onPreviewSkillUpdate={(id) =>
                             void previewLibrarySkillUpdate(id)
                           }
-                          onImportOwnedSkill={(index, skill) =>
-                            void importOwnedSkillToLibrary(index, skill)
-                          }
-                          onChange={(assetPolicy) => {
+                          onChange={(resources) => {
                             updateDraftProfile({
                               ...draftProfile,
-                              assetPolicy
+                              resources
                             });
                           }}
                         />
@@ -4331,117 +4129,11 @@ const AppContent = ({
                           target={selectedTarget}
                           connections={nativeMcpConnections}
                           issues={nativeMcpIssues}
-                          value={draftProfile.assetPolicy ?? emptyAssetPolicy}
-                          onChange={(assetPolicy) =>
-                            updateDraftProfile({ ...draftProfile, assetPolicy })
+                          value={draftProfile.resources ?? emptyProfileResources}
+                          onChange={(resources) =>
+                            updateDraftProfile({ ...draftProfile, resources })
                           }
                           onRefresh={refreshNativeMcpConnections}
-                        />
-                      </ProfileComposerSection>
-                      <ProfileComposerSection
-                        id="advanced"
-                        icon={<Settings2 size={18} strokeWidth={2.2} />}
-                        title={t("Advanced")}
-                        description={t(
-                          "Agent settings, validation, and recovery"
-                        )}
-                        count={
-                          draftProfile.assetPolicy.disabledSkillPaths.length
-                        }
-                        chipNames={draftProfile.assetPolicy.disabledSkillPaths}
-                        expanded={activeComposerSection === "advanced"}
-                        onToggle={() => toggleComposerSection("advanced")}
-                      >
-                        {selectedTarget &&
-                        profileTarget &&
-                        selectedTarget.id !== profileTarget.id ? (
-                          <div className="native-config-notice" role="note">
-                            <strong>
-                              {t("{{name}}-only configuration", {
-                                name: profileTarget.name
-                              })}
-                            </strong>
-                            <span>
-                              {t(
-                                "This section is saved with the Profile but omitted when applying to {{name}}.",
-                                { name: selectedTarget.name }
-                              )}
-                            </span>
-                          </div>
-                        ) : null}
-                        {profileTarget?.capabilities.nativeConfig !== false ? (
-                          <McpEditor
-                            label={t("{{name}} settings ({{config}})", {
-                              name: profileTarget?.name ?? t("Native"),
-                              config: profileTarget?.configLabel ?? t("config")
-                            })}
-                            value={draftProfile.configText}
-                            onChange={(configText) => {
-                              updateDraftProfile({
-                                ...draftProfile,
-                                configText
-                              });
-                            }}
-                          />
-                        ) : null}
-                        <SkillsEditor
-                          mode="advanced"
-                          value={draftProfile.assetPolicy ?? emptyAssetPolicy}
-                          configText={draftProfile.configText}
-                          configLanguage={profileTarget?.configLanguage}
-                          preview={preview}
-                          librarySkills={librarySkills}
-                          mcpServers={mcpServers}
-                          onChange={(assetPolicy) => {
-                            updateDraftProfile({
-                              ...draftProfile,
-                              assetPolicy
-                            });
-                          }}
-                        />
-                        <section
-                          className="validation-panel"
-                          aria-label={t("Validation")}
-                        >
-                          <div className="section-title">{t("Validation")}</div>
-                          <div className="validation-grid">
-                            {validationRows.map((row) => (
-                              <div
-                                className={`check-row check-row--${row.level}`}
-                                key={row.label}
-                              >
-                                <span>
-                                  {t(row.label)}
-                                  {row.detail ? (
-                                    <small>{t(row.detail)}</small>
-                                  ) : null}
-                                </span>
-                                <strong>{t(row.value)}</strong>
-                              </div>
-                            ))}
-                          </div>
-                          {preview?.warnings.map((item) => (
-                            <p className="warning" key={item}>
-                              {item}
-                            </p>
-                          ))}
-                          {preview?.errors.map((item) => (
-                            <p className="error" key={item}>
-                              {item}
-                            </p>
-                          ))}
-                        </section>
-                        <HistoryView
-                          backups={backups.filter(
-                            (backup) =>
-                              backup.profileId === draftProfile.id &&
-                              backup.targetId === selectedTarget?.id
-                          )}
-                          busy={busy}
-                          rollbackPreview={undefined}
-                          targetNames={targetNames}
-                          onPreviewRollback={previewSelectedRollback}
-                          onRestoreRollback={restoreSelectedRollback}
                         />
                       </ProfileComposerSection>
                     </section>
@@ -4485,22 +4177,14 @@ const AppContent = ({
                         onReplacementAcknowledgedChange={
                           setReplaceProtectedTargetChanges
                         }
-                        omissionsAcknowledged={acceptCrossTargetOmissions}
-                        onOmissionsAcknowledgedChange={
-                          setAcceptCrossTargetOmissions
-                        }
                         onOpenRecovery={() => {
                           setPreview(undefined);
-                          setActiveComposerSection("advanced");
+                          setActiveWorkspace("settings");
+                          setBackupManagerOpen(true);
                         }}
-                        onAdoptTargetChanges={
-                          draftProfile.manifest.targetId === selectedTarget?.id
-                            ? adoptCompatibleTargetChanges
-                            : undefined
-                        }
+                        onAdoptTargetChanges={adoptCompatibleTargetChanges}
                         onCancel={() => {
                           setReplaceProtectedTargetChanges(false);
-                          setAcceptCrossTargetOmissions(false);
                           setPreview(undefined);
                         }}
                         onConfirm={applySelectedProfile}
@@ -4614,9 +4298,17 @@ const AppContent = ({
                             </div>
                           ) : null}
                           <label>
-                            <span>{t("Native format")}</span>
+                            <span>
+                              {profileCreateSource === "target"
+                                ? t("Source Agent")
+                                : t("Preferred Agent")}
+                            </span>
                             <select
-                              aria-label={t("Profile native format")}
+                              aria-label={
+                                profileCreateSource === "target"
+                                  ? t("Source Agent")
+                                  : t("Preferred Agent")
+                              }
                               value={profileForm.targetId}
                               onChange={(event) => {
                                 setProfileForm({ ...profileForm, targetId: event.currentTarget.value });

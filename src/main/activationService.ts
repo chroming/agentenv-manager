@@ -13,10 +13,6 @@ import {
   writeAtomic
 } from "./fileUtils";
 import type { AgentEnvPaths } from "./paths";
-import {
-  createMcpLibraryStore,
-  type McpLibraryStore
-} from "./mcpLibraryStore";
 import type { ProfileStore } from "./profileStore";
 import {
   createSettingsStore,
@@ -28,7 +24,6 @@ import {
   type SkillLibraryStore
 } from "./skillLibraryStore";
 import { normalizeSkillKey } from "../shared/skillIdentity";
-import { parseSkillFrontmatter } from "./skillFrontmatter";
 import {
   createTargetRegistry,
   type TargetRegistry
@@ -61,7 +56,6 @@ import type {
   TargetState
 } from "../shared/types";
 import { createProfileContentHash } from "./profileFingerprint";
-import { targetProfile } from "./profileTargeting";
 import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
@@ -87,7 +81,6 @@ export interface ActivationServiceOptions {
   allowRealHomeWrites?: boolean;
   settingsStore?: SettingsStore;
   targetScope?: TargetScope;
-  mcpLibraryStore?: McpLibraryStore;
   skillLibraryStore?: SkillLibraryStore;
 }
 
@@ -327,9 +320,9 @@ const applyLibrarySkillAvailability = (
   }
   return {
     ...profile,
-    assetPolicy: {
-      ...profile.assetPolicy,
-      skillRefs: profile.assetPolicy.skillRefs.map((reference) =>
+    resources: {
+      ...profile.resources,
+      skills: profile.resources.skills.map((reference) =>
         disabledIds.has(reference.libraryId) ? { ...reference, enabled: false } : reference
       )
     }
@@ -338,37 +331,21 @@ const applyLibrarySkillAvailability = (
 
 const effectivePayloadFor = (
   profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+  targetId: string,
   mcpActivationSupported: boolean
 ): EffectiveProfilePayload => {
-  const compactConfig = profile.configText.replace(/\s/g, "");
-  const instructions =
-    profile.manifest.managed.instructions && profile.instructions.trim().length > 0 ? 1 : 0;
-  const skills = profile.manifest.managed.assets
-    ? profile.assetPolicy.ownedDirs.filter((asset) => asset.kind === "skill").length +
-      profile.assetPolicy.ownedFiles.filter((asset) => asset.kind === "skill").length +
-      (profile.assetPolicy.skillRefs?.filter((reference) => reference.enabled !== false).length ?? 0)
-    : 0;
-  const agents = profile.manifest.managed.assets
-    ? profile.assetPolicy.ownedDirs.filter((asset) => asset.kind === "agent").length +
-      profile.assetPolicy.ownedFiles.filter((asset) => asset.kind === "agent").length
-    : 0;
-  const selectedMcpCount = profile.manifest.managed.config
-    ? (profile.assetPolicy.mcpSelections ?? []).filter(
-        (selection) => selection.targetId === profile.manifest.targetId
-      ).length
-    : 0;
-  const mcpServers = mcpActivationSupported ? selectedMcpCount : 0;
-  const observedMcpServers = mcpActivationSupported ? 0 : selectedMcpCount;
-  const nativeConfig =
-    profile.manifest.managed.config && compactConfig.length > 0 && compactConfig !== "{}" ? 1 : 0;
+  const instructions = 1;
+  const skills = profile.resources.skills.filter((reference) => reference.enabled).length;
+  const policy = profile.resources.mcpByTarget[targetId];
+  const mcpServers =
+    mcpActivationSupported && policy?.mode === "manage"
+      ? policy.selections.length
+      : 0;
   return {
     instructions,
     skills,
     mcpServers,
-    observedMcpServers,
-    agents,
-    nativeConfig,
-    total: instructions + skills + mcpServers + agents + nativeConfig
+    total: instructions + skills + mcpServers
   };
 };
 
@@ -379,7 +356,6 @@ export const createActivationService = ({
   allowRealHomeWrites = false,
   settingsStore = createSettingsStore(paths),
   targetScope = createTargetScope(targetRegistry, settingsStore),
-  mcpLibraryStore = createMcpLibraryStore(paths),
   skillLibraryStore = createSkillLibraryStore(paths, settingsStore, {
     targetPathsProvider: () => targetRegistry.listAdapters().map((adapter) =>
       adapter.createTargetPaths({
@@ -467,10 +443,7 @@ export const createActivationService = ({
     }
     const entries = await readdir(paths.targetStatesDir, { withFileTypes: true });
     const enabledTargetIds = new Set(await targetScope.listEnabledIds());
-    const [skillLibrary, mcpLibrary] = await Promise.all([
-      skillLibraryStore.listSkills(),
-      mcpLibraryStore.listServers()
-    ]);
+    const skillLibrary = await skillLibraryStore.listSkills();
     const states = await Promise.all(
       entries
         .filter(
@@ -514,12 +487,8 @@ export const createActivationService = ({
                 activeProfileName = profile.manifest.name;
                 const expectedHash =
                   profile.targetContentHashes?.[targetId] ??
-                  (profile.manifest.targetId === targetId ? profile.contentHash : undefined);
-                const currentVersions = collectLibraryResourceVersions(
-                  profile,
-                  skillLibrary,
-                  mcpLibrary
-                );
+                  createProfileContentHash(profile, targetId);
+                const currentVersions = collectLibraryResourceVersions(profile, skillLibrary);
                 const isCurrent =
                   Boolean(expectedHash) &&
                   expectedHash === state.appliedProfileHash &&
@@ -573,7 +542,7 @@ export const createActivationService = ({
     await mkdir(paths.targetStatesDir, { recursive: true, mode: 0o700 });
     await writeAtomic(
       statePathFor(targetId),
-      `${JSON.stringify({ ...state, formatVersion: 1 }, null, 2)}\n`
+      `${JSON.stringify({ ...state, formatVersion: 2 }, null, 2)}\n`
     );
   };
 
@@ -616,19 +585,10 @@ export const createActivationService = ({
     const fingerprints: Record<string, string> = {};
     const deferredLibraryIds = new Set<string>();
     for (const shared of sharedBySkill.values()) {
-      const reference = profile.assetPolicy.skillRefs.find(
-        (item) => item.libraryId === shared.libraryId && item.enabled !== false
+      const reference = profile.resources.skills.find(
+        (item) => item.libraryId === shared.libraryId && item.enabled
       );
       const targetName = reference?.targetName ?? shared.libraryId;
-      const profileOwnedConflict = profile.assetPolicy.ownedDirs.some(
-        (item) => item.kind === "skill" && item.targetName === targetName
-      );
-      if (profileOwnedConflict) {
-        errors.push(
-          `Cannot prepare shared Skill ${shared.skillKey}: Profile-owned Skill ${targetName} uses the same install name.`
-        );
-        continue;
-      }
       if (targetPaths.skillsDir) {
         const targetPath = join(targetPaths.skillsDir, targetName);
         const occupyingItem = inventory.find(
@@ -669,9 +629,9 @@ export const createActivationService = ({
     return {
       runtimeProfile: {
         ...profile,
-        assetPolicy: {
-          ...profile.assetPolicy,
-          skillRefs: profile.assetPolicy.skillRefs.filter(
+        resources: {
+          ...profile.resources,
+          skills: profile.resources.skills.filter(
             (reference) => !deferredLibraryIds.has(reference.libraryId)
           )
         }
@@ -685,35 +645,17 @@ export const createActivationService = ({
 
   const desiredSkillTargets = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>) =>
     new Set(
-      profile.assetPolicy.ownedDirs
-        .filter((ownedDir) => ownedDir.kind === "skill")
-        .map((ownedDir) => ownedDir.targetName)
-        .concat(
-          (profile.assetPolicy.skillRefs ?? [])
-            .filter((skillRef) => skillRef.enabled !== false)
-            .map((skillRef) => skillRef.targetName)
-        )
+      profile.resources.skills
+        .filter((skillRef) => skillRef.enabled)
+        .map((skillRef) => skillRef.targetName)
     );
 
   const desiredRuntimeSkills = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
     skillLibrary: SkillLibraryEntry[]
   ) => {
-    const ownedSkills = await Promise.all(
-      profile.assetPolicy.ownedDirs
-      .filter((ownedDir) => ownedDir.kind === "skill")
-      .map(async (ownedDir) => {
-        const sourcePath = join(profile.profileDir ?? "", ownedDir.source, "SKILL.md");
-        const frontmatter = parseSkillFrontmatter(await readTextIfExists(sourcePath));
-        return {
-          runtimeName: frontmatter.name || ownedDir.targetName,
-          deploymentName: ownedDir.targetName,
-          source: `Profile / ${ownedDir.source}`
-        };
-      })
-    );
-    const librarySkills = (profile.assetPolicy.skillRefs ?? [])
-      .filter((reference) => reference.enabled !== false)
+    const librarySkills = profile.resources.skills
+      .filter((reference) => reference.enabled)
       .map((reference) => ({
         runtimeName:
           skillLibrary.find((skill) => skill.id === reference.libraryId)?.name ||
@@ -721,7 +663,7 @@ export const createActivationService = ({
         deploymentName: reference.targetName,
         source: `Library / ${reference.libraryId}`
       }));
-    return [...ownedSkills, ...librarySkills];
+    return librarySkills;
   };
 
   const validateRuntimeSkills = async (
@@ -793,20 +735,10 @@ export const createActivationService = ({
     targetPaths: TargetPaths
   ) => {
     const desired = new Set<string>();
-    if (profile.manifest.managed.instructions) {
-      desired.add(targetPaths.instructionsPath);
-    }
-    if (profile.manifest.managed.config) {
-      desired.add(targetPaths.configPath);
-    }
+    desired.add(targetPaths.instructionsPath);
     if (targetPaths.skillsDir) {
       for (const targetName of desiredSkillTargets(profile)) {
         desired.add(join(targetPaths.skillsDir, targetName));
-      }
-    }
-    if (targetPaths.agentsDir) {
-      for (const ownedDir of profile.assetPolicy.ownedDirs.filter((item) => item.kind === "agent")) {
-        desired.add(join(targetPaths.agentsDir, ownedDir.targetName));
       }
     }
     return desired;
@@ -927,25 +859,8 @@ export const createActivationService = ({
         markerSource: string;
       }
     >();
-    const rootFor = (kind: "agent" | "skill") =>
-      kind === "agent" ? targetPaths.agentsDir : targetPaths.skillsDir;
-
-    for (const asset of [...profile.assetPolicy.ownedDirs, ...profile.assetPolicy.ownedFiles]) {
-      const root = rootFor(asset.kind);
-      if (root) {
-        desired.set(join(root, asset.targetName), {
-          resource: {
-            kind: asset.kind,
-            name: asset.targetName,
-            source: asset.source
-          },
-          sourcePath: join(profile.profileDir ?? "", asset.source),
-          markerSource: asset.source
-        });
-      }
-    }
-    for (const skillRef of (profile.assetPolicy.skillRefs ?? []).filter(
-      (reference) => reference.enabled !== false
+    for (const skillRef of profile.resources.skills.filter(
+      (reference) => reference.enabled
     )) {
       if (targetPaths.skillsDir) {
         desired.set(join(targetPaths.skillsDir, skillRef.targetName), {
@@ -1006,8 +921,8 @@ export const createActivationService = ({
       }
       const resource = desired.get(path);
       if (resource) {
-        const exists = !behindTransitionedRoot && await pathExists(path);
-        const stats = exists ? await stat(path) : undefined;
+        const exists = !behindTransitionedRoot && await pathEntryExists(path);
+        const stats = exists ? await lstat(path) : undefined;
         const markerPath = stats?.isDirectory() ? markerPathFor(path) : markerPathForFile(path);
         const expectedMarker = createOwnerMarkerContent({
           profileId: profile.id,
@@ -1033,7 +948,10 @@ export const createActivationService = ({
       if (path.endsWith(".agentenv-owner.json")) {
         continue;
       }
-      const stats = (await pathExists(path)) ? await lstat(path) : undefined;
+      const stats = (await pathEntryExists(path)) ? await lstat(path) : undefined;
+      if (!stats) {
+        continue;
+      }
       const identity = resourceKindForPath(path, targetPaths);
       resourceChanges.push({
         kind:
@@ -1060,14 +978,9 @@ export const createActivationService = ({
     inventory: SkillInventoryEntry[]
   ) => {
     const desiredSkillTargets = new Set(
-      profile.assetPolicy.ownedDirs
-        .filter((ownedDir) => ownedDir.kind === "skill")
-        .map((ownedDir) => ownedDir.targetName)
-        .concat(
-          (profile.assetPolicy.skillRefs ?? [])
-            .filter((skillRef) => skillRef.enabled !== false)
-            .map((skillRef) => skillRef.targetName)
-        )
+      profile.resources.skills
+        .filter((skillRef) => skillRef.enabled)
+        .map((skillRef) => skillRef.targetName)
     );
     if (desiredSkillTargets.size === 0) {
       return [];
@@ -1086,9 +999,8 @@ export const createActivationService = ({
     inventory: SkillInventoryEntry[],
     skillLibrary: SkillLibraryEntry[]
   ) => {
-    const references = (profile.assetPolicy.skillRefs ?? []).filter(
-      (reference) => reference.enabled !== false
-    );
+    const references = profile.resources.skills.filter((reference) => reference.enabled);
+    const disabledReferences = profile.resources.skills.filter((reference) => !reference.enabled);
     const desired = desiredSkillTargets(profile);
     const desiredRuntimeNames = new Set(
       (await desiredRuntimeSkills(profile, skillLibrary)).map((item) =>
@@ -1120,14 +1032,33 @@ export const createActivationService = ({
             reference.targetName === skill.id
         )
     );
+    const disabledConflicts = inventory.filter((skill) => {
+      if (
+        skill.locationRole === "discovery-only" ||
+        skill.runtimeAvailability === "disabled" ||
+        (skill.status === "managed" && skill.managedByTarget === true)
+      ) {
+        return false;
+      }
+      return disabledReferences.some(
+        (reference) =>
+          reference.libraryId === skill.libraryId ||
+          normalizeSkillKey(reference.targetName) ===
+            normalizeSkillKey(skill.deploymentName ?? skill.id) ||
+          normalizeSkillKey(
+            skillLibrary.find((candidate) => candidate.id === reference.libraryId)?.name ??
+              reference.targetName
+          ) === normalizeSkillKey(skill.runtimeName ?? skill.name)
+      );
+    });
     return {
       profile: preservedReferences.size === 0
         ? profile
         : {
             ...profile,
-            assetPolicy: {
-              ...profile.assetPolicy,
-              skillRefs: profile.assetPolicy.skillRefs.filter(
+            resources: {
+              ...profile.resources,
+              skills: profile.resources.skills.filter(
                 (reference) =>
                   !preservedReferences.has(`${reference.libraryId}:${reference.targetName}`)
               )
@@ -1143,6 +1074,11 @@ export const createActivationService = ({
           }
           return `Cannot install ${skill.runtimeName ?? skill.id} because ${manager} manages the existing Skill at ${skill.path}. Disable or remove it from ${manager}, then rescan before applying this Profile.`;
         }
+      ).concat(
+        disabledConflicts.map(
+          (skill) =>
+            `Cannot turn off Skill ${skill.runtimeName ?? skill.id} because an active copy remains outside AgentEnv ownership at ${skill.path}`
+        )
       ),
       warnings: external
         .filter((skill) => !conflicts.includes(skill))
@@ -1150,7 +1086,7 @@ export const createActivationService = ({
           (skill) =>
             `${skill.runtimeName ?? skill.id} is already provided by ${skill.externalOwnership?.displayName ?? skill.externalOwnership?.manager ?? "another tool"} with matching content and will be preserved`
         ),
-      paths: new Set(external.map((skill) => skill.path))
+      paths: new Set([...external, ...disabledConflicts].map((skill) => skill.path))
     };
   };
 
@@ -1159,26 +1095,25 @@ export const createActivationService = ({
     requestedTargetId?: string
   ): Promise<ActivationPreview> => {
     const sourceProfile = await profileStore.readProfile(profileId);
-    const targetId = requestedTargetId ?? sourceProfile.manifest.targetId;
+    const targetId =
+      requestedTargetId ??
+      sourceProfile.manifest.preferredTargetId ??
+      targetRegistry.list()[0]?.id;
+    if (!targetId) throw new Error("No Agent is available for this Profile");
     await targetScope.assertEnabled(targetId);
-    const mcpLibrary = await mcpLibraryStore.listServers();
     const skillLibrary = await skillLibraryStore.listSkills();
     const adapter = targetRegistry.get(targetId);
-    const targeted = targetProfile(
-      sourceProfile,
-      adapter,
-      targetRegistry.get(sourceProfile.manifest.targetId)
-    );
-    const profile = applyLibrarySkillAvailability(targeted.profile, skillLibrary);
-    const disabledLibrarySkills = targeted.profile.assetPolicy.skillRefs
+    const profile = applyLibrarySkillAvailability(sourceProfile, skillLibrary);
+    const disabledLibrarySkills = sourceProfile.resources.skills
       .filter(
         (reference) =>
-          reference.enabled !== false &&
+          reference.enabled &&
           skillLibrary.find((skill) => skill.id === reference.libraryId)?.globallyEnabled === false
       )
       .map((reference) => reference.libraryId);
     const effectivePayload = effectivePayloadFor(
       profile,
+      targetId,
       adapter.descriptor.capabilities.mcpActivation === true
     );
     const targetPaths = adapter.createTargetPaths({
@@ -1206,7 +1141,7 @@ export const createActivationService = ({
     );
     const profileContentHash =
       sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
-      createProfileContentHash(targeted.profile);
+      createProfileContentHash(sourceProfile, adapter.descriptor.id);
     const preparationPlan = await sharedSkillPreparationPlan(
       profile,
       targetPaths,
@@ -1219,10 +1154,7 @@ export const createActivationService = ({
       inventory,
       skillLibrary
     );
-    const materializedProfile = adapter.materializeMcpRefs(
-      externallyResolved.profile,
-      mcpLibrary
-    );
+    const materializedProfile = externallyResolved.profile;
     const runtimeValidation = await validateRuntimeSkills(
       adapter,
       targetPaths,
@@ -1240,7 +1172,6 @@ export const createActivationService = ({
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
       state: stateFile.state,
-      allowMatchingUnmanagedConfig: true,
       allowMatchingUnmanagedSkills: isTakeover,
       allowMatchingUnmanagedAssets: isTakeover,
       isolateSkillRoot: Boolean(skillRootTransition)
@@ -1252,27 +1183,6 @@ export const createActivationService = ({
           `${adapter.descriptor.name} requires recovery before another Apply: ${stateFile.state.recoveryRequired.error}`
         ]
       : [];
-    const portabilityErrors =
-      targeted.omissions.length > 0 && effectivePayload.total === 0
-        ? [`No portable Profile content can be applied to ${adapter.descriptor.name}`]
-        : [];
-    const unsupportedMcpErrors = (profile.assetPolicy.mcpRefs ?? []).flatMap((reference) => {
-      const server = mcpLibrary.find((entry) => entry.id === reference.libraryId);
-      if (!server) return [];
-      if (!adapter.descriptor.capabilities.mcpTransports.includes(server.transport)) {
-        return [`${adapter.descriptor.name} does not support ${server.transport} MCP server ${server.name}`];
-      }
-      if (
-        adapter.descriptor.capabilities.mcpEnvironmentReferences === false &&
-        server.transport === "stdio" &&
-        Object.keys(server.env ?? {}).length > 0
-      ) {
-        return [
-          `${adapter.descriptor.name} does not support safe environment references for MCP server ${server.name}`
-        ];
-      }
-      return [];
-    });
     const assetBackupPaths = await adapter.getAssetBackupPaths({
       profile: materializedProfile,
       targetPaths,
@@ -1332,8 +1242,6 @@ export const createActivationService = ({
     );
     const previewErrors = withoutGenericExternalConflicts(targetPreview.errors).concat(
       recoveryErrors,
-      portabilityErrors,
-      unsupportedMcpErrors,
       profileErrors,
       withoutGenericExternalConflicts(assetErrors),
       drift.errors,
@@ -1353,25 +1261,25 @@ export const createActivationService = ({
       id: randomUUID(),
       profileId: profile.id,
       profileContentHash,
-      libraryVersions: collectLibraryResourceVersions(profile, skillLibrary, mcpLibrary),
+      libraryVersions: collectLibraryResourceVersions(profile, skillLibrary),
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
-      warnings: targeted.warnings.concat(
-        disabledLibrarySkills.map(
+      warnings: [
+        ...disabledLibrarySkills.map(
           (id) => `Library Skill ${id} is globally disabled and will not be applied`
         ),
-        targetPreview.warnings,
-        runtimeValidation.warnings,
-        drift.warnings,
-        unmanagedWarnings,
-        preparationPlan.warnings,
-        externallyResolved.warnings,
+        ...targetPreview.warnings,
+        ...runtimeValidation.warnings,
+        ...drift.warnings,
+        ...unmanagedWarnings,
+        ...preparationPlan.warnings,
+        ...externallyResolved.warnings,
         ...(skillRootTransition
           ? [
               `${adapter.descriptor.name} Skills folder is linked to ${skillRootTransition.resolvedPath}. Apply will preserve that directory and replace only the Agent root link with a private Skills folder.`
             ]
           : [])
-      ),
+      ],
       errors: previewErrors,
       changes: targetPreview.changes,
       resourceChanges: assetPlan.resourceChanges,
@@ -1390,14 +1298,10 @@ export const createActivationService = ({
         JSON.stringify(stateFile.state.sharedSkillPreparations ?? []) !==
         JSON.stringify(preparationPlan.preparations),
       targetStateChanged:
-        JSON.stringify(stateFile.state.managedConfigKeys) !==
-          JSON.stringify(targetPreview.targetState.managedConfigKeys) ||
         JSON.stringify(stateFile.state.managedMcpNames) !==
           JSON.stringify(targetPreview.targetState.managedMcpNames),
       targetState: targetPreview.targetState,
       effectivePayload,
-      omissions: targeted.omissions,
-      requiresOmissionAcknowledgement: targeted.omissions.length > 0,
       operation: isTakeover ? "takeover" : "apply",
       skillRootTransition,
       legacySkillPaths
@@ -1444,12 +1348,6 @@ export const createActivationService = ({
     ) {
       return { ok: false, errors: ["No changes to apply"] };
     }
-    if (preview.requiresOmissionAcknowledgement && !options.allowOmissions) {
-      return {
-        ok: false,
-        errors: ["Compatibility omissions must be acknowledged before Apply"]
-      };
-    }
     if (activeTargetOperations.has(preview.targetId)) {
       return { ok: false, errors: [`Another operation is already running for ${preview.targetId}`] };
     }
@@ -1458,29 +1356,18 @@ export const createActivationService = ({
     try {
     const sourceProfile = await profileStore.readProfile(profileId);
     const adapter = targetRegistry.get(preview.targetId);
-    const [mcpLibrary, skillLibrary] = await Promise.all([
-      mcpLibraryStore.listServers(),
-      skillLibraryStore.listSkills()
-    ]);
-    const targetedProfile = targetProfile(
-      sourceProfile,
-      adapter,
-      targetRegistry.get(sourceProfile.manifest.targetId)
-    ).profile;
+    const skillLibrary = await skillLibraryStore.listSkills();
     const profile = applyLibrarySkillAvailability(
-      targetedProfile,
+      sourceProfile,
       skillLibrary
     );
     const currentProfileHash =
-      sourceProfile.targetContentHashes?.[preview.targetId] ?? createProfileContentHash(targetedProfile);
+      sourceProfile.targetContentHashes?.[preview.targetId] ??
+      createProfileContentHash(sourceProfile, preview.targetId);
     if (currentProfileHash !== preview.profileContentHash) {
       return { ok: false, errors: ["Profile changed after preview; review the latest version"] };
     }
-    const currentLibraryVersions = collectLibraryResourceVersions(
-      profile,
-      skillLibrary,
-      mcpLibrary
-    );
+    const currentLibraryVersions = collectLibraryResourceVersions(profile, skillLibrary);
     if (!libraryResourceVersionsEqual(currentLibraryVersions, preview.libraryVersions)) {
       return { ok: false, errors: ["Library resources changed after preview; review the latest versions"] };
     }
@@ -1544,10 +1431,7 @@ export const createActivationService = ({
     if (externallyResolved.errors.length > 0) {
       return { ok: false, errors: externallyResolved.errors };
     }
-    const materializedProfile = adapter.materializeMcpRefs(
-      externallyResolved.profile,
-      mcpLibrary
-    );
+    const materializedProfile = externallyResolved.profile;
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     const isTakeover = preview.operation === "takeover";
@@ -1787,10 +1671,7 @@ export const createActivationService = ({
     targetIds.forEach((targetId) => activeTargetOperations.add(targetId));
 
     try {
-      const [skillLibrary, mcpLibrary] = await Promise.all([
-        skillLibraryStore.listSkills(),
-        mcpLibraryStore.listServers()
-      ]);
+      const skillLibrary = await skillLibraryStore.listSkills();
       const librarySkill = skillLibrary.find((skill) => skill.id === libraryId);
       if (!librarySkill) {
         throw new Error(`Library Skill is unavailable: ${libraryId}`);
@@ -1835,22 +1716,16 @@ export const createActivationService = ({
         }
 
         const sourceProfile = await profileStore.readProfile(stateFile.state.activeProfileId);
-        const targetedProfile = targetProfile(
-          sourceProfile,
-          adapter,
-          targetRegistry.get(sourceProfile.manifest.targetId)
-        ).profile;
-        const effectiveProfile = applyLibrarySkillAvailability(targetedProfile, skillLibrary);
-        const expectedReference = effectiveProfile.assetPolicy.skillRefs.find(
-          (reference) => reference.libraryId === libraryId && reference.enabled !== false
+        const effectiveProfile = applyLibrarySkillAvailability(sourceProfile, skillLibrary);
+        const expectedReference = effectiveProfile.resources.skills.find(
+          (reference) => reference.libraryId === libraryId && reference.enabled
         );
         const currentProfileHash =
           sourceProfile.targetContentHashes?.[targetId] ??
-          createProfileContentHash(targetedProfile);
+          createProfileContentHash(sourceProfile, targetId);
         const currentLibraryVersions = collectLibraryResourceVersions(
           effectiveProfile,
-          skillLibrary,
-          mcpLibrary
+          skillLibrary
         );
         if (
           preparation.profileId !== sourceProfile.id ||
@@ -2347,9 +2222,6 @@ export const createActivationService = ({
   ): Promise<AdoptTargetChangesResult> => {
     await targetScope.assertEnabled(targetId);
     const profile = await profileStore.readProfile(profileId);
-    if (profile.manifest.targetId !== targetId) {
-      throw new Error("Live changes can only be adopted into a Profile with the same native Agent format");
-    }
     if (activeTargetOperations.has(targetId)) {
       throw new Error(`Another ${targetId} operation is already running`);
     }
@@ -2364,50 +2236,37 @@ export const createActivationService = ({
       const adopted: AdoptTargetChangesResult["adopted"] = [];
       const skipped = [...captured.excluded];
       let instructions = profile.instructions;
-      let configText = profile.configText;
-      let assetPolicy = profile.assetPolicy;
+      let resources = profile.resources;
 
       if (captured.instructions !== profile.instructions) {
         instructions = captured.instructions;
         adopted.push("instructions");
       }
-      if (captured.configText !== profile.configText) {
-        configText = captured.configText;
-        adopted.push("config");
-      }
-
-      if (adapter.descriptor.capabilities.disabledSkillPaths) {
-        const previous = JSON.stringify(profile.assetPolicy.disabledSkillPaths);
-        const next = JSON.stringify(captured.disabledSkillPaths);
-        if (previous !== next) {
-          assetPolicy = { ...assetPolicy, disabledSkillPaths: captured.disabledSkillPaths };
-          adopted.push("disabled-skills");
-        }
-      }
-
-      const otherTargetMcpSelections = (
-        profile.assetPolicy.mcpSelections ?? []
-      ).filter((selection) => selection.targetId !== targetId);
-      const capturedMcpSelections = (captured.mcpConnections ?? []).map(
-        (connection) => ({
-          targetId,
-          name: connection.name,
-          enabled: connection.enabled
-        })
-      );
-      const previousTargetMcpSelections = (
-        profile.assetPolicy.mcpSelections ?? []
-      ).filter((selection) => selection.targetId === targetId);
+      const currentMcpPolicy = profile.resources.mcpByTarget[targetId];
       if (
-        JSON.stringify(capturedMcpSelections) !==
-        JSON.stringify(previousTargetMcpSelections)
+        adapter.descriptor.capabilities.mcpActivation &&
+        currentMcpPolicy?.mode === "manage"
       ) {
-        assetPolicy = {
-          ...assetPolicy,
-          mcpRefs: [],
-          mcpSelections: [...otherTargetMcpSelections, ...capturedMcpSelections]
-        };
-        adopted.push("mcp");
+        const capturedByName = new Map(
+          (captured.mcpConnections ?? []).map((connection) => [connection.name, connection])
+        );
+        const capturedSelections = currentMcpPolicy.selections.map((selection) => ({
+          name: selection.name,
+          enabled: capturedByName.get(selection.name)?.enabled ?? false
+        }));
+        if (
+          JSON.stringify(capturedSelections) !==
+          JSON.stringify(currentMcpPolicy.selections)
+        ) {
+          resources = {
+            ...resources,
+            mcpByTarget: {
+              ...resources.mcpByTarget,
+              [targetId]: { mode: "manage", selections: capturedSelections }
+            }
+          };
+          adopted.push("mcp");
+        }
       }
 
       if (adopted.length === 0) {
@@ -2428,8 +2287,7 @@ export const createActivationService = ({
       const saved = await profileStore.saveProfile({
         manifest: profile.manifest,
         instructions,
-        configText,
-        assetPolicy
+        resources
       });
       return { profile: saved, adopted, skipped };
     } finally {

@@ -1,22 +1,22 @@
-import { cp, lstat, mkdir, readdir, readFile, rename } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import {
   ProfileManifestSchema,
+  ProfileResourcesSchema,
   SafeIdSchema
 } from "../shared/schemas";
 import type {
+  CreateProfileInput,
   ProfileDetail,
   ProfileSummary,
-  CreateProfileInput,
   SaveProfileInput,
   UpdateProfileMetadataInput
 } from "../shared/types";
+import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils";
 import { createPaths, type PathOverrides } from "./paths";
 import { createProfileContentHash } from "./profileFingerprint";
-import { targetProfile } from "./profileTargeting";
-import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
-import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils";
 import { findSecretWarnings } from "./secretWarnings";
+import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
 
 export interface ProfileStore {
   listProfiles(): Promise<ProfileSummary[]>;
@@ -28,9 +28,19 @@ export interface ProfileStore {
   deleteProfile(id: string): Promise<void>;
 }
 
-const readJson = async (path: string): Promise<unknown> => {
-  const content = await readFile(path, "utf8");
-  return JSON.parse(content);
+const PROFILE_MANIFEST_FILE = "profile.json";
+const PROFILE_INSTRUCTIONS_FILE = "INSTRUCTIONS.md";
+const PROFILE_RESOURCES_FILE = "resources.json";
+
+const readJson = async (path: string): Promise<unknown> =>
+  JSON.parse(await readFile(path, "utf8"));
+
+const parseProfileId = (id: string) => {
+  const result = SafeIdSchema.safeParse(id);
+  if (!result.success) {
+    throw new Error(`Invalid profile id: ${id}`);
+  }
+  return result.data;
 };
 
 const slugProfileName = (name: string) => {
@@ -39,7 +49,6 @@ const slugProfileName = (name: string) => {
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
-
   return SafeIdSchema.safeParse(slug).success ? slug : "profile";
 };
 
@@ -48,15 +57,11 @@ const createdAtFromProfile = (
   storedCreatedAt: string | undefined,
   stats: Awaited<ReturnType<typeof lstat>>
 ) => {
-  if (storedCreatedAt) {
-    return storedCreatedAt;
-  }
+  if (storedCreatedAt) return storedCreatedAt;
   const idTimestamp = id.match(/-(\d{13})$/)?.[1];
   if (idTimestamp) {
     const parsed = new Date(Number(idTimestamp));
-    if (Number.isFinite(parsed.getTime())) {
-      return parsed.toISOString();
-    }
+    if (Number.isFinite(parsed.getTime())) return parsed.toISOString();
   }
   const filesystemTime = stats.birthtimeMs > 0 ? stats.birthtime : stats.mtime;
   return filesystemTime.toISOString();
@@ -69,64 +74,50 @@ export const createProfileStore = (
   const paths = createPaths(overrides);
 
   const readProfile = async (id: string): Promise<ProfileDetail> => {
-    const parsedId = SafeIdSchema.safeParse(id);
-    if (!parsedId.success) {
-      throw new Error("Invalid profile id");
-    }
-
-    const profileDir = join(paths.profilesDir, parsedId.data);
+    const safeId = parseProfileId(id);
+    const profileDir = join(paths.profilesDir, safeId);
     const profileStats = await lstat(profileDir);
     if (!profileStats.isDirectory() || profileStats.isSymbolicLink()) {
-      throw new Error(`Profile storage must be a real directory: ${parsedId.data}`);
+      throw new Error(`Profile storage must be a real directory: ${safeId}`);
     }
-    const storedManifest = ProfileManifestSchema.parse(
-      await readJson(join(profileDir, "profile.json"))
-    );
+    const [storedManifest, instructions, resources] = await Promise.all([
+      readJson(join(profileDir, PROFILE_MANIFEST_FILE)).then((value) =>
+        ProfileManifestSchema.parse(value)
+      ),
+      readFile(join(profileDir, PROFILE_INSTRUCTIONS_FILE), "utf8"),
+      readJson(join(profileDir, PROFILE_RESOURCES_FILE)).then((value) =>
+        ProfileResourcesSchema.parse(value)
+      )
+    ]);
+    if (storedManifest.id !== safeId) {
+      throw new Error(`Profile directory and manifest ids differ: ${safeId}`);
+    }
     const manifest = {
       ...storedManifest,
-      createdAt: createdAtFromProfile(storedManifest.id, storedManifest.createdAt, profileStats)
+      createdAt: createdAtFromProfile(
+        storedManifest.id,
+        storedManifest.createdAt,
+        profileStats
+      )
     };
-    const profile = await targetRegistry
-      .get(manifest.targetId)
-      .readProfileFiles(profileDir, manifest);
-    const legacyMcpSelections = profile.assetPolicy.mcpRefs.map(
-      (reference) => ({
-        targetId: manifest.targetId,
-        name: reference.targetName
-      })
-    );
-    const mcpSelections = [
-      ...(profile.assetPolicy.mcpSelections ?? []),
-      ...legacyMcpSelections
-    ].filter(
-      (selection, index, selections) =>
-        selections.findIndex(
-          (candidate) =>
-            candidate.targetId === selection.targetId &&
-            candidate.name === selection.name
-        ) === index
-    );
-    const normalizedProfile: ProfileDetail = {
-      ...profile,
-      assetPolicy: {
-        ...profile.assetPolicy,
-        mcpRefs: [],
-        mcpSelections
-      }
+    const base: ProfileDetail = {
+      id: safeId,
+      profileDir,
+      manifest,
+      instructions,
+      resources
     };
     const targetContentHashes = Object.fromEntries(
-      targetRegistry.listAdapters().map((adapter) => {
-        const targeted = targetProfile(
-          normalizedProfile,
-          adapter,
-          targetRegistry.get(manifest.targetId)
-        ).profile;
-        return [adapter.descriptor.id, createProfileContentHash(targeted)];
-      })
+      targetRegistry
+        .list()
+        .map((target) => [target.id, createProfileContentHash(base, target.id)])
     );
+    const preferredTargetId = manifest.preferredTargetId;
     return {
-      ...normalizedProfile,
-      contentHash: targetContentHashes[manifest.targetId],
+      ...base,
+      contentHash:
+        (preferredTargetId && targetContentHashes[preferredTargetId]) ??
+        createProfileContentHash(base),
       targetContentHashes
     };
   };
@@ -150,48 +141,47 @@ export const createProfileStore = (
     }
 
     const summaries = await Promise.all(
-      entries.map(async (entry) => {
+      entries.map(async (entry): Promise<ProfileSummary> => {
         try {
           const profile = await readProfile(entry);
-          if (profile.manifest.id !== entry) {
-            throw new Error(`Profile directory and manifest ids differ: ${entry}`);
-          }
           return {
-            id: profile.manifest.id,
-            targetId: profile.manifest.targetId,
+            id: profile.id,
+            preferredTargetId: profile.manifest.preferredTargetId,
+            createdFromTargetId: profile.manifest.createdFromTargetId,
             name: profile.manifest.name,
             description: profile.manifest.description,
             createdAt: profile.manifest.createdAt,
             iconKey: profile.manifest.iconKey,
             contentHash: profile.contentHash,
             targetContentHashes: profile.targetContentHashes
-          } satisfies ProfileSummary;
+          };
         } catch (error) {
           return {
             id: entry,
-            targetId: "unknown",
             name: entry,
             description: "This Profile could not be loaded",
             loadError: error instanceof Error ? error.message : String(error)
-          } satisfies ProfileSummary;
+          };
         }
       })
     );
 
-    return summaries.sort((a, b) => {
-      const validityDifference = Number(Boolean(a.loadError)) - Number(Boolean(b.loadError));
+    return summaries.sort((left, right) => {
+      const validityDifference =
+        Number(Boolean(left.loadError)) - Number(Boolean(right.loadError));
       if (validityDifference) return validityDifference;
       const createdAtDifference =
-        Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? "");
-      return createdAtDifference || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
+        Date.parse(right.createdAt ?? "") - Date.parse(left.createdAt ?? "");
+      return (
+        createdAtDifference ||
+        left.name.localeCompare(right.name) ||
+        left.id.localeCompare(right.id)
+      );
     });
   };
 
   const saveProfile = async (input: SaveProfileInput): Promise<ProfileDetail> => {
-    const secretWarnings = [
-      ...findSecretWarnings(input.instructions),
-      ...findSecretWarnings(input.configText)
-    ];
+    const secretWarnings = findSecretWarnings(input.instructions);
     if (secretWarnings.length > 0) {
       const keys = [...new Set(secretWarnings.map((warning) => warning.split(": ").at(-1)))]
         .filter(Boolean)
@@ -201,11 +191,12 @@ export const createProfileStore = (
       );
     }
     const parsedManifest = ProfileManifestSchema.parse(input.manifest);
+    const resources = ProfileResourcesSchema.parse(input.resources);
     const profileDir = join(paths.profilesDir, parsedManifest.id);
     let createdAt = parsedManifest.createdAt;
-    if (!createdAt && await pathEntryExists(profileDir)) {
+    if (!createdAt && (await pathEntryExists(profileDir))) {
       const [currentManifest, currentStats] = await Promise.all([
-        readJson(join(profileDir, "profile.json")).then((value) =>
+        readJson(join(profileDir, PROFILE_MANIFEST_FILE)).then((value) =>
           ProfileManifestSchema.parse(value)
         ),
         lstat(profileDir)
@@ -216,20 +207,10 @@ export const createProfileStore = (
         currentStats
       );
     }
-    const manifest = {
+    const manifest = ProfileManifestSchema.parse({
       ...parsedManifest,
       createdAt: createdAt ?? new Date().toISOString()
-    };
-    const adapter = targetRegistry.get(manifest.targetId);
-    const profile: ProfileDetail = {
-      id: manifest.id,
-      profileDir,
-      manifest,
-      instructions: input.instructions,
-      configText: input.configText,
-      assetPolicy: input.assetPolicy
-    };
-
+    });
     if (await pathEntryExists(profileDir)) {
       const currentStats = await lstat(profileDir);
       if (!currentStats.isDirectory() || currentStats.isSymbolicLink()) {
@@ -238,49 +219,53 @@ export const createProfileStore = (
     }
 
     await replacePathAtomically(profileDir, async (stagingDir) => {
-      if (await pathEntryExists(profileDir)) {
-        await cp(profileDir, stagingDir, { recursive: true, dereference: false });
-      } else {
-        await mkdir(stagingDir, { recursive: true });
-      }
-      const stagedProfile = { ...profile, profileDir: stagingDir };
-      await writeAtomic(
-        join(stagingDir, "profile.json"),
-        `${JSON.stringify(manifest, null, 2)}\n`
-      );
-      await adapter.writeProfileFiles(stagingDir, stagedProfile);
-      await adapter.readProfileFiles(stagingDir, manifest);
+      await mkdir(stagingDir, { recursive: true, mode: 0o700 });
+      await Promise.all([
+        writeAtomic(
+          join(stagingDir, PROFILE_MANIFEST_FILE),
+          `${JSON.stringify(manifest, null, 2)}\n`
+        ),
+        writeAtomic(join(stagingDir, PROFILE_INSTRUCTIONS_FILE), input.instructions),
+        writeAtomic(
+          join(stagingDir, PROFILE_RESOURCES_FILE),
+          `${JSON.stringify(resources, null, 2)}\n`
+        )
+      ]);
+      ProfileManifestSchema.parse(await readJson(join(stagingDir, PROFILE_MANIFEST_FILE)));
+      ProfileResourcesSchema.parse(await readJson(join(stagingDir, PROFILE_RESOURCES_FILE)));
     });
-
     return readProfile(manifest.id);
   };
 
   const createProfile = async (input: CreateProfileInput): Promise<ProfileDetail> => {
-    const targetId = SafeIdSchema.parse(input.targetId);
-    const adapter = targetRegistry.get(targetId);
-    const idBase = input.name ? slugProfileName(input.name) : targetId;
-    const id = `${idBase}-${Date.now()}`;
-    const profile = adapter.createDefaultProfile(id);
+    const preferredTargetId = input.preferredTargetId
+      ? SafeIdSchema.parse(input.preferredTargetId)
+      : targetRegistry.list()[0]?.id;
+    if (preferredTargetId) targetRegistry.get(preferredTargetId);
+    const target = preferredTargetId ? targetRegistry.get(preferredTargetId).descriptor : undefined;
+    const name = input.name?.trim() || `${target?.name ?? "Agent"} Profile`;
+    const id = `${slugProfileName(name)}-${Date.now()}`;
     return saveProfile({
-      ...profile,
       manifest: {
-        ...profile.manifest,
+        id,
+        name,
+        description: input.description?.trim() ?? "",
         createdAt: new Date().toISOString(),
-        name: input.name?.trim() || profile.manifest.name,
-        description: input.description?.trim() ?? profile.manifest.description
-      }
+        preferredTargetId,
+        version: 2
+      },
+      instructions: "",
+      resources: { skills: [], mcpByTarget: {} }
     });
   };
 
   const updateProfileMetadata = async (
     input: UpdateProfileMetadataInput
   ): Promise<ProfileDetail> => {
-    const id = SafeIdSchema.parse(input.id);
+    const id = parseProfileId(input.id);
     const current = await readProfile(id);
     const name = input.name === undefined ? current.manifest.name : input.name.trim();
-    if (!name) {
-      throw new Error("Profile name is required");
-    }
+    if (!name) throw new Error("Profile name is required");
     const manifest = ProfileManifestSchema.parse({
       ...current.manifest,
       name,
@@ -291,45 +276,34 @@ export const createProfileStore = (
       iconKey: input.iconKey ?? current.manifest.iconKey
     });
     await writeAtomic(
-      join(current.profileDir ?? join(paths.profilesDir, id), "profile.json"),
+      join(current.profileDir ?? join(paths.profilesDir, id), PROFILE_MANIFEST_FILE),
       `${JSON.stringify(manifest, null, 2)}\n`
     );
     return readProfile(id);
   };
 
   const duplicateProfile = async (id: string): Promise<ProfileDetail> => {
-    const parsedId = SafeIdSchema.parse(id);
-    const profile = await readProfile(parsedId);
-    const duplicateId = `${parsedId}-copy-${Date.now()}`;
-    const sourceDir = join(paths.profilesDir, parsedId);
-    const targetDir = join(paths.profilesDir, duplicateId);
-    const manifest = {
-      ...profile.manifest,
-      id: duplicateId,
-      createdAt: new Date().toISOString(),
-      name: `${profile.manifest.name} Copy`
-    };
-
-    await replacePathAtomically(targetDir, async (stagingDir) => {
-      await cp(sourceDir, stagingDir, { recursive: true, dereference: false });
-      await writeAtomic(
-        join(stagingDir, "profile.json"),
-        `${JSON.stringify(manifest, null, 2)}\n`
-      );
+    const profile = await readProfile(parseProfileId(id));
+    const duplicateId = `${profile.id}-copy-${Date.now()}`;
+    return saveProfile({
+      manifest: {
+        ...profile.manifest,
+        id: duplicateId,
+        createdAt: new Date().toISOString(),
+        name: `${profile.manifest.name} Copy`
+      },
+      instructions: profile.instructions,
+      resources: profile.resources
     });
-
-    return readProfile(duplicateId);
   };
 
   const deleteProfile = async (id: string): Promise<void> => {
-    const parsedId = SafeIdSchema.parse(id);
-    const profileDir = join(paths.profilesDir, parsedId);
-    if (!(await pathEntryExists(profileDir))) {
-      return;
-    }
+    const safeId = parseProfileId(id);
+    const profileDir = join(paths.profilesDir, safeId);
+    if (!(await pathEntryExists(profileDir))) return;
     const trashDir = join(paths.appDataRoot, "trash", "profiles");
     await mkdir(trashDir, { recursive: true, mode: 0o700 });
-    await rename(profileDir, join(trashDir, `${parsedId}-${Date.now()}`));
+    await rename(profileDir, join(trashDir, `${safeId}-${Date.now()}`));
   };
 
   return {

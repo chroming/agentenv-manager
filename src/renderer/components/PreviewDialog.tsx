@@ -22,8 +22,6 @@ interface PreviewDialogProps {
   targetNames?: TargetNameIndex;
   replacementAcknowledged?: boolean;
   onReplacementAcknowledgedChange?(acknowledged: boolean): void;
-  omissionsAcknowledged?: boolean;
-  onOmissionsAcknowledgedChange?(acknowledged: boolean): void;
   onOpenRecovery?(): void;
   onAdoptTargetChanges?(): void;
   onCancel?(): void;
@@ -113,8 +111,6 @@ export const PreviewDialog = ({
   targetNames = {},
   replacementAcknowledged = false,
   onReplacementAcknowledgedChange,
-  omissionsAcknowledged = false,
-  onOmissionsAcknowledgedChange,
   onOpenRecovery,
   onAdoptTargetChanges,
   onCancel,
@@ -269,11 +265,7 @@ export const PreviewDialog = ({
     ...managedDriftErrors,
     ...unmanagedReplacementErrors
   ];
-  const omissionReasons = new Set(
-    isActivationPreview ? (preview.omissions ?? []).map((omission) => omission.reason) : []
-  );
   const keepItems = preview.warnings
-    .filter((warning) => !omissionReasons.has(warning))
     .map((warning) => prettifyIssue(warning, targetName, t));
   const resourceChanges = "resourceChanges" in preview ? preview.resourceChanges : [];
   const installChanges = resourceChanges.filter((change) => change.action === "install");
@@ -291,9 +283,7 @@ export const PreviewDialog = ({
     ? [
         payload.instructions > 0 ? plural(payload.instructions, "instruction file") : undefined,
         payload.skills > 0 ? plural(payload.skills, "Skill") : undefined,
-        payload.mcpServers > 0 ? plural(payload.mcpServers, "MCP server") : undefined,
-        payload.agents > 0 ? plural(payload.agents, "Agent") : undefined,
-        payload.nativeConfig > 0 ? plural(payload.nativeConfig, "native config") : undefined
+        payload.mcpServers > 0 ? plural(payload.mcpServers, "MCP switch") : undefined
       ].filter((item): item is string => Boolean(item))
     : [];
   const managedOutcomeText = isActivationPreview
@@ -305,14 +295,7 @@ export const PreviewDialog = ({
         ? t("{{target}} files will stay in place and AgentEnv ownership will be removed.", { target: targetName })
         : t("{{target}} will be restored to its pre-takeover environment.", { target: targetName })
       : t("{{files}} reviewed before restore.", { files: fileCountLabel });
-  const outcomeText = isActivationPreview && (payload?.observedMcpServers ?? 0) > 0
-    ? `${managedOutcomeText} ${t(
-        payload?.observedMcpServers === 1
-          ? "1 MCP connection remains Agent-controlled."
-          : "{{count}} MCP connections remain Agent-controlled.",
-        { count: payload?.observedMcpServers ?? 0 }
-      )}`
-    : managedOutcomeText;
+  const outcomeText = managedOutcomeText;
   const resourcePlan = resourceChanges.length > 0 ? (
     <section className="preview-resource-plan" aria-label={t("Resource changes")}>
       <header>
@@ -491,32 +474,6 @@ export const PreviewDialog = ({
                 {t("Open recovery history")}
               </button>
             </div>
-          ) : null}
-        </section>
-      ) : null}
-      {preview && "omissions" in preview && (preview.omissions?.length ?? 0) > 0 ? (
-        <section className="preview-drift-recovery preview-omission-review" aria-label={t("Compatibility omissions")}>
-          <div>
-            <strong>{t("Not included for {{target}}", { target: targetName })}</strong>
-            <p>{t("These native Profile resources are not compatible with the selected Agent.")}</p>
-          </div>
-          <ul>
-            {preview.omissions?.map((omission) => (
-              <li key={`${omission.kind}:${omission.name}`}>
-                <strong>{omission.name}</strong>
-                <span>{omission.reason}</span>
-              </li>
-            ))}
-          </ul>
-          {onOmissionsAcknowledgedChange ? (
-            <label>
-              <input
-                type="checkbox"
-                checked={omissionsAcknowledged}
-                onChange={(event) => onOmissionsAcknowledgedChange(event.currentTarget.checked)}
-              />
-              {t("I understand these resources will not be applied to {{target}}", { target: targetName })}
-            </label>
           ) : null}
         </section>
       ) : null}

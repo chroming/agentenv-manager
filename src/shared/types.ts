@@ -1,6 +1,7 @@
 export interface ProfileSummary {
   id: string;
-  targetId: string;
+  preferredTargetId?: string;
+  createdFromTargetId?: string;
   name: string;
   description: string;
   createdAt?: string;
@@ -10,8 +11,19 @@ export interface ProfileSummary {
   loadError?: string;
 }
 
-export type { AssetPolicy, ProfileManifest, ResourceIconKey } from "./schemas";
-import type { AssetPolicy, ProfileManifest, ResourceIconKey } from "./schemas";
+export type {
+  ProfileManifest,
+  ProfileMcpPolicy,
+  ProfileMcpSelection,
+  ProfileResources,
+  ProfileSkill,
+  ResourceIconKey
+} from "./schemas";
+import type {
+  ProfileManifest,
+  ProfileResources,
+  ResourceIconKey
+} from "./schemas";
 
 export interface AgentEnvApi {
   readonly platform: string;
@@ -30,9 +42,6 @@ export interface AgentEnvApi {
   listSkillCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
-  listMcpLibrary(): Promise<McpLibraryEntry[]>;
-  saveMcpServer(input: SaveMcpServerInput): Promise<McpLibraryEntry>;
-  removeMcpServer(id: string): Promise<void>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   previewSkillImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
   previewSkillMerge(id: string): Promise<SkillMergePreview>;
@@ -96,7 +105,7 @@ export interface AgentEnvApi {
   adoptTargetChanges(profileId: string, targetId: string): Promise<AdoptTargetChangesResult>;
 }
 
-export type AdoptedTargetResource = "instructions" | "config" | "mcp" | "disabled-skills";
+export type AdoptedTargetResource = "instructions" | "mcp";
 
 export interface AdoptTargetChangesResult {
   profile: ProfileDetail;
@@ -107,7 +116,6 @@ export interface AdoptTargetChangesResult {
 export interface ApplyProfileOptions {
   allowManagedDrift?: boolean;
   allowUnmanagedSkillReplacement?: boolean;
-  allowOmissions?: boolean;
 }
 
 export interface SkillLibraryEntry {
@@ -587,27 +595,6 @@ export interface NativeMcpInspection {
   issues: NativeMcpInspectionIssue[];
 }
 
-export interface McpLibraryEntry {
-  id: string;
-  name: string;
-  transport: McpTransport;
-  command?: string;
-  args?: string[];
-  url?: string;
-  env?: Record<string, string>;
-}
-
-export interface SaveMcpServerInput {
-  existingId?: string;
-  id: string;
-  name: string;
-  transport: McpTransport;
-  command?: string;
-  args?: string[];
-  url?: string;
-  env?: Record<string, string>;
-}
-
 export interface AgentEnvSettings {
   locale: AppLocale;
   skillSyncMethod: SkillSyncMethod;
@@ -704,7 +691,7 @@ export interface GitHubDeviceLoginResult {
 }
 
 export interface CreateProfileInput {
-  targetId: string;
+  preferredTargetId?: string;
   name?: string;
   description?: string;
 }
@@ -715,7 +702,7 @@ export interface CreateProfileFromTargetInput {
 }
 
 export interface TargetCaptureResource {
-  kind: "instructions" | "config" | "skill" | "mcp" | "agent";
+  kind: "instructions" | "skill" | "mcp";
   id: string;
   name: string;
   sourcePath?: string;
@@ -807,8 +794,7 @@ export interface TargetSkillExternalContainerMarker {
 }
 
 export interface TargetState {
-  formatVersion?: 1;
-  managedConfigKeys: string[];
+  formatVersion?: 2;
   managedMcpNames: string[];
   activeProfileId?: string;
   appliedProfileHash?: string;
@@ -932,8 +918,7 @@ export interface ProfileDetail {
   profileDir?: string;
   manifest: ProfileManifest;
   instructions: string;
-  configText: string;
-  assetPolicy: AssetPolicy;
+  resources: ProfileResources;
   contentHash?: string;
   targetContentHashes?: Record<string, string>;
 }
@@ -941,8 +926,7 @@ export interface ProfileDetail {
 export interface SaveProfileInput {
   manifest: ProfileManifest;
   instructions: string;
-  configText: string;
-  assetPolicy: AssetPolicy;
+  resources: ProfileResources;
 }
 
 export interface UpdateProfileMetadataInput {
@@ -987,8 +971,6 @@ export interface ActivationPreview {
   targetId: string;
   targetState: TargetState;
   effectivePayload?: EffectiveProfilePayload;
-  omissions?: PlannedOmission[];
-  requiresOmissionAcknowledgement?: boolean;
   operation?: "apply" | "takeover";
   skillRootTransition?: {
     path: string;
@@ -1002,21 +984,11 @@ export interface EffectiveProfilePayload {
   instructions: number;
   skills: number;
   mcpServers: number;
-  observedMcpServers?: number;
-  agents: number;
-  nativeConfig: number;
   total: number;
-}
-
-export interface PlannedOmission {
-  kind: "config" | "agent" | "setting";
-  name: string;
-  reason: string;
 }
 
 export interface LibraryResourceVersions {
   skills: Record<string, string>;
-  mcp: Record<string, string>;
 }
 
 export interface BackupEntry {

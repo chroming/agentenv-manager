@@ -11,6 +11,7 @@ import { createGitRepositoryCache } from "../../src/main/skillSources/gitReposit
 import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
 import { buildSkillCleanupGroups } from "../../src/shared/skillCleanup";
+import type { ProfileDetail, SaveProfileInput } from "../../src/shared/types";
 import { createGitTestRepository } from "./skillSources/gitTestRepository";
 
 let root = "";
@@ -1978,20 +1979,15 @@ description: >
       profileDir: join(paths.profilesDir, "daily-coding"),
       manifest: {
         id: "daily-coding",
-        targetId: "opencode",
+        preferredTargetId: "opencode",
         name: "Daily Coding",
         description: "",
-        version: 1 as const,
-        managed: { instructions: true, config: true, assets: true }
+        version: 2 as const
       },
       instructions: "",
-      configText: "{}\n",
-      assetPolicy: {
-        ownedDirs: [],
-        ownedFiles: [],
-        skillRefs: [{ libraryId: "reviewer", targetName: "reviewer" }],
-        mcpRefs: [],
-        disabledSkillPaths: []
+      resources: {
+        skills: [{ libraryId: "reviewer", targetName: "reviewer", enabled: true }],
+        mcpByTarget: {}
       }
     };
     const profileStore = {
@@ -2390,33 +2386,33 @@ description: >
       }),
       "utf8"
     );
-    const originalProfile = {
+    const originalProfile: ProfileDetail = {
       id: "daily-coding",
       profileDir,
       manifest: {
         id: "daily-coding",
-        targetId: "opencode",
+        preferredTargetId: "opencode",
         name: "Daily Coding",
         description: "",
-        version: 1 as const,
-        managed: { instructions: true, config: true, assets: true }
+        version: 2
       },
       instructions: "",
-      configText: "{}",
-      assetPolicy: {
-        ownedDirs: [],
-        ownedFiles: [],
-        skillRefs: [{ libraryId: "reviewer-beta", targetName: "reviewer", enabled: true }],
-        mcpRefs: [],
-        disabledSkillPaths: []
+      resources: {
+        skills: [{ libraryId: "reviewer-beta", targetName: "reviewer", enabled: true }],
+        mcpByTarget: {}
       }
     };
     let currentProfile = originalProfile;
     await writeFile(join(profileDir, "profile-state.json"), JSON.stringify(originalProfile), "utf8");
     const profileStore = {
-      listProfiles: async () => [{ id: currentProfile.id, targetId: "opencode", name: "Daily Coding", description: "" }],
+      listProfiles: async () => [{
+        id: currentProfile.id,
+        preferredTargetId: "opencode",
+        name: "Daily Coding",
+        description: ""
+      }],
       readProfile: async () => currentProfile,
-      saveProfile: async (input: typeof originalProfile) => {
+      saveProfile: async (input: SaveProfileInput) => {
         currentProfile = { ...input, id: input.manifest.id, profileDir };
         await writeFile(join(profileDir, "profile-state.json"), JSON.stringify(currentProfile), "utf8");
         return currentProfile;
@@ -2482,7 +2478,7 @@ description: >
     await expect(readFile(join(alphaDir, "SKILL.md"), "utf8")).resolves.toContain(
       "# Keep this content"
     );
-    expect(currentProfile.assetPolicy.skillRefs).toEqual([
+    expect(currentProfile.resources.skills).toEqual([
       { libraryId: "reviewer-alpha", targetName: "reviewer", enabled: true }
     ]);
     await expect(readlink(join(targetPaths.skillsDir, "reviewer"))).resolves.toBe(alphaDir);

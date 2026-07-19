@@ -1,12 +1,13 @@
 import { AlertTriangle, Network, RefreshCw } from "lucide-react";
 import type {
-  AssetPolicy,
   NativeMcpConnection,
   NativeMcpInspectionIssue,
+  ProfileResources,
   TargetInfo
 } from "../../shared/types";
-import { OverflowTooltip } from "./OverflowTooltip";
 import { useI18n } from "../i18n";
+import { OverflowTooltip } from "./OverflowTooltip";
+import { Switch } from "./ui";
 
 type McpSelectionMode = "agent" | "on" | "off";
 
@@ -14,22 +15,10 @@ interface ProfileMcpEditorProps {
   target?: TargetInfo;
   connections?: NativeMcpConnection[];
   issues?: NativeMcpInspectionIssue[];
-  value: AssetPolicy;
-  onChange(value: AssetPolicy): void;
+  value: ProfileResources;
+  onChange(value: ProfileResources): void;
   onRefresh(): Promise<void>;
 }
-
-const modeFor = (
-  value: AssetPolicy,
-  targetId: string,
-  name: string
-): McpSelectionMode => {
-  const selection = (value.mcpSelections ?? []).find(
-    (item) => item.targetId === targetId && item.name === name
-  );
-  if (!selection) return "agent";
-  return selection.enabled === false ? "off" : "on";
-};
 
 export const ProfileMcpEditor = ({
   target,
@@ -41,53 +30,53 @@ export const ProfileMcpEditor = ({
 }: ProfileMcpEditorProps) => {
   const { t } = useI18n();
   if (!target) {
-    return (
-      <div className="profile-mcp-empty">
-        {t("Select an Agent to inspect MCP connections.")}
-      </div>
-    );
+    return <div className="profile-mcp-empty">{t("Select an Agent to inspect MCP connections.")}</div>;
   }
 
+  const canManage = target.capabilities.mcpActivation === true;
+  const policy = value.mcpByTarget[target.id] ?? { mode: "ignore" as const, selections: [] };
+  const managing = canManage && policy.mode === "manage";
   const targetConnections = (connections ?? []).filter(
     (connection) => connection.targetId === target.id
   );
   const targetIssues = issues.filter((issue) => issue.targetId === target.id);
-  const liveNames = new Set(
-    targetConnections.map((connection) => connection.name)
-  );
-  const missingSelections: NativeMcpConnection[] = (value.mcpSelections ?? [])
-    .filter(
-      (selection) =>
-        selection.targetId === target.id && !liveNames.has(selection.name)
-    )
-    .map((selection) => ({
-      targetId: target.id,
-      name: selection.name,
-      scope: "unknown" as const,
-      enabled: selection.enabled !== false,
-      controllable: target.capabilities.mcpActivation === true,
-      sourcePath: target.paths.mcpConfigPath ?? target.paths.configPath,
-      transport: undefined,
-      detail: "setup-required"
-    }));
-  const rows = [...targetConnections, ...missingSelections].sort(
-    (left, right) => left.name.localeCompare(right.name)
-  );
+  const liveNames = new Set(targetConnections.map((connection) => connection.name));
+  const rows = [
+    ...targetConnections,
+    ...policy.selections
+      .filter((selection) => !liveNames.has(selection.name))
+      .map((selection) => ({
+        targetId: target.id,
+        name: selection.name,
+        scope: "unknown" as const,
+        enabled: false,
+        controllable: canManage,
+        sourcePath: target.paths.mcpConfigPath ?? target.paths.configPath,
+        transport: undefined,
+        detail: "setup-required"
+      }))
+  ].sort((left, right) => left.name.localeCompare(right.name));
 
-  const updateMode = (name: string, mode: McpSelectionMode) => {
-    const otherSelections = (value.mcpSelections ?? []).filter(
-      (selection) =>
-        !(selection.targetId === target.id && selection.name === name)
-    );
+  const updatePolicy = (nextPolicy: ProfileResources["mcpByTarget"][string]) => {
     onChange({
       ...value,
-      mcpSelections:
-        mode === "agent"
-          ? otherSelections
-          : [
-              ...otherSelections,
-              { targetId: target.id, name, enabled: mode === "on" }
-            ]
+      mcpByTarget: { ...value.mcpByTarget, [target.id]: nextPolicy }
+    });
+  };
+
+  const modeFor = (name: string): McpSelectionMode => {
+    const selection = policy.selections.find((item) => item.name === name);
+    if (!selection) return "agent";
+    return selection.enabled ? "on" : "off";
+  };
+
+  const updateMode = (name: string, mode: McpSelectionMode) => {
+    const otherSelections = policy.selections.filter((selection) => selection.name !== name);
+    updatePolicy({
+      mode: "manage",
+      selections: mode === "agent"
+        ? otherSelections
+        : [...otherSelections, { name, enabled: mode === "on" }]
     });
   };
 
@@ -97,29 +86,57 @@ export const ProfileMcpEditor = ({
         <div>
           <strong>{target.name}</strong>
           <span>
-            {target.capabilities.mcpActivation
-              ? t(
-                  "Definitions and sign-in stay in the Agent. Choose only what this Profile turns on or off."
-                )
-              : t(
-                  "MCP connections stay controlled by this Agent and are shown here for reference."
-                )}
+            {canManage
+              ? t("Manage only the MCP switches selected below. Definitions and credentials stay in the Agent.")
+              : t("MCP settings stay Agent-controlled for this Agent.")}
           </span>
         </div>
-        <button
-          className="icon-action"
-          type="button"
-          aria-label={t("Refresh MCP connections")}
-          title={t("Refresh MCP connections")}
-          onClick={() => void onRefresh()}
-        >
-          <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
-        </button>
-      </header>
-      {connections === undefined ? (
-        <div className="profile-mcp-empty">
-          {t("Loading MCP connections...")}
+        <div className="profile-mcp-editor__controls">
+          {canManage ? (
+            <Switch
+              checked={managing}
+              label={t("Manage MCPs for {{name}}", { name: target.name })}
+              onClick={() => updatePolicy(
+                managing
+                  ? { mode: "ignore", selections: policy.selections }
+                  : { mode: "manage", selections: policy.selections }
+              )}
+            >
+              {t(managing ? "Managed by Profile" : "Leave unchanged")}
+            </Switch>
+          ) : (
+            <>
+              <span className="profile-mcp-readonly">{t("Agent controlled")}</span>
+              {policy.mode === "manage" ? (
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => updatePolicy({ mode: "ignore", selections: policy.selections })}
+                >
+                  {t("Leave unchanged")}
+                </button>
+              ) : null}
+            </>
+          )}
+          <button
+            className="icon-action"
+            type="button"
+            aria-label={t("Refresh MCP connections")}
+            title={t("Refresh MCP connections")}
+            onClick={() => void onRefresh()}
+          >
+            <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
+          </button>
         </div>
+      </header>
+
+      {!managing && canManage ? (
+        <div className="profile-mcp-empty profile-mcp-empty--policy">
+          <Network size={17} strokeWidth={2} aria-hidden="true" />
+          <span>{t("Apply leaves every MCP setting in {{name}} unchanged.", { name: target.name })}</span>
+        </div>
+      ) : connections === undefined ? (
+        <div className="profile-mcp-empty">{t("Loading MCP connections...")}</div>
       ) : targetIssues.length > 0 ? (
         <div className="profile-mcp-inspection-error" role="alert">
           <AlertTriangle size={17} strokeWidth={2.2} aria-hidden="true" />
@@ -134,57 +151,42 @@ export const ProfileMcpEditor = ({
       ) : rows.length === 0 ? (
         <div className="profile-mcp-empty">
           <Network size={17} strokeWidth={2} aria-hidden="true" />
-          <span>
-            {t("No MCP connections are configured in {{name}}.", {
-              name: target.name
-            })}
-          </span>
+          <span>{t("No MCP connections are configured in {{name}}.", { name: target.name })}</span>
         </div>
       ) : (
         <div className="profile-mcp-list">
           {rows.map((connection) => {
             const missing = connection.detail === "setup-required";
-            const mode = modeFor(value, target.id, connection.name);
+            const mode = modeFor(connection.name);
             return (
-              <div
-                className="profile-mcp-row"
-                key={`${target.id}:${connection.name}`}
-              >
+              <div className="profile-mcp-row" key={`${target.id}:${connection.name}`}>
                 <span className="profile-mcp-row__identity">
                   <strong>
-                    <OverflowTooltip
-                      className="profile-mcp-name"
-                      text={connection.name}
-                    />
+                    <OverflowTooltip className="profile-mcp-name" text={connection.name} />
                   </strong>
                   <small>
                     {missing
-                      ? t("Setup required")
+                      ? mode === "on"
+                        ? t("Missing in Agent · Apply blocked")
+                        : t("Not configured · No change")
                       : t(connection.enabled ? "On in Agent" : "Off in Agent")}
                     {connection.transport ? ` · ${connection.transport}` : ""}
                   </small>
                 </span>
-                {target.capabilities.mcpActivation ? (
+                {canManage ? (
                   <select
                     className="profile-mcp-mode"
-                    aria-label={t("{{name}} Profile behavior", {
-                      name: connection.name
-                    })}
+                    aria-label={t("{{name}} Profile behavior", { name: connection.name })}
                     value={mode}
-                    onChange={(event) =>
-                      updateMode(
-                        connection.name,
-                        event.target.value as McpSelectionMode
-                      )
-                    }
+                    onChange={(event) => updateMode(connection.name, event.target.value as McpSelectionMode)}
                   >
                     <option value="agent">{t("Use Agent setting")}</option>
                     <option value="on">{t("On")}</option>
                     <option value="off">{t("Off")}</option>
                   </select>
                 ) : (
-                  <span className="profile-mcp-readonly">
-                    {t("Agent controlled")}
+                  <span className="profile-mcp-agent-state">
+                    {t(connection.enabled ? "On in Agent" : "Off in Agent")}
                   </span>
                 )}
               </div>

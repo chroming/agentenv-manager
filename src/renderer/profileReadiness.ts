@@ -23,7 +23,7 @@ export interface ProfileReadiness {
   status: ProfileReadinessStatus;
   label: "No profile" | "No Agent" | "Unsaved" | "Agent unavailable" | "Needs review" | "Apply pending" | "Applied" | "Ready";
   message: string;
-  remediationLabel?: "Open Agents" | "Save now" | "Open Advanced" | "Open Recovery";
+  remediationLabel?: "Open Agents" | "Save now" | "Open Recovery";
 }
 
 export interface ProfileReadinessInput {
@@ -86,8 +86,7 @@ export const deriveProfileReadiness = ({
     return {
       status: "validation-error",
       label: "Needs review",
-      message: "This profile has validation issues",
-      remediationLabel: "Open Advanced"
+      message: "This profile has validation issues"
     };
   }
 

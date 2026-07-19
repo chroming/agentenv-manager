@@ -24,14 +24,9 @@ describe("target integration contract", () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-target-contract-"));
     const adapter = createFixtureAgentAdapter();
     const paths = adapter.createTargetPaths({ homeDir: root });
-    const profileDir = join(root, "profiles", "fixture-profile");
-    const profile = createFixtureProfile(profileDir, {
-      instructions: "# Fixture instructions\n",
-      configText: '{"enabled":true}\n'
+    const profile = createFixtureProfile(join(root, "profiles", "fixture-profile"), {
+      instructions: "# Fixture instructions\n"
     });
-
-    await adapter.writeProfileFiles(profileDir, profile);
-    const restored = await adapter.readProfileFiles(profileDir, profile.manifest);
     const installation = await adapter.detectInstallation({
       platform: "linux",
       homeDir: root,
@@ -46,10 +41,6 @@ describe("target integration contract", () => {
         configDir: join(root, ".fixture-agent")
       })
     );
-    expect(restored.instructions).toBe(profile.instructions);
-    expect(restored.configText).toBe(profile.configText);
-    expect(adapter.hasMeaningfulNativeConfig("")).toBe(false);
-    expect(adapter.hasMeaningfulNativeConfig(profile.configText)).toBe(true);
     expect(installation.found).toBe(true);
     await mkdir(paths.configDir, { recursive: true });
     await writeFile(paths.instructionsPath, "# Live fixture\n", "utf8");
@@ -57,7 +48,7 @@ describe("target integration contract", () => {
     await expect(adapter.captureProfile(paths)).resolves.toEqual(
       expect.objectContaining({
         instructions: "# Live fixture\n",
-        configText: '{"live":true}\n',
+        mcpConnections: [],
         warnings: [],
         excluded: []
       })
@@ -76,7 +67,7 @@ describe("target integration contract", () => {
       adapter.createPreview({
         profile,
         targetPaths: paths,
-        state: { managedConfigKeys: [], managedMcpNames: [] }
+        state: { managedMcpNames: [] }
       })
     ).resolves.toEqual(expect.objectContaining({ changes: [], errors: [] }));
   });

@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createActivationService } from "../../src/main/activationService";
-import { createMcpLibraryStore } from "../../src/main/mcpLibraryStore";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
@@ -30,21 +29,18 @@ describe("OpenCode Create from Target e2e", () => {
     const settingsStore = createSettingsStore(paths);
     const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
     const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
-    const mcpLibraryStore = createMcpLibraryStore(paths);
     const activationService = createActivationService({
       paths,
       profileStore,
       targetRegistry,
       settingsStore,
-      skillLibraryStore,
-      mcpLibraryStore
+      skillLibraryStore
     });
     const captureService = createTargetCaptureService({
       paths,
       profileStore,
       targetRegistry,
       skillLibraryStore,
-      mcpLibraryStore,
       targetDiscoveryService: {
         listTargets: async () => [
           { id: "opencode", health: { executableFound: true } } as TargetInfo
@@ -101,13 +97,16 @@ describe("OpenCode Create from Target e2e", () => {
       .rejects.toThrow();
     await expect(profileStore.readProfile(result.profile.id)).resolves.toMatchObject({
       instructions: "# Existing OpenCode\n",
-      assetPolicy: {
-        skillRefs: [{ libraryId: "reviewer", targetName: "reviewer" }],
-        mcpRefs: [],
-        mcpSelections: [{ targetId: "opencode", name: "docs", enabled: true }]
+      resources: {
+        skills: [{ libraryId: "reviewer", targetName: "reviewer", enabled: true }],
+        mcpByTarget: {
+          opencode: {
+            mode: "manage",
+            selections: [{ name: "docs", enabled: true }]
+          }
+        }
       }
     });
-    await expect(mcpLibraryStore.listServers()).resolves.toEqual([]);
     await expect(activationService.listTargetStates()).resolves.toEqual([]);
   });
 });

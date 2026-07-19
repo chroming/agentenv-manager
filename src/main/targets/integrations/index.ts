@@ -18,16 +18,10 @@ const composeBuiltInIntegration = (
   },
   profile: {
     createDefaultProfile: adapter.createDefaultProfile,
-    captureProfile: adapter.captureProfile,
-    readProfileFiles: adapter.readProfileFiles,
-    writeProfileFiles: adapter.writeProfileFiles
+    captureProfile: adapter.captureProfile
   },
-  config: {
-    hasMeaningfulNativeConfig: adapter.hasMeaningfulNativeConfig,
+  preview: {
     createPreview: adapter.createPreview
-  },
-  mcp: {
-    materializeMcpRefs: adapter.materializeMcpRefs
   },
   skills: adapter.skills,
   assets: {

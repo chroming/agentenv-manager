@@ -7,6 +7,7 @@ import {
   inspectDataBackup,
   restoreDataBackup
 } from "../../src/main/dataBackupService";
+import { ensureAppDataFormat } from "../../src/main/appDataFormat";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createTargetRegistry } from "../../src/main/targets/registry";
@@ -24,12 +25,14 @@ describe("AgentEnv data backup service", () => {
     const paths = createPaths({ appDataRoot: join(root, "active-data") });
     const backupRoot = join(root, "exports");
     await mkdir(backupRoot, { recursive: true });
+    await ensureAppDataFormat(paths);
     const registry = createTargetRegistry();
     await createProfileStore({ appDataRoot: paths.appDataRoot }, registry).saveProfile(
       registry.get("opencode").createDefaultProfile("daily-coding")
     );
     await writeFile(join(paths.profilesDir, "daily-coding", "AGENTS.md"), "# Original\n");
-    await writeFile(paths.mcpLibraryPath, "[]\n");
+    const legacyMcpLibraryPath = join(paths.appDataRoot, "mcp-library.json");
+    await writeFile(legacyMcpLibraryPath, "[]\n");
 
     const backup = await createDataBackup(paths, backupRoot);
     const preview = await inspectDataBackup(backup.path);
@@ -43,7 +46,7 @@ describe("AgentEnv data backup service", () => {
     await expect(
       readFile(join(paths.profilesDir, "daily-coding", "AGENTS.md"), "utf8")
     ).resolves.toBe("# Original\n");
-    await expect(readFile(paths.mcpLibraryPath, "utf8")).resolves.toBe("[]\n");
+    await expect(readFile(legacyMcpLibraryPath, "utf8")).resolves.toBe("[]\n");
     await expect(readFile(join(paths.appDataRoot, "temporary.json"), "utf8")).rejects.toMatchObject({
       code: "ENOENT"
     });
@@ -114,6 +117,7 @@ describe("AgentEnv data backup service", () => {
     const backupRoot = join(root, "exports");
     await mkdir(paths.appDataRoot, { recursive: true });
     await mkdir(backupRoot, { recursive: true });
+    await ensureAppDataFormat(paths);
     await writeFile(join(paths.appDataRoot, "value.txt"), "backup\n");
     const backup = await createDataBackup(paths, backupRoot);
     await writeFile(join(paths.appDataRoot, "value.txt"), "current\n");

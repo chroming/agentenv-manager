@@ -1,5 +1,4 @@
 import type {
-  McpLibraryEntry,
   NativeMcpConnection,
   ProfileDetail,
   TargetActivationPreview,
@@ -28,18 +27,13 @@ export interface TargetAssetInput {
 
 export interface TargetPreviewInput extends TargetAssetInput {
   state: {
-    managedConfigKeys: string[];
     managedMcpNames: string[];
   };
-  allowMatchingUnmanagedConfig?: boolean;
 }
 
 export interface CapturedTargetProfile {
   instructions: string;
-  configText: string;
-  mcpServers: McpLibraryEntry[];
   mcpConnections?: NativeMcpConnection[];
-  disabledSkillPaths: string[];
   warnings: string[];
   excluded: string[];
 }
@@ -67,13 +61,6 @@ export interface AgentTargetAdapter {
   };
   createDefaultProfile(id: string): Omit<ProfileDetail, "profileDir">;
   captureProfile(targetPaths: TargetPaths): Promise<CapturedTargetProfile>;
-  readProfileFiles(profileDir: string, manifest: ProfileDetail["manifest"]): Promise<ProfileDetail>;
-  writeProfileFiles(profileDir: string, profile: ProfileDetail): Promise<void>;
-  materializeMcpRefs(
-    profile: ProfileDetail,
-    mcpLibrary: McpLibraryEntry[]
-  ): ProfileDetail;
-  hasMeaningfulNativeConfig(configText: string): boolean;
   createPreview(input: TargetPreviewInput): Promise<TargetActivationPreview>;
   validateAssets(input: TargetAssetInput): Promise<string[]>;
   getAssetBackupPaths(input: TargetAssetInput): Promise<string[]>;
