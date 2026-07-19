@@ -1384,6 +1384,34 @@ describe("Electron UI profile switching e2e", () => {
       description: "Writing workspace"
     });
 
+    await resizeAppWindow(page, 920, 620);
+    await expandComposerSection(page, "Skills");
+    const compactSkillManager = page.locator(".profile-skill-manager");
+    const readCompactSkillGeometry = async () => compactSkillManager.evaluate((manager) => {
+      const list = manager.querySelector<HTMLElement>(".profile-skill-list")!;
+      const content = list.querySelector<HTMLElement>(".profile-skill-row, .profile-skill-empty")!;
+      const listBox = list.getBoundingClientRect();
+      const contentBox = content.getBoundingClientRect();
+      return {
+        compact: manager.classList.contains("is-compact"),
+        count: manager.getAttribute("data-profile-skill-count"),
+        trailingSpace: Math.round(listBox.bottom - contentBox.bottom)
+      };
+    });
+    expect(await readCompactSkillGeometry()).toEqual({
+      compact: true,
+      count: "0",
+      trailingSpace: 0
+    });
+
+    await addLibrarySkillToProfile(page);
+    await page.getByRole("listitem", { name: "Profile skill shared-reviewer" }).waitFor();
+    expect(await readCompactSkillGeometry()).toEqual({
+      compact: true,
+      count: "1",
+      trailingSpace: 0
+    });
+
     await page.getByRole("button", { name: "Edit profile" }).click({ timeout: 5_000 });
     const editDialog = page.getByRole("dialog", { name: "Edit profile" });
     await editDialog.waitFor({ state: "visible", timeout: 5_000 });

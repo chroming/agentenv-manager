@@ -1326,6 +1326,25 @@
   overflow: hidden;
 }
 
+.profile-composer-section[data-profile-composer-id="skills"].is-expanded:has(
+    .profile-skill-manager.is-compact
+  ) {
+  flex: 0 0 auto;
+}
+
+.profile-composer-section__panel > .profile-skill-manager.is-compact {
+  grid-template-rows: auto auto;
+  height: auto;
+}
+
+.profile-skill-manager.is-compact .profile-skill-list {
+  overflow-y: visible;
+}
+
+.profile-skill-manager.is-compact .profile-skill-empty {
+  padding-block: 14px;
+}
+
 .profile-skill-toolbar {
   align-items: center;
   border-bottom: 1px solid #e8edf4;

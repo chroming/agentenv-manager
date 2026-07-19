@@ -309,6 +309,7 @@ export const SkillsEditor = ({
     (ownedFile) => ownedFile.kind === "agent"
   );
   const librarySkillEntries = value.skillRefs ?? [];
+  const profileSkillCount = skillEntries.length + librarySkillEntries.length;
   const librarySkillsById = useMemo(
     () => new Map(librarySkills.map((skill) => [skill.id, skill])),
     [librarySkills]
@@ -602,7 +603,11 @@ export const SkillsEditor = ({
 
   if (mode === "skills") {
     return (
-      <section className="profile-skill-manager" aria-label={t("Profile skills")}>
+      <section
+        className={`profile-skill-manager${profileSkillCount <= 1 ? " is-compact" : ""}`}
+        aria-label={t("Profile skills")}
+        data-profile-skill-count={profileSkillCount}
+      >
         <header className="profile-skill-toolbar">
           <div className="profile-skill-summary">
             <strong>{t("Skills")}</strong>
