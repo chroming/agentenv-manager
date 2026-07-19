@@ -1507,7 +1507,7 @@ export const SkillLibraryPanel = ({
                       }}
                     >
                       {updateAction === "update" ? (
-                        <Sparkles size={14} strokeWidth={2.2} />
+                        <RefreshCw size={14} strokeWidth={2.2} />
                       ) : (
                         <TriangleAlert size={14} strokeWidth={2.2} />
                       )}

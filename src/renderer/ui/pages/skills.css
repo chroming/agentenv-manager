@@ -262,6 +262,18 @@
   max-width: 100%;
 }
 
+.skill-library-panel .library-row-inline-action.is-update {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--accent);
+}
+
+.skill-library-panel .library-row-inline-action.is-update:hover:not(:disabled) {
+  background: #f2f7ff;
+  border-color: rgba(0, 122, 255, 0.32);
+  color: var(--accent-strong);
+}
+
 .skill-library-panel .library-version-cell strong,
 .skill-library-panel .library-version-cell small {
   display: block;

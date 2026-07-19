@@ -1102,13 +1102,17 @@ describe("Electron UI profile switching e2e", () => {
         const detailVisible = getComputedStyle(updateDetail).display !== "none";
         const actionsRect = actionsCell.getBoundingClientRect();
         return {
+          background: getComputedStyle(updateButton).backgroundColor,
           buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
           buttonInsideUpdateColumn:
             buttonRect.left >= updateRect.left - 1 && buttonRect.right <= updateRect.right + 1,
           columnsDoNotOverlap: updateRect.right <= actionsRect.left,
-          detailClearance: detailVisible ? detailRect.top - buttonRect.bottom : undefined
+          detailClearance: detailVisible ? detailRect.top - buttonRect.bottom : undefined,
+          foreground: getComputedStyle(updateButton).color
         };
       });
+      expect(updateActionGeometry.background).not.toBe("rgb(0, 122, 255)");
+      expect(updateActionGeometry.foreground).toBe("rgb(0, 122, 255)");
       expect(updateActionGeometry.buttonFitsText).toBe(true);
       expect(updateActionGeometry.buttonInsideUpdateColumn).toBe(true);
       expect(updateActionGeometry.columnsDoNotOverlap).toBe(true);
@@ -3217,6 +3221,12 @@ describe("Electron UI profile switching e2e", () => {
 
     const saveButton = page.getByRole("button", { name: "Save", exact: true });
     const applyButton = page.getByRole("button", { name: "Apply", exact: true });
+    const newProfileButton = page.getByRole("button", { name: "New Profile", exact: true });
+    await expect
+      .poll(() =>
+        newProfileButton.evaluate((element) => getComputedStyle(element).backgroundColor)
+      )
+      .not.toBe("rgb(0, 122, 255)");
     expect(await saveButton.isEnabled()).toBe(true);
     expect(await saveButton.getAttribute("class")).toContain("is-primary");
     await expect
