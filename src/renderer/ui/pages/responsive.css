@@ -8,7 +8,10 @@
   .editor-panel,
   .app-shell--library .editor-panel,
   .app-shell--profiles .editor-panel {
-    padding: 12px 14px 14px;
+    gap: var(--window-content-gap, 12px);
+    padding:
+      var(--window-chrome-inset-top, 12px) 14px
+      var(--window-content-inset-bottom, 14px);
   }
 
   .profile-target-workspace-button {

@@ -1,4 +1,10 @@
 /* Stable desktop chrome shared by every workspace. */
+html[data-platform="darwin"] {
+  --window-chrome-inset-top: 38px;
+  --window-content-gap: 8px;
+  --window-content-inset-bottom: 7px;
+}
+
 .app-shell {
   background: var(--page);
   gap: 0;
@@ -44,7 +50,7 @@
 
 html[data-platform="darwin"] .global-sidebar {
   app-region: drag;
-  padding-top: 38px;
+  padding-top: var(--window-chrome-inset-top);
   -webkit-app-region: drag;
 }
 
@@ -157,12 +163,12 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 }
 
 .editor-panel {
-  padding: 20px 24px 22px;
+  padding: var(--window-chrome-inset-top, 20px) 24px 22px;
 }
 
 @media (max-width: 1300px) {
   .editor-panel {
-    padding: 14px 18px 18px;
+    padding: var(--window-chrome-inset-top, 14px) 18px 18px;
   }
 }
 

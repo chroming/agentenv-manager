@@ -264,7 +264,7 @@
   container-type: inline-size;
   gap: 12px;
   grid-template-rows: auto minmax(0, 1fr);
-  padding: 14px 18px 18px;
+  padding: var(--window-chrome-inset-top, 14px) 18px 18px;
 }
 
 .profile-page-header {
@@ -1298,8 +1298,12 @@
   .profile-hero {
     grid-template-columns: 32px minmax(0, 1fr);
     grid-template-rows: auto auto;
-    min-height: 150px;
+    min-height: 144px;
     padding: 12px;
+  }
+
+  .profile-editor-surface {
+    gap: 6px;
   }
 
   .profile-hero__icon {
@@ -1327,7 +1331,7 @@
   }
 
   .profile-action-stack {
-    gap: 5px;
+    gap: 4px;
     grid-column: 1 / -1;
     grid-row: 2;
     justify-items: end;
