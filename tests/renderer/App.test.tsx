@@ -276,6 +276,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    platform: "darwin",
     onWindowCloseRequested: vi.fn().mockReturnValue(() => undefined),
     setWindowCloseGuard: vi.fn(),
     confirmWindowClose: vi.fn(),

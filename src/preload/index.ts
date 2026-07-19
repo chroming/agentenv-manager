@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { AgentEnvApi } from "../shared/types";
 
 const api: AgentEnvApi = {
+  platform: process.platform,
   onWindowCloseRequested: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("window:close-requested", listener);

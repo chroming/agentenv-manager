@@ -13,6 +13,7 @@ export type { AssetPolicy, ProfileManifest, ResourceIconKey } from "./schemas";
 import type { AssetPolicy, ProfileManifest, ResourceIconKey } from "./schemas";
 
 export interface AgentEnvApi {
+  readonly platform: string;
   onWindowCloseRequested(callback: () => void): () => void;
   setWindowCloseGuard(enabled: boolean): void;
   confirmWindowClose(): void;

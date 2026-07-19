@@ -27,7 +27,11 @@ import { createGitCliSkillSource } from "./skillSources/gitCliSource";
 import { createGitCommandRunner, type GitCommandRunner } from "./skillSources/gitCommandRunner";
 import { createGitRepositoryCache } from "./skillSources/gitRepositoryCache";
 import type { GitCliSkillSource } from "./skillSources/contract";
-import { preloadScriptName, windowBackgroundColor } from "./windowConfig";
+import {
+  preloadScriptName,
+  windowBackgroundColor,
+  windowChromeOptionsFor
+} from "./windowConfig";
 import { recoverPendingReplacementsInDirectory } from "./fileUtils";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
@@ -204,6 +208,7 @@ const createWindow = () => {
     height: 760,
     minWidth: 920,
     minHeight: 620,
+    ...windowChromeOptionsFor(process.platform),
     backgroundColor: windowBackgroundColor,
     title: "AgentEnv Manager",
     webPreferences: {

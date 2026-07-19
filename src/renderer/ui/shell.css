@@ -42,6 +42,28 @@
   padding: 8px 8px 14px;
 }
 
+html[data-platform="darwin"] .global-sidebar {
+  app-region: drag;
+  padding-top: 38px;
+  -webkit-app-region: drag;
+}
+
+html[data-platform="darwin"] .page-header.ui-page-header {
+  app-region: drag;
+  -webkit-app-region: drag;
+}
+
+html[data-platform="darwin"] .global-sidebar > *,
+html[data-platform="darwin"] .page-header.ui-page-header button,
+html[data-platform="darwin"] .page-header.ui-page-header input,
+html[data-platform="darwin"] .page-header.ui-page-header select,
+html[data-platform="darwin"] .page-header.ui-page-header textarea,
+html[data-platform="darwin"] .page-header.ui-page-header a,
+html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
+
 .brand-lockup h1 {
   font-size: 12.5px;
   font-weight: 650;

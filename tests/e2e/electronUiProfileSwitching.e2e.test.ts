@@ -6398,6 +6398,37 @@ describe("Electron UI profile switching e2e", () => {
     expect(new Set(headerMetrics.map((metric) => metric.fontSize))).toEqual(new Set(["23px"]));
     expect(Math.max(...headerMetrics.map((metric) => metric.left)) - Math.min(...headerMetrics.map((metric) => metric.left))).toBeLessThanOrEqual(1);
 
+    await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
+    const windowChrome = await page.evaluate(() => {
+      const sidebar = document.querySelector<HTMLElement>(".global-sidebar")!;
+      const brand = document.querySelector<HTMLElement>(".brand-lockup")!;
+      const pageHeader = document.querySelector<HTMLElement>(".ui-page-header")!;
+      const pageHeaderButton = pageHeader.querySelector<HTMLElement>("button")!;
+      const navigation = document.querySelector<HTMLElement>(".workspace-nav")!;
+      const appRegion = (element: HTMLElement) =>
+        getComputedStyle(element).getPropertyValue("-webkit-app-region");
+      return {
+        brandTop: Math.round(brand.getBoundingClientRect().top),
+        headerButtonRegion: appRegion(pageHeaderButton),
+        navigationRegion: appRegion(navigation),
+        pageHeaderRegion: appRegion(pageHeader),
+        platform: document.documentElement.dataset.platform,
+        sidebarPaddingTop: getComputedStyle(sidebar).paddingTop,
+        sidebarRegion: appRegion(sidebar)
+      };
+    });
+    expect(windowChrome.platform).toBe(process.platform);
+    if (process.platform === "darwin") {
+      expect(windowChrome).toMatchObject({
+        headerButtonRegion: "no-drag",
+        navigationRegion: "no-drag",
+        pageHeaderRegion: "drag",
+        sidebarPaddingTop: "38px",
+        sidebarRegion: "drag"
+      });
+      expect(windowChrome.brandTop).toBeGreaterThanOrEqual(42);
+    }
+
     const navigationAlignment = await sidebar.locator(".workspace-button").evaluateAll((buttons) =>
       buttons.map((button) => {
         const buttonBox = button.getBoundingClientRect();
