@@ -147,3 +147,60 @@
   border-color: #8cb4fa;
   box-shadow: 0 0 0 2px rgba(23, 105, 245, 0.1);
 }
+
+/* Menus and dialogs share hit targets and edge treatment regardless of owner page. */
+.ui-action-menu.row-action-popover,
+.ui-action-menu.profile-skill-menu,
+.ui-action-menu.profile-actions-menu,
+.ui-action-menu.profile-target-menu,
+.ui-action-menu.mcp-row-action-menu {
+  border-color: var(--border-strong);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--shadow-soft);
+  padding: 5px;
+  width: 220px;
+}
+
+.ui-action-menu .row-action-item,
+.ui-action-menu > button {
+  align-items: center;
+  border-radius: var(--radius-control);
+  display: flex;
+  font-size: var(--font-size-metadata);
+  font-weight: 600;
+  min-height: var(--control-height-default);
+  padding: 7px 9px;
+}
+
+.ui-action-menu .row-action-item span,
+.ui-action-menu > button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-dialog-header,
+.preview-header,
+.capture-dialog__header,
+.library-drawer__header {
+  border-bottom: 1px solid var(--border);
+  min-height: 64px;
+  padding: 14px 18px;
+}
+
+.preview-actions,
+.capture-dialog__footer,
+.library-drawer__footer {
+  border-top: 1px solid var(--border);
+  gap: var(--space-2);
+  min-height: 64px;
+  padding: 12px 18px;
+}
+
+.preview-actions button,
+.capture-dialog__footer button,
+.library-drawer__footer button {
+  height: 40px;
+  min-height: 40px;
+}

@@ -7,6 +7,27 @@
   padding: 0;
 }
 
+/* Shared page identity and command hierarchy. */
+.page-header.ui-page-header {
+  align-items: flex-start;
+  margin: 0;
+  min-height: var(--page-header-height);
+  padding: 0;
+}
+
+.page-header.ui-page-header .page-actions,
+.page-header.ui-page-header .profile-page-actions,
+.page-header.ui-page-header .target-page-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.page-header.ui-page-header .ui-button {
+  font-size: var(--font-size-body);
+  font-weight: 650;
+}
+
 .global-sidebar {
   background: rgba(243, 244, 246, 0.94);
   border: 0;

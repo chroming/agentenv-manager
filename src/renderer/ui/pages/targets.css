@@ -82,12 +82,13 @@
 
 .target-card--workflow {
   background: #fbfbfc;
+  border-radius: 10px;
   display: grid;
   border-color: transparent;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035), 0 5px 16px rgba(0, 0, 0, 0.035);
   gap: 10px;
   min-height: 0;
-  padding: 14px 16px;
+  padding: 12px 14px;
   transform: none;
 }
 
@@ -117,6 +118,10 @@
   white-space: nowrap;
 }
 
+.target-workflow-actions .secondary-action {
+  height: var(--control-height-compact);
+}
+
 .target-workflow-actions .secondary-action:first-child {
   background: transparent;
   border-color: transparent;
@@ -131,7 +136,7 @@
 .target-workflow-icon {
   align-items: center;
   background: #f1f1ef;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   display: inline-flex;
   height: 32px;
   justify-content: center;

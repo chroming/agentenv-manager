@@ -1,4 +1,4 @@
-@layer accessibility, tokens, base, legacy, primitives, shell, pages, system, overlays;
+@layer accessibility, tokens, base, legacy, primitives, shell, pages, overlays;
 
 @import "./accessibility.css" layer(accessibility);
 @import "./tokens.css" layer(tokens);
@@ -12,5 +12,4 @@
 @import "./pages/skills.css" layer(pages);
 @import "./pages/profiles.css" layer(pages);
 @import "./pages/responsive.css" layer(pages);
-@import "./system.css" layer(system);
 @import "./overlays.css" layer(overlays);

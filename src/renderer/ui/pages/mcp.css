@@ -355,13 +355,14 @@
 }
 
 .skill-library-panel--mcp .resource-row:hover {
-  background: #fafaf8;
+  background: rgba(0, 122, 255, 0.045);
   transform: none;
 }
 
-.skill-library-panel--mcp .resource-row > .resource-avatar {
-  background: #f1f1ef;
-  color: #5f615d;
+.skill-library-panel--mcp .resource-row > .resource-avatar,
+.skill-library-panel--mcp .ui-resource-row__icon {
+  background: transparent;
+  color: var(--muted);
 }
 
 .mcp-row-icon svg {
@@ -370,7 +371,7 @@
 }
 
 .skill-library-panel--mcp .resource-row__actions {
-  opacity: 0.42;
+  opacity: 1;
   transition: opacity var(--motion-fast);
 }
 
@@ -429,4 +430,65 @@
 .mcp-row-action-menu button:hover,
 .mcp-row-action-menu button:focus-visible {
   background: #fff1f2;
+}
+
+.skill-library-panel--mcp .resource-row__actions .icon-action {
+  background: transparent;
+  border-color: transparent;
+}
+
+.skill-library-panel--mcp .resource-row__actions .icon-action:hover:not(:disabled) {
+  background: var(--surface-pressed);
+  border-color: var(--border);
+}
+
+.skill-library-panel--mcp .mcp-library-row.ui-resource-row {
+  border-bottom: 1px solid var(--border);
+  grid-template-columns: 32px minmax(0, 1fr) minmax(96px, 126px) minmax(88px, 110px) 72px;
+  min-height: var(--resource-row-default);
+  padding: 8px 12px;
+}
+
+.skill-library-panel--mcp .mcp-library-row .resource-row__main {
+  gap: 2px;
+}
+
+.skill-library-panel--mcp .mcp-library-row .mcp-row-name,
+.skill-library-panel--mcp .mcp-library-row .mcp-row-endpoint,
+.skill-library-panel--mcp .mcp-library-row .mcp-row-meta-item,
+.skill-library-panel--mcp .mcp-library-row .mcp-row-usage {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-library-panel--mcp .mcp-library-row .mcp-row-meta-item,
+.skill-library-panel--mcp .mcp-library-row .mcp-row-usage {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  font-weight: 500;
+}
+
+.skill-library-panel--mcp .mcp-library-row .resource-row__actions {
+  gap: 4px;
+}
+
+@container skill-library (max-width: 760px) {
+  .skill-library-panel--mcp .mcp-library-row.ui-resource-row {
+    grid-template-columns: 32px minmax(0, 1fr) 92px 72px;
+  }
+
+  .skill-library-panel--mcp .mcp-library-row .ui-resource-row__metadata {
+    display: none;
+  }
+
+  .skill-library-panel--mcp .mcp-library-row .ui-resource-row__state {
+    grid-column: 3;
+  }
+
+  .skill-library-panel--mcp .mcp-library-row .ui-resource-row__actions {
+    grid-column: 4;
+  }
 }

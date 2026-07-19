@@ -1856,3 +1856,157 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Library and cleanup row geometry. */
+@container skill-library (max-width: 760px) {
+  .skill-library-panel .ui-page-header__copy p {
+    display: none;
+  }
+}
+
+.skill-library-panel .library-table__head {
+  background: var(--surface-muted);
+  color: var(--muted);
+  min-height: 40px;
+}
+
+.skill-library-panel .library-table-row {
+  border-bottom-color: var(--border);
+}
+
+.skill-library-panel .library-table-row:hover {
+  background: rgba(0, 122, 255, 0.045);
+}
+
+.skill-library-panel .library-resource-cell .resource-avatar {
+  background: transparent;
+  color: var(--muted);
+}
+
+.skill-library-panel .library-actions-cell .icon-action {
+  background: transparent;
+  border-color: transparent;
+  opacity: 1;
+}
+
+.skill-library-panel .library-actions-cell .icon-action:hover:not(:disabled) {
+  background: var(--surface-pressed);
+  border-color: var(--border);
+}
+
+.skill-library-panel .library-table-row.is-globally-disabled,
+.skill-library-panel .library-table-row.is-globally-disabled:hover {
+  background: #f4f5f7;
+  box-shadow: inset 3px 0 #98a2b3;
+}
+
+.skill-library-panel .library-table-row.is-globally-disabled .library-global-state {
+  background: #e4e7ec;
+  color: #475467;
+}
+
+.skill-library-panel .resource-list--unmanaged {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  gap: 0;
+}
+
+.skill-library-panel .cleanup-group-row,
+.skill-library-panel .cleanup-history-row {
+  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+  gap: 10px;
+  grid-template-columns: 32px minmax(0, 1fr) 88px 170px;
+  min-height: 76px;
+  padding: 8px 10px;
+}
+
+.skill-library-panel .cleanup-group-row:last-child,
+.skill-library-panel .cleanup-history-row:last-child {
+  border-bottom: 0;
+}
+
+.skill-library-panel .cleanup-group-row:hover,
+.skill-library-panel .cleanup-history-row:hover {
+  background: #f8faff;
+  transform: none;
+}
+
+.cleanup-group-icon,
+.cleanup-history-icon {
+  align-self: start;
+  background: #eef4ff;
+  color: #2764b9;
+  height: 32px;
+  margin-top: 2px;
+  width: 32px;
+}
+
+.skill-library-panel .cleanup-group-row > .resource-row__main,
+.skill-library-panel .cleanup-history-row > .resource-row__main {
+  align-self: center;
+  gap: 2px;
+}
+
+.skill-library-panel .cleanup-group-row .cleanup-group-state {
+  align-self: center;
+  grid-column: 3;
+  justify-self: start;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.skill-library-panel .cleanup-group-row > .cleanup-group-actions,
+.skill-library-panel .cleanup-history-row > .cleanup-group-actions {
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  grid-column: 4;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  justify-self: stretch;
+  width: 170px;
+}
+
+.skill-library-panel .cleanup-history-row {
+  grid-template-columns: 32px minmax(0, 1fr) 132px;
+  min-height: var(--resource-row-default);
+}
+
+.skill-library-panel .cleanup-history-row > .cleanup-group-actions {
+  display: flex;
+  grid-column: 3;
+  justify-content: flex-end;
+  width: 132px;
+}
+
+.cleanup-group-row .resource-row__main:has(.cleanup-shared-progress) .cleanup-group-owner,
+.cleanup-group-row .resource-row__main:has(.cleanup-shared-progress) .cleanup-group-summary,
+.cleanup-group-row .resource-row__main:has(.cleanup-group-owner) .cleanup-group-summary {
+  display: none;
+}
+
+.cleanup-history-section {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 14px;
+}
+
+@container skill-library (max-width: 560px) {
+  .skill-library-panel .cleanup-group-row {
+    grid-template-columns: 32px minmax(0, 1fr) 88px;
+  }
+
+  .skill-library-panel .cleanup-group-row .cleanup-group-state {
+    grid-column: 3;
+  }
+
+  .skill-library-panel .cleanup-group-row > .cleanup-group-actions {
+    grid-column: 2 / -1;
+    grid-row: 2;
+    justify-self: end;
+  }
+}

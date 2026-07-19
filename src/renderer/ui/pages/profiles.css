@@ -273,7 +273,7 @@
 }
 
 .profile-page-header h2 {
-  font-size: 22px;
+  font-size: var(--font-size-page-title);
   line-height: 1.15;
 }
 
@@ -1655,5 +1655,219 @@
 
   .profile-skill-update {
     min-width: 66px;
+  }
+}
+
+/* Stable desktop geometry for the profile list and selected profile header. */
+.profile-row {
+  align-items: start;
+  grid-template-columns: var(--profile-icon-slot) minmax(0, 1fr);
+  min-height: 82px;
+  padding: 7px 9px;
+}
+
+.profile-row__content {
+  display: grid;
+  gap: 1px 8px;
+  grid-template-areas:
+    "title title"
+    "description description"
+    "stats stats"
+    "deployments deployments";
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.profile-row__title {
+  grid-area: title;
+}
+
+.profile-row__description {
+  grid-area: description;
+}
+
+.profile-row__stats {
+  grid-area: stats;
+}
+
+.profile-row__stats > span + span::before {
+  margin-inline: 4px;
+}
+
+.profile-row__deployments {
+  grid-area: deployments;
+  justify-self: start;
+  max-width: 100%;
+  width: 100%;
+}
+
+.profile-row.is-active {
+  background: rgba(60, 60, 67, 0.09);
+}
+
+.profile-hero {
+  align-items: start;
+  display: grid;
+  gap: 8px 12px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  min-height: 0;
+  padding: 12px 14px;
+}
+
+.profile-hero__icon {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.profile-hero__body {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.profile-hero__title {
+  min-height: 26px;
+}
+
+.profile-hero__title h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-hero .profile-description {
+  -webkit-line-clamp: 1;
+  max-width: 72ch;
+}
+
+.profile-action-stack {
+  align-items: center;
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 12px;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-content: space-between;
+  justify-self: stretch;
+  width: 100%;
+}
+
+.profile-commit-actions {
+  flex: 0 0 auto;
+}
+
+.profile-commit-actions .save-button,
+.profile-commit-actions .profile-apply-button {
+  flex-basis: 104px;
+  min-width: 104px;
+  width: 104px;
+}
+
+.profile-action-status {
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.profile-composer-section__icon {
+  background: transparent;
+  border-radius: 0;
+  color: var(--muted);
+  height: 28px;
+  width: 28px;
+}
+
+.profile-composer-section[data-profile-composer-id="instructions"] .profile-composer-section__icon,
+.profile-composer-section[data-profile-composer-id="skills"] .profile-composer-section__icon,
+.profile-composer-section[data-profile-composer-id="mcp"] .profile-composer-section__icon,
+.profile-composer-section[data-profile-composer-id="advanced"] .profile-composer-section__icon {
+  background: transparent;
+  color: var(--muted);
+}
+
+.profile-skill-row,
+.profile-composer-section[data-profile-composer-id="mcp"] .profile-mcp-row {
+  min-height: var(--resource-row-compact);
+}
+
+.profile-skill-icon,
+.profile-mcp-row__icon {
+  height: var(--resource-icon-box);
+  width: var(--resource-icon-box);
+}
+
+.preview-resource-plan__list > article {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 32px minmax(0, 1fr) 64px 68px;
+  min-height: var(--resource-row-compact);
+  padding: 7px 12px;
+}
+
+.preview-resource-plan__icon {
+  align-items: center;
+  background: #eef4ff;
+  border-radius: var(--radius-control);
+  color: #2764b9;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.preview-resource-plan__kind {
+  color: var(--muted);
+  font-size: var(--font-size-metadata);
+  justify-self: start;
+  text-transform: capitalize;
+}
+
+.preview-resource-plan__list .change-kind {
+  justify-self: end;
+}
+
+.preview-summary-grid {
+  align-items: start;
+}
+
+.preview-summary-card {
+  align-content: start;
+  align-self: start;
+}
+
+@container profile-workspace (max-width: 760px) {
+  .profile-row {
+    min-height: 82px;
+  }
+
+  .profile-hero {
+    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    min-height: 0;
+  }
+
+  .profile-action-stack {
+    align-items: stretch;
+    display: grid;
+    gap: 5px;
+    grid-template-columns: minmax(0, 1fr);
+    justify-self: stretch;
+  }
+
+  .profile-commit-actions {
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .profile-commit-actions .save-button,
+  .profile-commit-actions .profile-apply-button {
+    flex-basis: 96px;
+    min-width: 96px;
+    width: 96px;
+  }
+
+  .profile-action-status {
+    grid-row: 2;
+    justify-self: start;
+    width: 100%;
   }
 }

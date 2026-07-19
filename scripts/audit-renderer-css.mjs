@@ -21,6 +21,19 @@ const files = (await listCssFiles(rendererRoot))
   .map((file) => relative(projectRoot, file))
   .sort();
 
+const rendererIndex = await readFile(resolve(rendererRoot, "ui/index.css"), "utf8");
+const primitiveRootSelectors = new Set([
+  ".ui-action-menu",
+  ".ui-badge",
+  ".ui-button",
+  ".ui-dialog-footer",
+  ".ui-dialog-header",
+  ".ui-icon-button",
+  ".ui-page-header",
+  ".ui-resource-row",
+  ".ui-switch"
+]);
+
 const selectorCounts = (content) => {
   const counts = new Map();
   const withoutComments = content.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -69,6 +82,13 @@ const sharedSelectors = [...selectorFiles.entries()]
       left.reduce((total, location) => total + location.count, 0)
   );
 
+const pagePrimitiveRedefinitions = reports.flatMap((report) => {
+  if (!report.file.startsWith("src/renderer/ui/pages/")) return [];
+  return [...report.selectors.keys()]
+    .filter((selector) => primitiveRootSelectors.has(selector))
+    .map((selector) => ({ file: report.file, selector }));
+});
+
 const result = {
   files: reports.map(({ selectors: _selectors, ...report }) => report),
   totals: {
@@ -81,6 +101,10 @@ const result = {
       0
     ),
     rawNumericLayers: reports.flatMap((report) => report.rawNumericLayers)
+  },
+  architecture: {
+    pagePrimitiveRedefinitions,
+    usesLateSystemLayer: /(?:\bsystem\b|system\.css)/.test(rendererIndex)
   },
   topCrossFileSelectors: sharedSelectors.slice(0, 25).map(([selector, locations]) => ({
     selector,
@@ -100,7 +124,21 @@ if (shouldCheck) {
     files.includes("src/renderer/product-shell.css")
       ? "src/renderer/product-shell.css must not return"
       : undefined,
-    (legacyStyles?.lines ?? Number.POSITIVE_INFINITY) > 5795
+    files.includes("src/renderer/ui/system.css")
+      ? "src/renderer/ui/system.css must not return; rules belong to primitives, shell, pages, or overlays"
+      : undefined,
+    result.architecture.usesLateSystemLayer
+      ? "ui/index.css must not restore a late system override layer"
+      : undefined,
+    result.architecture.pagePrimitiveRedefinitions.length > 0
+      ? `Page styles must not redefine primitive roots: ${result.architecture.pagePrimitiveRedefinitions
+          .map(({ file, selector }) => `${file} (${selector})`)
+          .join(", ")}`
+      : undefined,
+    result.totals.crossFileSelectors > 141
+      ? "Cross-file selector duplication grew beyond the ownership migration baseline"
+      : undefined,
+    (legacyStyles?.lines ?? Number.POSITIVE_INFINITY) > 5776
       ? "src/renderer/styles.css grew beyond its frozen migration baseline"
       : undefined,
     result.totals.containerQueries < 2

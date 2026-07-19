@@ -73,12 +73,12 @@
 .backup-settings-icon {
   align-items: center;
   background: #f1f1ef;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: #5f615d;
   display: inline-flex;
-  height: 34px;
+  height: var(--resource-icon-box);
   justify-content: center;
-  width: 34px;
+  width: var(--resource-icon-box);
 }
 
 .backup-settings-copy {
