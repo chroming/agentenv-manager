@@ -103,7 +103,12 @@ describe("package metadata", () => {
         appId?: string;
         productName?: string;
         directories?: { output?: string };
-        mac?: { icon?: string; target?: string[] };
+        mac?: {
+          icon?: string;
+          target?: string[];
+          identity?: string;
+          hardenedRuntime?: boolean;
+        };
       };
     };
 
@@ -127,7 +132,12 @@ describe("package metadata", () => {
       appId: "com.agentenv.manager",
       productName: "AgentEnv Manager",
       directories: { output: "release" },
-      mac: { icon: "build/icon.icns", target: ["dmg", "zip"] }
+      mac: {
+        icon: "build/icon.icns",
+        target: ["dmg", "zip"],
+        identity: "-",
+        hardenedRuntime: false
+      }
     });
     await expect(stat(join(process.cwd(), "build", "icon.icns"))).resolves.toMatchObject({
       size: expect.any(Number)
