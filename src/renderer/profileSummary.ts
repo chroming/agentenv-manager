@@ -1,5 +1,3 @@
-import * as TOML from "@iarna/toml";
-import { parse as parseJsonc, type ParseError } from "jsonc-parser";
 import type {
   ProfileDetail,
   ProfileSummary,
@@ -80,64 +78,9 @@ export const preferredTargetForProfile = (
   return targets.find((target) => isTargetInstalled(target.health))?.id ?? targets[0]?.id;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value && typeof value === "object" && !Array.isArray(value));
-
 const unique = (names: readonly string[]): string[] => [...new Set(names)];
 
 type ProfileTargetSchema = Pick<TargetDescriptor, "id" | "configLanguage" | "mcpConfigKey">;
-
-const jsoncMcpNames = (
-  configText: string,
-  property: string
-): string[] => {
-  const errors: ParseError[] = [];
-  const parsed = parseJsonc(configText.trim() || "{}", errors, { allowTrailingComma: true });
-  if (errors.length > 0 || !isRecord(parsed)) {
-    return [];
-  }
-
-  return isRecord(parsed[property]) ? Object.keys(parsed[property]) : [];
-};
-
-const jsonMcpNames = (configText: string, property: string): string[] => {
-  try {
-    const parsed = JSON.parse(configText.trim() || "{}");
-    return isRecord(parsed) && isRecord(parsed[property])
-      ? Object.keys(parsed[property])
-      : [];
-  } catch {
-    return [];
-  }
-};
-
-const tomlMcpNames = (configText: string, property: string): string[] => {
-  try {
-    const parsed = TOML.parse(configText) as Record<string, unknown>;
-    return isRecord(parsed[property]) ? Object.keys(parsed[property]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const rawMcpNames = (
-  configText: string,
-  target: ProfileTargetSchema
-): string[] => {
-  if (!target.mcpConfigKey) {
-    return [];
-  }
-  if (target.configLanguage === "json") {
-    return jsonMcpNames(configText, target.mcpConfigKey);
-  }
-  if (target.configLanguage === "jsonc") {
-    return jsoncMcpNames(configText, target.mcpConfigKey);
-  }
-  if (target.configLanguage === "toml") {
-    return tomlMcpNames(configText, target.mcpConfigKey);
-  }
-  return [];
-};
 
 export const summarizeProfile = (
   profile: Pick<ProfileDetail, "manifest" | "instructions" | "configText" | "assetPolicy">,
@@ -159,8 +102,10 @@ export const summarizeProfile = (
       .map((skill) => skill.targetName)
   ]);
   const mcpNames = unique([
-    ...profile.assetPolicy.mcpRefs.map((server) => server.targetName),
-    ...rawMcpNames(profile.configText, target)
+    ...(profile.assetPolicy.mcpSelections ?? [])
+      .filter((selection) => selection.targetId === target.id)
+      .map((selection) => selection.name),
+    ...profile.assetPolicy.mcpRefs.map((server) => server.targetName)
   ]);
 
   return {

@@ -119,9 +119,17 @@ describe("target capture service", () => {
     expect(preview.errors).toEqual([]);
     expect(preview.resources).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ kind: "skill", id: "review-workflow", action: "import" }),
-        expect.objectContaining({ kind: "mcp", id: "docs", action: "import" }),
-        expect.objectContaining({ kind: "agent", id: "reviewer", action: "include" })
+        expect.objectContaining({
+          kind: "skill",
+          id: "review-workflow",
+          action: "import"
+        }),
+        expect.objectContaining({ kind: "mcp", id: "docs", action: "include" }),
+        expect.objectContaining({
+          kind: "agent",
+          id: "reviewer",
+          action: "include"
+        })
       ])
     );
 
@@ -130,16 +138,15 @@ describe("target capture service", () => {
       name: "OpenCode Existing"
     });
     expect(result.importedSkillCount).toBe(1);
-    expect(result.importedMcpCount).toBe(1);
+    expect(result.importedMcpCount).toBe(0);
     expect(result.profile.assetPolicy.skillRefs).toEqual([
       { libraryId: "review-workflow", targetName: "review-workflow" }
     ]);
-    expect(result.profile.assetPolicy.mcpRefs).toEqual([
-      { libraryId: "docs", targetName: "docs" }
+    expect(result.profile.assetPolicy.mcpRefs).toEqual([]);
+    expect(result.profile.assetPolicy.mcpSelections).toEqual([
+      { targetId: "opencode", name: "docs", enabled: true }
     ]);
-    await expect(readFile(join(privateSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
-    await expect(readFile(join(privateSkill, ".agentenv-owner.json"), "utf8"))
-      .rejects.toThrow();
+    await expect(mcpLibraryStore.listServers()).resolves.toEqual([]);
     await expect(
       readFile(join(paths.skillsLibraryDir, "review-workflow", "SKILL.md"), "utf8")
     ).resolves.toContain("# Review");

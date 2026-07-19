@@ -23,6 +23,7 @@ export interface AgentEnvApi {
   listSupportedTargets(): Promise<TargetDescriptor[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
+  listNativeMcpConnections(): Promise<NativeMcpConnection[]>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   scanSkillInventory(): Promise<SkillInventoryEntry[]>;
   listSkillCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
@@ -477,6 +478,20 @@ export interface SkillCleanupIgnoreRule {
 
 export type McpTransport = "stdio" | "http" | "sse";
 
+export type NativeMcpScope =
+  "user" | "project" | "plugin" | "managed" | "unknown";
+
+export interface NativeMcpConnection {
+  targetId: string;
+  name: string;
+  scope: NativeMcpScope;
+  transport?: McpTransport;
+  enabled: boolean;
+  controllable: boolean;
+  sourcePath: string;
+  detail?: string;
+}
+
 export interface McpLibraryEntry {
   id: string;
   name: string;
@@ -657,6 +672,7 @@ export interface TargetCapabilities {
   disabledSkillPaths: boolean;
   nativeConfig?: boolean;
   mcpEnvironmentReferences?: boolean;
+  mcpActivation?: boolean;
 }
 
 export interface TargetPaths {

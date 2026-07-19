@@ -9,7 +9,6 @@ import {
   type ParseError
 } from "jsonc-parser";
 import type {
-  McpLibraryEntry,
   PlannedFileChange,
   ProfileDetail,
   TargetActivationPreview,
@@ -17,11 +16,10 @@ import type {
 } from "../../shared/types";
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
-import { jsonMcpEnvironment, materializeJsonMcpRefs } from "../mcpRefs";
 import { findSecretWarnings } from "../secretWarnings";
 import type { AgentTargetAdapter } from "./types";
 import {
-  captureJsonMcpServers,
+  captureNativeJsonMcpConnections,
   isJsonSubset,
   sameJsonValue,
   sanitizeCapturedJson
@@ -40,24 +38,6 @@ const profileFiles = createProfileFileDriver({
   configFile: "claude-code.json"
 });
 
-const materializeMcpRefs = (
-  profile: ProfileDetail,
-  mcpLibrary: McpLibraryEntry[]
-) => materializeJsonMcpRefs(profile, mcpLibrary, {
-  property: "mcpServers",
-  serializeServer: (server) => {
-    const env = jsonMcpEnvironment(server, (sourceName) => `\${${sourceName}}`);
-    return server.transport === "stdio"
-      ? {
-          type: "stdio",
-          command: server.command,
-          args: server.args ?? [],
-          ...(env ? { env } : {})
-        }
-      : { type: server.transport, url: server.url };
-  }
-});
-
 const assets = createDirectoryAssetDriver({
   targetName: "Claude Code",
   markerTargetId: ({ profile }) => profile.manifest.targetId
@@ -73,9 +53,6 @@ const formattingOptions = {
 
 const hashText = (content: string): string =>
   createHash("sha256").update(content).digest("hex");
-
-const cloneJson = <T>(value: T): T =>
-  value === undefined ? value : JSON.parse(JSON.stringify(value));
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -179,48 +156,14 @@ const applySettingsOverlay = (
   };
 };
 
-const applyMcpOverlay = (
-  liveContent: string,
-  liveConfig: Record<string, unknown>,
-  profileMcp: Record<string, unknown>,
-  state: TargetState
-) => {
-  let nextContent = liveContent.trim().length === 0 ? "{}\n" : liveContent;
-  const nextMcp = isRecord(liveConfig.mcpServers)
-    ? cloneJson(liveConfig.mcpServers)
-    : ({} as Record<string, unknown>);
-
-  for (const name of state.managedMcpNames) {
-    nextContent = setJsoncProperty(nextContent, ["mcpServers", name], undefined);
-    delete nextMcp[name];
-  }
-  for (const [name, server] of Object.entries(profileMcp)) {
-    nextContent = setJsoncProperty(nextContent, ["mcpServers", name], server);
-    nextMcp[name] = server;
-  }
-
-  if (Object.keys(nextMcp).length === 0) {
-    nextContent = setJsoncProperty(nextContent, ["mcpServers"], undefined);
-  }
-
-  return {
-    nextContent,
-    managedMcpNames: Object.keys(profileMcp).sort((a, b) => a.localeCompare(b))
-  };
-};
-
 const findOverlayConflicts = (
   liveSettings: Record<string, unknown>,
-  liveMcpConfig: Record<string, unknown>,
   profileSettings: Record<string, unknown>,
-  profileMcp: Record<string, unknown>,
   state: TargetState,
   allowMatchingUnmanaged = false
 ) => {
   const errors: string[] = [];
   const managedConfigKeys = new Set(state.managedConfigKeys);
-  const liveMcp = isRecord(liveMcpConfig.mcpServers) ? liveMcpConfig.mcpServers : {};
-  const managedMcpNames = new Set(state.managedMcpNames);
 
   for (const key of Object.keys(profileSettings).filter(
     (name) => !METADATA_CONFIG_KEYS.has(name)
@@ -231,16 +174,6 @@ const findOverlayConflicts = (
       !(allowMatchingUnmanaged && sameJsonValue(liveSettings[key], profileSettings[key]))
     ) {
       errors.push(`Config key ${key} already exists outside AgentEnv management`);
-    }
-  }
-
-  for (const name of Object.keys(profileMcp)) {
-    if (
-      name in liveMcp &&
-      !managedMcpNames.has(name) &&
-      !(allowMatchingUnmanaged && sameJsonValue(liveMcp[name], profileMcp[name]))
-    ) {
-      errors.push(`MCP server ${name} already exists outside AgentEnv management`);
     }
   }
 
@@ -265,7 +198,8 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       skills: true,
       mcpTransports: ["stdio", "http", "sse"],
       agentFormat: "claude-code",
-      disabledSkillPaths: false
+      disabledSkillPaths: false,
+      mcpActivation: false
     }
   },
   detectInstallation: createCommandInstallationDriver("claude").detectInstallation,
@@ -318,20 +252,27 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     const mcpConfig = parseJsoncObject(mcpText, "Invalid live .claude.json");
     if (!settings.ok) throw new Error(settings.message);
     if (!mcpConfig.ok) throw new Error(mcpConfig.message);
-    const liveMcp = isRecord(mcpConfig.value.mcpServers) ? mcpConfig.value.mcpServers : {};
-    const capturedMcp = captureJsonMcpServers(liveMcp, "shell-env");
+    const liveMcp = isRecord(mcpConfig.value.mcpServers)
+      ? mcpConfig.value.mcpServers
+      : {};
+    const mcpConnections = captureNativeJsonMcpConnections(liveMcp, {
+      targetId: "claude-code",
+      sourcePath: targetPaths.mcpConfigPath ?? targetPaths.configPath,
+      controllable: false
+    });
     const sanitized = sanitizeCapturedJson(settings.value, "claude.settings");
     return {
       instructions,
       configText: `${JSON.stringify({ settings: sanitized.value, mcpServers: {} }, null, 2)}\n`,
-      mcpServers: capturedMcp.servers,
+      mcpServers: [],
+      mcpConnections,
       disabledSkillPaths: [],
-      warnings: capturedMcp.excluded.map((name) => `MCP server ${name} was excluded because it contains unsupported or literal environment values`),
-      excluded: sanitized.excluded.concat(capturedMcp.excluded.map((name) => `.claude.json.mcpServers.${name}`))
+      warnings: [],
+      excluded: sanitized.excluded
     };
   },
   ...profileFiles,
-  materializeMcpRefs,
+  materializeMcpRefs: (profile) => profile,
   createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;
     const warnings = findSecretWarnings(profile.instructions).concat(
@@ -361,29 +302,30 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       errors.push(profileConfig.message);
     }
 
-    const { settings, mcpServers } = profileConfig.ok
+    const { settings } = profileConfig.ok
       ? parseProfileConfig(profileConfig.value)
-      : { settings: {}, mcpServers: {} };
+      : { settings: {} };
     const profileSettingKeys = Object.keys(settings).filter(
       (key) => !METADATA_CONFIG_KEYS.has(key)
     );
     const shouldInspectSettings =
-      profile.manifest.managed.config &&
-      profileSettingKeys.length > 0;
-    const shouldManageMcp =
-      profile.manifest.managed.config &&
-      (Object.keys(mcpServers).length > 0 || activeState.managedMcpNames.length > 0);
+      profile.manifest.managed.config && profileSettingKeys.length > 0;
+    const selectedMcpNames = new Set(
+      (profile.assetPolicy.mcpSelections ?? [])
+        .filter((selection) => selection.targetId === "claude-code")
+        .map((selection) => selection.name)
+    );
     const liveSettings = shouldInspectSettings
       ? parseJsoncObject(liveSettingsText, "Invalid live settings.json")
       : { ok: true as const, value: {} };
-    const liveMcp = shouldManageMcp
-      ? parseJsoncObject(liveMcpText, "Invalid live .claude.json")
-      : { ok: true as const, value: {} };
+    const liveMcp = parseJsoncObject(liveMcpText, "Invalid live .claude.json");
     if (!liveSettings.ok) {
       errors.push(liveSettings.message);
     }
     if (!liveMcp.ok) {
-      errors.push(liveMcp.message);
+      warnings.push(
+        `${liveMcp.message}; MCP selections remain Claude Code-controlled`
+      );
     }
 
     let effectiveSettings = settings;
@@ -412,14 +354,23 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       profile.manifest.managed.config &&
       effectiveSettingKeys.length > 0;
 
-    if (profileConfig.ok && liveSettings.ok && liveMcp.ok) {
+    if (profileConfig.ok && liveSettings.ok) {
+      const liveMcpServers =
+        liveMcp.ok && isRecord(liveMcp.value.mcpServers)
+          ? liveMcp.value.mcpServers
+          : {};
+      for (const name of selectedMcpNames) {
+        if (!(name in liveMcpServers)) {
+          warnings.push(
+            `MCP server ${name} is not configured in Claude Code; set it up in Claude Code`
+          );
+        }
+      }
       errors.push(
         ...findOverlayConflicts(
           liveSettings.value,
-          liveMcp.value,
           effectiveSettings,
-          mcpServers,
-          activeState,
+          { ...activeState, managedMcpNames: [] },
           allowMatchingUnmanagedConfig
         )
       );
@@ -432,12 +383,9 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
               activeState
             )
           : { nextContent: liveSettingsText, managedConfigKeys: [] };
-        const plannedMcp = shouldManageMcp
-          ? applyMcpOverlay(liveMcpText, liveMcp.value, mcpServers, activeState)
-          : { nextContent: liveMcpText, managedMcpNames: [] };
         targetState = {
           managedConfigKeys: plannedSettings.managedConfigKeys,
-          managedMcpNames: plannedMcp.managedMcpNames
+          managedMcpNames: []
         };
         if (shouldManageSettings) {
           addChange(
@@ -445,14 +393,6 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
             targetPaths.configPath,
             liveSettingsText,
             plannedSettings.nextContent
-          );
-        }
-        if (shouldManageMcp) {
-          addChange(
-            changes,
-            targetPaths.mcpConfigPath ?? "",
-            liveMcpText,
-            plannedMcp.nextContent
           );
         }
       }
@@ -464,9 +404,8 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       changes,
       liveFingerprints: {
         [targetPaths.instructionsPath]: hashText(liveInstructions),
-        ...(shouldManageSettings ? { [targetPaths.configPath]: hashText(liveSettingsText) } : {}),
-        ...(shouldManageMcp
-          ? { [targetPaths.mcpConfigPath ?? ""]: hashText(liveMcpText) }
+        ...(shouldManageSettings
+          ? { [targetPaths.configPath]: hashText(liveSettingsText) }
           : {})
       },
       targetState

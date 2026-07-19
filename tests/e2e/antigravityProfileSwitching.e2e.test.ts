@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createActivationService } from "../../src/main/activationService";
-import { createMcpLibraryStore } from "../../src/main/mcpLibraryStore";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createTargetDiscoveryService } from "../../src/main/targetDiscovery";
@@ -28,11 +27,7 @@ const createProfile = async (
       managed: { instructions: true, config: true, assets: true }
     },
     instructions: `# ${variant.toUpperCase()} Antigravity rules\n`,
-    configText: `${JSON.stringify({
-      mcpServers: {
-        [`agentenv-${variant}`]: { serverUrl: `https://example.com/${variant}/mcp` }
-      }
-    }, null, 2)}\n`,
+    configText: '{\n  "mcpServers": {}\n}\n',
     assetPolicy: {
       ownedDirs: [
         { kind: "skill", source: `skills/${variant}`, targetName: `agentenv-${variant}` }
@@ -40,6 +35,13 @@ const createProfile = async (
       ownedFiles: [],
       skillRefs: [],
       mcpRefs: [],
+      mcpSelections: [
+        {
+          targetId: "antigravity",
+          name: "native-private",
+          enabled: variant === "alpha"
+        }
+      ],
       disabledSkillPaths: []
     }
   });
@@ -64,7 +66,7 @@ afterEach(async () => {
 });
 
 describe("Antigravity Profile switching e2e", () => {
-  it("switches and rolls back rules, MCPs, and skills", async () => {
+  it("switches rules and skills while preserving Antigravity-owned MCP definitions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-e2e-"));
     const homeDir = join(root, "home");
     const binDir = join(root, "bin");
@@ -93,9 +95,24 @@ describe("Antigravity Profile switching e2e", () => {
     const targetPaths = registry.get("antigravity").createTargetPaths({ homeDir });
     await mkdir(targetPaths.configDir, { recursive: true });
     await writeFile(targetPaths.instructionsPath, "# Existing rules\n", "utf8");
-    await writeFile(targetPaths.configPath, `${JSON.stringify({
-      mcpServers: { unmanaged: { serverUrl: "https://example.com/unmanaged" } }
-    }, null, 2)}\n`, "utf8");
+    await writeFile(
+      targetPaths.configPath,
+      `${JSON.stringify(
+        {
+          mcpServers: {
+            unmanaged: { serverUrl: "https://example.com/unmanaged" },
+            "native-private": {
+              command: "node",
+              args: ["server.js"],
+              env: { API_TOKEN: "private-value" }
+            }
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
     const alpha = await createProfile(profileStore, "alpha");
     const beta = await createProfile(profileStore, "beta");
 
@@ -113,7 +130,11 @@ describe("Antigravity Profile switching e2e", () => {
     await expect(readFile(targetPaths.instructionsPath, "utf8")).resolves.toContain("BETA");
     expect(betaConfig.mcpServers).toEqual({
       unmanaged: { serverUrl: "https://example.com/unmanaged" },
-      "agentenv-beta": { serverUrl: "https://example.com/beta/mcp" }
+      "native-private": {
+        command: "node",
+        args: ["server.js"],
+        env: { API_TOKEN: "private-value" }
+      }
     });
     await expect(
       readFile(join(targetPaths.skillsDir ?? "", "agentenv-beta", "SKILL.md"), "utf8")
@@ -124,44 +145,52 @@ describe("Antigravity Profile switching e2e", () => {
 
     const rollbackPreview = await activationService.previewRollback(betaApply.backupId);
     expect(rollbackPreview.errors).toEqual([]);
-    await expect(activationService.rollback(betaApply.backupId)).resolves.toEqual({ ok: true });
-    const alphaConfig = JSON.parse(await readFile(targetPaths.configPath, "utf8"));
-    await expect(readFile(targetPaths.instructionsPath, "utf8")).resolves.toContain("ALPHA");
-    expect(alphaConfig.mcpServers).toEqual({
-      unmanaged: { serverUrl: "https://example.com/unmanaged" },
-      "agentenv-alpha": { serverUrl: "https://example.com/alpha/mcp" }
-    });
+    await expect(
+      activationService.rollback(betaApply.backupId)
+    ).resolves.toEqual({ ok: true });
+    const alphaConfig = JSON.parse(
+      await readFile(targetPaths.configPath, "utf8")
+    );
+    await expect(
+      readFile(targetPaths.instructionsPath, "utf8")
+    ).resolves.toContain("ALPHA");
+    expect(alphaConfig).toEqual(betaConfig);
   });
 
-  it("blocks Library MCP environment references instead of writing unsafe literals", async () => {
+  it("warns about missing native MCPs without blocking other Profile resources", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-env-e2e-"));
     const homeDir = join(root, "home");
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir });
     const registry = createTargetRegistry([createAntigravityTargetAdapter()]);
-    const profileStore = createProfileStore({ appDataRoot: paths.appDataRoot, homeDir }, registry);
-    const mcpStore = createMcpLibraryStore(paths);
-    await mcpStore.saveServer({
-      id: "private",
-      name: "Private",
-      transport: "stdio",
-      command: "node",
-      args: ["server.js"],
-      env: { API_TOKEN: "API_TOKEN" }
+    const profileStore = createProfileStore(
+      { appDataRoot: paths.appDataRoot, homeDir },
+      registry
+    );
+    const profile = await profileStore.createProfile({
+      targetId: "antigravity",
+      name: "Private"
     });
-    const profile = await profileStore.createProfile({ targetId: "antigravity", name: "Private" });
-    profile.assetPolicy.mcpRefs = [{ libraryId: "private", targetName: "private" }];
+    profile.instructions = "# Still applies\n";
+    profile.assetPolicy.mcpSelections = [
+      { targetId: "antigravity", name: "private", enabled: true }
+    ];
     await profileStore.saveProfile(profile);
     const service = createActivationService({
       paths,
       profileStore,
-      targetRegistry: registry,
-      mcpLibraryStore: mcpStore
+      targetRegistry: registry
     });
 
     const preview = await service.previewProfile(profile.id, "antigravity");
 
-    expect(preview.errors).toContain(
-      "Antigravity does not support safe environment references for MCP server Private"
+    expect(preview.errors).toEqual([]);
+    expect(preview.warnings).toContain(
+      "MCP server private is not configured in Antigravity; set it up in Antigravity"
     );
+    const result = await service.applyProfile(profile.id, preview.id);
+    expect(result.ok).toBe(true);
+    await expect(
+      readFile(join(homeDir, ".gemini", "GEMINI.md"), "utf8")
+    ).resolves.toBe("# Still applies\n");
   });
 });

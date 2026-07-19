@@ -96,7 +96,11 @@ export const registerIpcHandlers = ({
     skillsDir: paths.userSkillsDir,
     skillScanDirs: [paths.userSkillsDir],
     skillLocations: [
-      { path: paths.userSkillsDir, role: "compatibility-runtime", shared: true }
+      {
+        path: paths.userSkillsDir,
+        role: "compatibility-runtime",
+        shared: true
+      }
     ]
   };
   const inventoryPathsFor = (targets: Awaited<ReturnType<TargetDiscoveryService["listTargets"]>>) => {
@@ -171,7 +175,33 @@ export const registerIpcHandlers = ({
     targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true })
   );
   ipcMain.handle("targets:list-supported", () => targetRegistry.list());
-  ipcMain.handle("targets:list-states", () => activationService.listTargetStates());
+  ipcMain.handle("targets:list-states", () =>
+    activationService.listTargetStates()
+  );
+  ipcMain.handle("targets:list-native-mcps", async () => {
+    const targets = await targetDiscoveryService.listTargets();
+    const connections = await Promise.all(
+      targets
+        .filter((target) => isTargetInstalled(target.health))
+        .map(async (target) => {
+          try {
+            const captured = await targetRegistry
+              .get(target.id)
+              .captureProfile(target.paths);
+            return captured.mcpConnections ?? [];
+          } catch {
+            return [];
+          }
+        })
+    );
+    return connections
+      .flat()
+      .sort(
+        (left, right) =>
+          left.targetId.localeCompare(right.targetId) ||
+          left.name.localeCompare(right.name)
+      );
+  });
   ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
   ipcMain.handle("skills:scan-inventory", async () => {
     await waitForAutomationBackgroundDelay();

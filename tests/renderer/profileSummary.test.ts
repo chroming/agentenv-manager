@@ -29,6 +29,7 @@ const makeProfile = (overrides: Partial<ProfileDetail> = {}): ProfileDetail => (
     ownedFiles: [],
     skillRefs: [],
     mcpRefs: [],
+    mcpSelections: [],
     disabledSkillPaths: []
   },
   ...overrides
@@ -69,9 +70,11 @@ describe("profile summary", () => {
           { libraryId: "review", targetName: "profile-review" },
           { libraryId: "paused", targetName: "paused-skill", enabled: false }
         ],
-        mcpRefs: [
-          { libraryId: "docs", targetName: "library-docs" },
-          { libraryId: "shared", targetName: "shared-mcp" }
+        mcpRefs: [],
+        mcpSelections: [
+          { targetId: "opencode", name: "library-docs", enabled: true },
+          { targetId: "opencode", name: "shared-mcp", enabled: true },
+          { targetId: "opencode", name: "raw-search", enabled: false }
         ],
         disabledSkillPaths: []
       }
@@ -118,9 +121,12 @@ describe("profile summary", () => {
           { libraryId: "beta", targetName: "beta" },
           { libraryId: "gamma", targetName: "gamma" }
         ],
-        mcpRefs: [
-          { libraryId: "docs", targetName: "library-docs" },
-          { libraryId: "docs-copy", targetName: "library-docs" }
+        mcpRefs: [],
+        mcpSelections: [
+          { targetId: "codex", name: "library-docs", enabled: true },
+          { targetId: "codex", name: "library-docs", enabled: false },
+          { targetId: "codex", name: "raw_first", enabled: true },
+          { targetId: "codex", name: "raw_second", enabled: true }
         ],
         disabledSkillPaths: []
       }
@@ -139,7 +145,7 @@ describe("profile summary", () => {
     });
   });
 
-  it("supports JSONC mcpServers and ignores empty or unmanaged instructions", () => {
+  it("summarizes target-native MCP selections and ignores empty or unmanaged instructions", () => {
     const profile = makeProfile({
       instructions: "   \n",
       configText: `{
@@ -147,7 +153,14 @@ describe("profile summary", () => {
           "context7": { "command": "npx" },
           "docs": { "url": "https://example.com" }
         }
-      }`
+      }`,
+      assetPolicy: {
+        ...makeProfile().assetPolicy,
+        mcpSelections: [
+          { targetId: "claude-code", name: "context7", enabled: true },
+          { targetId: "claude-code", name: "docs", enabled: true }
+        ]
+      }
     });
 
     expect(
@@ -177,7 +190,7 @@ describe("profile summary", () => {
     ).toBe(0);
   });
 
-  it("uses only the raw MCP property owned by the selected target", () => {
+  it("uses only MCP selections owned by the selected target", () => {
     const profile = makeProfile({
       configText: `{
         "mcp": {
@@ -186,7 +199,14 @@ describe("profile summary", () => {
         "mcpServers": {
           "claude-docs": { "command": "npx" }
         }
-      }`
+      }`,
+      assetPolicy: {
+        ...makeProfile().assetPolicy,
+        mcpSelections: [
+          { targetId: "opencode", name: "opencode-search", enabled: true },
+          { targetId: "claude-code", name: "claude-docs", enabled: true }
+        ]
+      }
     });
 
     expect(

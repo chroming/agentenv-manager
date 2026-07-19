@@ -25,6 +25,7 @@ const makeProfile = (configText: string): ProfileDetail => ({
     ownedFiles: [],
     skillRefs: [],
     mcpRefs: [],
+    mcpSelections: [],
     disabledSkillPaths: []
   }
 });
@@ -53,7 +54,7 @@ describe("Antigravity target adapter", () => {
     });
   });
 
-  it("replaces managed MCPs while preserving unrelated live servers and root keys", async () => {
+  it("keeps native MCP configuration read-only while applying instructions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-"));
     const adapter = createAntigravityTargetAdapter();
     const paths = adapter.createTargetPaths({ homeDir: root });
@@ -73,19 +74,25 @@ describe("Antigravity target adapter", () => {
       }
     }, null, 2)}\n`);
 
-    const preview = await adapter.createPreview({ profile, targetPaths: paths, state });
-    const mcpChange = preview.changes.find((change) => change.path === paths.configPath);
-    const after = JSON.parse(mcpChange?.after ?? "{}") as Record<string, any>;
-
+    const preview = await adapter.createPreview({
+      profile,
+      targetPaths: paths,
+      state
+    });
     expect(preview.errors).toEqual([]);
-    expect(after.metadata).toEqual({ keep: true });
-    expect(after.mcpServers.unmanaged).toEqual({ serverUrl: "https://example.com/unmanaged" });
-    expect(after.mcpServers.docs).toEqual({ serverUrl: "https://example.com/docs" });
-    expect(after.mcpServers.stale).toBeUndefined();
-    expect(preview.targetState.managedMcpNames).toEqual(["docs"]);
+    expect(preview.changes.map((change) => change.path)).not.toContain(
+      paths.configPath
+    );
+    expect(preview.targetState.managedMcpNames).toEqual([]);
+    await expect(readFile(paths.configPath, "utf8")).resolves.toContain(
+      '"metadata"'
+    );
+    await expect(readFile(paths.configPath, "utf8")).resolves.toContain(
+      '"stale"'
+    );
   });
 
-  it("rejects JSONC syntax and conflicting unmanaged MCP names", async () => {
+  it("ignores legacy Profile MCP definitions and reports missing native setup", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-"));
     const adapter = createAntigravityTargetAdapter();
     const paths = adapter.createTargetPaths({ homeDir: root });
@@ -99,16 +106,14 @@ describe("Antigravity target adapter", () => {
       targetPaths: paths,
       state: { managedConfigKeys: [], managedMcpNames: [] }
     });
-    expect(invalid.errors[0]).toContain("Invalid profile Antigravity MCP config");
+    expect(invalid.errors).toEqual([]);
 
     const invalidShape = await adapter.createPreview({
       profile: makeProfile('{"mcpServers": []}'),
       targetPaths: paths,
       state: { managedConfigKeys: [], managedMcpNames: [] }
     });
-    expect(invalidShape.errors).toContain(
-      "Invalid profile Antigravity MCP config: mcpServers must be an object"
-    );
+    expect(invalidShape.errors).toEqual([]);
 
     const conflict = await adapter.createPreview({
       profile: makeProfile(JSON.stringify({
@@ -117,12 +122,22 @@ describe("Antigravity target adapter", () => {
       targetPaths: paths,
       state: { managedConfigKeys: [], managedMcpNames: [] }
     });
-    expect(conflict.errors).toContain(
-      "MCP server docs already exists outside AgentEnv management"
+    expect(conflict.errors).toEqual([]);
+    const missingProfile = makeProfile("{}");
+    missingProfile.assetPolicy.mcpSelections = [
+      { targetId: "antigravity", name: "missing", enabled: true }
+    ];
+    const missing = await adapter.createPreview({
+      profile: missingProfile,
+      targetPaths: paths,
+      state: { managedConfigKeys: [], managedMcpNames: [] }
+    });
+    expect(missing.warnings).toContain(
+      "MCP server missing is not configured in Antigravity; set it up in Antigravity"
     );
   });
 
-  it("materializes Library MCPs with Antigravity serverUrl and command shapes", async () => {
+  it("does not materialize legacy Library MCP definitions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-"));
     const adapter = createAntigravityTargetAdapter();
     const profile = makeProfile("{\n  \"mcpServers\": {}\n}\n");
@@ -136,15 +151,11 @@ describe("Antigravity target adapter", () => {
       { id: "local", name: "Local", transport: "stdio", command: "node", args: ["server.js"] }
     ]);
 
-    expect(JSON.parse(materialized.configText)).toEqual({
-      mcpServers: {
-        docs: { serverUrl: "https://example.com/mcp" },
-        local: { command: "node", args: ["server.js"] }
-      }
-    });
+    expect(materialized).toBe(profile);
+    expect(JSON.parse(materialized.configText)).toEqual({ mcpServers: {} });
   });
 
-  it("captures only portable non-secret MCP definitions", async () => {
+  it("discovers native MCP names without copying secret-bearing definitions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-"));
     const adapter = createAntigravityTargetAdapter();
     const paths = adapter.createTargetPaths({ homeDir: root });
@@ -163,12 +174,11 @@ describe("Antigravity target adapter", () => {
     const captured = await adapter.captureProfile(paths);
 
     expect(captured.instructions).toBe("# Existing rules\n");
-    expect(captured.mcpServers.map((server) => server.name)).toEqual(["docs", "local"]);
-    expect(captured.excluded).toEqual(expect.arrayContaining([
-      "mcp_config.json.mcpServers.secret",
-      "mcp_config.json.mcpServers.environment",
-      "mcp_config.json.mcpServers.badArgs"
-    ]));
+    expect(captured.mcpServers).toEqual([]);
+    expect(
+      captured.mcpConnections?.map((connection) => connection.name)
+    ).toEqual(["badArgs", "docs", "environment", "local", "secret"]);
+    expect(captured.excluded).toEqual([]);
   });
 
   it("blocks rules beyond Antigravity's documented character limit", async () => {

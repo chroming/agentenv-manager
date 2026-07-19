@@ -28,6 +28,7 @@ const makeProfile = (configText: string): ProfileDetail => ({
     ownedFiles: [],
     skillRefs: [],
     mcpRefs: [],
+    mcpSelections: [],
     disabledSkillPaths: []
   }
 });
@@ -110,27 +111,20 @@ describe("Claude Code target adapter", () => {
       change.path.endsWith(".claude.json")
     );
     expect(settingsChange).toBeDefined();
-    expect(mcpChange).toBeDefined();
+    expect(mcpChange).toBeUndefined();
     expect(parse(settingsChange?.after ?? "")).toMatchObject({
       $schema: "https://json.schemastore.org/claude-code-settings.json",
       theme: "dark",
       model: "opus",
       permissions: { deny: ["Read(./.env)"] }
     });
-    expect(parse(mcpChange?.after ?? "")).toMatchObject({
-      projects: { "/repo": { allowedTools: ["Read"] } },
-      mcpServers: {
-        unmanaged: { type: "http", url: "https://example.com/mcp" },
-        context7: { type: "http", url: "https://mcp.context7.com/mcp" }
-      }
-    });
-    const mcp = (parse(mcpChange?.after ?? "") as { mcpServers: Record<string, unknown> })
-      .mcpServers;
-    expect(mcp["old-managed"]).toBeUndefined();
     expect(preview.targetState).toEqual({
       managedConfigKeys: ["model", "permissions"],
-      managedMcpNames: ["context7"]
+      managedMcpNames: []
     });
+    await expect(
+      readFile(targetPaths.mcpConfigPath ?? "", "utf8")
+    ).resolves.toContain("old-managed");
   });
 
   it("preserves previously managed native settings when the Profile has no Advanced values", async () => {
@@ -219,7 +213,7 @@ describe("Claude Code target adapter", () => {
     expect(preview.errors).toContain(
       "Config key model already exists outside AgentEnv management"
     );
-    expect(preview.errors).toContain(
+    expect(preview.errors).not.toContain(
       "MCP server context7 already exists outside AgentEnv management"
     );
   });
@@ -308,14 +302,7 @@ describe("Claude Code target adapter", () => {
     );
     expect(preview.errors).toEqual([]);
     expect(settingsChange).toBeUndefined();
-    expect(parse(mcpChange?.after ?? "")).toMatchObject({
-      mcpServers: {
-        docs: {
-          type: "http",
-          url: "https://example.com/docs"
-        }
-      }
-    });
+    expect(mcpChange).toBeUndefined();
   });
 
   it("leaves Claude settings and MCP files outside the plan when neither surface is used", async () => {
@@ -443,11 +430,23 @@ describe("Claude Code target adapter", () => {
     );
 
     const captured = await adapter.captureProfile(targetPaths);
-    expect(JSON.parse(captured.configText)).toMatchObject({ settings: { model: "sonnet" } });
-    expect(JSON.parse(captured.configText).settings).not.toHaveProperty("customHeader");
-    expect(captured.mcpServers.map((server) => server.name)).toEqual(["docs"]);
-    expect(captured.excluded).toContain(".claude.json.mcpServers.secret");
-    expect(captured.excluded).toContain(".claude.json.mcpServers.remoteSecret");
+    expect(JSON.parse(captured.configText)).toMatchObject({
+      settings: { model: "sonnet" }
+    });
+    expect(JSON.parse(captured.configText).settings).not.toHaveProperty(
+      "customHeader"
+    );
+    expect(captured.mcpServers).toEqual([]);
+    expect(
+      captured.mcpConnections?.map((connection) => connection.name)
+    ).toEqual(["docs", "remoteSecret", "secret"]);
+    expect(
+      captured.mcpConnections?.every((connection) => !connection.controllable)
+    ).toBe(true);
+    expect(captured.excluded).not.toContain(".claude.json.mcpServers.secret");
+    expect(captured.excluded).not.toContain(
+      ".claude.json.mcpServers.remoteSecret"
+    );
     expect(captured.excluded).toContain("claude.settings.customHeader");
   });
 });

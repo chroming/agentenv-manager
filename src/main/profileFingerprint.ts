@@ -20,6 +20,11 @@ export const createProfileContentHash = (profile: ProfileFingerprintInput): stri
       ownedFiles: [...profile.assetPolicy.ownedFiles].sort(byIdentity),
       skillRefs: [...profile.assetPolicy.skillRefs].sort(byIdentity),
       mcpRefs: [...profile.assetPolicy.mcpRefs].sort(byIdentity),
+      mcpSelections: [...(profile.assetPolicy.mcpSelections ?? [])].sort(
+        (left, right) =>
+          left.targetId.localeCompare(right.targetId) ||
+          left.name.localeCompare(right.name)
+      ),
       disabledSkillPaths: [...profile.assetPolicy.disabledSkillPaths].sort()
     }
   };

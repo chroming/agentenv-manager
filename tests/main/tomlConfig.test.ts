@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractMcpServerNames,
   findUnmanagedMcpConflicts,
+  setMcpServerEnabled,
   validateToml
 } from "../../src/main/tomlConfig";
 
@@ -48,5 +49,56 @@ describe("toml config utilities", () => {
     const profileMcp = '[mcp_servers.context7]\ncommand = "node"\n';
 
     expect(findUnmanagedMcpConflicts(liveConfig, profileMcp)).toEqual([]);
+  });
+
+  it("toggles only the enabled field of an existing MCP definition", () => {
+    const original = [
+      'model = "gpt-5"',
+      "",
+      "[mcp_servers.context7]",
+      'url = "https://example.com/mcp"',
+      'bearer_token_env_var = "MCP_TOKEN"',
+      "enabled = false",
+      ""
+    ].join("\n");
+
+    const result = setMcpServerEnabled(original, "context7", true);
+
+    expect(result).toMatchObject({ found: true, changed: true });
+    expect(result.content).toContain('url = "https://example.com/mcp"');
+    expect(result.content).toContain('bearer_token_env_var = "MCP_TOKEN"');
+    expect(result.content).toContain("enabled = true");
+    expect(result.content).not.toContain("enabled = false");
+  });
+
+  it("adds enabled to a quoted MCP table without rewriting its definition", () => {
+    const original = [
+      '[mcp_servers."node_repl"]',
+      'command = "node"',
+      'args = ["server.js"]',
+      ""
+    ].join("\n");
+
+    const result = setMcpServerEnabled(original, "node_repl", false);
+
+    expect(result).toMatchObject({ found: true, changed: true });
+    expect(result.content).toContain('[mcp_servers."node_repl"]');
+    expect(result.content).toContain('args = ["server.js"]');
+    expect(result.content).toContain("enabled = false");
+  });
+
+  it("does not change config when the MCP definition is missing or already matches", () => {
+    const original = "[mcp_servers.context7]\nenabled = true\n";
+
+    expect(setMcpServerEnabled(original, "missing", false)).toEqual({
+      content: original,
+      found: false,
+      changed: false
+    });
+    expect(setMcpServerEnabled(original, "context7", true)).toEqual({
+      content: original,
+      found: true,
+      changed: false
+    });
   });
 });

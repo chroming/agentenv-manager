@@ -77,15 +77,17 @@ describe("OpenCode Create from Target e2e", () => {
 
     const preview = await captureService.previewTarget("opencode");
     expect(preview.errors).toEqual([]);
-    expect(preview.resources).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        kind: "skill",
-        id: "reviewer",
-        action: "import",
-        detail: "2 source copies stay unchanged"
-      }),
-      expect.objectContaining({ kind: "mcp", id: "docs", action: "import" })
-    ]));
+    expect(preview.resources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "skill",
+          id: "reviewer",
+          action: "import",
+          detail: "2 source copies stay unchanged"
+        }),
+        expect.objectContaining({ kind: "mcp", id: "docs", action: "include" })
+      ])
+    );
 
     const result = await captureService.createFromTarget({
       previewId: preview.id,
@@ -101,9 +103,11 @@ describe("OpenCode Create from Target e2e", () => {
       instructions: "# Existing OpenCode\n",
       assetPolicy: {
         skillRefs: [{ libraryId: "reviewer", targetName: "reviewer" }],
-        mcpRefs: [{ libraryId: "docs", targetName: "docs" }]
+        mcpRefs: [],
+        mcpSelections: [{ targetId: "opencode", name: "docs", enabled: true }]
       }
     });
+    await expect(mcpLibraryStore.listServers()).resolves.toEqual([]);
     await expect(activationService.listTargetStates()).resolves.toEqual([]);
   });
 });

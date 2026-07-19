@@ -60,6 +60,7 @@ import type {
   ManageTargetSkillInput,
   ManagedBackupInventory,
   ManagedBackupItem,
+  NativeMcpConnection,
   RetireSharedSkillInput,
   SharedSkillRetentionInput,
   McpLibraryEntry,
@@ -101,6 +102,7 @@ import { OverflowTooltip } from "./components/OverflowTooltip";
 import { McpEditor } from "./components/McpEditor";
 import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
+import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { ResourceIconPicker } from "./components/ResourceIconPicker";
 import {
@@ -147,6 +149,7 @@ const emptyAssetPolicy: AssetPolicy = {
   ownedFiles: [],
   skillRefs: [],
   mcpRefs: [],
+  mcpSelections: [],
   disabledSkillPaths: []
 };
 
@@ -589,6 +592,8 @@ const AppContent = ({
     [supportedTargets, t]
   );
   const [targetStates, setTargetStates] = useState<TargetManagementState[]>([]);
+  const [nativeMcpConnections, setNativeMcpConnections] =
+    useState<NativeMcpConnection[]>();
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
   const [mcpServers, setMcpServers] = useState<McpLibraryEntry[]>([]);
@@ -727,6 +732,17 @@ const AppContent = ({
       setManagedBackupsLoading(false);
     }
   }, []);
+  const refreshNativeMcpConnections = useCallback(async () => {
+    try {
+      setNativeMcpConnections(await window.agentEnv.listNativeMcpConnections());
+    } catch (unknownError) {
+      setError(
+        unknownError instanceof Error
+          ? unknownError.message
+          : String(unknownError)
+      );
+    }
+  }, []);
   const libraryScroll = useLibraryScrollRestoration({
     activeView: activeLibraryView,
     scrollTop:
@@ -824,6 +840,14 @@ const AppContent = ({
     forceTargetRefresh = false
   ) => {
     const skillItemsPromise = window.agentEnv.listSkillLibrary();
+    const nativeMcpPromise = window.agentEnv.listNativeMcpConnections();
+    void nativeMcpPromise
+      .then((items) => {
+        if (shouldApply()) setNativeMcpConnections(items);
+      })
+      .catch(() => {
+        if (shouldApply()) setNativeMcpConnections([]);
+      });
     const corePromise = Promise.all([
       window.agentEnv.listSupportedTargets(),
       window.agentEnv.listTargets(forceTargetRefresh),
@@ -3926,9 +3950,18 @@ const AppContent = ({
             <PageHeader
               className="page-header library-page-header"
               title={t(activeLibraryTab === "skills" ? "Skills" : "MCPs")}
-              help={<InfoTip label={t("Library is the shared resource layer. Profiles reference these skills and MCP servers instead of duplicating files in every profile.")} />}
-              actions={(
-                <ControlGroup className="page-actions" aria-label={t("Library actions")}>
+              help={
+                <InfoTip
+                  label={t(
+                    "Library stores canonical Skills that Profiles can reuse without duplicating files."
+                  )}
+                />
+              }
+              actions={
+                <ControlGroup
+                  className="page-actions"
+                  aria-label={t("Library actions")}
+                >
                   {activeLibraryTab === "skills" ? (
                     <>
                       <Button
@@ -3983,7 +4016,7 @@ const AppContent = ({
                     </Button>
                   )}
                 </ControlGroup>
-              )}
+              }
             />
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
@@ -4382,216 +4415,284 @@ const AppContent = ({
                         </div>
                       </div>
                     </header>
-            <section className="profile-composer" aria-label={t("Profile composer")}>
-              <ProfileComposerSection
-                id="instructions"
-                icon={<BookOpenText size={18} strokeWidth={2.2} />}
-                title={t("Instructions")}
-                description={t("Agent instructions and rule files")}
-                count={resourceSummary?.instructions.count ?? 0}
-                chipNames={
-                  resourceSummary?.instructions.count
-                    ? [profileTarget?.instructionsLabel ?? t("Instructions")]
-                    : []
-                }
-                expanded={activeComposerSection === "instructions"}
-                onToggle={() => toggleComposerSection("instructions")}
-              >
-                <AgentsEditor
-                  label={profileTarget?.instructionsLabel ?? t("Instructions")}
-                  value={draftProfile.instructions}
-                  onChange={(instructions) => {
-                    updateDraftProfile({ ...draftProfile, instructions });
-                  }}
-                />
-              </ProfileComposerSection>
-              <ProfileComposerSection
-                id="skills"
-                icon={<Database size={18} strokeWidth={2.2} />}
-                title={t("Skills")}
-                description={t("Reusable skills and workflows")}
-                count={resourceSummary?.skills.count ?? 0}
-                chipNames={resourceSummary?.skills.names ?? []}
-                expanded={activeComposerSection === "skills"}
-                onToggle={() => toggleComposerSection("skills")}
-              >
-                <SkillsEditor
-                  mode="skills"
-                  value={draftProfile.assetPolicy ?? emptyAssetPolicy}
-                  configText={draftProfile.configText}
-                  configLanguage={profileTarget?.configLanguage}
-                  preview={preview}
-                  librarySkills={librarySkills}
-                  skillUpdates={skillUpdates}
-                  checkingSkillUpdates={checkingProfileSkillUpdates}
-                  appliedSkillVersions={
-                    selectedTargetState?.activeProfileId === draftProfile.id
-                      ? selectedTargetState.appliedLibraryVersions?.skills
-                      : undefined
-                  }
-                  selectedTargetName={selectedTarget?.name}
-                  importingOwnedSkillIndex={importingOwnedSkillIndex}
-                  mcpServers={mcpServers}
-                  onCheckSkillUpdates={(ids) => void checkProfileSkillUpdates(ids)}
-                  onPreviewSkillUpdate={(id) => void previewLibrarySkillUpdate(id)}
-                  onImportOwnedSkill={(index, skill) => void importOwnedSkillToLibrary(index, skill)}
-                  onChange={(assetPolicy) => {
-                    updateDraftProfile({ ...draftProfile, assetPolicy });
-                  }}
-                />
-              </ProfileComposerSection>
-              <ProfileComposerSection
-                id="mcp"
-                icon={<Network size={18} strokeWidth={2.2} />}
-                title={t("MCPs")}
-                description={t("External tools and service connections")}
-                count={resourceSummary?.mcp.count ?? 0}
-                chipNames={resourceSummary?.mcp.names ?? []}
-                expanded={activeComposerSection === "mcp"}
-                onToggle={() => toggleComposerSection("mcp")}
-              >
-                <SkillsEditor
-                  mode="mcp"
-                  value={draftProfile.assetPolicy ?? emptyAssetPolicy}
-                  configText={draftProfile.configText}
-                  configLanguage={profileTarget?.configLanguage}
-                  preview={preview}
-                  librarySkills={librarySkills}
-                  mcpServers={mcpServers}
-                  onChange={(assetPolicy) => {
-                    updateDraftProfile({ ...draftProfile, assetPolicy });
-                  }}
-                />
-              </ProfileComposerSection>
-              <ProfileComposerSection
-                id="advanced"
-                icon={<Settings2 size={18} strokeWidth={2.2} />}
-                title={t("Advanced")}
-                description={t("Agent settings, validation, and recovery")}
-                count={draftProfile.assetPolicy.disabledSkillPaths.length}
-                chipNames={draftProfile.assetPolicy.disabledSkillPaths}
-                expanded={activeComposerSection === "advanced"}
-                onToggle={() => toggleComposerSection("advanced")}
-              >
-                {selectedTarget && profileTarget && selectedTarget.id !== profileTarget.id ? (
-                  <div className="native-config-notice" role="note">
-                    <strong>{t("{{name}}-only configuration", { name: profileTarget.name })}</strong>
-                    <span>{t("This section is saved with the Profile but omitted when applying to {{name}}.", { name: selectedTarget.name })}</span>
-                  </div>
-                ) : null}
-                {profileTarget?.capabilities.nativeConfig !== false ? (
-                  <McpEditor
-                    label={t("{{name}} settings ({{config}})", { name: profileTarget?.name ?? t("Native"), config: profileTarget?.configLabel ?? t("config") })}
-                    value={draftProfile.configText}
-                    onChange={(configText) => {
-                      updateDraftProfile({ ...draftProfile, configText });
-                    }}
-                  />
-                ) : null}
-                <SkillsEditor
-                  mode="advanced"
-                  value={draftProfile.assetPolicy ?? emptyAssetPolicy}
-                  configText={draftProfile.configText}
-                  configLanguage={profileTarget?.configLanguage}
-                  preview={preview}
-                  librarySkills={librarySkills}
-                  mcpServers={mcpServers}
-                  onChange={(assetPolicy) => {
-                    updateDraftProfile({ ...draftProfile, assetPolicy });
-                  }}
-                />
-                <section className="validation-panel" aria-label={t("Validation")}>
-                  <div className="section-title">{t("Validation")}</div>
-                  <div className="validation-grid">
-                    {validationRows.map((row) => (
-                      <div className={`check-row check-row--${row.level}`} key={row.label}>
-                        <span>
-                          {t(row.label)}
-                          {row.detail ? <small>{t(row.detail)}</small> : null}
-                        </span>
-                        <strong>{t(row.value)}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  {preview?.warnings.map((item) => (
-                    <p className="warning" key={item}>
-                      {item}
-                    </p>
-                  ))}
-                  {preview?.errors.map((item) => (
-                    <p className="error" key={item}>
-                      {item}
-                    </p>
-                  ))}
-                </section>
-                <HistoryView
-                  backups={backups.filter(
-                    (backup) =>
-                      backup.profileId === draftProfile.id &&
-                      backup.targetId === selectedTarget?.id
-                  )}
-                  busy={busy}
-                  rollbackPreview={undefined}
-                  targetNames={targetNames}
-                  onPreviewRollback={previewSelectedRollback}
-                  onRestoreRollback={restoreSelectedRollback}
-                />
-              </ProfileComposerSection>
-            </section>
-            {rollbackPreview ? (
-              <PreviewDialog
-                preview={rollbackPreview}
-                targetNames={targetNames}
-                title={t("Rollback preview")}
-                confirmLabel={t("Restore backup")}
-                confirmDisabled={busy || rollbackPreview.errors.length > 0}
-                cancelDisabled={busy}
-                errorMessage={rollbackError}
-                onCancel={busy
-                  ? undefined
-                  : () => {
-                      setRollbackPreview(undefined);
-                      setRollbackError(undefined);
-                    }}
-                onConfirm={restoreSelectedRollback}
-              />
-            ) : null}
-            {preview ? (
-              <PreviewDialog
-                preview={preview}
-                targetNames={targetNames}
-                title={t("Apply preview for {{name}}", { name: activeTargetName })}
-                confirmLabel={t(replaceProtectedTargetChanges ? "Back up and replace" : "Apply profile")}
-                confirmDisabled={!canApply || busy}
-                confirmBusy={isProfileApplying}
-                replacementAcknowledged={replaceProtectedTargetChanges}
-                onReplacementAcknowledgedChange={setReplaceProtectedTargetChanges}
-                omissionsAcknowledged={acceptCrossTargetOmissions}
-                onOmissionsAcknowledgedChange={setAcceptCrossTargetOmissions}
-                onOpenRecovery={() => {
-                  setPreview(undefined);
-                  setActiveComposerSection("advanced");
-                }}
-                onAdoptTargetChanges={
-                  draftProfile.manifest.targetId === selectedTarget?.id
-                    ? adoptCompatibleTargetChanges
-                    : undefined
-                }
-                onCancel={() => {
-                  setReplaceProtectedTargetChanges(false);
-                  setAcceptCrossTargetOmissions(false);
-                  setPreview(undefined);
-                }}
-                onConfirm={applySelectedProfile}
-              />
-            ) : null}
-            <SkillUpdateDialog
-              plan={selectedSkillUpdatePlan}
-              impact={selectedSkillUpdateImpact}
-              busy={busy}
-              onClose={() => setSelectedSkillUpdatePlan(undefined)}
-              onConfirm={(id) => void updateLibrarySkill(id)}
-            />
+                    <section
+                      className="profile-composer"
+                      aria-label={t("Profile composer")}
+                    >
+                      <ProfileComposerSection
+                        id="instructions"
+                        icon={<BookOpenText size={18} strokeWidth={2.2} />}
+                        title={t("Instructions")}
+                        description={t("Agent instructions and rule files")}
+                        count={resourceSummary?.instructions.count ?? 0}
+                        chipNames={
+                          resourceSummary?.instructions.count
+                            ? [
+                                profileTarget?.instructionsLabel ??
+                                  t("Instructions")
+                              ]
+                            : []
+                        }
+                        expanded={activeComposerSection === "instructions"}
+                        onToggle={() => toggleComposerSection("instructions")}
+                      >
+                        <AgentsEditor
+                          label={
+                            profileTarget?.instructionsLabel ??
+                            t("Instructions")
+                          }
+                          value={draftProfile.instructions}
+                          onChange={(instructions) => {
+                            updateDraftProfile({
+                              ...draftProfile,
+                              instructions
+                            });
+                          }}
+                        />
+                      </ProfileComposerSection>
+                      <ProfileComposerSection
+                        id="skills"
+                        icon={<Database size={18} strokeWidth={2.2} />}
+                        title={t("Skills")}
+                        description={t("Reusable skills and workflows")}
+                        count={resourceSummary?.skills.count ?? 0}
+                        chipNames={resourceSummary?.skills.names ?? []}
+                        expanded={activeComposerSection === "skills"}
+                        onToggle={() => toggleComposerSection("skills")}
+                      >
+                        <SkillsEditor
+                          mode="skills"
+                          value={draftProfile.assetPolicy ?? emptyAssetPolicy}
+                          configText={draftProfile.configText}
+                          configLanguage={profileTarget?.configLanguage}
+                          preview={preview}
+                          librarySkills={librarySkills}
+                          skillUpdates={skillUpdates}
+                          checkingSkillUpdates={checkingProfileSkillUpdates}
+                          appliedSkillVersions={
+                            selectedTargetState?.activeProfileId ===
+                            draftProfile.id
+                              ? selectedTargetState.appliedLibraryVersions
+                                  ?.skills
+                              : undefined
+                          }
+                          selectedTargetName={selectedTarget?.name}
+                          importingOwnedSkillIndex={importingOwnedSkillIndex}
+                          mcpServers={mcpServers}
+                          onCheckSkillUpdates={(ids) =>
+                            void checkProfileSkillUpdates(ids)
+                          }
+                          onPreviewSkillUpdate={(id) =>
+                            void previewLibrarySkillUpdate(id)
+                          }
+                          onImportOwnedSkill={(index, skill) =>
+                            void importOwnedSkillToLibrary(index, skill)
+                          }
+                          onChange={(assetPolicy) => {
+                            updateDraftProfile({
+                              ...draftProfile,
+                              assetPolicy
+                            });
+                          }}
+                        />
+                      </ProfileComposerSection>
+                      <ProfileComposerSection
+                        id="mcp"
+                        icon={<Network size={18} strokeWidth={2.2} />}
+                        title={t("MCPs")}
+                        description={t(
+                          "External tools and service connections"
+                        )}
+                        count={resourceSummary?.mcp.count ?? 0}
+                        chipNames={resourceSummary?.mcp.names ?? []}
+                        expanded={activeComposerSection === "mcp"}
+                        onToggle={() => toggleComposerSection("mcp")}
+                      >
+                        <ProfileMcpEditor
+                          target={selectedTarget}
+                          connections={nativeMcpConnections}
+                          value={draftProfile.assetPolicy ?? emptyAssetPolicy}
+                          onChange={(assetPolicy) =>
+                            updateDraftProfile({ ...draftProfile, assetPolicy })
+                          }
+                          onRefresh={refreshNativeMcpConnections}
+                        />
+                      </ProfileComposerSection>
+                      <ProfileComposerSection
+                        id="advanced"
+                        icon={<Settings2 size={18} strokeWidth={2.2} />}
+                        title={t("Advanced")}
+                        description={t(
+                          "Agent settings, validation, and recovery"
+                        )}
+                        count={
+                          draftProfile.assetPolicy.disabledSkillPaths.length
+                        }
+                        chipNames={draftProfile.assetPolicy.disabledSkillPaths}
+                        expanded={activeComposerSection === "advanced"}
+                        onToggle={() => toggleComposerSection("advanced")}
+                      >
+                        {selectedTarget &&
+                        profileTarget &&
+                        selectedTarget.id !== profileTarget.id ? (
+                          <div className="native-config-notice" role="note">
+                            <strong>
+                              {t("{{name}}-only configuration", {
+                                name: profileTarget.name
+                              })}
+                            </strong>
+                            <span>
+                              {t(
+                                "This section is saved with the Profile but omitted when applying to {{name}}.",
+                                { name: selectedTarget.name }
+                              )}
+                            </span>
+                          </div>
+                        ) : null}
+                        {profileTarget?.capabilities.nativeConfig !== false ? (
+                          <McpEditor
+                            label={t("{{name}} settings ({{config}})", {
+                              name: profileTarget?.name ?? t("Native"),
+                              config: profileTarget?.configLabel ?? t("config")
+                            })}
+                            value={draftProfile.configText}
+                            onChange={(configText) => {
+                              updateDraftProfile({
+                                ...draftProfile,
+                                configText
+                              });
+                            }}
+                          />
+                        ) : null}
+                        <SkillsEditor
+                          mode="advanced"
+                          value={draftProfile.assetPolicy ?? emptyAssetPolicy}
+                          configText={draftProfile.configText}
+                          configLanguage={profileTarget?.configLanguage}
+                          preview={preview}
+                          librarySkills={librarySkills}
+                          mcpServers={mcpServers}
+                          onChange={(assetPolicy) => {
+                            updateDraftProfile({
+                              ...draftProfile,
+                              assetPolicy
+                            });
+                          }}
+                        />
+                        <section
+                          className="validation-panel"
+                          aria-label={t("Validation")}
+                        >
+                          <div className="section-title">{t("Validation")}</div>
+                          <div className="validation-grid">
+                            {validationRows.map((row) => (
+                              <div
+                                className={`check-row check-row--${row.level}`}
+                                key={row.label}
+                              >
+                                <span>
+                                  {t(row.label)}
+                                  {row.detail ? (
+                                    <small>{t(row.detail)}</small>
+                                  ) : null}
+                                </span>
+                                <strong>{t(row.value)}</strong>
+                              </div>
+                            ))}
+                          </div>
+                          {preview?.warnings.map((item) => (
+                            <p className="warning" key={item}>
+                              {item}
+                            </p>
+                          ))}
+                          {preview?.errors.map((item) => (
+                            <p className="error" key={item}>
+                              {item}
+                            </p>
+                          ))}
+                        </section>
+                        <HistoryView
+                          backups={backups.filter(
+                            (backup) =>
+                              backup.profileId === draftProfile.id &&
+                              backup.targetId === selectedTarget?.id
+                          )}
+                          busy={busy}
+                          rollbackPreview={undefined}
+                          targetNames={targetNames}
+                          onPreviewRollback={previewSelectedRollback}
+                          onRestoreRollback={restoreSelectedRollback}
+                        />
+                      </ProfileComposerSection>
+                    </section>
+                    {rollbackPreview ? (
+                      <PreviewDialog
+                        preview={rollbackPreview}
+                        targetNames={targetNames}
+                        title={t("Rollback preview")}
+                        confirmLabel={t("Restore backup")}
+                        confirmDisabled={
+                          busy || rollbackPreview.errors.length > 0
+                        }
+                        cancelDisabled={busy}
+                        errorMessage={rollbackError}
+                        onCancel={
+                          busy
+                            ? undefined
+                            : () => {
+                                setRollbackPreview(undefined);
+                                setRollbackError(undefined);
+                              }
+                        }
+                        onConfirm={restoreSelectedRollback}
+                      />
+                    ) : null}
+                    {preview ? (
+                      <PreviewDialog
+                        preview={preview}
+                        targetNames={targetNames}
+                        title={t("Apply preview for {{name}}", {
+                          name: activeTargetName
+                        })}
+                        confirmLabel={t(
+                          replaceProtectedTargetChanges
+                            ? "Back up and replace"
+                            : "Apply profile"
+                        )}
+                        confirmDisabled={!canApply || busy}
+                        confirmBusy={isProfileApplying}
+                        replacementAcknowledged={replaceProtectedTargetChanges}
+                        onReplacementAcknowledgedChange={
+                          setReplaceProtectedTargetChanges
+                        }
+                        omissionsAcknowledged={acceptCrossTargetOmissions}
+                        onOmissionsAcknowledgedChange={
+                          setAcceptCrossTargetOmissions
+                        }
+                        onOpenRecovery={() => {
+                          setPreview(undefined);
+                          setActiveComposerSection("advanced");
+                        }}
+                        onAdoptTargetChanges={
+                          draftProfile.manifest.targetId === selectedTarget?.id
+                            ? adoptCompatibleTargetChanges
+                            : undefined
+                        }
+                        onCancel={() => {
+                          setReplaceProtectedTargetChanges(false);
+                          setAcceptCrossTargetOmissions(false);
+                          setPreview(undefined);
+                        }}
+                        onConfirm={applySelectedProfile}
+                      />
+                    ) : null}
+                    <SkillUpdateDialog
+                      plan={selectedSkillUpdatePlan}
+                      impact={selectedSkillUpdateImpact}
+                      busy={busy}
+                      onClose={() => setSelectedSkillUpdatePlan(undefined)}
+                      onConfirm={(id) => void updateLibrarySkill(id)}
+                    />
                   </>
                 ) : (
                   <div className="profile-empty-surface">
@@ -4810,6 +4911,7 @@ const AppContent = ({
           <TargetWorkspace
             targets={targets}
             targetStates={targetStates}
+            mcpConnections={nativeMcpConnections ?? []}
             backups={backups}
             rollbackPreview={rollbackPreview}
             rollbackError={rollbackError}

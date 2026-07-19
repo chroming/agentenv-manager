@@ -1,5 +1,6 @@
 import type {
   McpLibraryEntry,
+  NativeMcpConnection,
   ProfileDetail,
   TargetActivationPreview,
   TargetDescriptor,
@@ -35,6 +36,7 @@ export interface CapturedTargetProfile {
   instructions: string;
   configText: string;
   mcpServers: McpLibraryEntry[];
+  mcpConnections?: NativeMcpConnection[];
   disabledSkillPaths: string[];
   warnings: string[];
   excluded: string[];

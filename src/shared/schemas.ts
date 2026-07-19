@@ -98,6 +98,15 @@ export const AssetPolicySchema = z.object({
       })
     )
     .default([]),
+  mcpSelections: z
+    .array(
+      z.object({
+        targetId: SafeIdSchema,
+        name: z.string().trim().min(1),
+        enabled: z.boolean().optional()
+      })
+    )
+    .optional(),
   disabledSkillPaths: z.array(z.string().min(1)).default([])
 });
 
@@ -128,6 +137,7 @@ export const LegacySkillsPolicySchema = z
     ownedFiles: [],
     skillRefs: [],
     mcpRefs: [],
+    mcpSelections: [],
     disabledSkillPaths: value.disabledSkillPaths
   }));
 

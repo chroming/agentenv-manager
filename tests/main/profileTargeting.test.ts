@@ -38,7 +38,7 @@ describe("profile target adaptation", () => {
     expect(result.profile.assetPolicy.ownedDirs).toEqual([source.assetPolicy.ownedDirs[0]]);
     expect(result.profile.assetPolicy.ownedFiles).toEqual([]);
     expect(result.profile.assetPolicy.skillRefs).toEqual(source.assetPolicy.skillRefs);
-    expect(result.profile.assetPolicy.mcpRefs).toEqual(source.assetPolicy.mcpRefs);
+    expect(result.profile.assetPolicy.mcpRefs).toEqual([]);
     expect(result.profile.assetPolicy.disabledSkillPaths).toEqual([]);
     expect(result.warnings).toEqual([
       "opencode Advanced config is Agent-specific and is not applied to Codex",

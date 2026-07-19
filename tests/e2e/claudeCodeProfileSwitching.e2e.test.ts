@@ -82,12 +82,6 @@ const createClaudeProfile = async (
           permissions: {
             deny: variant === "alpha" ? ["Read(./alpha.env)"] : ["Read(./beta.env)"]
           }
-        },
-        mcpServers: {
-          [`agentenv-${variant}-mcp`]: {
-            type: "http",
-            url: `https://example.com/${variant}/mcp`
-          }
         }
       },
       null,
@@ -109,6 +103,13 @@ const createClaudeProfile = async (
       ownedFiles: [],
       skillRefs: [],
       mcpRefs: [],
+      mcpSelections: [
+        {
+          targetId: "claude-code",
+          name: "user-managed",
+          enabled: variant === "alpha"
+        }
+      ],
       disabledSkillPaths: []
     }
   });
@@ -152,8 +153,9 @@ afterEach(async () => {
 });
 
 describe("Claude Code profile switching e2e", () => {
-  it("switches and rolls back memory, settings, MCP, agents, and skills", async () => {
-    const { paths, profileStore, activationService, listTargets } = await makeEnv();
+  it("switches managed resources while leaving Claude-owned MCP definitions untouched", async () => {
+    const { paths, profileStore, activationService, listTargets } =
+      await makeEnv();
     const claudeDir = join(paths.homeDir, ".claude");
     const settingsPath = join(claudeDir, "settings.json");
     const mcpPath = join(paths.homeDir, ".claude.json");
@@ -178,7 +180,16 @@ describe("Claude Code profile switching e2e", () => {
           mcpServers: {
             "user-managed": {
               type: "http",
-              url: "https://example.com/user/mcp"
+              url: "https://example.com/user/mcp",
+              headers: { Authorization: "Bearer private" }
+            },
+            "agentenv-alpha-mcp": {
+              type: "http",
+              url: "https://example.com/alpha/mcp"
+            },
+            "agentenv-beta-mcp": {
+              type: "http",
+              url: "https://example.com/beta/mcp"
             }
           }
         },
@@ -213,20 +224,16 @@ describe("Claude Code profile switching e2e", () => {
       model: "opus",
       permissions: { deny: ["Read(./beta.env)"] }
     });
-    expect(betaMcp).toMatchObject({
-      projects: { "/repo": { allowedTools: ["Read"] } },
-      mcpServers: {
-        "user-managed": {
-          type: "http",
-          url: "https://example.com/user/mcp"
-        },
-        "agentenv-beta-mcp": {
-          type: "http",
-          url: "https://example.com/beta/mcp"
-        }
-      }
+    expect(betaMcp).toEqual(await readJsonc(mcpPath));
+    expect(betaMcp.mcpServers).toMatchObject({
+      "user-managed": {
+        type: "http",
+        url: "https://example.com/user/mcp",
+        headers: { Authorization: "Bearer private" }
+      },
+      "agentenv-alpha-mcp": { url: "https://example.com/alpha/mcp" },
+      "agentenv-beta-mcp": { url: "https://example.com/beta/mcp" }
     });
-    expect((betaMcp.mcpServers as Record<string, unknown>)["agentenv-alpha-mcp"]).toBeUndefined();
     await expect(
       readFile(join(claudeDir, "agents", "agentenv-beta-agent", "agent.md"), "utf8")
     ).resolves.toContain("beta agent prompt");
@@ -240,7 +247,6 @@ describe("Claude Code profile switching e2e", () => {
       expect.arrayContaining([
         join(claudeDir, "CLAUDE.md"),
         settingsPath,
-        mcpPath,
         join(claudeDir, "agents", "agentenv-alpha-agent"),
         join(claudeDir, "skills", "agentenv-alpha-skill"),
         join(claudeDir, "agents", "agentenv-beta-agent"),
@@ -262,19 +268,7 @@ describe("Claude Code profile switching e2e", () => {
       model: "sonnet",
       permissions: { deny: ["Read(./alpha.env)"] }
     });
-    expect(alphaMcp).toMatchObject({
-      mcpServers: {
-        "user-managed": {
-          type: "http",
-          url: "https://example.com/user/mcp"
-        },
-        "agentenv-alpha-mcp": {
-          type: "http",
-          url: "https://example.com/alpha/mcp"
-        }
-      }
-    });
-    expect((alphaMcp.mcpServers as Record<string, unknown>)["agentenv-beta-mcp"]).toBeUndefined();
+    expect(alphaMcp).toEqual(betaMcp);
     await expect(
       readFile(join(claudeDir, "agents", "agentenv-alpha-agent", "agent.md"), "utf8")
     ).resolves.toContain("alpha agent prompt");

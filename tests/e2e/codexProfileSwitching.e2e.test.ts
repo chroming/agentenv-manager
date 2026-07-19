@@ -69,11 +69,7 @@ const createCodexProfile = async (
       managed: { instructions: true, config: true, assets: true }
     },
     instructions: `# ${variant.toUpperCase()} Codex Instructions\n\n- Active profile: ${variant}.\n`,
-    configText: [
-      `[mcp_servers.agentenv-${variant}-mcp]`,
-      `url = "https://example.com/${variant}/mcp"`,
-      ""
-    ].join("\n"),
+    configText: "",
     assetPolicy: {
       ownedDirs: [
         {
@@ -91,6 +87,18 @@ const createCodexProfile = async (
       ],
       skillRefs: [],
       mcpRefs: [],
+      mcpSelections: [
+        {
+          targetId: "codex",
+          name: "agentenv-alpha-mcp",
+          enabled: variant === "alpha"
+        },
+        {
+          targetId: "codex",
+          name: "agentenv-beta-mcp",
+          enabled: variant === "beta"
+        }
+      ],
       disabledSkillPaths: []
     }
   });
@@ -137,8 +145,9 @@ afterEach(async () => {
 });
 
 describe("Codex profile switching e2e", () => {
-  it("switches and rolls back AGENTS.md, config.toml MCP, custom agents, and skills while preserving auth", async () => {
-    const { paths, profileStore, activationService, listTargets } = await makeEnv();
+  it("switches native MCP activation and managed resources while preserving definitions and auth", async () => {
+    const { paths, profileStore, activationService, listTargets } =
+      await makeEnv();
     const codexDir = join(paths.homeDir, ".codex");
     const configPath = join(codexDir, "config.toml");
     const authPath = join(codexDir, "auth.json");
@@ -152,6 +161,15 @@ describe("Codex profile switching e2e", () => {
         "",
         "[mcp_servers.user_docs]",
         'url = "https://example.com/user-docs"',
+        "",
+        "[mcp_servers.agentenv-alpha-mcp]",
+        'url = "https://example.com/alpha/mcp"',
+        "enabled = false",
+        "",
+        "[mcp_servers.agentenv-beta-mcp]",
+        'url = "https://example.com/beta/mcp"',
+        'bearer_token_env_var = "MCP_TOKEN"',
+        "enabled = false",
         ""
       ].join("\n"),
       "utf8"
@@ -178,8 +196,17 @@ describe("Codex profile switching e2e", () => {
     expect(betaConfig).toContain('model = "gpt-5"');
     expect(betaConfig).toContain("[mcp_servers.user_docs]");
     expect(betaConfig).toContain("[mcp_servers.agentenv-beta-mcp]");
-    expect(betaConfig).not.toContain("[mcp_servers.agentenv-alpha-mcp]");
-    await expect(readFile(authPath, "utf8")).resolves.toBe('{"token":"never-touch"}\n');
+    expect(betaConfig).toContain("[mcp_servers.agentenv-alpha-mcp]");
+    expect(betaConfig).toMatch(
+      /\[mcp_servers\.agentenv-alpha-mcp\][\s\S]*?enabled = false/
+    );
+    expect(betaConfig).toMatch(
+      /\[mcp_servers\.agentenv-beta-mcp\][\s\S]*?enabled = true/
+    );
+    expect(betaConfig).toContain('bearer_token_env_var = "MCP_TOKEN"');
+    await expect(readFile(authPath, "utf8")).resolves.toBe(
+      '{"token":"never-touch"}\n'
+    );
     await expect(
       readFile(join(codexDir, "skills", "agentenv-beta-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("beta skill");
@@ -207,8 +234,16 @@ describe("Codex profile switching e2e", () => {
       "Active profile: alpha"
     );
     expect(alphaConfig).toContain("[mcp_servers.agentenv-alpha-mcp]");
-    expect(alphaConfig).not.toContain("[mcp_servers.agentenv-beta-mcp]");
-    await expect(readFile(authPath, "utf8")).resolves.toBe('{"token":"never-touch"}\n');
+    expect(alphaConfig).toContain("[mcp_servers.agentenv-beta-mcp]");
+    expect(alphaConfig).toMatch(
+      /\[mcp_servers\.agentenv-alpha-mcp\][\s\S]*?enabled = true/
+    );
+    expect(alphaConfig).toMatch(
+      /\[mcp_servers\.agentenv-beta-mcp\][\s\S]*?enabled = false/
+    );
+    await expect(readFile(authPath, "utf8")).resolves.toBe(
+      '{"token":"never-touch"}\n'
+    );
     await expect(
       readFile(join(codexDir, "agents", "agentenv-alpha-agent.toml"), "utf8")
     ).resolves.toContain("alpha agent prompt");

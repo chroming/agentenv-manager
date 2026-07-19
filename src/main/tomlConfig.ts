@@ -56,3 +56,67 @@ export const findUnmanagedMcpConflicts = (
       !(allowMatching && JSON.stringify(liveServers[name]) === JSON.stringify(profileServers[name]))
   );
 };
+
+const decodeMcpTableName = (value: string): string | undefined => {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('"')) {
+    try {
+      return JSON.parse(trimmed) as string;
+    } catch {
+      return undefined;
+    }
+  }
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+};
+
+const mcpTableHeader =
+  /^\s*\[\s*mcp_servers\.((?:"(?:\\.|[^"])*")|(?:'[^']*')|(?:[A-Za-z0-9_-]+))\s*\]\s*(?:#.*)?$/;
+
+export const setMcpServerEnabled = (
+  content: string,
+  name: string,
+  enabled: boolean
+): { content: string; found: boolean; changed: boolean } => {
+  const validation = validateToml(content);
+  if (!validation.ok) {
+    throw new Error(`Invalid live config.toml: ${validation.message}`);
+  }
+  const lines = content.split("\n");
+  const tableIndex = lines.findIndex((line) => {
+    const match = line.match(mcpTableHeader);
+    return match ? decodeMcpTableName(match[1]) === name : false;
+  });
+  if (tableIndex < 0) {
+    return { content, found: false, changed: false };
+  }
+  let endIndex = tableIndex + 1;
+  while (endIndex < lines.length && !/^\s*\[/.test(lines[endIndex])) {
+    endIndex += 1;
+  }
+  const enabledIndex = lines.findIndex(
+    (line, index) =>
+      index > tableIndex && index < endIndex && /^\s*enabled\s*=/.test(line)
+  );
+  const nextLine = `enabled = ${enabled ? "true" : "false"}`;
+  if (enabledIndex >= 0) {
+    if (lines[enabledIndex].trim() === nextLine) {
+      return { content, found: true, changed: false };
+    }
+    lines[enabledIndex] = nextLine;
+  } else {
+    lines.splice(tableIndex + 1, 0, nextLine);
+  }
+  const nextContent = lines.join("\n");
+  const nextValidation = validateToml(nextContent);
+  if (!nextValidation.ok) {
+    throw new Error(`Invalid planned config.toml: ${nextValidation.message}`);
+  }
+  return {
+    content: nextContent,
+    found: true,
+    changed: nextContent !== content
+  };
+};

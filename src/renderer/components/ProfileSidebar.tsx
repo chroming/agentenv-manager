@@ -240,8 +240,12 @@ export const ProfileSidebar = ({
     detail: string;
     icon: LucideIcon;
   }> = [
-    { id: "skills", label: t("Skills"), detail: t("Skill library"), icon: BookOpen },
-    { id: "mcp", label: t("MCPs"), detail: t("Shared connections"), icon: Network }
+    {
+      id: "skills",
+      label: t("Skills"),
+      detail: t("Skill library"),
+      icon: BookOpen
+    }
   ];
   const workspaceItems: Array<{
     id: AppWorkspace;

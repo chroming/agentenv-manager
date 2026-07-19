@@ -28,6 +28,7 @@ const makeProfile = (configText: string): ProfileDetail => ({
     ownedFiles: [],
     skillRefs: [],
     mcpRefs: [],
+    mcpSelections: [],
     disabledSkillPaths: []
   }
 });
@@ -90,7 +91,8 @@ describe("OpenCode target adapter", () => {
         '  "theme": "system",',
         '  "permission": { "bash": "allow" },',
         '  "mcp": {',
-        '    "old-managed": { "type": "local", "command": ["old"] },',
+        '    "old-managed": { "type": "local", "command": ["old"], "enabled": true },',
+        '    "context7": { "type": "remote", "url": "https://mcp.context7.com/mcp", "enabled": false },',
         '    "unmanaged": { "type": "remote", "url": "https://example.com/mcp" }',
         "  }",
         "}",
@@ -100,20 +102,11 @@ describe("OpenCode target adapter", () => {
     );
 
     const profile = makeProfile(
-      JSON.stringify(
-        {
-          permission: { bash: "ask" },
-          mcp: {
-            context7: {
-              type: "remote",
-              url: "https://mcp.context7.com/mcp"
-            }
-          }
-        },
-        null,
-        2
-      )
+      JSON.stringify({ permission: { bash: "ask" } }, null, 2)
     );
+    profile.assetPolicy.mcpSelections = [
+      { targetId: "opencode", name: "context7", enabled: true }
+    ];
     const state: TargetState = {
       managedConfigKeys: ["permission"],
       managedMcpNames: ["old-managed"]
@@ -133,10 +126,14 @@ describe("OpenCode target adapter", () => {
       permission: { bash: "ask" },
       mcp: {
         unmanaged: { type: "remote", url: "https://example.com/mcp" },
-        context7: { type: "remote", url: "https://mcp.context7.com/mcp" }
+        context7: {
+          type: "remote",
+          url: "https://mcp.context7.com/mcp",
+          enabled: true
+        },
+        "old-managed": { type: "local", command: ["old"], enabled: true }
       }
     });
-    expect((parsed.mcp as Record<string, unknown>)["old-managed"]).toBeUndefined();
     expect(preview.targetState).toEqual({
       managedConfigKeys: ["permission"],
       managedMcpNames: ["context7"]
@@ -178,7 +175,7 @@ describe("OpenCode target adapter", () => {
     await expect(readFile(targetPaths.configPath, "utf8")).resolves.toBe(liveConfig);
   });
 
-  it("reports unmanaged MCP name conflicts before apply", async () => {
+  it("controls existing MCP activation without comparing or replacing definitions", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-"));
     const adapter = createOpenCodeTargetAdapter();
     const targetPaths = adapter.createTargetPaths({ homeDir: root });
@@ -206,6 +203,9 @@ describe("OpenCode target adapter", () => {
         }
       })
     );
+    profile.assetPolicy.mcpSelections = [
+      { targetId: "opencode", name: "context7", enabled: false }
+    ];
 
     const preview = await adapter.createPreview({
       profile,
@@ -213,9 +213,18 @@ describe("OpenCode target adapter", () => {
       state: { managedConfigKeys: [], managedMcpNames: [] }
     });
 
-    expect(preview.errors).toContain(
-      "MCP server context7 already exists outside AgentEnv management"
+    expect(preview.errors).toEqual([]);
+    const configChange = preview.changes.find(
+      (change) => change.path === targetPaths.configPath
     );
+    const after = parse(configChange?.after ?? "") as {
+      mcp: Record<string, unknown>;
+    };
+    expect(after.mcp.context7).toMatchObject({
+      type: "remote",
+      url: "https://example.com/existing",
+      enabled: false
+    });
   });
 
   it("leaves opencode.jsonc outside the plan when the Profile has no config or MCP", async () => {

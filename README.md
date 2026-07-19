@@ -2,7 +2,7 @@
 
 AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 agent 工具的工作环境。
 
-这里的“环境”指一组可复用配置：指令文件、工具配置、Skills、MCP Servers，以及和这些资源相关的安装、预览、备份和回滚记录。目标是让你在不同开发阶段切换不同 agent 环境时，不需要手动改一堆散落在本机目录里的文件。
+这里的“环境”指一组可复用配置：指令文件、工具配置、Skills，以及目标 Agent 已安装 MCP 的启停选择。MCP 定义、登录和凭据继续由各 Agent 自己管理。目标是让你在不同开发阶段切换不同 agent 环境时，不需要手动改一堆散落在本机目录里的文件。
 
 ## 当前状态
 
@@ -21,7 +21,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
   - agent 配置文件，例如 JSONC / TOML 配置
   - profile 自带 Skills / Agents
   - 来自统一 Library 的 Skills
-  - 来自统一 MCP Library 的 MCP Servers
+  - 各 Target 原生 MCP 的启停选择
   - Codex disabled skill paths
 - 应用 profile 前会先生成 diff preview。
 - 确认 preview 后才会写入目标 agent 目录。
@@ -43,11 +43,12 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 - Skill 与 Profile 可以从内置图标中选择并持久化显示图标。
 - Profile 应用时可以用 copy / symlink / auto 模式把 library skill 安装到目标 agent。
 
-### MCP Library
+### MCP 管理
 
-- 统一管理可复用 MCP server。
-- Profile 可以引用 MCP Library 中的 server。
-- 同一个 MCP server 可以被多个 profile 和多个 target 复用。
+- 自动发现各 Agent 已配置的 MCP，不复制定义或凭据。
+- Profile 按 Target 保存 `Use Agent setting`、`On` 或 `Off` 三态选择。
+- Codex 和 OpenCode 支持通过原生 `enabled` 字段切换；Claude Code 和 Antigravity 当前只读展示。
+- 缺少的 MCP 显示 Setup required 警告，但不会阻止 Instructions 或 Skills 应用。
 
 ### Target 支持
 
@@ -58,7 +59,7 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 - Codex
 - Antigravity
 
-新增 agent 的理想方式是写一个独立 integration 模块，然后注册到 `src/main/targets/integrations/index.ts`。安装检测、路径、Profile、MCP 和资源部署都由该模块声明，核心切换流程不应该为了新增 agent 大改。
+新增 agent 的理想方式是写一个独立 integration 模块，然后注册到 `src/main/targets/integrations/index.ts`。安装检测、路径、Profile、原生 MCP 发现与启停能力和资源部署都由该模块声明，核心切换流程不应该为了新增 agent 大改。
 
 ### 界面语言
 

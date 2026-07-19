@@ -113,6 +113,38 @@ describe("profile store", () => {
     ).toMatchObject({ createdAt: profile.manifest.createdAt });
   });
 
+  it("migrates legacy MCP Library references to native Target selections", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-legacy-mcp-profile-"));
+    await writeProfile(root);
+    await writeFile(
+      join(root, "profiles", "daily-coding", "assets.json"),
+      JSON.stringify({
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [],
+        mcpRefs: [{ libraryId: "docs", targetName: "context7" }],
+        disabledSkillPaths: []
+      })
+    );
+    const store = createProfileStore({ appDataRoot: root });
+
+    const profile = await store.readProfile("daily-coding");
+
+    expect(profile.assetPolicy.mcpRefs).toEqual([]);
+    expect(profile.assetPolicy.mcpSelections).toEqual([
+      { targetId: "codex", name: "context7" }
+    ]);
+    await store.saveProfile(profile);
+    expect(
+      JSON.parse(
+        await readFile(join(root, "profiles", "daily-coding", "assets.json"), "utf8")
+      )
+    ).toMatchObject({
+      mcpRefs: [],
+      mcpSelections: [{ targetId: "codex", name: "context7" }]
+    });
+  });
+
   it("updates profile metadata without persisting unsaved environment content", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-profile-metadata-"));
     await writeProfile(root);

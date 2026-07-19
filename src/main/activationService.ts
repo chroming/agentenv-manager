@@ -77,7 +77,6 @@ import {
   type SkillRootTransition
 } from "./skillRootTopology";
 import { redactSensitiveValues } from "./secretWarnings";
-import { semanticMcpDefinition } from "./mcpIdentity";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -428,7 +427,9 @@ const effectivePayloadFor = (profile: Awaited<ReturnType<ProfileStore["readProfi
       profile.assetPolicy.ownedFiles.filter((asset) => asset.kind === "agent").length
     : 0;
   const mcpServers = profile.manifest.managed.config
-    ? profile.assetPolicy.mcpRefs?.length ?? 0
+    ? (profile.assetPolicy.mcpSelections ?? []).filter(
+        (selection) => selection.targetId === profile.manifest.targetId
+      ).length
     : 0;
   const nativeConfig =
     profile.manifest.managed.config && compactConfig.length > 0 && compactConfig !== "{}" ? 1 : 0;
@@ -563,10 +564,12 @@ export const createActivationService = ({
             return undefined;
           }
           const driftChecks = await Promise.all(
-            (state.managedResources ?? []).map(async (resource) => {
-              const currentHash = await hashPath(resource.path);
-              return currentHash !== resource.contentHash;
-            })
+            (state.managedResources ?? [])
+              .filter((resource) => resource.kind !== "config")
+              .map(async (resource) => {
+                const currentHash = await hashPath(resource.path);
+                return currentHash !== resource.contentHash;
+              })
           );
           const driftCount = driftChecks.filter(Boolean).length;
           let lifecycleStatus: TargetManagementState["lifecycleStatus"] = "unmanaged";
@@ -784,6 +787,10 @@ export const createActivationService = ({
     const paths = new Set<string>();
     const desired = desiredManagedPaths(profile, targetPaths);
     for (const resource of state.managedResources ?? []) {
+      // Native configuration files have shared ownership. Adapters compare and
+      // patch only their managed fields, while Preview freshness protects the
+      // whole file between confirmation and Apply.
+      if (resource.kind === "config") continue;
       if (affectedPaths && !affectedPaths.has(resource.path)) {
         continue;
       }
@@ -855,12 +862,14 @@ export const createActivationService = ({
   ) => {
     const snapshots: ManagedResourceSnapshot[] = [];
     for (const path of [...new Set(pathsToSnapshot)]) {
+      const identity = resourceKindForPath(path, targetPaths);
+      if (identity.kind === "config") continue;
       const contentHash = await hashPath(path);
       if (!contentHash) {
         continue;
       }
       snapshots.push({
-        ...resourceKindForPath(path, targetPaths),
+        ...identity,
         path,
         contentHash,
         source: "profile-apply"
@@ -2257,28 +2266,29 @@ export const createActivationService = ({
         }
       }
 
-      const libraryMcp = await mcpLibraryStore.listServers();
-      const matchedMcpRefs = captured.mcpServers.map((server) => {
-        const match = libraryMcp.find(
-          (candidate) => semanticMcpDefinition(candidate) === semanticMcpDefinition(server)
-        );
-        return match ? { libraryId: match.id, targetName: server.name } : undefined;
-      });
-      const missingMcp = captured.mcpServers.filter(
-        (_, index) => !matchedMcpRefs[index]
+      const otherTargetMcpSelections = (
+        profile.assetPolicy.mcpSelections ?? []
+      ).filter((selection) => selection.targetId !== targetId);
+      const capturedMcpSelections = (captured.mcpConnections ?? []).map(
+        (connection) => ({
+          targetId,
+          name: connection.name,
+          enabled: connection.enabled
+        })
       );
-      if (missingMcp.length > 0) {
-        skipped.push(
-          ...missingMcp.map((server) => `MCP server ${server.name} is not in the Library`)
-        );
-      } else {
-        const nextMcpRefs = matchedMcpRefs.filter(
-          (reference): reference is NonNullable<typeof reference> => Boolean(reference)
-        );
-        if (JSON.stringify(nextMcpRefs) !== JSON.stringify(profile.assetPolicy.mcpRefs)) {
-          assetPolicy = { ...assetPolicy, mcpRefs: nextMcpRefs };
-          adopted.push("mcp");
-        }
+      const previousTargetMcpSelections = (
+        profile.assetPolicy.mcpSelections ?? []
+      ).filter((selection) => selection.targetId === targetId);
+      if (
+        JSON.stringify(capturedMcpSelections) !==
+        JSON.stringify(previousTargetMcpSelections)
+      ) {
+        assetPolicy = {
+          ...assetPolicy,
+          mcpRefs: [],
+          mcpSelections: [...otherTargetMcpSelections, ...capturedMcpSelections]
+        };
+        adopted.push("mcp");
       }
 
       if (adopted.length === 0) {

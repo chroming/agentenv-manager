@@ -3,7 +3,6 @@ import { cp, lstat, mkdir, readFile, readdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type {
   CreateProfileFromTargetInput,
-  McpLibraryEntry,
   TargetCapturePreview,
   TargetCaptureResource,
   TargetCaptureResult,
@@ -19,7 +18,6 @@ import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetRegistry } from "./targets/registry";
 import type { TargetScope } from "./targets/targetScope";
 import type { CapturedTargetProfile } from "./targets/types";
-import { semanticMcpDefinition } from "./mcpIdentity";
 import { isTargetInstalled } from "../shared/targetHealth";
 
 interface CapturedSkill {
@@ -32,13 +30,6 @@ interface CapturedSkill {
   conflictResolution?: SkillImportConflictResolution;
 }
 
-interface CapturedMcp {
-  targetName: string;
-  libraryId: string;
-  definition: McpLibraryEntry;
-  existing: boolean;
-}
-
 interface CapturedAgent {
   targetName: string;
   sourcePath: string;
@@ -49,7 +40,6 @@ interface InternalCapture {
   preview: TargetCapturePreview;
   captured: CapturedTargetProfile;
   skills: CapturedSkill[];
-  mcp: CapturedMcp[];
   agents: CapturedAgent[];
   fingerprints: Record<string, string>;
 }
@@ -103,7 +93,7 @@ export const createTargetCaptureService = ({
   targetRegistry,
   profileStore,
   skillLibraryStore,
-  mcpLibraryStore,
+  mcpLibraryStore: _mcpLibraryStore,
   targetDiscoveryService,
   targetScope
 }: TargetCaptureServiceOptions): TargetCaptureService => {
@@ -122,10 +112,7 @@ export const createTargetCaptureService = ({
       fakeHomeRoot: paths.fakeHomeRoot
     });
     const captured = await adapter.captureProfile(targetPaths);
-    const [librarySkills, libraryMcp] = await Promise.all([
-      skillLibraryStore.listSkills(),
-      mcpLibraryStore.listServers()
-    ]);
+    const librarySkills = await skillLibraryStore.listSkills();
     const inventory = await skillLibraryStore.scanInventory(
       [targetPaths],
       librarySkills
@@ -230,29 +217,22 @@ export const createTargetCaptureService = ({
       });
     }
 
-    const reservedMcpIds = new Set(libraryMcp.map((server) => server.id));
-    const mcp: CapturedMcp[] = captured.mcpServers.map((server) => {
-      const existing = libraryMcp.find(
-        (item) => semanticMcpDefinition(item) === semanticMcpDefinition(server)
-      );
-      const libraryId = existing?.id ?? uniqueId(
-        reservedMcpIds.has(server.id) ? `${targetId}-${server.id}` : server.id,
-        reservedMcpIds
-      );
+    for (const connection of captured.mcpConnections ?? []) {
       resources.push({
         kind: "mcp",
-        id: server.name,
-        name: server.name,
-        libraryId,
-        action: existing ? "reuse" : "import"
+        id: connection.name,
+        name: connection.name,
+        sourcePath: connection.sourcePath,
+        action: "include",
+        detail: connection.controllable
+          ? connection.enabled
+            ? "Enabled; Profile can control activation"
+            : "Disabled; Profile can control activation"
+          : connection.enabled
+            ? "Enabled; remains Agent-controlled"
+            : "Disabled; remains Agent-controlled"
       });
-      return {
-        targetName: server.name,
-        libraryId,
-        definition: { ...server, id: libraryId },
-        existing: Boolean(existing)
-      };
-    });
+    }
 
     const agents: CapturedAgent[] = [];
     if (targetPaths.agentsDir && await pathExists(targetPaths.agentsDir)) {
@@ -327,7 +307,7 @@ export const createTargetCaptureService = ({
       warnings,
       errors
     };
-    return { preview, captured, skills, mcp, agents, fingerprints };
+    return { preview, captured, skills, agents, fingerprints };
   };
 
   const previewTarget = async (targetId: string) => {
@@ -354,7 +334,6 @@ export const createTargetCaptureService = ({
     }
 
     const importedSkillPaths: string[] = [];
-    const importedMcpIds: string[] = [];
     let profileId: string | undefined;
     try {
       for (const skill of capture.skills.filter((item) => !item.existing)) {
@@ -367,11 +346,6 @@ export const createTargetCaptureService = ({
         });
         importedSkillPaths.push(imported.path);
       }
-      for (const server of capture.mcp.filter((item) => !item.existing)) {
-        await mcpLibraryStore.saveServer(server.definition);
-        importedMcpIds.push(server.libraryId);
-      }
-
       const created = await profileStore.createProfile({
         targetId: capture.preview.targetId,
         name: profileName,
@@ -411,10 +385,14 @@ export const createTargetCaptureService = ({
             libraryId: skill.libraryId,
             targetName: skill.targetName
           })),
-          mcpRefs: capture.mcp.map((server) => ({
-            libraryId: server.libraryId,
-            targetName: server.targetName
-          })),
+          mcpRefs: [],
+          mcpSelections: (capture.captured.mcpConnections ?? []).map(
+            (connection) => ({
+              targetId: connection.targetId,
+              name: connection.name,
+              enabled: connection.enabled
+            })
+          ),
           disabledSkillPaths: capture.captured.disabledSkillPaths
         }
       });
@@ -423,13 +401,13 @@ export const createTargetCaptureService = ({
         profile: await profileStore.readProfile(saved.id),
         targetId: capture.preview.targetId,
         importedSkillCount: importedSkillPaths.length,
-        importedMcpCount: importedMcpIds.length,
+        importedMcpCount: 0,
         warnings: capture.preview.warnings
       };
     } catch (error) {
       if (profileId) await profileStore.deleteProfile(profileId);
-      for (const id of importedMcpIds) await mcpLibraryStore.removeServer(id);
-      for (const path of importedSkillPaths) await rm(path, { recursive: true, force: true });
+      for (const path of importedSkillPaths)
+        await rm(path, { recursive: true, force: true });
       throw new Error(
         `Create from Agent failed: ${
           error instanceof Error ? error.message : String(error)

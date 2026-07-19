@@ -36,6 +36,7 @@ const profile: ProfileDetail = {
     ownedFiles: [],
     skillRefs: [],
     mcpRefs: [],
+    mcpSelections: [],
     disabledSkillPaths: []
   },
   contentHash: "profile-hash",
@@ -121,7 +122,8 @@ const target: TargetInfo = {
     skills: true,
     mcpTransports: ["stdio", "http", "sse"],
     agentFormat: "opencode",
-    disabledSkillPaths: false
+    disabledSkillPaths: false,
+    mcpActivation: true
   },
   paths: {
     targetId: "opencode",
@@ -217,12 +219,7 @@ const profileC: ProfileDetail = {
 
 const richProfile: ProfileDetail = {
   ...profile,
-  configText: `{
-    "mcp": {
-      "raw-search": { "type": "remote" },
-      "raw-browser": { "type": "remote" }
-    }
-  }`,
+  configText: "{}\n",
   assetPolicy: {
     ownedDirs: [
       { kind: "skill", source: "skills/review", targetName: "profile-review" }
@@ -234,9 +231,12 @@ const richProfile: ProfileDetail = {
       { libraryId: "testing", targetName: "library-testing" },
       { libraryId: "docs", targetName: "library-docs" }
     ],
-    mcpRefs: [
-      { libraryId: "docs", targetName: "library-docs" },
-      { libraryId: "shared", targetName: "shared-mcp" }
+    mcpRefs: [],
+    mcpSelections: [
+      { targetId: "opencode", name: "library-docs", enabled: true },
+      { targetId: "opencode", name: "shared-mcp", enabled: true },
+      { targetId: "opencode", name: "raw-search", enabled: false },
+      { targetId: "opencode", name: "raw-browser", enabled: true }
     ],
     disabledSkillPaths: ["legacy-skill"]
   }
@@ -290,6 +290,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
     listTargets: vi.fn().mockResolvedValue([target]),
     listTargetStates: vi.fn().mockResolvedValue([]),
+    listNativeMcpConnections: vi.fn().mockResolvedValue([]),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
     scanSkillInventory: vi.fn().mockResolvedValue([]),
     listSkillCleanupBackups: vi.fn().mockResolvedValue([]),
@@ -789,8 +790,14 @@ describe("App", () => {
     });
     render(<App />);
 
-    expect(await screen.findByRole("group", { name: "Library item github-reviewer" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Skill library" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("group", {
+        name: "Library item github-reviewer"
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Skill library" })
+    ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Skills" })).toBeInTheDocument();
     expect(
       within(screen.getByRole("group", { name: "Library item github-reviewer" }))
@@ -1257,98 +1264,97 @@ describe("App", () => {
     expect(updateSettings).not.toHaveBeenCalled();
   });
 
-  it("opens the MCP library and saves reusable MCP servers", async () => {
+  it("keeps MCP definitions out of Library and saves target-native activation choices", async () => {
     const api = installApi({
-      listMcpLibrary: vi.fn().mockResolvedValue([
+      listNativeMcpConnections: vi.fn().mockResolvedValue([
         {
-          id: "context7",
-          name: "Context7",
-          transport: "stdio",
-          command: "npx",
-          args: ["-y", "@upstash/context7-mcp"],
-          env: {}
+          targetId: "opencode",
+          name: "context7",
+          scope: "user",
+          transport: "http",
+          enabled: true,
+          controllable: true,
+          sourcePath: "/tmp/home/.config/opencode/opencode.jsonc"
         }
       ])
     });
     render(<App />);
 
     await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "MCPs" }));
-
-    expect(screen.getByRole("region", { name: "MCP library" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "MCPs" })).toBeInTheDocument();
-    expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
-    const context7Row = screen.getByRole("group", { name: "MCP library item context7" });
-    expect(context7Row).toBeInTheDocument();
-
-    fireEvent.click(within(context7Row).getByRole("button", { name: "More actions for context7" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Edit context7" }));
-    expect(screen.getByLabelText("MCP library id")).toHaveValue("context7");
-    expect(screen.getByLabelText("MCP library name")).toHaveValue("Context7");
-    expect(screen.getByLabelText("MCP command")).toHaveValue("npx");
-    expect(screen.getByLabelText("MCP args")).toHaveValue("-y\n@upstash/context7-mcp");
-    expect(screen.getByLabelText("MCP library id")).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("MCP library name"), {
-      target: { value: "Shared Docs" }
-    });
-    fireEvent.change(screen.getByLabelText("MCP transport"), {
-      target: { value: "http" }
-    });
-    fireEvent.change(screen.getByLabelText("MCP URL"), {
-      target: { value: "https://example.com/shared-docs/mcp" }
-    });
-    expect(screen.queryByLabelText("MCP env")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-
-    await waitFor(() =>
-      expect(api.saveMcpServer).toHaveBeenCalledWith({
-        existingId: "context7",
-        id: "context7",
-        name: "Shared Docs",
-        transport: "http",
-        command: undefined,
-        url: "https://example.com/shared-docs/mcp",
-        args: [],
-        env: {}
-      })
+    expect(
+      within(screen.getByRole("navigation", { name: "Workspace" })).queryByRole(
+        "button",
+        { name: "MCPs" }
+      )
+    ).not.toBeInTheDocument();
+    await openProfiles();
+    fireEvent.click(
+      within(
+        screen.getByRole("region", { name: "Profile composer" })
+      ).getByRole("button", { name: "MCPs" })
     );
+    const behavior = await screen.findByLabelText("context7 Profile behavior");
+    expect(behavior).toHaveValue("agent");
+    fireEvent.change(behavior, { target: { value: "off" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    fireEvent.click(within(context7Row).getByRole("button", { name: "More actions for context7" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Remove context7" }));
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Delete MCP" })).not.toBeInTheDocument();
-    fireEvent.click(within(context7Row).getByRole("button", { name: "More actions for context7" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Remove context7" }));
-    const deleteDialog = screen.getByRole("dialog", { name: "Delete MCP" });
-    expect(deleteDialog).toHaveTextContent("Context7");
-    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete MCP" }));
-    await waitFor(() => expect(api.removeMcpServer).toHaveBeenCalledWith("context7"));
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
+    expect(
+      vi.mocked(api.saveProfile).mock.calls.at(-1)?.[0].assetPolicy
+        .mcpSelections
+    ).toContainEqual({
+      targetId: "opencode",
+      name: "context7",
+      enabled: false
+    });
+    expect(api.saveMcpServer).not.toHaveBeenCalled();
   });
 
-  it("keeps an MCP draft open when persistence fails", async () => {
+  it("shows read-only native MCPs without offering Profile activation controls", async () => {
+    const readOnlyTarget: TargetInfo = {
+      ...target,
+      id: "claude-code",
+      name: "Claude Code",
+      capabilities: { ...target.capabilities, mcpActivation: false },
+      paths: {
+        ...target.paths,
+        targetId: "claude-code",
+        configDir: "/tmp/home/.claude",
+        configPath: "/tmp/home/.claude/settings.json",
+        mcpConfigPath: "/tmp/home/.claude.json"
+      }
+    };
     installApi({
-      saveMcpServer: vi.fn().mockRejectedValue(new Error("Library is read-only"))
+      listSupportedTargets: vi.fn().mockResolvedValue([readOnlyTarget]),
+      listTargets: vi.fn().mockResolvedValue([readOnlyTarget]),
+      listNativeMcpConnections: vi.fn().mockResolvedValue([
+        {
+          targetId: "claude-code",
+          name: "docs",
+          scope: "user",
+          transport: "stdio",
+          enabled: true,
+          controllable: false,
+          sourcePath: "/tmp/home/.claude.json"
+        }
+      ]),
+      readProfile: vi.fn().mockResolvedValue({
+        ...profile,
+        manifest: { ...profile.manifest, targetId: "claude-code" }
+      })
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "MCPs" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add MCP" }));
-    fireEvent.change(screen.getByLabelText("MCP library id"), {
-      target: { value: "local-search" }
-    });
-    fireEvent.change(screen.getByLabelText("MCP library name"), {
-      target: { value: "Local Search" }
-    });
-    fireEvent.change(screen.getByLabelText("MCP command"), {
-      target: { value: "node" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add to library" }));
-
-    await screen.findByRole("alert");
-    expect(screen.getByRole("dialog", { name: "MCP editor" })).toBeInTheDocument();
-    expect(screen.getByLabelText("MCP library id")).toHaveValue("local-search");
-    expect(screen.getByLabelText("MCP command")).toHaveValue("node");
+    await openProfiles();
+    fireEvent.click(
+      within(
+        screen.getByRole("region", { name: "Profile composer" })
+      ).getByRole("button", { name: "MCPs" })
+    );
+    expect(await screen.findByText("Agent controlled")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("docs Profile behavior")
+    ).not.toBeInTheDocument();
   });
 
   it("refreshes target discovery from the Targets page", async () => {
@@ -1522,7 +1528,7 @@ describe("App", () => {
           lastAppliedAt: "2026-07-09T08:00:00.000Z",
           appliedLibraryVersions: {
             skills: { docs: "missing", testing: "missing" },
-            mcp: { docs: "missing", shared: "missing" }
+            mcp: {}
           }
         }),
         managedState({
@@ -1530,7 +1536,7 @@ describe("App", () => {
           lastAppliedAt: "2026-07-10T08:00:00.000Z",
           appliedLibraryVersions: {
             skills: { docs: "missing", testing: "missing" },
-            mcp: { docs: "missing", shared: "missing" }
+            mcp: {}
           }
         })
       ])
@@ -2111,7 +2117,10 @@ describe("App", () => {
     cleanup();
     installApi({
       listTargetStates: vi.fn().mockResolvedValue([
-        managedState({ activeProfileId: "another-profile", managedResourceCount: 7 })
+        managedState({
+          activeProfileId: "another-profile",
+          managedResourceCount: 7
+        })
       ])
     });
     render(<App />);

@@ -31,9 +31,8 @@ import {
   markerPathForFile
 } from "../ownershipMarkers";
 import { findSecretWarnings } from "../secretWarnings";
-import { materializeTomlMcpRefs } from "../mcpRefs";
 import { removeSkillDeployment } from "../skillDeployment";
-import { findUnmanagedMcpConflicts, validateToml } from "../tomlConfig";
+import { setMcpServerEnabled, validateToml } from "../tomlConfig";
 import {
   addSkillRefBackupPaths,
   applySkillRefs,
@@ -419,7 +418,8 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       skills: true,
       mcpTransports: ["stdio", "http", "sse"],
       agentFormat: "codex",
-      disabledSkillPaths: true
+      disabledSkillPaths: true,
+      mcpActivation: true
     }
   },
   detectInstallation: createCommandInstallationDriver("codex").detectInstallation,
@@ -467,33 +467,34 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       parsed.mcp_servers && typeof parsed.mcp_servers === "object" && !Array.isArray(parsed.mcp_servers)
         ? (parsed.mcp_servers as Record<string, unknown>)
         : {};
-    const mcpServers = [];
-    const excluded: string[] = [];
-    for (const [name, raw] of Object.entries(rawServers)) {
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-        excluded.push(`mcp_servers.${name}`);
-        continue;
-      }
-      const server = raw as Record<string, unknown>;
-      const command = typeof server.command === "string" ? server.command : undefined;
-      const url = typeof server.url === "string" ? server.url : undefined;
-      const args = Array.isArray(server.args)
-        ? server.args.filter((item): item is string => typeof item === "string")
-        : [];
-      const envVars = Array.isArray(server.env_vars)
-        ? server.env_vars.filter((item): item is string => typeof item === "string")
-        : [];
-      if ((!command && !url) || server.env || server.http_headers || server.env_http_headers) {
-        excluded.push(`mcp_servers.${name}`);
-        continue;
-      }
-      mcpServers.push({
-        id: name.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "mcp-server",
-        name,
-        transport: command ? "stdio" as const : "http" as const,
-        ...(command ? { command, args, env: Object.fromEntries(envVars.map((item) => [item, item])) } : { url, args: [], env: {} })
-      });
-    }
+    const mcpConnections = Object.entries(rawServers)
+      .filter(([, raw]) =>
+        Boolean(raw && typeof raw === "object" && !Array.isArray(raw))
+      )
+      .map(([name, raw]) => {
+        const server = raw as Record<string, unknown>;
+        const type =
+          typeof server.type === "string"
+            ? server.type.toLowerCase()
+            : undefined;
+        return {
+          targetId: "codex",
+          name,
+          scope: "user" as const,
+          transport:
+            typeof server.command === "string"
+              ? ("stdio" as const)
+              : type === "sse"
+                ? ("sse" as const)
+                : typeof server.url === "string"
+                  ? ("http" as const)
+                  : undefined,
+          enabled: server.enabled !== false,
+          controllable: true,
+          sourcePath: targetPaths.configPath
+        };
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
     const skills =
       parsed.skills && typeof parsed.skills === "object" && !Array.isArray(parsed.skills)
         ? (parsed.skills as Record<string, unknown>)
@@ -510,22 +511,27 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     return {
       instructions,
       configText: "",
-      mcpServers,
+      mcpServers: [],
+      mcpConnections,
       disabledSkillPaths,
       warnings: [
-        ...excluded.map((path) => `${path} was excluded because it contains unsupported or literal credential fields`),
-        ...(nativeKeys.length > 0 ? [`Codex native settings remain Target-owned: ${nativeKeys.join(", ")}`] : [])
+        ...(nativeKeys.length > 0
+          ? [
+              `Codex native settings remain Target-owned: ${nativeKeys.join(", ")}`
+            ]
+          : [])
       ],
-      excluded: excluded.concat(nativeKeys.map((key) => `config.toml.${key}`))
+      excluded: nativeKeys.map((key) => `config.toml.${key}`)
     };
   },
   ...profileFiles,
-  materializeMcpRefs: materializeTomlMcpRefs,
-  createPreview: async ({ profile, targetPaths, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
-    const createdState: TargetState = {
-      managedConfigKeys: [],
-      managedMcpNames: []
-    };
+  materializeMcpRefs: (profile) => profile,
+  createPreview: async ({
+    profile,
+    targetPaths,
+    state
+  }): Promise<TargetActivationPreview> => {
+    const activeState = state ?? { managedConfigKeys: [], managedMcpNames: [] };
     const warnings = findSecretWarnings(profile.instructions).concat(
       findSecretWarnings(profile.configText)
     );
@@ -558,11 +564,19 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     const skillsToml = profile.manifest.managed.assets
       ? buildSkillsConfigToml(profile)
       : "";
-    const hasManagedMcpSection = liveConfig.includes("AgentEnv Manager: mcp");
-    const hasManagedSkillsSection = liveConfig.includes("AgentEnv Manager: skills");
+    const hasManagedSkillsSection = liveConfig.includes(
+      "AgentEnv Manager: skills"
+    );
+    const selectedMcpStates = new Map(
+      (profile.assetPolicy.mcpSelections ?? [])
+        .filter((selection) => selection.targetId === "codex")
+        .map(
+          (selection) => [selection.name, selection.enabled !== false] as const
+        )
+    );
     const shouldManageMcp =
       profile.manifest.managed.config &&
-      (profile.configText.trim().length > 0 || hasManagedMcpSection);
+      (selectedMcpStates.size > 0 || activeState.managedMcpNames.length > 0);
     const shouldManageSkills =
       profile.manifest.managed.assets &&
       (skillsToml.trim().length > 0 || hasManagedSkillsSection);
@@ -572,30 +586,27 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       errors.push(invalidMessage("Invalid live config.toml", liveValidation.message));
     }
 
-    const profileMcpValidation = shouldManageMcp
-      ? validateToml(profile.configText)
-      : { ok: true as const };
-    if (!profileMcpValidation.ok) {
-      errors.push(invalidMessage("Invalid profile MCP TOML", profileMcpValidation.message));
-    }
-
-    if (shouldManageConfig && liveValidation.ok && profileMcpValidation.ok) {
-      const conflicts = shouldManageMcp
-        ? findUnmanagedMcpConflicts(liveConfig, profile.configText, allowMatchingUnmanagedConfig)
-        : [];
-      errors.push(
-        ...conflicts.map(
-          (name) =>
-            `MCP server ${name} already exists outside AgentEnv-managed section`
-        )
-      );
-
-      if (conflicts.length === 0) {
-        const nextConfigWithMcp = shouldManageMcp
-          ? profile.configText.trim().length > 0
-            ? replaceManagedSection(liveConfig, "mcp", profile.configText)
-            : stripManagedSection(liveConfig, "mcp")
-          : liveConfig;
+    let managedMcpNames: string[] = [];
+    if (shouldManageConfig && liveValidation.ok) {
+      let nextConfigWithMcp = liveConfig;
+      if (shouldManageMcp) {
+        const controlledNames = new Set<string>();
+        for (const [name, enabled] of selectedMcpStates) {
+          const result = setMcpServerEnabled(nextConfigWithMcp, name, enabled);
+          if (!result.found) {
+            warnings.push(
+              `MCP server ${name} is not configured in Codex; set it up in Codex before applying this selection`
+            );
+            continue;
+          }
+          nextConfigWithMcp = result.content;
+          controlledNames.add(name);
+        }
+        managedMcpNames = [...controlledNames].sort((left, right) =>
+          left.localeCompare(right)
+        );
+      }
+      {
         const nextConfig = shouldManageSkills
           ? skillsToml.trim().length > 0
             ? replaceManagedSection(nextConfigWithMcp, "skills", skillsToml)
@@ -621,7 +632,10 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
         [targetPaths.instructionsPath]: hashText(liveInstructions),
         ...(shouldManageConfig ? { [targetPaths.configPath]: hashText(liveConfig) } : {})
       },
-      targetState: createdState
+      targetState: {
+        managedConfigKeys: activeState.managedConfigKeys,
+        managedMcpNames
+      }
     };
   },
   validateAssets,

@@ -104,19 +104,18 @@ const writeProfile = async (appDataRoot, fixture) => {
     "utf8"
   );
   await writeJson(join(profileDir, "opencode.jsonc"), {
-    $schema: "https://opencode.ai/config.json",
-    mcp: Object.fromEntries(
-      fixture.mcp.slice(0, 2).map((name) => [
-        `${name}-local`,
-        { type: "remote", url: `https://example.com/${name}/mcp` }
-      ])
-    )
+    $schema: "https://opencode.ai/config.json"
   });
   await writeJson(join(profileDir, "assets.json"), {
     ownedDirs: [],
     ownedFiles: [],
     skillRefs: fixture.skills.map((name) => ({ libraryId: name, targetName: name })),
-    mcpRefs: fixture.mcp.map((name) => ({ libraryId: name, targetName: name })),
+    mcpRefs: [],
+    mcpSelections: fixture.mcp.map((name, index) => ({
+      targetId: "opencode",
+      name,
+      enabled: index !== 2
+    })),
     disabledSkillPaths: []
   });
 };
@@ -182,7 +181,21 @@ const prepareFixture = async (root) => {
   }
 
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Existing OpenCode environment\n", "utf8");
-  await writeJson(join(opencodeDir, "opencode.jsonc"), { shell: "/bin/zsh" });
+  await writeJson(join(opencodeDir, "opencode.jsonc"), {
+    shell: "/bin/zsh",
+    mcp: Object.fromEntries(
+      ["filesystem", "github", "postgres", "shared-docs"].map(
+        (name, index) => [
+          name,
+          {
+            type: "remote",
+            url: `https://example.com/${name}/mcp`,
+            enabled: index !== 2
+          }
+        ]
+      )
+    )
+  });
   const cleanupSkillName = "cross-agent-review-workflow-with-a-long-name";
   const cleanupVariants = [
     {
@@ -395,6 +408,15 @@ const writeCaptureManifest = async () => {
 };
 
 await mkdir(outputDir, { recursive: true });
+for (const entry of await readdir(outputDir, { withFileTypes: true })) {
+  if (
+    entry.isFile() &&
+    entry.name !== "reference.png" &&
+    (entry.name.endsWith(".png") || entry.name === "capture-manifest.json")
+  ) {
+    await rm(join(outputDir, entry.name), { force: true });
+  }
+}
 if (suppliedReference && suppliedReference !== referencePath) {
   await copyFile(suppliedReference, referencePath);
 }
@@ -579,25 +601,6 @@ try {
   };
 
   await captureWorkspace(
-    "MCPs",
-    "mcp-servers",
-    () => page.getByRole("region", { name: "MCP library" })
-  );
-  const mcpActionsButton = page
-    .getByRole("group", { name: "MCP library item shared-docs" })
-    .getByRole("button", { name: "More actions for shared-docs" });
-  await mcpActionsButton.click();
-  await capturePage(page, join(outputDir, "mcp-actions-920x620.png"));
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Add MCP" }).click();
-  const mcpEditor = page.getByRole("dialog", { name: "MCP editor" });
-  await mcpEditor.waitFor({ state: "visible" });
-  await capturePage(page, join(outputDir, "mcp-editor-920x620.png"));
-  await setWindowSize(page, windowHandle, 1180, 728);
-  await capturePage(page, join(outputDir, "mcp-editor-1180x728.png"));
-  await page.keyboard.press("Escape");
-  await mcpEditor.waitFor({ state: "hidden" });
-  await captureWorkspace(
     "Profiles",
     "profiles",
     () => page.getByRole("region", { name: "Profiles", exact: true })
@@ -621,6 +624,11 @@ try {
       page,
       join(outputDir, `profile-${sectionName.toLowerCase().replace(" ", "-")}-920x620.png`)
     );
+    if (sectionName === "MCPs") {
+      await setWindowSize(page, windowHandle, 1180, 728);
+      await capturePage(page, join(outputDir, "profile-mcps-1180x728.png"));
+      await setWindowSize(page, windowHandle, 920, 620);
+    }
     if (sectionName === "Skills") {
       await page.getByRole("button", { name: "Add library skill" }).click();
       const skillPicker = page.getByRole("dialog", { name: "Add library skills" });

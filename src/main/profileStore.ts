@@ -89,14 +89,39 @@ export const createProfileStore = (
     const profile = await targetRegistry
       .get(manifest.targetId)
       .readProfileFiles(profileDir, manifest);
+    const legacyMcpSelections = profile.assetPolicy.mcpRefs.map(
+      (reference) => ({
+        targetId: manifest.targetId,
+        name: reference.targetName
+      })
+    );
+    const mcpSelections = [
+      ...(profile.assetPolicy.mcpSelections ?? []),
+      ...legacyMcpSelections
+    ].filter(
+      (selection, index, selections) =>
+        selections.findIndex(
+          (candidate) =>
+            candidate.targetId === selection.targetId &&
+            candidate.name === selection.name
+        ) === index
+    );
+    const normalizedProfile: ProfileDetail = {
+      ...profile,
+      assetPolicy: {
+        ...profile.assetPolicy,
+        mcpRefs: [],
+        mcpSelections
+      }
+    };
     const targetContentHashes = Object.fromEntries(
       targetRegistry.listAdapters().map((adapter) => {
-        const targeted = targetProfile(profile, adapter).profile;
+        const targeted = targetProfile(normalizedProfile, adapter).profile;
         return [adapter.descriptor.id, createProfileContentHash(targeted)];
       })
     );
     return {
-      ...profile,
+      ...normalizedProfile,
       contentHash: targetContentHashes[manifest.targetId],
       targetContentHashes
     };

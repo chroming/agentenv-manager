@@ -88,13 +88,7 @@ const writeOpenCodeProfile = async (
   );
   await writeJson(join(profileDir, "opencode.jsonc"), {
     $schema: "https://opencode.ai/config.json",
-    username: `ui-${variant}`,
-    mcp: {
-      [`ui-${variant}-mcp`]: {
-        type: "local",
-        command: ["node", "--version"]
-      }
-    }
+    username: `ui-${variant}`
   });
   await writeJson(join(profileDir, "assets.json"), {
     ownedDirs: [
@@ -110,11 +104,11 @@ const writeOpenCodeProfile = async (
       }
     ],
     ownedFiles: [],
-    mcpRefs: [
-      {
-        libraryId: "shared-docs",
-        targetName: "shared-docs"
-      }
+    mcpRefs: [],
+    mcpSelections: [
+      { targetId: "opencode", name: "ui-alpha-mcp", enabled: variant === "alpha" },
+      { targetId: "opencode", name: "ui-beta-mcp", enabled: variant === "beta" },
+      { targetId: "opencode", name: "shared-docs", enabled: true }
     ],
     disabledSkillPaths: []
   });
@@ -153,11 +147,7 @@ const writeCodexProfile = async (
     `# UI Codex ${variant.toUpperCase()}\n\n- Active Codex UI profile: ${variant}.\n`,
     "utf8"
   );
-  await writeFile(
-    join(profileDir, "config.toml"),
-    `[mcp_servers.ui_codex_${variant}]\nurl = "https://example.com/codex/${variant}/mcp"\n`,
-    "utf8"
-  );
+  await writeFile(join(profileDir, "config.toml"), "", "utf8");
   await writeJson(join(profileDir, "assets.json"), {
     ownedDirs: [
       {
@@ -173,11 +163,11 @@ const writeCodexProfile = async (
         targetName: `ui-codex-${variant}-agent.toml`
       }
     ],
-    mcpRefs: [
-      {
-        libraryId: "shared-docs",
-        targetName: "shared-docs"
-      }
+    mcpRefs: [],
+    mcpSelections: [
+      { targetId: "codex", name: "ui_codex_alpha", enabled: variant === "alpha" },
+      { targetId: "codex", name: "ui_codex_beta", enabled: variant === "beta" },
+      { targetId: "codex", name: "shared-docs", enabled: true }
     ],
     disabledSkillPaths: []
   });
@@ -223,6 +213,9 @@ const writeClaudeProfile = async (appDataRoot: string) => {
     ownedFiles: [],
     skillRefs: [{ libraryId: "shared-reviewer", targetName: "bytedcli" }],
     mcpRefs: [],
+    mcpSelections: [
+      { targetId: "claude-code", name: "claude-native", enabled: true }
+    ],
     disabledSkillPaths: []
   });
 };
@@ -469,6 +462,21 @@ const launchApp = async (
       "user-managed": {
         type: "remote",
         url: "https://example.com/user"
+      },
+      "ui-alpha-mcp": {
+        type: "local",
+        command: ["node", "--version"],
+        enabled: false
+      },
+      "ui-beta-mcp": {
+        type: "local",
+        command: ["node", "--version"],
+        enabled: false
+      },
+      "shared-docs": {
+        type: "remote",
+        url: "https://example.com/shared-docs/mcp",
+        enabled: false
       }
     }
   });
@@ -476,7 +484,25 @@ const launchApp = async (
   await writeFile(join(codexDir, "auth.json"), '{"token":"ui-keep"}\n', "utf8");
   await writeFile(
     join(codexDir, "config.toml"),
-    'model = "gpt-5"\n\n[mcp_servers.user_docs]\nurl = "https://example.com/user-docs"\n',
+    [
+      'model = "gpt-5"',
+      "",
+      "[mcp_servers.user_docs]",
+      'url = "https://example.com/user-docs"',
+      "",
+      "[mcp_servers.ui_codex_alpha]",
+      'url = "https://example.com/codex/alpha/mcp"',
+      "enabled = false",
+      "",
+      "[mcp_servers.ui_codex_beta]",
+      'url = "https://example.com/codex/beta/mcp"',
+      "enabled = false",
+      "",
+      "[mcp_servers.shared-docs]",
+      'url = "https://example.com/shared-docs/mcp"',
+      "enabled = false",
+      ""
+    ].join("\n"),
     "utf8"
   );
   await writeOpenCodeProfile(appDataRoot, "alpha");
@@ -485,6 +511,15 @@ const launchApp = async (
   await writeCodexProfile(appDataRoot, "beta");
   if (options.includeClaudeTarget) {
     await writeClaudeProfile(appDataRoot);
+    await writeJson(join(homeDir, ".claude.json"), {
+      mcpServers: {
+        "claude-native": {
+          type: "http",
+          url: "https://example.com/claude/mcp",
+          headers: { Authorization: "Bearer private" }
+        }
+      }
+    });
   }
   const librarySkill = await writeLibrarySkill(appDataRoot);
   if (options.openCodeAlphaLibrarySkillCount) {
@@ -659,13 +694,10 @@ describe("Electron UI profile switching e2e", () => {
       })
     ).toBeGreaterThan(0);
 
-    await page.getByRole("button", { name: "MCPs", exact: true }).click();
-    await page
-      .getByRole("group", { name: "MCP library item shared-docs" })
-      .waitFor({ state: "visible" });
-
     await selectProfile(page, "UI OpenCode alpha");
     await page.getByRole("region", { name: "Profile composer" }).waitFor({ state: "visible" });
+    await expandComposerSection(page, "MCPs");
+    await page.getByLabel("ui-alpha-mcp Profile behavior").waitFor({ state: "visible" });
 
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     await page.getByRole("article", { name: "Agent OpenCode" }).waitFor({ state: "visible" });
@@ -727,10 +759,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("complementary", { name: "Activation" }).count()).toBe(0);
   }, 30_000);
 
-  it("preserves independent Library context across workspaces", async () => {
+  it("preserves Skills Library context across workspace navigation", async () => {
     const { page } = await launchApp({
-      openCodeAlphaLibrarySkillCount: 30,
-      mcpLibraryCount: 30
+      openCodeAlphaLibrarySkillCount: 30
     });
     await page.setViewportSize({ width: 920, height: 620 });
     const navigation = page.getByRole("complementary", { name: "Global navigation" });
@@ -766,15 +797,6 @@ describe("Electron UI profile switching e2e", () => {
     const skillScroll = await skillScroller.evaluate((element) => element.scrollTop);
     expect(skillScroll).toBeGreaterThan(100);
 
-    await navigation.getByRole("button", { name: "MCPs", exact: true }).click();
-    await page.getByRole("textbox", { name: "Search MCPs" }).fill("Fixture MCP");
-    const mcpScroller = page.locator(".skill-library-panel > .resource-section");
-    await mcpScroller.evaluate((element) => {
-      element.scrollTop = Math.min(240, element.scrollHeight - element.clientHeight);
-    });
-    const mcpScroll = await mcpScroller.evaluate((element) => element.scrollTop);
-    expect(mcpScroll).toBeGreaterThan(100);
-
     await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
     expect(await page.getByRole("textbox", { name: "Search skills" }).inputValue()).toBe(
@@ -796,15 +818,6 @@ describe("Electron UI profile switching e2e", () => {
       )
       .toBeLessThanOrEqual(2);
 
-    await navigation.getByRole("button", { name: "MCPs", exact: true }).click();
-    expect(await page.getByRole("textbox", { name: "Search MCPs" }).inputValue()).toBe(
-      "Fixture MCP"
-    );
-    await expect
-      .poll(async () =>
-        Math.abs((await mcpScroller.evaluate((element) => element.scrollTop)) - mcpScroll)
-      )
-      .toBeLessThanOrEqual(2);
   }, 30_000);
 
   it("supports platform-correct desktop shortcuts in real workspaces", async () => {
@@ -864,14 +877,6 @@ describe("Electron UI profile switching e2e", () => {
     expect(
       await page
         .getByRole("textbox", { name: "Search skills" })
-        .evaluate((element) => document.activeElement === element)
-    ).toBe(true);
-
-    await navigation.getByRole("button", { name: "MCPs", exact: true }).click();
-    await page.keyboard.press("Meta+f");
-    expect(
-      await page
-        .getByRole("textbox", { name: "Search MCPs" })
         .evaluate((element) => document.activeElement === element)
     ).toBe(true);
 
@@ -984,36 +989,6 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => page.evaluate(() => document.activeElement?.getAttribute("aria-label")))
       .toBe("More actions for shared-reviewer");
 
-    await page.getByRole("button", { name: "MCPs", exact: true }).click();
-    const mcpSearch = page.getByRole("textbox", { name: "Search MCPs" });
-    await page.getByRole("button", { name: "Add MCP" }).click();
-    const editor = page.getByRole("dialog", { name: "MCP editor" });
-    await page.keyboard.press("Meta+f");
-    await expectFocusInside(editor);
-    expect(await mcpSearch.evaluate((element) => document.activeElement === element)).toBe(false);
-    await page.keyboard.press("Escape");
-
-    const sharedMcp = page.getByRole("group", { name: "MCP library item shared-docs" });
-    await sharedMcp.getByRole("button", { name: "More actions for shared-docs" }).click();
-    const mcpMenu = page.getByRole("menu", { name: "Actions for shared-docs" });
-    await expectInViewport(page, mcpMenu);
-    await expectTopmost(mcpMenu);
-    await mcpMenu.getByRole("menuitem", { name: "Remove shared-docs" }).click();
-    const mcpDelete = page.getByRole("dialog", { name: "Delete MCP" });
-    await expectFocusInside(mcpDelete);
-    await expectFocusTrapped(mcpDelete);
-    await page.keyboard.press("Meta+f");
-    await expectFocusInside(mcpDelete);
-    expect(await mcpSearch.evaluate((element) => document.activeElement === element)).toBe(false);
-    await page.keyboard.press("Escape");
-    await mcpDelete.waitFor({ state: "hidden" });
-    await expect
-      .poll(() =>
-        sharedMcp
-          .getByRole("button", { name: "More actions for shared-docs" })
-          .evaluate((element) => document.activeElement === element)
-      )
-      .toBe(true);
   }, 30_000);
 
   it("keeps Library scale correct and responsive at supported viewports", async () => {
@@ -2345,17 +2320,15 @@ describe("Electron UI profile switching e2e", () => {
     expect(instructionEditorGeometry.bottomGap).toBeLessThanOrEqual(24);
 
     await expandComposerSection(page, "MCPs");
-    expect(await page.locator(".asset-editor-header--compact .section-title").count()).toBe(0);
-    const profileMcpServers = page.getByRole("region", { name: "Profile MCP servers" });
-    await profileMcpServers.waitFor({ state: "visible" });
-    expect(await profileMcpServers.getByText("Inventory", { exact: true }).count()).toBe(0);
-    expect(await profileMcpServers.getByText("Configured", { exact: true }).count()).toBe(0);
-    expect(await profileMcpServers.locator(".resource-chip").count()).toBe(0);
-    const mcpRowGeometry = await profileMcpServers.locator(".profile-mcp-row").evaluateAll(
+    const profileMcpEditor = page.locator(".profile-mcp-editor");
+    await profileMcpEditor.waitFor({ state: "visible" });
+    expect(await profileMcpEditor.getByText("Inventory", { exact: true }).count()).toBe(0);
+    expect(await profileMcpEditor.getByRole("button", { name: /Add|Remove/ }).count()).toBe(0);
+    const mcpRowGeometry = await profileMcpEditor.locator(".profile-mcp-row").evaluateAll(
       (rows) =>
         rows.map((row) => {
           const rowBox = row.getBoundingClientRect();
-          const iconBox = row.querySelector<HTMLElement>(".profile-mcp-row__icon")!
+          const controlBox = row.querySelector<HTMLElement>(".profile-mcp-mode")!
             .getBoundingClientRect();
           return {
             contained: [...row.children].every((child) => {
@@ -2363,23 +2336,15 @@ describe("Electron UI profile switching e2e", () => {
               return childBox.left >= rowBox.left - 1 && childBox.right <= rowBox.right + 1;
             }),
             height: Math.round(rowBox.height),
-            iconHeight: Math.round(iconBox.height),
-            iconWidth: Math.round(iconBox.width)
+            controlHeight: Math.round(controlBox.height)
           };
         })
     );
     expect(mcpRowGeometry.length).toBeGreaterThan(0);
     expect(mcpRowGeometry.every((row) => row.contained)).toBe(true);
-    expect(mcpRowGeometry.every((row) => row.height <= 54)).toBe(true);
-    expect(mcpRowGeometry.every((row) => row.iconHeight === 30 && row.iconWidth === 30)).toBe(true);
-    await expectInViewport(
-      page,
-      profileMcpServers.getByRole("button", { name: "Remove shared-docs from profile" })
-    );
-    const mcpHeaderHeight = await page
-      .locator('[data-profile-composer-id="mcp"] .asset-editor-header--compact')
-      .evaluate((header) => Math.round(header.getBoundingClientRect().height));
-    expect(mcpHeaderHeight).toBeLessThanOrEqual(34);
+    expect(mcpRowGeometry.every((row) => row.height <= 58)).toBe(true);
+    expect(mcpRowGeometry.every((row) => row.controlHeight === 36)).toBe(true);
+    await expectInViewport(page, page.getByLabel("shared-docs Profile behavior"));
     expect(await workbench.evaluate((element) => getComputedStyle(element).gridTemplateColumns))
       .toMatch(/^220px /);
   }, 30_000);
@@ -2777,7 +2742,6 @@ describe("Electron UI profile switching e2e", () => {
       const skillsGeometry = await readGeometry("Skills", "Import skills");
 
       const workspaces = [
-        { button: "MCPs", heading: "MCPs", action: "Add MCP" },
         { button: "Profiles", heading: "Profiles", action: "New Profile" },
         { button: "Agents", heading: "Agents", action: "Refresh" },
         { button: "Settings", heading: "Settings", action: "Sign in with GitHub" }
@@ -2859,7 +2823,7 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 920, height: 620 });
 
-    for (const workspace of ["Skills", "MCPs", "Profiles", "Agents", "Settings"]) {
+    for (const workspace of ["Skills", "Profiles", "Agents", "Settings"]) {
       await page.getByRole("button", { name: workspace, exact: true }).click();
       await page.evaluate(() => window.scrollTo({ top: 240, left: 120 }));
       await page.locator(".app-shell").evaluate((shell) => {
@@ -3199,60 +3163,25 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => openCodeCard.textContent()).toContain("Not managed");
   }, 30_000);
 
-  it("opens MCP creation from a clear page action", async () => {
+  it("keeps MCP definitions Agent-owned and exposes only Profile activation choices", async () => {
     const { page } = await launchApp();
     await resizeAppWindow(page, 920, 620);
-    await page.getByRole("button", { name: "MCPs", exact: true }).click();
 
-    const addButton = page
-      .locator(".library-page-header")
-      .getByRole("button", { name: "Add MCP" });
-    expect(await addButton.count()).toBe(1);
-    expect(
-      await page
-        .getByRole("region", { name: "MCP library" })
-        .getByText("MCP Library", { exact: true })
-        .count()
-    ).toBe(0);
-    expect(await page.getByRole("region", { name: "MCP editor" }).count()).toBe(0);
-    const mcpLibrary = page.getByRole("region", { name: "MCP library" });
-    for (const column of ["MCP", "Profiles", "Actions"]) {
-      expect(await mcpLibrary.getByText(column, { exact: true }).count()).toBe(1);
-    }
-    const libraryGeometry = await mcpLibrary.evaluate((element) => ({
-      height: element.getBoundingClientRect().height,
-      overflow: element.scrollWidth - element.clientWidth,
-      searchTop: element.querySelector(".mcp-library-search")!.getBoundingClientRect().top,
-      headerTop: element.querySelector(".mcp-list-header")!.getBoundingClientRect().top,
-      toolbarBottom: element.querySelector(".mcp-library-toolbar")!.getBoundingClientRect().bottom
-    }));
-    expect(libraryGeometry.height).toBeGreaterThan(400);
-    expect(libraryGeometry.overflow).toBeLessThanOrEqual(1);
-    expect(libraryGeometry.headerTop - libraryGeometry.toolbarBottom).toBeLessThanOrEqual(1);
-    await addButton.click();
-    const editor = page.getByRole("dialog", { name: "MCP editor" });
-    await editor.waitFor({ state: "visible" });
-    const editorActions = editor.locator(".mcp-editor-actions");
-    expect(await editorActions.getByRole("button", { name: "Cancel" }).boundingBox()).not.toBeNull();
-    expect(await editorActions.getByRole("button", { name: "Add to library" }).boundingBox()).not.toBeNull();
-    await expectInViewport(page, editor);
-    await page.mouse.click(220, 420);
-    await editor.waitFor({ state: "detached" });
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+    expect(await navigation.getByRole("button", { name: "MCPs", exact: true }).count()).toBe(0);
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "MCPs");
 
-    await addButton.click();
+    const editor = page.locator(".profile-mcp-editor");
     await editor.waitFor({ state: "visible" });
-    await expect
-      .poll(() =>
-        page
-          .getByLabel("MCP library id")
-          .evaluate((element) => document.activeElement === element)
-      )
-      .toBe(true);
-    await page.keyboard.press("Escape");
-    await editor.waitFor({ state: "detached" });
-    await expect
-      .poll(() => addButton.evaluate((element) => document.activeElement === element))
-      .toBe(true);
+    const sharedDocsControl = page.getByLabel("shared-docs Profile behavior");
+    await sharedDocsControl.scrollIntoViewIfNeeded();
+    await expectInViewport(page, sharedDocsControl);
+    expect(await editor.getByText("OpenCode", { exact: true }).count()).toBe(1);
+    expect(await editor.getByRole("button", { name: /Add|Remove|Delete/ }).count()).toBe(0);
+    expect(await page.getByLabel("ui-alpha-mcp Profile behavior").inputValue()).toBe("on");
+    expect(await page.getByLabel("ui-beta-mcp Profile behavior").inputValue()).toBe("off");
+    expect(await page.getByLabel("shared-docs Profile behavior").inputValue()).toBe("on");
   }, 30_000);
 
   it("edits and persists Instructions from the default-collapsed Composer", async () => {
@@ -4477,78 +4406,21 @@ describe("Electron UI profile switching e2e", () => {
     ).toBe("palette");
   }, 30_000);
 
-  it("adds and removes reusable MCP servers through the rendered MCP library", async () => {
-    const { appDataRoot, page } = await launchApp();
-    const mcpLibraryPath = join(appDataRoot, "mcp-library.json");
+  it("shows Claude Code MCP definitions read-only and never rewrites them", async () => {
+    const { homeDir, page } = await launchApp({ includeClaudeTarget: true });
+    const mcpPath = join(homeDir, ".claude.json");
+    const originalMcp = await readFile(mcpPath, "utf8");
 
-    await page.getByRole("button", { name: "MCPs" }).click();
-    await page.getByRole("region", { name: "MCP library" }).waitFor({ state: "visible" });
-    const sharedMcpRow = page.getByRole("group", { name: "MCP library item shared-docs" });
-    expect(await sharedMcpRow.locator(".resource-chip").count()).toBe(0);
-    expect(await sharedMcpRow.locator(".mcp-row-icon .lucide-network").count()).toBe(1);
-    await sharedMcpRow.getByRole("button", { name: "More actions for shared-docs" }).click();
-    await page.getByRole("menuitem", { name: "Review profiles" }).click();
-    await page.getByRole("heading", { name: "Profiles", exact: true }).waitFor();
-    await page.getByRole("button", { name: "MCPs", exact: true }).click();
-    await page.getByRole("button", { name: "Add MCP" }).click();
-    await page.getByLabel("MCP library id").fill("local-search");
-    await page.getByLabel("MCP library name").fill("Local Search");
-    await page.getByLabel("MCP command").fill("node");
-    await page.getByLabel("MCP args").fill("server.js\n--stdio");
-    await page.getByLabel("MCP env").fill("SEARCH_TOKEN\nAGENTENV_CACHE_DIR");
-    await page.getByRole("button", { name: "Add to library" }).click();
+    await selectProfile(page, "UI Claude clean");
+    await selectTarget(page, "Claude Code");
+    await expandComposerSection(page, "MCPs");
+    const editor = page.locator(".profile-mcp-editor");
+    await editor.waitFor({ state: "visible" });
+    expect(await editor.getByText("Agent controlled", { exact: true }).count()).toBe(1);
+    expect(await editor.locator("select").count()).toBe(0);
 
-    const localSearch = page.getByRole("group", { name: "MCP library item local-search" });
-    await localSearch.waitFor({ state: "visible" });
-    await expect.poll(() => localSearch.textContent()).toContain("node server.js --stdio");
-    await expect.poll(() => localSearch.textContent()).toContain("2 env variables");
-    await expect
-      .poll(async () =>
-        readJson<
-          Array<{ id: string; command?: string; args?: string[]; env?: Record<string, string> }>
-        >(mcpLibraryPath)
-      )
-      .toContainEqual(
-        expect.objectContaining({
-          id: "local-search",
-          command: "node",
-          args: ["server.js", "--stdio"],
-          env: {
-            AGENTENV_CACHE_DIR: "AGENTENV_CACHE_DIR",
-            SEARCH_TOKEN: "SEARCH_TOKEN"
-          }
-        })
-      );
-
-    await localSearch.getByRole("button", { name: "More actions for local-search" }).click();
-    await page.getByRole("menuitem", { name: "Edit local-search" }).click();
-    await expect.poll(() => page.getByLabel("MCP library id").inputValue()).toBe("local-search");
-    expect(await page.getByLabel("MCP library id").isDisabled()).toBe(true);
-    await expect.poll(() => page.getByLabel("MCP args").inputValue()).toBe("server.js\n--stdio");
-    await page.getByRole("button", { name: "Close MCP editor" }).click();
-
-    await page.getByRole("button", { name: "Add MCP" }).click();
-    await page.getByLabel("MCP library id").fill("local-search");
-    await expect
-      .poll(() => page.getByRole("dialog", { name: "MCP editor" }).textContent())
-      .toContain("This ID already exists");
-    expect(await page.getByRole("button", { name: "Add to library" }).isDisabled()).toBe(true);
-    await page.keyboard.press("Escape");
-
-    await localSearch.getByRole("button", { name: "More actions for local-search" }).click();
-    await page.getByRole("menuitem", { name: "Remove local-search" }).click();
-    const deleteDialog = page.getByRole("dialog", { name: "Delete MCP" });
-    await deleteDialog.waitFor({ state: "visible" });
-    await expect.poll(() => deleteDialog.textContent()).toContain("Local Search");
-    await deleteDialog.getByRole("button", { name: "Delete MCP" }).click();
-    await localSearch.waitFor({ state: "detached" });
-    await expect
-      .poll(async () =>
-        (await readJson<Array<{ id: string }>>(mcpLibraryPath)).some(
-          (server) => server.id === "local-search"
-        )
-      )
-      .toBe(false);
+    await previewAndApply(page, "Claude Code");
+    await expect(readFile(mcpPath, "utf8")).resolves.toBe(originalMcp);
   }, 30_000);
 
   it("installs a shared library skill into an OpenCode profile from the rendered app", async () => {
@@ -5464,23 +5336,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.locator("html").getAttribute("lang")).toBe("zh-TW");
 
     await resizeAppWindow(page, 920, 620);
-    for (const workspace of ["技能", "MCP", "設定檔", "Agents", "設定"]) {
+    for (const workspace of ["技能", "設定檔", "Agents", "設定"]) {
       await page.getByRole("button", { name: workspace, exact: true }).click();
-      if (workspace === "MCP") {
-        const mcpLibrary = page.locator(".skill-library-panel--mcp");
-        await mcpLibrary.waitFor({ state: "visible" });
-        const mcpRowGeometry = await mcpLibrary.locator(".resource-row").first().evaluate((row) => {
-          const style = getComputedStyle(row);
-          return {
-            gridTemplateColumns: style.gridTemplateColumns,
-            height: Math.round(row.getBoundingClientRect().height),
-            minHeight: style.minHeight
-          };
-        });
-        expect(mcpRowGeometry.gridTemplateColumns.split(" ")).toHaveLength(5);
-        expect(mcpRowGeometry.minHeight).toBe("58px");
-        expect(mcpRowGeometry.height).toBeLessThanOrEqual(72);
-      }
       const containment = await page.evaluate(() => ({
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: document.documentElement.clientWidth,
@@ -6308,70 +6165,48 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, 30_000);
 
-  it("applies reusable MCP library refs to multiple agent targets", async () => {
+  it("applies target-specific native MCP activation to multiple Agent targets", async () => {
     const { codexDir, opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
     await previewAndApply(page, "OpenCode");
-    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
-      "https://example.com/shared-docs/mcp"
-    );
+    const openCodeConfig = await readJson<{
+      mcp: Record<string, { url?: string; enabled?: boolean }>;
+    }>(join(opencodeDir, "opencode.jsonc"));
+    expect(openCodeConfig.mcp["shared-docs"]).toMatchObject({
+      url: "https://example.com/shared-docs/mcp",
+      enabled: true
+    });
 
     await selectTarget(page, "Codex");
     await selectProfile(page, "UI Codex alpha");
     await previewAndApply(page, "Codex");
-    await expect(readFile(join(codexDir, "config.toml"), "utf8")).resolves.toContain(
-      "[mcp_servers.shared-docs]"
-    );
-    await expect(readFile(join(codexDir, "config.toml"), "utf8")).resolves.toContain(
-      'url = "https://example.com/shared-docs/mcp"'
-    );
+    const codexConfig = await readFile(join(codexDir, "config.toml"), "utf8");
+    expect(codexConfig).toContain("[mcp_servers.shared-docs]");
+    expect(codexConfig).toContain('url = "https://example.com/shared-docs/mcp"');
+    expect(codexConfig).toMatch(/\[mcp_servers\.shared-docs\][\s\S]*?enabled = true/);
   }, 30_000);
 
-  it("adds reusable MCP servers to a profile from the rendered Resources picker", async () => {
-    const { opencodeDir, page } = await launchApp();
-
-    await page.getByRole("button", { name: "MCPs" }).click();
-    await page.getByRole("region", { name: "MCP library" }).waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Add MCP" }).click();
-    await page.getByLabel("MCP library id").fill("local-search");
-    await page.getByLabel("MCP library name").fill("Local Search");
-    await page.getByLabel("MCP command").fill("node");
-    await page.getByLabel("MCP args").fill("server.js\n--stdio");
-    await page.getByLabel("MCP env").fill("SEARCH_TOKEN");
-    await page.getByRole("button", { name: "Add to library" }).click();
-    await page
-      .getByRole("group", { name: "MCP library item local-search" })
-      .waitFor({ state: "visible" });
-
+  it("persists Use Agent setting without deleting the native MCP definition", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "MCPs");
-    await page.getByRole("button", { name: "Add library MCP" }).click();
-    const picker = page.getByRole("dialog", { name: "Add library MCP servers" });
-    await picker.waitFor({ state: "visible" });
-    expect(await picker.getByLabel("Shared Docs").isDisabled()).toBe(true);
-    await picker.getByLabel("Local Search").check();
-    await picker.getByRole("button", { name: "Add selected MCP servers" }).click();
-    await picker.waitFor({ state: "hidden" });
-    await page
-      .getByRole("group", { name: "MCP local-search" })
-      .waitFor({ state: "visible" });
-
+    await page.getByLabel("shared-docs Profile behavior").selectOption("agent");
     await saveProfile(page);
     await previewAndApply(page, "OpenCode");
 
-    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
-      "local-search"
+    const assets = await readJson<{
+      mcpSelections?: Array<{ targetId: string; name: string; enabled?: boolean }>;
+    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "assets.json"));
+    expect(assets.mcpSelections?.some((item) => item.name === "shared-docs")).toBe(false);
+    const live = await readJson<{ mcp: Record<string, { url?: string; enabled?: boolean }> }>(
+      join(opencodeDir, "opencode.jsonc")
     );
-    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
-      "server.js"
-    );
-    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
-      '"SEARCH_TOKEN": "{env:SEARCH_TOKEN}"'
-    );
-    await expect(readFile(join(opencodeDir, "opencode.jsonc"), "utf8")).resolves.toContain(
-      '"environment"'
-    );
+    expect(live.mcp["shared-docs"]).toEqual({
+      type: "remote",
+      url: "https://example.com/shared-docs/mcp",
+      enabled: false
+    });
   }, 30_000);
 
   it("switches OpenCode profiles through the rendered app and restores from history", async () => {
@@ -6388,13 +6223,15 @@ describe("Electron UI profile switching e2e", () => {
 
     await selectProfile(page, "UI OpenCode beta");
     await previewAndApply(page, "OpenCode");
-    const betaConfig = await readFile(join(opencodeDir, "opencode.jsonc"), "utf8");
+    const betaConfig = await readJson<{
+      mcp: Record<string, { enabled?: boolean }>;
+    }>(join(opencodeDir, "opencode.jsonc"));
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain(
       "Active UI profile: beta"
     );
-    expect(betaConfig).toContain("ui-beta-mcp");
-    expect(betaConfig).not.toContain("ui-alpha-mcp");
-    expect(betaConfig).toContain("user-managed");
+    expect(betaConfig.mcp["ui-alpha-mcp"]?.enabled).toBe(false);
+    expect(betaConfig.mcp["ui-beta-mcp"]?.enabled).toBe(true);
+    expect(betaConfig.mcp["user-managed"]).toBeDefined();
     await expect(fileExists(join(opencodeDir, "agents", "ui-alpha-agent"))).resolves.toBe(
       false
     );
@@ -6426,6 +6263,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain(
       "Active UI profile: alpha"
     );
+    const rolledBackConfig = await readJson<{
+      mcp: Record<string, { enabled?: boolean }>;
+    }>(join(opencodeDir, "opencode.jsonc"));
+    expect(rolledBackConfig.mcp["ui-alpha-mcp"]?.enabled).toBe(true);
+    expect(rolledBackConfig.mcp["ui-beta-mcp"]?.enabled).toBe(false);
     await expect(fileExists(join(opencodeDir, "agents", "ui-beta-agent"))).resolves.toBe(
       false
     );
@@ -6501,7 +6343,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(betaConfig).toContain('model = "gpt-5"');
     expect(betaConfig).toContain("[mcp_servers.user_docs]");
     expect(betaConfig).toContain("[mcp_servers.ui_codex_beta]");
-    expect(betaConfig).not.toContain("[mcp_servers.ui_codex_alpha]");
+    expect(betaConfig).toContain("[mcp_servers.ui_codex_alpha]");
+    expect(betaConfig).toMatch(/\[mcp_servers\.ui_codex_alpha\][\s\S]*?enabled = false/);
+    expect(betaConfig).toMatch(/\[mcp_servers\.ui_codex_beta\][\s\S]*?enabled = true/);
     await expect(
       readFile(join(codexDir, "agents", "ui-codex-beta-agent.toml"), "utf8")
     ).resolves.toContain("beta Codex agent prompt");
@@ -6519,7 +6363,7 @@ describe("Electron UI profile switching e2e", () => {
     const sidebar = page.locator(".global-sidebar");
 
     const headerMetrics: Array<{ fontSize: string; left: number; top: number }> = [];
-    for (const workspace of ["Skills", "MCPs", "Profiles", "Agents", "Settings"]) {
+    for (const workspace of ["Skills", "Profiles", "Agents", "Settings"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
       const header = page.locator(".ui-page-header").first();
       await header.waitFor({ state: "visible" });
@@ -6637,54 +6481,6 @@ describe("Electron UI profile switching e2e", () => {
       right: "1px",
       top: "1px"
     });
-
-    await sidebar.getByRole("button", { name: "MCPs", exact: true }).click();
-    const mcpSearchGeometry = await page.locator(".mcp-library-search").evaluate((field) => {
-      const fieldBox = field.getBoundingClientRect();
-      const inputBox = field.querySelector("input")!.getBoundingClientRect();
-      return {
-        bottomInset: fieldBox.bottom - inputBox.bottom,
-        leftInset: inputBox.left - fieldBox.left,
-        rightInset: fieldBox.right - inputBox.right,
-        topInset: inputBox.top - fieldBox.top
-      };
-    });
-    expect(mcpSearchGeometry.bottomInset).toBeGreaterThanOrEqual(1);
-    expect(mcpSearchGeometry.leftInset).toBeGreaterThanOrEqual(30);
-    expect(mcpSearchGeometry.rightInset).toBeGreaterThanOrEqual(1);
-    expect(mcpSearchGeometry.topInset).toBeGreaterThanOrEqual(1);
-    const mcpRow = page.locator(".mcp-library-row").first();
-    await mcpRow.waitFor({ state: "visible" });
-    const mcpGeometry = await mcpRow.evaluate((row) => {
-      const icon = row.querySelector<HTMLElement>(".ui-resource-row__icon")!.getBoundingClientRect();
-      const actions = row.querySelector<HTMLElement>(".ui-resource-row__actions")!.getBoundingClientRect();
-      const box = row.getBoundingClientRect();
-      return {
-        actionCount: row.querySelectorAll(".ui-resource-row__actions > button").length,
-        actionsContained: actions.right <= box.right + 1,
-        columnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
-        iconHeight: icon.height,
-        iconWidth: icon.width,
-        rowHeight: box.height,
-        rowContained: row.scrollWidth <= row.clientWidth + 1
-      };
-    });
-    expect(mcpGeometry).toEqual({
-      actionCount: 1,
-      actionsContained: true,
-      columnCount: 5,
-      iconHeight: 30,
-      iconWidth: 30,
-      rowHeight: 58,
-      rowContained: true
-    });
-
-    await mcpRow.getByRole("button", { name: /More actions for/ }).click();
-    const mcpMenu = page.locator(".mcp-row-action-menu.ui-action-menu");
-    await mcpMenu.waitFor({ state: "visible" });
-    const mcpMenuWidth = await mcpMenu.evaluate((menu) => menu.getBoundingClientRect().width);
-    expect(mcpMenuWidth).toBe(220);
-    await page.keyboard.press("Escape");
 
     await sidebar.getByRole("button", { name: "Profiles", exact: true }).click();
     await page.locator(".profile-hero").waitFor({ state: "visible" });

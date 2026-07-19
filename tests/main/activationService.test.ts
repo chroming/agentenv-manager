@@ -43,10 +43,7 @@ const makeEnv = async () => {
     })
   );
   await writeFile(join(profileDir, "AGENTS.md"), "# New agents\n");
-  await writeFile(
-    join(profileDir, "mcp.toml"),
-    '[mcp_servers.context7]\ncommand = "npx"\n'
-  );
+  await writeFile(join(profileDir, "mcp.toml"), "");
   await writeFile(
     join(profileDir, "assets.json"),
     JSON.stringify({
@@ -59,12 +56,8 @@ const makeEnv = async () => {
       ],
       ownedFiles: [],
       skillRefs: [],
-      mcpRefs: [
-        {
-          libraryId: "shared-docs",
-          targetName: "shared_docs"
-        }
-      ],
+      mcpRefs: [],
+      mcpSelections: [{ targetId: "codex", name: "context7", enabled: true }],
       disabledSkillPaths: ["/Users/example/.agents/skills/old/SKILL.md"]
     })
   );
@@ -139,7 +132,10 @@ describe("activation service", () => {
   it("applies a profile, creates a backup, and copies owned skills", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");
-    await writeFile(paths.codexConfigPath, 'model = "gpt-5"\n# keep me\n');
+    await writeFile(
+      paths.codexConfigPath,
+      'model = "gpt-5"\n# keep me\n\n[mcp_servers.context7]\ncommand = "npx"\nenabled = false\n'
+    );
 
     const preview = await service.previewProfile("daily-coding");
     expect(preview.resourceChanges).toContainEqual({
@@ -162,10 +158,7 @@ describe("activation service", () => {
       "[mcp_servers.context7]"
     );
     await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toContain(
-      "[mcp_servers.shared_docs]"
-    );
-    await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toContain(
-      'url = "https://example.com/shared-docs/mcp"'
+      "enabled = true"
     );
     await expect(
       readFile(
@@ -181,9 +174,7 @@ describe("activation service", () => {
     const state = (await service.listTargetStates())[0];
     expect(state?.activeProfileId).toBe("daily-coding");
     expect(state?.appliedProfileHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(state?.appliedLibraryVersions?.mcp["shared-docs"]).toContain(
-      "https://example.com/shared-docs/mcp"
-    );
+    expect(state?.appliedLibraryVersions?.mcp).toEqual({});
 
     const backups = await createBackupStore(paths).listBackups();
     expect(backups).toHaveLength(1);
@@ -221,7 +212,6 @@ describe("activation service", () => {
     const preview = await service.previewProfile("daily-coding");
     const serialized = JSON.stringify(preview);
     expect(serialized).not.toContain(literalSecret);
-    expect(serialized).toContain("<redacted>");
     expect(preview.warnings).toContain(
       "Possible literal secret in profile content: api_key"
     );
@@ -279,8 +269,9 @@ describe("activation service", () => {
     expect(result.skipped).toEqual([]);
     expect(result.profile.instructions).toBe("# Live guidance\n");
     expect(JSON.parse(result.profile.configText)).toEqual({ theme: "new" });
-    expect(result.profile.assetPolicy.mcpRefs).toEqual([
-      { libraryId: "library-docs", targetName: "docs" }
+    expect(result.profile.assetPolicy.mcpRefs).toEqual([]);
+    expect(result.profile.assetPolicy.mcpSelections).toEqual([
+      { targetId: "opencode", name: "docs", enabled: true }
     ]);
     await expect(createBackupStore(paths).listBackups()).resolves.toHaveLength(1);
   });
@@ -371,7 +362,10 @@ describe("activation service", () => {
     );
     expect((await service.listTargetStates())[0]?.sharedSkillPreparations).toEqual([]);
     await expect(service.listSharedSkillMigrationBackups()).resolves.toEqual([
-      expect.objectContaining({ id: migration.backupId, libraryId: "reviewer" })
+      expect.objectContaining({
+        id: migration.backupId,
+        libraryId: "reviewer"
+      })
     ]);
 
     await service.rollbackSharedSkillMigration(migration.backupId);
@@ -525,20 +519,17 @@ describe("activation service", () => {
 
     const preview = await service.previewProfile("daily-coding", "opencode");
     expect(preview.targetId).toBe("opencode");
-    expect(preview.warnings).toContain(
+    expect(preview.warnings).not.toContain(
       "codex Advanced config is Agent-specific and is not applied to OpenCode"
     );
     expect(preview.effectivePayload).toMatchObject({
       instructions: 1,
       skills: 1,
-      mcpServers: 1,
+      mcpServers: 0,
       nativeConfig: 0
     });
     expect(preview.omissions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: "config" }),
-        expect.objectContaining({ kind: "setting" })
-      ])
+      expect.arrayContaining([expect.objectContaining({ kind: "setting" })])
     );
     await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
       ok: false,
@@ -553,10 +544,10 @@ describe("activation service", () => {
       (await service.applyProfile("daily-coding", preview.id, { allowOmissions: true })).ok
     ).toBe(true);
     await expect(readFile(openCodeInstructions, "utf8")).resolves.toBe("# New agents\n");
-    await expect(readFile(openCodeConfig, "utf8")).resolves.toContain("shared_docs");
-    await expect(readFile(join(openCodeSkill, "SKILL.md"), "utf8")).resolves.toContain(
-      "name: example"
-    );
+    await expect(readFile(openCodeConfig, "utf8")).resolves.toBe("{}\n");
+    await expect(
+      readFile(join(openCodeSkill, "SKILL.md"), "utf8")
+    ).resolves.toContain("name: example");
   });
 
   it("blocks apply when a resource changes after preview", async () => {
@@ -604,7 +595,7 @@ describe("activation service", () => {
     });
   });
 
-  it("blocks apply when a referenced library resource changes after preview", async () => {
+  it("does not invalidate Apply when unused legacy MCP Library data changes", async () => {
     const { paths, service } = await makeEnv();
     const preview = await service.previewProfile("daily-coding");
     await writeFile(
@@ -619,10 +610,9 @@ describe("activation service", () => {
       ])
     );
 
-    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
-      ok: false,
-      errors: ["Library resources changed after preview; review the latest versions"]
-    });
+    await expect(
+      service.applyProfile("daily-coding", preview.id)
+    ).resolves.toEqual(expect.objectContaining({ ok: true }));
   });
 
   it("refuses stale previews without writing", async () => {

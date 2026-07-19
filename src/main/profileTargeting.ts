@@ -58,6 +58,7 @@ export const targetProfile = (
         ...source.assetPolicy,
         ownedDirs: source.assetPolicy.ownedDirs.filter((asset) => asset.kind === "skill"),
         ownedFiles: [],
+        mcpRefs: [],
         disabledSkillPaths: []
       },
       contentHash: undefined,

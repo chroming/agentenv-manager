@@ -16,6 +16,8 @@ const api: AgentEnvApi = {
   listSupportedTargets: () => ipcRenderer.invoke("targets:list-supported"),
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
+  listNativeMcpConnections: () =>
+    ipcRenderer.invoke("targets:list-native-mcps"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),
   scanSkillInventory: () => ipcRenderer.invoke("skills:scan-inventory"),
   listSkillCleanupBackups: () => ipcRenderer.invoke("skills:list-cleanup-backups"),

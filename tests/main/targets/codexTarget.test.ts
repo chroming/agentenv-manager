@@ -28,6 +28,7 @@ const makeProfile = (configText: string): ProfileDetail => ({
     ],
     skillRefs: [],
     mcpRefs: [],
+    mcpSelections: [],
     disabledSkillPaths: ["/Users/example/.agents/skills/legacy/SKILL.md"]
   }
 });
@@ -73,19 +74,20 @@ describe("Codex target adapter", () => {
         "",
         "[mcp_servers.user_docs]",
         'url = "https://example.com/user-docs"',
+        "",
+        "[mcp_servers.context7]",
+        'command = "npx"',
+        'args = ["-y", "@upstash/context7-mcp"]',
+        "enabled = false",
         ""
       ].join("\n"),
       "utf8"
     );
 
-    const profile = makeProfile(
-      [
-        "[mcp_servers.context7]",
-        'command = "npx"',
-        'args = ["-y", "@upstash/context7-mcp"]',
-        ""
-      ].join("\n")
-    );
+    const profile = makeProfile("");
+    profile.assetPolicy.mcpSelections = [
+      { targetId: "codex", name: "context7", enabled: true }
+    ];
     const preview = await adapter.createPreview({
       profile,
       targetPaths,
@@ -102,13 +104,16 @@ describe("Codex target adapter", () => {
     expect(configChange?.after).toContain('model = "gpt-5"');
     expect(configChange?.after).toContain("[mcp_servers.user_docs]");
     expect(configChange?.after).toContain("[mcp_servers.context7]");
+    expect(configChange?.after).toMatch(
+      /\[mcp_servers\.context7\][\s\S]*enabled = true/
+    );
     expect(configChange?.after).toContain("[[skills.config]]");
     expect(configChange?.after).toContain(
       'path = "/Users/example/.agents/skills/legacy/SKILL.md"'
     );
   });
 
-  it("reports unmanaged MCP conflicts before apply", async () => {
+  it("controls an existing native MCP without replacing its definition", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-codex-"));
     const adapter = createCodexTargetAdapter();
     const targetPaths = adapter.createTargetPaths({ homeDir: root });
@@ -119,15 +124,23 @@ describe("Codex target adapter", () => {
       "utf8"
     );
 
+    const profile = makeProfile('[mcp_servers.context7]\ncommand = "new"\n');
+    profile.assetPolicy.mcpSelections = [
+      { targetId: "codex", name: "context7", enabled: false }
+    ];
     const preview = await adapter.createPreview({
-      profile: makeProfile('[mcp_servers.context7]\ncommand = "new"\n'),
+      profile,
       targetPaths,
       state: { managedConfigKeys: [], managedMcpNames: [] }
     });
 
-    expect(preview.errors).toContain(
-      "MCP server context7 already exists outside AgentEnv-managed section"
+    expect(preview.errors).toEqual([]);
+    const configChange = preview.changes.find(
+      (change) => change.path === targetPaths.configPath
     );
+    expect(configChange?.after).toContain('command = "old"');
+    expect(configChange?.after).not.toContain('command = "new"');
+    expect(configChange?.after).toContain("enabled = false");
   });
 
   it("leaves config.toml outside the plan when the Profile has no MCP or Skill settings", async () => {
@@ -258,11 +271,14 @@ describe("Codex target adapter", () => {
     const captured = await adapter.captureProfile(targetPaths);
     expect(captured.instructions).toBe("# Existing Codex\n");
     expect(captured.configText).toBe("");
-    expect(captured.mcpServers).toEqual([
+    expect(captured.mcpServers).toEqual([]);
+    expect(captured.mcpConnections).toEqual([
       expect.objectContaining({
         name: "docs",
-        command: "node",
-        env: { DOCS_TOKEN: "DOCS_TOKEN" }
+        targetId: "codex",
+        enabled: true,
+        controllable: true,
+        transport: "stdio"
       })
     ]);
     expect(captured.disabledSkillPaths).toEqual(["/tmp/disabled/SKILL.md"]);

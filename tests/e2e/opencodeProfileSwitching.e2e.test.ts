@@ -102,13 +102,6 @@ const createOpenCodeProfile = async (
         username: `agentenv-${variant}`,
         permission: {
           edit: variant === "alpha" ? "deny" : "ask"
-        },
-        mcp: {
-          [`agentenv-${variant}-mcp`]: {
-            type: "local",
-            command: ["node", "--version"],
-            enabled: true
-          }
         }
       },
       null,
@@ -130,6 +123,18 @@ const createOpenCodeProfile = async (
       ownedFiles: [],
       skillRefs: [],
       mcpRefs: [],
+      mcpSelections: [
+        {
+          targetId: "opencode",
+          name: "agentenv-alpha-mcp",
+          enabled: variant === "alpha"
+        },
+        {
+          targetId: "opencode",
+          name: "agentenv-beta-mcp",
+          enabled: variant === "beta"
+        }
+      ],
       disabledSkillPaths: []
     }
   });
@@ -173,8 +178,9 @@ afterEach(async () => {
 });
 
 describe("OpenCode profile switching e2e", () => {
-  it("switches active instructions, MCP config, agents, and skills between profiles", async () => {
-    const { paths, profileStore, activationService, listTargets } = await makeEnv();
+  it("switches instructions, native MCP activation, agents, and skills between profiles", async () => {
+    const { paths, profileStore, activationService, listTargets } =
+      await makeEnv();
     const targetDir = join(paths.homeDir, ".config", "opencode");
     const skillsDir = join(targetDir, "skills");
     await mkdir(targetDir, { recursive: true });
@@ -188,6 +194,16 @@ describe("OpenCode profile switching e2e", () => {
             "user-managed": {
               type: "remote",
               url: "https://example.com/mcp"
+            },
+            "agentenv-alpha-mcp": {
+              type: "local",
+              command: ["node", "--version"],
+              enabled: false
+            },
+            "agentenv-beta-mcp": {
+              type: "local",
+              command: ["node", "--version"],
+              enabled: false
             }
           }
         },
@@ -216,6 +232,11 @@ describe("OpenCode profile switching e2e", () => {
           type: "local",
           command: ["node", "--version"],
           enabled: true
+        },
+        "agentenv-beta-mcp": {
+          type: "local",
+          command: ["node", "--version"],
+          enabled: false
         }
       }
     });
@@ -248,10 +269,14 @@ describe("OpenCode profile switching e2e", () => {
           type: "local",
           command: ["node", "--version"],
           enabled: true
+        },
+        "agentenv-alpha-mcp": {
+          type: "local",
+          command: ["node", "--version"],
+          enabled: false
         }
       }
     });
-    expect((betaConfig.mcp as Record<string, unknown>)["agentenv-alpha-mcp"]).toBeUndefined();
     await expect(
       fileExists(join(targetDir, "agents", "agentenv-alpha-agent"))
     ).resolves.toBe(false);
@@ -264,6 +289,10 @@ describe("OpenCode profile switching e2e", () => {
     await expect(
       readFile(join(skillsDir, "agentenv-beta-skill", "SKILL.md"), "utf8")
     ).resolves.toContain("name: agentenv-beta-skill");
+
+    const noOpPreview = await activationService.previewProfile(beta.id);
+    expect(noOpPreview.changes).toEqual([]);
+    expect(noOpPreview.resourceChanges).toEqual([]);
   });
 
   it("switches reusable library skill links without duplicating the library skill", async () => {
@@ -421,10 +450,33 @@ describe("OpenCode profile switching e2e", () => {
     await expect(fileExists(`${legacySkillDir}.agentenv-owner.json`)).resolves.toBe(false);
   });
 
-  it("blocks a profile switch when the target has an unmanaged MCP conflict", async () => {
+  it("preserves native MCP definitions added outside AgentEnv", async () => {
     const { paths, profileStore, activationService } = await makeEnv();
     const targetDir = join(paths.homeDir, ".config", "opencode");
-    const skillsDir = join(targetDir, "skills");
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(
+      join(targetDir, "opencode.jsonc"),
+      `${JSON.stringify(
+        {
+          mcp: {
+            "agentenv-alpha-mcp": {
+              type: "local",
+              command: ["node", "--version"],
+              enabled: false
+            },
+            "agentenv-beta-mcp": {
+              type: "remote",
+              url: "https://example.com/user-beta",
+              headers: { Authorization: "{env:MCP_TOKEN}" },
+              enabled: false
+            }
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
     const alpha = await createOpenCodeProfile(profileStore, "alpha");
     const beta = await createOpenCodeProfile(profileStore, "beta");
     await expectApplyOk(activationService, alpha.id);
@@ -437,9 +489,9 @@ describe("OpenCode profile switching e2e", () => {
           ...liveConfig,
           mcp: {
             ...(liveConfig.mcp as Record<string, unknown>),
-            "agentenv-beta-mcp": {
+            "late-added": {
               type: "remote",
-              url: "https://example.com/user-beta"
+              url: "https://example.com/late-added"
             }
           }
         },
@@ -450,47 +502,36 @@ describe("OpenCode profile switching e2e", () => {
     );
 
     const preview = await activationService.previewProfile(beta.id);
-    expect(preview.errors).toContain(
-      "MCP server agentenv-beta-mcp already exists outside AgentEnv management"
-    );
+    expect(preview.errors).toEqual([]);
     const result = await activationService.applyProfile(beta.id, preview.id);
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.errors).toContain(
-        "MCP server agentenv-beta-mcp already exists outside AgentEnv management"
-      );
-    }
-    const configAfterBlockedSwitch = await readJsonc(join(targetDir, "opencode.jsonc"));
-    expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toContain(
-      "Active profile: alpha"
+    expect(result.ok).toBe(true);
+    const configAfterSwitch = await readJsonc(
+      join(targetDir, "opencode.jsonc")
     );
-    expect(configAfterBlockedSwitch).toMatchObject({
-      username: "agentenv-alpha",
+    expect(await readFile(join(targetDir, "AGENTS.md"), "utf8")).toContain(
+      "Active profile: beta"
+    );
+    expect(configAfterSwitch).toMatchObject({
+      username: "agentenv-beta",
       mcp: {
         "agentenv-alpha-mcp": {
           type: "local",
           command: ["node", "--version"],
-          enabled: true
+          enabled: false
         },
         "agentenv-beta-mcp": {
           type: "remote",
-          url: "https://example.com/user-beta"
+          url: "https://example.com/user-beta",
+          headers: { Authorization: "{env:MCP_TOKEN}" },
+          enabled: true
+        },
+        "late-added": {
+          type: "remote",
+          url: "https://example.com/late-added"
         }
       }
     });
-    await expect(
-      fileExists(join(targetDir, "agents", "agentenv-alpha-agent"))
-    ).resolves.toBe(true);
-    await expect(
-      fileExists(join(skillsDir, "agentenv-alpha-skill"))
-    ).resolves.toBe(true);
-    await expect(
-      fileExists(join(targetDir, "agents", "agentenv-beta-agent"))
-    ).resolves.toBe(false);
-    await expect(
-      fileExists(join(skillsDir, "agentenv-beta-skill"))
-    ).resolves.toBe(false);
   });
 
   it("rolls back a profile switch including owned agents and skills", async () => {
@@ -508,6 +549,16 @@ describe("OpenCode profile switching e2e", () => {
             "user-managed": {
               type: "remote",
               url: "https://example.com/mcp"
+            },
+            "agentenv-alpha-mcp": {
+              type: "local",
+              command: ["node", "--version"],
+              enabled: false
+            },
+            "agentenv-beta-mcp": {
+              type: "local",
+              command: ["node", "--version"],
+              enabled: false
             }
           }
         },
@@ -556,12 +607,14 @@ describe("OpenCode profile switching e2e", () => {
           type: "local",
           command: ["node", "--version"],
           enabled: true
+        },
+        "agentenv-beta-mcp": {
+          type: "local",
+          command: ["node", "--version"],
+          enabled: false
         }
       }
     });
-    expect(
-      (rolledBackConfig.mcp as Record<string, unknown>)["agentenv-beta-mcp"]
-    ).toBeUndefined();
     await expect(
       readFile(join(targetDir, "agents", "agentenv-alpha-agent", "agent.md"), "utf8")
     ).resolves.toContain("alpha agent prompt");

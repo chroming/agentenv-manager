@@ -12,6 +12,7 @@ import {
 import { useRef, useState } from "react";
 import type {
   BackupSummary,
+  NativeMcpConnection,
   RollbackPreview,
   StopManagingMode,
   StopManagingPreview,
@@ -30,6 +31,7 @@ import { isTargetInstalled } from "../../shared/targetHealth";
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
   targetStates: TargetManagementState[];
+  mcpConnections: NativeMcpConnection[];
   backups: BackupSummary[];
   rollbackPreview?: RollbackPreview;
   rollbackError?: string;
@@ -74,6 +76,7 @@ const lifecycleLabel: Record<TargetManagementState["lifecycleStatus"], string> =
 export const TargetWorkspace = ({
   targets,
   targetStates,
+  mcpConnections,
   backups,
   rollbackPreview,
   rollbackError,
@@ -237,6 +240,41 @@ export const TargetWorkspace = ({
                         <strong>{t(check.exists ? (check.writable ? "Writable" : "Read-only") : "Missing")}</strong>
                       </div>
                     ))}
+                  </div>
+                  <div className="target-native-mcps">
+                    <div className="target-native-mcps__heading">
+                      <strong>{t("MCP connections")}</strong>
+                      <span>
+                        {t("Configured in {{name}}", { name: target.name })}
+                      </span>
+                    </div>
+                    {mcpConnections.filter(
+                      (connection) => connection.targetId === target.id
+                    ).length === 0 ? (
+                      <p>{t("No MCP connections detected")}</p>
+                    ) : (
+                      <div className="target-native-mcps__list">
+                        {mcpConnections
+                          .filter(
+                            (connection) => connection.targetId === target.id
+                          )
+                          .map((connection) => (
+                            <div
+                              key={`${connection.targetId}:${connection.name}`}
+                            >
+                              <span>
+                                <strong>{connection.name}</strong>
+                                <small title={connection.sourcePath}>
+                                  {connection.sourcePath}
+                                </small>
+                              </span>
+                              <span>
+                                {t(connection.enabled ? "On" : "Off")}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
                   </div>
                   {isManaged ? (
                     <footer className="target-diagnostics-actions">

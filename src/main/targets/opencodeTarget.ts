@@ -9,7 +9,6 @@ import {
   type ParseError
 } from "jsonc-parser";
 import type {
-  McpLibraryEntry,
   PlannedFileChange,
   ProfileDetail,
   TargetActivationPreview,
@@ -21,10 +20,13 @@ import {
   pathExists,
   readTextIfExists
 } from "../fileUtils";
-import { jsonMcpEnvironment, materializeJsonMcpRefs } from "../mcpRefs";
 import { findSecretWarnings } from "../secretWarnings";
 import type { AgentTargetAdapter } from "./types";
-import { captureJsonMcpServers, sameJsonValue, sanitizeCapturedJson } from "./capture";
+import {
+  captureNativeJsonMcpConnections,
+  sameJsonValue,
+  sanitizeCapturedJson
+} from "./capture";
 import { createProfileFileDriver } from "./shared/profileFiles";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
 import { createCommandInstallationDriver } from "./installationDiscovery";
@@ -109,12 +111,6 @@ const applyJsoncOverlay = (
   state: TargetState
 ) => {
   let nextContent = liveContent.trim().length === 0 ? "{}\n" : liveContent;
-  const nextMcp = isRecord(liveConfig.mcp)
-    ? cloneJson(liveConfig.mcp)
-    : ({} as Record<string, unknown>);
-  const profileMcp = isRecord(profileConfig.mcp)
-    ? profileConfig.mcp
-    : ({} as Record<string, unknown>);
   const profileConfigKeys = Object.keys(profileConfig).filter(
     (key) => key !== "mcp" && !METADATA_CONFIG_KEYS.has(key)
   );
@@ -142,24 +138,11 @@ const applyJsoncOverlay = (
     nextContent = setJsoncProperty(nextContent, [key], profileConfig[key]);
   }
 
-  for (const name of state.managedMcpNames) {
-    nextContent = setJsoncProperty(nextContent, ["mcp", name], undefined);
-    delete nextMcp[name];
-  }
-  for (const [name, server] of Object.entries(profileMcp)) {
-    nextContent = setJsoncProperty(nextContent, ["mcp", name], server);
-    nextMcp[name] = server;
-  }
-
-  if (Object.keys(nextMcp).length === 0) {
-    nextContent = setJsoncProperty(nextContent, ["mcp"], undefined);
-  }
-
   return {
     nextContent,
     targetState: {
       managedConfigKeys: profileConfigKeys,
-      managedMcpNames: Object.keys(profileMcp).sort((a, b) => a.localeCompare(b))
+      managedMcpNames: []
     }
   };
 };
@@ -172,9 +155,6 @@ const findOverlayConflicts = (
 ) => {
   const errors: string[] = [];
   const managedConfigKeys = new Set(state.managedConfigKeys);
-  const liveMcp = isRecord(liveConfig.mcp) ? liveConfig.mcp : {};
-  const profileMcp = isRecord(profileConfig.mcp) ? profileConfig.mcp : {};
-  const managedMcpNames = new Set(state.managedMcpNames);
 
   for (const key of Object.keys(profileConfig).filter(
     (name) => name !== "mcp" && !METADATA_CONFIG_KEYS.has(name)
@@ -185,16 +165,6 @@ const findOverlayConflicts = (
       !(allowMatchingUnmanaged && sameJsonValue(liveConfig[key], profileConfig[key]))
     ) {
       errors.push(`Config key ${key} already exists outside AgentEnv management`);
-    }
-  }
-
-  for (const name of Object.keys(profileMcp)) {
-    if (
-      name in liveMcp &&
-      !managedMcpNames.has(name) &&
-      !(allowMatchingUnmanaged && sameJsonValue(liveMcp[name], profileMcp[name]))
-    ) {
-      errors.push(`MCP server ${name} already exists outside AgentEnv management`);
     }
   }
 
@@ -218,23 +188,6 @@ const profileFiles = createProfileFileDriver({
   readConfigText: readOpenCodeProfileConfig
 });
 
-const materializeMcpRefs = (
-  profile: ProfileDetail,
-  mcpLibrary: McpLibraryEntry[]
-) => materializeJsonMcpRefs(profile, mcpLibrary, {
-  property: "mcp",
-  serializeServer: (server) => {
-    const environment = jsonMcpEnvironment(server, (sourceName) => `{env:${sourceName}}`);
-    return server.transport === "stdio"
-      ? {
-          type: "local",
-          command: [server.command, ...(server.args ?? [])].filter(Boolean),
-          ...(environment ? { environment } : {})
-        }
-      : { type: "remote", url: server.url };
-  }
-});
-
 const assets = createDirectoryAssetDriver({ targetName: "OpenCode" });
 
 export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
@@ -256,7 +209,8 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       skills: true,
       mcpTransports: ["stdio", "http", "sse"],
       agentFormat: "opencode",
-      disabledSkillPaths: false
+      disabledSkillPaths: false,
+      mcpActivation: true
     }
   },
   detectInstallation: createCommandInstallationDriver("opencode").detectInstallation,
@@ -308,20 +262,25 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     const parsed = parseJsoncObject(configText, "Invalid live opencode.jsonc");
     if (!parsed.ok) throw new Error(parsed.message);
     const config = cloneJson(parsed.value);
-    const capturedMcp = captureJsonMcpServers(config.mcp, "braced-env");
+    const mcpConnections = captureNativeJsonMcpConnections(config.mcp, {
+      targetId: "opencode",
+      sourcePath: targetPaths.configPath,
+      controllable: true
+    });
     delete config.mcp;
     const sanitized = sanitizeCapturedJson(config, "opencode");
     return {
       instructions,
       configText: `${JSON.stringify(sanitized.value, null, 2)}\n`,
-      mcpServers: capturedMcp.servers,
+      mcpServers: [],
+      mcpConnections,
       disabledSkillPaths: [],
-      warnings: capturedMcp.excluded.map((name) => `MCP server ${name} was excluded because it contains unsupported or literal environment values`),
-      excluded: sanitized.excluded.concat(capturedMcp.excluded.map((name) => `mcp.${name}`))
+      warnings: [],
+      excluded: sanitized.excluded
     };
   },
   ...profileFiles,
-  materializeMcpRefs,
+  materializeMcpRefs: (profile) => profile,
   createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;
     const warnings = findSecretWarnings(profile.instructions).concat(
@@ -341,9 +300,19 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       profile.instructions
     );
 
-    const profileConfig = profile.manifest.managed.config
+    const parsedProfileConfig = profile.manifest.managed.config
       ? parseJsoncObject(profile.configText, "Invalid profile opencode.jsonc")
       : { ok: true as const, value: {} };
+    const profileConfig = parsedProfileConfig.ok
+      ? {
+          ...parsedProfileConfig,
+          value: Object.fromEntries(
+            Object.entries(parsedProfileConfig.value).filter(
+              ([key]) => key !== "mcp"
+            )
+          )
+        }
+      : parsedProfileConfig;
     let targetState: TargetState = activeState;
     if (!profileConfig.ok) {
       errors.push(profileConfig.message);
@@ -354,14 +323,17 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
           (key) => key !== "mcp" && !METADATA_CONFIG_KEYS.has(key)
         )
       : [];
-    const profileMcpNames =
-      profileConfig.ok && isRecord(profileConfig.value.mcp)
-        ? Object.keys(profileConfig.value.mcp)
-        : [];
+    const selectedMcpStates = new Map(
+      (profile.assetPolicy.mcpSelections ?? [])
+        .filter((selection) => selection.targetId === "opencode")
+        .map(
+          (selection) => [selection.name, selection.enabled !== false] as const
+        )
+    );
     const shouldManageConfig =
       profile.manifest.managed.config &&
       (profileConfigKeys.length > 0 ||
-        profileMcpNames.length > 0 ||
+        selectedMcpStates.size > 0 ||
         activeState.managedMcpNames.length > 0);
     const liveConfig = shouldManageConfig
       ? parseJsoncObject(liveConfigText, "Invalid live opencode.jsonc")
@@ -371,16 +343,47 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     }
 
     if (shouldManageConfig && liveConfig.ok && profileConfig.ok) {
-      errors.push(...findOverlayConflicts(liveConfig.value, profileConfig.value, activeState, allowMatchingUnmanagedConfig));
+      errors.push(
+        ...findOverlayConflicts(
+          liveConfig.value,
+          profileConfig.value,
+          { ...activeState, managedMcpNames: [] },
+          allowMatchingUnmanagedConfig
+        )
+      );
       if (errors.length === 0) {
         const planned = applyJsoncOverlay(
           liveConfigText,
           liveConfig.value,
           profileConfig.value,
-          activeState
+          { ...activeState, managedMcpNames: [] }
         );
-        targetState = planned.targetState;
-        addChange(changes, targetPaths.configPath, liveConfigText, planned.nextContent);
+        let nextContent = planned.nextContent;
+        const liveMcp = isRecord(liveConfig.value.mcp)
+          ? liveConfig.value.mcp
+          : {};
+        const controlledNames = new Set<string>();
+        for (const [name, enabled] of selectedMcpStates) {
+          if (!isRecord(liveMcp[name])) {
+            warnings.push(
+              `MCP server ${name} is not configured in OpenCode; set it up in OpenCode before applying this selection`
+            );
+            continue;
+          }
+          nextContent = setJsoncProperty(
+            nextContent,
+            ["mcp", name, "enabled"],
+            enabled
+          );
+          controlledNames.add(name);
+        }
+        targetState = {
+          managedConfigKeys: planned.targetState.managedConfigKeys,
+          managedMcpNames: [...controlledNames].sort((left, right) =>
+            left.localeCompare(right)
+          )
+        };
+        addChange(changes, targetPaths.configPath, liveConfigText, nextContent);
       }
     } else if (!shouldManageConfig && profileConfig.ok) {
       targetState = DEFAULT_STATE;

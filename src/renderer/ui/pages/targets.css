@@ -456,3 +456,65 @@
 .capture-dialog__submit.is-working svg {
   animation: spin 0.8s linear infinite;
 }
+.target-native-mcps {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.target-native-mcps__heading {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.target-native-mcps__heading strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.target-native-mcps__heading span,
+.target-native-mcps > p {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.target-native-mcps__list {
+  display: grid;
+}
+
+.target-native-mcps__list > div {
+  align-items: center;
+  border-top: 1px solid var(--border-subtle, var(--border));
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 46px;
+  padding: 7px 0;
+}
+
+.target-native-mcps__list > div > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.target-native-mcps__list strong,
+.target-native-mcps__list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-native-mcps__list strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.target-native-mcps__list small,
+.target-native-mcps__list > div > span:last-child {
+  color: var(--muted);
+  font-size: 11px;
+}
