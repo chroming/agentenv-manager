@@ -254,15 +254,6 @@
   font-weight: 650;
 }
 
-.workspace-button.is-active {
-  background: #eaf1ff;
-  color: #1558c0;
-}
-
-.workspace-button.is-active .workspace-button__icon {
-  color: #1558c0;
-}
-
 /* Dense Library rows share the same identity, state, and action rhythm. */
 .skill-library-panel .library-table__head {
   background: var(--surface-muted);
@@ -276,13 +267,13 @@
 
 .skill-library-panel .library-table-row:hover,
 .skill-library-panel--mcp .resource-row:hover {
-  background: #f8faff;
+  background: rgba(0, 122, 255, 0.045);
 }
 
 .skill-library-panel .library-resource-cell .resource-avatar,
 .skill-library-panel--mcp .ui-resource-row__icon {
-  background: #eef4ff;
-  color: #2764b9;
+  background: transparent;
+  color: var(--muted);
 }
 
 .skill-library-panel .library-actions-cell .icon-action,
@@ -389,14 +380,14 @@
 }
 
 .profile-row.is-active {
-  background: #eef4ff;
+  background: rgba(60, 60, 67, 0.09);
 }
 
 .profile-hero {
   align-items: start;
   display: grid;
   gap: 8px 12px;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 30px minmax(0, 1fr);
   grid-template-rows: auto auto;
   min-height: 0;
   padding: 12px 14px;
@@ -456,29 +447,31 @@
 }
 
 .profile-composer-section__icon {
-  border-radius: var(--radius-control);
-  height: 32px;
-  width: 32px;
+  background: transparent;
+  border-radius: 0;
+  color: var(--muted);
+  height: 28px;
+  width: 28px;
 }
 
 .profile-composer-section[data-profile-composer-id="instructions"] .profile-composer-section__icon {
-  background: #eef4ff;
-  color: #2764b9;
+  background: transparent;
+  color: var(--muted);
 }
 
 .profile-composer-section[data-profile-composer-id="skills"] .profile-composer-section__icon {
-  background: var(--success-bg);
-  color: var(--success);
+  background: transparent;
+  color: var(--muted);
 }
 
 .profile-composer-section[data-profile-composer-id="mcp"] .profile-composer-section__icon {
-  background: #f3effb;
-  color: #6b4eb5;
+  background: transparent;
+  color: var(--muted);
 }
 
 .profile-composer-section[data-profile-composer-id="advanced"] .profile-composer-section__icon {
-  background: var(--surface-pressed);
-  color: #475467;
+  background: transparent;
+  color: var(--muted);
 }
 
 .profile-skill-row,
@@ -636,8 +629,8 @@
 .preview-actions button,
 .capture-dialog__footer button,
 .library-drawer__footer button {
-  height: var(--control-height-prominent);
-  min-height: var(--control-height-prominent);
+  height: 40px;
+  min-height: 40px;
 }
 
 .preview-resource-plan__list > article {
@@ -682,25 +675,19 @@
 
 /* Agents and Settings reuse the same object-row scale. */
 .target-card--workflow {
-  border-radius: var(--radius-surface);
+  border-radius: 10px;
   padding: 12px 14px;
-}
-
-.target-workflow-header {
-  grid-template-columns: 36px minmax(190px, 1fr) auto auto;
 }
 
 .target-workflow-icon {
   border-radius: var(--radius-control);
-  height: 36px;
-  width: 36px;
+  height: 32px;
+  width: 32px;
 }
 
 .target-workflow-actions .secondary-action {
-  background: var(--surface);
-  border-color: var(--border-strong);
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
+  height: var(--control-height-compact);
+  min-height: var(--control-height-compact);
 }
 
 .settings-page > .resource-section {
@@ -739,9 +726,9 @@
 
   .profile-commit-actions .save-button,
   .profile-commit-actions .profile-apply-button {
-    flex-basis: 92px;
-    min-width: 92px;
-    width: 92px;
+    flex-basis: 96px;
+    min-width: 96px;
+    width: 96px;
   }
 
   .profile-action-status {

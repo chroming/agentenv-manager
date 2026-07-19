@@ -255,8 +255,8 @@
 
 /* Profiles owns one control and density contract across its supported window sizes. */
 .app-shell--profiles {
-  --profile-control-height: 40px;
-  --profile-icon-slot: 28px;
+  --profile-control-height: 34px;
+  --profile-icon-slot: 24px;
 }
 
 .app-shell--profiles .editor-panel {
@@ -269,7 +269,7 @@
 
 .profile-page-header {
   align-items: center;
-  min-height: 44px;
+  min-height: var(--page-header-height);
 }
 
 .profile-page-header h2 {
@@ -311,7 +311,7 @@
 }
 
 .profile-page-actions .profile-new-button {
-  min-width: 116px;
+  min-width: 104px;
 }
 
 .profile-page-actions .profile-new-button:not(.is-primary) {
@@ -363,7 +363,7 @@
 .profile-workbench {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
+  border-radius: 10px;
   gap: 0;
   grid-template-columns: 260px minmax(0, 1fr);
   min-height: 0;
@@ -371,7 +371,7 @@
 }
 
 .profile-index {
-  background: #fafaf8;
+  background: #f7f7f8;
   border: 0;
   border-radius: 0;
   border-right: 1px solid var(--border);
@@ -399,7 +399,7 @@
   border-radius: 0;
   gap: 4px;
   grid-template-columns: var(--profile-icon-slot) minmax(0, 1fr);
-  min-height: 82px;
+  min-height: 78px;
   padding: 8px 9px;
   transform: none;
 }
@@ -414,10 +414,10 @@
 }
 
 .profile-row.is-active {
-  background: #eeeeec;
+  background: rgba(60, 60, 67, 0.09);
   border-color: transparent;
-  border-radius: 0 6px 6px 0;
-  box-shadow: inset 3px 0 0 var(--accent);
+  border-radius: 6px;
+  box-shadow: none;
   margin: 0;
 }
 
@@ -428,8 +428,8 @@
 .profile-row__icon--3,
 .profile-row__icon--4,
 .profile-row__icon--selected {
-  background: #f1f1ef;
-  color: #5f615d;
+  background: transparent;
+  color: var(--muted);
   height: var(--profile-icon-slot);
   margin-top: 0;
   width: var(--profile-icon-slot);
@@ -601,19 +601,19 @@
 .profile-hero {
   align-items: start;
   gap: 12px;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   border: 0;
   border-bottom: 1px solid var(--border);
   border-radius: 0;
-  min-height: 110px;
-  padding: 14px 16px;
+  min-height: 100px;
+  padding: 13px 16px;
 }
 
 .profile-hero__icon {
-  background: #f1f1ef;
-  color: #5f615d;
-  height: 36px;
-  width: 36px;
+  background: transparent;
+  color: var(--muted);
+  height: 30px;
+  width: 30px;
 }
 
 .profile-hero__body {
@@ -625,7 +625,7 @@
 }
 
 .profile-hero__title h2 {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 650;
   line-height: 26px;
 }
@@ -953,15 +953,16 @@
 
 /* Apply preview keeps readable rows and one stable footer while content scrolls. */
 .preview-modal-backdrop {
-  padding: 24px;
+  backdrop-filter: none;
+  padding: 28px;
 }
 
 .preview-dialog--modal {
-  gap: 14px;
-  max-height: calc(100vh - 48px);
-  max-width: 880px;
-  padding: 18px;
-  width: min(880px, calc(100vw - 48px));
+  gap: 12px;
+  max-height: calc(100vh - 56px);
+  max-width: 800px;
+  padding: 16px;
+  width: min(800px, calc(100vw - 56px));
 }
 
 .preview-dialog--modal .preview-header {
@@ -996,8 +997,8 @@
   border-left: 1px solid var(--border);
   border-radius: 0;
   gap: 5px;
-  min-height: 72px;
-  padding: 11px 12px;
+  min-height: 64px;
+  padding: 9px 12px;
 }
 
 .preview-summary-card > strong {
@@ -1246,11 +1247,11 @@
 
 .preview-dialog--modal .preview-actions {
   flex: 0 0 66px;
-  margin: 0 -18px -18px;
+  margin: 0 -16px -16px;
   min-height: 66px;
   padding: 12px 18px 14px;
   position: sticky;
-  bottom: -18px;
+  bottom: -16px;
   z-index: var(--z-actions);
 }
 

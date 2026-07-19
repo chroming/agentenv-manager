@@ -1328,7 +1328,7 @@ describe("Electron UI profile switching e2e", () => {
         contentGap: Math.round(content.left - icon.right)
       };
     });
-    expect(newProfileGeometry).toEqual({ iconSize: 28, contentGap: 4 });
+    expect(newProfileGeometry).toEqual({ iconSize: 24, contentGap: 4 });
     expect(await findProfileByName(appDataRoot, "Docs Writing")).toMatchObject({
       name: "Docs Writing",
       description: "Writing workspace"
@@ -1830,8 +1830,8 @@ describe("Electron UI profile switching e2e", () => {
         ]
       };
     });
-    expect(skillIconGeometry.iconSize).toEqual([32, 32]);
-    expect(skillIconGeometry.glyphSize).toEqual([20, 20]);
+    expect(skillIconGeometry.iconSize).toEqual([26, 26]);
+    expect(skillIconGeometry.glyphSize).toEqual([17, 17]);
     expect(skillIconGeometry.centerDelta.every((delta) => delta <= 0.5)).toBe(true);
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
     const popover = page.getByRole("menu", { name: "Actions for shared-reviewer" });
@@ -2001,7 +2001,7 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(profileObjectGeometry.iconTextGap).toBeGreaterThanOrEqual(3);
     expect(profileObjectGeometry.iconTextGap).toBeLessThanOrEqual(5);
-    expect(profileObjectGeometry.iconWidth).toBe(28);
+    expect(profileObjectGeometry.iconWidth).toBe(24);
     expect(profileObjectGeometry.headerTargetControls).toBe(0);
 
     const profileCommitGeometry = await commitActions.evaluate((group) => {
@@ -2317,7 +2317,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(mcpRowGeometry.length).toBeGreaterThan(0);
     expect(mcpRowGeometry.every((row) => row.contained)).toBe(true);
     expect(mcpRowGeometry.every((row) => row.height <= 54)).toBe(true);
-    expect(mcpRowGeometry.every((row) => row.iconHeight === 32 && row.iconWidth === 32)).toBe(true);
+    expect(mcpRowGeometry.every((row) => row.iconHeight === 30 && row.iconWidth === 30)).toBe(true);
     await expectInViewport(
       page,
       profileMcpServers.getByRole("button", { name: "Remove shared-docs from profile" })
@@ -2464,8 +2464,8 @@ describe("Electron UI profile switching e2e", () => {
       expect(Math.abs(saveBox!.y - applyButtonBox!.y)).toBeLessThanOrEqual(1);
       expect(Math.abs(saveBox!.height - applyButtonBox!.height)).toBeLessThanOrEqual(1);
       expect(Math.abs(saveBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
-      expect(Math.round(saveBox!.height)).toBe(40);
-      expect(Math.round(saveBox!.width)).toBe((page.viewportSize()?.width ?? 0) <= 1050 ? 92 : 104);
+      expect(Math.round(saveBox!.height)).toBe(34);
+      expect(Math.round(saveBox!.width)).toBe((page.viewportSize()?.width ?? 0) <= 1050 ? 96 : 104);
 
       const controlsFitText = await commitActions.locator("button").evaluateAll((buttons) =>
         buttons.every((button) => {
@@ -2631,7 +2631,17 @@ describe("Electron UI profile switching e2e", () => {
         }))
       )
     );
-    expect(targetPeerActions[0]).toEqual(targetPeerActions[1]);
+    expect(targetPeerActions[0]).toMatchObject({
+      background: "rgba(0, 0, 0, 0)",
+      border: "rgba(0, 0, 0, 0)",
+      height: 30
+    });
+    expect(targetPeerActions[1]).toMatchObject({
+      color: "rgb(29, 29, 31)",
+      height: 30
+    });
+    expect(targetPeerActions[1].background).not.toBe(targetPeerActions[0].background);
+    expect(targetPeerActions[1].border).not.toBe(targetPeerActions[0].border);
     await expectInViewport(page, page.getByRole("button", { name: /Recovery/ }));
     expect(await page.getByRole("dialog", { name: "Recovery" }).count()).toBe(0);
 
@@ -2953,7 +2963,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.buttonsFitText).toBe(true);
       expect(geometry.dialogOverflow).toBeLessThanOrEqual(1);
       expect(geometry.resourceRows.length).toBeGreaterThan(0);
-      expect(geometry.resourceRows.every((height) => height >= 51)).toBe(true);
+      expect(geometry.resourceRows.every((height) => height >= 49)).toBe(true);
       expect(geometry.summaryCardsFit).toBe(true);
     };
 
@@ -2962,7 +2972,7 @@ describe("Electron UI profile switching e2e", () => {
     await expectPreviewGeometry();
   }, 30_000);
 
-  it("makes Targets a sequential management workflow with on-demand diagnostics", async () => {
+  it("lays out Agents as adaptive management cards with on-demand diagnostics", async () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
     await page.getByRole("button", { name: "Agents", exact: true }).click();
@@ -2975,7 +2985,17 @@ describe("Electron UI profile switching e2e", () => {
     ]);
     expect(openCodeBox).not.toBeNull();
     expect(claudeBox).not.toBeNull();
-    expect(claudeBox!.y).toBeGreaterThan(openCodeBox!.y);
+    expect(Math.abs(claudeBox!.y - openCodeBox!.y)).toBeLessThanOrEqual(1);
+    expect(claudeBox!.x).toBeGreaterThan(openCodeBox!.x);
+
+    await resizeAppWindow(page, 920, 620);
+    const [compactOpenCodeBox, compactClaudeBox] = await Promise.all([
+      openCodeCard.boundingBox(),
+      claudeCard.boundingBox()
+    ]);
+    expect(compactOpenCodeBox).not.toBeNull();
+    expect(compactClaudeBox).not.toBeNull();
+    expect(compactClaudeBox!.y).toBeGreaterThan(compactOpenCodeBox!.y);
 
     await openCodeCard
       .getByRole("button", { name: "Open OpenCode in Profiles" })
@@ -3137,7 +3157,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() =>
         saveButton.evaluate((element) => getComputedStyle(element).backgroundColor)
       )
-      .toBe("rgb(23, 105, 245)");
+      .toBe("rgb(0, 122, 255)");
     expect(await applyButton.isDisabled()).toBe(true);
     expect(await applyButton.textContent()).toContain("Apply");
 
@@ -3148,7 +3168,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() =>
         applyButton.evaluate((element) => getComputedStyle(element).backgroundColor)
       )
-      .toBe("rgb(23, 105, 245)");
+      .toBe("rgb(0, 122, 255)");
 
     await expect(
       readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "AGENTS.md"), "utf8")
@@ -5268,7 +5288,7 @@ describe("Electron UI profile switching e2e", () => {
           };
         });
         expect(mcpRowGeometry.gridTemplateColumns).toMatch(/^32px /);
-        expect(mcpRowGeometry.minHeight).toBe("60px");
+        expect(mcpRowGeometry.minHeight).toBe("58px");
         expect(mcpRowGeometry.height).toBeLessThanOrEqual(72);
       }
       const containment = await page.evaluate(() => ({
@@ -6312,10 +6332,10 @@ describe("Electron UI profile switching e2e", () => {
         };
       });
       expect(metrics.contained).toBe(true);
-      expect(metrics.actionHeights.every((height) => Math.abs(height - 40) <= 1)).toBe(true);
+      expect(metrics.actionHeights.every((height) => Math.abs(height - 34) <= 1)).toBe(true);
       headerMetrics.push({ fontSize: metrics.fontSize, left: metrics.left });
     }
-    expect(new Set(headerMetrics.map((metric) => metric.fontSize))).toEqual(new Set(["22px"]));
+    expect(new Set(headerMetrics.map((metric) => metric.fontSize))).toEqual(new Set(["23px"]));
     expect(Math.max(...headerMetrics.map((metric) => metric.left)) - Math.min(...headerMetrics.map((metric) => metric.left))).toBeLessThanOrEqual(1);
 
     await sidebar.getByRole("button", { name: "MCP Servers", exact: true }).click();
@@ -6335,9 +6355,9 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(mcpGeometry).toEqual({
       actionsContained: true,
-      iconHeight: 32,
-      iconWidth: 32,
-      rowHeight: 60,
+      iconHeight: 30,
+      iconWidth: 30,
+      rowHeight: 58,
       rowContained: true
     });
 

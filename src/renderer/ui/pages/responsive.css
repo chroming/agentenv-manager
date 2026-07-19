@@ -2,7 +2,7 @@
   .app-shell,
   .app-shell--library,
   .app-shell--profiles {
-    grid-template-columns: 196px minmax(0, 1fr);
+    grid-template-columns: 204px minmax(0, 1fr);
   }
 
   .editor-panel,
@@ -21,7 +21,7 @@
 
   .target-workflow-header {
     gap: 10px;
-    grid-template-columns: 34px minmax(100px, 1fr) auto auto;
+    grid-template-columns: 32px minmax(100px, 1fr) auto auto;
   }
 
   .target-workflow-actions .secondary-action {
@@ -30,8 +30,8 @@
   }
 
   .target-workflow-icon {
-    height: 34px;
-    width: 34px;
+    height: 32px;
+    width: 32px;
   }
 
   .target-workflow-title > small {
