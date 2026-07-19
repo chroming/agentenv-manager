@@ -386,13 +386,22 @@ const readCodexDisabledSkillNames = async (targetPaths: TargetPaths) => {
       stripManagedSection(await readTextIfExists(targetPaths.configPath), "skills")
     ) as Record<string, unknown>;
   } catch {
-    return new Set<string>();
+    return {
+      disabledRuntimeNames: new Set<string>(),
+      issues: [{
+        code: "unreadable-native-state" as const,
+        severity: "error" as const,
+        message: `Invalid Codex Skill settings (${targetPaths.configPath})`
+      }]
+    };
   }
   const skillsConfig =
     parsed.skills && typeof parsed.skills === "object" && !Array.isArray(parsed.skills)
       ? (parsed.skills as Record<string, unknown>).config
       : undefined;
-  if (!Array.isArray(skillsConfig)) return new Set<string>();
+  if (!Array.isArray(skillsConfig)) {
+    return { disabledRuntimeNames: new Set<string>(), issues: [] };
+  }
 
   const disabledEntries: Array<{ name?: string; path?: string }> = [];
   for (const entry of skillsConfig) {
@@ -414,12 +423,12 @@ const readCodexDisabledSkillNames = async (targetPaths: TargetPaths) => {
       return frontmatter.name || basename(path.endsWith("SKILL.md") ? dirname(path) : path);
     })
   );
-  return new Set(disabledNames.filter(Boolean));
+  return { disabledRuntimeNames: new Set(disabledNames.filter(Boolean)), issues: [] };
 };
 
 const skills = createFilesystemSkillDriver({
   targetId: "codex",
-  readDisabledRuntimeNames: readCodexDisabledSkillNames
+  readNativeState: readCodexDisabledSkillNames
 });
 
 export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
@@ -577,6 +586,16 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
   },
   ...profileFiles,
   materializeMcpRefs: (profile) => profile,
+  hasMeaningfulNativeConfig: (configText) => {
+    try {
+      const parsed = TOML.parse(configText || "") as Record<string, unknown>;
+      return Object.keys(parsed).some(
+        (key) => key !== "mcp_servers" && key !== "skills"
+      );
+    } catch {
+      return true;
+    }
+  },
   createPreview: async ({
     profile,
     targetPaths,

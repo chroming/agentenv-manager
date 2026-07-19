@@ -2,6 +2,8 @@ import { chmod, cp, lstat, mkdir, readFile, readdir } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import type { AgentEnvPaths } from "./paths";
 import { replacePathWithCopy, writeAtomic } from "./fileUtils";
+import { ensureAppDataFormat } from "./appDataFormat";
+import { validateAppDataRoot } from "./appDataValidation";
 
 export interface DataBackupResult {
   path: string;
@@ -30,6 +32,7 @@ export const createDataBackup = async (
   ) {
     throw new Error("Store AgentEnv backups outside the active data directory");
   }
+  await ensureAppDataFormat(paths);
   const createdAt = new Date().toISOString();
   const destination = join(destinationRoot, backupName(createdAt));
   await mkdir(destination, { recursive: false, mode: 0o700 });
@@ -60,7 +63,14 @@ const rejectLinks = async (path: string): Promise<void> => {
   }
 };
 
-export const inspectDataBackup = async (path: string): Promise<DataRestorePreview> => {
+interface DataBackupValidationOptions {
+  validate?: (appDataRoot: string) => Promise<void>;
+}
+
+export const inspectDataBackup = async (
+  path: string,
+  options: DataBackupValidationOptions = {}
+): Promise<DataRestorePreview> => {
   let manifest: { formatVersion?: unknown; createdAt?: unknown };
   try {
     manifest = JSON.parse(
@@ -78,6 +88,7 @@ export const inspectDataBackup = async (path: string): Promise<DataRestorePrevie
     throw new Error("Unsupported or invalid AgentEnv backup");
   }
   await rejectLinks(dataPath);
+  await (options.validate ?? validateAppDataRoot)(dataPath);
   const entries = await readdir(dataPath);
   return {
     path,
@@ -89,9 +100,11 @@ export const inspectDataBackup = async (path: string): Promise<DataRestorePrevie
 
 export const restoreDataBackup = async (
   paths: AgentEnvPaths,
-  backupPath: string
+  backupPath: string,
+  options: DataBackupValidationOptions = {}
 ): Promise<{ safetyBackupPath: string }> => {
-  await inspectDataBackup(backupPath);
+  const validate = options.validate ?? validateAppDataRoot;
+  await inspectDataBackup(backupPath, { validate });
   if (
     resolve(backupPath) === resolve(paths.appDataRoot) ||
     resolve(backupPath).startsWith(`${resolve(paths.appDataRoot)}/`)
@@ -101,8 +114,37 @@ export const restoreDataBackup = async (
   const safetyRoot = join(dirname(paths.appDataRoot), "agentenv-import-safety");
   await mkdir(safetyRoot, { recursive: true, mode: 0o700 });
   const safetyBackup = await createDataBackup(paths, safetyRoot);
-  await replacePathWithCopy(join(backupPath, "data"), paths.appDataRoot, {
-    dereference: false
-  });
+  try {
+    await replacePathWithCopy(join(backupPath, "data"), paths.appDataRoot, {
+      dereference: false
+    });
+    await chmod(paths.appDataRoot, 0o700);
+    await ensureAppDataFormat(paths);
+    await validate(paths.appDataRoot);
+  } catch (error) {
+    try {
+      await replacePathWithCopy(
+        join(safetyBackup.path, "data"),
+        paths.appDataRoot,
+        { dereference: false }
+      );
+      await chmod(paths.appDataRoot, 0o700);
+      await ensureAppDataFormat(paths);
+      await validate(paths.appDataRoot);
+    } catch (rollbackError) {
+      throw new Error(
+        `Data restore failed and automatic recovery also failed. Recover from ${safetyBackup.path}. Restore error: ${
+          error instanceof Error ? error.message : String(error)
+        }. Recovery error: ${
+          rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+        }`
+      );
+    }
+    throw new Error(
+      `Data restore failed validation; the previous AgentEnv data was restored. ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
   return { safetyBackupPath: safetyBackup.path };
 };

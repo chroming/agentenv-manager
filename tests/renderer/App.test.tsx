@@ -290,7 +290,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
     listTargets: vi.fn().mockResolvedValue([target]),
     listTargetStates: vi.fn().mockResolvedValue([]),
-    listNativeMcpConnections: vi.fn().mockResolvedValue([]),
+    listNativeMcpConnections: vi.fn().mockResolvedValue({ connections: [], issues: [] }),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
     scanSkillInventory: vi.fn().mockResolvedValue([]),
     listSkillCleanupBackups: vi.fn().mockResolvedValue([]),
@@ -1266,7 +1266,7 @@ describe("App", () => {
 
   it("keeps MCP definitions out of Library and saves target-native activation choices", async () => {
     const api = installApi({
-      listNativeMcpConnections: vi.fn().mockResolvedValue([
+      listNativeMcpConnections: vi.fn().mockResolvedValue({ connections: [
         {
           targetId: "opencode",
           name: "context7",
@@ -1276,7 +1276,7 @@ describe("App", () => {
           controllable: true,
           sourcePath: "/tmp/home/.config/opencode/opencode.jsonc"
         }
-      ])
+      ], issues: [] })
     });
     render(<App />);
 
@@ -1310,6 +1310,35 @@ describe("App", () => {
     expect(api.saveMcpServer).not.toHaveBeenCalled();
   });
 
+  it("shows native MCP inspection failures instead of a false empty state", async () => {
+    installApi({
+      listNativeMcpConnections: vi.fn().mockResolvedValue({
+        connections: [],
+        issues: [{
+          targetId: "opencode",
+          targetName: "OpenCode",
+          sourcePath: "/tmp/home/.config/opencode/opencode.jsonc",
+          message: "Invalid live opencode.jsonc"
+        }]
+      })
+    });
+    render(<App />);
+
+    await openProfiles();
+    fireEvent.click(
+      within(screen.getByRole("region", { name: "Profile composer" }))
+        .getByRole("button", { name: "MCPs" })
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not inspect MCP connections"
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Invalid live opencode.jsonc");
+    expect(
+      screen.queryByText("No MCP connections are configured in OpenCode.")
+    ).not.toBeInTheDocument();
+  });
+
   it("shows read-only native MCPs without offering Profile activation controls", async () => {
     const readOnlyTarget: TargetInfo = {
       ...target,
@@ -1327,7 +1356,7 @@ describe("App", () => {
     installApi({
       listSupportedTargets: vi.fn().mockResolvedValue([readOnlyTarget]),
       listTargets: vi.fn().mockResolvedValue([readOnlyTarget]),
-      listNativeMcpConnections: vi.fn().mockResolvedValue([
+      listNativeMcpConnections: vi.fn().mockResolvedValue({ connections: [
         {
           targetId: "claude-code",
           name: "docs",
@@ -1337,7 +1366,7 @@ describe("App", () => {
           controllable: false,
           sourcePath: "/tmp/home/.claude.json"
         }
-      ]),
+      ], issues: [] }),
       readProfile: vi.fn().mockResolvedValue({
         ...profile,
         manifest: { ...profile.manifest, targetId: "claude-code" }
@@ -1429,6 +1458,38 @@ describe("App", () => {
     fireEvent.click(advanced);
     expect(advanced).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByLabelText("OpenCode settings (opencode.jsonc)")).not.toBeInTheDocument();
+  });
+
+  it("keeps usable Profiles available and surfaces a damaged stored Profile", async () => {
+    const readProfile = vi.fn().mockImplementation(async (profileId) => {
+      if (profileId === "broken-profile") throw new Error("Invalid profile manifest");
+      return profile;
+    });
+    installApi({
+      listProfiles: vi.fn().mockResolvedValue([
+        summaryOf(profile),
+        {
+          id: "broken-profile",
+          targetId: "unknown",
+          name: "broken-profile",
+          description: "This Profile could not be loaded",
+          loadError: "Invalid profile manifest"
+        }
+      ]),
+      readProfile
+    });
+    render(<App />);
+
+    await openProfiles();
+    expect(await screen.findByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
+    const brokenRow = screen.getByRole("group", { name: "Profile broken-profile" });
+    expect(brokenRow).toHaveTextContent("Stored Profile data could not be loaded");
+
+    fireEvent.click(within(brokenRow).getByRole("button"));
+
+    expect(readProfile).not.toHaveBeenCalledWith("broken-profile");
+    expect(await screen.findByText(/broken-profile needs repair: Invalid profile manifest/))
+      .toBeInTheDocument();
   });
 
   it("focuses the active profile without moving it ahead of newer profiles", async () => {

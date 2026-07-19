@@ -7,6 +7,7 @@ export interface ProfileSummary {
   iconKey?: ResourceIconKey;
   contentHash?: string;
   targetContentHashes?: Record<string, string>;
+  loadError?: string;
 }
 
 export type { AssetPolicy, ProfileManifest, ResourceIconKey } from "./schemas";
@@ -23,7 +24,7 @@ export interface AgentEnvApi {
   listSupportedTargets(): Promise<TargetDescriptor[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
-  listNativeMcpConnections(): Promise<NativeMcpConnection[]>;
+  listNativeMcpConnections(): Promise<NativeMcpInspection>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   scanSkillInventory(): Promise<SkillInventoryEntry[]>;
   listSkillCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
@@ -56,7 +57,7 @@ export interface AgentEnvApi {
   setSkillAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
   setSkillIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
-  updateLibrarySkill(id: string): Promise<SkillLibraryEntry>;
+  updateLibrarySkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
   readGitHubAuthStatus(): Promise<GitHubAuthStatus>;
@@ -383,6 +384,7 @@ export interface ManageTargetSkillInput {
 
 export interface SkillUpdatePlan {
   id: string;
+  previewId?: string;
   name: string;
   sourceType: SkillSourceType;
   source?: string;
@@ -391,6 +393,20 @@ export interface SkillUpdatePlan {
   updateAvailable: boolean;
   changes: PlannedFileChange[];
   errors: string[];
+  impact: SkillUpdateImpact;
+}
+
+export interface SkillUpdateImpact {
+  profileNames: string[];
+  linkedInstallCount: number;
+  linkedTargetIds: string[];
+  copiedInstallCount: number;
+  copiedTargetIds: string[];
+}
+
+export interface SkillUpdateConfirmation {
+  id: string;
+  previewId: string;
 }
 
 export type SkillInventoryStatus = "managed" | "library" | "external" | "unmanaged" | "ignored";
@@ -431,7 +447,8 @@ export interface SkillRuntimeIssue {
     | "invalid-runtime-name"
     | "duplicate-runtime-name"
     | "external-owner"
-    | "unreadable-skill";
+    | "unreadable-skill"
+    | "unreadable-native-state";
   severity: "info" | "warning" | "error";
   message: string;
 }
@@ -470,6 +487,7 @@ export interface SkillRuntimeSnapshot {
 
 export interface SkillRuntimeNativeState {
   disabledRuntimeNames: string[];
+  issues: SkillRuntimeIssue[];
 }
 
 export interface SkillCleanupLocationInput {
@@ -555,6 +573,18 @@ export interface NativeMcpConnection {
   controllable: boolean;
   sourcePath: string;
   detail?: string;
+}
+
+export interface NativeMcpInspectionIssue {
+  targetId: string;
+  targetName: string;
+  sourcePath: string;
+  message: string;
+}
+
+export interface NativeMcpInspection {
+  connections: NativeMcpConnection[];
+  issues: NativeMcpInspectionIssue[];
 }
 
 export interface McpLibraryEntry {
@@ -777,6 +807,7 @@ export interface TargetSkillExternalContainerMarker {
 }
 
 export interface TargetState {
+  formatVersion?: 1;
   managedConfigKeys: string[];
   managedMcpNames: string[];
   activeProfileId?: string;

@@ -41,6 +41,8 @@ const zhCN: Record<string, string> = {
   "Loading MCP connections...": "正在载入 MCP 连接...",
   "No MCP connections are configured in {{name}}.":
     "{{name}} 中未配置 MCP 连接。",
+  "Could not inspect MCP connections": "无法读取 MCP 连接",
+  "Retry": "重试",
   "Setup required": "需要设置",
   "On in Agent": "Agent 中已开启",
   "Off in Agent": "Agent 中已关闭",
@@ -67,6 +69,8 @@ const zhCN: Record<string, string> = {
   "Select an Agent before previewing changes": "请先选择一个 Agent，再预览变更",
   "Open Agents": "打开 Agents",
   "Compose reusable environments and apply them safely to local Agents.": "组合可复用环境，并安全应用到本地 Agents。",
+  "Stored Profile data could not be loaded": "已存储的配置方案无法载入",
+  "Profile {{name}} needs repair: {{error}}": "配置方案 {{name}} 需要修复：{{error}}",
   "Agent settings, validation, and recovery": "Agent 设置、校验与恢复",
   "From Agent": "从 Agent 创建",
   "Native format": "原生格式",
@@ -1188,7 +1192,12 @@ Object.assign(zhCN, {
   "This installation is owned by {{manager}}. AgentEnv will import an independent Library copy and leave it unchanged.": "此安装由 {{manager}} 管理；AgentEnv 会导入独立的资源库副本，并保持原安装不变。",
   "AgentEnv will back up this Target copy, import it to Library, then replace the folder with a managed copy.": "AgentEnv 会备份此目标副本，将其导入资源库，再用托管副本替换该文件夹。",
   "Updates the shared Library copy used by {{profiles}}. Copied Target installs remain unchanged until their Profiles are applied.": "更新被 {{profiles}} 使用的共享资源库副本；复制到目标的安装会保持不变，直到再次应用对应配置方案。",
-  "Updates the shared Library copy used by {{profiles}}. Linked Target installs may change immediately after this update.": "更新被 {{profiles}} 使用的共享资源库副本；使用链接的目标安装可能会立即变化。"
+  "Updates the shared Library copy used by {{profiles}}. Linked Target installs may change immediately after this update.": "更新被 {{profiles}} 使用的共享资源库副本；使用链接的目标安装可能会立即变化。",
+  "Used by {{count}} Profiles": "被 {{count}} 个配置方案引用",
+  "{{count}} linked Agent installs change immediately": "{{count}} 个链接安装会立即更新",
+  "{{count}} copied Agent installs wait for Apply or Sync": "{{count}} 个复制安装会等到应用或同步后更新",
+  "No Profiles or managed Agent installs currently use this Skill": "目前没有配置方案或托管的 Agent 安装使用此技能",
+  "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs wait": "{{profiles}} 个配置方案 · {{linked}} 个链接安装立即更新 · {{copied}} 个复制安装等待应用"
 });
 
 Object.assign(zhCN, {
@@ -1343,6 +1352,8 @@ const zhTW: Record<string, string> = {
   "Shared connections": "共用連線",
   "Profiles": "設定檔",
   "Compose environments": "組合 Agent 環境",
+  "Stored Profile data could not be loaded": "已儲存的設定檔無法載入",
+  "Profile {{name}} needs repair: {{error}}": "設定檔 {{name}} 需要修復：{{error}}",
   "Targets": "目標",
   "Local agent runtimes": "本機 Agent 執行環境",
   "Settings": "設定",

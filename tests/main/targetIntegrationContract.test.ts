@@ -48,6 +48,8 @@ describe("target integration contract", () => {
     );
     expect(restored.instructions).toBe(profile.instructions);
     expect(restored.configText).toBe(profile.configText);
+    expect(adapter.hasMeaningfulNativeConfig("")).toBe(false);
+    expect(adapter.hasMeaningfulNativeConfig(profile.configText)).toBe(true);
     expect(installation.found).toBe(true);
     await mkdir(paths.configDir, { recursive: true });
     await writeFile(paths.instructionsPath, "# Live fixture\n", "utf8");
@@ -62,7 +64,8 @@ describe("target integration contract", () => {
     );
     await expect(adapter.validateAssets({ profile, targetPaths: paths })).resolves.toEqual([]);
     await expect(adapter.skills.readNativeState(paths)).resolves.toEqual({
-      disabledRuntimeNames: []
+      disabledRuntimeNames: [],
+      issues: []
     });
     await expect(adapter.skills.inspectRuntime(paths)).resolves.toEqual({
       targetId: "fixture-agent",

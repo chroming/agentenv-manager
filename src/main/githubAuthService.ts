@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
 import type {
   GitHubAuthStatus,
   GitHubAuthUser,
@@ -10,6 +10,7 @@ import type {
 } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
 import { DEFAULT_GITHUB_OAUTH_CLIENT_ID } from "./githubConfig";
+import { writeAtomic } from "./fileUtils";
 
 interface TokenFile {
   token: string;
@@ -163,8 +164,7 @@ export const createFileGitHubTokenStore = (
       throw new Error("Secure storage is unavailable on this Mac");
     }
     const encrypted = cipher.encryptString(token).toString("base64");
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, `${JSON.stringify({ token: encrypted }, null, 2)}\n`, "utf8");
+    await writeAtomic(path, `${JSON.stringify({ token: encrypted }, null, 2)}\n`);
   };
 
   const clearToken = async () => {

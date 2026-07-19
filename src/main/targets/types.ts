@@ -73,6 +73,7 @@ export interface AgentTargetAdapter {
     profile: ProfileDetail,
     mcpLibrary: McpLibraryEntry[]
   ): ProfileDetail;
+  hasMeaningfulNativeConfig(configText: string): boolean;
   createPreview(input: TargetPreviewInput): Promise<TargetActivationPreview>;
   validateAssets(input: TargetAssetInput): Promise<string[]>;
   getAssetBackupPaths(input: TargetAssetInput): Promise<string[]>;

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
 import { createHash } from "node:crypto";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createActivationService } from "./activationService";
 import {
@@ -34,6 +34,8 @@ import {
   windowChromeOptionsFor
 } from "./windowConfig";
 import { recoverPendingReplacementsInDirectory } from "./fileUtils";
+import { createMutationCoordinator } from "./mutationCoordinator";
+import { ensureAppDataFormat } from "./appDataFormat";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -241,6 +243,10 @@ const createWindow = () => {
   win.webContents.on("render-process-gone", () => {
     guardedWindowCloses.delete(win);
   });
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (event) => {
+    event.preventDefault();
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -261,13 +267,18 @@ const createServices = async () => {
     homeDir,
     userDataDir: app.getPath("userData")
   });
-  await recoverPendingReplacementsInDirectory(join(appDataRoot, ".."));
-  if (!process.env.AGENTENV_DATA_ROOT) {
-    await migrateLegacyAppDataRoot({
-      legacyRoot: legacyElectronAppDataRoot(app.getPath("userData")),
-      nextRoot: appDataRoot
-    });
-  }
+  const mutationCoordinator = createMutationCoordinator(appDataRoot);
+  await mutationCoordinator.runExclusive("Initialize AgentEnv data", async () => {
+    await recoverPendingReplacementsInDirectory(join(appDataRoot, ".."));
+    if (!process.env.AGENTENV_DATA_ROOT) {
+      await migrateLegacyAppDataRoot({
+        legacyRoot: legacyElectronAppDataRoot(app.getPath("userData")),
+        nextRoot: appDataRoot
+      });
+    }
+    await mkdir(appDataRoot, { recursive: true, mode: 0o700 });
+    await chmod(appDataRoot, 0o700);
+  });
   const paths = createPaths({
     appDataRoot,
     repositoryCacheDir: join(
@@ -277,6 +288,9 @@ const createServices = async () => {
     homeDir,
     fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });
+  await mutationCoordinator.runExclusive("Initialize AgentEnv data format", () =>
+    ensureAppDataFormat(paths)
+  );
   const targetRegistry = createTargetRegistry();
   let gitRunner: GitCommandRunner | undefined;
   let repositorySourcePromise: Promise<GitCliSkillSource> | undefined;
@@ -322,12 +336,17 @@ const createServices = async () => {
     for (const scanDir of targetPaths.skillScanDirs ?? []) replacementRoots.add(scanDir);
     for (const location of targetPaths.skillLocations ?? []) replacementRoots.add(location.path);
   }
-  for (const root of replacementRoots) {
-    await recoverPendingReplacementsInDirectory(root);
-  }
+  await mutationCoordinator.runExclusive("Recover interrupted writes", async () => {
+    for (const root of replacementRoots) {
+      await recoverPendingReplacementsInDirectory(root);
+    }
+  });
   const settingsStore = createSettingsStore(paths, {
     supportedTargetIds: targetRegistry.list().map((target) => target.id)
   });
+  await mutationCoordinator.runExclusive("Initialize Settings", () =>
+    settingsStore.readSettings()
+  );
   const targetScope = createTargetScope(targetRegistry, settingsStore);
   const githubAuthService = createGitHubAuthService({
     tokenStore: createFileGitHubTokenStore(paths, {
@@ -399,7 +418,9 @@ const createServices = async () => {
     targetScope
   });
 
-  await seedDefaultProfiles(paths, targetRegistry);
+  await mutationCoordinator.runExclusive("Initialize Profiles", () =>
+    seedDefaultProfiles(paths, targetRegistry)
+  );
 
   return {
     paths,
@@ -414,6 +435,7 @@ const createServices = async () => {
     targetCaptureService,
     targetRegistry,
     targetDiscoveryService,
+    mutationCoordinator,
     cancelRepositoryOperations: () => gitRunner?.cancelActive(),
     dispose: () => {
       repositoryServicesDisposed = true;
@@ -422,17 +444,34 @@ const createServices = async () => {
   };
 };
 
-void app.whenReady().then(() => {
+const ownsSingleInstance =
+  process.env.AGENTENV_AUTOMATION === "1" || app.requestSingleInstanceLock();
+
+if (!ownsSingleInstance) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (!window) return;
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  });
+}
+
+if (ownsSingleInstance) void app.whenReady().then(() => {
   void createServices()
     .then((services) => {
       disposeServices = services.dispose;
       registerIpcHandlers(services);
       if (process.env.AGENTENV_AUTOMATION !== "1") {
         const runBackupCleanup = async () => {
-          const settings = await services.settingsStore.readSettings();
-          if (settings.backupRetentionDays !== null) {
-            await services.backupMaintenanceService.cleanup();
-          }
+          await services.mutationCoordinator.runExclusive("Clean up backups", async () => {
+            const settings = await services.settingsStore.readSettings();
+            if (settings.backupRetentionDays !== null) {
+              await services.backupMaintenanceService.cleanup();
+            }
+          });
         };
         void runBackupCleanup().catch((error) => {
           console.error("Automatic backup cleanup failed", error);

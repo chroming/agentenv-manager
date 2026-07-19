@@ -714,17 +714,23 @@ description: >
     await expect(store.checkUpdates([imported.id])).resolves.toEqual([
       expect.objectContaining({ id: imported.id, sourceType: "git", updateAvailable: true })
     ]);
-    await expect(store.previewUpdate(imported.id)).resolves.toMatchObject({
+    const updatePlan = await store.previewUpdate(imported.id);
+    expect(updatePlan).toMatchObject({
       sourceType: "git",
       updateAvailable: true,
       changes: [expect.objectContaining({ path: "prompt.md" })],
       errors: []
     });
-    const updated = await store.updateSkill(imported.id);
+    await repository.write("skills/review/prompt.md", "Unreviewed repository change.\n");
+    await repository.commit("change repository after preview");
+    const updated = await store.updateSkill({ id: imported.id, previewId: updatePlan.previewId! });
 
     await expect(readFile(join(updated.path, "prompt.md"), "utf8")).resolves.toBe(
       "Review the new behavior.\n"
     );
+    await expect(store.checkUpdates([imported.id])).resolves.toEqual([
+      expect.objectContaining({ id: imported.id, updateAvailable: true })
+    ]);
     await expect(readFile(join(targetCopy, "prompt.md"), "utf8")).resolves.toBe(
       "Review carefully.\n"
     );
@@ -756,7 +762,8 @@ description: >
     await store.setIcon({ id: "reviewer", iconKey: "shield" });
     await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: Reviewer\n---\n\n# v2\n", "utf8");
-    const updated = await store.updateSkill("reviewer");
+    const updatePlan = await store.previewUpdate("reviewer");
+    const updated = await store.updateSkill({ id: "reviewer", previewId: updatePlan.previewId! });
 
     expect(updated.iconKey).toBe("shield");
     await expect(store.listSkills()).resolves.toEqual([
@@ -1879,6 +1886,170 @@ description: >
     expect(plan.changes[0].diff).toContain("# v2");
   });
 
+  it("applies the exact local Skill candidate that was reviewed", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "source", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v1\n", "utf8");
+
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
+    await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# reviewed v2\n", "utf8");
+
+    const plan = await store.previewUpdate("reviewer");
+    expect(plan.previewId).toBeTruthy();
+
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# unreviewed v3\n", "utf8");
+    const updated = await store.updateSkill({ id: "reviewer", previewId: plan.previewId! });
+
+    await expect(readFile(join(updated.path, "SKILL.md"), "utf8")).resolves.toContain(
+      "# reviewed v2"
+    );
+    await expect(readFile(join(updated.path, "SKILL.md"), "utf8")).resolves.not.toContain(
+      "# unreviewed v3"
+    );
+  });
+
+  it("detects and applies binary Skill asset changes without decoding them as text", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "source", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# Reviewer\n", "utf8");
+    await writeFile(join(sourceDir, "icon.png"), Buffer.from([0, 1, 2, 3]));
+
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
+    await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
+    await writeFile(join(sourceDir, "icon.png"), Buffer.from([0, 1, 9, 3]));
+
+    const plan = await store.previewUpdate("reviewer");
+    expect(plan.changes).toEqual([
+      expect.objectContaining({
+        path: "icon.png",
+        before: expect.stringContaining("[binary file: 4 bytes, sha256"),
+        after: expect.stringContaining("[binary file: 4 bytes, sha256")
+      })
+    ]);
+
+    const updated = await store.updateSkill({ id: "reviewer", previewId: plan.previewId! });
+    await expect(readFile(join(updated.path, "icon.png"))).resolves.toEqual(
+      Buffer.from([0, 1, 9, 3])
+    );
+  });
+
+  it("rejects a Skill update when the Library copy changed after preview", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "source", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v1\n", "utf8");
+
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
+    await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
+    const plan = await store.previewUpdate("reviewer");
+
+    await writeFile(
+      join(paths.skillsLibraryDir, "reviewer", "SKILL.md"),
+      "---\nname: reviewer\n---\n# edited after preview\n",
+      "utf8"
+    );
+
+    await expect(
+      store.updateSkill({ id: "reviewer", previewId: plan.previewId! })
+    ).rejects.toThrow("changed after the update preview");
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("# edited after preview");
+  });
+
+  it("reports Profile, linked install, and copied install impact in update previews", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceDir = join(root, "source", "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v1\n", "utf8");
+    const profile = {
+      id: "daily-coding",
+      profileDir: join(paths.profilesDir, "daily-coding"),
+      manifest: {
+        id: "daily-coding",
+        targetId: "opencode",
+        name: "Daily Coding",
+        description: "",
+        version: 1 as const,
+        managed: { instructions: true, config: true, assets: true }
+      },
+      instructions: "",
+      configText: "{}\n",
+      assetPolicy: {
+        ownedDirs: [],
+        ownedFiles: [],
+        skillRefs: [{ libraryId: "reviewer", targetName: "reviewer" }],
+        mcpRefs: [],
+        disabledSkillPaths: []
+      }
+    };
+    const profileStore = {
+      listProfiles: vi.fn().mockResolvedValue([profile.manifest]),
+      readProfile: vi.fn().mockResolvedValue(profile),
+      saveProfile: vi.fn()
+    };
+    let syncMethod: "symlink" | "copy" = "symlink";
+    const settingsStore = {
+      readSettings: vi.fn(async () => ({
+        locale: "system" as const,
+        skillSyncMethod: syncMethod,
+        skillStorageLocation: "appData" as const,
+        skillAutoCheckEnabled: true,
+        skillAutoCheckIntervalMinutes: 60,
+        backupRetentionDays: null
+      }))
+    };
+    const openCodePaths = createOpenCodeTargetAdapter().createTargetPaths({
+      homeDir: paths.homeDir,
+      fakeHomeRoot: paths.fakeHomeRoot
+    });
+    const claudePaths = createClaudeCodeTargetAdapter().createTargetPaths({
+      homeDir: paths.homeDir,
+      fakeHomeRoot: paths.fakeHomeRoot
+    });
+    const store = createSkillLibraryStore(paths, settingsStore, {
+      profileStore,
+      targetPathsProvider: () => [openCodePaths, claudePaths]
+    });
+    await store.importSkill({ sourcePath: sourceDir, id: "reviewer", sourceType: "local" });
+    await store.setUpdateSource({ id: "reviewer", sourceType: "local", source: sourceDir });
+    await store.deployLibrarySkill({
+      targetPaths: openCodePaths,
+      targetName: "reviewer",
+      libraryId: "reviewer",
+      profileId: profile.id
+    });
+    syncMethod = "copy";
+    await store.deployLibrarySkill({
+      targetPaths: claudePaths,
+      targetName: "reviewer",
+      libraryId: "reviewer",
+      profileId: profile.id
+    });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
+
+    const plan = await store.previewUpdate("reviewer");
+
+    expect(plan.impact).toEqual({
+      profileNames: ["Daily Coding"],
+      linkedInstallCount: 1,
+      linkedTargetIds: ["opencode"],
+      copiedInstallCount: 1,
+      copiedTargetIds: ["claude-code", "opencode"]
+    });
+  });
+
   it("refreshes local-source skills and records a new content hash", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
@@ -1896,7 +2067,8 @@ description: >
     await store.setUpdatePolicy({ id: "reviewer", policy: "tracked" });
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n\n# v2\n", "utf8");
 
-    const updated = await store.updateSkill("reviewer");
+    const updatePlan = await store.previewUpdate("reviewer");
+    const updated = await store.updateSkill({ id: "reviewer", previewId: updatePlan.previewId! });
 
     expect(updated.contentHash).not.toBe(first.contentHash);
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).resolves.toContain(
@@ -2112,7 +2284,8 @@ description: >
       }
     ]);
 
-    const updated = await store.updateSkill("reviewer");
+    const updatePlan = await store.previewUpdate("reviewer");
+    const updated = await store.updateSkill({ id: "reviewer", previewId: updatePlan.previewId! });
 
     expect(updated.remoteRevision).toBe("bd3ab812f7c7c36d243ec501041be299e208ecc1");
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).resolves.toContain(
@@ -2167,6 +2340,11 @@ description: >
       before: "---\nname: reviewer\n---\n# v1\n",
       after: "---\nname: reviewer\n---\n# v2\n"
     });
+
+    version = "v3";
+    const updated = await store.updateSkill({ id: "reviewer", previewId: plan.previewId! });
+    await expect(readFile(join(updated.path, "SKILL.md"), "utf8")).resolves.toContain("# v2");
+    await expect(readFile(join(updated.path, "SKILL.md"), "utf8")).resolves.not.toContain("# v3");
   });
 
   it("merges same-name Library skills while choosing content and update source independently", async () => {

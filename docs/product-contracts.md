@@ -644,6 +644,8 @@ External ownership contract:
 - Window focus and manual status checks MUST NOT create overlapping or early token requests. A completed authorization immediately refreshes the visible account and rate-limit state without requiring navigation or restart.
 - System Git authentication, host trust, VPN, ref, and timeout failures MUST provide Repository-specific diagnostics and MUST NOT suggest GitHub sign-in.
 - Update Preview MUST show changed files and validation errors.
+- Update Preview MUST bind one immutable materialized candidate, the current Library content hash, and the current update metadata. Confirm applies that exact candidate; it MUST NOT fetch the source again. If Library content or metadata changes after Preview, Update fails stale and requires a new review.
+- Update Preview MUST derive impact from persisted Profiles and observed managed installs. It names referencing Profiles and distinguishes live links, which change immediately, from copied installs, which remain pending.
 - Applying a Library update changes canonical content only after Preview, Backup, validation, and atomic replacement. A check never modifies Library.
 - A Repository update changes neither a Profile nor a Target directly. Related Profiles and copied Target installs become `Changes pending` and require the normal Save/Apply lifecycle.
 - In optional Copy mode, Profiles remain saved and their deployed Targets become `Changes pending`; copied installs require explicit synchronization or Profile Apply.
@@ -849,6 +851,7 @@ A new Target adapter MUST define:
 - Backup path enumeration.
 - Apply, drift, and rollback behavior.
 - Cross-Target capability declarations.
+- A semantic native-config predicate that distinguishes metadata-only or MCP-only defaults from Agent-specific Advanced configuration.
 
 Registration MUST occur in the Target registry. Renderer components MUST NOT require Target-specific branches for ordinary lifecycle behavior.
 
@@ -875,8 +878,13 @@ environment values, and all other MCP definition fields remain Agent-owned.
 - Backups include a manifest with format version and creation time.
 - GitHub credentials remain encrypted for the originating Mac and MUST NOT be presented as portable plaintext.
 - Corrupt or unsupported future data MUST fail closed with recovery guidance rather than being partially loaded.
-- A restore/import flow MUST create a safety backup before replacing current canonical data, reject unsafe links or unsupported formats, and refresh all visible canonical state after success.
+- A restore/import flow MUST deeply validate Profiles, Skills, MCP storage, Settings, and deployment state before mutation; create a safety backup before replacing current canonical data; reject unsafe links or unsupported formats; validate the active data again after replacement; automatically restore the safety backup if that validation fails; and refresh all visible canonical state after success.
+- One malformed Profile MUST remain visible as needing repair without hiding usable Profiles or blocking creation of a valid first Profile. It MUST NOT be silently interpreted as an empty Profile.
+- Malformed deployment state MUST surface `Recovery required` and block Preview, Apply, rollback, and ownership changes until repaired. It MUST NOT be treated as an unmanaged Target.
+- Malformed native Skill or MCP state MUST surface an inspection error and block unsafe mutation. It MUST NOT be rendered or planned as a confirmed empty state.
+- AgentEnv permits only one application instance and one data-root mutation at a time. A lock outside the replaceable data root protects startup migration, writes, backup cleanup, and restore; dead owner locks MAY be recovered explicitly.
 - Canonical JSON/text writes use same-directory temporary files and atomic rename. Directory replacement prepares a complete sibling staging path, records a recovery journal, preserves the previous path until the swap succeeds, and repairs interrupted swaps at startup.
+- Private data directories use owner-only permissions where the platform supports them; canonical text and credential files are written with owner-only permissions by default.
 - Profile deletion moves the Profile into AgentEnv's private trash area rather than permanently removing it immediately. Skill cleanup, update, and deletion retain restorable backup data.
 - Backup manifests and IDs are validated before restore, and restore paths are limited to adapter-declared Target locations and AgentEnv-owned canonical locations. A malformed or tampered backup fails closed before any destination is modified.
 - A clean application window closes without waiting for renderer acknowledgement. Only an unsaved Profile draft enables the close guard; Cancel keeps the window and draft intact, while Save or Discard completes the pending close explicitly.

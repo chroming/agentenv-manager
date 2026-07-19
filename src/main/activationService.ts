@@ -58,7 +58,6 @@ import type {
   StopManagingResult,
   TargetManagementState,
   TargetPaths,
-  TargetRecoveryState,
   TargetState
 } from "../shared/types";
 import { createProfileContentHash } from "./profileFingerprint";
@@ -79,6 +78,7 @@ import {
   type SkillRootTransition
 } from "./skillRootTopology";
 import { redactSensitiveValues } from "./secretWarnings";
+import { defaultTargetState, parseTargetState } from "./targetState";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -118,11 +118,14 @@ export interface ActivationService {
   adoptTargetChanges(profileId: string, targetId: string): Promise<AdoptTargetChangesResult>;
 }
 
-const DEFAULT_TARGET_STATE: TargetState = {
-  managedConfigKeys: [],
-  managedMcpNames: [],
-  managedResources: []
-};
+const DEFAULT_TARGET_STATE: TargetState = defaultTargetState();
+
+class InvalidTargetStateError extends Error {
+  constructor(readonly statePath: string) {
+    super(`Agent management state is invalid and must be recovered before changes can continue: ${statePath}`);
+    this.name = "InvalidTargetStateError";
+  }
+}
 
 const publicPreview = (preview: ActivationPreview): ActivationPreview => ({
   ...preview,
@@ -228,88 +231,6 @@ const appendHistory = async (
     `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`,
     "utf8"
   );
-};
-
-const normalizeTargetState = (value: unknown): TargetState => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return DEFAULT_TARGET_STATE;
-  }
-  const record = value as Partial<TargetState>;
-  const managedResources = Array.isArray(record.managedResources)
-    ? record.managedResources.filter(
-        (item): item is ManagedResourceSnapshot =>
-          Boolean(item) &&
-          typeof item === "object" &&
-          "kind" in item &&
-          "id" in item &&
-          "path" in item &&
-          "contentHash" in item &&
-          typeof item.kind === "string" &&
-          typeof item.id === "string" &&
-          typeof item.path === "string" &&
-          typeof item.contentHash === "string"
-      )
-    : [];
-  const sharedSkillPreparations = Array.isArray(record.sharedSkillPreparations)
-    ? record.sharedSkillPreparations.filter(
-        (item): item is SharedSkillPreparation =>
-          Boolean(item) &&
-          typeof item === "object" &&
-          "skillKey" in item &&
-          "libraryId" in item &&
-          "sharedPaths" in item &&
-          "targetName" in item &&
-          "disposition" in item &&
-          "profileId" in item &&
-          "profileHash" in item &&
-          typeof item.skillKey === "string" &&
-          typeof item.libraryId === "string" &&
-          Array.isArray(item.sharedPaths) &&
-          item.sharedPaths.every((path) => typeof path === "string") &&
-          typeof item.targetName === "string" &&
-          (item.disposition === "install" || item.disposition === "omit") &&
-          typeof item.profileId === "string" &&
-          typeof item.profileHash === "string"
-      )
-    : [];
-  const recoveryRecord =
-    record.recoveryRequired && typeof record.recoveryRequired === "object"
-      ? (record.recoveryRequired as unknown as Record<string, unknown>)
-      : undefined;
-  const recoveryRequired: TargetRecoveryState | undefined =
-    recoveryRecord &&
-    (recoveryRecord.operation === "apply" || recoveryRecord.operation === "rollback") &&
-    typeof recoveryRecord.error === "string" &&
-    typeof recoveryRecord.occurredAt === "string"
-      ? {
-          operation: recoveryRecord.operation as "apply" | "rollback",
-          error: recoveryRecord.error,
-          backupId:
-            typeof recoveryRecord.backupId === "string" ? recoveryRecord.backupId : undefined,
-          occurredAt: recoveryRecord.occurredAt
-        }
-      : undefined;
-  return {
-    managedConfigKeys: Array.isArray(record.managedConfigKeys)
-      ? record.managedConfigKeys.filter((item): item is string => typeof item === "string")
-      : [],
-    managedMcpNames: Array.isArray(record.managedMcpNames)
-      ? record.managedMcpNames.filter((item): item is string => typeof item === "string")
-      : [],
-    activeProfileId: typeof record.activeProfileId === "string" ? record.activeProfileId : undefined,
-    appliedProfileHash:
-      typeof record.appliedProfileHash === "string" ? record.appliedProfileHash : undefined,
-    appliedLibraryVersions:
-      record.appliedLibraryVersions &&
-      typeof record.appliedLibraryVersions === "object" &&
-      !Array.isArray(record.appliedLibraryVersions)
-        ? record.appliedLibraryVersions
-        : undefined,
-    lastAppliedAt: typeof record.lastAppliedAt === "string" ? record.lastAppliedAt : undefined,
-    managedResources,
-    sharedSkillPreparations,
-    recoveryRequired
-  };
 };
 
 const createRollbackChange = async (
@@ -525,23 +446,18 @@ export const createActivationService = ({
 
   const readTargetStateFile = async (targetId: string) => {
     const path = statePathFor(targetId);
-    const content = await readTextIfExists(path);
+    if (!(await pathEntryExists(path))) {
+      return { path, content: "", state: DEFAULT_TARGET_STATE };
+    }
+    const content = await readFile(path, "utf8");
     if (content.trim().length === 0) {
-      return { path, content, state: DEFAULT_TARGET_STATE };
+      throw new InvalidTargetStateError(path);
     }
 
     try {
-      return {
-        path,
-        content,
-        state: normalizeTargetState(JSON.parse(content))
-      };
+      return { path, content, state: parseTargetState(JSON.parse(content)) };
     } catch {
-      return {
-        path,
-        content,
-        state: DEFAULT_TARGET_STATE
-      };
+      throw new InvalidTargetStateError(path);
     }
   };
 
@@ -565,72 +481,86 @@ export const createActivationService = ({
         )
         .map(async (entry): Promise<TargetManagementState | undefined> => {
           const targetId = entry.name.replace(/\.json$/, "");
-          const { state } = await readTargetStateFile(targetId);
-          if (
-            !state.activeProfileId &&
-            (state.managedResources ?? []).length === 0 &&
-            !state.recoveryRequired
-          ) {
-            return undefined;
-          }
-          const driftChecks = await Promise.all(
-            (state.managedResources ?? [])
-              .filter((resource) => resource.kind !== "config")
-              .map(async (resource) => {
-                const currentHash = await hashPath(resource.path);
-                return currentHash !== resource.contentHash;
-              })
-          );
-          const driftCount = driftChecks.filter(Boolean).length;
-          let lifecycleStatus: TargetManagementState["lifecycleStatus"] = "unmanaged";
-          let lifecycleReason: string | undefined;
-          let activeProfileName: string | undefined;
-          if (state.recoveryRequired) {
-            lifecycleStatus = "recovery-required";
-            lifecycleReason = state.recoveryRequired.error;
-          } else if (driftCount > 0) {
-            lifecycleStatus = "drifted";
-            lifecycleReason = `${driftCount} managed ${driftCount === 1 ? "resource differs" : "resources differ"} from the applied snapshot`;
-          } else if (state.activeProfileId) {
-            try {
-              const profile = await profileStore.readProfile(state.activeProfileId);
-              activeProfileName = profile.manifest.name;
-              const expectedHash =
-                profile.targetContentHashes?.[targetId] ??
-                (profile.manifest.targetId === targetId ? profile.contentHash : undefined);
-              const currentVersions = collectLibraryResourceVersions(
-                profile,
-                skillLibrary,
-                mcpLibrary
-              );
-              const isCurrent =
-                Boolean(expectedHash) &&
-                expectedHash === state.appliedProfileHash &&
-                libraryResourceVersionsEqual(currentVersions, state.appliedLibraryVersions);
-              lifecycleStatus = isCurrent ? "applied" : "pending";
-              if (!isCurrent) {
-                lifecycleReason = "Saved Profile or Library resources changed after the last Apply";
-              }
-            } catch {
-              lifecycleStatus = "pending";
-              lifecycleReason = "The active Profile is unavailable";
+          try {
+            const { state } = await readTargetStateFile(targetId);
+            if (
+              !state.activeProfileId &&
+              (state.managedResources ?? []).length === 0 &&
+              !state.recoveryRequired
+            ) {
+              return undefined;
             }
+            const driftChecks = await Promise.all(
+              (state.managedResources ?? [])
+                .filter((resource) => resource.kind !== "config")
+                .map(async (resource) => {
+                  const currentHash = await hashPath(resource.path);
+                  return currentHash !== resource.contentHash;
+                })
+            );
+            const driftCount = driftChecks.filter(Boolean).length;
+            let lifecycleStatus: TargetManagementState["lifecycleStatus"] = "unmanaged";
+            let lifecycleReason: string | undefined;
+            let activeProfileName: string | undefined;
+            if (state.recoveryRequired) {
+              lifecycleStatus = "recovery-required";
+              lifecycleReason = state.recoveryRequired.error;
+            } else if (driftCount > 0) {
+              lifecycleStatus = "drifted";
+              lifecycleReason = `${driftCount} managed ${driftCount === 1 ? "resource differs" : "resources differ"} from the applied snapshot`;
+            } else if (state.activeProfileId) {
+              try {
+                const profile = await profileStore.readProfile(state.activeProfileId);
+                activeProfileName = profile.manifest.name;
+                const expectedHash =
+                  profile.targetContentHashes?.[targetId] ??
+                  (profile.manifest.targetId === targetId ? profile.contentHash : undefined);
+                const currentVersions = collectLibraryResourceVersions(
+                  profile,
+                  skillLibrary,
+                  mcpLibrary
+                );
+                const isCurrent =
+                  Boolean(expectedHash) &&
+                  expectedHash === state.appliedProfileHash &&
+                  libraryResourceVersionsEqual(currentVersions, state.appliedLibraryVersions);
+                lifecycleStatus = isCurrent ? "applied" : "pending";
+                if (!isCurrent) {
+                  lifecycleReason = "Saved Profile or Library resources changed after the last Apply";
+                }
+              } catch {
+                lifecycleStatus = "pending";
+                lifecycleReason = "The active Profile is unavailable";
+              }
+            }
+            return {
+              targetId,
+              activeProfileId: state.activeProfileId,
+              activeProfileName,
+              appliedProfileHash: state.appliedProfileHash,
+              appliedLibraryVersions: state.appliedLibraryVersions,
+              status: state.activeProfileId ? "managed" : "unmanaged",
+              lifecycleStatus,
+              lifecycleReason,
+              lastAppliedAt: state.lastAppliedAt,
+              managedResourceCount: state.managedResources?.length ?? 0,
+              sharedSkillPreparations: state.sharedSkillPreparations ?? [],
+              warningCount: 0,
+              errorCount: driftCount
+            };
+          } catch (error) {
+            if (!(error instanceof InvalidTargetStateError)) throw error;
+            return {
+              targetId,
+              status: "managed",
+              lifecycleStatus: "recovery-required",
+              lifecycleReason: error.message,
+              managedResourceCount: 0,
+              sharedSkillPreparations: [],
+              warningCount: 0,
+              errorCount: 1
+            };
           }
-          return {
-            targetId,
-            activeProfileId: state.activeProfileId,
-            activeProfileName,
-            appliedProfileHash: state.appliedProfileHash,
-            appliedLibraryVersions: state.appliedLibraryVersions,
-            status: state.activeProfileId ? "managed" : "unmanaged",
-            lifecycleStatus,
-            lifecycleReason,
-            lastAppliedAt: state.lastAppliedAt,
-            managedResourceCount: state.managedResources?.length ?? 0,
-            sharedSkillPreparations: state.sharedSkillPreparations ?? [],
-            warningCount: 0,
-            errorCount: driftCount
-          };
         })
     );
 
@@ -641,7 +571,10 @@ export const createActivationService = ({
 
   const writeTargetState = async (targetId: string, state: TargetState) => {
     await mkdir(paths.targetStatesDir, { recursive: true, mode: 0o700 });
-    await writeAtomic(statePathFor(targetId), `${JSON.stringify(state, null, 2)}\n`);
+    await writeAtomic(
+      statePathFor(targetId),
+      `${JSON.stringify({ ...state, formatVersion: 1 }, null, 2)}\n`
+    );
   };
 
   const sharedSkillPreparationPlan = async (
@@ -795,7 +728,8 @@ export const createActivationService = ({
     adapter: ReturnType<TargetRegistry["get"]>,
     targetPaths: TargetPaths,
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    skillLibrary: SkillLibraryEntry[]
+    skillLibrary: SkillLibraryEntry[],
+    inventory: SkillInventoryEntry[]
   ) => {
     const nativeState = await adapter.skills.readNativeState(targetPaths);
     const desired = await desiredRuntimeSkills(profile, skillLibrary);
@@ -813,6 +747,14 @@ export const createActivationService = ({
           ]
         : []
     );
+    const warnings = nativeState.issues
+      .filter((issue) => issue.severity !== "error")
+      .map((issue) => issue.message);
+    errors.push(
+      ...nativeState.issues
+        .filter((issue) => issue.severity === "error")
+        .map((issue) => issue.message)
+    );
     const desiredNames = new Set(byRuntimeName.keys());
     for (const runtimeName of nativeState.disabledRuntimeNames) {
       if (desiredNames.has(normalizeSkillKey(runtimeName))) {
@@ -821,7 +763,29 @@ export const createActivationService = ({
         );
       }
     }
-    return { errors: [...new Set(errors)], warnings: [] as string[] };
+    for (const [runtimeName, desiredItems] of byRuntimeName) {
+      if (desiredItems.length !== 1) continue;
+      const desiredItem = desiredItems[0];
+      const conflictingPaths = [...new Set(
+        inventory
+          .filter(
+            (item) =>
+              item.locationRole !== "discovery-only" &&
+              item.runtimeAvailability !== "disabled" &&
+              normalizeSkillKey(item.runtimeName ?? item.name) === runtimeName &&
+              normalizeSkillKey(item.deploymentName ?? item.id) !==
+                normalizeSkillKey(desiredItem.deploymentName) &&
+              !(item.status === "managed" && item.managedByTarget === true)
+          )
+          .map((item) => item.path)
+      )].sort((left, right) => left.localeCompare(right));
+      for (const path of conflictingPaths) {
+        errors.push(
+          `Cannot install runtime Skill ${desiredItem.runtimeName} as ${desiredItem.deploymentName} because an existing Agent Skill declares the same runtime name at ${path}`
+        );
+      }
+    }
+    return { errors: [...new Set(errors)], warnings: [...new Set(warnings)] };
   };
 
   const desiredManagedPaths = (
@@ -1200,7 +1164,11 @@ export const createActivationService = ({
     const mcpLibrary = await mcpLibraryStore.listServers();
     const skillLibrary = await skillLibraryStore.listSkills();
     const adapter = targetRegistry.get(targetId);
-    const targeted = targetProfile(sourceProfile, adapter);
+    const targeted = targetProfile(
+      sourceProfile,
+      adapter,
+      targetRegistry.get(sourceProfile.manifest.targetId)
+    );
     const profile = applyLibrarySkillAvailability(targeted.profile, skillLibrary);
     const disabledLibrarySkills = targeted.profile.assetPolicy.skillRefs
       .filter(
@@ -1232,10 +1200,10 @@ export const createActivationService = ({
               (path) => resolve(path) !== resolve(targetPaths.skillsDir ?? "")
             )
           };
-    const [inventory, runtimeValidation] = await Promise.all([
-      skillLibraryStore.scanInventory([inventoryTargetPaths], skillLibrary),
-      validateRuntimeSkills(adapter, targetPaths, profile, skillLibrary)
-    ]);
+    const inventory = await skillLibraryStore.scanInventory(
+      [inventoryTargetPaths],
+      skillLibrary
+    );
     const profileContentHash =
       sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
       createProfileContentHash(targeted.profile);
@@ -1254,6 +1222,13 @@ export const createActivationService = ({
     const materializedProfile = adapter.materializeMcpRefs(
       externallyResolved.profile,
       mcpLibrary
+    );
+    const runtimeValidation = await validateRuntimeSkills(
+      adapter,
+      targetPaths,
+      materializedProfile,
+      skillLibrary,
+      inventory
     );
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
@@ -1487,7 +1462,11 @@ export const createActivationService = ({
       mcpLibraryStore.listServers(),
       skillLibraryStore.listSkills()
     ]);
-    const targetedProfile = targetProfile(sourceProfile, adapter).profile;
+    const targetedProfile = targetProfile(
+      sourceProfile,
+      adapter,
+      targetRegistry.get(sourceProfile.manifest.targetId)
+    ).profile;
     const profile = applyLibrarySkillAvailability(
       targetedProfile,
       skillLibrary
@@ -1575,8 +1554,9 @@ export const createActivationService = ({
     const runtimeValidation = await validateRuntimeSkills(
       adapter,
       targetPaths,
-      profile,
-      skillLibrary
+      materializedProfile,
+      skillLibrary,
+      inventory
     );
     if (runtimeValidation.errors.length > 0) {
       return { ok: false, errors: runtimeValidation.errors };
@@ -1855,7 +1835,11 @@ export const createActivationService = ({
         }
 
         const sourceProfile = await profileStore.readProfile(stateFile.state.activeProfileId);
-        const targetedProfile = targetProfile(sourceProfile, adapter).profile;
+        const targetedProfile = targetProfile(
+          sourceProfile,
+          adapter,
+          targetRegistry.get(sourceProfile.manifest.targetId)
+        ).profile;
         const effectiveProfile = applyLibrarySkillAvailability(targetedProfile, skillLibrary);
         const expectedReference = effectiveProfile.assetPolicy.skillRefs.find(
           (reference) => reference.libraryId === libraryId && reference.enabled !== false

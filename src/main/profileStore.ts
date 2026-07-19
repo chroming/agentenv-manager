@@ -116,7 +116,11 @@ export const createProfileStore = (
     };
     const targetContentHashes = Object.fromEntries(
       targetRegistry.listAdapters().map((adapter) => {
-        const targeted = targetProfile(normalizedProfile, adapter).profile;
+        const targeted = targetProfile(
+          normalizedProfile,
+          adapter,
+          targetRegistry.get(manifest.targetId)
+        ).profile;
         return [adapter.descriptor.id, createProfileContentHash(targeted)];
       })
     );
@@ -130,9 +134,14 @@ export const createProfileStore = (
   const listProfiles = async (): Promise<ProfileSummary[]> => {
     let entries: string[];
     try {
-      entries = (await readdir(paths.profilesDir)).filter(
-        (entry) => !entry.includes(".agentenv-")
-      );
+      entries = (await readdir(paths.profilesDir, { withFileTypes: true }))
+        .filter(
+          (entry) =>
+            !entry.name.startsWith(".") &&
+            !entry.name.includes(".agentenv-") &&
+            (entry.isDirectory() || entry.isSymbolicLink())
+        )
+        .map((entry) => entry.name);
     } catch (error) {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
         return [];
@@ -142,21 +151,36 @@ export const createProfileStore = (
 
     const summaries = await Promise.all(
       entries.map(async (entry) => {
-        const profile = await readProfile(entry);
-        return {
-          id: profile.manifest.id,
-          targetId: profile.manifest.targetId,
-          name: profile.manifest.name,
-          description: profile.manifest.description,
-          createdAt: profile.manifest.createdAt,
-          iconKey: profile.manifest.iconKey,
-          contentHash: profile.contentHash,
-          targetContentHashes: profile.targetContentHashes
-        };
+        try {
+          const profile = await readProfile(entry);
+          if (profile.manifest.id !== entry) {
+            throw new Error(`Profile directory and manifest ids differ: ${entry}`);
+          }
+          return {
+            id: profile.manifest.id,
+            targetId: profile.manifest.targetId,
+            name: profile.manifest.name,
+            description: profile.manifest.description,
+            createdAt: profile.manifest.createdAt,
+            iconKey: profile.manifest.iconKey,
+            contentHash: profile.contentHash,
+            targetContentHashes: profile.targetContentHashes
+          } satisfies ProfileSummary;
+        } catch (error) {
+          return {
+            id: entry,
+            targetId: "unknown",
+            name: entry,
+            description: "This Profile could not be loaded",
+            loadError: error instanceof Error ? error.message : String(error)
+          } satisfies ProfileSummary;
+        }
       })
     );
 
     return summaries.sort((a, b) => {
+      const validityDifference = Number(Boolean(a.loadError)) - Number(Boolean(b.loadError));
+      if (validityDifference) return validityDifference;
       const createdAtDifference =
         Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? "");
       return createdAtDifference || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);

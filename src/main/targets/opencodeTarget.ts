@@ -318,6 +318,12 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   },
   ...profileFiles,
   materializeMcpRefs: (profile) => profile,
+  hasMeaningfulNativeConfig: (configText) => {
+    const parsed = parseJsoncObject(configText, "Invalid OpenCode Profile config");
+    return !parsed.ok || Object.keys(parsed.value).some(
+      (key) => key !== "mcp" && !METADATA_CONFIG_KEYS.has(key)
+    );
+  },
   createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;
     const warnings = findSecretWarnings(profile.instructions).concat(

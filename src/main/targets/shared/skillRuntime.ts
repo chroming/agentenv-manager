@@ -25,7 +25,10 @@ export interface DiscoveredSkillDirectory {
 
 interface FilesystemSkillDriverOptions {
   targetId: string;
-  readDisabledRuntimeNames?: (targetPaths: TargetPaths) => Promise<ReadonlySet<string>>;
+  readNativeState?: (targetPaths: TargetPaths) => Promise<{
+    disabledRuntimeNames: ReadonlySet<string> | readonly string[];
+    issues?: SkillRuntimeIssue[];
+  }>;
 }
 
 const locationForRoot = (targetPaths: TargetPaths, root: string): TargetSkillLocation =>
@@ -85,7 +88,7 @@ export const discoverSkillDirectories = async (
     if (scanDepth !== "recursive" || entryStats.isSymbolicLink()) return;
 
     const children = await readdir(candidate, { withFileTypes: true }).catch(() => []);
-    for (const child of children) {
+    for (const child of children.sort((left, right) => left.name.localeCompare(right.name))) {
       if (child.name.startsWith(".")) continue;
       if (!child.isDirectory() && !child.isSymbolicLink()) continue;
       await visit(join(candidate, child.name), child.name, nextAncestors, depth + 1);
@@ -94,7 +97,7 @@ export const discoverSkillDirectories = async (
 
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
   const rootAncestors = new Set([await realpath(root).catch(() => resolve(root))]);
-  for (const entry of entries) {
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
     if (entry.name.startsWith(".")) continue;
     if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
     await visit(join(root, entry.name), entry.name, rootAncestors, 1);
@@ -133,22 +136,26 @@ export const inspectExternalSkillOwnership = async (
 export const createFilesystemSkillDriver = (
   options: FilesystemSkillDriverOptions
 ): TargetSkillDriver => {
-  const readNativeState: TargetSkillDriver["readNativeState"] = async (targetPaths) => ({
-    disabledRuntimeNames: [
-      ...(options.readDisabledRuntimeNames
-        ? await options.readDisabledRuntimeNames(targetPaths)
-        : new Set<string>())
-    ].sort((left, right) => left.localeCompare(right))
-  });
+  const readNativeState: TargetSkillDriver["readNativeState"] = async (targetPaths) => {
+    const nativeState = options.readNativeState
+      ? await options.readNativeState(targetPaths)
+      : { disabledRuntimeNames: [] as string[], issues: [] as SkillRuntimeIssue[] };
+    return {
+      disabledRuntimeNames: [...nativeState.disabledRuntimeNames].sort((left, right) =>
+        left.localeCompare(right)
+      ),
+      issues: nativeState.issues ?? []
+    };
+  };
 
   const inspectRuntime: TargetSkillDriver["inspectRuntime"] = async (
     targetPaths
   ): Promise<SkillRuntimeSnapshot> => {
-    const { disabledRuntimeNames } = await readNativeState(targetPaths);
+    const { disabledRuntimeNames, issues: nativeIssues } = await readNativeState(targetPaths);
     const disabledNames = new Set(disabledRuntimeNames);
     const disabledKeys = new Set([...disabledNames].map(normalizeSkillKey));
     const observations: SkillRuntimeObservation[] = [];
-    const snapshotIssues: SkillRuntimeIssue[] = [];
+    const snapshotIssues: SkillRuntimeIssue[] = [...nativeIssues];
 
     for (const location of targetSkillLocations(targetPaths)) {
       const candidates = await discoverSkillDirectories(
@@ -283,15 +290,12 @@ export const createFilesystemSkillDriver = (
     for (const duplicates of byRuntimeName.values()) {
       if (duplicates.length < 2) continue;
       const paths = duplicates.map((item) => item.path).join(", ");
-      for (const [index, observation] of duplicates.entries()) {
+      for (const observation of duplicates) {
         observation.issues.push({
           code: "duplicate-runtime-name",
           severity: "warning",
           message: `Runtime name ${observation.runtimeName} is declared by multiple Skills: ${paths}`
         });
-        if (index > 0 && observation.availability === "enabled") {
-          observation.availability = "shadowed";
-        }
       }
     }
 

@@ -137,11 +137,19 @@ describe("SkillLibraryPanel", () => {
       activeTool?: "import" | "discoveries",
       bulkUpdatePlans?: Array<{
         id: string;
+        previewId: string;
         name: string;
         sourceType: "local";
         updateAvailable: boolean;
         changes: Array<{ path: string; before: string; after: string; diff: string }>;
         errors: string[];
+        impact: {
+          profileNames: string[];
+          linkedInstallCount: number;
+          linkedTargetIds: string[];
+          copiedInstallCount: number;
+          copiedTargetIds: string[];
+        };
       }>,
       showSelectedUpdatePlan = false
     ) => (
@@ -432,6 +440,7 @@ describe("SkillLibraryPanel", () => {
         ]}
         selectedUpdatePlan={showSelectedUpdatePlan ? {
           id: "shared-reviewer",
+          previewId: "preview-shared-reviewer",
           name: "Shared Reviewer",
           sourceType: "local",
           source: "/tmp/source/shared-reviewer",
@@ -446,7 +455,14 @@ describe("SkillLibraryPanel", () => {
               diff: "--- before\n+++ after\n@@\n-# v1\n+# v2\n"
             }
           ],
-          errors: []
+          errors: [],
+          impact: {
+            profileNames: ["Daily Coding"],
+            linkedInstallCount: 1,
+            linkedTargetIds: ["opencode"],
+            copiedInstallCount: 0,
+            copiedTargetIds: []
+          }
         } : undefined}
         bulkUpdatePlans={bulkUpdatePlans}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
@@ -1051,19 +1067,35 @@ describe("SkillLibraryPanel", () => {
       renderPanel(undefined, [
         {
           id: "shared-reviewer",
+          previewId: "preview-shared-reviewer",
           name: "Shared Reviewer",
           sourceType: "local",
           updateAvailable: true,
           changes: [{ path: "SKILL.md", before: "old", after: "new", diff: "diff" }],
-          errors: []
+          errors: [],
+          impact: {
+            profileNames: ["Daily Coding"],
+            linkedInstallCount: 1,
+            linkedTargetIds: ["opencode"],
+            copiedInstallCount: 0,
+            copiedTargetIds: []
+          }
         },
         {
           id: "broken-reviewer",
+          previewId: "preview-broken-reviewer",
           name: "Broken Reviewer",
           sourceType: "local",
           updateAvailable: false,
           changes: [],
-          errors: ["Source unavailable"]
+          errors: ["Source unavailable"],
+          impact: {
+            profileNames: [],
+            linkedInstallCount: 0,
+            linkedTargetIds: [],
+            copiedInstallCount: 0,
+            copiedTargetIds: []
+          }
         }
       ])
     );
@@ -1071,7 +1103,9 @@ describe("SkillLibraryPanel", () => {
     const partialApply = within(bulkDialog).getByRole("button", { name: "Apply 1 updates" });
     expect(partialApply).toBeEnabled();
     fireEvent.click(partialApply);
-    expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith(["shared-reviewer"]);
+    expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "shared-reviewer", previewId: "preview-shared-reviewer" })
+    ]);
   }, 15_000);
 
   it("scans and imports skills from an SSH repository ref and directory", async () => {

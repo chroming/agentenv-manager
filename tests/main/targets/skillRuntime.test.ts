@@ -63,10 +63,16 @@ describe("filesystem Skill runtime driver", () => {
     ]);
     expect(snapshot.observations.map((item) => item.availability)).toEqual([
       "enabled",
-      "shadowed"
+      "enabled"
     ]);
-    expect(snapshot.observations[1].issues).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: "duplicate-runtime-name" })])
+    expect(snapshot.observations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          issues: expect.arrayContaining([
+            expect.objectContaining({ code: "duplicate-runtime-name" })
+          ])
+        })
+      ])
     );
   });
 

@@ -20,7 +20,6 @@ import {
   Plus,
   RefreshCw,
   ScanLine,
-  Search,
   Settings2,
   TriangleAlert,
   Trash2,
@@ -61,6 +60,7 @@ import type {
   ManagedBackupInventory,
   ManagedBackupItem,
   NativeMcpConnection,
+  NativeMcpInspectionIssue,
   RetireSharedSkillInput,
   SharedSkillRetentionInput,
   McpLibraryEntry,
@@ -99,11 +99,11 @@ import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { DiffViewer } from "./components/DiffViewer";
 import { HistoryView } from "./components/HistoryView";
 import { InfoTip } from "./components/InfoTip";
-import { OverflowTooltip } from "./components/OverflowTooltip";
 import { McpEditor } from "./components/McpEditor";
 import { McpLibraryPanel } from "./components/McpLibraryPanel";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
+import { ProfileList } from "./components/ProfileList";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { ResourceIconPicker } from "./components/ResourceIconPicker";
 import {
@@ -137,14 +137,11 @@ import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration
 import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
 import {
-  compareProfilesByCreationTime,
-  listProfileApplications,
   preferredTargetForProfile,
   summarizeProfile,
   type ProfileResourceSummary
 } from "./profileSummary";
 import { createTargetNameIndex } from "./targetPresentation";
-
 const emptyAssetPolicy: AssetPolicy = {
   ownedDirs: [],
   ownedFiles: [],
@@ -595,6 +592,7 @@ const AppContent = ({
   const [targetStates, setTargetStates] = useState<TargetManagementState[]>([]);
   const [nativeMcpConnections, setNativeMcpConnections] =
     useState<NativeMcpConnection[]>();
+  const [nativeMcpIssues, setNativeMcpIssues] = useState<NativeMcpInspectionIssue[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
   const [mcpServers, setMcpServers] = useState<McpLibraryEntry[]>([]);
@@ -735,7 +733,9 @@ const AppContent = ({
   }, []);
   const refreshNativeMcpConnections = useCallback(async () => {
     try {
-      setNativeMcpConnections(await window.agentEnv.listNativeMcpConnections());
+      const inspection = await window.agentEnv.listNativeMcpConnections();
+      setNativeMcpConnections(inspection.connections);
+      setNativeMcpIssues(inspection.issues);
     } catch (unknownError) {
       setError(
         unknownError instanceof Error
@@ -843,11 +843,18 @@ const AppContent = ({
     const skillItemsPromise = window.agentEnv.listSkillLibrary();
     const nativeMcpPromise = window.agentEnv.listNativeMcpConnections();
     void nativeMcpPromise
-      .then((items) => {
-        if (shouldApply()) setNativeMcpConnections(items);
+      .then((inspection) => {
+        if (shouldApply()) {
+          setNativeMcpConnections(inspection.connections);
+          setNativeMcpIssues(inspection.issues);
+        }
       })
-      .catch(() => {
-        if (shouldApply()) setNativeMcpConnections([]);
+      .catch((unknownError) => {
+        if (shouldApply()) {
+          setNativeMcpConnections(undefined);
+          setNativeMcpIssues([]);
+          setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+        }
       });
     const corePromise = Promise.all([
       window.agentEnv.listSupportedTargets(),
@@ -959,7 +966,9 @@ const AppContent = ({
             error: "GitHub is temporarily unavailable. Local resources are still available."
           };
     const profileDetails = await Promise.all(
-      profileItems.map((profile) => window.agentEnv.readProfile(profile.id))
+      profileItems
+        .filter((profile) => !profile.loadError)
+        .map((profile) => window.agentEnv.readProfile(profile.id))
     );
     const usage: Record<string, string[]> = {};
     const nextMcpUsage: Record<string, string[]> = {};
@@ -1168,7 +1177,8 @@ const AppContent = ({
         });
 
         const { profileItems, targetItems, targetStateItems } = core;
-        if (profileItems.length === 0) {
+        const usableProfiles = profileItems.filter((profile) => !profile.loadError);
+        if (usableProfiles.length === 0) {
           return;
         }
 
@@ -1185,9 +1195,9 @@ const AppContent = ({
           (state) => state.targetId === initialTargetId
         )?.activeProfileId;
         const initialProfile =
-          profileItems.find((profile) => profile.id === activeProfileId) ??
-          profileItems.find((profile) => !initialTargetId || profile.targetId === initialTargetId) ??
-          profileItems[0];
+          usableProfiles.find((profile) => profile.id === activeProfileId) ??
+          usableProfiles.find((profile) => !initialTargetId || profile.targetId === initialTargetId) ??
+          usableProfiles[0];
         const initialProfileTargetId = initialTargetId ?? initialProfile.targetId;
         setSelectedTargetId(initialProfileTargetId);
         setProfileTargetSelections({ [initialProfile.id]: initialProfileTargetId });
@@ -1328,6 +1338,14 @@ const AppContent = ({
     profileId: string,
     composerSection?: "instructions" | "skills" | "mcp" | "advanced"
   ) => {
+    const summary = profiles.find((profile) => profile.id === profileId);
+    if (summary?.loadError) {
+      setError(t("Profile {{name}} needs repair: {{error}}", {
+        name: summary.name,
+        error: summary.loadError
+      }));
+      return;
+    }
     if (profileId === selectedProfileId) {
       setActiveWorkspace("profiles");
       setActiveComposerSection(composerSection);
@@ -1865,7 +1883,9 @@ const AppContent = ({
     try {
       await window.agentEnv.deleteProfile(deletedProfileId);
       const { profileItems } = await refreshProfiles();
-      const nextProfile = profileItems.find((profile) => profile.targetId === deletedTargetId);
+      const nextProfile = profileItems.find(
+        (profile) => !profile.loadError && profile.targetId === deletedTargetId
+      );
       if (nextProfile) {
         const nextDetail = await window.agentEnv.readProfile(nextProfile.id);
         setSelectedProfileId(nextProfile.id);
@@ -2108,16 +2128,6 @@ const AppContent = ({
   const profileTarget = supportedTargets.find(
     (target) => target.id === draftProfile?.manifest.targetId
   );
-  const normalizedProfileSearch = profileSearch.trim().toLowerCase();
-  const visibleProfiles = profiles
-    .filter((profile) => {
-      if (normalizedProfileSearch.length === 0) {
-        return true;
-      }
-
-      return `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedProfileSearch);
-    })
-    .sort(compareProfilesByCreationTime);
   const activeTargetName = selectedTarget?.name ?? draftProfile?.manifest.targetId ?? "Agent";
   const targetStateById = new Map(targetStates.map((state) => [state.targetId, state]));
   const preparedSkillTargetsBySkill = useMemo(
@@ -2140,16 +2150,6 @@ const AppContent = ({
     [targetStates]
   );
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
-  const selectedSkillUpdateImpact = selectedSkillUpdatePlan
-    ? t(
-        skillSettings.skillSyncMethod === "copy"
-          ? "Updates the shared Library copy used by {{profiles}}. Copied Agent installs remain unchanged until their Profiles are applied."
-          : "Updates the shared Library copy used by {{profiles}}. Linked Agent installs may change immediately after this update.",
-        {
-          profiles: plural(skillUsage[selectedSkillUpdatePlan.id]?.length ?? 0, "profile")
-        }
-      )
-    : undefined;
   const isSelectedProfileActive = Boolean(
     selectedProfileId && targetStates.some((state) => state.activeProfileId === selectedProfileId)
   );
@@ -2612,17 +2612,24 @@ const AppContent = ({
     }
   };
 
-  const updateLibrarySkill = async (id: string) => {
+  const updateLibrarySkill = async (plan: SkillUpdatePlan) => {
+    if (!plan.previewId) {
+      setError("Skill update preview is unavailable; review the update again");
+      return;
+    }
     setBusy(true);
     setError(undefined);
     try {
-      const updated = await window.agentEnv.updateLibrarySkill(id);
+      const updated = await window.agentEnv.updateLibrarySkill({
+        id: plan.id,
+        previewId: plan.previewId
+      });
       setSelectedSkillUpdatePlan(undefined);
       applyLibraryContentUpdatesLocally([updated]);
       setSkillUpdateCheckStatus(
         summarizeSkillUpdateResult(
-          id,
-          skillUpdates.filter((item) => item.id !== id),
+          plan.id,
+          skillUpdates.filter((item) => item.id !== plan.id),
           t
         )
       );
@@ -2713,8 +2720,9 @@ const AppContent = ({
     }
   };
 
-  const updateAllLibrarySkills = async (ids: string[]) => {
-    if (ids.length === 0) {
+  const updateAllLibrarySkills = async (plans: SkillUpdatePlan[]) => {
+    const applicablePlans = plans.filter((plan) => Boolean(plan.previewId));
+    if (applicablePlans.length === 0) {
       return;
     }
 
@@ -2722,9 +2730,20 @@ const AppContent = ({
     setError(undefined);
     setBulkSkillUpdatePlans(undefined);
     try {
-      const results = await Promise.allSettled(
-        ids.map((id) => window.agentEnv.updateLibrarySkill(id))
-      );
+      const results: PromiseSettledResult<SkillLibraryEntry>[] = [];
+      for (const plan of applicablePlans) {
+        try {
+          results.push({
+            status: "fulfilled",
+            value: await window.agentEnv.updateLibrarySkill({
+              id: plan.id,
+              previewId: plan.previewId!
+            })
+          });
+        } catch (reason) {
+          results.push({ status: "rejected", reason });
+        }
+      }
       const failures = results.filter((result): result is PromiseRejectedResult =>
         result.status === "rejected"
       );
@@ -2743,8 +2762,8 @@ const AppContent = ({
           state: "success",
           message:
             remainingUpdates > 0
-              ? `Updated ${plural(ids.length, "skill")} · More updates remain`
-              : `Updated ${plural(ids.length, "skill")} · All tracked skills are up to date`
+              ? `Updated ${plural(applicablePlans.length, "skill")} · More updates remain`
+              : `Updated ${plural(applicablePlans.length, "skill")} · All tracked skills are up to date`
         });
       }
       if (failures.length > 0) {
@@ -3488,7 +3507,7 @@ const AppContent = ({
       setSelectedProfileId(undefined);
       setDraftProfile(undefined);
       const refreshed = await refreshProfiles();
-      const firstProfile = refreshed.profileItems[0];
+      const firstProfile = refreshed.profileItems.find((profile) => !profile.loadError);
       if (firstProfile) {
         setSelectedProfileId(firstProfile.id);
         setSelectedTargetId(firstProfile.targetId);
@@ -4144,147 +4163,22 @@ const AppContent = ({
               )}
             />
             <section className="profile-workbench ui-surface-frame" aria-label={t("Profiles")}>
-              <aside className="profile-index" aria-label={t("Profile list")}>
-                <div className="profile-list-toolbar">
-                  <label className="profile-search ui-composite-field">
-                    <Search size={15} strokeWidth={2.2} aria-hidden="true" />
-                    <input
-                      ref={profileSearchInputRef}
-                      aria-label={t("Search profiles")}
-                      placeholder={t("Search Profile name...")}
-                      value={profileSearch}
-                      onChange={(event) => setProfileSearch(event.currentTarget.value)}
-                    />
-                  </label>
-                </div>
-                <div className="profile-list">
-                  {isLoading ? (
-                    <div className="inline-state inline-state--loading" role="status">
-                      <span className="inline-state__icon" aria-hidden="true" />
-                      <span>{t("Loading profiles")}</span>
-                    </div>
-                  ) : null}
-                  {!isLoading && visibleProfiles.length === 0 ? (
-                    <div className="inline-state">
-                      <span className="inline-state__icon" aria-hidden="true">
-                        <Search size={15} strokeWidth={2.2} />
-                      </span>
-                      <span>{t("No profiles match this view")}</span>
-                    </div>
-                  ) : null}
-                  {visibleProfiles.map((profile) => {
-                    const counts = profileResourceCounts[profile.id];
-                    const profileApplications = listProfileApplications(
-                      profile.id,
-                      targetStates,
-                      targets
-                    );
-                    const isSelected = profile.id === selectedProfileId;
-                    const profileIconKey =
-                      (isSelected ? draftProfile?.manifest.iconKey : undefined) ??
-                      profile.iconKey ??
-                      "folder";
-                    return (
-                      <div
-                        className={`profile-row${isSelected ? " is-active" : ""}`}
-                        key={profile.id}
-                        role="group"
-                        aria-label={t("Profile {{name}}", { name: profile.name })}
-                      >
-                      <ResourceIconPicker
-                        className="profile-row__icon"
-                        iconKey={profileIconKey}
-                        label={profile.name}
-                        triggerLabel={t("Change icon for profile {{id}}", { id: profile.id })}
-                        onChange={(iconKey) => changeProfileIcon(profile.id, iconKey)}
-                      />
-                      <button
-                        className="profile-row__content"
-                        type="button"
-                        aria-current={isSelected ? "page" : undefined}
-                        onClick={() => selectProfile(profile.id)}
-                      >
-                        <span className="profile-row__title">
-                          <span className="profile-row__name">{profile.name}</span>
-                          {isSelected && isProfileDirty ? <strong>{t("Unsaved")}</strong> : null}
-                        </span>
-                        <OverflowTooltip
-                          ariaLabel={t("Full profile description {{id}}", { id: profile.id })}
-                          className="profile-row__description"
-                          focusable={false}
-                          text={profile.description || t("No description")}
-                        />
-                        <span className="profile-row__stats">
-                          <span>{t("{{count}} skills", { count: counts?.skills.count ?? 0 })}</span>
-                          <span>{counts?.mcp.count ?? 0} MCP</span>
-                          <span>{t("{{count}} files", { count: counts?.instructions.count ?? 0 })}</span>
-                        </span>
-                        <span
-                          className={`profile-row__deployments${profileApplications.length === 0 ? " profile-row__deployments--empty" : ""}`}
-                          aria-label={
-                            profileApplications.length > 0
-                              ? t("Active on: {{targets}}", { targets: profileApplications.map((application) => application.target?.name ?? application.state.targetId).join(", ") })
-                              : t("Not active")
-                          }
-                        >
-                          {profileApplications.length === 0 ? (
-                            <span>{t("Not active")}</span>
-                          ) : profileApplications.map((application) => {
-                            const targetName = application.target?.name ?? application.state.targetId;
-                            const targetIcon = application.target
-                              ? targetIconFor(application.target)
-                              : undefined;
-                            const needsAttention =
-                              application.state.lifecycleStatus === "drifted" ||
-                              application.state.lifecycleStatus === "recovery-required" ||
-                              (application.state.errorCount ?? 0) > 0;
-                            const isCurrent = Boolean(
-                              !needsAttention &&
-                                application.state.appliedProfileHash &&
-                                application.state.appliedProfileHash ===
-                                  (profile.targetContentHashes?.[application.state.targetId] ??
-                                    profile.contentHash) &&
-                                libraryResourceVersionsEqual(
-                                  application.state.appliedLibraryVersions,
-                                  profileLibraryVersions[profile.id]
-                                )
-                            );
-                            const deploymentState = needsAttention
-                              ? "attention"
-                              : isCurrent
-                                ? "current"
-                                : "pending";
-                            const deploymentTitle = needsAttention
-                              ? t("{{name}} needs attention", { name: targetName })
-                              : isCurrent
-                                ? t("{{name}} is up to date", { name: targetName })
-                                : t("{{name}} uses this profile; changes are pending", { name: targetName });
-                            return (
-                              <span
-                                className={`profile-target-chip profile-target-chip--${deploymentState}`}
-                                title={deploymentTitle}
-                                key={application.state.targetId}
-                              >
-                                {targetIcon?.assetUrl ? (
-                                  <img
-                                    className={`profile-target-logo profile-target-logo--${targetIcon.flavor}`}
-                                    src={targetIcon.assetUrl}
-                                    alt=""
-                                  />
-                                ) : (
-                                  <Monitor size={12} strokeWidth={2.2} aria-hidden="true" />
-                                )}
-                                <span>{targetName}</span>
-                              </span>
-                            );
-                          })}
-                        </span>
-                      </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </aside>
+              <ProfileList
+                isLoading={isLoading}
+                profiles={profiles}
+                search={profileSearch}
+                searchInputRef={profileSearchInputRef}
+                selectedProfileId={selectedProfileId}
+                draftProfile={draftProfile}
+                isProfileDirty={isProfileDirty}
+                profileResourceCounts={profileResourceCounts}
+                profileLibraryVersions={profileLibraryVersions}
+                targets={targets}
+                targetStates={targetStates}
+                onSearchChange={setProfileSearch}
+                onSelect={selectProfile}
+                onIconChange={changeProfileIcon}
+              />
               <div className="profile-editor-surface">
                 {draftProfile ? (
                   <>
@@ -4366,6 +4260,7 @@ const AppContent = ({
                             aria-haspopup="menu"
                             aria-label={t("More profile actions")}
                             title={t("More profile actions")}
+                            disabled={busy || !draftProfile || draftProfile.id !== selectedProfileId}
                             onClick={() => {
                               setIsTargetMenuOpen(false);
                               setIsProfileActionsOpen((current) => !current);
@@ -4518,6 +4413,7 @@ const AppContent = ({
                         <ProfileMcpEditor
                           target={selectedTarget}
                           connections={nativeMcpConnections}
+                          issues={nativeMcpIssues}
                           value={draftProfile.assetPolicy ?? emptyAssetPolicy}
                           onChange={(assetPolicy) =>
                             updateDraftProfile({ ...draftProfile, assetPolicy })
@@ -4693,13 +4589,12 @@ const AppContent = ({
                         onConfirm={applySelectedProfile}
                       />
                     ) : null}
-                    <SkillUpdateDialog
-                      plan={selectedSkillUpdatePlan}
-                      impact={selectedSkillUpdateImpact}
-                      busy={busy}
-                      onClose={() => setSelectedSkillUpdatePlan(undefined)}
-                      onConfirm={(id) => void updateLibrarySkill(id)}
-                    />
+                      <SkillUpdateDialog
+                        plan={selectedSkillUpdatePlan}
+                        busy={busy}
+                        onClose={() => setSelectedSkillUpdatePlan(undefined)}
+                        onConfirm={(plan) => void updateLibrarySkill(plan)}
+                      />
                   </>
                 ) : (
                   <div className="profile-empty-surface">

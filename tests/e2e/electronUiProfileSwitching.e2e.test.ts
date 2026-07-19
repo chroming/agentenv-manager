@@ -429,6 +429,8 @@ const launchApp = async (
     migratedBackupFixtures?: boolean;
     includeClaudeTarget?: boolean;
     openCodeBetaProfileName?: string;
+    malformedProfile?: boolean;
+    malformedOpenCodeConfig?: boolean;
   } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
@@ -456,30 +458,34 @@ const launchApp = async (
     await mkdir(claudeDir, { recursive: true });
   }
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Existing UI OpenCode\n", "utf8");
-  await writeJson(join(opencodeDir, "opencode.jsonc"), {
-    shell: "/bin/zsh",
-    mcp: {
-      "user-managed": {
-        type: "remote",
-        url: "https://example.com/user"
-      },
-      "ui-alpha-mcp": {
-        type: "local",
-        command: ["node", "--version"],
-        enabled: false
-      },
-      "ui-beta-mcp": {
-        type: "local",
-        command: ["node", "--version"],
-        enabled: false
-      },
-      "shared-docs": {
-        type: "remote",
-        url: "https://example.com/shared-docs/mcp",
-        enabled: false
+  if (options.malformedOpenCodeConfig) {
+    await writeFile(join(opencodeDir, "opencode.jsonc"), "{ invalid\n", "utf8");
+  } else {
+    await writeJson(join(opencodeDir, "opencode.jsonc"), {
+      shell: "/bin/zsh",
+      mcp: {
+        "user-managed": {
+          type: "remote",
+          url: "https://example.com/user"
+        },
+        "ui-alpha-mcp": {
+          type: "local",
+          command: ["node", "--version"],
+          enabled: false
+        },
+        "ui-beta-mcp": {
+          type: "local",
+          command: ["node", "--version"],
+          enabled: false
+        },
+        "shared-docs": {
+          type: "remote",
+          url: "https://example.com/shared-docs/mcp",
+          enabled: false
+        }
       }
-    }
-  });
+    });
+  }
   await writeFile(join(codexDir, "AGENTS.md"), "# Existing UI Codex\n", "utf8");
   await writeFile(join(codexDir, "auth.json"), '{"token":"ui-keep"}\n', "utf8");
   await writeFile(
@@ -509,6 +515,11 @@ const launchApp = async (
   await writeOpenCodeProfile(appDataRoot, "beta", options.openCodeBetaProfileName);
   await writeCodexProfile(appDataRoot, "alpha");
   await writeCodexProfile(appDataRoot, "beta");
+  if (options.malformedProfile) {
+    const brokenProfileDir = join(appDataRoot, "profiles", "broken-profile");
+    await mkdir(brokenProfileDir, { recursive: true });
+    await writeFile(join(brokenProfileDir, "profile.json"), "{}\n", "utf8");
+  }
   if (options.includeClaudeTarget) {
     await writeClaudeProfile(appDataRoot);
     await writeJson(join(homeDir, ".claude.json"), {
@@ -677,6 +688,28 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item shared-reviewer" })
       .waitFor({ state: "visible" });
     expect(await page.getByText("Action failed", { exact: true }).count()).toBe(0);
+  }, 30_000);
+
+  it("keeps valid Profiles usable and shows native inspection failure instead of false-empty data", async () => {
+    const { page } = await launchApp({
+      malformedProfile: true,
+      malformedOpenCodeConfig: true
+    });
+
+    await selectProfile(page, "UI OpenCode alpha");
+    const brokenRow = page.getByRole("group", { name: "Profile broken-profile" });
+    await brokenRow.waitFor({ state: "visible" });
+    await expect.poll(() => brokenRow.textContent()).toContain(
+      "Stored Profile data could not be loaded"
+    );
+
+    await brokenRow.getByRole("button").click();
+    await page.getByText(/broken-profile needs repair/).waitFor({ state: "visible" });
+    await expandComposerSection(page, "MCPs");
+    await page.getByText("Could not inspect MCP connections").waitFor({ state: "visible" });
+    expect(
+      await page.getByText("No MCP connections are configured in OpenCode.").count()
+    ).toBe(0);
   }, 30_000);
 
   it("keeps every workspace usable while startup enrichment is still running", async () => {
@@ -1408,6 +1441,7 @@ describe("Electron UI profile switching e2e", () => {
     const deleteDialog = page.getByRole("dialog", { name: "Delete profile" });
     await deleteDialog.waitFor({ state: "visible", timeout: 5_000 });
     await deleteDialog.getByRole("button", { name: "Remove profile" }).click();
+    await deleteDialog.waitFor({ state: "hidden", timeout: 10_000 });
     await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({
       state: "visible",
       timeout: 10_000
@@ -4487,8 +4521,12 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "Review update shared-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
-    await page
-      .getByRole("dialog", { name: "Update preview for shared-reviewer" })
+    const updateDialog = page.getByRole("dialog", {
+      name: "Update preview for shared-reviewer"
+    });
+    await updateDialog.waitFor({ state: "visible" });
+    await updateDialog
+      .getByText(/Used by 1 Profiles.*1 copied Agent installs wait for Apply or Sync/)
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated shared-reviewer");
@@ -4705,7 +4743,7 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, 30_000);
 
-  it("keeps successful skill updates when another bulk update source disappears", async () => {
+  it("applies reviewed bulk candidates when a source disappears after preview", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
     const missingSourceSkill = await writeTrackedLibrarySkill(
       appDataRoot,
@@ -4728,15 +4766,15 @@ describe("Electron UI profile switching e2e", () => {
     await rm(missingSourceSkill.sourceDir, { recursive: true, force: true });
     await bulkUpdateDialog.getByRole("button", { name: "Apply 2 updates" }).click();
 
-    const feedback = page.getByRole("alert");
-    await expect.poll(() => feedback.textContent()).toContain("1 update failed");
-    await expect.poll(() => feedback.textContent()).toContain("source");
+    await expect.poll(() => page.getByRole("status").textContent()).toContain(
+      "Updated 2 skills"
+    );
     await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
       "Successful partial update."
     );
     await expect(
       readFile(join(missingSourceSkill.libraryDir, "SKILL.md"), "utf8")
-    ).resolves.toContain("Missing source helper v1.");
+    ).resolves.toContain("Missing source helper v2.");
   }, 30_000);
 
   it("backs up and restores AgentEnv data through system directory pickers", async () => {
@@ -6112,6 +6150,11 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("dialog", { name: "Update preview for shared-reviewer" })
       .waitFor({ state: "visible" });
+    await writeFile(
+      join(librarySkill.sourceDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Changed after review.\n---\n\n# Shared Reviewer\n\nThis content was not reviewed.\n",
+      "utf8"
+    );
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
@@ -6120,6 +6163,9 @@ describe("Electron UI profile switching e2e", () => {
 
     await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
       "Use the refreshed source content."
+    );
+    await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.not.toContain(
+      "This content was not reviewed."
     );
   }, 30_000);
 

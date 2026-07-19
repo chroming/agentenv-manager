@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -16,6 +16,16 @@ afterEach(async () => {
 });
 
 describe("durable file utilities", () => {
+  it("creates private parent directories and files by default", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-file-utils-"));
+    const target = join(root, "private", "nested", "state.json");
+
+    await writeAtomic(target, "{}\n");
+
+    expect((await stat(join(root, "private", "nested"))).mode & 0o777).toBe(0o700);
+    expect((await stat(target)).mode & 0o777).toBe(0o600);
+  });
+
   it("keeps the original path when preparing a replacement fails", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-file-utils-"));
     const target = join(root, "skill");

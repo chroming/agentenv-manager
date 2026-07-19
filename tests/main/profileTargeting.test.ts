@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { targetProfile } from "../../src/main/profileTargeting";
 import { createCodexTargetAdapter } from "../../src/main/targets/codexTarget";
+import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
+import { createClaudeCodeTargetAdapter } from "../../src/main/targets/claudeCodeTarget";
+import { createTargetRegistry } from "../../src/main/targets/registry";
 import type { ProfileDetail } from "../../src/shared/types";
 
 const source: ProfileDetail = {
@@ -14,7 +17,7 @@ const source: ProfileDetail = {
     managed: { instructions: true, config: true, assets: true }
   },
   instructions: "# Shared instructions\n",
-  configText: '{"mcp":{"native":{}}}',
+  configText: '{"theme":"dark","mcp":{"native":{}}}',
   assetPolicy: {
     ownedDirs: [
       { kind: "skill", source: "skills/review", targetName: "review" },
@@ -30,7 +33,11 @@ const source: ProfileDetail = {
 
 describe("profile target adaptation", () => {
   it("keeps portable resources and omits target-specific state", () => {
-    const result = targetProfile(source, createCodexTargetAdapter());
+    const result = targetProfile(
+      source,
+      createCodexTargetAdapter(),
+      createOpenCodeTargetAdapter()
+    );
 
     expect(result.profile.manifest.targetId).toBe("codex");
     expect(result.profile.instructions).toBe(source.instructions);
@@ -58,5 +65,33 @@ describe("profile target adaptation", () => {
       warnings: [],
       omissions: []
     });
+  });
+
+  it("does not report schema-only or MCP-only default config as an omission", () => {
+    const codex = createCodexTargetAdapter();
+    const claude = createClaudeCodeTargetAdapter();
+    const antigravity = createTargetRegistry().get("antigravity");
+
+    for (const sourceAdapter of [claude, antigravity]) {
+      const defaultProfile = sourceAdapter.createDefaultProfile("portable-default");
+      const result = targetProfile(defaultProfile, codex, sourceAdapter);
+      expect(result.omissions.filter((omission) => omission.kind === "config")).toEqual([]);
+    }
+  });
+
+  it("still reports meaningful Agent-native config as an omission", () => {
+    const claude = createClaudeCodeTargetAdapter();
+    const claudeProfile = claude.createDefaultProfile("claude-native");
+    claudeProfile.configText = JSON.stringify({
+      settings: {
+        $schema: "https://json.schemastore.org/claude-code-settings.json",
+        model: "opus"
+      },
+      mcpServers: {}
+    });
+
+    expect(
+      targetProfile(claudeProfile, createCodexTargetAdapter(), claude).omissions
+    ).toContainEqual(expect.objectContaining({ kind: "config" }));
   });
 });

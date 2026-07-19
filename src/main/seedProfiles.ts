@@ -1,35 +1,20 @@
-import { mkdir, readdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { AgentEnvPaths } from "./paths";
+import { createProfileStore } from "./profileStore";
 import {
   createTargetRegistry,
   type TargetRegistry
 } from "./targets/registry";
 
-const isMissingFileError = (error: unknown) =>
-  Boolean(
-    error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
-  );
-
-const hasAnyProfiles = async (profilesDir: string): Promise<boolean> => {
-  try {
-    return (await readdir(profilesDir)).length > 0;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return false;
-    }
-    throw error;
-  }
-};
-
 export const seedDefaultProfiles = async (
   paths: AgentEnvPaths,
   targetRegistry: TargetRegistry = createTargetRegistry()
 ) => {
-  if (await hasAnyProfiles(paths.profilesDir)) {
+  const profileStore = createProfileStore({
+    appDataRoot: paths.appDataRoot,
+    homeDir: paths.homeDir,
+    fakeHomeRoot: paths.fakeHomeRoot
+  }, targetRegistry);
+  if ((await profileStore.listProfiles()).some((profile) => !profile.loadError)) {
     return;
   }
 
@@ -41,12 +26,5 @@ export const seedDefaultProfiles = async (
   }
   const profile = adapter.createDefaultProfile(adapter.descriptor.defaultProfileId);
   profile.manifest.createdAt = new Date().toISOString();
-  const profileDir = join(paths.profilesDir, profile.id);
-  await mkdir(profileDir, { recursive: true });
-  await writeFile(
-    join(profileDir, "profile.json"),
-    `${JSON.stringify(profile.manifest, null, 2)}\n`,
-    "utf8"
-  );
-  await adapter.writeProfileFiles(profileDir, { ...profile, profileDir });
+  await profileStore.saveProfile(profile);
 };

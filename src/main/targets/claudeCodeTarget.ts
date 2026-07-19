@@ -105,20 +105,30 @@ const readClaudeDisabledSkillNames = async (
     await readTextIfExists(targetPaths.configPath),
     "Invalid Claude Code settings"
   );
-  if (!settings.ok || !isRecord(settings.value.skillOverrides)) {
-    return new Set<string>();
+  if (!settings.ok) {
+    return {
+      disabledRuntimeNames: new Set<string>(),
+      issues: [{
+        code: "unreadable-native-state" as const,
+        severity: "error" as const,
+        message: `${settings.message} (${targetPaths.configPath})`
+      }]
+    };
+  }
+  if (!isRecord(settings.value.skillOverrides)) {
+    return { disabledRuntimeNames: new Set<string>(), issues: [] };
   }
   const disabled = Object.entries(settings.value.skillOverrides).flatMap(([name, value]) => {
     if (value === false || value === "off") return [name];
     if (isRecord(value) && value.enabled === false) return [name];
     return [];
   });
-  return new Set(disabled);
+  return { disabledRuntimeNames: new Set(disabled), issues: [] };
 };
 
 const skills = createFilesystemSkillDriver({
   targetId: "claude-code",
-  readDisabledRuntimeNames: readClaudeDisabledSkillNames
+  readNativeState: readClaudeDisabledSkillNames
 });
 
 const setJsoncProperty = (content: string, path: string[], value: unknown) => {
@@ -311,6 +321,17 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
   },
   ...profileFiles,
   materializeMcpRefs: (profile) => profile,
+  hasMeaningfulNativeConfig: (configText) => {
+    const parsed = parseJsoncObject(configText, "Invalid Claude Code Profile config");
+    if (!parsed.ok) return true;
+    if (Object.keys(parsed.value).some(
+      (key) => key !== "settings" && key !== "mcpServers"
+    )) return true;
+    const settings = parsed.value.settings;
+    if (settings === undefined) return false;
+    if (!isRecord(settings)) return true;
+    return Object.keys(settings).some((key) => key !== "$schema");
+  },
   createPreview: async ({ profile, targetPaths, state, allowMatchingUnmanagedConfig }): Promise<TargetActivationPreview> => {
     const activeState = state ?? DEFAULT_STATE;
     const warnings = findSecretWarnings(profile.instructions).concat(

@@ -91,6 +91,25 @@ describe("profile store", () => {
     ]);
   });
 
+  it("keeps valid Profiles available when another stored Profile is malformed", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-recovery-"));
+    await writeProfile(root);
+    const brokenDir = join(root, "profiles", "broken-profile");
+    await mkdir(brokenDir, { recursive: true });
+    await writeFile(join(brokenDir, "profile.json"), "{}\n");
+    await writeFile(join(root, "profiles", ".DS_Store"), "finder metadata");
+
+    const profiles = await createProfileStore({ appDataRoot: root }).listProfiles();
+
+    expect(profiles[0]).toMatchObject({ id: "daily-coding" });
+    expect(profiles[0].loadError).toBeUndefined();
+    expect(profiles[1]).toMatchObject({
+      id: "broken-profile",
+      targetId: "unknown",
+      loadError: expect.any(String)
+    });
+  });
+
   it("reads a profile with managed files", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-"));
     await writeProfile(root);

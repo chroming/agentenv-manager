@@ -36,6 +36,7 @@ export interface TargetProfileDriver {
 }
 
 export interface TargetConfigDriver {
+  hasMeaningfulNativeConfig(configText: string): boolean;
   createPreview(input: TargetPreviewInput): ReturnType<AgentTargetAdapter["createPreview"]>;
 }
 

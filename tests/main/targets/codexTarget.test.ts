@@ -75,10 +75,26 @@ describe("Codex target adapter", () => {
     const snapshot = await adapter.skills.inspectRuntime(targetPaths);
 
     expect(nativeState.disabledRuntimeNames).toEqual(["named-reviewer", "reviewer"]);
+    expect(nativeState.issues).toEqual([]);
     expect(snapshot.observations).toEqual(expect.arrayContaining([
       expect.objectContaining({ runtimeName: "reviewer", availability: "disabled" }),
       expect.objectContaining({ runtimeName: "managed-skill", availability: "enabled" })
     ]));
+  });
+
+  it("reports invalid native Skill settings instead of treating them as empty", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-codex-"));
+    const adapter = createCodexTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.configPath, "[[skills.config]\nenabled = false\n", "utf8");
+
+    const nativeState = await adapter.skills.readNativeState(targetPaths);
+
+    expect(nativeState.disabledRuntimeNames).toEqual([]);
+    expect(nativeState.issues).toEqual([
+      expect.objectContaining({ code: "unreadable-native-state", severity: "error" })
+    ]);
   });
 
   it("uses real Codex user paths and enables guarded real writes", async () => {

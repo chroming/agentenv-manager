@@ -151,8 +151,8 @@ interface SkillLibraryPanelProps {
   onSetIcon(input: SkillIconInput): void;
   onPreviewLibrarySkillUpdate(id: string): void;
   onCloseUpdatePreview(): void;
-  onUpdateLibrarySkill(id: string): void;
-  onUpdateAllLibrarySkills(ids: string[]): void;
+  onUpdateLibrarySkill(plan: SkillUpdatePlan): void;
+  onUpdateAllLibrarySkills(plans: SkillUpdatePlan[]): void;
   onPreviewAllLibrarySkillUpdates(ids: string[]): void;
   onCloseBulkUpdatePreview(): void;
   onSyncSkillInstalls(id: string): void;
@@ -2429,6 +2429,15 @@ export const SkillLibraryPanel = ({
                     <strong>{plan.name}</strong>
                     <span>{plan.errors.length > 0 ? t("Blocked") : t("{{count}} file changes", { count: plan.changes.length })}</span>
                   </summary>
+                  {plan.impact ? (
+                    <p className="skill-update-impact">
+                      {t("{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs wait", {
+                        profiles: plan.impact.profileNames.length,
+                        linked: plan.impact.linkedInstallCount,
+                        copied: plan.impact.copiedInstallCount
+                      })}
+                    </p>
+                  ) : null}
                   {plan.errors.map((error) => <p className="error" key={error}>{error}</p>)}
                   {plan.changes.map((change) => <code key={change.path}>{change.path}</code>)}
                 </details>
@@ -2440,7 +2449,7 @@ export const SkillLibraryPanel = ({
                 className="primary-action"
                 type="button"
                 disabled={bulkUpdatePlans.every((plan) => plan.errors.length > 0 || plan.changes.length === 0)}
-                onClick={() => onUpdateAllLibrarySkills(bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).map((plan) => plan.id))}
+                onClick={() => onUpdateAllLibrarySkills(bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0))}
               >
                 {t("Apply {{count}} updates", { count: bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).length })}
               </button>

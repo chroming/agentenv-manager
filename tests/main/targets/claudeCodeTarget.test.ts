@@ -60,6 +60,21 @@ describe("Claude Code target adapter", () => {
     await expect(readFile(targetPaths.configPath, "utf8")).resolves.toBe(settings);
   });
 
+  it("reports malformed settings instead of assuming no native Skill overrides", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    await mkdir(targetPaths.configDir, { recursive: true });
+    await writeFile(targetPaths.configPath, "{ \"skillOverrides\": {", "utf8");
+
+    const nativeState = await adapter.skills.readNativeState(targetPaths);
+
+    expect(nativeState.disabledRuntimeNames).toEqual([]);
+    expect(nativeState.issues).toEqual([
+      expect.objectContaining({ code: "unreadable-native-state", severity: "error" })
+    ]);
+  });
+
   it("plans CLAUDE.md, settings.json, and user-scope MCP overlay without clobbering unmanaged config", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
     const adapter = createClaudeCodeTargetAdapter();

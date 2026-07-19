@@ -102,6 +102,27 @@ afterEach(async () => {
 });
 
 describe("activation service", () => {
+  it("fails closed when persisted Agent management state is invalid", async () => {
+    const { paths, service } = await makeEnv();
+    await mkdir(paths.targetStatesDir, { recursive: true });
+    const statePath = join(paths.targetStatesDir, "codex.json");
+    await writeFile(statePath, "{ invalid json", "utf8");
+
+    await expect(service.listTargetStates()).resolves.toEqual([
+      expect.objectContaining({
+        targetId: "codex",
+        status: "managed",
+        lifecycleStatus: "recovery-required",
+        errorCount: 1,
+        lifecycleReason: expect.stringContaining(statePath)
+      })
+    ]);
+    await expect(service.previewProfile("daily-coding")).rejects.toThrow(
+      "management state is invalid"
+    );
+    await expect(readFile(statePath, "utf8")).resolves.toBe("{ invalid json");
+  });
+
   it("hides deployment state and blocks Apply after an Agent is turned off", async () => {
     const { paths, service, settingsStore } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");
@@ -163,6 +184,22 @@ describe("activation service", () => {
     );
     expect(preview.errors).toContain(
       "Profile declares runtime Skill name example more than once (Profile / skills/example-skill, Library / owned-name-conflict)"
+    );
+  });
+
+  it("blocks an existing Agent Skill with the same runtime name under another directory", async () => {
+    const { paths, service } = await makeEnv();
+    const existingDir = join(paths.codexHome, "skills", "legacy-example-folder");
+    await mkdir(existingDir, { recursive: true });
+    await writeFile(
+      join(existingDir, "SKILL.md"),
+      "---\nname: example\ndescription: Existing Agent copy.\n---\n# Existing\n"
+    );
+
+    const preview = await service.previewProfile("daily-coding");
+
+    expect(preview.errors).toContain(
+      `Cannot install runtime Skill example as agentenv-daily-coding-example-skill because an existing Agent Skill declares the same runtime name at ${existingDir}`
     );
   });
 
@@ -1096,7 +1133,7 @@ describe("activation service", () => {
         skillsDir: paths.userSkillsDir
       }),
       skills: {
-        readNativeState: async () => ({ disabledRuntimeNames: [] }),
+        readNativeState: async () => ({ disabledRuntimeNames: [], issues: [] }),
         inspectRuntime: async () => ({ targetId: "codex", observations: [], issues: [] })
       },
       createDefaultProfile: () => {
@@ -1112,6 +1149,7 @@ describe("activation service", () => {
         throw new Error("not used");
       },
       materializeMcpRefs: (profile) => profile,
+      hasMeaningfulNativeConfig: (configText) => configText.trim().length > 0,
       createPreview: async () => ({
         warnings: [],
         errors: [],

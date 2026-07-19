@@ -6,7 +6,7 @@ import type { AgentEnvPaths } from "./paths";
 import { hashComparableResource } from "./resourceHash";
 import { writeAtomic } from "./fileUtils";
 
-const SettingsSchema = z.object({
+export const SettingsSchema = z.object({
   locale: z.enum(["system", "en", "zh_CN", "zh_TW"]).default("system"),
   skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("symlink"),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
@@ -15,6 +15,9 @@ const SettingsSchema = z.object({
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
   enabledTargetIds: z.array(z.string().min(1)).optional()
 });
+
+export const parseSettingsData = (value: unknown): AgentEnvSettings =>
+  SettingsSchema.parse(value);
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",

@@ -182,6 +182,10 @@ export const antigravityIntegration: AgentTargetIntegration = {
     ...profileFiles
   },
   config: {
+    hasMeaningfulNativeConfig: (configText) => {
+      const parsed = parseJsonObject(configText, "Invalid Antigravity Profile config");
+      return !parsed.ok || Object.keys(parsed.value).some((key) => key !== "mcpServers");
+    },
     createPreview: async ({
       profile,
       targetPaths,

@@ -278,6 +278,18 @@ const capturePage = async (
   path,
   { preserveFocus = false, preservePointer = false } = {}
 ) => {
+  const expectedSize = path.match(/-(\d+)x(\d+)\.png$/);
+  if (expectedSize) {
+    const viewport = page.viewportSize();
+    if (
+      viewport?.width !== Number(expectedSize[1]) ||
+      viewport?.height !== Number(expectedSize[2])
+    ) {
+      throw new Error(
+        `Capture filename ${path} does not match the ${viewport?.width ?? "unknown"}x${viewport?.height ?? "unknown"} viewport`
+      );
+    }
+  }
   await page.evaluate(async ({ shouldPreserveFocus }) => {
     await document.fonts?.ready;
     for (const animation of document.getAnimations()) {
@@ -693,6 +705,7 @@ try {
   await capturePage(page, join(outputDir, "target-recovery-1180x728.png"));
   await recoveryDialog.getByRole("button", { name: "Close" }).click();
   await recoveryDialog.waitFor({ state: "hidden" });
+  await setWindowSize(page, windowHandle, 920, 620);
   await page
     .getByRole("article", { name: "Agent OpenCode" })
     .getByRole("button", { name: "Create profile from OpenCode" })

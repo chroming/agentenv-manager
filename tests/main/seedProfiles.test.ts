@@ -34,7 +34,7 @@ describe("seed profiles", () => {
     ).resolves.toContain("OpenCode Daily Coding");
   });
 
-  it("does not overwrite existing profiles", async () => {
+  it("preserves a malformed Profile but still seeds one usable Profile", async () => {
     const paths = await makePaths();
     const profileDir = join(paths.profilesDir, "custom");
     await mkdir(profileDir, { recursive: true });
@@ -47,6 +47,21 @@ describe("seed profiles", () => {
     ).resolves.toBe("{}");
     await expect(
       readFile(join(paths.profilesDir, "opencode-daily-coding", "profile.json"), "utf8")
-    ).rejects.toThrow();
+    ).resolves.toContain("OpenCode Daily Coding");
+  });
+
+  it("does not overwrite an existing valid Profile", async () => {
+    const paths = await makePaths();
+    await seedDefaultProfiles(paths);
+    const instructionsPath = join(
+      paths.profilesDir,
+      "opencode-daily-coding",
+      "AGENTS.md"
+    );
+    await writeFile(instructionsPath, "# Customized\n");
+
+    await seedDefaultProfiles(paths);
+
+    await expect(readFile(instructionsPath, "utf8")).resolves.toBe("# Customized\n");
   });
 });

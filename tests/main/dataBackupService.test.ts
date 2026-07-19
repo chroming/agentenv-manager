@@ -8,6 +8,8 @@ import {
   restoreDataBackup
 } from "../../src/main/dataBackupService";
 import { createPaths } from "../../src/main/paths";
+import { createProfileStore } from "../../src/main/profileStore";
+import { createTargetRegistry } from "../../src/main/targets/registry";
 
 let root = "";
 
@@ -21,15 +23,18 @@ describe("AgentEnv data backup service", () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-data-backup-"));
     const paths = createPaths({ appDataRoot: join(root, "active-data") });
     const backupRoot = join(root, "exports");
-    await mkdir(join(paths.profilesDir, "daily-coding"), { recursive: true });
     await mkdir(backupRoot, { recursive: true });
+    const registry = createTargetRegistry();
+    await createProfileStore({ appDataRoot: paths.appDataRoot }, registry).saveProfile(
+      registry.get("opencode").createDefaultProfile("daily-coding")
+    );
     await writeFile(join(paths.profilesDir, "daily-coding", "AGENTS.md"), "# Original\n");
     await writeFile(paths.mcpLibraryPath, "[]\n");
 
     const backup = await createDataBackup(paths, backupRoot);
     const preview = await inspectDataBackup(backup.path);
     expect(preview.formatVersion).toBe(1);
-    expect(preview.topLevelItemCount).toBe(2);
+    expect(preview.topLevelItemCount).toBe(3);
 
     await writeFile(join(paths.profilesDir, "daily-coding", "AGENTS.md"), "# Changed\n");
     await writeFile(join(paths.appDataRoot, "temporary.json"), "{}\n");
@@ -79,5 +84,53 @@ describe("AgentEnv data backup service", () => {
     await symlink(root, join(backup, "data", "escape"));
 
     await expect(inspectDataBackup(backup)).rejects.toThrow("cannot contain symbolic links");
+  });
+
+  it("rejects a structurally invalid backup before touching active data", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-backup-"));
+    const paths = createPaths({ appDataRoot: join(root, "active-data") });
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await writeFile(join(paths.appDataRoot, "keep.txt"), "active\n");
+    const backup = join(root, "backup");
+    await mkdir(join(backup, "data", "profiles", "broken"), { recursive: true });
+    await writeFile(
+      join(backup, "agentenv-backup.json"),
+      '{"formatVersion":1,"createdAt":"2026-07-12T00:00:00.000Z"}\n'
+    );
+    await writeFile(
+      join(backup, "data", "profiles", "broken", "profile.json"),
+      "{}\n"
+    );
+
+    await expect(restoreDataBackup(paths, backup)).rejects.toThrow();
+    await expect(readFile(join(paths.appDataRoot, "keep.txt"), "utf8")).resolves.toBe(
+      "active\n"
+    );
+  });
+
+  it("restores the previous data when post-copy validation fails", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-data-backup-"));
+    const paths = createPaths({ appDataRoot: join(root, "active-data") });
+    const backupRoot = join(root, "exports");
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await mkdir(backupRoot, { recursive: true });
+    await writeFile(join(paths.appDataRoot, "value.txt"), "backup\n");
+    const backup = await createDataBackup(paths, backupRoot);
+    await writeFile(join(paths.appDataRoot, "value.txt"), "current\n");
+    let validationCount = 0;
+
+    await expect(
+      restoreDataBackup(paths, backup.path, {
+        validate: async () => {
+          validationCount += 1;
+          if (validationCount === 2) throw new Error("post-copy validation failed");
+        }
+      })
+    ).rejects.toThrow("previous AgentEnv data was restored");
+
+    expect(validationCount).toBe(3);
+    await expect(readFile(join(paths.appDataRoot, "value.txt"), "utf8")).resolves.toBe(
+      "current\n"
+    );
   });
 });

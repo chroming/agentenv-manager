@@ -113,6 +113,7 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
     }
   },
   config: {
+    hasMeaningfulNativeConfig: (configText) => configText.trim().length > 0,
     createPreview: async () => ({
       changes: [],
       warnings: [],
@@ -125,7 +126,7 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
     materializeMcpRefs: (profile) => profile
   },
   skills: {
-    readNativeState: async () => ({ disabledRuntimeNames: [] }),
+    readNativeState: async () => ({ disabledRuntimeNames: [], issues: [] }),
     inspectRuntime: async (targetPaths) => ({
       targetId: targetPaths.targetId,
       observations: [],

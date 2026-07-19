@@ -10,7 +10,7 @@ interface SkillUpdateDialogProps {
   impact?: string;
   busy?: boolean;
   onClose(): void;
-  onConfirm(id: string): void;
+  onConfirm(plan: SkillUpdatePlan): void;
 }
 
 export const SkillUpdateDialog = ({
@@ -37,6 +37,33 @@ export const SkillUpdateDialog = ({
     return null;
   }
 
+  const planImpact = plan.impact ?? {
+    profileNames: [],
+    linkedInstallCount: 0,
+    linkedTargetIds: [],
+    copiedInstallCount: 0,
+    copiedTargetIds: []
+  };
+  const impactSummary = impact ?? (() => {
+    const parts: string[] = [];
+    if (planImpact.profileNames.length > 0) {
+      parts.push(t("Used by {{count}} Profiles", { count: planImpact.profileNames.length }));
+    }
+    if (planImpact.linkedInstallCount > 0) {
+      parts.push(t("{{count}} linked Agent installs change immediately", {
+        count: planImpact.linkedInstallCount
+      }));
+    }
+    if (planImpact.copiedInstallCount > 0) {
+      parts.push(t("{{count}} copied Agent installs wait for Apply or Sync", {
+        count: planImpact.copiedInstallCount
+      }));
+    }
+    return parts.length > 0
+      ? parts.join(" · ")
+      : t("No Profiles or managed Agent installs currently use this Skill");
+  })();
+
   return (
     <ModalFrame
       ariaLabel={t("Update preview for {{id}}", { id: plan.id })}
@@ -54,7 +81,7 @@ export const SkillUpdateDialog = ({
                 ? ` · ${(plan.currentRevision ?? "current").slice(0, 7)} → ${plan.latestRevision.slice(0, 7)}`
                 : ""}
             </p>
-            {impact ? <p className="skill-update-impact">{impact}</p> : null}
+            <p className="skill-update-impact">{impactSummary}</p>
           </div>
         </header>
         <div className="update-change-list">
@@ -79,7 +106,7 @@ export const SkillUpdateDialog = ({
             disabled={busy}
             size="prominent"
             variant="primary"
-            onClick={() => onConfirm(plan.id)}
+            onClick={() => onConfirm(plan)}
           >
             {t(busy ? "Updating..." : "Update skill")}
           </Button>

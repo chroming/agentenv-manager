@@ -1,7 +1,8 @@
-import { Network, RefreshCw } from "lucide-react";
+import { AlertTriangle, Network, RefreshCw } from "lucide-react";
 import type {
   AssetPolicy,
   NativeMcpConnection,
+  NativeMcpInspectionIssue,
   TargetInfo
 } from "../../shared/types";
 import { OverflowTooltip } from "./OverflowTooltip";
@@ -12,6 +13,7 @@ type McpSelectionMode = "agent" | "on" | "off";
 interface ProfileMcpEditorProps {
   target?: TargetInfo;
   connections?: NativeMcpConnection[];
+  issues?: NativeMcpInspectionIssue[];
   value: AssetPolicy;
   onChange(value: AssetPolicy): void;
   onRefresh(): Promise<void>;
@@ -32,6 +34,7 @@ const modeFor = (
 export const ProfileMcpEditor = ({
   target,
   connections,
+  issues = [],
   value,
   onChange,
   onRefresh
@@ -48,6 +51,7 @@ export const ProfileMcpEditor = ({
   const targetConnections = (connections ?? []).filter(
     (connection) => connection.targetId === target.id
   );
+  const targetIssues = issues.filter((issue) => issue.targetId === target.id);
   const liveNames = new Set(
     targetConnections.map((connection) => connection.name)
   );
@@ -115,6 +119,17 @@ export const ProfileMcpEditor = ({
       {connections === undefined ? (
         <div className="profile-mcp-empty">
           {t("Loading MCP connections...")}
+        </div>
+      ) : targetIssues.length > 0 ? (
+        <div className="profile-mcp-inspection-error" role="alert">
+          <AlertTriangle size={17} strokeWidth={2.2} aria-hidden="true" />
+          <span>
+            <strong>{t("Could not inspect MCP connections")}</strong>
+            <small>{targetIssues.map((issue) => issue.message).join(" · ")}</small>
+          </span>
+          <button className="secondary-action" type="button" onClick={() => void onRefresh()}>
+            {t("Retry")}
+          </button>
         </div>
       ) : rows.length === 0 ? (
         <div className="profile-mcp-empty">

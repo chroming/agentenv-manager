@@ -9,7 +9,6 @@ import type {
   GitHubSkillImportInput,
   GitHubSkillImportResult,
   GitHubSkillScanResult,
-  PlannedFileChange,
   RepositorySkillImportInput,
   RepositorySkillImportResult,
   RepositorySkillScanResult,
@@ -34,6 +33,8 @@ import type {
   SkillSourceType,
   SkillUpstream,
   SkillUpdateInfo,
+  SkillUpdateConfirmation,
+  SkillUpdateImpact,
   SkillUpdatePolicy,
   SkillUpdatePolicyInput,
   SkillUpdatePlan,
@@ -46,7 +47,6 @@ import type {
   UnmanagedSkillEntry,
   SharedSkillRetentionInput
 } from "../shared/types";
-import { createUnifiedDiff } from "./diff";
 import { normalizeSkillKey } from "../shared/skillIdentity";
 import { pathEntryExists, pathExists, replacePathAtomically, replacePathWithCopy, writeAtomic } from "./fileUtils";
 import {
@@ -65,6 +65,8 @@ import { createTargetRegistry } from "./targets/registry";
 import { createFilesystemSkillDriver } from "./targets/shared/skillRuntime";
 import type { GitCliSkillSource } from "./skillSources/contract";
 import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
+import { readAllProfilesForResourceMutation } from "./profileSafety";
+import { createSkillChanges } from "./skillFileChanges";
 
 interface SkillMetadataFile {
   sourceType?: SkillSourceType;
@@ -215,7 +217,7 @@ export interface SkillLibraryStore {
   setAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
   setIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewUpdate(id: string): Promise<SkillUpdatePlan>;
-  updateSkill(id: string): Promise<SkillLibraryEntry>;
+  updateSkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
 }
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<{
@@ -236,6 +238,19 @@ interface SkillLibraryStoreOptions {
   runtimeSnapshotProvider?: (targetPaths: TargetPaths) => Promise<SkillRuntimeSnapshot>;
   repositorySource?: GitCliSkillSource;
 }
+
+interface PendingSkillUpdate {
+  previewId: string;
+  id: string;
+  candidateDir: string;
+  candidateContentHash: string;
+  expectedLibraryContentHash: string;
+  expectedMetadataHash: string;
+  createdAt: number;
+  nextMetadata: SkillMetadataFile;
+}
+
+const SKILL_UPDATE_PREVIEW_TTL_MS = 30 * 60 * 1000;
 
 interface ParsedGitHubSkillSource {
   owner: string;
@@ -361,60 +376,6 @@ const validateSkillFrontmatter = async (skillDir: string) => {
     throw new Error(`Skill frontmatter is invalid: ${frontmatter.errors.join("; ")}`);
   }
   return frontmatter;
-};
-
-const readSkillFiles = async (root: string) => {
-  const files = new Map<string, string>();
-
-  const walk = async (dir: string) => {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      if (entry.name === ".agentenv-skill.json") {
-        continue;
-      }
-      const child = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(child);
-        continue;
-      }
-      if (!entry.isFile()) {
-        continue;
-      }
-      files.set(relative(root, child), await readFile(child, "utf8"));
-    }
-  };
-
-  await walk(root);
-  return files;
-};
-
-const createSkillChanges = async (currentDir: string, nextDir: string): Promise<PlannedFileChange[]> => {
-  const currentFiles = await readSkillFiles(currentDir);
-  const nextFiles = await readSkillFiles(nextDir);
-  const filePaths = [...new Set([...currentFiles.keys(), ...nextFiles.keys()])].sort((a, b) => {
-    if (a === "SKILL.md") {
-      return -1;
-    }
-    if (b === "SKILL.md") {
-      return 1;
-    }
-    return a.localeCompare(b);
-  });
-  return filePaths
-    .map((path) => {
-      const before = currentFiles.get(path) ?? "";
-      const after = nextFiles.get(path) ?? "";
-      if (before === after) {
-        return undefined;
-      }
-      return {
-        path,
-        before,
-        after,
-        diff: createUnifiedDiff(path, before, after)
-      };
-    })
-    .filter((change): change is PlannedFileChange => Boolean(change));
 };
 
 const removeAndCopy = async (source: string, destination: string) => {
@@ -549,6 +510,34 @@ export const createSkillLibraryStore = (
     ));
   const runtimeSnapshotProvider = options.runtimeSnapshotProvider ?? ((targetPaths) =>
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
+  const pendingUpdates = new Map<string, PendingSkillUpdate>();
+
+  const metadataHash = (metadata: SkillMetadataFile) =>
+    createHash("sha256").update(JSON.stringify(metadata)).digest("hex");
+
+  const discardPendingUpdate = async (previewId: string) => {
+    const pending = pendingUpdates.get(previewId);
+    if (!pending) return;
+    pendingUpdates.delete(previewId);
+    await rm(pending.candidateDir, { recursive: true, force: true });
+  };
+
+  const discardPendingUpdatesForSkill = async (id: string, exceptPreviewId?: string) => {
+    await Promise.all(
+      [...pendingUpdates.values()]
+        .filter((pending) => pending.id === id && pending.previewId !== exceptPreviewId)
+        .map((pending) => discardPendingUpdate(pending.previewId))
+    );
+  };
+
+  const discardExpiredPendingUpdates = async () => {
+    const cutoff = Date.now() - SKILL_UPDATE_PREVIEW_TTL_MS;
+    await Promise.all(
+      [...pendingUpdates.values()]
+        .filter((pending) => pending.createdAt < cutoff)
+        .map((pending) => discardPendingUpdate(pending.previewId))
+    );
+  };
 
   const readIgnoreRules = async () =>
     (await readJsonIfExists<SkillCleanupIgnoreRule[]>(ignoreRulesPath))?.filter(
@@ -2179,9 +2168,7 @@ export const createSkillLibraryStore = (
     }
 
     const profiles = profileStore
-      ? await Promise.all(
-          (await profileStore.listProfiles()).map((profile) => profileStore.readProfile(profile.id))
-        )
+      ? await readAllProfilesForResourceMutation(profileStore, "Skill merge preview")
       : [];
     const inventory = targetPaths.length > 0 ? await scanInventory(targetPaths) : [];
     const entries = await Promise.all(
@@ -2270,8 +2257,9 @@ export const createSkillLibraryStore = (
     }
     const removedIds = requestedIds.filter((id) => id !== keepId);
     const removedIdSet = new Set(removedIds);
-    const profileDetails = await Promise.all(
-      (await profileStore.listProfiles()).map((profile) => profileStore.readProfile(profile.id))
+    const profileDetails = await readAllProfilesForResourceMutation(
+      profileStore,
+      "Skill merge"
     );
     const affectedProfiles = profileDetails.filter((profile) =>
       profile.assetPolicy.skillRefs.some((reference) => removedIdSet.has(reference.libraryId))
@@ -2841,7 +2829,40 @@ export const createSkillLibraryStore = (
     return entryFor(safeId, targetDir);
   };
 
+  const skillUpdateImpact = async (id: string): Promise<SkillUpdateImpact> => {
+    const profileNames = profileStore
+      ? (await readAllProfilesForResourceMutation(
+          profileStore,
+          "Skill update preview"
+        )).flatMap((profile) =>
+          profile.assetPolicy.skillRefs.some(
+            (reference) => reference.libraryId === id && reference.enabled !== false
+          )
+            ? [profile.manifest.name]
+            : []
+        )
+      : [];
+    const inventory = await scanInventory(targetPathsProvider(), await listSkills());
+    const installs = inventory.filter(
+      (item) => item.status === "managed" && item.libraryId === id
+    );
+    const targetIdsFor = (method: "linked" | "copied") =>
+      [...new Set(
+        installs
+          .filter((item) => item.installMethod === method)
+          .flatMap((item) => item.foundIn)
+      )].sort((left, right) => left.localeCompare(right));
+    return {
+      profileNames: [...new Set(profileNames)].sort((left, right) => left.localeCompare(right)),
+      linkedInstallCount: installs.filter((item) => item.installMethod === "linked").length,
+      linkedTargetIds: targetIdsFor("linked"),
+      copiedInstallCount: installs.filter((item) => item.installMethod === "copied").length,
+      copiedTargetIds: targetIdsFor("copied")
+    };
+  };
+
   const previewUpdate = async (id: string): Promise<SkillUpdatePlan> => {
+    await discardExpiredPendingUpdates();
     const safeId = SafeIdSchema.parse(id);
     const targetDir = join(await libraryDir(), safeId);
     if (!(await pathExists(join(targetDir, "SKILL.md")))) {
@@ -2849,6 +2870,7 @@ export const createSkillLibraryStore = (
     }
     const skill = await entryFor(safeId, targetDir);
     const metadata = await readLibraryMetadata(targetDir);
+    const impact = await skillUpdateImpact(safeId);
     if (skill.updatePolicy !== "tracked") {
       return {
         id: skill.id,
@@ -2858,7 +2880,8 @@ export const createSkillLibraryStore = (
         currentRevision: metadata.remoteRevision ?? metadata.contentHash,
         updateAvailable: false,
         changes: [],
-        errors: ["This skill is not tracked for updates"]
+        errors: ["This skill is not tracked for updates"],
+        impact
       };
     }
     if (!metadata.source) {
@@ -2870,40 +2893,109 @@ export const createSkillLibraryStore = (
         currentRevision: metadata.remoteRevision ?? metadata.contentHash,
         updateAvailable: false,
         changes: [],
-        errors: ["Skill has no update source configured"]
+        errors: ["Skill has no update source configured"],
+        impact
       };
     }
+
+    const finalizeCandidate = async (
+      candidateDir: string,
+      nextMetadata: SkillMetadataFile,
+      latestRevision?: string
+    ): Promise<SkillUpdatePlan> => {
+      await validateSkillFrontmatter(candidateDir);
+      await rm(join(candidateDir, ".agentenv-skill.json"), { force: true });
+      await rm(join(candidateDir, ".agentenv-owner.json"), { force: true });
+      const expectedLibraryContentHash = await computeContentHash(targetDir);
+      const changes = await createSkillChanges(targetDir, candidateDir);
+      if (await computeContentHash(targetDir) !== expectedLibraryContentHash) {
+        throw new Error("Library skill changed while preparing the update preview; retry");
+      }
+      const currentMetadata = await readLibraryMetadata(targetDir);
+      if (metadataHash(currentMetadata) !== metadataHash(metadata)) {
+        throw new Error("Skill update settings changed while preparing the preview; retry");
+      }
+      const candidateContentHash = await computeContentHash(candidateDir);
+      if (changes.length === 0) {
+        await rm(candidateDir, { recursive: true, force: true });
+        return {
+          id: skill.id,
+          name: skill.name,
+          sourceType: skill.sourceType,
+          source: metadata.source,
+          currentRevision: metadata.remoteRevision ?? metadata.contentHash,
+          latestRevision,
+          updateAvailable: false,
+          changes: [],
+          errors: [],
+          impact
+        };
+      }
+
+      const previewId = randomUUID();
+      await discardPendingUpdatesForSkill(skill.id);
+      pendingUpdates.set(previewId, {
+        previewId,
+        id: skill.id,
+        candidateDir,
+        candidateContentHash,
+        expectedLibraryContentHash,
+        expectedMetadataHash: metadataHash(currentMetadata),
+        createdAt: Date.now(),
+        nextMetadata
+      });
+      return {
+        id: skill.id,
+        previewId,
+        name: skill.name,
+        sourceType: skill.sourceType,
+        source: metadata.source,
+        currentRevision: metadata.remoteRevision ?? metadata.contentHash,
+        latestRevision,
+        updateAvailable: true,
+        changes,
+        errors: [],
+        impact
+      };
+    };
 
     if (metadata.sourceType === "github") {
       const source = parseGitHubSkillUrl(metadata.source, {
         ref: metadata.remoteRef,
         remotePath: metadata.remotePath
       });
-      const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-preview-"));
+      const candidateDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-update-"));
       try {
-        const { hasSkillMd, revision } = await readGitHubTree(source, tempDir);
+        const { hasSkillMd, revision } = await readGitHubTree(source, candidateDir);
         if (!hasSkillMd) {
           throw new Error(`GitHub skill source is missing SKILL.md: ${metadata.source}`);
         }
-        const changes = await createSkillChanges(targetDir, tempDir);
-        return {
-          id: skill.id,
-          name: skill.name,
+        return await finalizeCandidate(candidateDir, {
+          ...metadata,
           sourceType: "github",
           source: metadata.source,
-          currentRevision: metadata.remoteRevision,
-          latestRevision: revision,
-          updateAvailable: changes.length > 0,
-          changes,
-          errors: []
-        };
-      } finally {
-        await rm(tempDir, { recursive: true, force: true });
+          remoteRef: source.ref,
+          remotePath: source.remotePath,
+          remoteRevision: revision,
+          updatePolicy: "tracked",
+          upstream: {
+            kind: "github",
+            locator: metadata.source,
+            ref: source.ref,
+            subpath: source.remotePath,
+            revision
+          }
+        }, revision);
+      } catch (error) {
+        if (![...pendingUpdates.values()].some((pending) => pending.candidateDir === candidateDir)) {
+          await rm(candidateDir, { recursive: true, force: true });
+        }
+        throw error;
       }
     }
 
     if (metadata.sourceType === "git") {
-      const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-preview-"));
+      const candidateDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-update-"));
       try {
         const materialized = await requireRepositorySource().materialize(
           {
@@ -2912,22 +3004,23 @@ export const createSkillLibraryStore = (
             directory: metadata.remotePath,
             transport: "system-git"
           },
-          tempDir
+          candidateDir
         );
-        const changes = await createSkillChanges(targetDir, tempDir);
-        return {
-          id: skill.id,
-          name: skill.name,
+        return await finalizeCandidate(candidateDir, {
+          ...metadata,
           sourceType: "git",
-          source: metadata.source,
-          currentRevision: metadata.remoteRevision,
-          latestRevision: materialized.contentRevision,
-          updateAvailable: changes.length > 0,
-          changes,
-          errors: []
-        };
-      } finally {
-        await rm(tempDir, { recursive: true, force: true });
+          source: materialized.repository,
+          remoteRef: materialized.ref,
+          remotePath: materialized.directory,
+          remoteRevision: materialized.contentRevision,
+          updatePolicy: "tracked",
+          upstream: materialized.upstream
+        }, materialized.contentRevision);
+      } catch (error) {
+        if (![...pendingUpdates.values()].some((pending) => pending.candidateDir === candidateDir)) {
+          await rm(candidateDir, { recursive: true, force: true });
+        }
+        throw error;
       }
     }
 
@@ -2940,25 +3033,38 @@ export const createSkillLibraryStore = (
         currentRevision: metadata.contentHash,
         updateAvailable: false,
         changes: [],
-        errors: [`Skill update source type is not supported yet: ${metadata.sourceType}`]
+        errors: [`Skill update source type is not supported yet: ${metadata.sourceType}`],
+        impact
       };
     }
     if (!(await pathExists(join(metadata.source, "SKILL.md")))) {
       throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
     }
-    const latestRevision = await computeContentHash(metadata.source);
-    const changes = await createSkillChanges(targetDir, metadata.source);
-    return {
-      id: skill.id,
-      name: skill.name,
-      sourceType: "local",
-      source: metadata.source,
-      currentRevision: metadata.contentHash,
-      latestRevision,
-      updateAvailable: changes.length > 0,
-      changes,
-      errors: []
-    };
+    const sourceHashBeforeCopy = await computeContentHash(metadata.source);
+    const candidateDir = await mkdtemp(join(tmpdir(), "agentenv-local-skill-update-"));
+    try {
+      await cp(metadata.source, candidateDir, { recursive: true, dereference: true });
+      const sourceHashAfterCopy = await computeContentHash(metadata.source);
+      const candidateHash = await computeContentHash(candidateDir);
+      if (
+        sourceHashBeforeCopy !== sourceHashAfterCopy ||
+        candidateHash !== sourceHashAfterCopy
+      ) {
+        throw new Error("Local Skill source changed while preparing the update preview; retry");
+      }
+      return await finalizeCandidate(candidateDir, {
+        ...metadata,
+        sourceType: "local",
+        source: metadata.source,
+        updatePolicy: "tracked",
+        upstream: metadata.upstream ?? { kind: "local", locator: metadata.source }
+      }, sourceHashAfterCopy);
+    } catch (error) {
+      if (![...pendingUpdates.values()].some((pending) => pending.candidateDir === candidateDir)) {
+        await rm(candidateDir, { recursive: true, force: true });
+      }
+      throw error;
+    }
   };
 
   const createLibraryUpdateBackup = async (
@@ -2990,113 +3096,50 @@ export const createSkillLibraryStore = (
     return manifest;
   };
 
-  const updateSkill = async (id: string): Promise<SkillLibraryEntry> => {
+  const updateSkill = async ({
+    id,
+    previewId
+  }: SkillUpdateConfirmation): Promise<SkillLibraryEntry> => {
     const safeId = SafeIdSchema.parse(id);
+    const pending = pendingUpdates.get(String(previewId));
+    if (!pending || pending.id !== safeId) {
+      throw new Error("Skill update preview is unavailable; review the update again");
+    }
+    if (Date.now() - pending.createdAt > SKILL_UPDATE_PREVIEW_TTL_MS) {
+      await discardPendingUpdate(pending.previewId);
+      throw new Error("Skill update preview expired; review the update again");
+    }
+
     const targetDir = join(await libraryDir(), safeId);
-    const metadata = await readLibraryMetadata(targetDir);
-    if (updatePolicyFor(metadata) !== "tracked") {
-      throw new Error(`${safeId} is not tracked for updates`);
+    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
+      throw new Error(`Library skill does not exist: ${safeId}`);
     }
-    if (metadata.sourceType === "github" && metadata.source) {
-      const source = parseGitHubSkillUrl(metadata.source, {
-        ref: metadata.remoteRef,
-        remotePath: metadata.remotePath
-      });
-      const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-"));
-      try {
-        const { hasSkillMd, revision } = await readGitHubTree(source, tempDir);
-        if (!hasSkillMd) {
-          throw new Error(`GitHub skill source is missing SKILL.md: ${metadata.source}`);
-        }
-        const backup = await createLibraryUpdateBackup(safeId, targetDir);
-        try {
-          await removeAndCopy(tempDir, targetDir);
-          await writeMetadata(targetDir, {
-            sourceType: "github",
-            source: metadata.source,
-            remoteRef: source.ref,
-            remotePath: source.remotePath,
-            remoteRevision: revision,
-            updatePolicy: "tracked",
-            iconKey: metadata.iconKey,
-            upstream: {
-              kind: "github",
-              locator: metadata.source,
-              ref: source.ref,
-              subpath: source.remotePath,
-              revision
-            },
-            provenance: metadata.provenance
-          });
-        } catch (error) {
-          await restoreCleanupBackup(backup);
-          throw new Error(
-            `Updating ${safeId} failed and restored the previous Library version: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          );
-        }
-        return entryFor(safeId, targetDir);
-      } finally {
-        await rm(tempDir, { recursive: true, force: true });
-      }
+    const [currentContentHash, currentMetadata, candidateContentHash] = await Promise.all([
+      computeContentHash(targetDir),
+      readLibraryMetadata(targetDir),
+      computeContentHash(pending.candidateDir)
+    ]);
+    if (
+      currentContentHash !== pending.expectedLibraryContentHash ||
+      metadataHash(currentMetadata) !== pending.expectedMetadataHash
+    ) {
+      throw new Error("Library skill changed after the update preview; review the latest version");
     }
-    if (metadata.sourceType === "git" && metadata.source) {
-      const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-"));
-      try {
-        const materialized = await requireRepositorySource().materialize(
-          {
-            repository: metadata.source,
-            ref: metadata.remoteRef,
-            directory: metadata.remotePath,
-            transport: "system-git"
-          },
-          tempDir
-        );
-        const backup = await createLibraryUpdateBackup(safeId, targetDir);
-        try {
-          await removeAndCopy(tempDir, targetDir);
-          await writeMetadata(targetDir, {
-            sourceType: "git",
-            source: materialized.repository,
-            remoteRef: materialized.ref,
-            remotePath: materialized.directory,
-            remoteRevision: materialized.contentRevision,
-            updatePolicy: "tracked",
-            iconKey: metadata.iconKey,
-            upstream: materialized.upstream,
-            provenance: metadata.provenance
-          });
-        } catch (error) {
-          await restoreCleanupBackup(backup);
-          throw new Error(
-            `Updating ${safeId} failed and restored the previous Library version: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          );
-        }
-        return entryFor(safeId, targetDir);
-      } finally {
-        await rm(tempDir, { recursive: true, force: true });
-      }
+    if (candidateContentHash !== pending.candidateContentHash) {
+      await discardPendingUpdate(pending.previewId);
+      throw new Error("Reviewed Skill update candidate is no longer available; review it again");
     }
-    if (metadata.sourceType !== "local" || !metadata.source) {
-      throw new Error(`Skill ${safeId} cannot be updated without a local source`);
-    }
-    if (!(await pathExists(join(metadata.source, "SKILL.md")))) {
-      throw new Error(`Skill source is missing SKILL.md: ${metadata.source}`);
-    }
+
     const backup = await createLibraryUpdateBackup(safeId, targetDir);
     try {
-      await removeAndCopy(metadata.source, targetDir);
-      await writeMetadata(targetDir, {
-        sourceType: "local",
-        source: metadata.source,
-        updatePolicy: "tracked",
-        iconKey: metadata.iconKey,
-        upstream: metadata.upstream ?? { kind: "local", locator: metadata.source },
-        provenance: metadata.provenance
-      });
+      await removeAndCopy(pending.candidateDir, targetDir);
+      await writeMetadata(targetDir, pending.nextMetadata);
+      const updated = await entryFor(safeId, targetDir);
+      if (await computeContentHash(targetDir) !== pending.candidateContentHash) {
+        throw new Error("The updated Library copy did not match the reviewed candidate");
+      }
+      await discardPendingUpdatesForSkill(safeId);
+      return updated;
     } catch (error) {
       await restoreCleanupBackup(backup);
       throw new Error(
@@ -3105,7 +3148,6 @@ export const createSkillLibraryStore = (
         }`
       );
     }
-    return entryFor(safeId, targetDir);
   };
 
   return {

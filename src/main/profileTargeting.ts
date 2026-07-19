@@ -9,7 +9,8 @@ export interface TargetedProfile {
 
 export const targetProfile = (
   source: ProfileDetail,
-  adapter: AgentTargetAdapter
+  adapter: AgentTargetAdapter,
+  sourceAdapter?: AgentTargetAdapter
 ): TargetedProfile => {
   if (source.manifest.targetId === adapter.descriptor.id) {
     return { profile: source, warnings: [], omissions: [] };
@@ -20,7 +21,9 @@ export const targetProfile = (
     source.assetPolicy.ownedDirs.filter((asset) => asset.kind === "agent").length +
     source.assetPolicy.ownedFiles.filter((asset) => asset.kind === "agent").length;
   const compactNativeConfig = source.configText.replace(/\s/g, "");
-  const hasNativeConfig = compactNativeConfig.length > 0 && compactNativeConfig !== "{}";
+  const hasNativeConfig = sourceAdapter
+    ? sourceAdapter.hasMeaningfulNativeConfig(source.configText)
+    : compactNativeConfig.length > 0 && compactNativeConfig !== "{}";
   const hasDisabledSkills = source.assetPolicy.disabledSkillPaths.length > 0;
   const warnings: string[] = [];
   const omissions: PlannedOmission[] = [];

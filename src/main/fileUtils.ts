@@ -54,11 +54,16 @@ const syncPath = async (path: string) => {
   }
 };
 
-export const writeAtomic = async (targetPath: string, content: string) => {
-  await mkdir(dirname(targetPath), { recursive: true });
+export const writeAtomic = async (
+  targetPath: string,
+  content: string,
+  options: { mode?: number } = {}
+) => {
+  const mode = options.mode ?? 0o600;
+  await mkdir(dirname(targetPath), { recursive: true, mode: 0o700 });
   const tempPath = `${targetPath}.agentenv-tmp-${process.pid}-${randomUUID()}`;
   try {
-    await writeFile(tempPath, content, "utf8");
+    await writeFile(tempPath, content, { encoding: "utf8", mode });
     await syncPath(tempPath);
     await rename(tempPath, targetPath);
     await syncPath(dirname(targetPath));

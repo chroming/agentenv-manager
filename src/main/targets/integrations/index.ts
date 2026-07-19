@@ -23,6 +23,7 @@ const composeBuiltInIntegration = (
     writeProfileFiles: adapter.writeProfileFiles
   },
   config: {
+    hasMeaningfulNativeConfig: adapter.hasMeaningfulNativeConfig,
     createPreview: adapter.createPreview
   },
   mcp: {
