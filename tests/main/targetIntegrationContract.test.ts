@@ -61,6 +61,14 @@ describe("target integration contract", () => {
       })
     );
     await expect(adapter.validateAssets({ profile, targetPaths: paths })).resolves.toEqual([]);
+    await expect(adapter.skills.readNativeState(paths)).resolves.toEqual({
+      disabledRuntimeNames: []
+    });
+    await expect(adapter.skills.inspectRuntime(paths)).resolves.toEqual({
+      targetId: "fixture-agent",
+      observations: [],
+      issues: []
+    });
     await expect(
       adapter.createPreview({
         profile,

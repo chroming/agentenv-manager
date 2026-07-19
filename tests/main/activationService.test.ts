@@ -129,6 +129,43 @@ describe("activation service", () => {
     expect(scanInventory).toHaveBeenCalledTimes(1);
   });
 
+  it("blocks a Profile that declares the same runtime Skill name twice", async () => {
+    const { paths, service } = await makeEnv();
+    for (const id of ["review-a", "review-b"]) {
+      const libraryDir = join(paths.skillsLibraryDir, id);
+      await mkdir(libraryDir, { recursive: true });
+      await writeFile(
+        join(libraryDir, "SKILL.md"),
+        `---\nname: shared-reviewer\ndescription: ${id}\n---\n# ${id}\n`
+      );
+    }
+    const ownedConflictDir = join(paths.skillsLibraryDir, "owned-name-conflict");
+    await mkdir(ownedConflictDir, { recursive: true });
+    await writeFile(
+      join(ownedConflictDir, "SKILL.md"),
+      "---\nname: example\ndescription: Conflicts with the Profile-owned Skill.\n---\n# Example\n"
+    );
+    const assetsPath = join(paths.profilesDir, "daily-coding", "assets.json");
+    const assets = JSON.parse(await readFile(assetsPath, "utf8")) as {
+      skillRefs: Array<{ libraryId: string; targetName: string }>;
+    };
+    assets.skillRefs = [
+      { libraryId: "review-a", targetName: "review-a" },
+      { libraryId: "review-b", targetName: "review-b" },
+      { libraryId: "owned-name-conflict", targetName: "other-example-folder" }
+    ];
+    await writeFile(assetsPath, JSON.stringify(assets));
+
+    const preview = await service.previewProfile("daily-coding");
+
+    expect(preview.errors).toContain(
+      "Profile declares runtime Skill name shared-reviewer more than once (Library / review-a, Library / review-b)"
+    );
+    expect(preview.errors).toContain(
+      "Profile declares runtime Skill name example more than once (Profile / skills/example-skill, Library / owned-name-conflict)"
+    );
+  });
+
   it("applies a profile, creates a backup, and copies owned skills", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");
@@ -1058,6 +1095,10 @@ describe("activation service", () => {
         configPath: paths.codexConfigPath,
         skillsDir: paths.userSkillsDir
       }),
+      skills: {
+        readNativeState: async () => ({ disabledRuntimeNames: [] }),
+        inspectRuntime: async () => ({ targetId: "codex", observations: [], issues: [] })
+      },
       createDefaultProfile: () => {
         throw new Error("not used");
       },

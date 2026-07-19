@@ -36,20 +36,23 @@ describe("executable discovery", () => {
     ).resolves.toBe(executable);
   });
 
-  it("checks common user bins when a desktop app PATH is sparse", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-executable-"));
-    const executable = join(root, ".local", "bin", "opencode");
-    await executableFile(executable);
+  it.each(["opencode", "claude", "codex", "agy"])(
+    "finds %s in common user bins when a desktop app PATH is sparse",
+    async (command) => {
+      root = await mkdtemp(join(tmpdir(), "agentenv-executable-"));
+      const executable = join(root, ".local", "bin", command);
+      await executableFile(executable);
 
-    await expect(
-      findExecutable("opencode", {
-        homeDir: root,
-        pathEnv: "",
-        systemPathLookup: false,
-        shellPathLookup: false
-      })
-    ).resolves.toBe(executable);
-  });
+      await expect(
+        findExecutable(command, {
+          homeDir: root,
+          pathEnv: "",
+          systemPathLookup: false,
+          shellPathLookup: false
+        })
+      ).resolves.toBe(executable);
+    }
+  );
 
   it("uses a bounded login-shell lookup as the final fallback", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-executable-"));

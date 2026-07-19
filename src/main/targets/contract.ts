@@ -1,4 +1,10 @@
-import type { ProfileDetail, TargetDescriptor } from "../../shared/types";
+import type {
+  ProfileDetail,
+  SkillRuntimeNativeState,
+  SkillRuntimeSnapshot,
+  TargetDescriptor,
+  TargetPaths
+} from "../../shared/types";
 import type {
   AgentTargetAdapter,
   CapturedTargetProfile,
@@ -40,6 +46,12 @@ export interface TargetMcpDriver {
   ): ProfileDetail;
 }
 
+/** Read-only facts about how an Agent discovers and identifies Skills. */
+export interface TargetSkillDriver {
+  readNativeState(targetPaths: TargetPaths): Promise<SkillRuntimeNativeState>;
+  inspectRuntime(targetPaths: TargetPaths): Promise<SkillRuntimeSnapshot>;
+}
+
 export interface TargetAssetDriver {
   validateAssets(input: TargetAssetInput): ReturnType<AgentTargetAdapter["validateAssets"]>;
   getAssetBackupPaths(
@@ -61,5 +73,6 @@ export interface AgentTargetIntegration {
   profile: TargetProfileDriver;
   config: TargetConfigDriver;
   mcp: TargetMcpDriver;
+  skills: TargetSkillDriver;
   assets: TargetAssetDriver;
 }

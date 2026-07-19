@@ -223,7 +223,7 @@ describe("target discovery", () => {
     expect(codex?.health.canWrite).toBe(true);
   });
 
-  it("marks Antigravity ready from a macOS application without an agy command", async () => {
+  it("keeps Antigravity CLI missing when only the desktop application exists", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-discovery-"));
     const homeDir = join(root, "home");
     const applicationPath = join(homeDir, "Applications", "Antigravity.app");
@@ -245,14 +245,12 @@ describe("target discovery", () => {
     const [antigravity] = await service.listTargets();
 
     expect(antigravity.health).toEqual(expect.objectContaining({
-      status: "ready",
-      installationFound: true,
+      status: "missing",
+      installationFound: false,
       executableFound: false,
       executablePath: undefined,
-      canWrite: true
+      canWrite: false
     }));
-    expect(antigravity.health.installationEvidence).toEqual([
-      { kind: "desktop-app", label: "Antigravity application", path: applicationPath }
-    ]);
+    expect(antigravity.health.installationEvidence).toEqual([]);
   });
 });

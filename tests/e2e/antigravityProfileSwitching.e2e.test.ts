@@ -193,4 +193,50 @@ describe("Antigravity Profile switching e2e", () => {
       readFile(join(homeDir, ".gemini", "GEMINI.md"), "utf8")
     ).resolves.toBe("# Still applies\n");
   });
+
+  it("moves AgentEnv-owned legacy Skills to the CLI root and restores both paths on rollback", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-legacy-e2e-"));
+    const homeDir = join(root, "home");
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir });
+    const registry = createTargetRegistry([createAntigravityTargetAdapter()]);
+    const profileStore = createProfileStore({ appDataRoot: paths.appDataRoot, homeDir }, registry);
+    const profile = await createProfile(profileStore, "alpha");
+    const targetPaths = registry.get("antigravity").createTargetPaths({ homeDir });
+    const legacyPath = join(homeDir, ".gemini", "config", "skills", "agentenv-alpha");
+    await mkdir(legacyPath, { recursive: true });
+    await writeFile(join(legacyPath, "SKILL.md"), "---\nname: agentenv-alpha\n---\n# Legacy\n");
+    await writeFile(
+      join(legacyPath, ".agentenv-owner.json"),
+      `${JSON.stringify({
+        owner: "agentenv-manager",
+        profileId: profile.id,
+        targetId: "antigravity",
+        kind: "skill",
+        source: "skills/alpha"
+      }, null, 2)}\n`
+    );
+    const service = createActivationService({ paths, profileStore, targetRegistry: registry });
+
+    const preview = await service.previewProfile(profile.id, "antigravity");
+    expect(preview.errors).toEqual([]);
+    expect(preview.legacySkillPaths).toEqual([legacyPath]);
+    expect(preview.resourceChanges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "remove", path: legacyPath }),
+      expect.objectContaining({ action: "install", path: join(targetPaths.skillsDir ?? "", "agentenv-alpha") })
+    ]));
+
+    const result = await service.applyProfile(profile.id, preview.id);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.errors.join("\n"));
+    await expect(readFile(join(legacyPath, "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(targetPaths.skillsDir ?? "", "agentenv-alpha", "SKILL.md"), "utf8"))
+      .resolves.toContain("description: alpha");
+
+    const rollbackPreview = await service.previewRollback(result.backupId);
+    expect(rollbackPreview.errors).toEqual([]);
+    await expect(service.rollback(result.backupId)).resolves.toEqual({ ok: true });
+    await expect(readFile(join(legacyPath, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Legacy");
+  });
 });

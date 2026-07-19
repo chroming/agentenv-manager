@@ -70,10 +70,10 @@ describe("OpenCode target adapter", () => {
       join(root, ".claude", "skills")
     ]);
     expect(targetPaths.skillLocations).toEqual([
-      { path: join(root, ".config", "opencode", "skills"), role: "preferred-runtime", shared: false },
-      { path: join(root, ".config", "opencode", "skill"), role: "alternate-runtime", shared: false },
-      { path: join(root, ".agents", "skills"), role: "compatibility-runtime", shared: true },
-      { path: join(root, ".claude", "skills"), role: "compatibility-runtime", shared: true }
+      expect.objectContaining({ path: join(root, ".config", "opencode", "skills"), role: "preferred-runtime", shared: false, scanDepth: "recursive" }),
+      expect.objectContaining({ path: join(root, ".config", "opencode", "skill"), role: "alternate-runtime", shared: false, scanDepth: "recursive" }),
+      expect.objectContaining({ path: join(root, ".agents", "skills"), role: "compatibility-runtime", shared: true, scanDepth: "recursive" }),
+      expect.objectContaining({ path: join(root, ".claude", "skills"), role: "compatibility-runtime", shared: true, scanDepth: "recursive" })
     ]);
   });
 

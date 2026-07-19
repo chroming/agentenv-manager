@@ -13,6 +13,7 @@ import { defineTargetIntegration } from "../../defineTargetIntegration";
 import { createAntigravityInstallationDriver } from "../../installationDiscovery";
 import { createDirectoryAssetDriver } from "../../shared/assetDeployment";
 import { createProfileFileDriver } from "../../shared/profileFiles";
+import { createFilesystemSkillDriver } from "../../shared/skillRuntime";
 import { captureNativeJsonMcpConnections } from "../../capture";
 
 const DEFAULT_STATE: TargetState = {
@@ -59,12 +60,13 @@ const profileFiles = createProfileFileDriver({
 });
 
 const assets = createDirectoryAssetDriver({ targetName: "Antigravity" });
+const skills = createFilesystemSkillDriver({ targetId: "antigravity" });
 
 export const antigravityIntegration: AgentTargetIntegration = {
   descriptor: {
     id: "antigravity",
-    name: "Antigravity",
-    description: "Manage global Antigravity rules, MCPs, and skills.",
+    name: "Antigravity CLI",
+    description: "Manage global Antigravity CLI rules, MCPs, and skills.",
     iconKey: "antigravity",
     displayOrder: 3,
     instructionsLabel: "GEMINI.md",
@@ -88,22 +90,46 @@ export const antigravityIntegration: AgentTargetIntegration = {
     createTargetPaths: ({ homeDir }) => {
       const geminiDir = join(homeDir, ".gemini");
       const configDir = join(geminiDir, "config");
-      const skillsDir = join(configDir, "skills");
       const cliSkillsDir = join(geminiDir, "antigravity-cli", "skills");
+      const sharedSkillsDir = join(geminiDir, "skills");
+      const legacySkillsDir = join(configDir, "skills");
       return {
         targetId: "antigravity",
         configDir,
         instructionsPath: join(geminiDir, "GEMINI.md"),
         configPath: join(configDir, "mcp_config.json"),
-        skillsDir,
+        skillsDir: cliSkillsDir,
         skillLocations: [
-          { path: skillsDir, role: "preferred-runtime", shared: false },
-          { path: cliSkillsDir, role: "discovery-only", shared: false }
+          {
+            path: cliSkillsDir,
+            role: "preferred-runtime",
+            shared: false,
+            scope: "user",
+            scanDepth: "direct",
+            management: "managed"
+          },
+          {
+            path: sharedSkillsDir,
+            role: "compatibility-runtime",
+            shared: true,
+            scope: "shared",
+            scanDepth: "direct",
+            management: "observed"
+          },
+          {
+            path: legacySkillsDir,
+            role: "discovery-only",
+            shared: false,
+            scope: "user",
+            scanDepth: "direct",
+            management: "legacy"
+          }
         ],
-        skillScanDirs: [skillsDir, cliSkillsDir]
+        skillScanDirs: [cliSkillsDir, sharedSkillsDir, legacySkillsDir]
       };
     }
   },
+  skills,
   profile: {
     createDefaultProfile: (id) => ({
       id,

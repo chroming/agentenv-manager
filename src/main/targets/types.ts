@@ -5,7 +5,9 @@ import type {
   TargetActivationPreview,
   TargetDescriptor,
   TargetInstallationEvidence,
-  TargetPaths
+  TargetPaths,
+  SkillRuntimeNativeState,
+  SkillRuntimeSnapshot
 } from "../../shared/types";
 
 export interface TargetPathInput {
@@ -59,6 +61,10 @@ export interface AgentTargetAdapter {
   descriptor: TargetDescriptor;
   detectInstallation(input: TargetInstallationInput): Promise<TargetInstallationResult>;
   createTargetPaths(input: TargetPathInput): TargetPaths;
+  skills: {
+    readNativeState(targetPaths: TargetPaths): Promise<SkillRuntimeNativeState>;
+    inspectRuntime(targetPaths: TargetPaths): Promise<SkillRuntimeSnapshot>;
+  };
   createDefaultProfile(id: string): Omit<ProfileDetail, "profileDir">;
   captureProfile(targetPaths: TargetPaths): Promise<CapturedTargetProfile>;
   readProfileFiles(profileDir: string, manifest: ProfileDetail["manifest"]): Promise<ProfileDetail>;

@@ -144,9 +144,11 @@ export interface SkillProvenance {
 }
 
 export interface SkillExternalOwnership {
-  manager: "skills-cli";
-  lockPath: string;
-  lockVersion: number;
+  manager: "skills-cli" | "claude-plugin" | "agent-builtin";
+  displayName?: string;
+  importable?: boolean;
+  lockPath?: string;
+  lockVersion?: number;
   canonicalPath: string;
   confidence: "confirmed" | "inferred";
   state: "healthy" | "broken-link" | "unknown";
@@ -397,6 +399,14 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   status: SkillInventoryStatus;
   libraryId?: string;
   skillKey: string;
+  runtimeName?: string;
+  deploymentName?: string;
+  runtimeScope?: SkillRuntimeScope;
+  runtimeOwner?: SkillRuntimeOwner;
+  managedByTarget?: boolean;
+  runtimeAvailability?: SkillRuntimeAvailability;
+  runtimeConfidence?: SkillRuntimeConfidence;
+  runtimeIssues?: SkillRuntimeIssue[];
   contentHash: string;
   ignoreRuleId?: string;
   installMethod?: "linked" | "copied";
@@ -404,7 +414,53 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   externalOwnership?: SkillExternalOwnership;
   locationRole?: TargetSkillLocationRole;
   sharedLocation?: boolean;
+  legacyLocation?: boolean;
   ignoreReason?: string;
+}
+
+export type SkillScanDepth = "direct" | "recursive";
+export type SkillRuntimeScope = "user" | "workspace" | "shared" | "builtin";
+export type SkillRuntimeOwner = "agentenv" | "user" | "agent" | "external";
+export type SkillRuntimeAvailability = "enabled" | "disabled" | "shadowed" | "unknown";
+export type SkillRuntimeConfidence = "verified" | "inferred";
+
+export interface SkillRuntimeIssue {
+  code:
+    | "missing-runtime-name"
+    | "invalid-runtime-name"
+    | "duplicate-runtime-name"
+    | "external-owner"
+    | "unreadable-skill";
+  severity: "info" | "warning" | "error";
+  message: string;
+}
+
+export interface SkillRuntimeObservation {
+  targetId: string;
+  path: string;
+  runtimeName: string;
+  deploymentName: string;
+  version?: string;
+  scope: SkillRuntimeScope;
+  owner: SkillRuntimeOwner;
+  availability: SkillRuntimeAvailability;
+  confidence: SkillRuntimeConfidence;
+  locationRole: TargetSkillLocationRole;
+  shared: boolean;
+  legacy: boolean;
+  externalOwnership?: SkillExternalOwnership;
+  issues: SkillRuntimeIssue[];
+}
+
+export interface SkillRuntimeSnapshot {
+  targetId: string;
+  observations: SkillRuntimeObservation[];
+  issues: SkillRuntimeIssue[];
+  nativeDisabledRuntimeNames?: string[];
+}
+
+export interface SkillRuntimeNativeState {
+  disabledRuntimeNames: string[];
 }
 
 export interface SkillCleanupLocationInput {
@@ -698,6 +754,17 @@ export interface TargetSkillLocation {
   path: string;
   role: TargetSkillLocationRole;
   shared: boolean;
+  scope?: SkillRuntimeScope;
+  scanDepth?: SkillScanDepth;
+  management?: "managed" | "observed" | "legacy";
+  externalContainerMarkers?: TargetSkillExternalContainerMarker[];
+}
+
+export interface TargetSkillExternalContainerMarker {
+  relativePath: string;
+  manager: SkillExternalOwnership["manager"];
+  displayName: string;
+  importable: boolean;
 }
 
 export interface TargetState {
@@ -888,6 +955,7 @@ export interface ActivationPreview {
     linkTarget: string;
     resolvedPath: string;
   };
+  legacySkillPaths?: string[];
 }
 
 export interface EffectiveProfilePayload {

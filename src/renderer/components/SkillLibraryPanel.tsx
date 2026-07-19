@@ -80,6 +80,7 @@ import {
 import { useI18n } from "../i18n";
 import { Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
+import { isExternalSkillImportable } from "../../shared/skillIdentity";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -238,6 +239,12 @@ const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
   if (status === "ignored") return "Ignored";
   return "Managed";
 };
+
+const externalManagerLabel = (skill: SkillInventoryEntry | undefined) =>
+  skill?.externalOwnership?.displayName ??
+  (skill?.externalOwnership?.manager === "skills-cli"
+    ? "Skills CLI"
+    : skill?.externalOwnership?.manager ?? "External manager");
 
 const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "not-in-library") return "Not in Library";
@@ -806,20 +813,37 @@ export const SkillLibraryPanel = ({
     selectedLocalInventory &&
       (selectedLocalInventory.status === "managed" ||
         selectedLocalInventory.status === "ignored" ||
+        (selectedLocalInventory.status === "external" &&
+          !isExternalSkillImportable(selectedLocalInventory.externalOwnership)) ||
         selectedLocalConflict)
   );
   const localImportImpact = !selectedLocalInventory
     ? undefined
     : selectedLocalInventory.status === "managed"
-      ? "This Agent copy is already managed by AgentEnv and is present in Library."
+      ? { message: "This Agent copy is already managed by AgentEnv and is present in Library." }
       : selectedLocalInventory.status === "ignored"
-        ? "This group is ignored. Restore it in Scan local before managing it."
+        ? { message: "This group is ignored. Restore it in Scan local before managing it." }
         : selectedLocalConflict
-          ? "This folder differs from the existing Library version. Use Scan local to review the conflict."
+          ? {
+              message:
+                "This folder differs from the existing Library version. Use Scan local to review the conflict."
+            }
           : selectedLocalInventory.status === "external"
-            ? "This installation is owned by Skills CLI. AgentEnv will import an independent Library copy and leave it unchanged."
+            ? selectedLocalInventory.externalOwnership?.importable === false
+              ? {
+                  message: "This Skill is provided by {{manager}} and remains read-only here.",
+                  values: { manager: externalManagerLabel(selectedLocalInventory) }
+                }
+              : {
+                  message:
+                    "This installation is owned by {{manager}}. AgentEnv will import an independent Library copy and leave it unchanged.",
+                  values: { manager: externalManagerLabel(selectedLocalInventory) }
+                }
             : selectedLocalCanManage
-              ? "AgentEnv will back up this Agent copy, import it to Library, then replace the folder with a managed copy."
+              ? {
+                  message:
+                    "AgentEnv will back up this Agent copy, import it to Library, then replace the folder with a managed copy."
+                }
               : undefined;
   const localImportLabel = selectedLocalCanManage ? "Import & manage" : "Import copy";
   const sourceCandidateDraft = sourceCandidate
@@ -852,7 +876,7 @@ export const SkillLibraryPanel = ({
     externalImportGroup?.activeItems.filter(
       (item) =>
         item.status === "external" &&
-        item.externalOwnership
+        isExternalSkillImportable(item.externalOwnership)
     ) ?? [];
   const selectedExternalImport = externalImportItems.find(
     (item) => item.path === externalImport?.sourcePath
@@ -2438,7 +2462,11 @@ export const SkillLibraryPanel = ({
                 <p className="muted">
                   {selectedExternalImport?.contentMatchesLibrary
                     ? t("Review the matching Library copy and any source changes. External files and lock data stay unchanged.")
-                    : t("Create an independent Library copy. Skills CLI files and lock data stay unchanged.")}
+                    : selectedExternalImport?.externalOwnership?.manager === "skills-cli"
+                      ? t("Create an independent Library copy. Skills CLI files and lock data stay unchanged.")
+                      : t("Create an independent Library copy. {{manager}} files stay unchanged.", {
+                          manager: externalManagerLabel(selectedExternalImport)
+                        })}
                 </p>
               </div>
             </header>
@@ -2944,6 +2972,7 @@ export const SkillLibraryPanel = ({
                     const source = group.activeItems.find(
                       (item) =>
                         item.status === "external" &&
+                        isExternalSkillImportable(item.externalOwnership) &&
                         item.externalOwnership?.state !== "broken-link"
                     );
                     if (source) {
@@ -3266,7 +3295,7 @@ export const SkillLibraryPanel = ({
                           ) : (
                             <CheckCircle2 size={15} strokeWidth={2.2} aria-hidden="true" />
                           )}
-                          <span>{t(localImportImpact)}</span>
+                          <span>{t(localImportImpact.message, localImportImpact.values)}</span>
                         </div>
                       ) : null}
                     </section>

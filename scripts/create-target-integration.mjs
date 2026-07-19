@@ -16,6 +16,7 @@ await mkdir(directory, { recursive: false });
 const source = `import { join } from "node:path";
 import { defineTargetIntegration } from "../../defineTargetIntegration";
 import { createCommandInstallationDriver } from "../../installationDiscovery";
+import { createFilesystemSkillDriver } from "../../shared/skillRuntime";
 import type { AgentTargetIntegration } from "../../contract";
 
 export const ${pascalName}Integration: AgentTargetIntegration = {
@@ -40,12 +41,22 @@ export const ${pascalName}Integration: AgentTargetIntegration = {
   paths: {
     createTargetPaths: ({ homeDir }) => {
       const configDir = join(homeDir, ".config", "${id}");
+      const skillsDir = join(configDir, "skills");
       return {
         targetId: "${id}",
         configDir,
         instructionsPath: join(configDir, "AGENTS.md"),
         configPath: join(configDir, "config.json"),
-        skillsDir: join(configDir, "skills")
+        skillsDir,
+        skillLocations: [{
+          path: skillsDir,
+          role: "preferred-runtime",
+          shared: false,
+          scope: "user",
+          scanDepth: "direct",
+          management: "managed"
+        }],
+        skillScanDirs: [skillsDir]
       };
     }
   },
@@ -61,6 +72,7 @@ export const ${pascalName}Integration: AgentTargetIntegration = {
   mcp: {
     materializeMcpRefs: (profile) => profile
   },
+  skills: createFilesystemSkillDriver({ targetId: "${id}" }),
   assets: {
     validateAssets: async () => [],
     getAssetBackupPaths: async () => [],

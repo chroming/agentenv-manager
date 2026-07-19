@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import * as TOML from "@iarna/toml";
 import {
   AssetPolicySchema,
@@ -31,6 +31,7 @@ import {
   markerPathForFile
 } from "../ownershipMarkers";
 import { findSecretWarnings } from "../secretWarnings";
+import { parseSkillFrontmatter } from "../skillFrontmatter";
 import { removeSkillDeployment } from "../skillDeployment";
 import { setMcpServerEnabled, validateToml } from "../tomlConfig";
 import {
@@ -41,6 +42,7 @@ import {
 } from "./skillRefs";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
 import { createProfileFileDriver } from "./shared/profileFiles";
+import { createFilesystemSkillDriver } from "./shared/skillRuntime";
 import { createCommandInstallationDriver } from "./installationDiscovery";
 
 const hashText = (content: string): string =>
@@ -177,19 +179,6 @@ const removeStaleOwnedSkills = async (input: TargetAssetInput) => {
   }
 };
 
-const legacyOwnedSkillDirs = async (targetPaths: TargetPaths) => {
-  const matches: string[] = [];
-  for (const location of targetPaths.skillLocations ?? []) {
-    if (location.role !== "compatibility-runtime" || !(await pathExists(location.path))) continue;
-    for (const entry of await readdir(location.path, { withFileTypes: true })) {
-      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-      const targetDir = join(location.path, entry.name);
-      if (await isOwnedSkillDir(targetDir, targetPaths)) matches.push(targetDir);
-    }
-  }
-  return matches;
-};
-
 const removeStaleOwnedAgentFiles = async ({ profile, targetPaths }: TargetAssetInput) => {
   if (!targetPaths.agentsDir || !(await pathExists(targetPaths.agentsDir))) {
     return;
@@ -235,11 +224,6 @@ const getAssetBackupPaths = async (input: TargetAssetInput) => {
     }
   }
   addSkillRefBackupPaths(paths, targetPaths, input);
-  if (!input.isolateSkillRoot) {
-    for (const legacyPath of await legacyOwnedSkillDirs(targetPaths)) {
-      paths.add(legacyPath);
-    }
-  }
   if (targetPaths.agentsDir) {
     for (const ownedFile of profile.assetPolicy.ownedFiles ?? []) {
       if (ownedFile.kind === "agent") {
@@ -367,11 +351,6 @@ const applyAssets = async (input: TargetAssetInput) => {
     );
   }
   await applySkillRefs(input);
-  if (!input.isolateSkillRoot) {
-    for (const legacyPath of await legacyOwnedSkillDirs(targetPaths)) {
-      await removeSkillDeployment(legacyPath);
-    }
-  }
 };
 
 const readAssetPolicy = async (profileDir: string) => {
@@ -398,6 +377,41 @@ const profileFiles = createProfileFileDriver({
   configFile: "config.toml",
   readConfigText,
   readAssetPolicy
+});
+
+const readCodexDisabledSkillNames = async (targetPaths: TargetPaths) => {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = TOML.parse(
+      stripManagedSection(await readTextIfExists(targetPaths.configPath), "skills")
+    ) as Record<string, unknown>;
+  } catch {
+    return new Set<string>();
+  }
+  const skillsConfig =
+    parsed.skills && typeof parsed.skills === "object" && !Array.isArray(parsed.skills)
+      ? (parsed.skills as Record<string, unknown>).config
+      : undefined;
+  if (!Array.isArray(skillsConfig)) return new Set<string>();
+
+  const disabledNames = await Promise.all(
+    skillsConfig.flatMap((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+      const item = entry as Record<string, unknown>;
+      if (item.enabled !== false || typeof item.path !== "string") return [];
+      return [item.path];
+    }).map(async (path) => {
+      const manifestPath = path.endsWith("SKILL.md") ? path : join(path, "SKILL.md");
+      const frontmatter = parseSkillFrontmatter(await readTextIfExists(manifestPath));
+      return frontmatter.name || basename(path.endsWith("SKILL.md") ? dirname(path) : path);
+    })
+  );
+  return new Set(disabledNames.filter(Boolean));
+};
+
+const skills = createFilesystemSkillDriver({
+  targetId: "codex",
+  readDisabledRuntimeNames: readCodexDisabledSkillNames
 });
 
 export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
@@ -436,12 +450,27 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       agentsDir: join(codexHome, "agents"),
       skillsDir,
       skillLocations: [
-        { path: skillsDir, role: "preferred-runtime", shared: false },
-        { path: sharedSkillsDir, role: "compatibility-runtime", shared: true }
+        {
+          path: skillsDir,
+          role: "preferred-runtime",
+          shared: false,
+          scope: "user",
+          scanDepth: "direct",
+          management: "managed"
+        },
+        {
+          path: sharedSkillsDir,
+          role: "compatibility-runtime",
+          shared: true,
+          scope: "shared",
+          scanDepth: "recursive",
+          management: "legacy"
+        }
       ],
       skillScanDirs: [skillsDir, sharedSkillsDir]
     };
   },
+  skills,
   createDefaultProfile: (id) => ({
     id,
     manifest: {

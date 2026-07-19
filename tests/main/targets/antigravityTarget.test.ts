@@ -45,12 +45,23 @@ describe("Antigravity target adapter", () => {
       configDir: join(root, ".gemini", "config"),
       instructionsPath: join(root, ".gemini", "GEMINI.md"),
       configPath: join(root, ".gemini", "config", "mcp_config.json"),
-      skillsDir: join(root, ".gemini", "config", "skills")
+      skillsDir: join(root, ".gemini", "antigravity-cli", "skills")
     });
     expect(paths.skillLocations).toContainEqual({
       path: join(root, ".gemini", "antigravity-cli", "skills"),
+      role: "preferred-runtime",
+      shared: false,
+      scope: "user",
+      scanDepth: "direct",
+      management: "managed"
+    });
+    expect(paths.skillLocations).toContainEqual({
+      path: join(root, ".gemini", "config", "skills"),
       role: "discovery-only",
-      shared: false
+      shared: false,
+      scope: "user",
+      scanDepth: "direct",
+      management: "legacy"
     });
   });
 

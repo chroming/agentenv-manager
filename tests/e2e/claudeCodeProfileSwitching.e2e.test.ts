@@ -153,6 +153,23 @@ afterEach(async () => {
 });
 
 describe("Claude Code profile switching e2e", () => {
+  it("blocks a Profile Skill disabled by native Claude Code settings", async () => {
+    const { paths, profileStore, activationService } = await makeEnv();
+    const claudeDir = join(paths.homeDir, ".claude");
+    const settingsPath = join(claudeDir, "settings.json");
+    await mkdir(claudeDir, { recursive: true });
+    const settings = '{\n  "skillOverrides": { "agentenv-alpha-skill": "off" }\n}\n';
+    await writeFile(settingsPath, settings, "utf8");
+    const profile = await createClaudeProfile(profileStore, "alpha");
+
+    const preview = await activationService.previewProfile(profile.id);
+
+    expect(preview.errors).toContain(
+      "Claude Code has Skill agentenv-alpha-skill disabled in native settings; enable it there before applying this Profile"
+    );
+    await expect(readFile(settingsPath, "utf8")).resolves.toBe(settings);
+  });
+
   it("switches managed resources while leaving Claude-owned MCP definitions untouched", async () => {
     const { paths, profileStore, activationService, listTargets } =
       await makeEnv();

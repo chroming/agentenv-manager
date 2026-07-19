@@ -38,6 +38,8 @@ describe("Skills CLI lock inspection", () => {
     expect(inspection.diagnostics).toEqual([]);
     expect(inspection.evidenceBySkillKey.get("reviewer")).toEqual({
       manager: "skills-cli",
+      displayName: "Skills CLI",
+      importable: true,
       lockPath,
       lockVersion: 3,
       canonicalPath: join(root, ".agents", "skills", "reviewer"),

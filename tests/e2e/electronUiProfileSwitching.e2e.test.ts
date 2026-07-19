@@ -4931,7 +4931,7 @@ describe("Electron UI profile switching e2e", () => {
 
     dialog = page.getByRole("dialog", { name: "Review OpenCode capture" });
     const impact = dialog.getByRole("region", { name: "Capture impact" });
-    await expect.poll(() => impact.textContent()).toContain("target-only-reviewer");
+    await expect.poll(() => impact.textContent()).toContain("Target Only Reviewer");
     await expect.poll(() => impact.textContent()).toContain(
       "Import Agent copy as opencode-shared-reviewer; existing same-name Library Skill stays unchanged"
     );

@@ -117,13 +117,9 @@ export const createTargetCaptureService = ({
       [targetPaths],
       librarySkills
     );
-    const runtimeLocations = (targetPaths.skillLocations ?? [
-      ...(targetPaths.skillsDir
-        ? [{ path: targetPaths.skillsDir, role: "preferred-runtime" as const, shared: false }]
-        : [])
-    ]).filter((location) => location.role !== "discovery-only");
-    const runtimeRoots = new Set(runtimeLocations.map((location) => location.path));
-    const runtimeInventory = inventory.filter((entry) => runtimeRoots.has(dirname(entry.path)));
+    const runtimeInventory = inventory.filter(
+      (entry) => entry.locationRole !== "discovery-only"
+    );
     const ignoredInventory = runtimeInventory.filter((entry) => entry.status === "ignored");
     const externalInventory = runtimeInventory.filter((entry) => entry.status === "external");
     const skillInventory = runtimeInventory.filter(
@@ -131,7 +127,10 @@ export const createTargetCaptureService = ({
     );
     const groupedSkills = new Map<string, typeof skillInventory>();
     for (const entry of skillInventory) {
-      groupedSkills.set(entry.id, [...(groupedSkills.get(entry.id) ?? []), entry]);
+      groupedSkills.set(entry.skillKey, [
+        ...(groupedSkills.get(entry.skillKey) ?? []),
+        entry
+      ]);
     }
 
     const resources: TargetCaptureResource[] = [];
@@ -149,34 +148,43 @@ export const createTargetCaptureService = ({
       warnings.push(`Ignored Skill ${entry.name} will remain Agent-owned`);
     }
     for (const entry of externalInventory) {
+      const manager = entry.externalOwnership?.displayName ??
+        entry.externalOwnership?.manager ??
+        "another tool";
       resources.push({
         kind: "skill",
         id: entry.id,
         name: entry.name,
         sourcePath: entry.path,
         action: "exclude",
-        detail: "Managed by Skills CLI; remains unchanged"
+        detail: `Managed by ${manager}; remains unchanged`
       });
-      warnings.push(`Skills CLI skill ${entry.name} remains externally managed`);
+      warnings.push(`${manager} Skill ${entry.name} remains externally managed`);
     }
     const reservedSkillIds = new Set(librarySkills.map((skill) => skill.id));
     const skills: CapturedSkill[] = [];
-    for (const [targetName, entries] of groupedSkills) {
+    for (const [runtimeName, entries] of groupedSkills) {
+      const preferredEntry =
+        entries.find((entry) => entry.locationRole === "preferred-runtime") ??
+        entries.find((entry) => entry.locationRole === "alternate-runtime") ??
+        entries[0];
+      const targetName = preferredEntry.deploymentName ?? preferredEntry.id;
       if (!safeName.test(targetName)) {
         errors.push(`Skill ${targetName} cannot be captured because its directory name is invalid`);
         continue;
       }
       const hashes = new Set(entries.map((entry) => entry.contentHash));
       if (hashes.size > 1) {
-        errors.push(`Skill ${targetName} has different content in multiple active locations`);
+        errors.push(
+          `Runtime Skill ${runtimeName} has different content in multiple active locations`
+        );
         continue;
       }
       const requestedLibraryId = uniqueId(
-        reservedSkillIds.has(safeId(targetName)) ? `${targetId}-${targetName}` : targetName,
+        reservedSkillIds.has(safeId(runtimeName)) ? `${targetId}-${runtimeName}` : runtimeName,
         reservedSkillIds
       );
-      const preferredEntry = entries.find((entry) => dirname(entry.path) === targetPaths.skillsDir);
-      const sourcePath = preferredEntry?.path ?? entries[0].path;
+      const sourcePath = preferredEntry.path;
       const sourcePaths = [...new Set(entries.map((entry) => entry.path))];
       const importPreview = await skillLibraryStore.previewImport({
         kind: "local",
@@ -205,7 +213,7 @@ export const createTargetCaptureService = ({
       resources.push({
         kind: "skill",
         id: targetName,
-        name: targetName,
+        name: preferredEntry.runtimeName ?? preferredEntry.name,
         sourcePath,
         libraryId,
         action: existing ? "reuse" : "import",

@@ -25,14 +25,11 @@ describe("Antigravity installation discovery", () => {
     }
   );
 
-  it("detects a user-installed macOS application without the CLI", async () => {
+  it("does not confuse the macOS application with Antigravity CLI", async () => {
     const path = "/Users/test/Applications/Antigravity.app";
     const result = await detect("darwin", { existingPaths: [path] });
 
-    expect(result).toEqual({
-      found: true,
-      evidence: [{ kind: "desktop-app", label: "Antigravity application", path }]
-    });
+    expect(result).toEqual({ found: false, evidence: [] });
   });
 
   it("detects the documented Windows user installation when PATH is stale", async () => {
@@ -45,7 +42,7 @@ describe("Antigravity installation discovery", () => {
     });
   });
 
-  it("checks the system Applications directory only when allowed", async () => {
+  it("does not use the system application as CLI installation evidence", async () => {
     const path = "/Applications/Antigravity.app";
     await expect(detect("darwin", { existingPaths: [path] })).resolves.toEqual({
       found: false,
@@ -53,10 +50,7 @@ describe("Antigravity installation discovery", () => {
     });
     await expect(
       detect("darwin", { existingPaths: [path], systemApps: true })
-    ).resolves.toEqual({
-      found: true,
-      evidence: [{ kind: "desktop-app", label: "Antigravity application", path }]
-    });
+    ).resolves.toEqual({ found: false, evidence: [] });
   });
 
   it("does not treat configuration residue as an installation", async () => {

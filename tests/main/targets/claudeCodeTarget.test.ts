@@ -41,6 +41,25 @@ afterEach(async () => {
 });
 
 describe("Claude Code target adapter", () => {
+  it("reports native skillOverrides as runtime-disabled without modifying settings", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
+    const adapter = createClaudeCodeTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const skillDir = join(targetPaths.skillsDir ?? "", "reviewer");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), "---\nname: reviewer\n---\n# Reviewer\n");
+    await mkdir(targetPaths.configDir, { recursive: true });
+    const settings = '{\n  // Native Claude setting\n  "skillOverrides": { "reviewer": "off" }\n}\n';
+    await writeFile(targetPaths.configPath, settings, "utf8");
+
+    const snapshot = await adapter.skills.inspectRuntime(targetPaths);
+
+    expect(snapshot.observations).toEqual([
+      expect.objectContaining({ runtimeName: "reviewer", availability: "disabled" })
+    ]);
+    await expect(readFile(targetPaths.configPath, "utf8")).resolves.toBe(settings);
+  });
+
   it("plans CLAUDE.md, settings.json, and user-scope MCP overlay without clobbering unmanaged config", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-claude-"));
     const adapter = createClaudeCodeTargetAdapter();

@@ -358,6 +358,43 @@ description: >
     ).resolves.toContain("# Reviewer");
   });
 
+  it("keeps Claude Code plugin Skills external and read-only", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const homeDir = join(root, "home");
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir });
+    const pluginDir = join(homeDir, ".claude", "plugins", "cache", "review-plugin");
+    const pluginSkill = join(pluginDir, "skills", "reviewer");
+    const targetSkill = join(homeDir, ".claude", "skills", "reviewer");
+    await mkdir(join(pluginDir, ".claude-plugin"), { recursive: true });
+    await mkdir(pluginSkill, { recursive: true });
+    await mkdir(dirname(targetSkill), { recursive: true });
+    await writeFile(join(pluginDir, ".claude-plugin", "plugin.json"), "{}\n");
+    await writeFile(join(pluginSkill, "SKILL.md"), "---\nname: reviewer\n---\n# Reviewer\n");
+    await symlink(pluginSkill, targetSkill);
+    const targetPaths = createClaudeCodeTargetAdapter().createTargetPaths({ homeDir });
+    const openCodePaths = createOpenCodeTargetAdapter().createTargetPaths({ homeDir });
+
+    const inventory = await createSkillLibraryStore(paths).scanInventory([
+      targetPaths,
+      openCodePaths
+    ]);
+
+    expect(inventory).toEqual([
+      expect.objectContaining({
+        id: "reviewer",
+        skillKey: "reviewer",
+        status: "external",
+        foundIn: ["claude-code", "opencode"],
+        runtimeOwner: "external",
+        externalOwnership: expect.objectContaining({
+          manager: "claude-plugin",
+          displayName: "Claude Code plugin",
+          importable: false
+        })
+      })
+    ]);
+  });
+
   it("imports unmanaged skills into the library without mutating the source directory", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
@@ -902,7 +939,7 @@ description: >
         foundIn: ["opencode"],
         status: "managed",
         libraryId: "shared-reviewer",
-        skillKey: "reviewer",
+        skillKey: "shared-reviewer",
         installMethod: "linked",
         contentMatchesLibrary: true
       }
@@ -986,6 +1023,33 @@ description: >
         }
       ])
     ).resolves.toMatchObject([{ status: "unmanaged" }]);
+  });
+
+  it("restores a legacy directory-key ignore rule through the runtime Skill name", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const homeDir = join(root, "home");
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir });
+    const skillDir = join(homeDir, ".config", "opencode", "skills", "legacy-folder");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      "---\nname: runtime-reviewer\ndescription: Legacy ignore key.\n---\n"
+    );
+    await mkdir(paths.appDataRoot, { recursive: true });
+    await writeFile(
+      join(paths.appDataRoot, "skill-cleanup-ignore-rules.json"),
+      JSON.stringify([{ id: "ignore-legacy-folder", scope: "group", skillKey: "legacy-folder" }])
+    );
+    const store = createSkillLibraryStore(paths);
+    const targetPaths = createOpenCodeTargetAdapter().createTargetPaths({ homeDir });
+
+    await expect(store.scanInventory([targetPaths])).resolves.toEqual([
+      expect.objectContaining({ skillKey: "runtime-reviewer", status: "ignored" })
+    ]);
+    await store.unignoreSkillGroup("runtime-reviewer");
+    await expect(store.scanInventory([targetPaths])).resolves.toEqual([
+      expect.objectContaining({ skillKey: "runtime-reviewer", status: "unmanaged" })
+    ]);
   });
 
   it("identifies and retains only shared compatibility Skill locations", async () => {
@@ -1267,11 +1331,13 @@ description: >
 
     expect(codexInventory[0]).toMatchObject({
       status: "managed",
-      libraryId: "shared-reviewer"
+      libraryId: "shared-reviewer",
+      managedByTarget: true
     });
     expect(openCodeInventory[0]).toMatchObject({
       status: "managed",
-      libraryId: "shared-reviewer"
+      libraryId: "shared-reviewer",
+      managedByTarget: false
     });
     expect(sharedInventory).toHaveLength(1);
     expect(sharedInventory[0]).toMatchObject({

@@ -27,6 +27,8 @@ import {
   createSkillLibraryStore,
   type SkillLibraryStore
 } from "./skillLibraryStore";
+import { normalizeSkillKey } from "../shared/skillIdentity";
+import { parseSkillFrontmatter } from "./skillFrontmatter";
 import {
   createTargetRegistry,
   type TargetRegistry
@@ -752,6 +754,68 @@ export const createActivationService = ({
         )
     );
 
+  const desiredRuntimeSkills = async (
+    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+    skillLibrary: SkillLibraryEntry[]
+  ) => {
+    const ownedSkills = await Promise.all(
+      profile.assetPolicy.ownedDirs
+      .filter((ownedDir) => ownedDir.kind === "skill")
+      .map(async (ownedDir) => {
+        const sourcePath = join(profile.profileDir ?? "", ownedDir.source, "SKILL.md");
+        const frontmatter = parseSkillFrontmatter(await readTextIfExists(sourcePath));
+        return {
+          runtimeName: frontmatter.name || ownedDir.targetName,
+          deploymentName: ownedDir.targetName,
+          source: `Profile / ${ownedDir.source}`
+        };
+      })
+    );
+    const librarySkills = (profile.assetPolicy.skillRefs ?? [])
+      .filter((reference) => reference.enabled !== false)
+      .map((reference) => ({
+        runtimeName:
+          skillLibrary.find((skill) => skill.id === reference.libraryId)?.name ||
+          reference.targetName,
+        deploymentName: reference.targetName,
+        source: `Library / ${reference.libraryId}`
+      }));
+    return [...ownedSkills, ...librarySkills];
+  };
+
+  const validateRuntimeSkills = async (
+    adapter: ReturnType<TargetRegistry["get"]>,
+    targetPaths: TargetPaths,
+    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
+    skillLibrary: SkillLibraryEntry[]
+  ) => {
+    const nativeState = await adapter.skills.readNativeState(targetPaths);
+    const desired = await desiredRuntimeSkills(profile, skillLibrary);
+    const byRuntimeName = new Map<string, typeof desired>();
+    for (const item of desired) {
+      const key = normalizeSkillKey(item.runtimeName);
+      byRuntimeName.set(key, [...(byRuntimeName.get(key) ?? []), item]);
+    }
+    const errors = [...byRuntimeName.entries()].flatMap(([runtimeName, items]) =>
+      items.length > 1
+        ? [
+            `Profile declares runtime Skill name ${runtimeName} more than once (${items
+              .map((item) => item.source)
+              .join(", ")})`
+          ]
+        : []
+    );
+    const desiredNames = new Set(byRuntimeName.keys());
+    for (const runtimeName of nativeState.disabledRuntimeNames) {
+      if (desiredNames.has(normalizeSkillKey(runtimeName))) {
+        errors.push(
+          `${adapter.descriptor.name} has Skill ${runtimeName} disabled in native settings; enable it there before applying this Profile`
+        );
+      }
+    }
+    return { errors: [...new Set(errors)], warnings: [] as string[] };
+  };
+
   const desiredManagedPaths = (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
     targetPaths: TargetPaths
@@ -828,7 +892,7 @@ export const createActivationService = ({
         skill.status === "ignored"
           ? `Ignored local skill kept: ${skill.path}`
           : skill.status === "external"
-            ? `Skills CLI-managed skill kept: ${skill.path}`
+            ? `${skill.externalOwnership?.displayName ?? skill.externalOwnership?.manager ?? "Externally"}-managed skill kept: ${skill.path}`
           : `Unmanaged local skill kept: ${skill.path}`
       );
   };
@@ -1047,16 +1111,24 @@ export const createActivationService = ({
 
   const resolveExternalSkills = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    inventory: SkillInventoryEntry[]
+    inventory: SkillInventoryEntry[],
+    skillLibrary: SkillLibraryEntry[]
   ) => {
     const references = (profile.assetPolicy.skillRefs ?? []).filter(
       (reference) => reference.enabled !== false
     );
     const desired = desiredSkillTargets(profile);
+    const desiredRuntimeNames = new Set(
+      (await desiredRuntimeSkills(profile, skillLibrary)).map((item) =>
+        normalizeSkillKey(item.runtimeName)
+      )
+    );
     const external = desired.size === 0
       ? []
       : inventory.filter(
-          (skill) => skill.status === "external" && desired.has(skill.id)
+          (skill) =>
+            skill.status === "external" &&
+            (desired.has(skill.id) || desiredRuntimeNames.has(skill.skillKey))
         );
     const preservedReferences = new Set(
       external.flatMap((skill) => {
@@ -1090,14 +1162,21 @@ export const createActivationService = ({
             }
           },
       errors: conflicts.map(
-        (skill) =>
-          `Cannot install ${skill.id} because Skills CLI manages the existing Skill at ${skill.path}. Remove it from Skills CLI, then rescan before applying this Profile.`
+        (skill) => {
+          const manager = skill.externalOwnership?.displayName ??
+            skill.externalOwnership?.manager ??
+            "another tool";
+          if (skill.externalOwnership?.manager === "skills-cli") {
+            return `Cannot install ${skill.id} because Skills CLI manages the existing Skill at ${skill.path}. Remove it from Skills CLI, then rescan before applying this Profile.`;
+          }
+          return `Cannot install ${skill.runtimeName ?? skill.id} because ${manager} manages the existing Skill at ${skill.path}. Disable or remove it from ${manager}, then rescan before applying this Profile.`;
+        }
       ),
       warnings: external
         .filter((skill) => !conflicts.includes(skill))
         .map(
           (skill) =>
-            `${skill.id} is already provided by Skills CLI with matching content and will be preserved`
+            `${skill.runtimeName ?? skill.id} is already provided by ${skill.externalOwnership?.displayName ?? skill.externalOwnership?.manager ?? "another tool"} with matching content and will be preserved`
         ),
       paths: new Set(external.map((skill) => skill.path))
     };
@@ -1142,10 +1221,10 @@ export const createActivationService = ({
               (path) => resolve(path) !== resolve(targetPaths.skillsDir ?? "")
             )
           };
-    const inventory = await skillLibraryStore.scanInventory(
-      [inventoryTargetPaths],
-      skillLibrary
-    );
+    const [inventory, runtimeValidation] = await Promise.all([
+      skillLibraryStore.scanInventory([inventoryTargetPaths], skillLibrary),
+      validateRuntimeSkills(adapter, targetPaths, profile, skillLibrary)
+    ]);
     const profileContentHash =
       sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
       createProfileContentHash(targeted.profile);
@@ -1158,7 +1237,8 @@ export const createActivationService = ({
     );
     const externallyResolved = await resolveExternalSkills(
       preparationPlan.runtimeProfile,
-      inventory
+      inventory,
+      skillLibrary
     );
     const materializedProfile = adapter.materializeMcpRefs(
       externallyResolved.profile,
@@ -1219,6 +1299,15 @@ export const createActivationService = ({
     if (skillRootTransition) {
       assetBackupPaths.push(skillRootTransition.path);
     }
+    const legacySkillPaths = inventory
+      .filter(
+        (skill) =>
+          skill.legacyLocation &&
+          skill.status === "managed" &&
+          skill.managedByTarget === true
+      )
+      .map((skill) => skill.path);
+    assetBackupPaths.push(...legacySkillPaths);
     const affectedManagedPaths = new Set([
       ...targetPreview.changes.map((change) => change.path),
       ...assetBackupPaths
@@ -1264,7 +1353,8 @@ export const createActivationService = ({
       drift.errors,
       ignoredErrors,
       externallyResolved.errors,
-      preparationPlan.errors
+      preparationPlan.errors,
+      runtimeValidation.errors
     );
     const replaceableTargetPaths = [
       ...new Set(
@@ -1285,6 +1375,7 @@ export const createActivationService = ({
           (id) => `Library Skill ${id} is globally disabled and will not be applied`
         ),
         targetPreview.warnings,
+        runtimeValidation.warnings,
         drift.warnings,
         unmanagedWarnings,
         preparationPlan.warnings,
@@ -1322,7 +1413,8 @@ export const createActivationService = ({
       omissions: targeted.omissions,
       requiresOmissionAcknowledgement: targeted.omissions.length > 0,
       operation: isTakeover ? "takeover" : "apply",
-      skillRootTransition
+      skillRootTransition,
+      legacySkillPaths
     };
     previews.set(preview.id, preview);
     return publicPreview(preview);
@@ -1426,6 +1518,21 @@ export const createActivationService = ({
       [inventoryTargetPaths],
       skillLibrary
     );
+    const currentLegacySkillPaths = inventory
+      .filter(
+        (skill) =>
+          skill.legacyLocation &&
+          skill.status === "managed" &&
+          skill.managedByTarget === true
+      )
+      .map((skill) => skill.path)
+      .sort();
+    if (
+      JSON.stringify(currentLegacySkillPaths) !==
+      JSON.stringify([...(preview.legacySkillPaths ?? [])].sort())
+    ) {
+      return { ok: false, errors: ["Legacy Skill locations changed after preview"] };
+    }
     const preparationPlan = await sharedSkillPreparationPlan(
       profile,
       targetPaths,
@@ -1441,7 +1548,8 @@ export const createActivationService = ({
     }
     const externallyResolved = await resolveExternalSkills(
       preparationPlan.runtimeProfile,
-      inventory
+      inventory,
+      skillLibrary
     );
     if (externallyResolved.errors.length > 0) {
       return { ok: false, errors: externallyResolved.errors };
@@ -1453,6 +1561,15 @@ export const createActivationService = ({
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     const isTakeover = preview.operation === "takeover";
+    const runtimeValidation = await validateRuntimeSkills(
+      adapter,
+      targetPaths,
+      profile,
+      skillLibrary
+    );
+    if (runtimeValidation.errors.length > 0) {
+      return { ok: false, errors: runtimeValidation.errors };
+    }
     if (
       !allowRealHomeWrites &&
       !adapter.descriptor.realWritesEnabled &&
@@ -1496,6 +1613,7 @@ export const createActivationService = ({
     if (preview.skillRootTransition) {
       assetBackupPaths.push(preview.skillRootTransition.path);
     }
+    assetBackupPaths.push(...(preview.legacySkillPaths ?? []));
     const affectedManagedPaths = new Set([
       ...preview.changes.map((change) => change.path),
       ...assetBackupPaths
@@ -1571,6 +1689,12 @@ export const createActivationService = ({
           replaceablePaths,
           isolateSkillRoot: Boolean(preview.skillRootTransition)
         });
+      }
+      for (const legacyPath of preview.legacySkillPaths ?? []) {
+        await removeSkillDeployment(legacyPath);
+        if (await pathEntryExists(legacyPath)) {
+          throw new Error(`Post-apply verification failed for legacy Skill ${legacyPath}`);
+        }
       }
       if (preview.skillRootTransition) {
         const isolatedRoot = await inspectSkillRoot(preview.skillRootTransition.path);

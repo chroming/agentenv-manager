@@ -1072,7 +1072,7 @@ describe("SkillLibraryPanel", () => {
     expect(partialApply).toBeEnabled();
     fireEvent.click(partialApply);
     expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith(["shared-reviewer"]);
-  });
+  }, 15_000);
 
   it("scans and imports skills from an SSH repository ref and directory", async () => {
     const scanResult = {

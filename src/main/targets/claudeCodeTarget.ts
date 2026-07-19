@@ -26,6 +26,7 @@ import {
 } from "./capture";
 import { createProfileFileDriver } from "./shared/profileFiles";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
+import { createFilesystemSkillDriver } from "./shared/skillRuntime";
 import { createCommandInstallationDriver } from "./installationDiscovery";
 
 const DEFAULT_STATE: TargetState = {
@@ -96,6 +97,29 @@ const parseJsoncObject = (
   }
   return { ok: true, value: parsed };
 };
+
+const readClaudeDisabledSkillNames = async (
+  targetPaths: ReturnType<AgentTargetAdapter["createTargetPaths"]>
+) => {
+  const settings = parseJsoncObject(
+    await readTextIfExists(targetPaths.configPath),
+    "Invalid Claude Code settings"
+  );
+  if (!settings.ok || !isRecord(settings.value.skillOverrides)) {
+    return new Set<string>();
+  }
+  const disabled = Object.entries(settings.value.skillOverrides).flatMap(([name, value]) => {
+    if (value === false || value === "off") return [name];
+    if (isRecord(value) && value.enabled === false) return [name];
+    return [];
+  });
+  return new Set(disabled);
+};
+
+const skills = createFilesystemSkillDriver({
+  targetId: "claude-code",
+  readDisabledRuntimeNames: readClaudeDisabledSkillNames
+});
 
 const setJsoncProperty = (content: string, path: string[], value: unknown) => {
   const source = content.trim().length === 0 ? "{}\n" : content;
@@ -214,10 +238,24 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       mcpConfigPath: join(homeDir, ".claude.json"),
       agentsDir: join(claudeDir, "agents"),
       skillsDir,
-      skillLocations: [{ path: skillsDir, role: "preferred-runtime", shared: false }],
+      skillLocations: [{
+        path: skillsDir,
+        role: "preferred-runtime",
+        shared: false,
+        scope: "user",
+        scanDepth: "direct",
+        management: "managed",
+        externalContainerMarkers: [{
+          relativePath: ".claude-plugin/plugin.json",
+          manager: "claude-plugin",
+          displayName: "Claude Code plugin",
+          importable: false
+        }]
+      }],
       skillScanDirs: [skillsDir]
     };
   },
+  skills,
   createDefaultProfile: (id) => ({
     id,
     manifest: {

@@ -459,6 +459,7 @@ Object.assign(zhCN, {
   "Import external skill": "导入外部技能",
   "Import {{name}}": "导入 {{name}}",
   "Create an independent Library copy. Skills CLI files and lock data stay unchanged.": "创建独立的资源库副本；Skills CLI 文件与锁定数据保持不变。",
+  "Create an independent Library copy. {{manager}} files stay unchanged.": "创建独立的资源库副本；{{manager}} 的文件保持不变。",
   "Review the matching Library copy and any source changes. External files and lock data stay unchanged.": "查看匹配的资源库副本及来源变化；外部文件与锁定数据保持不变。",
   "Content {{hash}}": "内容 {{hash}}",
   "Import copy": "导入副本",
@@ -1174,6 +1175,8 @@ Object.assign(zhCN, {
   "This group is ignored. Restore it in Scan local before managing it.": "此组已被忽略；请先在扫描本地技能中恢复，再进行管理。",
   "This folder differs from the existing Library version. Use Scan local to review the conflict.": "此文件夹与资源库中的现有版本不同；请使用扫描本地技能查看冲突。",
   "This installation is owned by Skills CLI. AgentEnv will import an independent Library copy and leave it unchanged.": "此安装由 Skills CLI 管理；AgentEnv 会导入独立的资源库副本，并保持原安装不变。",
+  "This Skill is provided by {{manager}} and remains read-only here.": "此技能由 {{manager}} 提供，在此处保持只读。",
+  "This installation is owned by {{manager}}. AgentEnv will import an independent Library copy and leave it unchanged.": "此安装由 {{manager}} 管理；AgentEnv 会导入独立的资源库副本，并保持原安装不变。",
   "AgentEnv will back up this Target copy, import it to Library, then replace the folder with a managed copy.": "AgentEnv 会备份此目标副本，将其导入资源库，再用托管副本替换该文件夹。",
   "Updates the shared Library copy used by {{profiles}}. Copied Target installs remain unchanged until their Profiles are applied.": "更新被 {{profiles}} 使用的共享资源库副本；复制到目标的安装会保持不变，直到再次应用对应配置方案。",
   "Updates the shared Library copy used by {{profiles}}. Linked Target installs may change immediately after this update.": "更新被 {{profiles}} 使用的共享资源库副本；使用链接的目标安装可能会立即变化。"

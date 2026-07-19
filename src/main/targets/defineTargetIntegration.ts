@@ -37,6 +37,7 @@ export const defineTargetIntegration = (
     detectInstallation: (input) => integration.discovery.detectInstallation(input),
     createTargetPaths: (input) =>
       validatePaths(integration.descriptor, integration.paths.createTargetPaths(input)),
+    skills: integration.skills,
     createDefaultProfile: (id) => integration.profile.createDefaultProfile(id),
     captureProfile: (targetPaths) => integration.profile.captureProfile(targetPaths),
     readProfileFiles: (profileDir, manifest) =>

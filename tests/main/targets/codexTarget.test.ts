@@ -41,6 +41,42 @@ afterEach(async () => {
 });
 
 describe("Codex target adapter", () => {
+  it("reports only Target-owned native disabled Skills", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-codex-"));
+    const adapter = createCodexTargetAdapter();
+    const targetPaths = adapter.createTargetPaths({ homeDir: root });
+    const reviewerDir = join(targetPaths.skillsDir ?? "", "reviewer-folder");
+    const managedDir = join(targetPaths.skillsDir ?? "", "managed-folder");
+    await mkdir(reviewerDir, { recursive: true });
+    await mkdir(managedDir, { recursive: true });
+    await writeFile(join(reviewerDir, "SKILL.md"), "---\nname: reviewer\n---\n# Reviewer\n");
+    await writeFile(join(managedDir, "SKILL.md"), "---\nname: managed-skill\n---\n# Managed\n");
+    await writeFile(
+      targetPaths.configPath,
+      [
+        "[[skills.config]]",
+        `path = ${JSON.stringify(join(reviewerDir, "SKILL.md"))}`,
+        "enabled = false",
+        "",
+        "# BEGIN AgentEnv Manager: skills",
+        "[[skills.config]]",
+        `path = ${JSON.stringify(join(managedDir, "SKILL.md"))}`,
+        "enabled = false",
+        "# END AgentEnv Manager: skills",
+        ""
+      ].join("\n")
+    );
+
+    const nativeState = await adapter.skills.readNativeState(targetPaths);
+    const snapshot = await adapter.skills.inspectRuntime(targetPaths);
+
+    expect(nativeState.disabledRuntimeNames).toEqual(["reviewer"]);
+    expect(snapshot.observations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ runtimeName: "reviewer", availability: "disabled" }),
+      expect.objectContaining({ runtimeName: "managed-skill", availability: "enabled" })
+    ]));
+  });
+
   it("uses real Codex user paths and enables guarded real writes", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-codex-"));
     const adapter = createCodexTargetAdapter();

@@ -28,6 +28,7 @@ const composeBuiltInIntegration = (
   mcp: {
     materializeMcpRefs: adapter.materializeMcpRefs
   },
+  skills: adapter.skills,
   assets: {
     validateAssets: adapter.validateAssets,
     getAssetBackupPaths: adapter.getAssetBackupPaths,

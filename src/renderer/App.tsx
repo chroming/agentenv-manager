@@ -93,6 +93,7 @@ import {
   libraryResourceVersionsEqual
 } from "../shared/libraryVersions";
 import { isTargetInstalled } from "../shared/targetHealth";
+import { isExternalSkillImportable } from "../shared/skillIdentity";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { DiffViewer } from "./components/DiffViewer";
@@ -2566,6 +2567,12 @@ const AppContent = ({
   };
 
   const importExternalSkill = async (skill: SkillInventoryEntry) => {
+    if (
+      !isExternalSkillImportable(skill.externalOwnership)
+    ) {
+      setError(`${skill.name} is managed by ${skill.externalOwnership?.displayName ?? "another tool"} and cannot be imported from this runtime copy.`);
+      return false;
+    }
     setBusy(true);
     setError(undefined);
     try {

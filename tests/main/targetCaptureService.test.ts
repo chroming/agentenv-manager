@@ -89,7 +89,12 @@ describe("target capture service", () => {
     });
 
     const targetDir = join(homeDir, ".config", "opencode");
-    const privateSkill = join(targetDir, "skills", "review-workflow");
+    const privateSkill = join(
+      targetDir,
+      "skills",
+      "engineering",
+      "review-workflow"
+    );
     const agentDir = join(targetDir, "agents", "reviewer");
     await mkdir(privateSkill, { recursive: true });
     await mkdir(agentDir, { recursive: true });

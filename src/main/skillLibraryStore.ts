@@ -39,13 +39,23 @@ import type {
   SkillUpdatePlan,
   SkillUpdateSourceInput,
   TargetSkillLocationRole,
+  TargetSkillLocation,
   TargetPaths,
   UnmanagedSkillEntry,
   SharedSkillRetentionInput
 } from "../shared/types";
 import { createUnifiedDiff } from "./diff";
+import {
+  isPortableSkillRuntimeName,
+  normalizeSkillKey
+} from "../shared/skillIdentity";
 import { pathEntryExists, pathExists, replacePathAtomically, replacePathWithCopy, writeAtomic } from "./fileUtils";
-import { createOwnerMarkerContent, markerPathFor, markerPathForFile } from "./ownershipMarkers";
+import {
+  createOwnerMarkerContent,
+  isAgentEnvOwnedDir,
+  markerPathFor,
+  markerPathForFile
+} from "./ownershipMarkers";
 import type { AgentEnvPaths } from "./paths";
 import type { ProfileStore } from "./profileStore";
 import { resolveSkillsLibraryDir, type SettingsStore } from "./settingsStore";
@@ -53,6 +63,10 @@ import { parseSkillFrontmatter } from "./skillFrontmatter";
 import { inspectSkillsCliLocks } from "./skillsCliInspector";
 import { deploySkillDirectory, removeSkillDeployment } from "./skillDeployment";
 import { createTargetRegistry } from "./targets/registry";
+import {
+  discoverSkillDirectories,
+  inspectExternalSkillOwnership
+} from "./targets/shared/skillRuntime";
 import type { GitCliSkillSource } from "./skillSources/contract";
 import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
 
@@ -100,7 +114,7 @@ const skillLocationAuthority = (
 const mergeInventoryLocation = (
   entry: SkillInventoryEntry,
   targetId: string,
-  location: { role: TargetSkillLocationRole; shared: boolean } | undefined
+  location: TargetSkillLocation | undefined
 ): void => {
   const replacesLocation =
     skillLocationAuthority(location?.role, location?.shared) >
@@ -109,6 +123,8 @@ const mergeInventoryLocation = (
   if (replacesLocation) {
     entry.locationRole = location?.role;
     entry.sharedLocation = location?.shared;
+    entry.runtimeScope = location?.scope ?? (location?.shared ? "shared" : "user");
+    entry.legacyLocation = location?.management === "legacy";
     entry.foundIn = [targetId, ...entry.foundIn.filter((item) => item !== targetId)];
     return;
   }
@@ -282,8 +298,7 @@ const isMissingFileError = (error: unknown) =>
       error.code === "ENOENT"
   );
 
-export const normalizeSkillKey = (value: string) =>
-  value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+export { normalizeSkillKey } from "../shared/skillIdentity";
 
 const readJsonIfExists = async <T>(path: string): Promise<T | undefined> => {
   try {
@@ -565,8 +580,23 @@ export const createSkillLibraryStore = (
   const unignoreSkillGroup = async (skillKey: string): Promise<void> => {
     const normalized = normalizeSkillKey(skillKey);
     const rules = await readIgnoreRules();
+    const relatedRuleIds = new Set<string>();
+    if (!rules.some((rule) => rule.scope === "group" && rule.skillKey === normalized)) {
+      const inventory = await scanInventory(await targetPathsProvider());
+      for (const entry of inventory) {
+        if (entry.skillKey === normalized && entry.ignoreRuleId) {
+          relatedRuleIds.add(entry.ignoreRuleId);
+        }
+      }
+    }
     await writeIgnoreRules(
-      rules.filter((rule) => !(rule.scope === "group" && rule.skillKey === normalized))
+      rules.filter(
+        (rule) =>
+          !(
+            rule.scope === "group" &&
+            (rule.skillKey === normalized || relatedRuleIds.has(rule.id))
+          )
+      )
     );
   };
 
@@ -1168,6 +1198,11 @@ export const createSkillLibraryStore = (
     const librarySkills = knownLibrarySkills ?? await listSkills();
     const libraryIds = new Set(librarySkills.map((skill) => skill.id));
     const libraryById = new Map(librarySkills.map((skill) => [skill.id, skill]));
+    const libraryBySkillKey = new Map<string, SkillLibraryEntry[]>();
+    for (const skill of librarySkills) {
+      const key = normalizeSkillKey(skill.name || skill.id);
+      libraryBySkillKey.set(key, [...(libraryBySkillKey.get(key) ?? []), skill]);
+    }
     const ignoreRules = await readIgnoreRules();
     const skillsCliEvidence = (
       await inspectSkillsCliLocks(paths.homeDir, options.skillsCliLockPaths)
@@ -1179,67 +1214,101 @@ export const createSkillLibraryStore = (
         if (!scanRoot || !(await pathExists(scanRoot))) {
           continue;
         }
-        const entries = await readdir(scanRoot, { withFileTypes: true });
         const resolvedScanRoot = resolve(scanRoot);
         const location = target.skillLocations?.find(
           (item) => resolve(item.path) === resolvedScanRoot
         ) ??
           (target.skillsDir && resolve(target.skillsDir) === resolvedScanRoot
-            ? { path: scanRoot, role: "preferred-runtime" as const, shared: false }
-            : undefined);
-        for (const entry of entries) {
-          if ((!entry.isDirectory() && !entry.isSymbolicLink()) || entry.name.startsWith(".")) {
-            continue;
-          }
-          const skillDir = join(scanRoot, entry.name);
-          const skillKey = normalizeSkillKey(entry.name);
-          const evidence = skillsCliEvidence.get(skillKey);
-          let directoryStats;
-          try {
-            directoryStats = await stat(skillDir);
-          } catch (error) {
-            if (entry.isSymbolicLink() && evidence && isMissingFileError(error)) {
-              const ignoreRule = findIgnoreRule(ignoreRules, { skillKey, path: skillDir });
-              const externalOwnership = {
-                ...evidence,
-                confidence: "confirmed" as const,
-                state: "broken-link" as const
-              };
-              const key = `external:${entry.name}:${skillDir}`;
-              const existing = byKey.get(key);
-              if (existing) {
-                mergeInventoryLocation(existing, target.targetId, location);
-                continue;
+            ? {
+                path: scanRoot,
+                role: "preferred-runtime" as const,
+                shared: false,
+                scope: "user" as const,
+                scanDepth: "direct" as const,
+                management: "managed" as const
               }
-              byKey.set(key, {
-                id: entry.name,
-                name: entry.name,
-                description: "External Skill link target is missing.",
-                path: skillDir,
-                foundIn: [target.targetId],
-                status: ignoreRule ? "ignored" : "external",
-                libraryId: libraryIds.has(entry.name) ? entry.name : undefined,
-                skillKey,
-                contentHash: "",
-                ignoreRuleId: ignoreRule?.id,
-                ignoreReason: ignoreRule?.reason,
-                locationRole: location?.role,
-                sharedLocation: location?.shared,
-                externalOwnership
-              });
+            : undefined);
+        const candidates = await discoverSkillDirectories(
+          scanRoot,
+          location?.scanDepth ?? "direct"
+        );
+        for (const candidate of candidates) {
+          const deploymentName = candidate.deploymentName;
+          const skillDir = candidate.path;
+          const deploymentKey = normalizeSkillKey(deploymentName);
+          const brokenEvidence = skillsCliEvidence.get(deploymentKey);
+          if (candidate.brokenLink) {
+            if (!brokenEvidence) continue;
+            const ignoreRule = findIgnoreRule(ignoreRules, {
+              skillKey: deploymentKey,
+              path: skillDir
+            });
+            const externalOwnership = {
+              ...brokenEvidence,
+              confidence: "confirmed" as const,
+              state: "broken-link" as const
+            };
+            const key = `external:${deploymentName}:${skillDir}`;
+            const existing = byKey.get(key);
+            if (existing) {
+              mergeInventoryLocation(existing, target.targetId, location);
               continue;
             }
-            throw error;
+            byKey.set(key, {
+              id: deploymentName,
+              name: deploymentName,
+              description: "External Skill link target is missing.",
+              path: skillDir,
+              foundIn: [target.targetId],
+              status: ignoreRule ? "ignored" : "external",
+              libraryId: libraryIds.has(deploymentName) ? deploymentName : undefined,
+              skillKey: deploymentKey,
+              runtimeName: deploymentName,
+              deploymentName,
+              runtimeScope: location?.scope ?? (location?.shared ? "shared" : "user"),
+              runtimeOwner: "external",
+              runtimeAvailability: "unknown",
+              runtimeConfidence: "inferred",
+              runtimeIssues: [{
+                code: "unreadable-skill",
+                severity: "warning",
+                message: `Skill link target is unavailable: ${skillDir}`
+              }],
+              contentHash: "",
+              ignoreRuleId: ignoreRule?.id,
+              ignoreReason: ignoreRule?.reason,
+              locationRole: location?.role,
+              sharedLocation: location?.shared,
+              legacyLocation: location?.management === "legacy",
+              externalOwnership
+            });
+            continue;
           }
+
+          const directoryStats = await stat(skillDir);
           if (!directoryStats.isDirectory() || !(await pathExists(join(skillDir, "SKILL.md")))) {
             continue;
           }
           const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
           const frontmatter = parseSkillFrontmatter(content);
+          const runtimeName = frontmatter.name || deploymentName;
+          const skillKey = normalizeSkillKey(runtimeName);
+          const evidence = skillsCliEvidence.get(skillKey) ?? brokenEvidence;
           const ownedId = await ownedLibraryId(skillDir);
           const markerId = ownedId && libraryIds.has(ownedId) ? ownedId : undefined;
-          const ignoreRule = findIgnoreRule(ignoreRules, { skillKey, path: skillDir });
-          let externalOwnership = evidence;
+          const agentEnvOwned = await isAgentEnvOwnedDir(skillDir, {
+            targetId: target.targetId,
+            kind: "skill"
+          });
+          const managedByAgentEnv = agentEnvOwned || Boolean(markerId);
+          const ignoreRule =
+            findIgnoreRule(ignoreRules, { skillKey, path: skillDir }) ??
+            (skillKey !== deploymentKey
+              ? findIgnoreRule(ignoreRules, { skillKey: deploymentKey, path: skillDir })
+              : undefined);
+          let externalOwnership = managedByAgentEnv
+            ? undefined
+            : evidence ?? await inspectExternalSkillOwnership(skillDir, location);
           if (externalOwnership) {
             let confidence = externalOwnership.confidence;
             try {
@@ -1258,17 +1327,24 @@ export const createSkillLibraryStore = (
           const externalLibraryId = externalOwnership
             ? librarySkills.find((skill) => skill.contentHash === contentHash)?.id
             : undefined;
-          const status = markerId
+          const runtimeLibraryCandidates = libraryBySkillKey.get(skillKey) ?? [];
+          const runtimeLibraryId =
+            runtimeLibraryCandidates.find((skill) => skill.contentHash === contentHash)?.id ??
+            (runtimeLibraryCandidates.length === 1 ? runtimeLibraryCandidates[0].id : undefined);
+          const localLibraryId = libraryIds.has(deploymentName)
+            ? deploymentName
+            : runtimeLibraryId;
+          const status = managedByAgentEnv
             ? "managed"
             : ignoreRule
               ? "ignored"
               : externalOwnership
                 ? "external"
-                : libraryIds.has(entry.name)
+                : localLibraryId
                   ? "library"
                   : "unmanaged";
-          const libraryId = markerId ?? externalLibraryId ?? (libraryIds.has(entry.name) ? entry.name : undefined);
-          const key = `${status}:${libraryId ?? entry.name}:${skillDir}`;
+          const libraryId = markerId ?? externalLibraryId ?? localLibraryId;
+          const key = `${status}:${libraryId ?? deploymentName}:${skillDir}`;
           const existing = byKey.get(key);
           if (existing) {
             mergeInventoryLocation(existing, target.targetId, location);
@@ -1277,18 +1353,52 @@ export const createSkillLibraryStore = (
           const skillDirStats = await lstat(skillDir);
           const skillFileStats = await lstat(join(skillDir, "SKILL.md"));
           byKey.set(key, {
-            id: entry.name,
-            name: frontmatter.name || entry.name,
+            id: deploymentName,
+            name: runtimeName,
             description: frontmatter.description,
             path: skillDir,
             foundIn: [target.targetId],
             status,
             libraryId,
             skillKey,
+            runtimeName,
+            deploymentName,
+            runtimeScope: location?.scope ?? (location?.shared ? "shared" : "user"),
+            runtimeOwner: managedByAgentEnv
+              ? "agentenv"
+              : externalOwnership
+                ? "external"
+                : location?.scope === "builtin"
+                  ? "agent"
+                  : "user",
+            managedByTarget: agentEnvOwned,
+            runtimeAvailability: "unknown",
+            runtimeConfidence: frontmatter.name ? "verified" : "inferred",
+            runtimeIssues: [
+              ...frontmatter.errors.map((message) => ({
+                code: "invalid-runtime-name" as const,
+                severity: "warning" as const,
+                message
+              })),
+              ...(!frontmatter.name
+                ? [{
+                    code: "missing-runtime-name" as const,
+                    severity: "warning" as const,
+                    message: `SKILL.md has no name; ${deploymentName} is used as a fallback`
+                  }]
+                : []),
+              ...(frontmatter.name && !isPortableSkillRuntimeName(frontmatter.name)
+                ? [{
+                    code: "invalid-runtime-name" as const,
+                    severity: "warning" as const,
+                    message: `Runtime Skill name does not follow the portable Agent Skills format: ${frontmatter.name}`
+                  }]
+                : [])
+            ],
             contentHash,
             ignoreRuleId: ignoreRule?.id,
             ignoreReason: ignoreRule?.reason,
-            installMethod: markerId
+            installMethod: managedByAgentEnv
               ? skillDirStats.isSymbolicLink() || skillFileStats.isSymbolicLink()
                 ? "linked"
                 : "copied"
@@ -1300,12 +1410,50 @@ export const createSkillLibraryStore = (
                 : undefined,
             externalOwnership,
             locationRole: location?.role,
-            sharedLocation: location?.shared
+            sharedLocation: location?.shared,
+            legacyLocation: location?.management === "legacy"
           });
         }
       }
     }
-    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const inventory = [...byKey.values()];
+    for (const target of targetPaths) {
+      const targetEntries = inventory.filter((entry) => entry.foundIn.includes(target.targetId));
+      const byRuntimeName = new Map<string, SkillInventoryEntry[]>();
+      for (const entry of targetEntries) {
+        byRuntimeName.set(entry.skillKey, [
+          ...(byRuntimeName.get(entry.skillKey) ?? []),
+          entry
+        ]);
+      }
+      for (const duplicates of byRuntimeName.values()) {
+        if (duplicates.length < 2) continue;
+        const ordered = duplicates.sort(
+          (left, right) =>
+            skillLocationAuthority(right.locationRole, right.sharedLocation) -
+            skillLocationAuthority(left.locationRole, left.sharedLocation)
+        );
+        const detail = ordered.map((entry) => entry.path).join(", ");
+        let activeRuntimeIndex = 0;
+        for (const entry of ordered) {
+          entry.runtimeIssues = [
+            ...(entry.runtimeIssues ?? []),
+            {
+              code: "duplicate-runtime-name",
+              severity: "warning",
+              message: `Runtime name ${entry.runtimeName ?? entry.name} is declared in multiple locations: ${detail}`
+            }
+          ];
+          if (entry.locationRole === "discovery-only") {
+            entry.runtimeAvailability = "unknown";
+          } else {
+            entry.runtimeAvailability = activeRuntimeIndex === 0 ? "enabled" : "shadowed";
+            activeRuntimeIndex += 1;
+          }
+        }
+      }
+    }
+    return inventory.sort((a, b) => a.name.localeCompare(b.name));
   };
 
   const findManagedInstallPaths = async (

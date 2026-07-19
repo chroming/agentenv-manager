@@ -57,9 +57,9 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 - OpenCode
 - Claude Code
 - Codex
-- Antigravity
+- Antigravity CLI (`agy`)
 
-新增 agent 的理想方式是写一个独立 integration 模块，然后注册到 `src/main/targets/integrations/index.ts`。安装检测、路径、Profile、原生 MCP 发现与启停能力和资源部署都由该模块声明，核心切换流程不应该为了新增 agent 大改。
+新增 agent 的理想方式是写一个独立 integration 模块，然后注册到 `src/main/targets/integrations/index.ts`。安装检测、路径、Profile、Skill 运行时扫描规则、原生 MCP 发现与启停能力和资源部署都由该模块声明。适配器只报告 Agent 特有事实，Preview、备份、原子 Apply、校验和回滚仍由统一核心完成。
 
 ### 界面语言
 

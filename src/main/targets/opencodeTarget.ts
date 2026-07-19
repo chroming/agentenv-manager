@@ -29,6 +29,7 @@ import {
 } from "./capture";
 import { createProfileFileDriver } from "./shared/profileFiles";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
+import { createFilesystemSkillDriver } from "./shared/skillRuntime";
 import { createCommandInstallationDriver } from "./installationDiscovery";
 
 const DEFAULT_STATE: TargetState = {
@@ -189,6 +190,7 @@ const profileFiles = createProfileFileDriver({
 });
 
 const assets = createDirectoryAssetDriver({ targetName: "OpenCode" });
+const skills = createFilesystemSkillDriver({ targetId: "opencode" });
 
 export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
   descriptor: {
@@ -226,10 +228,44 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       agentsDir: join(configDir, "agents"),
       skillsDir: privateSkillsDir,
       skillLocations: [
-        { path: privateSkillsDir, role: "preferred-runtime", shared: false },
-        { path: join(configDir, "skill"), role: "alternate-runtime", shared: false },
-        { path: sharedSkillsDir, role: "compatibility-runtime", shared: true },
-        { path: join(homeDir, ".claude", "skills"), role: "compatibility-runtime", shared: true }
+        {
+          path: privateSkillsDir,
+          role: "preferred-runtime",
+          shared: false,
+          scope: "user",
+          scanDepth: "recursive",
+          management: "managed"
+        },
+        {
+          path: join(configDir, "skill"),
+          role: "alternate-runtime",
+          shared: false,
+          scope: "user",
+          scanDepth: "recursive",
+          management: "observed"
+        },
+        {
+          path: sharedSkillsDir,
+          role: "compatibility-runtime",
+          shared: true,
+          scope: "shared",
+          scanDepth: "recursive",
+          management: "observed"
+        },
+        {
+          path: join(homeDir, ".claude", "skills"),
+          role: "compatibility-runtime",
+          shared: true,
+          scope: "shared",
+          scanDepth: "recursive",
+          management: "observed",
+          externalContainerMarkers: [{
+            relativePath: ".claude-plugin/plugin.json",
+            manager: "claude-plugin",
+            displayName: "Claude Code plugin",
+            importable: false
+          }]
+        }
       ],
       skillScanDirs: [
         privateSkillsDir,
@@ -239,6 +275,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       ]
     };
   },
+  skills,
   createDefaultProfile: (id) => ({
     id,
     manifest: {

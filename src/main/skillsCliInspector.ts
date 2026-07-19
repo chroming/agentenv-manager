@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { SkillExternalOwnership, SkillUpstream } from "../shared/types";
+import { normalizeSkillKey } from "../shared/skillIdentity";
 
 interface SkillsCliLockEntry {
   source?: unknown;
@@ -22,9 +23,6 @@ export interface SkillsCliInspection {
 }
 
 const SUPPORTED_LOCK_VERSION = 3;
-
-const normalizeSkillKey = (value: string) =>
-  value.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
 
 const stringValue = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -107,6 +105,8 @@ export const inspectSkillsCliLocks = async (
       }
       evidenceBySkillKey.set(skillKey, {
         manager: "skills-cli",
+        displayName: "Skills CLI",
+        importable: true,
         lockPath,
         lockVersion: SUPPORTED_LOCK_VERSION,
         canonicalPath: join(homeDir, ".agents", "skills", skillKey),

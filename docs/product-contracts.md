@@ -560,6 +560,14 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 
 Scan MUST inspect every adapter-declared Skill location and group results by canonical Skill identity and content.
 
+Runtime identity, Library identity, and deployment identity are distinct:
+
+- `runtimeName` comes from `SKILL.md` frontmatter and is the identity used by an Agent to resolve duplicate Skills. A missing name falls back to the deployment directory only with an explicit inferred-confidence warning.
+- `libraryId` is AgentEnv's stable canonical record ID. It MUST NOT be silently rewritten merely because a runtime name or install directory differs.
+- `deploymentName` is the directory name inside a Target Skill root. It is a path concern, not the primary duplicate or compatibility key.
+- Scan and Apply MUST detect duplicate desired `runtimeName` values even when the Library IDs and deployment directories differ.
+- Adapter-declared scan depth is authoritative. Recursive Agents are scanned recursively with realpath cycle protection; direct-child Agents are not assigned nested Skills they do not load.
+
 The Local Skill Cleanup surface owns unresolved local-state counts and group details; Library/Skills MUST NOT duplicate a `Needs attention` summary above the table. While the cleanup surface is open, `Refresh` MUST run a new filesystem scan in place, retain the surface, and expose its working and completion states.
 
 Scan MAY read supported versions of `$XDG_STATE_HOME/skills/.skill-lock.json` and `~/.agents/.skill-lock.json` to identify Skills CLI ownership and recover upstream provenance. Unsupported or corrupt lock data MUST degrade to ordinary filesystem scanning and MUST NOT block unrelated Skills.
@@ -620,6 +628,7 @@ Ignore contract:
 External ownership contract:
 
 - Skills tracked by a supported Skills CLI lock are classified as `External`, not `Unmanaged`.
+- Adapter-declared native containers, including Claude Code plugins, are also classified as `External`. The UI names the actual owner and MUST NOT present an import or takeover command when that source is not independently importable.
 - Directory symlinks and broken tracked symlinks remain visible in Scan results.
 - `Import copy` copies a selected healthy external installation into Library, preserves verified upstream metadata, and leaves the external files and lock unchanged.
 - `Import copy` is idempotent. Matching Library content is reused; an occupied ID with different content requires the shared duplicate-import decision instead of failing or silently suffixing. After rescan, an external installation with matching Library content remains labelled `External`, shows its Library relationship, and retains a `Review` entry. Review offers `Update source` when online provenance can improve tracking, otherwise it confirms reuse; it MUST NOT create a duplicate Library copy.
@@ -651,7 +660,7 @@ External ownership contract:
 - Unmanaged copies are never deleted.
 - Deletion with managed installs creates an undoable Backup.
 
-Status: local, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter; read-only Skills CLI detection; external copy import; scan; cleanup; ignore; icon metadata; reference blocking; managed-install removal; and undo are `Implemented`. External-manager takeover and identity edge cases need broader contract tests.
+Status: local, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter runtime identity; direct and recursive Agent scanning; read-only Skills CLI and Claude plugin ownership detection; external copy import where safe; scan; cleanup; ignore; icon metadata; duplicate runtime-name blocking; reference blocking; managed-install removal; and undo are `Implemented`.
 
 ## 17. Native MCP Contract
 
@@ -831,6 +840,7 @@ A new Target adapter MUST define:
 - Read/write and validation behavior.
 - Instructions capability.
 - Skill capability and install methods.
+- A read-only Skill runtime driver declaring roots, scan depth, scope, runtime identity, native disable facts, and external ownership markers.
 - Native MCP discovery scope and safe activation capability.
 - Agent capability, if any.
 - Native Advanced configuration ownership.
@@ -842,11 +852,17 @@ A new Target adapter MUST define:
 
 Registration MUST occur in the Target registry. Renderer components MUST NOT require Target-specific branches for ordinary lifecycle behavior.
 
+Target Skill drivers report facts only. They MUST NOT import Library content, mutate Profile state, deploy files, remove legacy paths, or create backups. The core owns Save, Preview, Backup, atomic Apply, post-write verification, and Rollback through one Agent-neutral operation model. Agent-specific behavior belongs behind the adapter; Agent-specific buttons and Target ID branches do not belong in the renderer.
+
+Legacy migration eligibility is both path- and Target-owned. A shared copy carrying another Target's AgentEnv ownership marker is observable but MUST NOT be removed, replaced, or claimed by the current Target.
+
 Antigravity's implemented global scope manages `~/.gemini/GEMINI.md` and
-`~/.gemini/config/skills`. It discovers MCP names from `~/.gemini/config/mcp_config.json`
-without mutating that file. Its
-`~/.gemini/antigravity-cli/skills` location is scanned as a discovery-only compatibility source
-and is not a second deployment destination. Secret-bearing headers, OAuth configuration, literal
+`~/.gemini/antigravity-cli/skills`. It observes `~/.gemini/skills` as a shared compatibility
+location and treats the former `~/.gemini/config/skills` destination as legacy. Apply previews,
+backs up, removes, verifies, and can roll back only AgentEnv-owned legacy copies; unowned legacy
+content remains untouched. Antigravity CLI readiness requires authoritative `agy` command evidence;
+the Antigravity desktop application is a separate product and is not sufficient. AgentEnv discovers
+MCP names from `~/.gemini/config/mcp_config.json` without mutating that file. Secret-bearing headers, OAuth configuration, literal
 environment values, and all other MCP definition fields remain Agent-owned.
 
 ## 23.1 AgentEnv Data Lifecycle
@@ -1002,7 +1018,7 @@ Current verdict: **Needs refinement**. Core Skill Library, Profile, Preview, tra
 
 Last verified: 2026-07-18 against the current working tree at the time of this snapshot.
 
-- `532` automated tests passed across `61` test files; the `92`-test Electron UI suite and `103` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- `547` automated tests pass across `63` test files; the `92`-test Electron UI suite and `105` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
 - The CSS architecture gate passed with fourteen named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `50` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including sidebar Agent overflow, Profile icon selection, Profile Skill selection and applied revisions, native MCP Profile states, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, Agent Diagnostics, and focused update-setting states.
 - Skills, Profiles, Agents, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
@@ -1022,7 +1038,8 @@ Last verified: 2026-07-18 against the current working tree at the time of this s
 - Codex Capture now reuses identical Library Skills and previews a stable alternate ID for different same-name content instead of failing during Save. Unmanaged same-name OpenCode and Claude Code Skill destinations remain blocked until an exact fresh Preview is acknowledged, then pass Backup, atomic replacement, ownership, and recovery assertions; Skills CLI-owned paths remain protected.
 - Shared compatibility migration now distinguishes imported, preparing, ready, retained, external, and conflict states; Apply records per-Target install or omit intent without duplicate runtime copies, and Electron E2E verifies early-switch blocking, transactional cutover, backup history, and full restore.
 - Native MCP discovery includes all configured names without copying credential values. OpenCode and Codex Apply change only native activation fields, preserve definitions added outside AgentEnv, warn rather than block when setup is missing, and produce a real no-op when states already match.
-- Claude Code and Antigravity expose Agent-owned MCPs read-only. Antigravity detects either `agy` or the macOS application, applies and rolls back `GEMINI.md` and dedicated global Skills, and leaves `mcp_config.json` unchanged.
+- Claude Code and Antigravity expose Agent-owned MCPs read-only. Antigravity CLI requires `agy`, applies and rolls back `GEMINI.md` and dedicated CLI Skills, transactionally migrates AgentEnv-owned legacy Skill copies, and leaves `mcp_config.json` unchanged.
+- All four built-in adapters expose the same read-only Skill runtime contract. Tests cover direct and recursive discovery, symlink-cycle safety, frontmatter runtime identity, duplicate declarations, Claude plugin ownership, Claude and Codex native disable state, duplicate desired runtime names, and Antigravity legacy migration with rollback.
 - GitHub Device Flow respects server polling intervals, absorbs `slow_down` as a longer pending interval, blocks overlapping token requests, and refreshes connected account state after browser authorization.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards; Configuration changes is a keyboard-focusable review action that opens the first collapsed diff without widening the dialog.
 - Profile list icon and content columns remain aligned at the minimum viewport, and a deliberately long truncated Profile name keeps the same text origin before and after selection.
@@ -1035,5 +1052,5 @@ Last verified: 2026-07-18 against the current working tree at the time of this s
 ## 26. Current Priority Gaps
 
 1. Migrate persisted Profile terminology from `targetId` to `nativeTargetId` with backward compatibility.
-2. Broaden Skill identity contract tests for same-ID conflicts and different-ID identical-content candidates.
+2. Extend the conditional duplicate review with more uncommon intentionally distinct same-name Skill fixtures.
 3. Sign and notarize macOS distribution, then repeat packaged primary-workflow verification on a clean Mac.

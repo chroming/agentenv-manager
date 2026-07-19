@@ -39,6 +39,7 @@ import type { AgentEnvPaths } from "./paths";
 import { createDataBackup, inspectDataBackup, restoreDataBackup } from "./dataBackupService";
 import { parseExternalUrl } from "./externalUrl";
 import { isTargetInstalled } from "../shared/targetHealth";
+import { isExternalSkillImportable } from "../shared/skillIdentity";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -99,7 +100,10 @@ export const registerIpcHandlers = ({
       {
         path: paths.userSkillsDir,
         role: "compatibility-runtime",
-        shared: true
+        shared: true,
+        scope: "shared",
+        scanDepth: "recursive",
+        management: "observed"
       }
     ]
   };
@@ -285,6 +289,14 @@ export const registerIpcHandlers = ({
       inventoryPathsFor(targets)
     );
     const localInstall = inventory.find((item) => resolve(item.path) === sourcePath);
+
+    if (
+      localInstall?.status === "external" &&
+      !isExternalSkillImportable(localInstall.externalOwnership)
+    ) {
+      const manager = localInstall.externalOwnership?.displayName ?? "another tool";
+      throw new Error(`${localInstall.name} is managed by ${manager} and cannot be imported from this runtime copy`);
+    }
 
     if (localInstall?.status === "managed" && localInstall.libraryId) {
       const skill = (await skillLibraryStore.listSkills()).find(

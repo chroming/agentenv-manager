@@ -39,19 +39,6 @@ export const createAntigravityInstallationDriver = (): TargetDiscoveryDriver => 
       }
     }
 
-    if (input.platform === "darwin") {
-      const candidates = [join(input.homeDir, "Applications", "Antigravity.app")];
-      if (input.allowSystemApplicationLookup) {
-        candidates.push("/Applications/Antigravity.app");
-      }
-      for (const path of candidates) {
-        if (await input.pathExists(path)) {
-          evidence.push({ kind: "desktop-app", label: "Antigravity application", path });
-          break;
-        }
-      }
-    }
-
     return { found: evidence.length > 0, evidence };
   }
 });

@@ -124,6 +124,14 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
   mcp: {
     materializeMcpRefs: (profile) => profile
   },
+  skills: {
+    readNativeState: async () => ({ disabledRuntimeNames: [] }),
+    inspectRuntime: async (targetPaths) => ({
+      targetId: targetPaths.targetId,
+      observations: [],
+      issues: []
+    })
+  },
   assets: {
     validateAssets: async () => [],
     getAssetBackupPaths: async () => [],
