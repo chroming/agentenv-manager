@@ -2757,7 +2757,8 @@ describe("Electron UI profile switching e2e", () => {
             },
             navigation: [...document.querySelectorAll(".workspace-button")].map(rect),
             sidebar: rect(document.querySelector(".global-sidebar")),
-            status: rect(document.querySelector(".system-status-card"))
+            status: rect(document.querySelector(".system-status-card")),
+            statusAgentChips: [...document.querySelectorAll(".agent-chip")].map(rect)
           };
         },
         {
@@ -2795,6 +2796,11 @@ describe("Electron UI profile switching e2e", () => {
         });
         expect(workspaceGeometry.sidebar).toEqual(skillsGeometry.sidebar);
         expect(workspaceGeometry.status).toEqual(skillsGeometry.status);
+        expect(workspaceGeometry.statusAgentChips).toEqual(skillsGeometry.statusAgentChips);
+        workspaceGeometry.statusAgentChips.forEach((chip) => {
+          expect(chip?.width).toBe(chip?.height);
+          expect(chip?.width).toBe(28);
+        });
         expect(workspaceGeometry.editorPadding).toEqual(skillsGeometry.editorPadding);
         expect({
           fontSize: workspaceGeometry.heading.fontSize,

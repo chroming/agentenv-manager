@@ -59,6 +59,13 @@ html[data-platform="darwin"] {
   width: 17px;
 }
 
+.agent-chip-row > .agent-chip {
+  aspect-ratio: 1;
+  flex: 0 0 28px;
+  max-width: 28px;
+  min-width: 28px;
+}
+
 .agent-chip--more {
   background: #f8fafc;
   border-color: #d9e2ef;
