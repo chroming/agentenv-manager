@@ -365,6 +365,14 @@ export const McpLibraryPanel = ({
                 <OverflowTooltip
                   ariaLabel={t("Environment summary for {{id}}", { id: server.id })}
                   className="mcp-row-meta-item"
+                  displayText={Object.keys(server.env ?? {}).length > 0
+                    ? t(
+                        Object.keys(server.env ?? {}).length === 1
+                          ? "{{count}} env variable"
+                          : "{{count}} env variables",
+                        { count: Object.keys(server.env ?? {}).length }
+                      )
+                    : t("None")}
                   text={Object.keys(server.env ?? {}).length > 0
                     ? t(
                         Object.keys(server.env ?? {}).length === 1
@@ -397,17 +405,6 @@ export const McpLibraryPanel = ({
                   <button
                     className="icon-action"
                     type="button"
-                    aria-label={t("Edit {{name}}", { name: server.id })}
-                    onClick={(event) => {
-                      editorTriggerRef.current = event.currentTarget;
-                      editServer(server);
-                    }}
-                  >
-                    <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
-                  </button>
-                  <button
-                    className="icon-action"
-                    type="button"
                     aria-label={t("More actions for {{id}}", { id: server.id })}
                     aria-expanded={openAction?.id === server.id}
                     onClick={(event) => {
@@ -434,6 +431,19 @@ export const McpLibraryPanel = ({
                           aria-label={t("Actions for {{id}}", { id: server.id })}
                           style={{ left: openAction.left, top: openAction.top }}
                         >
+                          <button
+                            type="button"
+                            role="menuitem"
+                            aria-label={t("Edit {{name}}", { name: server.id })}
+                            onClick={(event) => {
+                              editorTriggerRef.current = event.currentTarget;
+                              editServer(server);
+                              setOpenAction(undefined);
+                            }}
+                          >
+                            <Pencil size={14} strokeWidth={2.2} aria-hidden="true" />
+                            <span>{t("Edit MCP")}</span>
+                          </button>
                           {(mcpUsage[server.id] ?? []).length > 0 ? (
                             <button
                               type="button"

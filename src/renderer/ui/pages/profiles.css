@@ -881,9 +881,9 @@
 }
 
 .profile-mcp-row__icon {
-  background: #f1f1ef;
-  border-radius: 7px;
-  color: #5f615d;
+  background: transparent;
+  border-radius: 0;
+  color: var(--muted);
   height: 30px;
   width: 30px;
 }
@@ -1410,9 +1410,9 @@
 }
 
 .profile-composer-section__panel > .profile-skill-manager {
-  background: #fff;
-  border: 1px solid #e5eaf2;
-  border-radius: 7px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
@@ -1426,8 +1426,8 @@
   display: flex;
   gap: 12px;
   justify-content: space-between;
-  min-height: 50px;
-  padding: 7px 10px 7px 12px;
+  min-height: 44px;
+  padding: 5px 4px 7px 6px;
 }
 
 .profile-skill-summary {
@@ -1464,6 +1464,7 @@
 }
 
 .profile-skill-list {
+  background: var(--surface);
   display: grid;
   min-height: 0;
   min-width: 0;
@@ -1506,9 +1507,9 @@
 
 .profile-skill-icon {
   align-items: center;
-  background: #edf4ff;
-  border-radius: 7px;
-  color: var(--accent);
+  background: transparent;
+  border-radius: 0;
+  color: var(--muted);
   display: inline-flex;
   height: 32px;
   justify-content: center;
@@ -1862,7 +1863,7 @@
   }
 
   .profile-commit-actions {
-    grid-row: 1;
+    grid-row: 2;
     justify-self: end;
   }
 
@@ -1874,7 +1875,7 @@
   }
 
   .profile-action-status {
-    grid-row: 2;
+    grid-row: 1;
     justify-self: start;
     width: 100%;
   }

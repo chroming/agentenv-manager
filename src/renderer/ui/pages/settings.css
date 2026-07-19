@@ -477,17 +477,53 @@
   }
 }
 
-.settings-page .resource-settings-grid > label {
-  align-content: start;
+.settings-preference-list {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
   display: grid;
-  gap: 6px;
 }
 
-.settings-page .resource-settings-grid > label > span {
+.settings-preference-row {
+  align-items: center;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 320px);
+  min-height: 64px;
+  padding: 9px 2px;
+}
+
+.settings-preference-row + .settings-preference-row {
+  border-top: 1px solid var(--border);
+}
+
+.settings-preference-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-preference-copy strong {
   color: var(--text);
   font-size: 13px;
-  font-weight: 600;
   line-height: 18px;
+}
+
+.settings-preference-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.settings-preference-row > select,
+.settings-preference-row > .settings-readonly-value {
+  justify-self: end;
+  max-width: 320px;
+  width: 100%;
+}
+
+.settings-preference-row > .ui-switch,
+.settings-preference-row > .settings-interval-control {
+  justify-self: end;
 }
 
 .settings-advanced {
@@ -540,61 +576,10 @@
   font-size: 20px;
 }
 
-.settings-auto-check-row {
-  align-items: center;
-  border-top: 1px solid var(--border);
-  display: grid;
-  gap: 16px;
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr) 138px;
-  min-height: 70px;
-  padding-top: 12px;
-}
-
-.settings-auto-check-main {
-  display: block;
-  min-width: 0;
-}
-
-.settings-auto-check-copy {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.settings-auto-check-title {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-}
-
-.settings-auto-check-title > .ui-switch {
-  flex: 0 0 auto;
-}
-
-.settings-auto-check-copy strong,
-.settings-interval-field > span:first-child {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 18px;
-}
-
-.settings-auto-check-copy small {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.settings-interval-field {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-}
-
 .settings-interval-control {
   display: block;
   position: relative;
+  width: 138px;
 }
 
 .settings-interval-control input {
@@ -778,25 +763,9 @@
 .github-login-result--error {
   color: var(--danger);
 }
-.resource-settings-grid--single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.settings-page .resource-settings-grid--single > label {
-  align-items: center;
-  grid-template-columns: 132px minmax(220px, 320px);
-}
-
-.settings-page .resource-settings-grid--single > label > span {
-  grid-column: 1;
-  text-align: right;
-}
-
-.settings-page .resource-settings-grid--single > label > select {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-.settings-page .resource-settings-grid--single > label > small {
-  grid-column: 2;
+@container (max-width: 560px) {
+  .settings-preference-row {
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 220px);
+  }
 }

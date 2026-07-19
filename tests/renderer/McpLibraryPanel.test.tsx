@@ -152,7 +152,8 @@ describe("McpLibraryPanel", () => {
       })
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit context7" }));
+    fireEvent.click(screen.getByRole("button", { name: "More actions for context7" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit context7" }));
     expect(screen.getByLabelText("MCP library id")).toBeDisabled();
     expect(screen.getByText("ID is fixed because Profiles reference it.")).toBeInTheDocument();
     expect(screen.getByLabelText("MCP library name")).toHaveFocus();

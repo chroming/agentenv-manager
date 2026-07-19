@@ -4506,7 +4506,8 @@ describe("Electron UI profile switching e2e", () => {
         })
       );
 
-    await localSearch.getByRole("button", { name: "Edit local-search" }).click();
+    await localSearch.getByRole("button", { name: "More actions for local-search" }).click();
+    await page.getByRole("menuitem", { name: "Edit local-search" }).click();
     await expect.poll(() => page.getByLabel("MCP library id").inputValue()).toBe("local-search");
     expect(await page.getByLabel("MCP library id").isDisabled()).toBe(true);
     await expect.poll(() => page.getByLabel("MCP args").inputValue()).toBe("server.js\n--stdio");
@@ -5218,18 +5219,21 @@ describe("Electron UI profile switching e2e", () => {
     const autoCheck = page.getByRole("switch", { name: "Skill auto update check" });
     const interval = page.getByLabel("Skill auto check interval minutes");
     const assertAutoCheckLayout = async () => {
-      const geometry = await page.locator(".settings-auto-check-row").evaluate((row) => {
-        const intervalField = row.querySelector<HTMLElement>(".settings-interval-field")!;
-        const title = row.querySelector<HTMLElement>(".settings-auto-check-title strong")!;
-        const switchControl = row.querySelector<HTMLElement>('.ui-switch[role="switch"]')!;
-        const rowRect = row.getBoundingClientRect();
-        const intervalRect = intervalField.getBoundingClientRect();
+      const geometry = await autoCheck.evaluate((switchControl) => {
+        const autoRow = switchControl.closest<HTMLElement>(".settings-preference-row")!;
+        const intervalControl = document.querySelector<HTMLElement>(".settings-interval-control")!;
+        const intervalRow = intervalControl.closest<HTMLElement>(".settings-preference-row")!;
+        const title = autoRow.querySelector<HTMLElement>(".settings-preference-copy strong")!;
+        const autoRowRect = autoRow.getBoundingClientRect();
+        const intervalRowRect = intervalRow.getBoundingClientRect();
+        const intervalRect = intervalControl.getBoundingClientRect();
         const titleRect = title.getBoundingClientRect();
         const switchRect = switchControl.getBoundingClientRect();
         return {
-          rowRight: rowRect.right,
-          rowTop: rowRect.top,
-          rowBottom: rowRect.bottom,
+          autoRowRight: autoRowRect.right,
+          autoRowTop: autoRowRect.top,
+          autoRowBottom: autoRowRect.bottom,
+          intervalRowRight: intervalRowRect.right,
           titleRight: titleRect.right,
           intervalLeft: intervalRect.left,
           intervalRight: intervalRect.right,
@@ -5240,10 +5244,12 @@ describe("Electron UI profile switching e2e", () => {
         };
       });
       expect(geometry.switchLeft).toBeGreaterThanOrEqual(geometry.titleRight + 8);
-      expect(geometry.switchRight).toBeLessThanOrEqual(geometry.intervalLeft - 8);
-      expect(geometry.intervalRight).toBeLessThanOrEqual(geometry.rowRight);
-      expect(geometry.switchTop).toBeGreaterThanOrEqual(geometry.rowTop);
-      expect(geometry.switchBottom).toBeLessThanOrEqual(geometry.rowBottom);
+      expect(geometry.switchRight).toBeLessThanOrEqual(geometry.autoRowRight);
+      expect(geometry.intervalRight).toBeLessThanOrEqual(geometry.intervalRowRight);
+      expect(Math.abs(geometry.switchRight - geometry.intervalRight)).toBeLessThanOrEqual(1);
+      expect(geometry.switchTop).toBeGreaterThanOrEqual(geometry.autoRowTop);
+      expect(geometry.switchBottom).toBeLessThanOrEqual(geometry.autoRowBottom);
+      expect(geometry.intervalLeft).toBeGreaterThan(geometry.titleRight);
     };
     await assertAutoCheckLayout();
     await page.setViewportSize({ width: 920, height: 620 });
@@ -5413,7 +5419,7 @@ describe("Electron UI profile switching e2e", () => {
             minHeight: style.minHeight
           };
         });
-        expect(mcpRowGeometry.gridTemplateColumns).toMatch(/^32px /);
+        expect(mcpRowGeometry.gridTemplateColumns.split(" ")).toHaveLength(5);
         expect(mcpRowGeometry.minHeight).toBe("58px");
         expect(mcpRowGeometry.height).toBeLessThanOrEqual(72);
       }
@@ -6585,7 +6591,9 @@ describe("Electron UI profile switching e2e", () => {
       const actions = row.querySelector<HTMLElement>(".ui-resource-row__actions")!.getBoundingClientRect();
       const box = row.getBoundingClientRect();
       return {
+        actionCount: row.querySelectorAll(".ui-resource-row__actions > button").length,
         actionsContained: actions.right <= box.right + 1,
+        columnCount: getComputedStyle(row).gridTemplateColumns.split(" ").length,
         iconHeight: icon.height,
         iconWidth: icon.width,
         rowHeight: box.height,
@@ -6593,7 +6601,9 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(mcpGeometry).toEqual({
+      actionCount: 1,
       actionsContained: true,
+      columnCount: 5,
       iconHeight: 30,
       iconWidth: 30,
       rowHeight: 58,
@@ -6637,14 +6647,89 @@ describe("Electron UI profile switching e2e", () => {
       return {
         actionsContained: actionsBox.right <= stack.getBoundingClientRect().right + 1,
         overlaps,
+        statusBeforeActions: statusBox.top <= actionsBox.top,
         statusFits: status.scrollWidth <= status.clientWidth + 1
       };
     });
     expect(profileActionGeometry).toEqual({
       actionsContained: true,
       overlaps: false,
+      statusBeforeActions: true,
       statusFits: true
     });
+    await expandComposerSection(page, "Skills");
+    const profileSkillGeometry = await page.locator(".profile-skill-manager").evaluate((manager) => {
+      const icon = manager.querySelector<HTMLElement>(".profile-skill-icon")!;
+      return {
+        border: getComputedStyle(manager).borderTopWidth,
+        iconBackground: getComputedStyle(icon).backgroundColor,
+        radius: getComputedStyle(manager).borderRadius,
+        rowContained: Array.from(manager.querySelectorAll<HTMLElement>(".profile-skill-row")).every(
+          (row) => row.scrollWidth <= row.clientWidth + 1
+        )
+      };
+    });
+    expect(profileSkillGeometry).toEqual({
+      border: "0px",
+      iconBackground: "rgba(0, 0, 0, 0)",
+      radius: "0px",
+      rowContained: true
+    });
+
+    await sidebar.getByRole("button", { name: "Agents", exact: true }).click();
+    const targetListGeometry = await page.locator(".target-list").evaluate((list) => {
+      const rows = Array.from(list.querySelectorAll<HTMLElement>(".target-card--workflow"));
+      const listBox = list.getBoundingClientRect();
+      return {
+        contained: rows.every((row) => {
+          const box = row.getBoundingClientRect();
+          return box.left >= listBox.left && box.right <= listBox.right;
+        }),
+        continuous: rows.slice(1).every((row, index) => {
+          const previous = rows[index].getBoundingClientRect();
+          return Math.abs(row.getBoundingClientRect().top - previous.bottom) <= 1;
+        }),
+        flatRows: rows.every((row) => {
+          const style = getComputedStyle(row);
+          return style.borderRadius === "0px" && style.boxShadow === "none";
+        }),
+        healthBackgroundsAreNeutral: rows.every((row) => {
+          const status = row.querySelector<HTMLElement>(".target-health-status")!;
+          return getComputedStyle(status).backgroundColor === "rgba(0, 0, 0, 0)";
+        })
+      };
+    });
+    expect(targetListGeometry).toEqual({
+      contained: true,
+      continuous: true,
+      flatRows: true,
+      healthBackgroundsAreNeutral: true
+    });
+
+    await sidebar.getByRole("button", { name: "Settings", exact: true }).click();
+    const preferenceGeometry = await page.locator(".settings-preference-row").evaluateAll((rows) =>
+      rows.map((row) => {
+        const copy = row.querySelector<HTMLElement>(".settings-preference-copy")!;
+        const control = row.querySelector<HTMLElement>(":scope > select, :scope > .ui-switch, :scope > .settings-readonly-value, :scope > .settings-interval-control")!;
+        const rowBox = row.getBoundingClientRect();
+        const copyBox = copy.getBoundingClientRect();
+        const controlBox = control.getBoundingClientRect();
+        return {
+          contained:
+            copyBox.left >= rowBox.left &&
+            controlBox.right <= rowBox.right + 1 &&
+            row.scrollWidth <= row.clientWidth + 1,
+          overlaps: !(
+            copyBox.right <= controlBox.left ||
+            controlBox.right <= copyBox.left ||
+            copyBox.bottom <= controlBox.top ||
+            controlBox.bottom <= copyBox.top
+          )
+        };
+      })
+    );
+    expect(preferenceGeometry.length).toBeGreaterThanOrEqual(5);
+    expect(preferenceGeometry.every((row) => row.contained && !row.overlaps)).toBe(true);
 
     await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("button", { name: "Scan local" }).click();

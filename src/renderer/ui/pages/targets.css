@@ -76,23 +76,33 @@
 
 .target-list {
   align-items: start;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
 }
 
 .target-card--workflow {
   align-content: start;
   align-self: start;
-  background: #fbfbfc;
-  border-radius: 10px;
+  background: var(--surface);
+  border: 0;
+  border-radius: 0;
   display: grid;
-  border-color: transparent;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.035), 0 5px 16px rgba(0, 0, 0, 0.035);
-  gap: 10px;
+  box-shadow: none;
+  flex: 0 0 auto;
+  gap: 7px;
   min-height: 0;
-  padding: 12px 14px;
+  padding: 10px 14px;
   transform: none;
+  width: 100%;
+}
+
+.target-card--workflow + .target-card--workflow {
+  border-top: 1px solid var(--border);
 }
 
 .target-card--workflow:hover {
@@ -134,6 +144,38 @@
 .target-workflow-actions .secondary-action:first-child:hover:not(:disabled) {
   background: rgba(60, 60, 67, 0.07);
   color: var(--text);
+}
+
+.target-health-status {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: var(--font-size-metadata);
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.target-health-status::before {
+  background: currentColor;
+  border-radius: 50%;
+  content: "";
+  height: 6px;
+  width: 6px;
+}
+
+.target-health-status--ready {
+  color: var(--success);
+}
+
+.target-health-status--needs-setup,
+.target-health-status--guarded {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.target-health-status--missing {
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .target-workflow-icon {
@@ -183,7 +225,7 @@
   display: grid;
   gap: 4px;
   min-width: 0;
-  padding: 9px 4px 0;
+  padding: 7px 4px 0;
 }
 
 .target-state-grid > span:last-child {
@@ -243,24 +285,6 @@
   overscroll-behavior: contain;
   padding-right: 4px;
   padding-top: 10px;
-}
-
-.target-config-path {
-  display: grid;
-  gap: 4px;
-}
-
-.target-config-path > span {
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 760;
-  text-transform: uppercase;
-}
-
-.target-config-path code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .target-recovery-dialog {
@@ -356,14 +380,11 @@
 }
 
 .target-diagnostics-actions {
-  background: #fbfbfc;
+  background: transparent;
   border-top: 1px solid var(--border);
-  bottom: 0;
   display: flex;
   justify-content: flex-end;
   padding-top: 10px;
-  position: sticky;
-  z-index: var(--z-raised);
 }
 
 .stop-managing-options {

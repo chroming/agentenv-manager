@@ -95,7 +95,7 @@ export const AgentSettingsSection = ({
                 </span>
                 <span className="agent-settings-copy">
                   <strong>{agent.name}</strong>
-                  <small>{agent.description}</small>
+                  <small>{t(agent.description)}</small>
                 </span>
                 <div className="agent-settings-state">
                   <span className={`agent-settings-status${recoveryRequired ? " is-warning" : ""}`}>

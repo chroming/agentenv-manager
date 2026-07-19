@@ -593,9 +593,9 @@ export const SkillsEditor = ({
           <div className="profile-skill-summary">
             <strong>{t("Skills")}</strong>
             <span>
-              {t("{{count}} on", { count: enabledLibrarySkillCount })}
+              {t("{{count}} enabled", { count: enabledLibrarySkillCount })}
               {librarySkillEntries.length > enabledLibrarySkillCount
-                ? ` · ${t("{{count}} off", { count: librarySkillEntries.length - enabledLibrarySkillCount })}`
+                ? ` · ${t("{{count}} disabled", { count: librarySkillEntries.length - enabledLibrarySkillCount })}`
                 : ""}
             </span>
           </div>

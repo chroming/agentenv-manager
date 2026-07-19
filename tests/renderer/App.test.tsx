@@ -1277,7 +1277,8 @@ describe("App", () => {
     const context7Row = screen.getByRole("group", { name: "MCP library item context7" });
     expect(context7Row).toBeInTheDocument();
 
-    fireEvent.click(within(context7Row).getByRole("button", { name: "Edit context7" }));
+    fireEvent.click(within(context7Row).getByRole("button", { name: "More actions for context7" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit context7" }));
     expect(screen.getByLabelText("MCP library id")).toHaveValue("context7");
     expect(screen.getByLabelText("MCP library name")).toHaveValue("Context7");
     expect(screen.getByLabelText("MCP command")).toHaveValue("npx");

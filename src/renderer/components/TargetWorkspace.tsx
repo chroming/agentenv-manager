@@ -173,9 +173,9 @@ export const TargetWorkspace = ({
                 </span>
                 <span className="target-workflow-title">
                   <strong>{target.name}</strong>
-                  <small>{target.description}</small>
+                  <small>{t(target.description)}</small>
                 </span>
-                <span className={`target-badge target-badge--${target.health.status}`}>
+                <span className={`target-health-status target-health-status--${target.health.status}`}>
                   {t(targetStatusLabel[target.health.status])}
                 </span>
                 <span className="target-workflow-actions">
@@ -229,10 +229,6 @@ export const TargetWorkspace = ({
               </button>
               {isExpanded ? (
                 <section className="target-diagnostics" role="region" aria-label={t("{{name}} diagnostics", { name: target.name })}>
-                  <div className="target-config-path">
-                    <span>{t("Config directory")}</span>
-                    <code title={target.paths.configDir}>{target.paths.configDir}</code>
-                  </div>
                   <div className="target-checks">
                     {target.health.checks.map((check) => (
                       <div className="target-check" key={check.id}>

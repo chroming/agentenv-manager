@@ -4319,17 +4319,6 @@ const AppContent = ({
                           </button>
                           {isProfileActionsOpen ? (
                             <div className="profile-actions-menu ui-action-menu" role="menu" aria-label={t("Profile actions")}>
-                              <button
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setIsProfileActionsOpen(false);
-                                  openEditProfileDialog();
-                                }}
-                              >
-                                <Pencil size={15} strokeWidth={2.2} aria-hidden="true" />
-                                <span>{t("Edit profile")}</span>
-                              </button>
                               <button type="button" role="menuitem" onClick={duplicateSelectedProfile}>
                                 <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
                                 <span>{t("Duplicate profile")}</span>
@@ -4838,9 +4827,12 @@ const AppContent = ({
                   <p className="settings-muted">{t("Choose how AgentEnv Manager displays its interface.")}</p>
                 </div>
               </div>
-              <div className="resource-settings-grid resource-settings-grid--single">
-                <label>
-                  <span>{t("Language")}</span>
+              <div className="settings-preference-list">
+                <label className="settings-preference-row">
+                  <span className="settings-preference-copy">
+                    <strong>{t("Language")}</strong>
+                    <small>{t("Uses your system language until you choose another language.")}</small>
+                  </span>
                   <select
                     data-testid="locale-select"
                     aria-label={t("Interface language")}
@@ -4854,9 +4846,6 @@ const AppContent = ({
                     <option value="zh_CN">{t("Simplified Chinese")}</option>
                     <option value="zh_TW">{t("Traditional Chinese")}</option>
                   </select>
-                  <small className="settings-field-note">
-                    {t("Uses your system language until you choose another language.")}
-                  </small>
                 </label>
               </div>
             </section>
@@ -4878,9 +4867,18 @@ const AppContent = ({
                   <p className="settings-muted">{t("Defaults used when installing managed skills.")}</p>
                 </div>
               </div>
-              <div className="resource-settings-grid">
-                <label>
-                  <span>{t("Sync")}</span>
+              <div className="settings-preference-list">
+                <label className="settings-preference-row">
+                  <span className="settings-preference-copy">
+                    <strong>{t("Sync")}</strong>
+                    <small>
+                      {skillSettings.skillSyncMethod === "copy"
+                        ? t("Library updates stay pending until installs are explicitly synchronized.")
+                        : skillSettings.skillSyncMethod === "auto"
+                          ? t("Uses live links when supported and falls back to copied installs.")
+                          : t("Library updates immediately change linked Agent Skills without another Apply preview.")}
+                    </small>
+                  </span>
                   <select
                     aria-label={t("Global skill sync method")}
                     value={skillSettings.skillSyncMethod}
@@ -4894,60 +4892,54 @@ const AppContent = ({
                     <option value="copy">{t("Copy (apply-gated updates)")}</option>
                     <option value="auto">{t("Auto (live link when possible)")}</option>
                   </select>
-                  <small className="settings-field-note">
-                    {skillSettings.skillSyncMethod === "copy"
-                      ? t("Library updates stay pending until installs are explicitly synchronized.")
-                      : skillSettings.skillSyncMethod === "auto"
-                        ? t("Uses live links when supported and falls back to copied installs.")
-                        : t("Library updates immediately change linked Agent Skills without another Apply preview.")}
-                  </small>
                 </label>
-                <label>
-                  <span>{t("Storage")}</span>
+                <div className="settings-preference-row">
+                  <span className="settings-preference-copy">
+                    <strong>{t("Storage")}</strong>
+                    <small>~/.config/agentenv-manager</small>
+                  </span>
                   <div className="settings-readonly-value" aria-label={t("Global skill storage location")}>
                     {t("AgentEnv data")}
                   </div>
-                </label>
-                <div className="settings-auto-check-row">
-                  <div className="settings-auto-check-main">
-                    <span className="settings-auto-check-copy">
-                      <span className="settings-auto-check-title">
-                        <strong>{t("Auto-check")}</strong>
-                        <Switch
-                          checked={skillSettings.skillAutoCheckEnabled}
-                          label={t("Skill auto update check")}
-                          disabled={busy}
-                          onClick={() =>
-                            updateSkillSettings({
-                              skillAutoCheckEnabled: !skillSettings.skillAutoCheckEnabled
-                            })
-                          }
-                        />
-                      </span>
-                      <small>{t("Checks only skills that have per-skill update checks enabled.")}</small>
-                    </span>
-                  </div>
-                  <label className="settings-interval-field">
-                    <span>{t("Check interval")}</span>
-                    <span className="settings-interval-control">
-                      <input
-                        aria-label={t("Skill auto check interval minutes")}
-                        min={5}
-                        max={1440}
-                        step={5}
-                        type="number"
-                        disabled={!skillSettings.skillAutoCheckEnabled || busy}
-                        value={skillSettings.skillAutoCheckIntervalMinutes}
-                        onChange={(event) =>
-                          updateSkillSettings({
-                            skillAutoCheckIntervalMinutes: Number(event.currentTarget.value)
-                          })
-                        }
-                      />
-                      <span aria-hidden="true">{t("min")}</span>
-                    </span>
-                  </label>
                 </div>
+                <div className="settings-preference-row">
+                  <span className="settings-preference-copy">
+                    <strong>{t("Auto-check")}</strong>
+                    <small>{t("Checks only skills that have per-skill update checks enabled.")}</small>
+                  </span>
+                  <Switch
+                    checked={skillSettings.skillAutoCheckEnabled}
+                    label={t("Skill auto update check")}
+                    disabled={busy}
+                    onClick={() =>
+                      updateSkillSettings({
+                        skillAutoCheckEnabled: !skillSettings.skillAutoCheckEnabled
+                      })
+                    }
+                  />
+                </div>
+                <label className="settings-preference-row">
+                  <span className="settings-preference-copy">
+                    <strong>{t("Check interval")}</strong>
+                  </span>
+                  <span className="settings-interval-control">
+                    <input
+                      aria-label={t("Skill auto check interval minutes")}
+                      min={5}
+                      max={1440}
+                      step={5}
+                      type="number"
+                      disabled={!skillSettings.skillAutoCheckEnabled || busy}
+                      value={skillSettings.skillAutoCheckIntervalMinutes}
+                      onChange={(event) =>
+                        updateSkillSettings({
+                          skillAutoCheckIntervalMinutes: Number(event.currentTarget.value)
+                        })
+                      }
+                    />
+                    <span aria-hidden="true">{t("min")}</span>
+                  </span>
+                </label>
               </div>
             </section>
             <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">
