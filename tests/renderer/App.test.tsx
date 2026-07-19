@@ -517,6 +517,15 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       ...input,
       id: input.manifest.id
     })),
+    updateProfileMetadata: vi.fn().mockImplementation(async (input) => ({
+      ...profile,
+      manifest: {
+        ...profile.manifest,
+        name: input.name ?? profile.manifest.name,
+        description: input.description ?? profile.manifest.description,
+        iconKey: input.iconKey ?? profile.manifest.iconKey
+      }
+    })),
     createProfile: vi.fn().mockImplementation(async (input) => ({
       ...profile,
       id: `${input.targetId}-created`,
@@ -1074,15 +1083,15 @@ describe("App", () => {
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ locale: "zh_CN" }));
     unrelatedReads.forEach((read) => expect(read).not.toHaveBeenCalled());
     expect(await screen.findByRole("button", { name: "配置方案" })).toBeInTheDocument();
-    expect(document.documentElement.lang).toBe("zh-CN");
+    await waitFor(() => expect(document.documentElement.lang).toBe("zh-CN"));
 
     fireEvent.change(screen.getByTestId("locale-select"), { target: { value: "zh_TW" } });
     await waitFor(() => expect(screen.getByRole("button", { name: "設定檔" })).toBeInTheDocument());
-    expect(document.documentElement.lang).toBe("zh-TW");
+    await waitFor(() => expect(document.documentElement.lang).toBe("zh-TW"));
 
     fireEvent.change(screen.getByTestId("locale-select"), { target: { value: "en" } });
     await waitFor(() => expect(screen.getByRole("button", { name: "Profiles" })).toBeInTheDocument());
-    expect(document.documentElement.lang).toBe("en-US");
+    await waitFor(() => expect(document.documentElement.lang).toBe("en-US"));
   });
 
   it("opens the MCP library and saves reusable MCP servers", async () => {
@@ -1307,7 +1316,7 @@ describe("App", () => {
     const profileRows = profileList.querySelectorAll(".profile-row");
     expect(profileRows[0]).toHaveTextContent("Profile B");
     expect(profileRows[1]).toHaveTextContent("Daily Coding");
-    expect(profileRows[1]).toHaveTextContent("Current");
+    expect(within(profileRows[1] as HTMLElement).queryByText("Current")).not.toBeInTheDocument();
 
     const skillsRegion = await screen.findByRole("region", { name: "Profile skills" });
     expect(within(skillsRegion).getByRole("switch", { name: "Disable Testing" })).toBeChecked();
@@ -1424,11 +1433,18 @@ describe("App", () => {
     expect(document.querySelector(".profile-page-header [aria-label='More profile actions']")).toBeNull();
   });
 
-  it("saves a profile icon through the whole-profile draft workflow", async () => {
-    const api = installApi();
+  it("auto-saves profile icons without committing environment draft changes", async () => {
+    const metadataSave = deferred<ProfileDetail>();
+    const api = installApi({
+      updateProfileMetadata: vi.fn().mockReturnValue(metadataSave.promise)
+    });
     render(<App />);
 
     await openProfiles();
+    fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
+    fireEvent.change(screen.getByLabelText("AGENTS.md"), {
+      target: { value: "# Unsaved instructions\n" }
+    });
     const row = screen.getByRole("group", { name: "Profile Daily Coding" });
     const icon = within(row).getByRole("button", {
       name: "Change icon for profile daily-coding"
@@ -1442,16 +1458,23 @@ describe("App", () => {
       )
     );
 
+    await waitFor(() =>
+      expect(api.updateProfileMetadata).toHaveBeenCalledWith({
+        id: "daily-coding",
+        iconKey: "rocket"
+      })
+    );
+    expect(screen.getAllByText("Saving profile details").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    act(() => metadataSave.resolve({
+      ...profile,
+      manifest: { ...profile.manifest, iconKey: "rocket" }
+    }));
+    expect(await screen.findByText("Profile details saved")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
     expect(row).toHaveTextContent("Unsaved");
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() =>
-      expect(api.saveProfile).toHaveBeenCalledWith(
-        expect.objectContaining({
-          manifest: expect.objectContaining({ iconKey: "rocket" })
-        })
-      )
-    );
+    expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Unsaved instructions\n");
+    expect(api.saveProfile).not.toHaveBeenCalled();
   });
 
   it("makes Save primary and disables Apply until profile changes are saved", async () => {
@@ -2022,6 +2045,7 @@ describe("App", () => {
     await waitFor(() =>
       expect(driftApi.applyProfile).toHaveBeenCalledWith("daily-coding", "preview-1", {
         allowManagedDrift: true,
+        allowUnmanagedSkillReplacement: true,
         allowOmissions: false
       })
     );
@@ -2278,21 +2302,16 @@ describe("App", () => {
       target: { value: "Review and quality checks" }
     });
     fireEvent.click(within(editDialog).getByRole("button", { name: "Done" }));
-    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
-    expect(api.saveProfile).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-
     await waitFor(() =>
-      expect(api.saveProfile).toHaveBeenCalledWith(
-        expect.objectContaining({
-          manifest: expect.objectContaining({
-            id: "daily-coding",
-            name: "Review Focus",
-            description: "Review and quality checks"
-          })
-        })
-      )
+      expect(api.updateProfileMetadata).toHaveBeenCalledWith({
+        id: "daily-coding",
+        name: "Review Focus",
+        description: "Review and quality checks"
+      })
     );
+    expect(await screen.findByText("Profile details saved")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(api.saveProfile).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "More profile actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate profile" }));

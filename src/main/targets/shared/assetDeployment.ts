@@ -116,8 +116,8 @@ export const createDirectoryAssetDriver = ({
           input.allowMatchingUnmanagedAssets &&
           (await hashComparableResource(sourceDir)) ===
             (await hashComparableResource(targetDir));
-        const replaceableManaged = input.replaceableManagedPaths?.has(targetDir) === true;
-        if (targetExists && !owned && !matching && !replaceableManaged) {
+        const replaceable = input.replaceablePaths?.has(targetDir) === true;
+        if (targetExists && !owned && !matching && !replaceable) {
           errors.push(
             `${ownedDir.kind} target already exists and is not AgentEnv-owned: ${targetDir}`
           );
@@ -178,8 +178,8 @@ export const createDirectoryAssetDriver = ({
           await pathExists(targetDir) &&
           (await hashComparableResource(sourceDir)) ===
             (await hashComparableResource(targetDir));
-        const replaceableManaged = input.replaceableManagedPaths?.has(targetDir) === true;
-        if ((await pathEntryExists(targetDir)) && !owned && !matching && !replaceableManaged) {
+        const replaceable = input.replaceablePaths?.has(targetDir) === true;
+        if ((await pathEntryExists(targetDir)) && !owned && !matching && !replaceable) {
           throw new Error(
             `${ownedDir.kind} target changed after preview and is not AgentEnv-owned: ${targetDir}`
           );

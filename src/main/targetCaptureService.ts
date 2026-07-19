@@ -6,7 +6,8 @@ import type {
   McpLibraryEntry,
   TargetCapturePreview,
   TargetCaptureResource,
-  TargetCaptureResult
+  TargetCaptureResult,
+  SkillImportConflictResolution
 } from "../shared/types";
 import { pathExists } from "./fileUtils";
 import type { McpLibraryStore } from "./mcpLibraryStore";
@@ -26,6 +27,7 @@ interface CapturedSkill {
   sourcePaths: string[];
   contentHash: string;
   existing: boolean;
+  conflictResolution?: SkillImportConflictResolution;
 }
 
 interface CapturedMcp {
@@ -177,22 +179,36 @@ export const createTargetCaptureService = ({
         errors.push(`Skill ${targetName} has different content in multiple active locations`);
         continue;
       }
-      const contentHash = entries[0].contentHash;
-      const existing = librarySkills.find((skill) => skill.contentHash === contentHash);
-      const libraryId = existing?.id ?? uniqueId(
+      const requestedLibraryId = uniqueId(
         reservedSkillIds.has(safeId(targetName)) ? `${targetId}-${targetName}` : targetName,
         reservedSkillIds
       );
       const preferredEntry = entries.find((entry) => dirname(entry.path) === targetPaths.skillsDir);
       const sourcePath = preferredEntry?.path ?? entries[0].path;
       const sourcePaths = [...new Set(entries.map((entry) => entry.path))];
+      const importPreview = await skillLibraryStore.previewImport({
+        kind: "local",
+        input: { sourcePath, id: requestedLibraryId }
+      });
+      const identicalConflict = importPreview.conflicts.find(
+        (conflict) => conflict.contentIdentical
+      );
+      const existing = identicalConflict
+        ? librarySkills.find((skill) => skill.id === identicalConflict.existing.id)
+        : undefined;
+      const libraryId = existing?.id ?? requestedLibraryId;
+      const conflictResolution = !existing && importPreview.conflicts.length > 0
+        ? { action: "keep-both" as const, id: libraryId }
+        : undefined;
+      const contentHash = importPreview.incoming.contentHash;
       skills.push({
         targetName,
         libraryId,
         sourcePath,
         sourcePaths,
         contentHash,
-        existing: Boolean(existing)
+        existing: Boolean(existing),
+        conflictResolution
       });
       resources.push({
         kind: "skill",
@@ -201,7 +217,11 @@ export const createTargetCaptureService = ({
         sourcePath,
         libraryId,
         action: existing ? "reuse" : "import",
-        detail: sourcePaths.length > 1 ? `${sourcePaths.length} source copies stay unchanged` : undefined
+        detail: conflictResolution
+          ? `Import Target copy as ${libraryId}; existing same-name Library Skill stays unchanged`
+          : sourcePaths.length > 1
+            ? `${sourcePaths.length} source copies stay unchanged`
+            : undefined
       });
     }
 
@@ -335,7 +355,9 @@ export const createTargetCaptureService = ({
         const imported = await skillLibraryStore.importSkill({
           sourcePath: skill.sourcePath,
           id: skill.libraryId,
-          sourceType: "local"
+          sourceType: "local",
+          expectedContentHash: skill.contentHash,
+          conflictResolution: skill.conflictResolution
         });
         importedSkillPaths.push(imported.path);
       }

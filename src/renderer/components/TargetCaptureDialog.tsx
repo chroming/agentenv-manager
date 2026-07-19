@@ -218,9 +218,16 @@ export const TargetCaptureDialog = ({
                     <header><strong>{t(resourceKindLabels[group.kind])}</strong><span>{group.resources.length}</span></header>
                     {group.resources.map((resource) => {
                       const sourceCopyMatch = resource.detail?.match(/^(\d+) source copies stay unchanged$/);
+                      const alternateImportMatch = resource.detail?.match(
+                        /^Import Target copy as (.+); existing same-name Library Skill stays unchanged$/
+                      );
                       const detail = sourceCopyMatch
                         ? t("{{count}} source copies stay unchanged", { count: sourceCopyMatch[1] })
-                        : resource.detail;
+                        : alternateImportMatch
+                          ? t("Import Target copy as {{id}}; existing same-name Library Skill stays unchanged", {
+                              id: alternateImportMatch[1]
+                            })
+                          : resource.detail;
                       const fullDetail = [resource.sourcePath, resource.detail].filter(Boolean).join(" · ");
                       return (
                         <div className={`capture-resource capture-resource--${resource.action}`} key={`${resource.kind}:${resource.id}`}>

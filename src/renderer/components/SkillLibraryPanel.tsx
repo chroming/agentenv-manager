@@ -8,6 +8,8 @@ import {
 } from "react";
 import {
   CheckCircle2,
+  Circle,
+  CircleSlash2,
   Combine,
   ExternalLink,
   Folder,
@@ -27,7 +29,8 @@ import {
   Trash2,
   TriangleAlert,
   Users,
-  X
+  X,
+  XCircle
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -77,6 +80,20 @@ export type SkillUpdateCheckStatus = {
   message: string;
 };
 
+export type GitHubSkillImportItemStatus =
+  | "waiting"
+  | "reviewing"
+  | "importing"
+  | "imported"
+  | "failed"
+  | "skipped";
+
+export interface GitHubSkillImportProgress {
+  sourceUrl: string;
+  status: GitHubSkillImportItemStatus;
+  error?: string;
+}
+
 export interface PreparedSkillTarget {
   targetId: string;
   targetName: string;
@@ -103,7 +120,10 @@ interface SkillLibraryPanelProps {
   onImportUnmanaged(sourcePath: string): Promise<boolean>;
   onImportExternal(skill: SkillInventoryEntry): Promise<boolean>;
   onScanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
-  onImportGitHubSkills(inputs: GitHubSkillImportInput[]): Promise<GitHubSkillImportResult>;
+  onImportGitHubSkills(
+    inputs: GitHubSkillImportInput[],
+    onProgress?: (progress: GitHubSkillImportProgress) => void
+  ): Promise<GitHubSkillImportResult>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): Promise<boolean>;
   onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<void>;
@@ -313,6 +333,9 @@ export const SkillLibraryPanel = ({
   const [githubSelectedIds, setGithubSelectedIds] = useState<string[]>([]);
   const [githubCandidateIds, setGithubCandidateIds] = useState<Record<string, string>>({});
   const [githubImportResult, setGithubImportResult] = useState<GitHubSkillImportResult>();
+  const [githubImportProgress, setGithubImportProgress] = useState<
+    Record<string, GitHubSkillImportProgress>
+  >({});
   const [githubOperation, setGithubOperation] = useState<"scanning" | "importing">();
   const [localImportOperation, setLocalImportOperation] = useState(false);
   const [automaticCleanupKey, setAutomaticCleanupKey] = useState<string>();
@@ -394,6 +417,16 @@ export const SkillLibraryPanel = ({
     githubSelectedReadyCount === githubReadyCandidateIds.length;
   const githubSomeReadySelected =
     githubSelectedReadyCount > 0 && !githubAllReadySelected;
+  const githubImportProgressItems = Object.values(githubImportProgress);
+  const githubImportedProgressCount = githubImportProgressItems.filter(
+    (progress) => progress.status === "imported"
+  ).length;
+  const githubFailedImportCount = githubImportProgressItems.filter(
+    (progress) => progress.status === "failed"
+  ).length;
+  const githubSkippedImportCount = githubImportProgressItems.filter(
+    (progress) => progress.status === "skipped"
+  ).length;
   const dismissModal = () => {
     if (selectedUpdatePlan) {
       onCloseUpdatePreview();
@@ -567,6 +600,7 @@ export const SkillLibraryPanel = ({
     setGithubSelectedIds([]);
     setGithubCandidateIds({});
     setGithubImportResult(undefined);
+    setGithubImportProgress({});
     setGithubOperationError("");
     setGithubOperation(undefined);
   }, [activeTool]);
@@ -784,6 +818,7 @@ export const SkillLibraryPanel = ({
     setGithubOperation("scanning");
     setGithubOperationError("");
     setGithubImportResult(undefined);
+    setGithubImportProgress({});
     try {
       const result = await onScanGitHubSkills(url);
       setGithubScanResult(result);
@@ -809,6 +844,21 @@ export const SkillLibraryPanel = ({
     );
     setGithubOperation("importing");
     setGithubOperationError("");
+    setGithubImportResult(undefined);
+    setGithubImportProgress(
+      Object.fromEntries(
+        selected.map((candidate) => [
+          candidate.sourceUrl,
+          { sourceUrl: candidate.sourceUrl, status: "waiting" }
+        ])
+      )
+    );
+    const latestProgress = new Map<string, GitHubSkillImportProgress>(
+      selected.map((candidate) => [
+        candidate.sourceUrl,
+        { sourceUrl: candidate.sourceUrl, status: "waiting" as const }
+      ])
+    );
     try {
       const result = await onImportGitHubSkills(
         selected.map((candidate) => ({
@@ -816,25 +866,39 @@ export const SkillLibraryPanel = ({
           id: githubCandidateIds[candidate.id] || candidate.id,
           ref: candidate.ref,
           remotePath: candidate.remotePath
-        }))
+        })),
+        (progress) => {
+          latestProgress.set(progress.sourceUrl, progress);
+          setGithubImportProgress((current) => ({
+            ...current,
+            [progress.sourceUrl]: progress
+          }));
+        }
       );
       setGithubImportResult(result);
-      if (result.failed.length === 0) {
-        setGithubUrl("");
-        setGithubScanResult(undefined);
-        setGithubSelectedIds([]);
-        onCloseTool?.();
-      } else {
-        const importedIds = new Set(result.imported.map((skill) => skill.id));
-        setGithubSelectedIds((current) =>
-          current.filter((candidateId) => {
-            const resolvedId = githubCandidateIds[candidateId] || candidateId;
-            return !importedIds.has(resolvedId);
-          })
-        );
-      }
     } catch (error) {
-      setGithubOperationError(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      const failed = selected.filter((candidate) =>
+        latestProgress.get(candidate.sourceUrl)?.status !== "imported"
+      );
+      setGithubOperationError(message);
+      setGithubImportProgress((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          failed.map((candidate) => [
+            candidate.sourceUrl,
+            { sourceUrl: candidate.sourceUrl, status: "failed" as const, error: message }
+          ])
+        )
+      }));
+      setGithubImportResult({
+        imported: [],
+        failed: failed.map((candidate) => ({
+          id: githubCandidateIds[candidate.id] || candidate.id,
+          sourceUrl: candidate.sourceUrl,
+          error: message
+        }))
+      });
     } finally {
       setGithubOperation(undefined);
     }
@@ -3003,7 +3067,7 @@ export const SkillLibraryPanel = ({
                       <button
                         className="secondary-action"
                         type="button"
-                        disabled={Boolean(githubOperation)}
+                        disabled={Boolean(githubOperation) || Boolean(githubImportResult)}
                         onClick={() => {
                           setGithubScanResult(undefined);
                           setGithubImportResult(undefined);
@@ -3025,7 +3089,11 @@ export const SkillLibraryPanel = ({
                           type="checkbox"
                           aria-label={t("Select all discovered skills")}
                           checked={githubAllReadySelected}
-                          disabled={githubReadyCandidateIds.length === 0 || Boolean(githubOperation)}
+                          disabled={
+                            githubReadyCandidateIds.length === 0 ||
+                            Boolean(githubOperation) ||
+                            Boolean(githubImportResult)
+                          }
                           ref={(checkbox) => {
                             if (checkbox) {
                               checkbox.indeterminate = githubSomeReadySelected;
@@ -3039,8 +3107,40 @@ export const SkillLibraryPanel = ({
                         />
                         <span>{t("Select all")}</span>
                       </label>
-                      <span className="github-selection-count" role="status">
-                        {t("{{count}} selected", { count: githubSelectedIds.length })}
+                      <span
+                        className={`github-selection-count${
+                          githubImportResult
+                            ? githubFailedImportCount > 0 || githubSkippedImportCount > 0
+                              ? " is-partial"
+                              : " is-complete"
+                            : ""
+                        }`}
+                        role="status"
+                      >
+                        {githubImportResult ? (
+                          <>
+                            {githubFailedImportCount > 0 || githubSkippedImportCount > 0 ? (
+                              <TriangleAlert size={14} strokeWidth={2.2} aria-hidden="true" />
+                            ) : (
+                              <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden="true" />
+                            )}
+                            {t(
+                              githubFailedImportCount > 0 && githubSkippedImportCount > 0
+                                ? "{{imported}} imported · {{failed}} failed · {{skipped}} skipped"
+                                : githubFailedImportCount > 0
+                                  ? "{{imported}} imported · {{failed}} failed"
+                                  : githubSkippedImportCount > 0
+                                    ? "{{imported}} imported · {{skipped}} skipped"
+                                    : "All {{count}} skills imported",
+                              {
+                                count: githubImportedProgressCount,
+                                imported: githubImportedProgressCount,
+                                failed: githubFailedImportCount,
+                                skipped: githubSkippedImportCount
+                              }
+                            )}
+                          </>
+                        ) : t("{{count}} selected", { count: githubSelectedIds.length })}
                       </span>
                     </div>
                     <div className="github-candidate-list">
@@ -3050,6 +3150,7 @@ export const SkillLibraryPanel = ({
                       {githubScanResult.candidates.map((candidate) => {
                         const selectable = candidate.status === "ready";
                         const checked = githubSelectedIds.includes(candidate.id);
+                        const progress = githubImportProgress[candidate.sourceUrl];
                         const failure = githubImportResult?.failed.find(
                           (item) => item.sourceUrl === candidate.sourceUrl
                         );
@@ -3058,20 +3159,43 @@ export const SkillLibraryPanel = ({
                             className={`github-candidate-row${selectable ? "" : " is-disabled"}`}
                             key={candidate.sourceUrl}
                           >
-                            <input
-                              type="checkbox"
-                              aria-label={t("Select {{name}}", { name: candidate.name })}
-                              disabled={!selectable || Boolean(githubOperation)}
-                              checked={checked}
-                              onChange={(event) => {
-                                const checked = event.currentTarget.checked;
-                                setGithubSelectedIds((current) =>
-                                  checked
-                                    ? [...current, candidate.id]
-                                    : current.filter((id) => id !== candidate.id)
-                                );
-                              }}
-                            />
+                            {progress ? (
+                              <span
+                                className={`github-import-state github-import-state--${progress.status}`}
+                                role="status"
+                                aria-label={t("{{name}}: {{status}}", {
+                                  name: candidate.name,
+                                  status: t(progress.status)
+                                })}
+                              >
+                                {progress.status === "waiting" ? (
+                                  <Circle size={16} strokeWidth={2} aria-hidden="true" />
+                                ) : progress.status === "reviewing" || progress.status === "importing" ? (
+                                  <LoaderCircle className="is-spinning" size={16} aria-hidden="true" />
+                                ) : progress.status === "imported" ? (
+                                  <CheckCircle2 size={16} strokeWidth={2.2} aria-hidden="true" />
+                                ) : progress.status === "skipped" ? (
+                                  <CircleSlash2 size={16} strokeWidth={2.1} aria-hidden="true" />
+                                ) : (
+                                  <XCircle size={16} strokeWidth={2.2} aria-hidden="true" />
+                                )}
+                              </span>
+                            ) : (
+                              <input
+                                type="checkbox"
+                                aria-label={t("Select {{name}}", { name: candidate.name })}
+                                disabled={!selectable || Boolean(githubOperation) || Boolean(githubImportResult)}
+                                checked={checked}
+                                onChange={(event) => {
+                                  const checked = event.currentTarget.checked;
+                                  setGithubSelectedIds((current) =>
+                                    checked
+                                      ? [...current, candidate.id]
+                                      : current.filter((id) => id !== candidate.id)
+                                  );
+                                }}
+                              />
+                            )}
                             <span className="resource-avatar resource-avatar--github" aria-hidden="true">
                               <GitBranch size={16} strokeWidth={2.2} />
                             </span>
@@ -3084,13 +3208,17 @@ export const SkillLibraryPanel = ({
                                 tooltipClassName="library-source-tooltip"
                               />
                               {candidate.description ? <small>{candidate.description}</small> : null}
-                              {failure ? <small className="field-error">{failure.error}</small> : null}
+                              {progress ? (
+                                <small className={progress.status === "failed" ? "field-error" : "github-import-state-label"}>
+                                  {progress.error ?? t(progress.status)}
+                                </small>
+                              ) : failure ? <small className="field-error">{failure.error}</small> : null}
                             </span>
                             {selectable ? (
                               <input
                                 className="github-candidate-id"
                                 aria-label={t("Library ID for {{name}}", { name: candidate.name })}
-                                disabled={Boolean(githubOperation)}
+                                disabled={Boolean(githubOperation) || Boolean(githubImportResult)}
                                 value={githubCandidateIds[candidate.id] ?? candidate.id}
                                 onChange={(event) => {
                                   const value = event.currentTarget.value;
@@ -3120,12 +3248,12 @@ export const SkillLibraryPanel = ({
                 ) : null}
                 <footer className="preview-actions import-dialog-actions">
                   <button
-                    className="secondary-action"
+                    className={githubImportResult ? "primary-action" : "secondary-action"}
                     type="button"
                     disabled={Boolean(githubOperation) || localImportOperation}
                     onClick={onCloseTool}
                   >
-                    {t("Cancel")}
+                    {t(githubImportResult ? "Close" : "Cancel")}
                   </button>
                   {importSource === "local" ? (
                       <button
@@ -3152,7 +3280,7 @@ export const SkillLibraryPanel = ({
                       >
                         {t(githubOperation === "scanning" ? "Scanning..." : "Scan")}
                       </button>
-                  ) : (
+                  ) : githubImportResult ? null : (
                     <button
                       className="primary-action"
                       type="button"

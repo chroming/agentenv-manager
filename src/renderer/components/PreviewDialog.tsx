@@ -20,8 +20,8 @@ interface PreviewDialogProps {
   cancelLabel?: string;
   errorMessage?: string;
   targetNames?: TargetNameIndex;
-  managedDriftAcknowledged?: boolean;
-  onManagedDriftAcknowledgedChange?(acknowledged: boolean): void;
+  replacementAcknowledged?: boolean;
+  onReplacementAcknowledgedChange?(acknowledged: boolean): void;
   omissionsAcknowledged?: boolean;
   onOmissionsAcknowledgedChange?(acknowledged: boolean): void;
   onOpenRecovery?(): void;
@@ -64,6 +64,16 @@ const prettifyIssue = (
     };
   }
 
+  const unmanagedSkillMatch = message.match(
+    /^skill target already exists and is not AgentEnv-owned: (.+)$/i
+  );
+  if (unmanagedSkillMatch) {
+    return {
+      title: t("Existing unmanaged Skill will be replaced"),
+      detail: unmanagedSkillMatch[1]
+    };
+  }
+
   return { title: message };
 };
 
@@ -94,8 +104,8 @@ export const PreviewDialog = ({
   cancelLabel = "Cancel",
   errorMessage,
   targetNames = {},
-  managedDriftAcknowledged = false,
-  onManagedDriftAcknowledgedChange,
+  replacementAcknowledged = false,
+  onReplacementAcknowledgedChange,
   omissionsAcknowledged = false,
   onOmissionsAcknowledgedChange,
   onOpenRecovery,
@@ -239,6 +249,19 @@ export const PreviewDialog = ({
   const managedDriftErrors = preview.errors.filter((error) =>
     error.startsWith("External changes detected in AgentEnv-managed")
   );
+  const replaceableTargetPaths = new Set(
+    isActivationPreview ? (preview.replaceableTargetPaths ?? []) : []
+  );
+  const unmanagedReplacementErrors = preview.errors.filter((error) => {
+    const path = error.match(
+      /^skill target already exists and is not AgentEnv-owned: (.+)$/i
+    )?.[1];
+    return Boolean(path && replaceableTargetPaths.has(path));
+  });
+  const protectedReplacementErrors = [
+    ...managedDriftErrors,
+    ...unmanagedReplacementErrors
+  ];
   const omissionReasons = new Set(
     isActivationPreview ? (preview.omissions ?? []).map((omission) => omission.reason) : []
   );
@@ -425,23 +448,23 @@ export const PreviewDialog = ({
           </div>
         </details>
       ) : null}
-      {managedDriftErrors.length > 0 && onManagedDriftAcknowledgedChange ? (
-        <section className="preview-drift-recovery" aria-label={t("External change recovery")}>
+      {protectedReplacementErrors.length > 0 && onReplacementAcknowledgedChange ? (
+        <section className="preview-drift-recovery" aria-label={t("Protected target changes")}>
           <div>
-            <strong>{t("External changes are protected")}</strong>
-            <p>{t("Cancel keeps the target unchanged. Continuing creates a backup, then replaces the managed resources shown above.")}</p>
+            <strong>{t("Existing target resources are protected")}</strong>
+            <p>{t("Cancel keeps the target unchanged. Continuing creates a backup, then replaces the resources shown above.")}</p>
           </div>
           <label>
             <input
               type="checkbox"
-              checked={managedDriftAcknowledged}
-              onChange={(event) => onManagedDriftAcknowledgedChange(event.currentTarget.checked)}
+              checked={replacementAcknowledged}
+              onChange={(event) => onReplacementAcknowledgedChange(event.currentTarget.checked)}
             />
             {t("I understand; back up and replace these changes")}
           </label>
           {onOpenRecovery ? (
             <div className="preview-drift-actions">
-              {onAdoptTargetChanges ? (
+              {onAdoptTargetChanges && managedDriftErrors.length > 0 ? (
                 <button className="secondary-action" type="button" onClick={onAdoptTargetChanges}>
                   {t("Adopt compatible changes")}
                 </button>

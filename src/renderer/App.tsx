@@ -103,6 +103,7 @@ import {
   type LibraryTab
 } from "./components/ProfileSidebar";
 import {
+  type GitHubSkillImportProgress,
   SkillLibraryPanel,
   type PreparedSkillTarget,
   type SkillUpdateCheckStatus
@@ -608,7 +609,7 @@ const AppContent = ({
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
-  const [replaceManagedDrift, setReplaceManagedDrift] = useState(false);
+  const [replaceProtectedTargetChanges, setReplaceProtectedTargetChanges] = useState(false);
   const [acceptCrossTargetOmissions, setAcceptCrossTargetOmissions] = useState(false);
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
@@ -629,6 +630,7 @@ const AppContent = ({
   const [importingOwnedSkillIndex, setImportingOwnedSkillIndex] = useState<number>();
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
+  const [profileMetadataSavingId, setProfileMetadataSavingId] = useState<string>();
   const [isProfilePreviewing, setIsProfilePreviewing] = useState(false);
   const [isProfileApplying, setIsProfileApplying] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
@@ -744,7 +746,10 @@ const AppContent = ({
   }, [settingsSaveStatus]);
 
   useEffect(() => {
-    if (profileSaveStatus !== "Profile saved") {
+    if (
+      profileSaveStatus !== "Profile saved" &&
+      profileSaveStatus !== "Profile details saved"
+    ) {
       return undefined;
     }
     const timeout = window.setTimeout(() => setProfileSaveStatus(""), 2400);
@@ -1292,7 +1297,6 @@ const AppContent = ({
       preview.conflicts.find((conflict) => conflict.sourceUpdateAvailable) ??
       preview.conflicts.find((conflict) => conflict.identical) ??
       preview.conflicts[0];
-    setSkillLibraryTool(undefined);
     setSelectedSkillConflictId(preferredConflict.existing.id);
     setSkillImportAlternateId(preview.suggestedId);
     setSkillImportDecision(preferredConflict.contentIdentical ? "keep-both" : "replace");
@@ -1386,34 +1390,89 @@ const AppContent = ({
     }
   };
 
+  const acceptProfileMetadata = (saved: ProfileDetail, previousName: string) => {
+    const summary: ProfileSummary = {
+      id: saved.id,
+      targetId: saved.manifest.targetId,
+      name: saved.manifest.name,
+      description: saved.manifest.description,
+      createdAt: saved.manifest.createdAt,
+      iconKey: saved.manifest.iconKey,
+      contentHash: saved.contentHash,
+      targetContentHashes: saved.targetContentHashes
+    };
+    setProfiles((current) =>
+      current.map((profile) => profile.id === saved.id ? summary : profile)
+    );
+    const versions = profileLibraryVersions[saved.id];
+    setSkillUsage((current) => reconcileProfileUsage(
+      current,
+      Object.keys(versions?.skills ?? {}),
+      Object.keys(versions?.skills ?? {}),
+      previousName,
+      saved.manifest.name
+    ));
+    setMcpUsage((current) => reconcileProfileUsage(
+      current,
+      Object.keys(versions?.mcp ?? {}),
+      Object.keys(versions?.mcp ?? {}),
+      previousName,
+      saved.manifest.name
+    ));
+    setTargetStates((current) =>
+      current.map((state) =>
+        state.activeProfileId === saved.id
+          ? { ...state, activeProfileName: saved.manifest.name }
+          : state
+      )
+    );
+    setDraftProfile((current) =>
+      current?.id === saved.id
+        ? {
+            ...current,
+            manifest: {
+              ...current.manifest,
+              name: saved.manifest.name,
+              description: saved.manifest.description,
+              iconKey: saved.manifest.iconKey
+            },
+            contentHash: saved.contentHash,
+            targetContentHashes: saved.targetContentHashes
+          }
+        : current
+    );
+    setProfileSaveStatus("Profile details saved");
+  };
+
   const changeProfileIconNow = async (profileId: string, iconKey: ResourceIconKey) => {
-    if (draftProfile?.id === profileId) {
-      updateDraftProfile({
-        ...draftProfile,
-        manifest: { ...draftProfile.manifest, iconKey }
-      });
+    if (profileMetadataSavingId === profileId) {
       return;
     }
-    setBusy(true);
     setError(undefined);
+    setProfileMetadataSavingId(profileId);
+    if (draftProfile?.id === profileId) {
+      setProfileSaveStatus("Saving profile details");
+    }
     try {
-      const profile = await window.agentEnv.readProfile(profileId);
-      setActiveWorkspace("profiles");
-      setSelectedProfileId(profileId);
-      setSelectedTargetId((current) => current ?? profile.manifest.targetId);
-      updateDraftProfile({
-        ...profile,
-        manifest: { ...profile.manifest, iconKey }
+      const previousName =
+        profiles.find((profile) => profile.id === profileId)?.name ??
+        draftProfile?.manifest.name ??
+        profileId;
+      const saved = await window.agentEnv.updateProfileMetadata({
+        id: profileId,
+        iconKey
       });
+      acceptProfileMetadata(saved, previousName);
     } catch (unknownError) {
+      setProfileSaveStatus("");
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
-      setBusy(false);
+      setProfileMetadataSavingId((current) => current === profileId ? undefined : current);
     }
   };
 
   const changeProfileIcon = (profileId: string, iconKey: ResourceIconKey) => {
-    guardProfileAction("change the profile icon", () => changeProfileIconNow(profileId, iconKey));
+    void changeProfileIconNow(profileId, iconKey);
   };
 
   const saveDraft = async () => {
@@ -1665,15 +1724,13 @@ const AppContent = ({
           setProfileCaptureStatus(t("{{name}} created. Target unchanged.", { name: saved.manifest.name }));
         }
       } else if (draftProfile) {
-        const updatedProfile: ProfileDetail = {
-          ...draftProfile,
-          manifest: {
-            ...draftProfile.manifest,
-            name,
-            description
-          }
-        };
-        updateDraftProfile(updatedProfile);
+        setProfileSaveStatus("Saving profile details");
+        const saved = await window.agentEnv.updateProfileMetadata({
+          id: draftProfile.id,
+          name,
+          description
+        });
+        acceptProfileMetadata(saved, draftProfile.manifest.name);
       }
       setActiveComposerSection(undefined);
       setActiveWorkspace("profiles");
@@ -1686,6 +1743,7 @@ const AppContent = ({
       if (isTargetCapture) {
         setProfileCaptureError(message);
       } else {
+        setProfileSaveStatus("");
         setError(message);
       }
     } finally {
@@ -1981,9 +2039,6 @@ const AppContent = ({
     (target) => target.id === draftProfile?.manifest.targetId
   );
   const normalizedProfileSearch = profileSearch.trim().toLowerCase();
-  const currentProfileId = targetStates.find(
-    (state) => state.targetId === selectedTargetId
-  )?.activeProfileId;
   const visibleProfiles = profiles
     .filter((profile) => {
       if (normalizedProfileSearch.length === 0) {
@@ -2110,20 +2165,34 @@ const AppContent = ({
                           ? t("Select a Target")
                           : t(readiness.message);
   const applyDisabled =
-    !draftProfile || !selectedTarget || busy || isProfileDirty || readiness.status === "applied";
+    !draftProfile ||
+    !selectedTarget ||
+    busy ||
+    profileMetadataSavingId === draftProfile.id ||
+    isProfileDirty ||
+    readiness.status === "applied";
   const applyDescription = !draftProfile
     ? t("Select a profile before previewing changes")
     : !selectedTarget
       ? t("Select a target before previewing changes")
       : busy
         ? t("An action is in progress")
+        : profileMetadataSavingId === draftProfile.id
+          ? t("Saving profile details")
         : t(readiness.message);
-  const previewHasOnlyManagedDrift = Boolean(
+  const previewReplaceableTargetPaths = new Set(preview?.replaceableTargetPaths ?? []);
+  const previewHasOnlyReplaceableErrors = Boolean(
     preview &&
       preview.errors.length > 0 &&
-      preview.errors.every((item) =>
-        item.startsWith("External changes detected in AgentEnv-managed")
-      )
+      preview.errors.every((item) => {
+        if (item.startsWith("External changes detected in AgentEnv-managed")) {
+          return true;
+        }
+        const path = item.match(
+          /^skill target already exists and is not AgentEnv-owned: (.+)$/i
+        )?.[1];
+        return Boolean(path && previewReplaceableTargetPaths.has(path));
+      })
   );
   const canApply = Boolean(
     preview &&
@@ -2131,7 +2200,8 @@ const AppContent = ({
         preview.resourceChanges.length > 0 ||
         preview.sharedSkillPreparationChanged ||
         preview.targetStateChanged) &&
-      (preview.errors.length === 0 || (previewHasOnlyManagedDrift && replaceManagedDrift)) &&
+      (preview.errors.length === 0 ||
+        (previewHasOnlyReplaceableErrors && replaceProtectedTargetChanges)) &&
       (!preview.requiresOmissionAcknowledgement || acceptCrossTargetOmissions) &&
       localValidationErrors.length === 0 &&
       !rollbackPreview &&
@@ -2169,7 +2239,7 @@ const AppContent = ({
           : []),
         ...localValidationErrors
       ];
-      setReplaceManagedDrift(false);
+      setReplaceProtectedTargetChanges(false);
       setAcceptCrossTargetOmissions(false);
       setPreview({
         ...nextPreview,
@@ -2220,7 +2290,8 @@ const AppContent = ({
     setProfileSaveStatus("");
     try {
       const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id, {
-        allowManagedDrift: replaceManagedDrift,
+        allowManagedDrift: replaceProtectedTargetChanges,
+        allowUnmanagedSkillReplacement: replaceProtectedTargetChanges,
         allowOmissions: acceptCrossTargetOmissions
       });
       if (!result.ok) {
@@ -2828,7 +2899,8 @@ const AppContent = ({
     window.agentEnv.scanGitHubSkills(url);
 
   const importGitHubSkills = async (
-    inputs: GitHubSkillImportInput[]
+    inputs: GitHubSkillImportInput[],
+    onProgress?: (progress: GitHubSkillImportProgress) => void
   ): Promise<GitHubSkillImportResult> => {
     setBusy(true);
     setError(undefined);
@@ -2837,26 +2909,37 @@ const AppContent = ({
       let updatedSourceCount = 0;
       for (const input of inputs) {
         try {
+          onProgress?.({ sourceUrl: input.url, status: "reviewing" });
           const prepared = await prepareSkillImport({ kind: "github", input });
-          if (!prepared || prepared.kind !== "github") continue;
+          if (!prepared || prepared.kind !== "github") {
+            onProgress?.({ sourceUrl: input.url, status: "skipped" });
+            continue;
+          }
           if (prepared.input.conflictResolution?.action === "update-source") {
             updatedSourceCount += 1;
           }
-          result.imported.push(
-            await window.agentEnv.importGitHubSkillToLibrary(prepared.input)
-          );
+          onProgress?.({ sourceUrl: input.url, status: "importing" });
+          const imported = await window.agentEnv.importGitHubSkillToLibrary(prepared.input);
+          result.imported.push(imported);
+          onProgress?.({ sourceUrl: input.url, status: "imported" });
           setPendingSkillImport(undefined);
         } catch (importError) {
           setPendingSkillImport(undefined);
+          const message = importError instanceof Error ? importError.message : String(importError);
           result.failed.push({
             id: input.id ?? "skill",
             sourceUrl: input.url,
-            error: importError instanceof Error ? importError.message : String(importError)
+            error: message
           });
+          onProgress?.({ sourceUrl: input.url, status: "failed", error: message });
         }
       }
       setSelectedSkillUpdatePlan(undefined);
-      await refreshProfiles({ checkSkillUpdates: false });
+      try {
+        await refreshProfiles({ checkSkillUpdates: false });
+      } catch (refreshError) {
+        setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
+      }
       if (result.imported.length > 0) {
         setSkillUpdateCheckStatus({
           state: result.failed.length > 0 ? "info" : "success",
@@ -2871,10 +2954,6 @@ const AppContent = ({
         });
       }
       return result;
-    } catch (unknownError) {
-      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
-      setError(message);
-      throw unknownError;
     } finally {
       setBusy(false);
     }
@@ -3554,9 +3633,11 @@ const AppContent = ({
       : profileSaveStatus
         ? {
             kind:
-              profileSaveStatus === "Profile saved"
+              profileSaveStatus === "Profile saved" ||
+              profileSaveStatus === "Profile details saved"
                 ? "success"
-                : profileSaveStatus === "Saving profile"
+                : profileSaveStatus === "Saving profile" ||
+                    profileSaveStatus === "Saving profile details"
                   ? "loading"
                   : "info",
             title: profileSaveStatus
@@ -3941,9 +4022,6 @@ const AppContent = ({
                         <span className="profile-row__title">
                           <span className="profile-row__name">{profile.name}</span>
                           {isSelected && isProfileDirty ? <strong>{t("Unsaved")}</strong> : null}
-                          {profile.id === currentProfileId && !(isSelected && isProfileDirty) ? (
-                            <strong className="profile-row__current">{t("Current")}</strong>
-                          ) : null}
                         </span>
                         <OverflowTooltip
                           ariaLabel={t("Full profile description {{id}}", { id: profile.id })}
@@ -4031,12 +4109,7 @@ const AppContent = ({
                         iconKey={draftProfile.manifest.iconKey ?? "folder"}
                         label={draftProfile.manifest.name}
                         triggerLabel={t("Change icon for profile {{id}}", { id: draftProfile.id })}
-                        onChange={(iconKey) =>
-                          updateDraftProfile({
-                            ...draftProfile,
-                            manifest: { ...draftProfile.manifest, iconKey }
-                          })
-                        }
+                        onChange={(iconKey) => changeProfileIcon(draftProfile.id, iconKey)}
                       />
                       <div className="profile-hero__body">
                         <div className="profile-hero__title">
@@ -4079,7 +4152,12 @@ const AppContent = ({
                               className={`save-button${isProfileDirty ? " is-primary" : ""}`}
                               type="button"
                               aria-busy={isProfileSaving}
-                              disabled={busy || isProfileSaving || !isProfileDirty}
+                              disabled={
+                                busy ||
+                                isProfileSaving ||
+                                profileMetadataSavingId === draftProfile.id ||
+                                !isProfileDirty
+                              }
                               onClick={saveSelectedProfile}
                             >
                               {isProfileSaving ? (
@@ -4347,11 +4425,11 @@ const AppContent = ({
                 preview={preview}
                 targetNames={targetNames}
                 title={t("Apply preview for {{name}}", { name: activeTargetName })}
-                confirmLabel={t(replaceManagedDrift ? "Back up and replace" : "Apply profile")}
+                confirmLabel={t(replaceProtectedTargetChanges ? "Back up and replace" : "Apply profile")}
                 confirmDisabled={!canApply || busy}
                 confirmBusy={isProfileApplying}
-                managedDriftAcknowledged={replaceManagedDrift}
-                onManagedDriftAcknowledgedChange={setReplaceManagedDrift}
+                replacementAcknowledged={replaceProtectedTargetChanges}
+                onReplacementAcknowledgedChange={setReplaceProtectedTargetChanges}
                 omissionsAcknowledged={acceptCrossTargetOmissions}
                 onOmissionsAcknowledgedChange={setAcceptCrossTargetOmissions}
                 onOpenRecovery={() => {
@@ -4364,7 +4442,7 @@ const AppContent = ({
                     : undefined
                 }
                 onCancel={() => {
-                  setReplaceManagedDrift(false);
+                  setReplaceProtectedTargetChanges(false);
                   setAcceptCrossTargetOmissions(false);
                   setPreview(undefined);
                 }}

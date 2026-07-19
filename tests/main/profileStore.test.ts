@@ -112,6 +112,31 @@ describe("profile store", () => {
     ).toMatchObject({ createdAt: profile.manifest.createdAt });
   });
 
+  it("updates profile metadata without persisting unsaved environment content", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-metadata-"));
+    await writeProfile(root);
+    const store = createProfileStore({ appDataRoot: root });
+
+    const updated = await store.updateProfileMetadata({
+      id: "daily-coding",
+      name: "Review Focus",
+      description: "Review metadata",
+      iconKey: "shield"
+    });
+
+    expect(updated.manifest).toMatchObject({
+      name: "Review Focus",
+      description: "Review metadata",
+      iconKey: "shield"
+    });
+    await expect(
+      readFile(join(root, "profiles", "daily-coding", "AGENTS.md"), "utf8")
+    ).resolves.toBe("# Agent\n");
+    await expect(
+      readFile(join(root, "profiles", "daily-coding", "mcp.toml"), "utf8")
+    ).resolves.toBe("[mcp_servers.docs]\n");
+  });
+
   it("rejects unsafe profile ids", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-"));
     const store = createProfileStore({ appDataRoot: root });

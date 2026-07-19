@@ -160,6 +160,39 @@ describe("PreviewDialog", () => {
     expect(onAcknowledgedChange).toHaveBeenCalledWith(true);
   });
 
+  it("presents an unmanaged Skill destination as an explicit backup replacement", () => {
+    const path = "/Users/test/.claude/skills/bytedcli";
+    const onAcknowledgedChange = vi.fn();
+    render(
+      <PreviewDialog
+        targetNames={{ "claude-code": "Claude Code" }}
+        preview={{
+          ...preview,
+          targetId: "claude-code",
+          errors: [`Skill target already exists and is not AgentEnv-owned: ${path}`],
+          replaceableTargetPaths: [path],
+          resourceChanges: [
+            { kind: "skill", action: "replace", name: "bytedcli", path }
+          ]
+        }}
+        replacementAcknowledged={false}
+        onReplacementAcknowledgedChange={onAcknowledgedChange}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Existing unmanaged Skill will be replaced")).toBeInTheDocument();
+    expect(screen.getAllByText(path).length).toBeGreaterThan(0);
+    expect(screen.getByText("Existing target resources are protected")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "I understand; back up and replace these changes"
+      })
+    );
+    expect(onAcknowledgedChange).toHaveBeenCalledWith(true);
+  });
+
   it("dismisses modal previews with Escape and backdrop clicks", async () => {
     const onCancel = vi.fn();
     render(<PreviewDialog preview={preview} onCancel={onCancel} onConfirm={vi.fn()} />);

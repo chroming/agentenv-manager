@@ -54,6 +54,7 @@ const api: AgentEnvApi = {
   listProfiles: () => ipcRenderer.invoke("profiles:list"),
   readProfile: (id) => ipcRenderer.invoke("profiles:read", id),
   saveProfile: (input) => ipcRenderer.invoke("profiles:save", input),
+  updateProfileMetadata: (input) => ipcRenderer.invoke("profiles:update-metadata", input),
   createProfile: (input) => ipcRenderer.invoke("profiles:create", input),
   previewCreateProfileFromTarget: (targetId) =>
     ipcRenderer.invoke("profiles:preview-create-from-target", targetId),

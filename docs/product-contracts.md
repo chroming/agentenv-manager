@@ -106,6 +106,11 @@ A Profile has one **native Target format** used to edit and validate native Adva
 
 Source of truth: the saved Profile directory in AgentEnv data.
 
+Profile name, description, and icon are identity metadata rather than environment payload. Editing
+them MUST persist immediately and independently without saving a dirty Instructions, Skills, MCP,
+or Advanced draft, changing deployment readiness, or writing any Target. Environment content keeps
+the explicit whole-Profile Save contract below.
+
 Each Library Skill reference has a Profile-scoped enabled state. Missing legacy state means enabled.
 
 - Turning a Skill off MUST preserve the reference and its Library content; it removes the Skill only from that Profile's effective payload.
@@ -223,7 +228,7 @@ Rules:
 - When no Target is selected, the visible Target selector remains the single selection entry point. When the Profile is dirty, the visible Save button remains the single persistence action.
 - Edit, Duplicate, Delete, Save, Target selection, and Apply are selected-Profile commands and MUST remain inside the selected Profile surface. The Profiles page header owns only page creation.
 - Every Profile row MUST list all Targets currently using that Profile, even when legacy deployment state has no application timestamp. Each Target is visibly distinguished as current, pending, or needing attention.
-- The Profile list is always ordered by persisted creation time, newest first. Selection, the chosen Apply Target, Current state, Save, and Apply MUST NOT reorder it.
+- The Profile list is always ordered by persisted creation time, newest first. Selection, the chosen Apply Target, deployment state, Save, and Apply MUST NOT reorder it.
 - Selected-Target lifecycle status belongs beside Save and Apply inside the selected Profile surface. It MUST NOT be repeated as a separate page-level summary strip.
 - Unsaved changes MUST block Preview and Apply.
 - Switching Profile, Target, workspace, or closing the window with a dirty draft MUST offer Save, Discard, or Cancel.
@@ -232,7 +237,8 @@ Rules:
 - When exactly one installed Target is available, Profiles MUST show it as stable context instead of an option menu. When multiple installed Targets are available, Target selection remains available.
 - Target selection is scoped to the selected Profile rather than the Profiles page. During an app session, each Profile remembers its own selected Target; otherwise the most recent active Target for that Profile is preferred, followed by its native Target. Choosing a Target for one Profile MUST NOT change another Profile's destination context.
 - An empty managed Instructions value is a valid complete Profile state. Preview MUST describe it as clearing the managed instruction file rather than blocking Apply.
-- On entry, Profiles SHOULD select the chosen Target's active Profile, pin it first in the list, mark it Current, and open its Skills section for the common single-Target workflow.
+- On entry, Profiles SHOULD select the chosen Target's active Profile and open its Skills section for the common single-Target workflow. Selection MUST NOT add a redundant `Current` badge or pin and reorder the row; the row's Target deployment badges remain the source of application state.
+- Profile name, description, and icon changes auto-save as identity metadata. They MUST preserve any unsaved environment draft and MUST NOT enable the environment Save button by themselves.
 - Profile Skills MUST expose enabled and disabled Library references in one compact list. Each row shows its display name, Library path, exact Library content revision, source kind, install name when different, and current state without forcing a details dialog. When the selected Target currently runs that Profile, the row also shows its applied content revision; a mismatch, missing install, or pending removal is `Apply pending`. Ownership, update-source policy, source-check result, Profile availability, and Target deployment are separate dimensions: the action-state column shows only exceptional or currently actionable states, while routine ownership and revisions remain metadata. `Not tracked` MUST NOT be presented as an ownership or management state. Check checks only enabled tracked references in that Profile; Add opens a searchable Library-only picker that identifies source, revision, and path and omits already attached or globally disabled Skills; Remove detaches a reference from the Profile without deleting Library content. A missing reference disables its availability control and offers Relink or Remove. Row menus MUST fit their longest localized command at the minimum viewport.
 - Legacy Profile-owned Skills MUST be labeled as Profile-only with revision unavailable. `Import to Library` creates an independent canonical Library copy, replaces the draft entry with a Library reference, preserves the existing Profile file, exposes local working and error states, and still requires Save before changing the persisted Profile.
 - Updating from Profile Skills still updates the global Library copy. The update confirmation MUST disclose how many Profiles reference it and whether Copy or Live link mode changes installed Targets immediately.
@@ -363,7 +369,12 @@ It MUST:
 7. Record one history entry only after success.
 8. Refresh visible Profile and Target state after completion.
 
-Switching Profiles MUST remove managed external resources owned by the previously active Profile when they are absent from the new Profile. Omitted native Advanced settings follow the ownership-release rule above and remain in place. Unmanaged resources MUST remain untouched unless they occupy a required destination, in which case Apply is blocked.
+Switching Profiles MUST remove managed external resources owned by the previously active Profile when they are absent from the new Profile. Omitted native Advanced settings follow the ownership-release rule above and remain in place. Unmanaged resources MUST remain untouched unless they occupy a required destination. A fresh Preview MAY offer `Back up and replace` for an exact unmanaged Skill destination required by the Profile; without that explicit acknowledgement Apply remains blocked.
+
+An unmanaged same-name Skill replacement MUST be scoped to exact paths named by the fresh Preview,
+included in the operation Backup, and installed atomically as an AgentEnv-owned resource. A Skill
+owned by another manager, protected by an Ignore rule, or not named by that Preview remains a hard
+conflict and MUST NOT be admitted by the replacement acknowledgement.
 
 Takeover is the first Apply to an unmanaged Target. Preview MUST disclose:
 
@@ -476,7 +487,9 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - GitHub imports default to the `Tracked` update policy.
 - A GitHub URL MAY identify a Skill directory, a containing directory, or a repository. Containing-directory and repository imports MUST scan recursively for valid top-level Skill roots before any Library write.
 - Scan results MUST appear in a confirmation dialog, select all importable candidates by default, allow individual candidates to be excluded, and identify already-imported or duplicate candidates without selecting them. The bulk-selection control MUST expose all, mixed, and none states while keeping its label and selected count aligned without overlap at the minimum supported viewport.
-- A batch import MUST preserve successful candidates when another candidate fails and MUST report each failure against its source.
+- A batch import MUST process selected candidates sequentially in the same dialog. Each candidate advances through distinct queued, reviewing, writing, completed, failed, or skipped states; only the current candidate may open the conditional duplicate review.
+- A candidate becomes completed only after its canonical Library write has returned successfully. Completed candidates remain visible and preserved when a later candidate fails or is skipped.
+- After the final candidate, the dialog MUST show one aggregate success or partial-failure result and remain open until the user explicitly closes it. A batch import MUST report each failure against its source.
 - Every Skill has an independent `Tracked` or `Untracked` update policy. `Untracked` excludes that Skill from manual, startup, and scheduled checks without reading its local source or contacting GitHub.
 - A Skill row overflow is a compact command menu. Update source and tracking fields live in a focused `Update settings` dialog and MUST NOT turn the row menu into a scrolling form.
 - The UI status for this durable policy is `Not tracked`; temporary wording such as `Checks off` and source-type wording such as `Fixed copy` MUST NOT substitute for the policy.
@@ -643,6 +656,7 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Review and Save expose local working and error states. Review MUST enter a visible animated busy state immediately, keep the action geometry stable, expose `aria-busy`, and block duplicate submission until the preview resolves. A stale or failed review remains in the dialog and offers `Refresh review`.
 - Profile Instructions and Advanced configuration remain in the source Target's native format. Reusable Skills and supported MCP definitions become Library references.
 - Existing Library content is reused only when its comparable content hash or semantic MCP definition matches exactly.
+- If a captured Skill has the same normalized name or requested ID as an existing Library Skill, Capture MUST resolve it during Preview rather than failing during Save. Matching content reuses the existing Library identity. Different content is previewed as an explicit unique Library ID while the existing same-name entry remains unchanged.
 - Sensitive values, credentials, caches, history, runtime state, and unsupported native fields MUST remain Target-owned and MUST be named as excluded.
 - Ignored Skills remain in place and are excluded from the new Profile.
 - Skills identified as owned by an external manager remain in place and are excluded from the captured Profile. Capture review MUST name the external manager; later Apply MUST NOT unexpectedly turn that external installation into a blocking desired resource.
@@ -685,6 +699,7 @@ Idle -> Pressed -> Working -> Success | Warning | Error | Partial failure
 - Completion updates visible persisted state, not only a message.
 - No visible command may appear to do nothing.
 - Profile edits update the in-memory draft without filesystem scans. Save, Preview, and Apply each expose control-local working state for their complete asynchronous lifetime.
+- Profile identity metadata auto-save exposes immediate working and completion feedback while preserving any dirty environment draft.
 - One Preview request MUST reuse one normalized Library and local-inventory snapshot rather than recursively scanning or hashing the same resource roots once per validation stage.
 - Repeated background Target reads MAY reuse recent executable discovery. The explicit Target `Refresh` command MUST bypass that cache.
 - Apply completion MUST update the visible verified Target state immediately; nonessential history, usage, and enrichment refreshes continue without holding the primary action in a working state.
@@ -920,7 +935,7 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-17 against the current `main` tree at the time of this snapshot.
 
-- `455` automated tests passed across `52` test files; the `88`-test Electron UI suite and `96` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- `461` automated tests passed across `52` test files; the `89`-test Electron UI suite and `97` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
 - The CSS architecture gate passed with six named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `51` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, and focused update-setting states.
 - Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
@@ -930,11 +945,12 @@ Last verified: 2026-07-17 against the current `main` tree at the time of this sn
 - Target-row capture preserves the Targets workspace until confirmation; setup, Back, local failure recovery, grouped capture review, and a 30-resource minimum-viewport stress case keep the action footer visible with one scrolling body.
 - Library deletion isolates the selected Skill from invalid neighboring content, and global feedback provides a non-blocking copy action.
 - Local imports remain usable after their original path is removed; per-Skill update-check defaults, opt-out persistence, and GitHub re-enable flows passed Store and Electron E2E coverage.
-- In-place Skill Refresh, GitHub directory candidate selection, partial batch import behavior, source-default Skill icons, custom Skill icon persistence, and draft-gated Profile icons passed Store, renderer, and Electron E2E coverage.
+- In-place Skill Refresh, sequential GitHub directory import with per-item progress and partial failure, source-default Skill icons, custom Skill icon persistence, and independently auto-saved Profile identity metadata passed Store, renderer, and Electron E2E coverage.
 - Skill Import source modes, compact row command menus, focused update settings, compact MCP rows, overflow-only MCP deletion, resource-first Apply Preview, and neutral Capture outcomes passed renderer, Electron E2E, and visual capture coverage.
 - Library Skill disable, picker exclusion, update-check isolation, re-enable, and Apply-time Target removal and restoration passed Store, renderer, and Electron E2E coverage; Profile Skill switches use the same Save and Apply contract as Add and Remove.
 - Skill table headers, compact grouped headers, retained version metadata, mixed-action rows, aligned metadata, empty install states, update labels, action-to-detail clearance, compact non-truncating Cleanup badges, equal-width Cleanup actions, and status-tooltip clearance passed coordinate, overlap, and overflow assertions at both supported viewports.
 - Target-local import now creates a transactional managed install, shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
+- Codex Capture now reuses identical Library Skills and previews a stable alternate ID for different same-name content instead of failing during Save. Unmanaged same-name OpenCode and Claude Code Skill destinations remain blocked until an exact fresh Preview is acknowledged, then pass Backup, atomic replacement, ownership, and recovery assertions; Skills CLI-owned paths remain protected.
 - Shared compatibility migration now distinguishes imported, preparing, ready, retained, external, and conflict states; Apply records per-Target install or omit intent without duplicate runtime copies, and Electron E2E verifies early-switch blocking, transactional cutover, backup history, and full restore.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards; Configuration changes is a keyboard-focusable review action that opens the first collapsed diff without widening the dialog.

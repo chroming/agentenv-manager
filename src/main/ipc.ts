@@ -26,6 +26,7 @@ import type {
   SkillMergeInput,
   SaveMcpServerInput,
   SaveProfileInput,
+  UpdateProfileMetadataInput,
   SkillUpdatePolicyInput,
   SkillAvailabilityInput,
   SkillUpdateSourceInput
@@ -578,6 +579,10 @@ export const registerIpcHandlers = ({
   ipcMain.handle("profiles:save", (_event, input: SaveProfileInput) =>
     profileStore.saveProfile(input)
   );
+  ipcMain.handle(
+    "profiles:update-metadata",
+    (_event, input: UpdateProfileMetadataInput) => profileStore.updateProfileMetadata(input)
+  );
   ipcMain.handle("profiles:create", (_event, input: CreateProfileInput | string) =>
     profileStore.createProfile(
       typeof input === "string" ? { targetId: parseId(input, "target id") } : input
@@ -618,6 +623,9 @@ export const registerIpcHandlers = ({
           ? {
               allowManagedDrift:
                 (options as { allowManagedDrift?: unknown }).allowManagedDrift === true,
+              allowUnmanagedSkillReplacement:
+                (options as { allowUnmanagedSkillReplacement?: unknown })
+                  .allowUnmanagedSkillReplacement === true,
               allowOmissions:
                 (options as { allowOmissions?: unknown }).allowOmissions === true
             }

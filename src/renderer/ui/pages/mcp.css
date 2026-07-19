@@ -181,6 +181,51 @@
   width: 100%;
 }
 
+.github-import-state {
+  align-items: center;
+  color: var(--subtle);
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  width: 18px;
+}
+
+.github-import-state--reviewing,
+.github-import-state--importing {
+  color: var(--accent);
+}
+
+.github-import-state--imported {
+  color: var(--success);
+}
+
+.github-import-state--failed {
+  color: var(--danger);
+}
+
+.github-import-state--skipped {
+  color: var(--warning);
+}
+
+.github-import-state-label {
+  color: var(--muted);
+}
+
+.github-selection-count.is-complete,
+.github-selection-count.is-partial {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.github-selection-count.is-complete {
+  color: var(--success);
+}
+
+.github-selection-count.is-partial {
+  color: var(--warning);
+}
+
 .import-inline-error {
   margin: 0 16px 12px;
 }

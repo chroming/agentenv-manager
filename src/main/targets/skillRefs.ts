@@ -40,7 +40,7 @@ export const validateSkillRefs = async ({
   targetPaths,
   skillLibraryDir,
   allowMatchingUnmanagedSkills,
-  replaceableManagedPaths,
+  replaceablePaths,
   isolateSkillRoot
 }: TargetAssetInput) => {
   const errors: string[] = [];
@@ -83,8 +83,8 @@ export const validateSkillRefs = async ({
     const owned = exists && await isOwnedSkillDir(targetDir, targetPaths);
     const matchingUnmanaged =
       exists && allowMatchingUnmanagedSkills && await contentMatches(sourceDir, targetDir);
-    const replaceableManaged = replaceableManagedPaths?.has(targetDir) === true;
-    if (exists && !owned && !matchingUnmanaged && !replaceableManaged) {
+    const replaceable = replaceablePaths?.has(targetDir) === true;
+    if (exists && !owned && !matchingUnmanaged && !replaceable) {
       errors.push(`Skill target already exists and is not AgentEnv-owned: ${targetDir}`);
     }
   }
@@ -114,7 +114,7 @@ export const applySkillRefs = async ({
   skillLibraryDir,
   skillSyncMethod = "symlink",
   allowMatchingUnmanagedSkills,
-  replaceableManagedPaths
+  replaceablePaths
 }: TargetAssetInput) => {
   if (!targetPaths.skillsDir || !skillLibraryDir) {
     return;
@@ -129,8 +129,8 @@ export const applySkillRefs = async ({
     const owned = targetExists && await isOwnedSkillDir(targetDir, targetPaths);
     const matchingUnmanaged =
       targetExists && allowMatchingUnmanagedSkills && await contentMatches(sourceDir, targetDir);
-    const replaceableManaged = replaceableManagedPaths?.has(targetDir) === true;
-    if (targetExists && !owned && !matchingUnmanaged && !replaceableManaged) {
+    const replaceable = replaceablePaths?.has(targetDir) === true;
+    if (targetExists && !owned && !matchingUnmanaged && !replaceable) {
       throw new Error(
         `Skill target changed after preview and is not AgentEnv-owned: ${targetDir}`
       );

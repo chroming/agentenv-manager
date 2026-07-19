@@ -147,6 +147,84 @@ describe("target capture service", () => {
     await expect(activationService.listTargetStates()).resolves.toEqual([]);
   });
 
+  it("reviews and resolves same-name Library Skills before creating from a Target", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-capture-library-conflict-"));
+    const homeDir = join(root, "home");
+    const appDataRoot = join(root, "app-data");
+    const paths = createPaths({ appDataRoot, homeDir });
+    const targetRegistry = createTargetRegistry();
+    const settingsStore = createSettingsStore(paths);
+    const profileStore = createProfileStore({ appDataRoot, homeDir }, targetRegistry);
+    const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+    const mcpLibraryStore = createMcpLibraryStore(paths);
+    const service = createTargetCaptureService({
+      paths,
+      profileStore,
+      targetRegistry,
+      skillLibraryStore,
+      mcpLibraryStore,
+      targetDiscoveryService: installedTargetDiscovery("codex")
+    });
+    const targetDir = join(homeDir, ".codex");
+    const existingSource = join(root, "existing-bytedcli");
+    const targetSkill = join(targetDir, "skills", "bytedcli");
+    const matchingSource = join(root, "matching-source");
+    const matchingTarget = join(targetDir, "skills", "matching-skill");
+    const matchingContent =
+      "---\nname: matching-skill\ndescription: Matching.\n---\n\n# Matching\n";
+    await mkdir(existingSource, { recursive: true });
+    await mkdir(targetSkill, { recursive: true });
+    await mkdir(matchingSource, { recursive: true });
+    await mkdir(matchingTarget, { recursive: true });
+    await writeFile(join(targetDir, "AGENTS.md"), "# Existing\n");
+    await writeFile(join(targetDir, "config.toml"), "model = \"gpt-5\"\n");
+    await writeFile(
+      join(existingSource, "SKILL.md"),
+      "---\nname: bytedcli\ndescription: Library version.\n---\n\n# Library\n"
+    );
+    await writeFile(
+      join(targetSkill, "SKILL.md"),
+      "---\nname: bytedcli\ndescription: Target version.\n---\n\n# Target\n"
+    );
+    await writeFile(join(matchingSource, "SKILL.md"), matchingContent);
+    await writeFile(join(matchingTarget, "SKILL.md"), matchingContent);
+    await skillLibraryStore.importSkill({ sourcePath: existingSource, id: "bytedcli" });
+    await skillLibraryStore.importSkill({ sourcePath: matchingSource, id: "matching-skill" });
+
+    const preview = await service.previewTarget("codex");
+    expect(preview.errors).toEqual([]);
+    expect(preview.resources).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      id: "matching-skill",
+      libraryId: "matching-skill",
+      action: "reuse"
+    }));
+    expect(preview.resources).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      id: "bytedcli",
+      libraryId: "codex-bytedcli",
+      action: "import",
+      detail:
+        "Import Target copy as codex-bytedcli; existing same-name Library Skill stays unchanged"
+    }));
+
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "Codex Existing"
+    });
+    expect(result.importedSkillCount).toBe(1);
+    expect(result.profile.assetPolicy.skillRefs).toEqual(expect.arrayContaining([
+      { libraryId: "matching-skill", targetName: "matching-skill" },
+      { libraryId: "codex-bytedcli", targetName: "bytedcli" }
+    ]));
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "bytedcli", "SKILL.md"), "utf8")
+    ).resolves.toContain("# Library");
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "codex-bytedcli", "SKILL.md"), "utf8")
+    ).resolves.toContain("# Target");
+  });
+
   it("rejects stale capture previews without importing resources", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-capture-stale-"));
     const homeDir = join(root, "home");

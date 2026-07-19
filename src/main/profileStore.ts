@@ -8,7 +8,8 @@ import type {
   ProfileDetail,
   ProfileSummary,
   CreateProfileInput,
-  SaveProfileInput
+  SaveProfileInput,
+  UpdateProfileMetadataInput
 } from "../shared/types";
 import { createPaths, type PathOverrides } from "./paths";
 import { createProfileContentHash } from "./profileFingerprint";
@@ -21,6 +22,7 @@ export interface ProfileStore {
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
+  updateProfileMetadata(input: UpdateProfileMetadataInput): Promise<ProfileDetail>;
   createProfile(input: CreateProfileInput): Promise<ProfileDetail>;
   duplicateProfile(id: string): Promise<ProfileDetail>;
   deleteProfile(id: string): Promise<void>;
@@ -221,6 +223,31 @@ export const createProfileStore = (
     });
   };
 
+  const updateProfileMetadata = async (
+    input: UpdateProfileMetadataInput
+  ): Promise<ProfileDetail> => {
+    const id = SafeIdSchema.parse(input.id);
+    const current = await readProfile(id);
+    const name = input.name === undefined ? current.manifest.name : input.name.trim();
+    if (!name) {
+      throw new Error("Profile name is required");
+    }
+    const manifest = ProfileManifestSchema.parse({
+      ...current.manifest,
+      name,
+      description:
+        input.description === undefined
+          ? current.manifest.description
+          : input.description.trim(),
+      iconKey: input.iconKey ?? current.manifest.iconKey
+    });
+    await writeAtomic(
+      join(current.profileDir ?? join(paths.profilesDir, id), "profile.json"),
+      `${JSON.stringify(manifest, null, 2)}\n`
+    );
+    return readProfile(id);
+  };
+
   const duplicateProfile = async (id: string): Promise<ProfileDetail> => {
     const parsedId = SafeIdSchema.parse(id);
     const profile = await readProfile(parsedId);
@@ -256,5 +283,13 @@ export const createProfileStore = (
     await rename(profileDir, join(trashDir, `${parsedId}-${Date.now()}`));
   };
 
-  return { listProfiles, readProfile, saveProfile, createProfile, duplicateProfile, deleteProfile };
+  return {
+    listProfiles,
+    readProfile,
+    saveProfile,
+    updateProfileMetadata,
+    createProfile,
+    duplicateProfile,
+    deleteProfile
+  };
 };

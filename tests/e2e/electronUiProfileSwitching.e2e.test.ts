@@ -221,7 +221,7 @@ const writeClaudeProfile = async (appDataRoot: string) => {
   await writeJson(join(profileDir, "assets.json"), {
     ownedDirs: [],
     ownedFiles: [],
-    skillRefs: [],
+    skillRefs: [{ libraryId: "shared-reviewer", targetName: "bytedcli" }],
     mcpRefs: [],
     disabledSkillPaths: []
   });
@@ -604,6 +604,20 @@ const addLibrarySkillToProfile = async (page: Page, skillName = "Shared Reviewer
   await picker.getByLabel(skillName).check();
   await picker.getByRole("button", { name: "Add selected skills" }).click();
   await picker.waitFor({ state: "hidden" });
+};
+
+const closeCompletedGitHubImport = async (
+  page: Page,
+  expectedSummary: string,
+  importedNames: string[]
+) => {
+  const dialog = page.getByRole("dialog", { name: "Import skills" });
+  await dialog.getByText(expectedSummary, { exact: true }).waitFor({ state: "visible" });
+  for (const name of importedNames) {
+    await dialog.getByRole("status", { name: `${name}: imported` }).waitFor({ state: "visible" });
+  }
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
 };
 
 afterEach(async () => {
@@ -1326,11 +1340,15 @@ describe("Electron UI profile switching e2e", () => {
     await editDialog.getByLabel("Profile name").fill("Docs Writing v2");
     await editDialog.getByLabel("Description").fill("Updated writing workspace");
     await editDialog.getByRole("button", { name: "Done", exact: true }).click();
-    await saveProfile(page);
+    await editDialog.waitFor({ state: "hidden" });
+    expect(await page.getByRole("button", { name: "Save", exact: true }).isDisabled()).toBe(true);
     await page.getByRole("heading", { name: "Docs Writing v2" }).waitFor({
       state: "visible",
       timeout: 10_000
     });
+    expect(await page.getByRole("group", { name: "Profile Docs Writing v2" }).getByText("Current", {
+      exact: true
+    }).count()).toBe(0);
     expect(await findProfileByName(appDataRoot, "Docs Writing v2")).toMatchObject({
       name: "Docs Writing v2",
       description: "Updated writing workspace"
@@ -1736,6 +1754,55 @@ describe("Electron UI profile switching e2e", () => {
         join(appDataRoot, "target-states", "claude-code.json")
       )
     ).resolves.toMatchObject({ managedConfigKeys: [] });
+  }, 30_000);
+
+  it("backs up and replaces an unmanaged Claude Code Skill after explicit review", async () => {
+    const { appDataRoot, claudeDir, page } = await launchApp({ includeClaudeTarget: true });
+    const targetSkill = join(claudeDir, "skills", "bytedcli");
+    await mkdir(targetSkill, { recursive: true });
+    await writeFile(
+      join(targetSkill, "SKILL.md"),
+      "---\nname: bytedcli\ndescription: Existing Claude copy.\n---\n\n# Existing Claude copy\n",
+      "utf8"
+    );
+
+    await selectProfile(page, "UI Claude clean");
+    await selectTarget(page, "Claude Code");
+    await applyActionButton(page, "Claude Code").click();
+
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await expect.poll(() => previewDialog.textContent()).toContain(
+      "Existing unmanaged Skill will be replaced"
+    );
+    await expect.poll(() => previewDialog.textContent()).toContain(targetSkill);
+    expect(await previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled()).toBe(true);
+    await previewDialog
+      .getByLabel("I understand; back up and replace these changes")
+      .check();
+    await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).resolves.toContain(
+      "Review code changes before applying them."
+    );
+    await expect(fileExists(`${targetSkill}.agentenv-owner.json`)).resolves.toBe(true);
+    const backupIds = await readdir(join(appDataRoot, "backups"));
+    const backupManifests = await Promise.all(
+      backupIds.map(async (id) => {
+        const manifestPath = join(appDataRoot, "backups", id, "manifest.json");
+        return await fileExists(manifestPath)
+          ? readJson<{ entries: Array<{ sourcePath: string; backupPath: string }> }>(manifestPath)
+          : undefined;
+      })
+    );
+    const entry = backupManifests
+      .flatMap((manifest) => manifest?.entries ?? [])
+      .find((candidate) => candidate.sourcePath === targetSkill);
+    expect(entry).toBeTruthy();
+    await expect(readFile(join(entry?.backupPath ?? "", "SKILL.md"), "utf8")).resolves.toContain(
+      "# Existing Claude copy"
+    );
   }, 30_000);
 
   it("shows polished skill row actions and update check feedback in the rendered app", async () => {
@@ -4256,13 +4323,12 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("menu", { name: "Icons for UI OpenCode alpha" })
       .getByRole("menuitemradio", { name: "Rocket" })
       .click();
-    expect(await page.getByRole("button", { name: "Save", exact: true }).isEnabled()).toBe(true);
-    await saveProfile(page);
-    await expect(
-      readJson<{ iconKey?: string }>(
+    expect(await page.getByRole("button", { name: "Save", exact: true }).isDisabled()).toBe(true);
+    await expect.poll(async () =>
+      (await readJson<{ iconKey?: string }>(
         join(appDataRoot, "profiles", "ui-opencode-alpha", "profile.json")
-      )
-    ).resolves.toMatchObject({ iconKey: "rocket" });
+      )).iconKey
+    ).toBe("rocket");
   }, 30_000);
 
   it("adds and removes reusable MCP servers through the rendered MCP library", async () => {
@@ -4806,6 +4872,13 @@ describe("Electron UI profile switching e2e", () => {
 
   it("captures a Profile from the live OpenCode Target without taking it over", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
+    const conflictingTargetSkill = join(opencodeDir, "skills", "shared-reviewer");
+    await mkdir(conflictingTargetSkill, { recursive: true });
+    await writeFile(
+      join(conflictingTargetSkill, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Target-specific version.\n---\n\n# Target version\n",
+      "utf8"
+    );
     await resizeAppWindow(page, 920, 620);
     await page.getByRole("button", { name: "Targets", exact: true }).click();
     const targetCard = page.getByRole("article", { name: "Target OpenCode" });
@@ -4826,6 +4899,9 @@ describe("Electron UI profile switching e2e", () => {
     dialog = page.getByRole("dialog", { name: "Review OpenCode capture" });
     const impact = dialog.getByRole("region", { name: "Capture impact" });
     await expect.poll(() => impact.textContent()).toContain("target-only-reviewer");
+    await expect.poll(() => impact.textContent()).toContain(
+      "Import Target copy as opencode-shared-reviewer; existing same-name Library Skill stays unchanged"
+    );
     const captureGeometry = await dialog.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const footer = element.querySelector<HTMLElement>(".capture-dialog__footer")?.getBoundingClientRect();
@@ -4861,6 +4937,12 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       readFile(join(appDataRoot, "skills-library", "target-only-reviewer", "SKILL.md"), "utf8")
     ).resolves.toContain("Migrate me into the shared library.");
+    await expect(
+      readFile(join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("Review code changes before applying them.");
+    await expect(
+      readFile(join(appDataRoot, "skills-library", "opencode-shared-reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("# Target version");
     const capturedSkillMetadata = await readJson<{ contentHash: string }>(
       join(appDataRoot, "skills-library", "target-only-reviewer", ".agentenv-skill.json")
     );
@@ -5492,7 +5574,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(join(installedSkillDir, "SKILL.md"))).resolves.toBe(true);
   }, 30_000);
 
-  it("shows profile-owned skill conflicts before applying from the rendered app", async () => {
+  it("reviews and replaces profile-owned Skill destination conflicts", async () => {
     const { opencodeDir, page } = await launchApp();
 
     await selectProfile(page, "UI OpenCode alpha");
@@ -5512,14 +5594,20 @@ describe("Electron UI profile switching e2e", () => {
 
     await applyActionButton(page, "OpenCode").click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
-    await page
-      .getByText(`skill target already exists and is not AgentEnv-owned: ${join(
-        opencodeDir,
-        "skills",
-        "target-only-reviewer"
-      )}`)
-      .waitFor({ state: "visible" });
+    const targetSkill = join(opencodeDir, "skills", "target-only-reviewer");
+    await expect.poll(() => previewDialog.textContent()).toContain(
+      "Existing unmanaged Skill will be replaced"
+    );
+    await expect.poll(() => previewDialog.textContent()).toContain(targetSkill);
     expect(await previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled()).toBe(true);
+    await previewDialog
+      .getByLabel("I understand; back up and replace these changes")
+      .check();
+    await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).resolves.toContain(
+      "alpha skill prompt"
+    );
   }, 30_000);
 
   it("imports and updates a GitHub-backed skill through the rendered app", async () => {
@@ -5538,11 +5626,11 @@ describe("Electron UI profile switching e2e", () => {
     const librarySkillMd = join(appDataRoot, "skills-library", "github-reviewer", "SKILL.md");
     await page.getByRole("button", { name: "Import 1" }).click();
     await expect.poll(() => fileExists(librarySkillMd), { timeout: 5_000 }).toBe(true);
+    await closeCompletedGitHubImport(page, "All 1 skills imported", ["GitHub Reviewer"]);
     await page
       .getByRole("group", { name: "Library item github-reviewer" })
       .getByText("GitHub skill v1.")
       .waitFor({ state: "visible" });
-    await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
 
     await electronApp.evaluate(({ ipcMain }) => {
       const state = globalThis as typeof globalThis & { __agentEnvOpenedSource?: string };
@@ -5699,17 +5787,19 @@ describe("Electron UI profile switching e2e", () => {
     expect(await selectAll.isChecked()).toBe(false);
     expect(await selectAll.evaluate((element) => (element as HTMLInputElement).indeterminate)).toBe(true);
     await expect.poll(() => page.locator(".github-selection-count").textContent()).toContain("1 selected");
-    await page.getByRole("button", { name: "Import 1" }).click();
+    await releaseCheck.check();
+    await expect.poll(() => page.locator(".github-selection-count").textContent()).toContain("2 selected");
+    await page.getByRole("button", { name: "Import 2" }).click();
 
-    await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
+    await closeCompletedGitHubImport(page, "All 2 skills imported", ["API Design", "Release Check"]);
     await page.getByRole("group", { name: "Library item api-design" }).waitFor({ state: "visible" });
-    expect(await page.getByRole("group", { name: "Library item release-check" }).count()).toBe(0);
+    await page.getByRole("group", { name: "Library item release-check" }).waitFor({ state: "visible" });
     await expect(
       readFile(join(appDataRoot, "skills-library", "api-design", "SKILL.md"), "utf8")
     ).resolves.toContain("Design stable APIs");
     await expect(
       readFile(join(appDataRoot, "skills-library", "release-check", "SKILL.md"), "utf8")
-    ).rejects.toMatchObject({ code: "ENOENT" });
+    ).resolves.toContain("Verify releases before shipping");
   }, 30_000);
 
   it("reviews a GitHub same-name conflict before replacing the Library copy", async () => {
@@ -5739,6 +5829,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => conflict.textContent()).toContain("Different");
     await conflict.getByRole("button", { name: "Replace Skill" }).click();
     await conflict.waitFor({ state: "hidden" });
+    await closeCompletedGitHubImport(page, "All 1 skills imported", ["Shared Reviewer"]);
 
     await expect.poll(() =>
       readFile(join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md"), "utf8")
@@ -5784,6 +5875,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await conflict.getByRole("radio", { name: /Replace Library copy/ }).count()).toBe(0);
     await conflict.getByRole("button", { name: "Update source" }).click();
     await conflict.waitFor({ state: "hidden" });
+    await closeCompletedGitHubImport(page, "All 1 skills imported", ["Shared Reviewer"]);
 
     expect(await page.getByRole("group", { name: "Library item shared-reviewer" }).count()).toBe(1);
     expect(await page.getByRole("group", { name: "Library item shared-reviewer-online" }).count()).toBe(0);

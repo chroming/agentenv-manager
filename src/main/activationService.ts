@@ -385,6 +385,11 @@ const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
 const MANAGED_DRIFT_PREFIX = "External changes detected in AgentEnv-managed";
+const UNMANAGED_SKILL_CONFLICT =
+  /^skill target already exists and is not AgentEnv-owned: (.+)$/i;
+
+const unmanagedSkillConflictPath = (error: string) =>
+  error.match(UNMANAGED_SKILL_CONFLICT)?.[1];
 
 const applyLibrarySkillAvailability = (
   profile: ProfileDetail,
@@ -1200,7 +1205,7 @@ export const createActivationService = ({
       skillSyncMethod: settings.skillSyncMethod,
       allowMatchingUnmanagedSkills: isTakeover,
       allowMatchingUnmanagedAssets: isTakeover,
-      replaceableManagedPaths: drift.paths,
+      replaceablePaths: drift.paths,
       isolateSkillRoot: Boolean(skillRootTransition)
     });
     const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, inventory);
@@ -1219,6 +1224,24 @@ export const createActivationService = ({
       skillLibraryDir,
       skillRootTransition
     );
+    const previewErrors = withoutGenericExternalConflicts(targetPreview.errors).concat(
+      recoveryErrors,
+      portabilityErrors,
+      unsupportedMcpErrors,
+      profileErrors,
+      withoutGenericExternalConflicts(assetErrors),
+      drift.errors,
+      ignoredErrors,
+      externallyResolved.errors,
+      preparationPlan.errors
+    );
+    const replaceableTargetPaths = [
+      ...new Set(
+        previewErrors
+          .map(unmanagedSkillConflictPath)
+          .filter((path): path is string => Boolean(path))
+      )
+    ];
     const preview: ActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
@@ -1241,19 +1264,10 @@ export const createActivationService = ({
             ]
           : [])
       ),
-      errors: withoutGenericExternalConflicts(targetPreview.errors).concat(
-        recoveryErrors,
-        portabilityErrors,
-        unsupportedMcpErrors,
-        profileErrors,
-        withoutGenericExternalConflicts(assetErrors),
-        drift.errors,
-        ignoredErrors,
-        externallyResolved.errors,
-        preparationPlan.errors
-      ),
+      errors: previewErrors,
       changes: targetPreview.changes,
       resourceChanges: assetPlan.resourceChanges,
+      replaceableTargetPaths,
       liveFingerprints: {
         ...targetPreview.liveFingerprints,
         [stateFile.path]: hashText(stateFile.content)
@@ -1292,9 +1306,18 @@ export const createActivationService = ({
     if (!preview || preview.profileId !== profileId) {
       return { ok: false, errors: ["Preview not found for profile"] };
     }
-    const blockingErrors = options.allowManagedDrift
-      ? preview.errors.filter((error) => !error.startsWith(MANAGED_DRIFT_PREFIX))
-      : preview.errors;
+    const replaceableTargetPaths = new Set(preview.replaceableTargetPaths ?? []);
+    const blockingErrors = preview.errors.filter((error) => {
+      if (options.allowManagedDrift && error.startsWith(MANAGED_DRIFT_PREFIX)) {
+        return false;
+      }
+      const path = unmanagedSkillConflictPath(error);
+      return !(
+        options.allowUnmanagedSkillReplacement &&
+        path &&
+        replaceableTargetPaths.has(path)
+      );
+    });
     if (blockingErrors.length > 0) {
       return { ok: false, errors: blockingErrors };
     }
@@ -1448,9 +1471,10 @@ export const createActivationService = ({
       targetPaths,
       affectedManagedPaths
     );
-    const replaceableManagedPaths = options.allowManagedDrift
-      ? currentDrift.paths
-      : undefined;
+    const replaceablePaths = new Set<string>([
+      ...(options.allowManagedDrift ? currentDrift.paths : []),
+      ...(options.allowUnmanagedSkillReplacement ? replaceableTargetPaths : [])
+    ]);
 
     const assetErrors = await adapter.validateAssets({
       profile: materializedProfile,
@@ -1459,7 +1483,7 @@ export const createActivationService = ({
       skillSyncMethod: settings.skillSyncMethod,
       allowMatchingUnmanagedSkills: isTakeover,
       allowMatchingUnmanagedAssets: isTakeover,
-      replaceableManagedPaths,
+      replaceablePaths,
       isolateSkillRoot: Boolean(preview.skillRootTransition)
     });
     if (assetErrors.length > 0) {
@@ -1508,7 +1532,7 @@ export const createActivationService = ({
           skillSyncMethod: settings.skillSyncMethod,
           allowMatchingUnmanagedSkills: isTakeover,
           allowMatchingUnmanagedAssets: isTakeover,
-          replaceableManagedPaths,
+          replaceablePaths,
           isolateSkillRoot: Boolean(preview.skillRootTransition)
         });
       }

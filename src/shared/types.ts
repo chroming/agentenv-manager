@@ -61,6 +61,7 @@ export interface AgentEnvApi {
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
+  updateProfileMetadata(input: UpdateProfileMetadataInput): Promise<ProfileDetail>;
   createProfile(input: CreateProfileInput): Promise<ProfileDetail>;
   previewCreateProfileFromTarget(targetId: string): Promise<TargetCapturePreview>;
   createProfileFromTarget(input: CreateProfileFromTargetInput): Promise<TargetCaptureResult>;
@@ -97,6 +98,7 @@ export interface AdoptTargetChangesResult {
 
 export interface ApplyProfileOptions {
   allowManagedDrift?: boolean;
+  allowUnmanagedSkillReplacement?: boolean;
   allowOmissions?: boolean;
 }
 
@@ -748,6 +750,13 @@ export interface SaveProfileInput {
   assetPolicy: AssetPolicy;
 }
 
+export interface UpdateProfileMetadataInput {
+  id: string;
+  name?: string;
+  description?: string;
+  iconKey?: ResourceIconKey;
+}
+
 export interface PlannedFileChange {
   path: string;
   before: string;
@@ -773,6 +782,7 @@ export interface ActivationPreview {
   errors: string[];
   changes: PlannedFileChange[];
   resourceChanges: PlannedResourceChange[];
+  replaceableTargetPaths?: string[];
   liveFingerprints: Record<string, string>;
   resourceFingerprints: Record<string, string>;
   sourceFingerprints: Record<string, string>;

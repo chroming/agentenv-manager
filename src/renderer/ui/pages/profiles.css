@@ -477,11 +477,6 @@
   padding: 0 5px;
 }
 
-.profile-row__title .profile-row__current {
-  background: #e9f8f0;
-  color: #168455;
-}
-
 .profile-row__description {
   color: var(--muted);
   display: block;

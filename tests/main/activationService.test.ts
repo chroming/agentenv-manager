@@ -758,16 +758,26 @@ describe("activation service", () => {
     expect(preview.errors).not.toContain("Managed instructions are empty");
   });
 
-  it("refuses non-AgentEnv skill target conflicts without writing", async () => {
+  it("requires explicit backup replacement for non-AgentEnv skill target conflicts", async () => {
     const { paths, service } = await makeEnv();
     await writeFile(paths.globalAgentsPath, "# Old agents\n");
-    await mkdir(join(paths.codexHome, "skills", "agentenv-daily-coding-example-skill"), {
+    const targetSkillDir = join(
+      paths.codexHome,
+      "skills",
+      "agentenv-daily-coding-example-skill"
+    );
+    await mkdir(targetSkillDir, {
       recursive: true
     });
+    await writeFile(
+      join(targetSkillDir, "SKILL.md"),
+      "---\nname: existing local copy\n---\n"
+    );
 
     const preview = await service.previewProfile("daily-coding");
     const result = await service.applyProfile("daily-coding", preview.id);
 
+    expect(preview.replaceableTargetPaths).toEqual([targetSkillDir]);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errors[0]).toContain("Skill target already exists");
@@ -775,6 +785,26 @@ describe("activation service", () => {
     await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe(
       "# Old agents\n"
     );
+
+    const replacement = await service.applyProfile("daily-coding", preview.id, {
+      allowUnmanagedSkillReplacement: true
+    });
+
+    expect(replacement.ok).toBe(true);
+    if (!replacement.ok) {
+      throw new Error(replacement.errors.join("\n"));
+    }
+    await expect(readFile(join(targetSkillDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "name: example"
+    );
+    await expect(
+      readFile(join(targetSkillDir, ".agentenv-owner.json"), "utf8")
+    ).resolves.toContain('"owner": "agentenv-manager"');
+    const backup = await createBackupStore(paths).readBackup(replacement.backupId);
+    const skillEntry = backup.entries.find((entry) => entry.sourcePath === targetSkillDir);
+    await expect(
+      readFile(join(skillEntry?.backupPath ?? "", "SKILL.md"), "utf8")
+    ).resolves.toContain("name: existing local copy");
   });
 
   it("identifies Skills CLI ownership when it blocks a Profile skill", async () => {
@@ -804,6 +834,7 @@ describe("activation service", () => {
       `Cannot install agentenv-daily-coding-example-skill because Skills CLI manages the existing Skill at ${targetDir}. Remove it from Skills CLI, then rescan before applying this Profile.`
     );
     expect(preview.errors.some((error) => error.includes("not AgentEnv-owned"))).toBe(false);
+    expect(preview.replaceableTargetPaths).toEqual([]);
   });
 
   it("reports ignored unmanaged skill conflicts during profile preview", async () => {
