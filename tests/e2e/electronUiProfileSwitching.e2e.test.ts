@@ -6491,6 +6491,7 @@ describe("Electron UI profile switching e2e", () => {
     const windowChrome = await page.evaluate(() => {
       const sidebar = document.querySelector<HTMLElement>(".global-sidebar")!;
       const editorPanel = document.querySelector<HTMLElement>(".editor-panel")!;
+      const editorDragStrip = document.querySelector<HTMLElement>(".window-drag-strip")!;
       const brand = document.querySelector<HTMLElement>(".brand-lockup")!;
       const pageHeader = document.querySelector<HTMLElement>(".ui-page-header")!;
       const pageHeaderButton = pageHeader.querySelector<HTMLElement>("button")!;
@@ -6500,6 +6501,12 @@ describe("Electron UI profile switching e2e", () => {
       return {
         brandTop: Math.round(brand.getBoundingClientRect().top),
         editorPaddingTop: getComputedStyle(editorPanel).paddingTop,
+        editorDragStripHeight: Math.round(editorDragStrip.getBoundingClientRect().height),
+        editorDragStripLeft: Math.round(editorDragStrip.getBoundingClientRect().left),
+        editorDragStripRegion: appRegion(editorDragStrip),
+        editorDragStripRight: Math.round(editorDragStrip.getBoundingClientRect().right),
+        editorLeft: Math.round(editorPanel.getBoundingClientRect().left),
+        editorRight: Math.round(editorPanel.getBoundingClientRect().right),
         headerButtonRegion: appRegion(pageHeaderButton),
         navigationRegion: appRegion(navigation),
         pageHeaderRegion: appRegion(pageHeader),
@@ -6512,12 +6519,16 @@ describe("Electron UI profile switching e2e", () => {
     if (process.platform === "darwin") {
       expect(windowChrome).toMatchObject({
         editorPaddingTop: "38px",
+        editorDragStripHeight: 38,
+        editorDragStripRegion: "drag",
         headerButtonRegion: "no-drag",
         navigationRegion: "no-drag",
         pageHeaderRegion: "drag",
         sidebarPaddingTop: "38px",
         sidebarRegion: "drag"
       });
+      expect(windowChrome.editorDragStripLeft).toBe(windowChrome.editorLeft);
+      expect(windowChrome.editorDragStripRight).toBe(windowChrome.editorRight);
       expect(windowChrome.brandTop).toBeGreaterThanOrEqual(42);
       expect(Math.min(...headerMetrics.map((metric) => metric.top))).toBeGreaterThanOrEqual(38);
     }

@@ -3904,6 +3904,7 @@ const AppContent = ({
               : t("{{name}} workspace", { name: activeWorkspace })
         }
       >
+        <div className="window-drag-strip" aria-hidden="true" />
         <AppFeedback feedback={appFeedback} onDismiss={dismissAppFeedback} />
         {activeWorkspace === "library" ? (
           <>

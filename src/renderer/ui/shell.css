@@ -166,6 +166,25 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   padding: var(--window-chrome-inset-top, 20px) 24px 22px;
 }
 
+.window-drag-strip {
+  display: none;
+}
+
+html[data-platform="darwin"] .editor-panel {
+  position: relative;
+}
+
+html[data-platform="darwin"] .window-drag-strip {
+  app-region: drag;
+  display: block;
+  height: var(--window-chrome-inset-top);
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  -webkit-app-region: drag;
+}
+
 @media (max-width: 1300px) {
   .editor-panel {
     padding: var(--window-chrome-inset-top, 14px) 18px 18px;
