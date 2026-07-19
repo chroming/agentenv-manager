@@ -1,10 +1,9 @@
 import { access, stat } from "node:fs/promises";
 import { constants } from "node:fs";
-import { execFile } from "node:child_process";
-import { delimiter, dirname, isAbsolute, join } from "node:path";
-import { promisify } from "node:util";
+import { dirname } from "node:path";
 import type { AgentEnvPaths } from "./paths";
 import { isMissingFileError, pathExists } from "./fileUtils";
+import { findExecutable } from "./executableDiscovery";
 import type { TargetRegistry } from "./targets/registry";
 import type {
   TargetHealth,
@@ -67,84 +66,6 @@ const canWriteTarget = async (path: string) => {
 
   const parent = await nearestExistingParent(path);
   return parent ? canAccess(parent, constants.W_OK) : false;
-};
-
-const execFileAsync = promisify(execFile);
-
-const unique = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
-
-const createExecutableSearchPaths = (
-  pathEnv: string,
-  homeDir: string,
-  systemPathLookup: boolean
-) =>
-  unique([
-    ...pathEnv.split(delimiter),
-    join(homeDir, ".local", "bin"),
-    join(homeDir, ".npm-global", "bin"),
-    join(homeDir, ".bun", "bin"),
-    join(homeDir, ".cargo", "bin"),
-    join(homeDir, ".deno", "bin"),
-    join(homeDir, ".volta", "bin"),
-    join(homeDir, "Library", "pnpm"),
-    ...(systemPathLookup
-      ? [
-          "/opt/homebrew/bin",
-          "/usr/local/bin",
-          "/usr/bin",
-          "/bin",
-          "/usr/sbin",
-          "/sbin"
-        ]
-      : [])
-  ]);
-
-const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
-
-const findExecutableFromLoginShell = async (name: string, homeDir: string) => {
-  if (isAbsolute(name)) {
-    return undefined;
-  }
-
-  const shells = unique([process.env.SHELL ?? "", "/bin/zsh", "/bin/bash"]);
-  for (const shell of shells) {
-    try {
-      const { stdout } = await execFileAsync(shell, ["-lc", `command -v -- ${shellQuote(name)}`], {
-        env: { ...process.env, HOME: homeDir },
-        timeout: 2000
-      });
-      const candidate = stdout.trim().split("\n")[0];
-      if (candidate && isAbsolute(candidate) && (await canAccess(candidate, constants.X_OK))) {
-        return candidate;
-      }
-    } catch {
-      // Shell startup files vary by machine; common path candidates remain the primary fallback.
-    }
-  }
-
-  return undefined;
-};
-
-const findExecutable = async (
-  name: string,
-  pathEnv: string,
-  homeDir: string,
-  systemPathLookup: boolean,
-  shellPathLookup: boolean
-) => {
-  const candidates = isAbsolute(name)
-    ? [name]
-    : createExecutableSearchPaths(pathEnv, homeDir, systemPathLookup).map((dir) =>
-        join(dir, name)
-      );
-
-  for (const candidate of candidates) {
-    if (await canAccess(candidate, constants.X_OK)) {
-      return candidate;
-    }
-  }
-
-  return shellPathLookup ? findExecutableFromLoginShell(name, homeDir) : undefined;
 };
 
 const checkPath = async (
@@ -226,13 +147,12 @@ export const createTargetDiscoveryService = (
         return cached.path;
       }
     }
-    const path = await findExecutable(
-      name,
+    const path = await findExecutable(name, {
       pathEnv,
-      paths.homeDir,
+      homeDir: paths.homeDir,
       systemPathLookup,
       shellPathLookup
-    );
+    });
     executableCache.set(name, { path, checkedAt: Date.now() });
     return path;
   };
