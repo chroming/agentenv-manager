@@ -568,7 +568,7 @@ try {
   };
 
   await captureWorkspace(
-    "MCP Servers",
+    "MCPs",
     "mcp-servers",
     () => page.getByRole("region", { name: "MCP library" })
   );
@@ -578,8 +578,8 @@ try {
   await mcpActionsButton.click();
   await capturePage(page, join(outputDir, "mcp-actions-920x620.png"));
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Add MCP server" }).click();
-  const mcpEditor = page.getByRole("dialog", { name: "MCP server editor" });
+  await page.getByRole("button", { name: "Add MCP" }).click();
+  const mcpEditor = page.getByRole("dialog", { name: "MCP editor" });
   await mcpEditor.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "mcp-editor-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -598,13 +598,13 @@ try {
   await page.getByRole("menu", { name: "Icons for Code Review" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-icon-picker-920x620.png"));
   await page.keyboard.press("Escape");
-  for (const sectionName of ["Instructions", "Skills", "MCP Servers", "Advanced"]) {
+  for (const sectionName of ["Instructions", "Skills", "MCPs", "Advanced"]) {
     await page
-      .locator(`[data-profile-composer-id="${sectionName === "MCP Servers" ? "mcp" : sectionName.toLowerCase()}"]`)
+      .locator(`[data-profile-composer-id="${sectionName === "MCPs" ? "mcp" : sectionName.toLowerCase()}"]`)
       .getByRole("button", { name: sectionName, exact: true })
       .click();
     await page
-      .locator(`[data-profile-composer-id="${sectionName === "MCP Servers" ? "mcp" : sectionName.toLowerCase()}"] .profile-composer-section__panel`)
+      .locator(`[data-profile-composer-id="${sectionName === "MCPs" ? "mcp" : sectionName.toLowerCase()}"] .profile-composer-section__panel`)
       .waitFor({ state: "visible" });
     await capturePage(
       page,
@@ -656,6 +656,16 @@ try {
     "targets",
     () => page.getByRole("region", { name: "Agents", exact: true })
   );
+  const openCodeAgent = page.getByRole("article", { name: "Agent OpenCode" });
+  await openCodeAgent.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
+  await openCodeAgent.getByRole("region", { name: "OpenCode diagnostics" }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "target-diagnostics-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "target-diagnostics-1180x728.png"));
+  await openCodeAgent.getByRole("button", { name: "Hide OpenCode diagnostics" }).click();
+  await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("button", { name: /Recovery/ }).click();
   const recoveryDialog = page.getByRole("dialog", { name: "Recovery" });
   await recoveryDialog.waitFor({ state: "visible" });

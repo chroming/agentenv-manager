@@ -1,5 +1,5 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Network, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { MoreHorizontal, Network, Pencil, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import type { McpLibraryEntry, McpTransport, SaveMcpServerInput } from "../../shared/types";
 import {
@@ -298,27 +298,42 @@ export const McpLibraryPanel = ({
   );
 
   return (
-    <section className="skill-library-panel skill-library-panel--mcp" aria-label={t("MCP library")}>
-      <label className="mcp-library-search">
-        <Search size={15} strokeWidth={2.2} aria-hidden="true" />
-        <input
-          ref={searchInputRef}
-          aria-label={t("Search MCP servers")}
-          placeholder={t("Search MCP servers...")}
-          value={search}
-          onChange={(event) =>
-            onViewStateChange(
-              updateMcpLibraryControls(viewState, { search: event.currentTarget.value })
-            )
-          }
-        />
-      </label>
+    <section className="skill-library-panel skill-library-panel--mcp ui-surface-frame" aria-label={t("MCP library")}>
+      <div className="mcp-library-toolbar">
+        <label className="mcp-library-search ui-composite-field">
+          <Search size={15} strokeWidth={2.2} aria-hidden="true" />
+          <input
+            ref={searchInputRef}
+            aria-label={t("Search MCPs")}
+            placeholder={t("Search MCPs...")}
+            value={search}
+            onChange={(event) =>
+              onViewStateChange(
+                updateMcpLibraryControls(viewState, { search: event.currentTarget.value })
+              )
+            }
+          />
+        </label>
+        <span className="mcp-library-count">
+          {t(mcpServers.length === 1 ? "{{count}} MCP" : "{{count}} MCPs", {
+            count: mcpServers.length
+          })}
+        </span>
+      </div>
 
       <section
         className="resource-section"
-        aria-label={t("MCP servers")}
+        aria-label={t("MCPs")}
         ref={scrollOwnerRef}
       >
+        {visibleServers.length > 0 ? (
+          <div className="mcp-list-header" aria-hidden="true">
+            <span>{t("MCP")}</span>
+            <span>{t("Environment")}</span>
+            <span>{t("Profiles")}</span>
+            <span>{t("Actions")}</span>
+          </div>
+        ) : null}
         <div className="resource-list library-list">
           {visibleServers.map((server) => (
             <ResourceRow
@@ -419,6 +434,19 @@ export const McpLibraryPanel = ({
                           aria-label={t("Actions for {{id}}", { id: server.id })}
                           style={{ left: openAction.left, top: openAction.top }}
                         >
+                          {(mcpUsage[server.id] ?? []).length > 0 ? (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                onReviewUsage(server.id);
+                                setOpenAction(undefined);
+                              }}
+                            >
+                              <Users size={14} strokeWidth={2.2} aria-hidden="true" />
+                              <span>{t("Review profiles")}</span>
+                            </button>
+                          ) : null}
                           <button
                             className="is-danger"
                             type="button"
@@ -433,7 +461,7 @@ export const McpLibraryPanel = ({
                             }}
                           >
                             <Trash2 size={14} strokeWidth={2.2} aria-hidden="true" />
-                            {t("Delete server")}
+                            <span>{t("Delete MCP")}</span>
                           </button>
                         </div>,
                         document.body
@@ -445,7 +473,7 @@ export const McpLibraryPanel = ({
           ))}
           {visibleServers.length === 0 ? (
             <div className="inline-state inline-state--panel library-empty-state">
-              <span>{t(mcpServers.length === 0 ? "No MCP servers yet" : "No matching MCP servers")}</span>
+              <span>{t(mcpServers.length === 0 ? "No MCPs yet" : "No matching MCPs")}</span>
               {mcpServers.length === 0 ? (
                 <button
                   className="primary-inline-action"
@@ -456,7 +484,7 @@ export const McpLibraryPanel = ({
                   }}
                 >
                   <Plus size={15} strokeWidth={2.3} />
-                  {t("Add first MCP server")}
+                  {t("Add first MCP")}
                 </button>
               ) : null}
             </div>
@@ -475,13 +503,13 @@ export const McpLibraryPanel = ({
             ref={editorDialogRef}
             className="library-drawer mcp-editor-drawer"
             role="dialog"
-            aria-label={t("MCP server editor")}
+            aria-label={t("MCP editor")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="library-drawer__header">
               <div>
-                <strong>{editingId ? t("Edit {{name}}", { name: draft.name || editingId }) : t("Add MCP server")}</strong>
+                <strong>{editingId ? t("Edit {{name}}", { name: draft.name || editingId }) : t("Add MCP")}</strong>
                 <p className="muted">
                   {draft.transport === "stdio"
                     ? t("Reference environment variables without storing secret values.")
@@ -491,7 +519,7 @@ export const McpLibraryPanel = ({
               <button
                 className="icon-action"
                 type="button"
-                aria-label={t("Close MCP server editor")}
+                aria-label={t("Close MCP editor")}
                 disabled={isSaving}
                 onClick={() => setIsEditorOpen(false)}
               >
@@ -605,15 +633,25 @@ export const McpLibraryPanel = ({
                   )}
                 </label>
               ) : null}
+            </div>
+            <footer className="library-drawer__footer mcp-editor-actions">
               <button
-                className="primary-action library-import-action"
+                className="secondary-action"
+                type="button"
+                disabled={isSaving}
+                onClick={() => setIsEditorOpen(false)}
+              >
+                {t("Cancel")}
+              </button>
+              <button
+                className="primary-action"
                 type="button"
                 disabled={!isDraftComplete || isSaving}
                 onClick={() => { void saveDraft(); }}
               >
-                {t(isSaving ? "Saving MCP server" : "Save MCP server")}
+                {t(isSaving ? "Saving MCP" : editingId ? "Save changes" : "Add to library")}
               </button>
-            </div>
+            </footer>
           </section>
         </div>
       ) : null}
@@ -624,20 +662,20 @@ export const McpLibraryPanel = ({
             ref={deleteDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
-            aria-label={t("Delete MCP server")}
+            aria-label={t("Delete MCP")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">{t("Delete MCP server")}</div>
+                <div className="section-title">{t("Delete MCP")}</div>
                 <p className="muted">
                   {(mcpUsage[deleteCandidate.id] ?? []).length > 0
                     ? t("{{name}} is used by {{profiles}}. Remove it from those profiles first.", {
                         name: deleteCandidate.name,
                         profiles: (mcpUsage[deleteCandidate.id] ?? []).join(", ")
                       })
-                    : t("Delete {{name}} from the shared MCP library?", { name: deleteCandidate.name })}
+                    : t("Delete {{name}} from the MCP library?", { name: deleteCandidate.name })}
                 </p>
               </div>
             </header>
@@ -670,7 +708,7 @@ export const McpLibraryPanel = ({
                     setDeleteCandidate(undefined);
                   }}
                 >
-                  {t("Delete server")}
+                  {t("Delete MCP")}
                 </button>
               )}
             </footer>

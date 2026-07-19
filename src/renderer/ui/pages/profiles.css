@@ -362,8 +362,8 @@
 
 .profile-workbench {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border-color: transparent;
+  border-radius: var(--radius-surface);
   gap: 0;
   grid-template-columns: 260px minmax(0, 1fr);
   min-height: 0;
@@ -381,8 +381,12 @@
   padding: 10px;
 }
 
-.profile-list-toolbar,
+.profile-list-toolbar {
+  min-height: var(--profile-control-height);
+}
+
 .profile-search {
+  height: var(--profile-control-height);
   min-height: var(--profile-control-height);
 }
 

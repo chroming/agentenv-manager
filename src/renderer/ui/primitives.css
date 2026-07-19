@@ -219,6 +219,58 @@
   user-select: text;
 }
 
+/* Framed work surfaces paint one uninterrupted edge above scrolling children. */
+.ui-surface-frame {
+  border: 1px solid transparent;
+  isolation: isolate;
+  overflow: hidden;
+  position: relative;
+}
+
+.ui-surface-frame::after {
+  border: 1px solid var(--border-strong);
+  border-radius: inherit;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: var(--z-actions);
+}
+
+/* Composite search fields own the border; their input stays inside it. */
+.ui-composite-field {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  display: flex;
+  gap: var(--space-2);
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 10px;
+}
+
+.ui-composite-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+}
+
+.ui-composite-field > input {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  outline: 0;
+  padding: 0;
+  width: auto;
+}
+
 /* Page headers keep one stable title and action geometry across every surface. */
 .ui-page-header {
   align-items: flex-start;

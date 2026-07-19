@@ -29,6 +29,7 @@ interface GitHubAccessTokenResponse {
   access_token?: string;
   error?: string;
   error_description?: string;
+  interval?: number;
 }
 
 interface GitHubUserResponse {
@@ -51,6 +52,7 @@ interface PendingDeviceLogin {
   deviceCode: string;
   expiresAtMs: number;
   intervalSeconds: number;
+  nextPollAtMs: number;
 }
 
 export interface GitHubTokenCipher {
@@ -239,7 +241,8 @@ export const createGitHubAuthService = ({
     pendingLogins.set(id, {
       deviceCode: payload.device_code,
       expiresAtMs,
-      intervalSeconds
+      intervalSeconds,
+      nextPollAtMs: 0
     });
 
     return {
@@ -267,6 +270,18 @@ export const createGitHubAuthService = ({
       };
     }
 
+    const now = Date.now();
+    if (now < pending.nextPollAtMs) {
+      return {
+        state: "pending",
+        message: "Waiting for GitHub authorization",
+        retryAfterSeconds: Math.max(1, Math.ceil((pending.nextPollAtMs - now) / 1000))
+      };
+    }
+
+    // Reserve the next poll window before awaiting fetch so overlapping renderer calls cannot race.
+    pending.nextPollAtMs = now + pending.intervalSeconds * 1000;
+
     const response = await fetchImpl("https://github.com/login/oauth/access_token", {
       body: new URLSearchParams({
         client_id: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
@@ -280,14 +295,20 @@ export const createGitHubAuthService = ({
     if (payload.error === "authorization_pending") {
       return {
         state: "pending",
-        message: "Waiting for GitHub authorization"
+        message: "Waiting for GitHub authorization",
+        retryAfterSeconds: pending.intervalSeconds
       };
     }
     if (payload.error === "slow_down") {
-      pending.intervalSeconds += 5;
+      pending.intervalSeconds = Math.max(
+        pending.intervalSeconds + 5,
+        payload.interval ?? 0
+      );
+      pending.nextPollAtMs = now + pending.intervalSeconds * 1000;
       return {
-        state: "slow-down",
-        message: "GitHub asked the app to slow down polling"
+        state: "pending",
+        message: "Waiting for GitHub authorization",
+        retryAfterSeconds: pending.intervalSeconds
       };
     }
     if (payload.error === "expired_token") {

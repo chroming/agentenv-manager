@@ -586,8 +586,9 @@ export interface GitHubDeviceLogin {
 }
 
 export interface GitHubDeviceLoginResult {
-  state: "pending" | "slow-down" | "expired" | "denied" | "signed-in";
+  state: "pending" | "expired" | "denied" | "signed-in";
   message?: string;
+  retryAfterSeconds?: number;
   status?: GitHubAuthStatus;
 }
 

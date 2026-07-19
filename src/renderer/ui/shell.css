@@ -64,10 +64,11 @@
 }
 
 .workspace-nav > button {
-  height: 32px;
-  min-height: 32px;
+  align-items: center;
+  height: 36px;
+  min-height: 36px;
   order: initial;
-  padding: 7px 10px;
+  padding: 0 10px;
 }
 
 .nav-section-label {
@@ -76,7 +77,13 @@
 }
 
 .workspace-button > span:not(.workspace-button__icon) {
+  align-self: center;
   font-size: 13px;
+  line-height: 16px;
+}
+
+.workspace-nav > button .workspace-button__icon {
+  align-self: center;
 }
 
 .workspace-button.is-active {

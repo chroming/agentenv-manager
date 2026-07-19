@@ -87,7 +87,7 @@ export const ProfileSidebar = ({
     icon: LucideIcon;
   }> = [
     { id: "skills", label: t("Skills"), detail: t("Skill library"), icon: BookOpen },
-    { id: "mcp", label: t("MCP Servers"), detail: t("Shared servers"), icon: Network }
+    { id: "mcp", label: t("MCPs"), detail: t("Shared connections"), icon: Network }
   ];
   const workspaceItems: Array<{
     id: AppWorkspace;

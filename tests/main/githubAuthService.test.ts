@@ -11,6 +11,7 @@ import { createPaths } from "../../src/main/paths";
 let root = "";
 
 afterEach(async () => {
+  vi.useRealTimers();
   if (root) {
     await rm(root, { recursive: true, force: true });
     root = "";
@@ -185,9 +186,66 @@ describe("GitHub auth service", () => {
 
     expect(result).toEqual({
       state: "pending",
-      message: "Waiting for GitHub authorization"
+      message: "Waiting for GitHub authorization",
+      retryAfterSeconds: 1
     });
     await expect(service.readAccessToken()).resolves.toBeUndefined();
+  });
+
+  it("backs off after GitHub slow_down and prevents overlapping token requests", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-18T00:00:00.000Z"));
+    const tokenResponses = [
+      { error: "slow_down", interval: 8 },
+      { access_token: "token-after-wait" }
+    ];
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "https://github.com/login/device/code") {
+        return jsonResponse({
+          device_code: "device-abc",
+          user_code: "ABCD-1234",
+          verification_uri: "https://github.com/login/device",
+          expires_in: 900,
+          interval: 2
+        });
+      }
+      if (url === "https://github.com/login/oauth/access_token") {
+        return jsonResponse(tokenResponses.shift());
+      }
+      if (url === "https://api.github.com/user") {
+        return jsonResponse({ login: "octocat" });
+      }
+      if (url === "https://api.github.com/rate_limit") {
+        return jsonResponse({ resources: { core: { limit: 5000, remaining: 4999 } } });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+    const writeToken = vi.fn(async () => undefined);
+    const service = createGitHubAuthService({
+      fetch: fetchMock,
+      tokenStore: {
+        clearToken: vi.fn(),
+        readToken: vi.fn(async () => undefined),
+        writeToken
+      }
+    });
+
+    const login = await service.startDeviceLogin();
+    await expect(service.pollDeviceLogin(login.id)).resolves.toEqual({
+      state: "pending",
+      message: "Waiting for GitHub authorization",
+      retryAfterSeconds: 8
+    });
+    await expect(service.pollDeviceLogin(login.id)).resolves.toEqual({
+      state: "pending",
+      message: "Waiting for GitHub authorization",
+      retryAfterSeconds: 8
+    });
+    expect(fetchMock.mock.calls.filter(([url]) => url.includes("access_token"))).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(8000);
+    await expect(service.pollDeviceLogin(login.id)).resolves.toMatchObject({ state: "signed-in" });
+    expect(writeToken).toHaveBeenCalledWith("token-after-wait");
   });
 
   it("clears the saved GitHub token on sign out", async () => {

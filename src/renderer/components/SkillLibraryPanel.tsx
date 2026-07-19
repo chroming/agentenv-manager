@@ -1197,7 +1197,7 @@ export const SkillLibraryPanel = ({
   };
 
   return (
-    <section className="skill-library-panel" aria-label={t("Skill library")}>
+    <section className="skill-library-panel ui-surface-frame" aria-label={t("Skill library")}>
       <div className="library-control-deck">
         <div className="library-quick-tabs" role="tablist" aria-label={t("Skill status filters")}>
           <button

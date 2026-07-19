@@ -17,7 +17,7 @@ const McpCreateHarness = (props: ComponentProps<typeof McpLibraryPanel>) => {
         type="button"
         onClick={() => setCreateRequest((current) => current + 1)}
       >
-        Add MCP server
+        Add MCP
       </button>
       <McpLibraryPanel
         {...props}
@@ -44,7 +44,7 @@ describe("McpLibraryPanel", () => {
       />
     );
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Search MCP servers" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Search MCPs" }), {
       target: { value: "github" }
     });
 
@@ -75,7 +75,7 @@ describe("McpLibraryPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "More actions for context7" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Remove context7" }));
-    const dialog = screen.getByRole("dialog", { name: "Delete MCP server" });
+    const dialog = screen.getByRole("dialog", { name: "Delete MCP" });
     expect(dialog).toHaveTextContent("used by Daily Coding");
     fireEvent.click(screen.getByRole("button", { name: "Review profiles" }));
 
@@ -110,13 +110,13 @@ describe("McpLibraryPanel", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("@upstash/context7-mcp");
     fireEvent.blur(endpoint);
 
-    fireEvent.click(screen.getByRole("button", { name: "Add MCP server" }));
-    expect(screen.getByText("Add MCP server", { selector: "strong" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add MCP" }));
+    expect(screen.getByText("Add MCP", { selector: "strong" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("MCP library id"), {
       target: { value: "context7" }
     });
     expect(screen.getByText("This ID already exists. Choose a unique ID.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save MCP server" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add to library" })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("MCP library id"), {
       target: { value: "local-search" }
@@ -131,11 +131,11 @@ describe("McpLibraryPanel", () => {
       target: { value: "SEARCH_TOKEN\nCACHE_DIR=AGENTENV_CACHE_DIR" }
     });
     expect(screen.getByText(/Environment aliases are not portable/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save MCP server" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add to library" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("MCP env"), {
       target: { value: "SEARCH_TOKEN\nAGENTENV_CACHE_DIR" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to library" }));
 
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith({
@@ -170,13 +170,13 @@ describe("McpLibraryPanel", () => {
         onReviewUsage={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: "Add MCP server" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add MCP" }));
     fireEvent.change(screen.getByLabelText("MCP library id"), { target: { value: "remote-docs" } });
     fireEvent.change(screen.getByLabelText("MCP library name"), { target: { value: "Remote Docs" } });
     fireEvent.change(screen.getByLabelText("MCP transport"), { target: { value: "http" } });
     fireEvent.change(screen.getByLabelText("MCP URL"), { target: { value: "file:///tmp/mcp" } });
 
     expect(screen.getByText("Use an http or https URL.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save MCP server" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add to library" })).toBeDisabled();
   });
 });

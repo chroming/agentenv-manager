@@ -629,6 +629,8 @@ External ownership contract:
 - Check compares only against an explicit update source.
 - A tracked online source MUST expose its complete address on hover and keyboard focus and provide a clearly identified command that opens the address in the system browser.
 - GitHub rate limiting MUST provide a GitHub sign-in remediation.
+- GitHub Device Flow polling MUST respect the server-provided minimum interval. `slow_down` extends every later poll by at least five seconds, remains a waiting state rather than a user-facing failure, and MUST NOT end automatic polling.
+- Window focus and manual status checks MUST NOT create overlapping or early token requests. A completed authorization immediately refreshes the visible account and rate-limit state without requiring navigation or restart.
 - System Git authentication, host trust, VPN, ref, and timeout failures MUST provide Repository-specific diagnostics and MUST NOT suggest GitHub sign-in.
 - Update Preview MUST show changed files and validation errors.
 - Applying a Library update changes canonical content only after Preview, Backup, validation, and atomic replacement. A check never modifies Library.
@@ -662,6 +664,8 @@ Status: local, recursive GitHub, and System Git Repository import/update; in-pla
 - Updating an MCP definition marks affected deployments `Changes pending` but does not deploy.
 - An MCP used by any Profile MUST NOT be deleted.
 - MCP rows use compact list density. Edit MAY remain a visible row command; destructive delete belongs in the row overflow and always requires confirmation. Aggregate count cards MUST NOT repeat information already visible in the Library list without enabling a distinct decision.
+- The product label is `MCPs`. The Library surface keeps search and count in one toolbar, names the comparison columns, keeps endpoint details selectable through overflow disclosure, and offers Profile-reference review before deletion.
+- MCP creation and editing use the shared focused-dialog anatomy with one scrolling form body and a stable Cancel plus Add/Save footer. Save progress locks dismissal and preserves the draft on failure.
 - A Profile's expanded MCP section is already scoped to MCP, so it MUST NOT repeat `Inventory`, an `MCP` type badge, or routine `Configured` status on every row. It shows the server name, Library or native-config source, endpoint, and only exceptional status such as `Conflict`; removal is a labelled secondary icon action.
 - Environment values that appear secret MUST be masked in UI, Preview, logs, and diagnostics.
 - Backups containing secrets MUST remain local and use restrictive filesystem permissions.
@@ -743,11 +747,12 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Layout verification MUST measure document and owned scroll-region overflow, child containment, text fit, sibling control overlap, and floating-layer stacking; successful clicks alone do not satisfy this contract.
 - The Electron compositor, document root, and application shell MUST paint the complete content viewport with the page background; short pages and navigation transitions MUST NOT expose an unpainted window background.
 - Electron MUST NOT expose an empty renderer frame during cold start. Its compositor background matches the application surface, and the HTML shell provides a branded, reduced-motion-aware launch state before React mounts without delaying foreground renderer scheduling.
-- Startup loads Library Skills independently from Target discovery. Local core data for Skills, MCP Servers, Profiles, Targets, and Settings becomes usable before GitHub update checks, local inventory scans, and derived Profile usage finish; those background enrichments MUST merge into the visible UI without replacing it with an empty state.
+- Startup loads Library Skills independently from Target discovery. Local core data for Skills, MCPs, Profiles, Targets, and Settings becomes usable before GitHub update checks, local inventory scans, and derived Profile usage finish; those background enrichments MUST merge into the visible UI without replacing it with an empty state.
 - Renderer startup MUST NOT synchronously open duplicate browser-side persistence. Locale begins from the operating system and then adopts the authoritative local Settings value during core loading.
 - Packaged macOS PNG and ICNS assets MUST preserve transparent corners around the app-icon silhouette so Finder volumes and Dock icons do not render an opaque square frame.
 - Primary commands and lifecycle state remain visible.
 - Switching workspaces MUST NOT resize or reposition global chrome. Sidebar, brand lockup, navigation rows, status card, page gutter, first-level page titles, and page-header control height use shared geometry at a given viewport.
+- Sidebar navigation icons and labels MUST share the vertical center of their fixed selection surface. Padding, icon slots, and text line boxes MUST fit inside that height rather than enlarging or overflowing it.
 - Workspace-specific content MAY use its own density only inside the stable page content region.
 - Page-level creation and import commands remain in the page header. A resource list MUST NOT repeat the page title and primary command inside a nested header.
 - First-level pages use the shared page-header anatomy: one title, optional concise context or help, then one right-aligned command group. Page titles use the same type scale and left origin across workspaces.
@@ -756,7 +761,8 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - A lifecycle state owns a stable lane and MUST NOT move into the action lane when another value is absent. State labels MUST fit without ellipsis; long explanations belong in a tooltip or focused review surface.
 - Resource rows expose at most one direct contextual command plus a trailing overflow menu. Destructive, settings, and infrequent commands belong in that menu. Inline icon commands use shared `32px` hit targets and always have accessible names and tooltips.
 - Accent fill identifies only the current page-level primary command or the next commit action. Lists MUST NOT contain repeated primary-filled actions unless each row is an independent queued workflow.
-- Library pages use the resource name as the interactive page title (`Skills` or `MCP Servers`); `Library` is neutral scope text and MUST NOT resemble a clickable breadcrumb.
+- Library pages use the resource name as the interactive page title (`Skills` or `MCPs`); `Library` is neutral scope text and MUST NOT resemble a clickable breadcrumb.
+- Agent cards align Diagnostics with their content track. Expanding one card MUST NOT stretch or visually open its grid-row sibling, and opening a second Diagnostics region closes the first.
 - Comparable actions in one command group use the same control height; Profile Save and Apply also reserve the same width so lifecycle state changes do not shift surrounding content.
 - A related command group MAY move below its heading at narrower supported widths, but its individual controls MUST remain together rather than orphan-wrapping one control onto another line.
 - Profile rows keep one stable hierarchy at default and minimum sizes: name, one-line description, resource counts, and optional deployment state. Responsive rules MAY truncate long values but MUST NOT remove these semantic layers.
@@ -773,6 +779,8 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Local Skill Cleanup is a review list, not a secondary resource library. Its rows show Skill identity, one compact state, the current safe next action, and overflow. Full paths, duplicate details, and alternate versions belong in Details or Review; History is an integrated list section rather than a visually unrelated card.
 - Buttons do not wrap at supported desktop widths.
 - Text line boxes, icon boxes, and control padding MUST fit inside their controls without vertical clipping.
+- A framed work surface has one edge owner painted above its scrolling children. Toolbars, rows, backgrounds, and scroll regions MUST stay inside that edge and MUST NOT redraw, cover, or visually interrupt any side or corner.
+- Composite icon-and-input controls draw one border on the parent control. Their transparent borderless input remains inside the parent's content box and MUST NOT cover the parent edge at any supported width.
 - Apply Preview keeps its header and footer stable. The modal owns the primary vertical scroll; large resource plans remain bounded, and long diff lines own only their horizontal overflow.
 - Create from Target keeps its step header and action footer visible at both supported viewports. Only the dialog body scrolls; resource groups MUST NOT introduce a second nested scroll region.
 - Menus, tooltips, and dialogs remain above rows and inside the visible viewport.
@@ -786,7 +794,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Primary workflows work with keyboard only.
 - Status is never communicated through color alone.
 - Dynamic visible copy and accessible labels use the active locale. Truncated Profile descriptions use the shared selectable overflow detail instead of native browser title tooltips.
-- Renderer styling follows one ordered cascade contract: accessibility, tokens, base, frozen legacy, primitives, shell, pages, shared system contracts, and overlays.
+- Renderer styling follows one ordered cascade contract: accessibility, tokens, base, frozen legacy, primitives, shell, pages, and overlays.
 - New page behavior MUST be owned by its page stylesheet or a shared primitive; the frozen legacy stylesheet MUST NOT grow and the retired product-level override file MUST NOT return.
 - Skills and Profiles respond to their actual content containers, not only the outer window width.
 
@@ -924,6 +932,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 
 - Local import survives deletion of original folder.
 - GitHub direct-Skill, containing-directory, and repository scan; candidate selection; partial import; rate limit; sign-in remediation; update check; Preview; and update.
+- GitHub Device Flow pending, focus return, `slow_down`, expiry, denial, and successful account-state refresh without overlapping network polls.
 - System Git repository, directory, and direct-Skill scan; HTTPS/SSH/local transport; ref selection; partial import; cancellation; subtree update detection; Preview; backup; cache rebuild; credential redaction; and packaged-app Git discovery.
 - Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
 - Library global disable persistence, update-check exclusion, Add Skill picker filtering, existing-reference visibility, and Apply-time managed-copy removal.
@@ -980,11 +989,11 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-18 against the current working tree at the time of this snapshot.
 
-- `507` automated tests passed across `58` test files; the `91`-test Electron UI suite and `100` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- `508` automated tests passed across `58` test files; the `91`-test Electron UI suite and `100` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
 - The CSS architecture gate passed with eleven named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
-- All `51` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, and focused update-setting states.
-- Skills, MCP Servers, Profiles, Targets, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
-- Shared page headers, `32px` resource identities, compact/default row heights, Profile commit controls, MCP rows, Cleanup state/action lanes, `220px` context menus, and Apply resource rows passed cross-workspace geometry and overflow assertions.
+- All `54` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, Agent Diagnostics, MCPs, and focused update-setting states.
+- Skills, MCPs, Profiles, Agents, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
+- Shared page headers, vertically centered navigation rows, uninterrupted work-surface edges, contained composite search fields, `32px` resource identities, compact/default row heights, Profile commit controls, MCP rows, Cleanup state/action lanes, `220px` context menus, and Apply resource rows passed cross-workspace geometry and overflow assertions.
 - Dirty Profile navigation passed persisted Save, Discard, and Cancel outcomes; Stop Managing passed persisted file-retention and ownership-detachment checks.
 - System-picker data backup and restore, pre-takeover restoration, read-only and missing Targets, missing Skill sources, offline and rate-limited GitHub checks, and partial bulk updates passed Electron E2E coverage.
 - First-row and floating layers, modal Escape, outside click, focus trapping, and focus restoration passed Electron E2E coverage.
@@ -999,6 +1008,7 @@ Last verified: 2026-07-18 against the current working tree at the time of this s
 - Codex Capture now reuses identical Library Skills and previews a stable alternate ID for different same-name content instead of failing during Save. Unmanaged same-name OpenCode and Claude Code Skill destinations remain blocked until an exact fresh Preview is acknowledged, then pass Backup, atomic replacement, ownership, and recovery assertions; Skills CLI-owned paths remain protected.
 - Shared compatibility migration now distinguishes imported, preparing, ready, retained, external, and conflict states; Apply records per-Target install or omit intent without duplicate runtime copies, and Electron E2E verifies early-switch blocking, transactional cutover, backup history, and full restore.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
+- GitHub Device Flow respects server polling intervals, absorbs `slow_down` as a longer pending interval, blocks overlapping token requests, and refreshes connected account state after browser authorization.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards; Configuration changes is a keyboard-focusable review action that opens the first collapsed diff without widening the dialog.
 - Profile list icon and content columns remain aligned at the minimum viewport, and a deliberately long truncated Profile name keeps the same text origin before and after selection.
 - JSON/JSONC, TOML, YAML, assignment-style, token-prefix, and private-key detection reject new literal credentials; legacy Preview before/after/diff payloads are redacted before reaching the renderer.

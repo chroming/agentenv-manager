@@ -31,6 +31,8 @@ const primitiveRootSelectors = new Set([
   ".ui-icon-button",
   ".ui-page-header",
   ".ui-resource-row",
+  ".ui-composite-field",
+  ".ui-surface-frame",
   ".ui-switch"
 ]);
 

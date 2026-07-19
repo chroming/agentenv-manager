@@ -1,5 +1,7 @@
 /* Skills owns table density and responds to its actual content width. */
 .skill-library-panel {
+  border-radius: var(--radius-surface);
+  box-shadow: none;
   container-name: skill-library;
   container-type: inline-size;
   flex: 1 1 auto;

@@ -1276,7 +1276,7 @@ const AppContent = ({
     if (activeWorkspace === "library" && activeLibraryTab === tab) {
       return;
     }
-    const label = tab === "skills" ? "open Skills" : "open MCP Servers";
+    const label = tab === "skills" ? "open Skills" : "open MCPs";
     guardProfileAction(label, () => {
       libraryScroll.captureScroll();
       setActiveLibraryTab(tab);
@@ -2391,7 +2391,7 @@ const AppContent = ({
             : kind === "config"
               ? "Advanced"
               : kind === "mcp"
-                ? "MCP Servers"
+                ? "MCPs"
                 : "Disabled skills"
         )
       );
@@ -3573,9 +3573,7 @@ const AppContent = ({
         ) {
           return;
         }
-        if (result?.state === "slow-down") {
-          delayMs += 5000;
-        }
+        delayMs = Math.max((result?.retryAfterSeconds ?? login.intervalSeconds) * 1000, 1000);
         schedule();
       }, delayMs);
     };
@@ -3911,7 +3909,7 @@ const AppContent = ({
           <>
             <PageHeader
               className="page-header library-page-header"
-              title={t(activeLibraryTab === "skills" ? "Skills" : "MCP Servers")}
+              title={t(activeLibraryTab === "skills" ? "Skills" : "MCPs")}
               help={<InfoTip label={t("Library is the shared resource layer. Profiles reference these skills and MCP servers instead of duplicating files in every profile.")} />}
               actions={(
                 <ControlGroup className="page-actions" aria-label={t("Library actions")}>
@@ -3965,7 +3963,7 @@ const AppContent = ({
                       icon={<Plus size={16} strokeWidth={2.4} />}
                       onClick={() => setMcpCreateRequest((current) => current + 1)}
                     >
-                      {t("Add MCP server")}
+                      {t("Add MCP")}
                     </Button>
                   )}
                 </ControlGroup>
@@ -4089,10 +4087,10 @@ const AppContent = ({
                 </div>
               )}
             />
-            <section className="profile-workbench" aria-label={t("Profiles")}>
+            <section className="profile-workbench ui-surface-frame" aria-label={t("Profiles")}>
               <aside className="profile-index" aria-label={t("Profile list")}>
                 <div className="profile-list-toolbar">
-                  <label className="profile-search">
+                  <label className="profile-search ui-composite-field">
                     <Search size={15} strokeWidth={2.2} aria-hidden="true" />
                     <input
                       ref={profileSearchInputRef}
@@ -4440,7 +4438,7 @@ const AppContent = ({
               <ProfileComposerSection
                 id="mcp"
                 icon={<Network size={18} strokeWidth={2.2} />}
-                title={t("MCP Servers")}
+                title={t("MCPs")}
                 description={t("External tools and service connections")}
                 count={resourceSummary?.mcp.count ?? 0}
                 chipNames={resourceSummary?.mcp.names ?? []}

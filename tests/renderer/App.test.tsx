@@ -687,7 +687,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
     expect(screen.getByText("Native: OpenCode")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
-    expect(within(composer).getByRole("button", { name: "MCP Servers" })).toBeInTheDocument();
+    expect(within(composer).getByRole("button", { name: "MCPs" })).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Advanced" })).toBeInTheDocument();
     for (const oldTab of ["Overview", "Instructions", "Config", "Resources", "Validation"]) {
       expect(screen.queryByRole("tab", { name: oldTab })).not.toBeInTheDocument();
@@ -1268,10 +1268,10 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "MCP Servers" }));
+    fireEvent.click(screen.getByRole("button", { name: "MCPs" }));
 
     expect(screen.getByRole("region", { name: "MCP library" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "MCP Servers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "MCPs" })).toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     const context7Row = screen.getByRole("group", { name: "MCP library item context7" });
     expect(context7Row).toBeInTheDocument();
@@ -1292,7 +1292,7 @@ describe("App", () => {
       target: { value: "https://example.com/shared-docs/mcp" }
     });
     expect(screen.queryByLabelText("MCP env")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(api.saveMcpServer).toHaveBeenCalledWith({
@@ -1310,12 +1310,12 @@ describe("App", () => {
     fireEvent.click(within(context7Row).getByRole("button", { name: "More actions for context7" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Remove context7" }));
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Delete MCP server" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Delete MCP" })).not.toBeInTheDocument();
     fireEvent.click(within(context7Row).getByRole("button", { name: "More actions for context7" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Remove context7" }));
-    const deleteDialog = screen.getByRole("dialog", { name: "Delete MCP server" });
+    const deleteDialog = screen.getByRole("dialog", { name: "Delete MCP" });
     expect(deleteDialog).toHaveTextContent("Context7");
-    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete server" }));
+    fireEvent.click(within(deleteDialog).getByRole("button", { name: "Delete MCP" }));
     await waitFor(() => expect(api.removeMcpServer).toHaveBeenCalledWith("context7"));
   });
 
@@ -1326,8 +1326,8 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByRole("region", { name: "Skill library" });
-    fireEvent.click(screen.getByRole("button", { name: "MCP Servers" }));
-    fireEvent.click(screen.getByRole("button", { name: "Add MCP server" }));
+    fireEvent.click(screen.getByRole("button", { name: "MCPs" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add MCP" }));
     fireEvent.change(screen.getByLabelText("MCP library id"), {
       target: { value: "local-search" }
     });
@@ -1337,10 +1337,10 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("MCP command"), {
       target: { value: "node" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save MCP server" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to library" }));
 
     await screen.findByRole("alert");
-    expect(screen.getByRole("dialog", { name: "MCP server editor" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "MCP editor" })).toBeInTheDocument();
     expect(screen.getByLabelText("MCP library id")).toHaveValue("local-search");
     expect(screen.getByLabelText("MCP command")).toHaveValue("node");
   });
@@ -1390,7 +1390,7 @@ describe("App", () => {
     const composer = await screen.findByRole("region", { name: "Profile composer" });
     const instructions = within(composer).getByRole("button", { name: "Instructions" });
     const skills = within(composer).getByRole("button", { name: "Skills" });
-    const mcp = within(composer).getByRole("button", { name: "MCP Servers" });
+    const mcp = within(composer).getByRole("button", { name: "MCPs" });
     const advanced = within(composer).getByRole("button", { name: "Advanced" });
 
     expect(instructions).toHaveAccessibleDescription(/1.*AGENTS\.md/);

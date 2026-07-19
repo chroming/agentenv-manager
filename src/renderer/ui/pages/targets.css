@@ -75,12 +75,15 @@
 }
 
 .target-list {
+  align-items: start;
   display: grid;
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .target-card--workflow {
+  align-content: start;
+  align-self: start;
   background: #fbfbfc;
   border-radius: 10px;
   display: grid;
@@ -207,13 +210,16 @@
 }
 
 .target-diagnostics-toggle {
+  align-items: center;
   background: transparent;
   border: 0;
   color: var(--muted);
-  gap: 6px;
+  display: inline-flex;
+  gap: 8px;
   justify-self: start;
   min-height: 26px;
   padding: 0;
+  text-align: left;
 }
 
 @container (max-width: 780px) {
@@ -236,6 +242,10 @@
   border-top: 1px solid var(--border);
   display: grid;
   gap: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
   padding-top: 10px;
 }
 
@@ -350,10 +360,14 @@
 }
 
 .target-diagnostics-actions {
+  background: #fbfbfc;
   border-top: 1px solid var(--border);
+  bottom: 0;
   display: flex;
   justify-content: flex-end;
   padding-top: 10px;
+  position: sticky;
+  z-index: var(--z-raised);
 }
 
 .stop-managing-options {
