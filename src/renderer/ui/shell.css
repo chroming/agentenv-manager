@@ -67,12 +67,24 @@ html[data-platform="darwin"] {
 }
 
 .agent-chip--more {
+  appearance: none;
   background: #f8fafc;
   border-color: #d9e2ef;
+  border-radius: 50%;
+  block-size: 28px;
+  box-sizing: border-box;
   color: #64748b;
   cursor: pointer;
+  display: grid;
+  flex: 0 0 28px;
   font-size: 9px;
+  inline-size: 28px;
+  max-block-size: 28px;
+  max-inline-size: 28px;
+  min-block-size: 28px;
+  min-inline-size: 28px;
   padding: 0;
+  place-items: center;
 }
 
 .agent-chip--more:hover,

@@ -2160,6 +2160,31 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "Advanced");
     expect(await skillsTrigger.getAttribute("aria-expanded")).toBe("false");
     expect(await advancedTrigger.getAttribute("aria-expanded")).toBe("true");
+    const expandedAdvancedGeometry = await composer.evaluate((element) => {
+      const triggers = [...element.querySelectorAll<HTMLElement>(
+        ".profile-composer-section__trigger"
+      )];
+      const expanded = element.querySelector<HTMLElement>(
+        ".profile-composer-section.is-expanded"
+      )!;
+      const expandedTrigger = expanded.querySelector<HTMLElement>(
+        ".profile-composer-section__trigger"
+      )!;
+      const panel = expanded.querySelector<HTMLElement>(
+        ".profile-composer-section__panel"
+      )!;
+      return {
+        panelBackground: getComputedStyle(panel).backgroundColor,
+        stableRows: triggers.every(
+          (trigger) => Math.round(trigger.getBoundingClientRect().height) === 52
+        ),
+        triggerBackground: getComputedStyle(expandedTrigger).backgroundColor
+      };
+    });
+    expect(expandedAdvancedGeometry.stableRows).toBe(true);
+    expect(expandedAdvancedGeometry.panelBackground).not.toBe(
+      expandedAdvancedGeometry.triggerBackground
+    );
     await page.getByLabel("Disabled Skill Paths").fill(
       Array.from({ length: 24 }, (_, index) => `/tmp/legacy-skill-${index}`).join("\n")
     );
@@ -2786,7 +2811,17 @@ describe("Electron UI profile switching e2e", () => {
             navigation: [...document.querySelectorAll(".workspace-button")].map(rect),
             sidebar: rect(document.querySelector(".global-sidebar")),
             status: rect(document.querySelector(".system-status-card")),
-            statusAgentChips: [...document.querySelectorAll(".agent-chip")].map(rect)
+            statusAgentChips: [...document.querySelectorAll(".agent-chip")].map(rect),
+            overflowChip: (() => {
+              const chip = document.querySelector<HTMLElement>(".agent-chip--more");
+              if (!chip) return undefined;
+              const style = getComputedStyle(chip);
+              return {
+                ...rect(chip),
+                borderRadius: style.borderRadius,
+                boxSizing: style.boxSizing
+              };
+            })()
           };
         },
         {
@@ -2828,6 +2863,12 @@ describe("Electron UI profile switching e2e", () => {
         workspaceGeometry.statusAgentChips.forEach((chip) => {
           expect(chip?.width).toBe(chip?.height);
           expect(chip?.width).toBe(28);
+        });
+        expect(workspaceGeometry.overflowChip).toMatchObject({
+          borderRadius: "50%",
+          boxSizing: "border-box",
+          height: 28,
+          width: 28
         });
         expect(workspaceGeometry.editorPadding).toEqual(skillsGeometry.editorPadding);
         expect({
