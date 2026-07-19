@@ -237,8 +237,15 @@ const createWindow = () => {
 };
 
 const createServices = async () => {
+  const homeDir = process.env.AGENTENV_HOME ?? app.getPath("home");
+  const operatingSystemCacheRoot =
+    process.platform === "darwin"
+      ? join(homeDir, "Library", "Caches")
+      : process.platform === "win32"
+        ? process.env.LOCALAPPDATA ?? app.getPath("sessionData")
+        : process.env.XDG_CACHE_HOME ?? join(homeDir, ".cache");
   const appDataRoot = resolveAppDataRoot({
-    homeDir: app.getPath("home"),
+    homeDir,
     userDataDir: app.getPath("userData")
   });
   await recoverPendingReplacementsInDirectory(join(appDataRoot, ".."));
@@ -250,7 +257,11 @@ const createServices = async () => {
   }
   const paths = createPaths({
     appDataRoot,
-    homeDir: process.env.AGENTENV_HOME,
+    repositoryCacheDir: join(
+      process.env.AGENTENV_CACHE_ROOT ?? join(operatingSystemCacheRoot, "agentenv-manager"),
+      "repositories"
+    ),
+    homeDir,
     fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });
   const targetRegistry = createTargetRegistry();

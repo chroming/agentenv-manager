@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 
 export interface AgentEnvPaths {
   appDataRoot: string;
+  repositoryCacheDir: string;
   profilesDir: string;
   backupsDir: string;
   targetStatesDir: string;
@@ -30,6 +31,9 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
 
   return {
     appDataRoot: overrides.appDataRoot,
+    repositoryCacheDir:
+      overrides.repositoryCacheDir ??
+      join(dirname(overrides.appDataRoot), ".agentenv-manager-cache", "repositories"),
     profilesDir: overrides.profilesDir ?? join(overrides.appDataRoot, "profiles"),
     backupsDir: overrides.backupsDir ?? join(overrides.appDataRoot, "backups"),
     targetStatesDir:
