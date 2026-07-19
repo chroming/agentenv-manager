@@ -57,7 +57,7 @@ describe("target capture service", () => {
       }
     });
 
-    await expect(service.previewTarget("opencode")).rejects.toThrow("Agent command is not installed");
+    await expect(service.previewTarget("opencode")).rejects.toThrow("Agent installation is not detected");
     await expect(profileStore.listProfiles()).resolves.toEqual([]);
   });
 

@@ -22,6 +22,8 @@ export interface TargetDiscoveryOptions {
   pathEnv?: string;
   systemPathLookup?: boolean;
   shellPathLookup?: boolean;
+  platform?: NodeJS.Platform;
+  allowSystemApplicationLookup?: boolean;
 }
 
 export interface TargetDiscoveryService {
@@ -106,8 +108,8 @@ const createChecks = async (paths: TargetPaths): Promise<TargetPathCheck[]> => {
 
 const summarizeHealth = (
   status: TargetHealthStatus,
-  executableName: string | undefined,
-  executableFound: boolean,
+  targetName: string,
+  installationFound: boolean,
   missingRequiredPaths: number
 ) => {
   if (status === "ready") {
@@ -117,15 +119,15 @@ const summarizeHealth = (
     return "Ready";
   }
   if (status === "guarded") {
-    if (executableName && !executableFound) {
-      return `${executableName} writes guarded; CLI not found`;
+    if (!installationFound) {
+      return `${targetName} writes guarded; installation not detected`;
     }
     return "Detected, protected";
   }
   if (status === "needs-setup") {
     return "Needs setup";
   }
-  return executableName ? `${executableName} CLI not found` : "Not detected";
+  return `${targetName} not detected`;
 };
 
 export const createTargetDiscoveryService = (
@@ -137,7 +139,9 @@ export const createTargetDiscoveryService = (
     targetScope = createTargetScope(targetRegistry, createSettingsStore(paths)),
     pathEnv = process.env.PATH ?? "",
     systemPathLookup = options.pathEnv === undefined,
-    shellPathLookup = options.pathEnv === undefined
+    shellPathLookup = options.pathEnv === undefined,
+    platform = process.platform,
+    allowSystemApplicationLookup = options.pathEnv === undefined
   } = options;
   const executableCache = new Map<
     string,
@@ -171,35 +175,47 @@ export const createTargetDiscoveryService = (
           fakeHomeRoot: paths.fakeHomeRoot
         });
         const executableName = adapter.descriptor.executableName;
-        const executablePath = executableName
-          ? await discoverExecutable(executableName, listOptions.forceRefresh === true)
-          : undefined;
-        const executableFound = executableName ? Boolean(executablePath) : true;
+        const installation = await adapter.detectInstallation({
+          platform,
+          homeDir: paths.homeDir,
+          allowSystemApplicationLookup,
+          findExecutable: (name) =>
+            discoverExecutable(name, listOptions.forceRefresh === true),
+          pathExists: pathExistsByStat
+        });
+        const commandEvidence = installation.evidence.find(
+          (evidence) => evidence.kind === "command"
+        );
+        const executablePath = commandEvidence?.path;
+        const executableFound = Boolean(commandEvidence);
+        const installationFound = installation.found;
         const checks = await createChecks(targetPaths);
         const requiredChecks = checks.filter((check) => check.required);
         const missingRequiredPaths = requiredChecks.filter((check) => !check.exists).length;
         const requiredPathsWritable = requiredChecks.every((check) => check.writable);
         const canWrite =
           adapter.descriptor.realWritesEnabled &&
-          executableFound &&
+          installationFound &&
           requiredPathsWritable;
         const status: TargetHealthStatus = !adapter.descriptor.realWritesEnabled
           ? "guarded"
-          : !executableFound
+          : !installationFound
             ? "missing"
             : requiredPathsWritable
               ? "ready"
               : "needs-setup";
         const health: TargetHealth = {
           status,
+          installationFound,
+          installationEvidence: installation.evidence,
           executableName,
           executablePath,
           executableFound,
           canWrite,
           summary: summarizeHealth(
             status,
-            executableName,
-            executableFound,
+            adapter.descriptor.name,
+            installationFound,
             missingRequiredPaths
           ),
           checks

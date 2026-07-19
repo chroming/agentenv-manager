@@ -1183,9 +1183,20 @@ export const createActivationService = ({
         : [];
     const unsupportedMcpErrors = (profile.assetPolicy.mcpRefs ?? []).flatMap((reference) => {
       const server = mcpLibrary.find((entry) => entry.id === reference.libraryId);
-      return server && !adapter.descriptor.capabilities.mcpTransports.includes(server.transport)
-        ? [`${adapter.descriptor.name} does not support ${server.transport} MCP server ${server.name}`]
-        : [];
+      if (!server) return [];
+      if (!adapter.descriptor.capabilities.mcpTransports.includes(server.transport)) {
+        return [`${adapter.descriptor.name} does not support ${server.transport} MCP server ${server.name}`];
+      }
+      if (
+        adapter.descriptor.capabilities.mcpEnvironmentReferences === false &&
+        server.transport === "stdio" &&
+        Object.keys(server.env ?? {}).length > 0
+      ) {
+        return [
+          `${adapter.descriptor.name} does not support safe environment references for MCP server ${server.name}`
+        ];
+      }
+      return [];
     });
     const assetBackupPaths = await adapter.getAssetBackupPaths({
       profile: materializedProfile,

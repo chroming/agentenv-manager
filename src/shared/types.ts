@@ -642,7 +642,7 @@ export interface TargetDescriptor {
   defaultProfileId?: string;
   instructionsLabel: string;
   configLabel: string;
-  configLanguage: "jsonc" | "toml" | "text";
+  configLanguage: "json" | "jsonc" | "toml" | "text";
   mcpConfigKey?: string;
   realWritesEnabled: boolean;
   executableName?: string;
@@ -655,6 +655,8 @@ export interface TargetCapabilities {
   mcpTransports: McpTransport[];
   agentFormat?: "opencode" | "claude-code" | "codex";
   disabledSkillPaths: boolean;
+  nativeConfig?: boolean;
+  mcpEnvironmentReferences?: boolean;
 }
 
 export interface TargetPaths {
@@ -771,12 +773,22 @@ export interface TargetPathCheck {
 
 export interface TargetHealth {
   status: TargetHealthStatus;
+  installationFound: boolean;
+  installationEvidence: TargetInstallationEvidence[];
   executableName?: string;
   executablePath?: string;
   executableFound: boolean;
   canWrite: boolean;
   summary: string;
   checks: TargetPathCheck[];
+}
+
+export type TargetInstallationEvidenceKind = "command" | "desktop-app";
+
+export interface TargetInstallationEvidence {
+  kind: TargetInstallationEvidenceKind;
+  label: string;
+  path: string;
 }
 
 export interface TargetInfo extends TargetDescriptor {

@@ -17,8 +17,8 @@ The product succeeds when a user can answer all of these questions without inspe
 5. Is the deployed Agent still identical to the saved Profile?
 6. How can the user recover or stop AgentEnv management?
 
-User-facing product language uses **Agent** for a local coding tool such as OpenCode, Codex, or
-Claude Code. The implementation keeps `Target`, `TargetAdapter`, and `targetId` as stable internal
+User-facing product language uses **Agent** for a local coding tool such as OpenCode, Codex,
+Claude Code, or Antigravity. The implementation keeps `Target`, `TargetAdapter`, and `targetId` as stable internal
 architecture terms. Internal names MUST NOT leak into navigation, commands, status, confirmation,
 or recovery copy.
 
@@ -125,7 +125,7 @@ Each Library Skill reference has a Profile-scoped enabled state. Missing legacy 
 
 ### 4.4 Agent (internal Target)
 
-An Agent is a supported local coding tool and its deployment locations. OpenCode, Codex, and Claude Code are Agents.
+An Agent is a supported local coding tool and its deployment locations. OpenCode, Codex, Claude Code, and Antigravity are Agents.
 
 - Target files are deployed copies, links, or serialized output.
 - Target files are never the canonical Library source.
@@ -143,8 +143,10 @@ Settings owns the explicit set of enabled Agents.
 - Every write or recovery entry point MUST re-check the enabled scope in the main process. Hiding a renderer control is not sufficient authorization.
 - Turning an Agent off MUST NOT edit or delete its files, deployment state, Profiles, Library resources, or Backups, and MUST NOT end an existing management relationship.
 - Turning off a managed Agent requires an impact confirmation. An Agent in `Recovery required` cannot be turned off through the UI until recovery is resolved.
-- Turning an Agent on MUST run fresh executable and lifecycle discovery before restoring operational controls.
-- An enabled Agent remains visible when its command is missing, with a clear missing-command state. Configuration directories alone do not make an Agent installed.
+- Turning an Agent on MUST run fresh installation and lifecycle discovery before restoring operational controls.
+- An enabled Agent remains visible when its installation is not detected. Configuration directories alone do not make an Agent installed.
+- Installation detection MUST use adapter-declared authoritative evidence. A command, desktop application, or another verified platform installation marker MAY establish installation; stale configuration files MUST NOT.
+- Installation probes MUST be platform-aware and testable without reading the developer's real machine. A macOS application probe MUST NOT prevent the same adapter from using command or platform-native evidence on Windows and Linux.
 - Shared Library data and global compatibility locations remain global concerns; disabling one Agent MUST only remove that Agent's identity and dedicated paths from consideration.
 
 Status: explicit persisted scope, discovery filtering, renderer filtering, operation guards, managed-Agent confirmation, and recovery lock are `Implemented`.
@@ -658,7 +660,7 @@ Status: local, recursive GitHub, and System Git Repository import/update; in-pla
 - Creation and editing are distinct modes. Editing MUST keep the referenced MCP ID fixed.
 - Target adapters serialize supported transports and fields.
 - Remote MCP URLs MUST use `http` or `https`.
-- Stdio credentials are represented only as validated environment variable names, never values. OpenCode receives environment substitutions, Claude Code receives variable expansion references, and Codex receives parent-environment forwarding.
+- Stdio credentials are represented only as validated environment variable names, never values. OpenCode receives environment substitutions, Claude Code receives variable expansion references, and Codex receives parent-environment forwarding. An adapter without a verified environment-reference syntax MUST block that MCP reference before Apply instead of writing a literal or guessed placeholder.
 - Remote credentials are not stored as generic environment fields. Authentication unsupported by the Library model remains configured in the destination Target.
 - Unsupported transport or fields block Apply unless omission is explicitly accepted.
 - Updating an MCP definition marks affected deployments `Changes pending` but does not deploy.
@@ -702,7 +704,7 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Takeover, backup, Target-specific deployment, and managed-resource replacement occur only during the later explicit Apply. Local duplicate cleanup remains an explicit Scan local workflow.
 - Failure while saving MUST remove the partially created Profile and newly imported Library resources while leaving the Target unchanged.
 
-Status: OpenCode, Codex, and Claude Code adapter capture, reviewed Library import, stale protection, source preservation, and saved-never-applied handoff are `Implemented`.
+Status: OpenCode, Codex, Claude Code, and Antigravity adapter capture, reviewed Library import, stale protection, source preservation, and saved-never-applied handoff are `Implemented`.
 
 ## 19. Profile Deletion Contract
 
@@ -820,14 +822,14 @@ Status: supported viewport containment, topmost overlays, modal focus trapping, 
 - File writes use validated IDs and paths and MUST prevent path traversal.
 - Symlink operations MUST not escape approved Library and Target roots.
 - AgentEnv MUST never modify agent authentication files such as Codex `auth.json`.
-- Real Target writes require an installed executable and writable destination; missing directories MAY be created only inside adapter-declared roots.
+- Real Target writes require authoritative installation evidence and a writable destination; missing directories MAY be created only inside adapter-declared roots.
 
 ## 23. Target Adapter Contract
 
 A new Target adapter MUST define:
 
 - Stable Target ID and display metadata.
-- Executable discovery.
+- Platform-aware installation discovery with one or more authoritative evidence probes.
 - All managed and scanned paths.
 - Default native Profile representation.
 - Read/write and validation behavior.
@@ -843,6 +845,14 @@ A new Target adapter MUST define:
 - Cross-Target capability declarations.
 
 Registration MUST occur in the Target registry. Renderer components MUST NOT require Target-specific branches for ordinary lifecycle behavior.
+
+Antigravity's implemented global scope manages `~/.gemini/GEMINI.md`,
+`~/.gemini/config/mcp_config.json`, and `~/.gemini/config/skills`. Its
+`~/.gemini/antigravity-cli/skills` location is scanned as a discovery-only compatibility source
+and is not a second deployment destination. Antigravity MCP writes use strict JSON and
+`serverUrl`; secret-bearing headers, OAuth configuration, literal environment values, and other
+unsupported captured fields remain Agent-owned. Because no safe environment-reference syntax is
+currently verified for Antigravity MCP stdio entries, those Library references block Apply.
 
 ## 23.1 AgentEnv Data Lifecycle
 
@@ -915,7 +925,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Copy mode keeps Library updates pending; Live link mode visibly propagates them immediately.
 - Create from Target captures portable resources, reuses exact Library matches, and leaves Target files and deployment state unchanged.
 - Ignored resources and unsupported native data remain Target-owned after Create from Target.
-- Applying the same Library Skill to OpenCode, Codex, and Claude Code creates isolated Target-specific runtime copies.
+- Applying the same Library Skill to OpenCode, Codex, Claude Code, and Antigravity creates isolated Target-specific runtime copies.
 - Create from Target followed by first Apply isolates a Target Skills root that aliases a shared directory, preserves the shared destination byte-for-byte, installs Target-owned child references, and restores the original root link through Rollback.
 - Shared compatibility copies remain unchanged during capture; later removal requires the explicit reviewed Scan local cleanup workflow.
 - Adding a shared compatibility Skill to Library keeps one shared runtime copy active and removes redundant Target-specific copies. Apply prepares each installed consumer without creating duplicate runtime copies; Replace shared copy then performs one backed-up, verified cross-Target switch without deleting Library content.
@@ -997,8 +1007,8 @@ Current verdict: **Needs refinement**. Core Library, Profile, Preview, transacti
 
 Last verified: 2026-07-18 against the current working tree at the time of this snapshot.
 
-- `510` automated tests passed across `58` test files; the `91`-test Electron UI suite and `100` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
-- The CSS architecture gate passed with eleven named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
+- `527` automated tests passed across `61` test files; the `91`-test Electron UI suite and `102` total E2E tests cover native Target, cross-Target, Create from Target, real Electron UI, progressive startup, localization persistence, stale Preview, rollback, recovery, native-settings ownership release, and externally replaced managed-Skill recovery scenarios.
+- The CSS architecture gate passed with fourteen named container queries, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
 - All `54` fixed-state visual captures were regenerated through the Electron compositor and reviewed at the supported default and minimum viewports, including Profile Skill selection and applied revisions, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, Agent Diagnostics, MCPs, and focused update-setting states.
 - Skills, MCPs, Profiles, Agents, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - The macOS inset hidden title bar, native-control safe area, full-width draggable top chrome, draggable page headings, and no-drag interactive controls passed main-process configuration and real Electron geometry assertions.
@@ -1017,6 +1027,7 @@ Last verified: 2026-07-18 against the current working tree at the time of this s
 - Codex Capture now reuses identical Library Skills and previews a stable alternate ID for different same-name content instead of failing during Save. Unmanaged same-name OpenCode and Claude Code Skill destinations remain blocked until an exact fresh Preview is acknowledged, then pass Backup, atomic replacement, ownership, and recovery assertions; Skills CLI-owned paths remain protected.
 - Shared compatibility migration now distinguishes imported, preparing, ready, retained, external, and conflict states; Apply records per-Target install or omit intent without duplicate runtime copies, and Electron E2E verifies early-switch blocking, transactional cutover, backup history, and full restore.
 - MCP creation blocks duplicate IDs, editing preserves reference identity, stdio environment references serialize without secret values for OpenCode, Claude Code, and Codex, and remote URLs reject unsafe protocols.
+- Antigravity detects either `agy` or the macOS application, applies and rolls back `GEMINI.md`, strict `mcp_config.json`, and dedicated global Skills, preserves unmanaged MCP entries, and blocks unverified MCP environment-reference serialization.
 - GitHub Device Flow respects server polling intervals, absorbs `slow_down` as a longer pending interval, blocks overlapping token requests, and refreshes connected account state after browser authorization.
 - Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards; Configuration changes is a keyboard-focusable review action that opens the first collapsed diff without widening the dialog.
 - Profile list icon and content columns remain aligned at the minimum viewport, and a deliberately long truncated Profile name keeps the same text origin before and after selection.

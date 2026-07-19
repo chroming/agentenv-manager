@@ -8,6 +8,7 @@ import type {
   TargetInfo,
   TargetManagementState
 } from "../shared/types";
+import { isTargetInstalled } from "../shared/targetHealth";
 
 export interface ProfileResourceSummary {
   instructions: { count: 0 | 1 };
@@ -76,7 +77,7 @@ export const preferredTargetForProfile = (
     return nativeTargetId;
   }
 
-  return targets.find((target) => target.health.executableFound)?.id ?? targets[0]?.id;
+  return targets.find((target) => isTargetInstalled(target.health))?.id ?? targets[0]?.id;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -99,6 +100,17 @@ const jsoncMcpNames = (
   return isRecord(parsed[property]) ? Object.keys(parsed[property]) : [];
 };
 
+const jsonMcpNames = (configText: string, property: string): string[] => {
+  try {
+    const parsed = JSON.parse(configText.trim() || "{}");
+    return isRecord(parsed) && isRecord(parsed[property])
+      ? Object.keys(parsed[property])
+      : [];
+  } catch {
+    return [];
+  }
+};
+
 const tomlMcpNames = (configText: string, property: string): string[] => {
   try {
     const parsed = TOML.parse(configText) as Record<string, unknown>;
@@ -114,6 +126,9 @@ const rawMcpNames = (
 ): string[] => {
   if (!target.mcpConfigKey) {
     return [];
+  }
+  if (target.configLanguage === "json") {
+    return jsonMcpNames(configText, target.mcpConfigKey);
   }
   if (target.configLanguage === "jsonc") {
     return jsoncMcpNames(configText, target.mcpConfigKey);

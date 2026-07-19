@@ -133,6 +133,10 @@ const target: TargetInfo = {
   },
   health: {
     status: "ready",
+    installationFound: true,
+    installationEvidence: [
+      { kind: "command", label: "opencode command", path: "/usr/local/bin/opencode" }
+    ],
     executableName: "opencode",
     executablePath: "/usr/local/bin/opencode",
     executableFound: true,

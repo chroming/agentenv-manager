@@ -14,6 +14,7 @@ import type {
 } from "../../shared/types";
 import { targetIconFor } from "./ProfileSidebar";
 import { useI18n } from "../i18n";
+import { isTargetInstalled } from "../../shared/targetHealth";
 
 type CaptureActivity = "idle" | "reviewing" | "creating";
 
@@ -132,9 +133,9 @@ export const TargetCaptureDialog = ({
                       <option
                         value={candidate.id}
                         key={candidate.id}
-                        disabled={!candidate.health.executableFound}
+                        disabled={!isTargetInstalled(candidate.health)}
                       >
-                        {candidate.name}{candidate.health.executableFound ? "" : t(" (missing)")}
+                        {candidate.name}{isTargetInstalled(candidate.health) ? "" : t(" (missing)")}
                       </option>
                     ))}
                   </select>
@@ -147,7 +148,7 @@ export const TargetCaptureDialog = ({
                   <span>
                     <small>{t("Source Agent")}</small>
                     <strong>{target?.name ?? t("Agent")}</strong>
-                    <em>{t(target?.health.executableFound ? "Command detected" : "Command missing")}</em>
+                    <em>{t(target && isTargetInstalled(target.health) ? "Installation detected" : "Installation not detected")}</em>
                   </span>
                 </div>
               )}
@@ -267,7 +268,7 @@ export const TargetCaptureDialog = ({
               className={`primary-action capture-dialog__submit${isBusy ? " is-working" : ""}`}
               type="button"
               aria-busy={isBusy}
-              disabled={isBusy || !target?.health.executableFound || !name.trim() || Boolean(preview?.errors.length)}
+              disabled={isBusy || !target || !isTargetInstalled(target.health) || !name.trim() || Boolean(preview?.errors.length)}
               onClick={isReview ? onCreate : onReview}
             >
               <span className="capture-dialog__submit-icon" aria-hidden="true">

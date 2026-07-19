@@ -20,6 +20,7 @@ import type { TargetRegistry } from "./targets/registry";
 import type { TargetScope } from "./targets/targetScope";
 import type { CapturedTargetProfile } from "./targets/types";
 import { semanticMcpDefinition } from "./mcpIdentity";
+import { isTargetInstalled } from "../shared/targetHealth";
 
 interface CapturedSkill {
   targetName: string;
@@ -112,8 +113,8 @@ export const createTargetCaptureService = ({
     await targetScope?.assertEnabled(targetId);
     const discoveredTargets = await targetDiscoveryService.listTargets();
     const target = discoveredTargets.find((item) => item.id === targetId);
-    if (!target?.health.executableFound) {
-      throw new Error("Agent command is not installed or cannot be found in the app PATH");
+    if (!target || !isTargetInstalled(target.health)) {
+      throw new Error("Agent installation is not detected");
     }
     const adapter = targetRegistry.get(targetId);
     const targetPaths = adapter.createTargetPaths({

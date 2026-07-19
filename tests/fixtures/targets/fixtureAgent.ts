@@ -32,6 +32,17 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
       disabledSkillPaths: false
     }
   },
+  discovery: {
+    detectInstallation: async (input) => {
+      const path = await input.findExecutable("fixture-agent");
+      return {
+        found: Boolean(path),
+        evidence: path
+          ? [{ kind: "command", label: "fixture-agent command", path }]
+          : []
+      };
+    }
+  },
   paths: {
     createTargetPaths: ({ homeDir }) => {
       const configDir = join(homeDir, ".fixture-agent");

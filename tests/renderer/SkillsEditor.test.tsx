@@ -673,4 +673,30 @@ describe("SkillsEditor", () => {
       "https://mcp.figma.com/mcp"
     );
   });
+
+  it("lists Antigravity strict JSON MCP servers using serverUrl", () => {
+    render(
+      <SkillsEditor
+        mode="mcp"
+        value={emptyPolicy}
+        configText={JSON.stringify({
+          mcpServers: {
+            docs: { serverUrl: "https://example.com/docs" }
+          }
+        })}
+        configLanguage="json"
+        preview={{
+          ...preview,
+          targetId: "antigravity",
+          targetState: { managedConfigKeys: [], managedMcpNames: ["docs"] }
+        }}
+        onChange={vi.fn()}
+      />
+    );
+
+    const inventory = screen.getByRole("region", { name: "Profile MCP servers" });
+    expect(within(inventory).getByRole("group", { name: "MCP docs" })).toHaveTextContent(
+      "https://example.com/docs"
+    );
+  });
 });

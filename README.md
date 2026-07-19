@@ -6,7 +6,7 @@ AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 ag
 
 ## 当前状态
 
-这是一个本地优先的 Electron 客户端，目前已经可以用于真实测试 OpenCode / Claude Code / Codex 的 profile 切换流程。
+这是一个本地优先的 Electron 客户端，目前已经可以用于真实测试 OpenCode、Claude Code、Codex 和 Antigravity 的 profile 切换流程。
 
 项目仍处在早期阶段，但已经接入 `electron-builder`。`npm run build` 用来生成 Electron/Vite 运行产物，`npm run pack` / `npm run dist` 用来生成本地可运行程序或安装包。
 
@@ -56,8 +56,9 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 - OpenCode
 - Claude Code
 - Codex
+- Antigravity
 
-新增 agent 的理想方式是写一个独立 target adapter，然后注册到 `src/main/targets/registry.ts`。核心切换流程不应该为了新增 agent 大改。
+新增 agent 的理想方式是写一个独立 integration 模块，然后注册到 `src/main/targets/integrations/index.ts`。安装检测、路径、Profile、MCP 和资源部署都由该模块声明，核心切换流程不应该为了新增 agent 大改。
 
 ### 界面语言
 

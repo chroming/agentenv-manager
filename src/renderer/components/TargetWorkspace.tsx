@@ -25,6 +25,7 @@ import { targetIconFor } from "./ProfileSidebar";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { Button, ControlGroup, PageHeader } from "./ui";
+import { isTargetInstalled } from "../../shared/targetHealth";
 
 interface TargetWorkspaceProps {
   targets: TargetInfo[];
@@ -183,8 +184,8 @@ export const TargetWorkspace = ({
                     className="secondary-action"
                     type="button"
                     aria-label={t("Create profile from {{name}}", { name: target.name })}
-                    disabled={busy || !target.health.executableFound}
-                    title={target.health.executableFound ? undefined : t("{{name}} command is missing", { name: target.name })}
+                    disabled={busy || !isTargetInstalled(target.health)}
+                    title={isTargetInstalled(target.health) ? undefined : t("{{name}} is not detected", { name: target.name })}
                     onClick={() => onCreateProfileFromTarget(target.id)}
                   >
                     <Plus size={14} strokeWidth={2.2} />

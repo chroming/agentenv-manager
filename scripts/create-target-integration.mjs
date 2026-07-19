@@ -15,6 +15,7 @@ await mkdir(directory, { recursive: false });
 
 const source = `import { join } from "node:path";
 import { defineTargetIntegration } from "../../defineTargetIntegration";
+import { createCommandInstallationDriver } from "../../installationDiscovery";
 import type { AgentTargetIntegration } from "../../contract";
 
 export const ${pascalName}Integration: AgentTargetIntegration = {
@@ -35,6 +36,7 @@ export const ${pascalName}Integration: AgentTargetIntegration = {
       disabledSkillPaths: false
     }
   },
+  discovery: createCommandInstallationDriver("${id}"),
   paths: {
     createTargetPaths: ({ homeDir }) => {
       const configDir = join(homeDir, ".config", "${id}");

@@ -77,6 +77,9 @@ const describeMcpServer = (server: unknown): Pick<McpResource, "type" | "detail"
   if (typeof server.url === "string" && server.url) {
     return { type, detail: server.url };
   }
+  if (typeof server.serverUrl === "string" && server.serverUrl) {
+    return { type, detail: server.serverUrl };
+  }
   if (Array.isArray(server.command) && server.command.every((item) => typeof item === "string")) {
     return { type, detail: server.command.join(" ") };
   }
@@ -93,7 +96,7 @@ const getMcpTable = (
   parsed: Record<string, unknown>,
   configLanguage: TargetInfo["configLanguage"]
 ) => {
-  if (configLanguage !== "jsonc") {
+  if (configLanguage !== "json" && configLanguage !== "jsonc") {
     return undefined;
   }
 
@@ -181,7 +184,18 @@ const parseConfigObject = (
   configText: string,
   configLanguage: TargetInfo["configLanguage"]
 ): { ok: true; value: Record<string, unknown> } | { ok: false; message: string } => {
-  if (configLanguage === "jsonc") {
+  if (configLanguage === "json" || configLanguage === "jsonc") {
+    if (configLanguage === "json") {
+      try {
+        const parsed = JSON.parse(configText.trim().length > 0 ? configText : "{}");
+        return isRecord(parsed) ? { ok: true, value: parsed } : { ok: true, value: {} };
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error)
+        };
+      }
+    }
     const errors: ParseError[] = [];
     const parsed = parseJsonc(configText.trim().length > 0 ? configText : "{}", errors, {
       allowTrailingComma: true
@@ -203,7 +217,7 @@ const getMcpResources = (
   configLanguage: TargetInfo["configLanguage"] | undefined,
   preview: ActivationPreview | undefined
 ): { resources: McpResource[]; error?: string; note?: string } => {
-  if (configLanguage !== "jsonc" && configLanguage !== "toml") {
+  if (configLanguage !== "json" && configLanguage !== "jsonc" && configLanguage !== "toml") {
     return { resources: [] };
   }
 

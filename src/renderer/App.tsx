@@ -91,6 +91,7 @@ import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
 } from "../shared/libraryVersions";
+import { isTargetInstalled } from "../shared/targetHealth";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { DiffViewer } from "./components/DiffViewer";
@@ -413,6 +414,20 @@ const validateConfig = (
   configText: string,
   language?: TargetInfo["configLanguage"]
 ): Pick<ValidationRow, "value" | "detail" | "level"> => {
+  if (language === "json") {
+    try {
+      const parsed = JSON.parse(configText.trim().length === 0 ? "{}" : configText);
+      return isRecord(parsed)
+        ? { value: "OK", level: "ok" }
+        : { value: "Blocked", detail: "Expected a JSON object", level: "error" };
+    } catch (error) {
+      return {
+        value: "Blocked",
+        detail: error instanceof Error ? error.message : String(error),
+        level: "error"
+      };
+    }
+  }
   if (language === "jsonc") {
     const errors: ParseError[] = [];
     const parsed = parseJsonc(configText.trim().length === 0 ? "{}" : configText, errors, {
@@ -1135,11 +1150,11 @@ const AppContent = ({
         const initialTarget =
           targetItems.find(
             (target) =>
-              target.health.executableFound &&
+              isTargetInstalled(target.health) &&
               targetStateItems.some(
                 (state) => state.targetId === target.id && Boolean(state.activeProfileId)
               )
-          ) ?? targetItems.find((target) => target.health.executableFound) ?? targetItems[0];
+          ) ?? targetItems.find((target) => isTargetInstalled(target.health)) ?? targetItems[0];
         const initialTargetId = initialTarget?.id;
         const activeProfileId = targetStateItems.find(
           (state) => state.targetId === initialTargetId
@@ -2064,7 +2079,7 @@ const AppContent = ({
   }, [isProfileActionsOpen, isTargetMenuOpen]);
 
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
-  const installedTargets = targets.filter((target) => target.health.executableFound);
+  const installedTargets = targets.filter((target) => isTargetInstalled(target.health));
   const profileTarget = supportedTargets.find(
     (target) => target.id === draftProfile?.manifest.targetId
   );
@@ -3982,7 +3997,7 @@ const AppContent = ({
                 bulkUpdatePlans={bulkSkillUpdatePlans}
                 skillUsage={skillUsage}
                 installedTargetIds={targets
-                  .filter((target) => target.health.executableFound)
+                  .filter((target) => isTargetInstalled(target.health))
                   .map((target) => target.id)}
                 targetNames={targetNames}
                 preparedTargetsBySkill={preparedSkillTargetsBySkill}
@@ -4464,13 +4479,15 @@ const AppContent = ({
                     <span>{t("This section is saved with the Profile but omitted when applying to {{name}}.", { name: selectedTarget.name })}</span>
                   </div>
                 ) : null}
-                <McpEditor
-                  label={t("{{name}} settings ({{config}})", { name: profileTarget?.name ?? t("Native"), config: profileTarget?.configLabel ?? t("config") })}
-                  value={draftProfile.configText}
-                  onChange={(configText) => {
-                    updateDraftProfile({ ...draftProfile, configText });
-                  }}
-                />
+                {profileTarget?.capabilities.nativeConfig !== false ? (
+                  <McpEditor
+                    label={t("{{name}} settings ({{config}})", { name: profileTarget?.name ?? t("Native"), config: profileTarget?.configLabel ?? t("config") })}
+                    value={draftProfile.configText}
+                    onChange={(configText) => {
+                      updateDraftProfile({ ...draftProfile, configText });
+                    }}
+                  />
+                ) : null}
                 <SkillsEditor
                   mode="advanced"
                   value={draftProfile.assetPolicy ?? emptyAssetPolicy}
@@ -4660,9 +4677,9 @@ const AppContent = ({
                                   setProfileCaptureOrigin("profiles");
                                   setProfileCaptureError("");
                                   const currentTarget = targets.find((target) => target.id === profileForm.targetId);
-                                  const nextTarget = currentTarget?.health.executableFound
+                                  const nextTarget = currentTarget && isTargetInstalled(currentTarget.health)
                                     ? currentTarget
-                                    : targets.find((target) => target.health.executableFound);
+                                    : targets.find((target) => isTargetInstalled(target.health));
                                   if (nextTarget) {
                                     setProfileForm((current) => ({
                                       ...current,

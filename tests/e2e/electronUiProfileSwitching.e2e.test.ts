@@ -1256,6 +1256,8 @@ describe("Electron UI profile switching e2e", () => {
                 health: {
                   ...target.health,
                   status: "missing",
+                  installationFound: false,
+                  installationEvidence: [],
                   executableFound: false,
                   executablePath: undefined,
                   canWrite: false,
@@ -1273,7 +1275,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => openCodeCard.textContent()).toContain("Missing");
     const captureCurrent = openCodeCard.getByRole("button", { name: "Create profile from OpenCode" });
     await expect.poll(() => captureCurrent.isDisabled()).toBe(true);
-    expect(await captureCurrent.getAttribute("title")).toBe("OpenCode command is missing");
+    expect(await captureCurrent.getAttribute("title")).toBe("OpenCode is not detected");
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toBe(
       originalInstructions
     );
@@ -5316,7 +5318,7 @@ describe("Electron UI profile switching e2e", () => {
           };
         })
       );
-      expect(rowGeometry).toHaveLength(3);
+      expect(rowGeometry).toHaveLength(4);
       for (const geometry of rowGeometry) {
         for (const child of geometry.children) {
           expect(child.left).toBeGreaterThanOrEqual(geometry.row.left);
@@ -5360,6 +5362,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("switch", { name: "Turn off Codex" }).click();
     await page.getByRole("switch", { name: "Turn off Claude Code" }).click();
+    await page.getByRole("switch", { name: "Turn off Antigravity" }).click();
     await expect
       .poll(async () => {
         const settings = await readJson<{ enabledTargetIds?: string[] }>(

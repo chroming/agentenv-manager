@@ -61,6 +61,7 @@ describe("profile store", () => {
         iconKey: "rocket",
         contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         targetContentHashes: {
+          antigravity: expect.stringMatching(/^[a-f0-9]{64}$/),
           opencode: expect.stringMatching(/^[a-f0-9]{64}$/),
           "claude-code": expect.stringMatching(/^[a-f0-9]{64}$/),
           codex: expect.stringMatching(/^[a-f0-9]{64}$/)

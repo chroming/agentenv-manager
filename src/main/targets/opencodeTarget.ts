@@ -27,6 +27,7 @@ import type { AgentTargetAdapter } from "./types";
 import { captureJsonMcpServers, sameJsonValue, sanitizeCapturedJson } from "./capture";
 import { createProfileFileDriver } from "./shared/profileFiles";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
+import { createCommandInstallationDriver } from "./installationDiscovery";
 
 const DEFAULT_STATE: TargetState = {
   managedConfigKeys: [],
@@ -258,6 +259,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       disabledSkillPaths: false
     }
   },
+  detectInstallation: createCommandInstallationDriver("opencode").detectInstallation,
   createTargetPaths: ({ homeDir }) => {
     const configDir = join(homeDir, ".config", "opencode");
     const privateSkillsDir = join(configDir, "skills");

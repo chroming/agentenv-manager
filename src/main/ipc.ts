@@ -38,6 +38,7 @@ import type { TargetRegistry } from "./targets/registry";
 import type { AgentEnvPaths } from "./paths";
 import { createDataBackup, inspectDataBackup, restoreDataBackup } from "./dataBackupService";
 import { parseExternalUrl } from "./externalUrl";
+import { isTargetInstalled } from "../shared/targetHealth";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -545,7 +546,7 @@ export const registerIpcHandlers = ({
       );
     }
     const installedTargetIds = new Set(
-      targets.filter((target) => target.health.executableFound).map((target) => target.id)
+      targets.filter((target) => isTargetInstalled(target.health)).map((target) => target.id)
     );
     const consumerTargetIds = new Set(
       sharedEntries.flatMap((item) => item.foundIn).filter((id) => installedTargetIds.has(id))

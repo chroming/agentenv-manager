@@ -10,6 +10,7 @@ import { createCodexTargetAdapter } from "../../src/main/targets/codexTarget";
 import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarget";
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import { createTargetScope } from "../../src/main/targets/targetScope";
+import { createAntigravityTargetAdapter } from "../../src/main/targets/integrations/antigravity";
 
 let root = "";
 
@@ -220,5 +221,38 @@ describe("target discovery", () => {
     expect(codex?.health.status).toBe("ready");
     expect(codex?.health.executableFound).toBe(true);
     expect(codex?.health.canWrite).toBe(true);
+  });
+
+  it("marks Antigravity ready from a macOS application without an agy command", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-discovery-"));
+    const homeDir = join(root, "home");
+    const applicationPath = join(homeDir, "Applications", "Antigravity.app");
+    await mkdir(applicationPath, { recursive: true });
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir,
+      fakeHomeRoot: join(root, "fake-home")
+    });
+    const service = createTargetDiscoveryService({
+      paths,
+      targetRegistry: createTargetRegistry([createAntigravityTargetAdapter()]),
+      pathEnv: "",
+      shellPathLookup: false,
+      platform: "darwin",
+      allowSystemApplicationLookup: false
+    });
+
+    const [antigravity] = await service.listTargets();
+
+    expect(antigravity.health).toEqual(expect.objectContaining({
+      status: "ready",
+      installationFound: true,
+      executableFound: false,
+      executablePath: undefined,
+      canWrite: true
+    }));
+    expect(antigravity.health.installationEvidence).toEqual([
+      { kind: "desktop-app", label: "Antigravity application", path: applicationPath }
+    ]);
   });
 });

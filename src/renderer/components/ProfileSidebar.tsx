@@ -15,6 +15,7 @@ import type {
 import { useI18n } from "../i18n";
 
 const appIconUrl = new URL("../assets/app-icon.png", import.meta.url).href;
+const antigravityIconUrl = new URL("../assets/target-icons/antigravity.png", import.meta.url).href;
 const claudeIconUrl = new URL("../assets/target-icons/claude.svg", import.meta.url).href;
 const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.url).href;
 const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
@@ -32,7 +33,7 @@ interface ProfileSidebarProps {
   onLibraryTabSelect(tab: LibraryTab): void;
 }
 
-type TargetIconFlavor = "opencode" | "codex" | "claude" | "generic";
+type TargetIconFlavor = "opencode" | "codex" | "claude" | "antigravity" | "generic";
 
 const targetInitials = (target: Pick<TargetDescriptor, "id" | "name">) => {
   const source = target.name || target.id;
@@ -57,6 +58,9 @@ export const targetIconFor = (
   if (target.iconKey === "codex") {
     return { flavor: "codex", assetUrl: openAiIconUrl };
   }
+  if (target.iconKey === "antigravity") {
+    return { flavor: "antigravity", assetUrl: antigravityIconUrl };
+  }
 
   return { flavor: "generic" };
 };
@@ -76,9 +80,10 @@ export const ProfileSidebar = ({
 }: ProfileSidebarProps) => {
   const { t } = useI18n();
   const readyTargets = targets.filter((target) => target.health.status === "ready").length;
-  const statusTargets = [...targets]
-    .sort((left, right) => targetDisplayRank(left) - targetDisplayRank(right))
-    .slice(0, 3);
+  const orderedTargets = [...targets]
+    .sort((left, right) => targetDisplayRank(left) - targetDisplayRank(right));
+  const statusTargets = orderedTargets.slice(0, 3);
+  const hiddenTargetCount = Math.max(0, orderedTargets.length - statusTargets.length);
 
   const libraryItems: Array<{
     id: LibraryTab;
@@ -210,6 +215,15 @@ export const ProfileSidebar = ({
               </span>
             );
           })}
+          {hiddenTargetCount > 0 ? (
+            <span
+              className="agent-chip agent-chip--more"
+              aria-label={t("{{count}} more Agents", { count: hiddenTargetCount })}
+              title={t("{{count}} more Agents", { count: hiddenTargetCount })}
+            >
+              +{hiddenTargetCount}
+            </span>
+          ) : null}
         </div>
       </section> : null}
     </aside>

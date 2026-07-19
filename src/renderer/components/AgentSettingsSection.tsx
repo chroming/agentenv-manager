@@ -23,7 +23,7 @@ interface AgentSettingsSectionProps {
 const healthLabel: Record<TargetInfo["health"]["status"], string> = {
   ready: "Ready",
   "needs-setup": "Needs setup",
-  missing: "Command not found",
+  missing: "Not detected",
   guarded: "Protected"
 };
 

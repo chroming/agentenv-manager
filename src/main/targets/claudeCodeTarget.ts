@@ -28,6 +28,7 @@ import {
 } from "./capture";
 import { createProfileFileDriver } from "./shared/profileFiles";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
+import { createCommandInstallationDriver } from "./installationDiscovery";
 
 const DEFAULT_STATE: TargetState = {
   managedConfigKeys: [],
@@ -267,6 +268,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       disabledSkillPaths: false
     }
   },
+  detectInstallation: createCommandInstallationDriver("claude").detectInstallation,
   createTargetPaths: ({ homeDir }) => {
     const claudeDir = join(homeDir, ".claude");
     const skillsDir = join(claudeDir, "skills");

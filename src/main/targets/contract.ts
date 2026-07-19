@@ -3,9 +3,15 @@ import type {
   AgentTargetAdapter,
   CapturedTargetProfile,
   TargetAssetInput,
+  TargetInstallationInput,
+  TargetInstallationResult,
   TargetPathInput,
   TargetPreviewInput
 } from "./types";
+
+export interface TargetDiscoveryDriver {
+  detectInstallation(input: TargetInstallationInput): Promise<TargetInstallationResult>;
+}
 
 export interface TargetPathDriver {
   createTargetPaths(input: TargetPathInput): ReturnType<AgentTargetAdapter["createTargetPaths"]>;
@@ -50,6 +56,7 @@ export interface TargetAssetDriver {
  */
 export interface AgentTargetIntegration {
   descriptor: TargetDescriptor;
+  discovery: TargetDiscoveryDriver;
   paths: TargetPathDriver;
   profile: TargetProfileDriver;
   config: TargetConfigDriver;

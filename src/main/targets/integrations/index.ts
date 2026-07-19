@@ -3,11 +3,16 @@ import { createCodexTargetAdapter } from "../codexTarget";
 import { createOpenCodeTargetAdapter } from "../opencodeTarget";
 import type { AgentTargetAdapter } from "../types";
 import { defineTargetIntegration } from "../defineTargetIntegration";
+import { createCommandInstallationDriver } from "../installationDiscovery";
+import { createAntigravityTargetAdapter } from "./antigravity";
 
 const composeBuiltInIntegration = (
   adapter: AgentTargetAdapter
 ): AgentTargetAdapter => defineTargetIntegration({
   descriptor: adapter.descriptor,
+  discovery: createCommandInstallationDriver(
+    adapter.descriptor.executableName ?? adapter.descriptor.id
+  ),
   paths: {
     createTargetPaths: adapter.createTargetPaths
   },
@@ -34,5 +39,6 @@ const composeBuiltInIntegration = (
 export const createBuiltInTargetAdapters = (): AgentTargetAdapter[] => [
   composeBuiltInIntegration(createOpenCodeTargetAdapter()),
   composeBuiltInIntegration(createClaudeCodeTargetAdapter()),
-  composeBuiltInIntegration(createCodexTargetAdapter())
+  composeBuiltInIntegration(createCodexTargetAdapter()),
+  createAntigravityTargetAdapter()
 ];

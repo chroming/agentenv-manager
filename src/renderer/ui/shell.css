@@ -48,6 +48,24 @@ html[data-platform="darwin"] {
   padding: 8px 8px 14px;
 }
 
+.agent-chip--antigravity {
+  background: #fff;
+  border-color: #d9e2ef;
+  color: #1769e0;
+}
+
+.agent-chip--antigravity .agent-chip__logo {
+  height: 17px;
+  width: 17px;
+}
+
+.agent-chip--more {
+  background: #f8fafc;
+  border-color: #d9e2ef;
+  color: #64748b;
+  font-size: 9px;
+}
+
 html[data-platform="darwin"] .global-sidebar {
   app-region: drag;
   padding-top: var(--window-chrome-inset-top);

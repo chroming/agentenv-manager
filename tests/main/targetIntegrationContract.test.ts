@@ -32,6 +32,13 @@ describe("target integration contract", () => {
 
     await adapter.writeProfileFiles(profileDir, profile);
     const restored = await adapter.readProfileFiles(profileDir, profile.manifest);
+    const installation = await adapter.detectInstallation({
+      platform: "linux",
+      homeDir: root,
+      allowSystemApplicationLookup: false,
+      findExecutable: async () => "/usr/local/bin/fixture-agent",
+      pathExists: async () => false
+    });
 
     expect(paths).toEqual(
       expect.objectContaining({
@@ -41,6 +48,7 @@ describe("target integration contract", () => {
     );
     expect(restored.instructions).toBe(profile.instructions);
     expect(restored.configText).toBe(profile.configText);
+    expect(installation.found).toBe(true);
     await mkdir(paths.configDir, { recursive: true });
     await writeFile(paths.instructionsPath, "# Live fixture\n", "utf8");
     await writeFile(paths.configPath, '{"live":true}\n', "utf8");

@@ -13,9 +13,6 @@ const validateDescriptor = (descriptor: TargetDescriptor): void => {
   if (!descriptor.name.trim()) {
     throw new Error(`Target ${descriptor.id} must have a name.`);
   }
-  if (!descriptor.executableName?.trim()) {
-    throw new Error(`Target ${descriptor.id} must declare an executable name.`);
-  }
 };
 
 const validatePaths = (descriptor: TargetDescriptor, paths: TargetPaths): TargetPaths => {
@@ -37,6 +34,7 @@ export const defineTargetIntegration = (
 
   return {
     descriptor: integration.descriptor,
+    detectInstallation: (input) => integration.discovery.detectInstallation(input),
     createTargetPaths: (input) =>
       validatePaths(integration.descriptor, integration.paths.createTargetPaths(input)),
     createDefaultProfile: (id) => integration.profile.createDefaultProfile(id),

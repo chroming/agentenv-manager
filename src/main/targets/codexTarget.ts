@@ -42,6 +42,7 @@ import {
 } from "./skillRefs";
 import type { AgentTargetAdapter, TargetAssetInput } from "./types";
 import { createProfileFileDriver } from "./shared/profileFiles";
+import { createCommandInstallationDriver } from "./installationDiscovery";
 
 const hashText = (content: string): string =>
   createHash("sha256").update(content).digest("hex");
@@ -421,6 +422,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       disabledSkillPaths: true
     }
   },
+  detectInstallation: createCommandInstallationDriver("codex").detectInstallation,
   createTargetPaths: ({ homeDir }) => {
     const codexHome = join(homeDir, ".codex");
     const skillsDir = join(codexHome, "skills");

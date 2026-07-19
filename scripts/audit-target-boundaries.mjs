@@ -14,7 +14,7 @@ const walk = async (directory) => {
   return nested.flat();
 };
 
-const targetFiles = (await walk(targetRoot)).filter((path) => path.endsWith("Target.ts"));
+const targetFiles = (await walk(targetRoot)).filter((path) => path.endsWith(".ts"));
 const targetIds = new Set();
 for (const path of targetFiles) {
   const content = await readFile(path, "utf8");

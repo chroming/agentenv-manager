@@ -1060,6 +1060,7 @@ describe("activation service", () => {
           disabledSkillPaths: true
         }
       },
+      detectInstallation: async () => ({ found: true, evidence: [] }),
       createTargetPaths: () => ({
         targetId: "codex",
         configDir: paths.codexHome,
