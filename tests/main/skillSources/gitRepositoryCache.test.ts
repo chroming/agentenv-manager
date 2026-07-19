@@ -69,7 +69,11 @@ describe("git repository cache", () => {
     const run = vi.fn(runner.run.bind(runner));
     const cache = createGitRepositoryCache({
       cacheRoot,
-      runner: { run, dispose: runner.dispose.bind(runner) }
+      runner: {
+        run,
+        cancelActive: runner.cancelActive.bind(runner),
+        dispose: runner.dispose.bind(runner)
+      }
     });
 
     const [left, right] = await Promise.all([

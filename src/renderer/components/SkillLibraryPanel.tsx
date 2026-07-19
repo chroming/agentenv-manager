@@ -111,6 +111,7 @@ export interface PreparedSkillTarget {
 
 interface SkillLibraryPanelProps {
   isLoading?: boolean;
+  isBusy?: boolean;
   librarySkills: SkillLibraryEntry[];
   skillUpdates: SkillUpdateInfo[];
   skillInventory: SkillInventoryEntry[];
@@ -138,6 +139,7 @@ interface SkillLibraryPanelProps {
     inputs: RepositorySkillImportInput[],
     onProgress?: (progress: GitHubSkillImportProgress) => void
   ): Promise<RepositorySkillImportResult>;
+  onCancelRepositoryOperations(): Promise<void>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): Promise<boolean>;
   onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<void>;
@@ -308,6 +310,7 @@ const clamp = (value: number, min: number, max: number) =>
 
 export const SkillLibraryPanel = ({
   isLoading = false,
+  isBusy = false,
   librarySkills,
   skillUpdates,
   skillInventory,
@@ -329,6 +332,7 @@ export const SkillLibraryPanel = ({
   onImportGitHubSkills,
   onScanRepositorySkills,
   onImportRepositorySkills,
+  onCancelRepositoryOperations,
   onManageTargetSkill,
   onConsolidateSkillGroup,
   onAutoConsolidateSkillGroups,
@@ -388,6 +392,7 @@ export const SkillLibraryPanel = ({
   const [repositoryDirectory, setRepositoryDirectory] = useState("");
   const [repositoryConnection, setRepositoryConnection] = useState<"auto" | "system-git">("auto");
   const [repositoryScanKind, setRepositoryScanKind] = useState<"github-api" | "system-git">();
+  const [repositoryOperationCancelable, setRepositoryOperationCancelable] = useState(false);
   const [repositoryScanSummary, setRepositoryScanSummary] = useState("");
   const [repositoryCandidateInputs, setRepositoryCandidateInputs] = useState<
     Record<string, RepositorySkillImportInput>
@@ -513,6 +518,12 @@ export const SkillLibraryPanel = ({
       autoCleanupReviewOpen ||
       cleanupDraft
   );
+  const closeImportTool = async () => {
+    if (githubOperation && repositoryOperationCancelable) {
+      await onCancelRepositoryOperations();
+    }
+    onCloseTool?.();
+  };
   const openMergePreview = async (skill: SkillLibraryEntry) => {
     setOpenAction(undefined);
     setMergeOperation("loading");
@@ -576,16 +587,20 @@ export const SkillLibraryPanel = ({
         return;
       }
       if (activeTool) {
-        if (activeTool === "import" && githubOperation) {
+        if (activeTool === "import" && githubOperation && !repositoryOperationCancelable) {
           return;
         }
-        onCloseTool?.();
+        if (activeTool === "import") {
+          void closeImportTool();
+        } else {
+          onCloseTool?.();
+        }
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTool, githubOperation, modalOpen, onCloseTool, openActionId]);
+  }, [activeTool, githubOperation, modalOpen, onCloseTool, openActionId, repositoryOperationCancelable]);
   useModalDialog({
     open: modalOpen,
     dialogRef: modalDialogRef,
@@ -600,8 +615,8 @@ export const SkillLibraryPanel = ({
     open: activeTool === "import",
     dialogRef: importDialogRef,
     fallbackFocusRef: importFallbackFocusRef,
-    dismissDisabled: Boolean(githubOperation),
-    onDismiss: () => onCloseTool?.()
+    dismissDisabled: Boolean(githubOperation) && !repositoryOperationCancelable,
+    onDismiss: () => void closeImportTool()
   });
 
   useEffect(() => {
@@ -870,6 +885,7 @@ export const SkillLibraryPanel = ({
       return;
     }
     setGithubOperation("scanning");
+    setRepositoryOperationCancelable(false);
     setGithubOperationError("");
     setGithubImportResult(undefined);
     setGithubImportProgress({});
@@ -892,12 +908,14 @@ export const SkillLibraryPanel = ({
 
       let result: GitHubSkillScanResult;
       if (useGitHubApi) {
+        setRepositoryOperationCancelable(false);
         const githubResult = await onScanGitHubSkills(url);
         result = githubResult;
         setRepositoryScanKind("github-api");
         setRepositoryScanSummary(`${githubResult.owner}/${githubResult.repo} · ${githubResult.ref}`);
         setRepositoryCandidateInputs({});
       } else {
+        setRepositoryOperationCancelable(true);
         const repositoryResult = await onScanRepositorySkills({
           repository: url,
           ref: repositoryRef.trim() || undefined,
@@ -955,6 +973,7 @@ export const SkillLibraryPanel = ({
       );
     } finally {
       setGithubOperation(undefined);
+      setRepositoryOperationCancelable(false);
     }
   };
 
@@ -966,6 +985,7 @@ export const SkillLibraryPanel = ({
       (candidate) => candidate.status === "ready" && githubSelectedIds.includes(candidate.id)
     );
     setGithubOperation("importing");
+    setRepositoryOperationCancelable(repositoryScanKind === "system-git");
     setGithubOperationError("");
     setGithubImportResult(undefined);
     setGithubImportProgress(
@@ -1041,6 +1061,7 @@ export const SkillLibraryPanel = ({
       });
     } finally {
       setGithubOperation(undefined);
+      setRepositoryOperationCancelable(false);
     }
   };
 
@@ -1713,6 +1734,7 @@ export const SkillLibraryPanel = ({
 
       <SkillUpdateDialog
         plan={selectedUpdatePlan}
+        busy={isBusy}
         onClose={onCloseUpdatePreview}
         onConfirm={onUpdateLibrarySkill}
       />
@@ -3164,8 +3186,11 @@ export const SkillLibraryPanel = ({
                     className="icon-action"
                     type="button"
                     aria-label={t("Close import")}
-                    disabled={Boolean(githubOperation) || localImportOperation}
-                    onClick={onCloseTool}
+                    disabled={
+                      localImportOperation ||
+                      (Boolean(githubOperation) && !repositoryOperationCancelable)
+                    }
+                    onClick={() => void closeImportTool()}
                   >
                     <X size={16} strokeWidth={2.2} />
                   </button>
@@ -3516,8 +3541,11 @@ export const SkillLibraryPanel = ({
                   <button
                     className={githubImportResult ? "primary-action" : "secondary-action"}
                     type="button"
-                    disabled={Boolean(githubOperation) || localImportOperation}
-                    onClick={onCloseTool}
+                    disabled={
+                      localImportOperation ||
+                      (Boolean(githubOperation) && !repositoryOperationCancelable)
+                    }
+                    onClick={() => void closeImportTool()}
                   >
                     {t(githubImportResult ? "Close" : "Cancel")}
                   </button>

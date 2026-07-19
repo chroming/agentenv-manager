@@ -713,11 +713,11 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Import skills" }).click();
     expect(await page.getByLabel("Local skill folder path").count()).toBe(1);
-    expect(await page.getByLabel("GitHub skill URL").count()).toBe(0);
-    await page.getByRole("tab", { name: "GitHub" }).click();
+    expect(await page.getByLabel("Repository address").count()).toBe(0);
+    await page.getByRole("tab", { name: "Repository" }).click();
     expect(await page.getByLabel("Local skill folder path").count()).toBe(0);
     await page
-      .getByLabel("GitHub skill URL")
+      .getByLabel("Repository address")
       .fill("https://github.com/acme/agent-skills/tree/main/skills/reviewer");
     expect(await page.getByRole("button", { name: "Scan", exact: true }).isEnabled()).toBe(true);
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -5615,8 +5615,8 @@ describe("Electron UI profile switching e2e", () => {
     const sourceUrl = "https://github.com/acme/agent-skills/tree/main/skills/reviewer";
 
     await page.getByRole("button", { name: "Import skills" }).click();
-    await page.getByRole("tab", { name: "GitHub" }).click();
-    await page.getByLabel("GitHub skill URL").fill(sourceUrl);
+    await page.getByRole("tab", { name: "Repository" }).click();
+    await page.getByLabel("Repository address").fill(sourceUrl);
     await page.getByRole("button", { name: "Scan", exact: true }).click();
     const githubReviewer = page.getByRole("checkbox", { name: "Select GitHub Reviewer" });
     await githubReviewer.waitFor();
@@ -5646,7 +5646,7 @@ describe("Electron UI profile switching e2e", () => {
     await sourceTooltip.waitFor({ state: "visible" });
     await expectInViewport(page, sourceTooltip);
     await page.mouse.move(10, 10);
-    await githubRow.getByRole("button", { name: "Open GitHub source for github-reviewer" }).click();
+    await githubRow.getByRole("button", { name: "Open repository source for github-reviewer" }).click();
     await expect
       .poll(() =>
         electronApp.evaluate(() =>
@@ -5742,9 +5742,9 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
 
     await page.getByRole("button", { name: "Import skills" }).click();
-    await page.getByRole("tab", { name: "GitHub" }).click();
+    await page.getByRole("tab", { name: "Repository" }).click();
     await page
-      .getByLabel("GitHub skill URL")
+      .getByLabel("Repository address")
       .fill("https://github.com/acme/agent-skills/tree/main/skills/engineering");
     await page.getByRole("button", { name: "Scan", exact: true }).click();
 
@@ -5815,8 +5815,8 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Import skills" }).click();
-    await page.getByRole("tab", { name: "GitHub" }).click();
-    await page.getByLabel("GitHub skill URL")
+    await page.getByRole("tab", { name: "Repository" }).click();
+    await page.getByLabel("Repository address")
       .fill(`https://github.com/acme/agent-skills/tree/main/${remotePath}`);
     await page.getByRole("button", { name: "Scan", exact: true }).click();
     await page.getByRole("checkbox", { name: "Select Shared Reviewer" })
@@ -5857,8 +5857,8 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Import skills" }).click();
-    await page.getByRole("tab", { name: "GitHub" }).click();
-    await page.getByLabel("GitHub skill URL")
+    await page.getByRole("tab", { name: "Repository" }).click();
+    await page.getByLabel("Repository address")
       .fill(`https://github.com/acme/agent-skills/tree/main/${remotePath}`);
     await page.getByRole("button", { name: "Scan", exact: true }).click();
     await page.getByRole("checkbox", { name: "Select Shared Reviewer" })

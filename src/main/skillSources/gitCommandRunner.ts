@@ -25,6 +25,7 @@ export interface GitCommandRunnerOptions {
 
 export interface GitCommandRunner {
   run(args: string[], options?: GitCommandRunOptions): Promise<GitCommandResult>;
+  cancelActive(): void;
   dispose(): void;
 }
 
@@ -204,12 +205,15 @@ export const createGitCommandRunner = (
 
   return {
     run,
-    dispose: () => {
-      if (disposed) return;
-      disposed = true;
+    cancelActive: () => {
       for (const cancel of [...active]) {
         cancel("cancelled");
       }
+    },
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      for (const cancel of [...active]) cancel("cancelled");
     }
   };
 };

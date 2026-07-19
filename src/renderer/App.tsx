@@ -3929,6 +3929,7 @@ const AppContent = ({
             {activeLibraryTab === "skills" ? (
               <SkillLibraryPanel
                 isLoading={isLoading}
+                isBusy={busy}
                 librarySkills={librarySkills}
                 skillUpdates={skillUpdates}
                 skillInventory={skillInventory}
@@ -3952,6 +3953,7 @@ const AppContent = ({
                 onImportGitHubSkills={importGitHubSkills}
                 onScanRepositorySkills={scanRepositorySkills}
                 onImportRepositorySkills={importRepositorySkills}
+                onCancelRepositoryOperations={() => window.agentEnv.cancelRepositoryOperations()}
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={consolidateSkillGroup}
                 onAutoConsolidateSkillGroups={autoConsolidateSkillGroups}

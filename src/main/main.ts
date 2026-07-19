@@ -392,6 +392,7 @@ const createServices = async () => {
     targetCaptureService,
     targetRegistry,
     targetDiscoveryService,
+    cancelRepositoryOperations: () => gitRunner?.cancelActive(),
     dispose: () => {
       repositoryServicesDisposed = true;
       gitRunner?.dispose();

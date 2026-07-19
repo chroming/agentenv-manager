@@ -468,6 +468,7 @@ describe("SkillLibraryPanel", () => {
         onImportGitHubSkills={onImportGitHubSkills}
         onScanRepositorySkills={onScanRepositorySkills}
         onImportRepositorySkills={onImportRepositorySkills}
+        onCancelRepositoryOperations={vi.fn().mockResolvedValue(undefined)}
         onPreviewLibrarySkillUpdate={onPreviewLibrarySkillUpdate}
         onCloseUpdatePreview={onCloseUpdatePreview}
         onUpdateLibrarySkill={onUpdateLibrarySkill}
@@ -1057,7 +1058,7 @@ describe("SkillLibraryPanel", () => {
   });
 
   it("scans and imports skills from an SSH repository ref and directory", async () => {
-    const onScanRepositorySkills = vi.fn().mockResolvedValue({
+    const scanResult = {
       repository: "git@code.example:platform/agent-skills.git",
       ref: "release/v2",
       directory: "skills/engineering",
@@ -1080,6 +1081,15 @@ describe("SkillLibraryPanel", () => {
           status: "ready" as const
         }
       ]
+    };
+    let rejectFirstScan: ((reason: Error) => void) | undefined;
+    const onScanRepositorySkills = vi.fn()
+      .mockImplementationOnce(() => new Promise((_resolve, reject) => {
+        rejectFirstScan = reject;
+      }))
+      .mockResolvedValue(scanResult);
+    const onCancelRepositoryOperations = vi.fn().mockImplementation(async () => {
+      rejectFirstScan?.(new Error("Git command was cancelled"));
     });
     const onImportRepositorySkills = vi.fn().mockImplementation(async (
       inputs: RepositorySkillImportInput[],
@@ -1122,6 +1132,7 @@ describe("SkillLibraryPanel", () => {
         onImportGitHubSkills={vi.fn()}
         onScanRepositorySkills={onScanRepositorySkills}
         onImportRepositorySkills={onImportRepositorySkills}
+        onCancelRepositoryOperations={onCancelRepositoryOperations}
         onManageTargetSkill={noop}
         onConsolidateSkillGroup={vi.fn().mockResolvedValue(false)}
         onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue(undefined)}
@@ -1165,10 +1176,18 @@ describe("SkillLibraryPanel", () => {
     fireEvent.change(screen.getByLabelText("Repository directory"), {
       target: { value: "skills/engineering" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Scan" }));
+    const scanButton = screen.getByRole("button", { name: "Scan" });
+    fireEvent.click(scanButton);
+    const cancelButton = screen.getByRole("button", { name: "Cancel" });
+    await waitFor(() => expect(cancelButton).toBeEnabled());
+    fireEvent.click(cancelButton);
+    await waitFor(() => expect(onCancelRepositoryOperations).toHaveBeenCalledTimes(1));
+    await screen.findByText("Git command was cancelled");
+    await waitFor(() => expect(scanButton).toBeEnabled());
+    fireEvent.click(scanButton);
 
     await screen.findByRole("checkbox", { name: "Select Internal Review" });
-    expect(onScanRepositorySkills).toHaveBeenCalledWith({
+    expect(onScanRepositorySkills).toHaveBeenLastCalledWith({
       repository: "git@code.example:platform/agent-skills.git",
       ref: "release/v2",
       directory: "skills/engineering",
@@ -1269,6 +1288,7 @@ describe("SkillLibraryPanel", () => {
         onImportGitHubSkills={vi.fn()}
         onScanRepositorySkills={vi.fn()}
         onImportRepositorySkills={vi.fn()}
+        onCancelRepositoryOperations={vi.fn().mockResolvedValue(undefined)}
         onManageTargetSkill={noop}
         onConsolidateSkillGroup={vi.fn().mockResolvedValue(false)}
         onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue(undefined)}

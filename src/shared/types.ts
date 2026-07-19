@@ -40,6 +40,7 @@ export interface AgentEnvApi {
   scanRepositorySkills(input: RepositorySkillSourceInput): Promise<RepositorySkillScanResult>;
   importRepositorySkillToLibrary(input: RepositorySkillImportInput): Promise<SkillLibraryEntry>;
   importRepositorySkills(inputs: RepositorySkillImportInput[]): Promise<RepositorySkillImportResult>;
+  cancelRepositoryOperations(): Promise<void>;
   removeSkillFromLibrary(id: string): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
   consolidateSkillGroup(input: SkillCleanupRequest): Promise<SkillCleanupResult>;

@@ -390,6 +390,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       updatedAt: "2026-07-17T00:00:00.000Z"
     }),
     importRepositorySkills: vi.fn().mockResolvedValue({ imported: [], failed: [] }),
+    cancelRepositoryOperations: vi.fn().mockResolvedValue(undefined),
     removeSkillFromLibrary: vi.fn().mockResolvedValue({
       backupId: "remove-backup",
       libraryId: "skill",

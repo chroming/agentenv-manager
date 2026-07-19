@@ -51,6 +51,7 @@ export interface IpcServices {
   targetDiscoveryService: TargetDiscoveryService;
   targetCaptureService: TargetCaptureService;
   paths: AgentEnvPaths;
+  cancelRepositoryOperations(): void;
 }
 
 const parseId = (value: unknown, label: string): string => {
@@ -82,7 +83,8 @@ export const registerIpcHandlers = ({
   targetRegistry,
   targetDiscoveryService,
   targetCaptureService,
-  paths
+  paths,
+  cancelRepositoryOperations
 }: IpcServices) => {
   const automationBackgroundDelayMs =
     process.env.AGENTENV_AUTOMATION === "1"
@@ -347,6 +349,9 @@ export const registerIpcHandlers = ({
     (_event, inputs: RepositorySkillImportInput[]) =>
       skillLibraryStore.importRepositorySkills(Array.isArray(inputs) ? inputs : [])
   );
+  ipcMain.handle("skills:cancel-repository", () => {
+    cancelRepositoryOperations();
+  });
   ipcMain.handle("skills:remove-library", async (_event, id: unknown) => {
     const skillId = parseId(id, "skill id");
     const profiles = await profileStore.listProfiles();

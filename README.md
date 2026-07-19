@@ -34,6 +34,8 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 
 - 将本地已有 skill 导入统一 skill library。
 - 从 GitHub 单个 Skill、任意目录或整个仓库扫描并批量选择导入。
+- 从公司内网或私有 Git 仓库通过 HTTPS / SSH Clone 地址导入；可指定分支、标签和子目录。
+- 通用仓库操作复用系统 Git、SSH Agent 与 credential helper，应用不保存仓库密码、Token 或 SSH 私钥。
 - 为 library skill 配置独立的 Tracked / Untracked 更新策略。
 - 检查 skill 更新。
 - 单个更新或批量更新。
@@ -163,7 +165,7 @@ release/
 
 当前 macOS 目标包含 `.dmg` 和 `.zip`，并使用项目内的应用图标。正式对外分发前仍需使用 Apple Developer ID 签名并完成 notarization；本地自用可以先直接运行 `.app`。
 
-验证实际打包后的 `.app` 能启动并完成一次 OpenCode Profile 接管：
+验证实际打包后的 `.app` 能在 Finder 风格的精简 `PATH` 下发现系统 Git、导入 Repository Skill，并完成一次 OpenCode Profile 接管：
 
 ```bash
 npm run test:e2e:packaged
@@ -187,6 +189,7 @@ AGENTENV_DATA_ROOT=.agentenv-runtime npm run dev
 AGENTENV_DATA_ROOT          覆盖应用数据目录
 AGENTENV_HOME               覆盖目标 home 目录
 AGENTENV_FAKE_HOME          覆盖 fake home 目录
+AGENTENV_CACHE_ROOT         覆盖可删除重建的 Repository cache 目录
 AGENTENV_GITHUB_FIXTURE_ROOT e2e 中用于 GitHub fixture
 ```
 
@@ -204,6 +207,8 @@ AgentEnv Manager 的核心原则是：先预览，再应用。
 6. 写入失败时尝试自动恢复 backup。
 
 目录和配置替换会先写入同目录 staging，再通过可恢复的原子交换生效；若进程在交换中断，下一次启动会根据 journal 恢复。默认 Live link 模式链接的是完整 Skill 目录，而不是在目标目录内逐文件创建链接。Profile 删除进入应用私有回收区，Skill 删除、清洗和更新会保留可恢复备份。
+
+Repository 扫描只写入操作系统缓存目录中的 bare cache，不会修改用户现有 checkout。缓存不属于 AgentEnv 数据备份，可以随时删除并在下次检查时重建。Repository 更新先进入 Library 的预览与备份流程，不会直接绕过 Profile Apply 修改 Target。
 
 对 Codex 这类敏感目标，真实 home 写入默认有额外保护。开发和 e2e 中可以通过 fake home 隔离测试。
 

@@ -511,6 +511,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - `SKILL.md` frontmatter MUST be parsed as YAML rather than with line-oriented string matching. Folded, quoted, and multiline values remain valid.
 - System Git uses one disposable Bare Repository Cache per sanitized locator. The Cache lives under the operating system cache root rather than AgentEnv data storage, is excluded from Data Backup, and MAY be deleted or rebuilt without changing Library, Profiles, or Targets.
 - A Repository scan or fetch failure MUST leave existing Library content available and MUST NOT block Profile Save or Apply. Repository operations never modify or pull a user's existing checkout.
+- Cancel, Escape, window close, and application quit MUST terminate active System Git processes without disposing the Repository service for later operations. GitHub API operations are not silently converted into System Git operations when cancelled or failed.
 
 ### 16.1.1 Refresh
 
@@ -625,7 +626,7 @@ External ownership contract:
 - Unmanaged copies are never deleted.
 - Deletion with managed installs creates an undoable Backup.
 
-Status: local and recursive GitHub import, in-place Refresh, per-Skill update policy, YAML frontmatter, read-only Skills CLI detection, external copy import, scan, cleanup, ignore, GitHub update, icon metadata, reference blocking, managed-install removal, and undo are `Implemented`; System Git Repository import/update is `In progress`, and external-manager takeover and identity edge cases need broader contract tests.
+Status: local, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter; read-only Skills CLI detection; external copy import; scan; cleanup; ignore; icon metadata; reference blocking; managed-install removal; and undo are `Implemented`. External-manager takeover and identity edge cases need broader contract tests.
 
 ## 17. MCP Library Contract
 
@@ -886,6 +887,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 
 - Local import survives deletion of original folder.
 - GitHub direct-Skill, containing-directory, and repository scan; candidate selection; partial import; rate limit; sign-in remediation; update check; Preview; and update.
+- System Git repository, directory, and direct-Skill scan; HTTPS/SSH/local transport; ref selection; partial import; cancellation; subtree update detection; Preview; backup; cache rebuild; credential redaction; and packaged-app Git discovery.
 - Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
 - Library global disable persistence, update-check exclusion, Add Skill picker filtering, existing-reference visibility, and Apply-time managed-copy removal.
 - In-place toolbar and `Cmd/Ctrl+R` Refresh preserve current Skill view state and do not contact update sources.

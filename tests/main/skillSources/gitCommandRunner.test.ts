@@ -77,4 +77,15 @@ describe("git command runner", () => {
     await expect(operation).rejects.toThrow("cancelled");
     await expect(runner.run(["status"])).rejects.toThrow("disposed");
   });
+
+  it("cancels active commands without disposing the runner", async () => {
+    const executable = await fakeGit('if [ "$1" = "fetch" ]; then sleep 5; else printf "ready\\n"; fi');
+    const runner = createGitCommandRunner({ executablePath: executable, defaultTimeoutMs: 5_000 });
+    const operation = runner.run(["fetch"]);
+
+    runner.cancelActive();
+
+    await expect(operation).rejects.toThrow("cancelled");
+    await expect(runner.run(["status"])).resolves.toMatchObject({ stdout: "ready\n" });
+  });
 });
