@@ -283,6 +283,36 @@ export interface GitHubSkillImportResult {
   failed: GitHubSkillImportFailure[];
 }
 
+export type RepositorySkillTransport = "github-api" | "system-git";
+
+export interface RepositorySkillSourceInput {
+  repository: string;
+  ref?: string;
+  directory?: string;
+  transport?: RepositorySkillTransport;
+}
+
+export interface RepositorySkillCandidate {
+  id: string;
+  name: string;
+  description: string;
+  directory: string;
+  source: SkillUpstream;
+  contentRevision: string;
+  resolvedCommit: string;
+  status: GitHubSkillCandidateStatus;
+  existingLibraryId?: string;
+}
+
+export interface RepositorySkillScanResult {
+  repository: string;
+  ref: string;
+  directory: string;
+  transport: RepositorySkillTransport;
+  truncated: boolean;
+  candidates: RepositorySkillCandidate[];
+}
+
 export interface SkillUpdateInfo {
   id: string;
   name: string;
@@ -402,7 +432,7 @@ export interface UnmanagedSkillEntry {
   foundIn: string[];
 }
 
-export type SkillSourceType = "local" | "github" | "zip";
+export type SkillSourceType = "local" | "github" | "git" | "zip";
 export type SkillUpdatePolicy = "tracked" | "untracked";
 export type SkillSyncMethod = "symlink" | "copy" | "auto";
 export type SkillStorageLocation = "appData" | "agents";

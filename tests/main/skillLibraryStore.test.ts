@@ -450,6 +450,74 @@ description: >
     ).rejects.toThrow(`Skill source is missing SKILL.md: ${missingSource}`);
   });
 
+  it("keeps repository sources tracked by default without checking disabled or untracked skills", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const fixtures = [
+      {
+        id: "disabled-git",
+        metadata: {
+          sourceType: "git",
+          source: "git@code.example.test:agent/skills.git",
+          remoteRef: "main",
+          remotePath: "skills/reviewer",
+          globallyEnabled: false
+        }
+      },
+      {
+        id: "untracked-git",
+        metadata: {
+          sourceType: "git",
+          source: "ssh://git@code.example.test/agent/skills.git",
+          updatePolicy: "untracked"
+        }
+      },
+      {
+        id: "legacy-github",
+        metadata: {
+          sourceType: "github",
+          source: "https://github.com/example/skills/tree/main/reviewer",
+          globallyEnabled: false
+        }
+      }
+    ] as const;
+
+    for (const fixture of fixtures) {
+      const skillDir = join(paths.skillsLibraryDir, fixture.id);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(
+        join(skillDir, "SKILL.md"),
+        `---\nname: ${fixture.id}\n---\n# ${fixture.id}\n`,
+        "utf8"
+      );
+      await writeFile(
+        join(skillDir, ".agentenv-skill.json"),
+        `${JSON.stringify(fixture.metadata, null, 2)}\n`,
+        "utf8"
+      );
+    }
+
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("disabled and untracked sources must not contact a remote");
+    });
+    const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+
+    await expect(store.listSkills()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "disabled-git",
+          sourceType: "git",
+          updatePolicy: "tracked",
+          globallyEnabled: false
+        }),
+        expect.objectContaining({ id: "untracked-git", updatePolicy: "untracked" }),
+        expect.objectContaining({ id: "legacy-github", updatePolicy: "tracked" })
+      ])
+    );
+    await expect(store.checkUpdates()).resolves.toEqual([]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("persists a custom skill icon across source updates", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

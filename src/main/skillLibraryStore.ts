@@ -259,7 +259,9 @@ const updatePolicyFor = (metadata: SkillMetadataFile): SkillUpdatePolicy => {
   if (typeof metadata.updateCheckEnabled === "boolean") {
     return metadata.updateCheckEnabled ? "tracked" : "untracked";
   }
-  return metadata.sourceType === "github" ? "tracked" : "untracked";
+  return metadata.sourceType === "github" || metadata.sourceType === "git"
+    ? "tracked"
+    : "untracked";
 };
 
 const isMissingFileError = (error: unknown) =>

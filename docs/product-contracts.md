@@ -477,29 +477,31 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 ### 16.1 Import
 
 - Import from a local folder copies canonical content into the Library.
-- Import presents `Local folder` and `GitHub` as mutually exclusive source modes. Only the active mode is rendered, and the footer exposes one primary action for that mode; a second import workflow MUST NOT compete inside the same dialog body.
+- Import presents `Local folder` and `Repository` as mutually exclusive source modes. Only the active mode is rendered, and the footer exposes one primary action for that mode; a second import workflow MUST NOT compete inside the same dialog body.
 - When the selected local folder is an adapter-declared Target Skill location, Import MUST back it up and replace it with a managed link or copy in the same transaction. A successfully managed source MUST NOT remain in Needs attention as a duplicate.
 - Local folders outside supported Target locations remain independent provenance sources and are not modified.
 - Normal use MUST continue if the original folder is later deleted.
 - The original local path is retained as provenance, but local imports default to the `Untracked` update policy.
 - A user MAY explicitly track a stable local folder as an update source.
-- GitHub import MUST store repository, ref, directory, and resolved revision.
-- GitHub imports default to the `Tracked` update policy.
-- A GitHub URL MAY identify a Skill directory, a containing directory, or a repository. Containing-directory and repository imports MUST scan recursively for valid top-level Skill roots before any Library write.
+- Repository import MUST store the sanitized repository locator, explicit ref, directory, resolved commit, and Skill-subtree revision. GitHub API imports remain `sourceType: github`; System Git imports use `sourceType: git`.
+- Repository imports default to the `Tracked` update policy. The selected source transport is durable metadata and MUST NOT switch silently during a later background check.
+- A GitHub Web URL MAY identify a Skill directory, a containing directory, or a repository. A generic Git clone locator uses separate optional Ref and Directory fields; unknown hosting providers' Web URL layouts MUST NOT be guessed. Containing-directory and repository imports MUST scan recursively for valid top-level Skill roots before any Library write.
+- `github.com` Web URLs use the GitHub API by default. SSH, SCP-like, non-`github.com`, and explicitly selected System Git locators use the packaged application's discovered system `git` executable and the user's existing SSH Agent or Git credential helper. AgentEnv MUST NOT store Git passwords, access tokens, private keys, or credential-helper output.
+- A GitHub API failure MUST NOT silently retry through System Git. The user MAY explicitly choose `Try with System Git`, after which that source remains a Git source.
 - Scan results MUST appear in a confirmation dialog, select all importable candidates by default, allow individual candidates to be excluded, and identify already-imported or duplicate candidates without selecting them. The bulk-selection control MUST expose all, mixed, and none states while keeping its label and selected count aligned without overlap at the minimum supported viewport.
 - A batch import MUST process selected candidates sequentially in the same dialog. Each candidate advances through distinct queued, reviewing, writing, completed, failed, or skipped states; only the current candidate may open the conditional duplicate review.
 - A candidate becomes completed only after its canonical Library write has returned successfully. Completed candidates remain visible and preserved when a later candidate fails or is skipped.
 - After the final candidate, the dialog MUST show one aggregate success or partial-failure result and remain open until the user explicitly closes it. A batch import MUST report each failure against its source.
-- Every Skill has an independent `Tracked` or `Untracked` update policy. `Untracked` excludes that Skill from manual, startup, and scheduled checks without reading its local source or contacting GitHub.
+- Every Skill has an independent `Tracked` or `Untracked` update policy. `Untracked` excludes that Skill from manual, startup, and scheduled checks without reading its local source, Repository Cache, or remote.
 - A Skill row overflow is a compact command menu. Update source and tracking fields live in a focused `Update settings` dialog and MUST NOT turn the row menu into a scrolling form.
 - The UI status for this durable policy is `Not tracked`; temporary wording such as `Checks off` and source-type wording such as `Fixed copy` MUST NOT substitute for the policy.
 - The global auto-check setting controls scheduling only; it never overrides a per-Skill `Untracked` policy.
-- Legacy metadata without an explicit policy defaults to `Untracked` for local sources and `Tracked` for GitHub sources.
+- Legacy metadata without an explicit policy defaults to `Untracked` for local sources and `Tracked` for GitHub API and System Git Repository sources.
 - Import validates `SKILL.md` and rejects unsafe or ambiguous directory layouts.
 - Skill version metadata is normalized from either ClawHub's top-level `version` field or Agent Skills' `metadata.version` field. String and numeric scalar versions are accepted. Conflicting values declared in both locations are rejected rather than silently prioritized.
 - Library identity is the stable `id`; duplicate detection uses the normalized frontmatter `name` and also guards storage-ID collisions. Import MUST NOT silently create a suffixed ID when a same-name Skill exists.
 - A same-name import opens one conditional review step before any write. It compares declared version, full content hash, `SKILL.md`, and every changed file against each matching Library entry. Identical content is labelled explicitly and can only reuse the existing entry. Different content requires an explicit choice between replacing a selected Library entry or saving under a validated unique ID.
-- Import comparison treats trackable online provenance as part of the Skill's useful state. When content is identical but an incoming GitHub source differs from or improves on the existing local provenance, the review labels `Source available` and offers `Update source`. This operation preserves every Skill file and stable Library ID while updating source, revision, upstream, and `Tracked` policy metadata. Different local paths alone do not create a source conflict, and a local import never silently downgrades an existing online source.
+- Import comparison treats trackable online provenance as part of the Skill's useful state. When content is identical but an incoming Repository source differs from or improves on the existing local provenance, the review labels `Source available` and offers `Update source`. This operation preserves every Skill file and stable Library ID while updating source, revision, upstream, transport, and `Tracked` policy metadata. Different local paths alone do not create a source conflict, and a local import never silently downgrades an existing online source.
 - Replacing preserves the selected Library ID so Profile references remain valid, preserves Library-only presentation and availability metadata, backs up the current content, and atomically installs the reviewed source. Saving another copy makes the duplicate IDs visible in the Skill list so intentionally same-name entries remain distinguishable.
 - Import commit MUST verify the reviewed incoming content hash. A local or remote source that changes after review is rejected without modifying Library.
 - Local import MUST distinguish a non-destructive `Import copy` from `Import & manage` for a folder already inside a Target. Before `Import & manage`, the UI discloses that AgentEnv will back up the Target copy, import it to Library, and replace that location with a managed installation.
@@ -507,6 +509,8 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - A failed local or external import MUST preserve the selected source and keep its dialog open so the user can retry or inspect the global error.
 - The Library Skill icon defaults to its source type and MAY be replaced by a built-in icon. The selected icon is presentation metadata and MUST survive content updates.
 - `SKILL.md` frontmatter MUST be parsed as YAML rather than with line-oriented string matching. Folded, quoted, and multiline values remain valid.
+- System Git uses one disposable Bare Repository Cache per sanitized locator. The Cache lives under the operating system cache root rather than AgentEnv data storage, is excluded from Data Backup, and MAY be deleted or rebuilt without changing Library, Profiles, or Targets.
+- A Repository scan or fetch failure MUST leave existing Library content available and MUST NOT block Profile Save or Apply. Repository operations never modify or pull a user's existing checkout.
 
 ### 16.1.1 Refresh
 
@@ -603,8 +607,10 @@ External ownership contract:
 - Check compares only against an explicit update source.
 - A tracked online source MUST expose its complete address on hover and keyboard focus and provide a clearly identified command that opens the address in the system browser.
 - GitHub rate limiting MUST provide a GitHub sign-in remediation.
+- System Git authentication, host trust, VPN, ref, and timeout failures MUST provide Repository-specific diagnostics and MUST NOT suggest GitHub sign-in.
 - Update Preview MUST show changed files and validation errors.
-- Applying a Library update changes canonical content.
+- Applying a Library update changes canonical content only after Preview, Backup, validation, and atomic replacement. A check never modifies Library.
+- A Repository update changes neither a Profile nor a Target directly. Related Profiles and copied Target installs become `Changes pending` and require the normal Save/Apply lifecycle.
 - In optional Copy mode, Profiles remain saved and their deployed Targets become `Changes pending`; copied installs require explicit synchronization or Profile Apply.
 - In default Live link mode, linked Target content changes immediately. The UI MUST disclose this behavior and MUST NOT represent the linked deployment as an immutable applied snapshot.
 - Live link installs link the complete Target Skill directory to the canonical Library directory. They MUST NOT construct a shadow directory made from per-file links. The ownership marker lives beside the directory link so Library contents remain clean and replacing or removing the link cannot touch the canonical directory.
@@ -619,7 +625,7 @@ External ownership contract:
 - Unmanaged copies are never deleted.
 - Deletion with managed installs creates an undoable Backup.
 
-Status: local and recursive GitHub import, in-place Refresh, per-Skill update policy, YAML frontmatter, read-only Skills CLI detection, external copy import, scan, cleanup, ignore, GitHub update, icon metadata, reference blocking, managed-install removal, and undo are `Implemented`; external-manager takeover and identity edge cases need broader contract tests.
+Status: local and recursive GitHub import, in-place Refresh, per-Skill update policy, YAML frontmatter, read-only Skills CLI detection, external copy import, scan, cleanup, ignore, GitHub update, icon metadata, reference blocking, managed-install removal, and undo are `Implemented`; System Git Repository import/update is `In progress`, and external-manager takeover and identity edge cases need broader contract tests.
 
 ## 17. MCP Library Contract
 
