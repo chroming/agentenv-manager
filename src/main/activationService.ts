@@ -551,7 +551,8 @@ export const createActivationService = ({
     targetPaths: TargetPaths,
     profileHash: string,
     skillLibrary: SkillLibraryEntry[],
-    inventory: SkillInventoryEntry[]
+    inventory: SkillInventoryEntry[],
+    allowMatchingUnmanagedSkills: boolean
   ) => {
     const sharedBySkill = new Map<
       string,
@@ -589,15 +590,26 @@ export const createActivationService = ({
         (item) => item.libraryId === shared.libraryId && item.enabled
       );
       const targetName = reference?.targetName ?? shared.libraryId;
+      let adoptMatchingTargetCopy = false;
       if (targetPaths.skillsDir) {
         const targetPath = join(targetPaths.skillsDir, targetName);
         const occupyingItem = inventory.find(
           (item) => !item.sharedLocation && resolve(item.path) === resolve(targetPath)
         );
-        if (
-          occupyingItem &&
-          occupyingItem.status !== "managed"
-        ) {
+        adoptMatchingTargetCopy = Boolean(
+          reference &&
+          allowMatchingUnmanagedSkills &&
+          occupyingItem?.status === "library" &&
+          occupyingItem.libraryId === shared.libraryId &&
+          occupyingItem.contentMatchesLibrary === true
+        );
+        if (occupyingItem?.status === "managed" && occupyingItem.libraryId !== shared.libraryId) {
+          errors.push(
+            `Cannot prepare shared Skill ${shared.skillKey}: ${targetPath} is managed as Library Skill ${occupyingItem.libraryId ?? "unknown"}.`
+          );
+          continue;
+        }
+        if (occupyingItem && occupyingItem.status !== "managed" && !adoptMatchingTargetCopy) {
           errors.push(
             `Cannot prepare shared Skill ${shared.skillKey}: ${targetPath} is occupied by a non-AgentEnv Skill.`
           );
@@ -608,7 +620,9 @@ export const createActivationService = ({
       for (const path of sharedPaths) {
         fingerprints[path] = (await hashPath(path)) ?? "";
       }
-      deferredLibraryIds.add(shared.libraryId);
+      if (!adoptMatchingTargetCopy) {
+        deferredLibraryIds.add(shared.libraryId);
+      }
       preparations.push({
         skillKey: shared.skillKey,
         libraryId: shared.libraryId,
@@ -619,7 +633,9 @@ export const createActivationService = ({
         profileHash
       });
       warnings.push(
-        reference
+        adoptMatchingTargetCopy
+          ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory; Apply will bring the matching Agent copy under management before Replace shared copy removes the compatibility copy.`
+          : reference
           ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory until Replace shared copy installs the Agent-specific copy.`
           : `Shared Skill ${shared.skillKey} stays active until Replace shared copy removes the compatibility copy; this Profile will omit it afterward.`
       );
@@ -1139,6 +1155,8 @@ export const createActivationService = ({
       [inventoryTargetPaths],
       skillLibrary
     );
+    const stateFile = await readTargetStateFile(adapter.descriptor.id);
+    const isTakeover = !stateFile.state.activeProfileId;
     const profileContentHash =
       sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
       createProfileContentHash(sourceProfile, adapter.descriptor.id);
@@ -1147,7 +1165,8 @@ export const createActivationService = ({
       targetPaths,
       profileContentHash,
       skillLibrary,
-      inventory
+      inventory,
+      isTakeover
     );
     const externallyResolved = await resolveExternalSkills(
       preparationPlan.runtimeProfile,
@@ -1164,8 +1183,6 @@ export const createActivationService = ({
     );
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
-    const stateFile = await readTargetStateFile(adapter.descriptor.id);
-    const isTakeover = !stateFile.state.activeProfileId;
     const targetPreview = await adapter.createPreview({
       profile: materializedProfile,
       targetPaths,
@@ -1415,7 +1432,8 @@ export const createActivationService = ({
       targetPaths,
       currentProfileHash,
       skillLibrary,
-      inventory
+      inventory,
+      preview.operation === "takeover"
     );
     if (
       JSON.stringify(preparationPlan.preparations) !==

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,6 +7,10 @@ import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
+import { createTargetCaptureService } from "../../src/main/targetCaptureService";
+import type { TargetDiscoveryService } from "../../src/main/targetDiscovery";
+import { createTargetRegistry } from "../../src/main/targets/registry";
+import type { TargetInfo } from "../../src/shared/types";
 
 let root = "";
 afterEach(async () => {
@@ -71,5 +75,113 @@ describe("Codex Profile v2 switching e2e", () => {
       .rejects.toThrow();
     await expect(readFile(join(paths.codexHome, "skills", "beta", "SKILL.md"), "utf8"))
       .resolves.toContain("# beta");
+  });
+
+  it("takes over an exact captured Codex Skill copy while preserving its shared copy", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-codex-capture-takeover-e2e-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home")
+    });
+    const targetRegistry = createTargetRegistry();
+    const profileStore = createProfileStore(
+      { appDataRoot: paths.appDataRoot, homeDir: paths.homeDir },
+      targetRegistry
+    );
+    const settingsStore = createSettingsStore(paths);
+    const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+    const activationService = createActivationService({
+      paths,
+      profileStore,
+      settingsStore,
+      skillLibraryStore,
+      targetRegistry
+    });
+    const captureService = createTargetCaptureService({
+      paths,
+      profileStore,
+      skillLibraryStore,
+      targetRegistry,
+      targetDiscoveryService: {
+        listTargets: async () => [
+          { id: "codex", health: { executableFound: true } } as TargetInfo
+        ]
+      } satisfies TargetDiscoveryService
+    });
+    const skillId = "k8s-ops";
+    const skillContent =
+      "---\nname: k8s-ops\ndescription: Captured operations workflow.\n---\n\n# K8s Ops\n";
+    const privateSkill = join(paths.codexHome, "skills", skillId);
+    const sharedSkill = join(paths.userSkillsDir, skillId);
+    await mkdir(privateSkill, { recursive: true });
+    await mkdir(sharedSkill, { recursive: true });
+    await writeFile(join(privateSkill, "SKILL.md"), skillContent, "utf8");
+    await writeFile(join(sharedSkill, "SKILL.md"), skillContent, "utf8");
+    await writeFile(paths.globalAgentsPath, "# Captured Codex\n", "utf8");
+    await writeFile(paths.codexConfigPath, "model = \"gpt-5\"\n", "utf8");
+
+    const capturePreview = await captureService.previewTarget("codex");
+    expect(capturePreview.errors).toEqual([]);
+    expect(capturePreview.resources).toContainEqual(
+      expect.objectContaining({
+        kind: "skill",
+        id: skillId,
+        action: "import",
+        detail: "2 source copies stay unchanged"
+      })
+    );
+    const captured = await captureService.createFromTarget({
+      previewId: capturePreview.id,
+      name: "Captured Codex"
+    });
+
+    const applyPreview = await activationService.previewProfile(captured.profile.id, "codex");
+    expect(applyPreview.errors).toEqual([]);
+    expect(applyPreview.resourceChanges).toContainEqual(
+      expect.objectContaining({
+        kind: "skill",
+        action: "replace",
+        name: skillId,
+        path: privateSkill
+      })
+    );
+    const applied = await activationService.applyProfile(
+      captured.profile.id,
+      applyPreview.id
+    );
+    if (!applied.ok) throw new Error(applied.errors.join("; "));
+
+    expect((await lstat(privateSkill)).isSymbolicLink()).toBe(true);
+    await expect(readFile(`${privateSkill}.agentenv-owner.json`, "utf8"))
+      .resolves.toContain(`"source": "skills-library/${skillId}"`);
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8"))
+      .resolves.toBe(skillContent);
+    await expect(readFile(join(sharedSkill, ".agentenv-owner.json"), "utf8"))
+      .rejects.toThrow();
+
+    const rollbackPreview = await activationService.previewRollback(applied.backupId);
+    expect(rollbackPreview.errors).toEqual([]);
+    expect((await activationService.rollback(applied.backupId)).ok).toBe(true);
+    expect((await lstat(privateSkill)).isDirectory()).toBe(true);
+    await expect(readFile(join(privateSkill, "SKILL.md"), "utf8"))
+      .resolves.toBe(skillContent);
+    await expect(readFile(`${privateSkill}.agentenv-owner.json`, "utf8"))
+      .rejects.toThrow();
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8"))
+      .resolves.toBe(skillContent);
+
+    await writeFile(join(privateSkill, "SKILL.md"), "# Changed after capture\n", "utf8");
+    const changedPreview = await activationService.previewProfile(
+      captured.profile.id,
+      "codex"
+    );
+    expect(changedPreview.errors).toContainEqual(
+      expect.stringContaining(`${privateSkill} is occupied by a non-AgentEnv Skill`)
+    );
+    expect((await lstat(privateSkill)).isDirectory()).toBe(true);
+    await expect(readFile(join(privateSkill, "SKILL.md"), "utf8"))
+      .resolves.toBe("# Changed after capture\n");
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8"))
+      .resolves.toBe(skillContent);
   });
 });
