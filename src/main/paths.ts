@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 export interface AgentEnvPaths {
   appDataRoot: string;
   repositoryCacheDir: string;
+  captureReceiptsDir: string;
   profilesDir: string;
   backupsDir: string;
   targetStatesDir: string;
@@ -27,12 +28,15 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
     (overrides.codexHome ? dirname(overrides.codexHome) : join(overrides.appDataRoot, "fake-home"));
   const codexHome = overrides.codexHome ?? join(home, ".codex");
   const userSkillsDir = overrides.userSkillsDir ?? join(home, ".agents", "skills");
+  const cacheRoot = join(dirname(overrides.appDataRoot), ".agentenv-manager-cache");
 
   return {
     appDataRoot: overrides.appDataRoot,
     repositoryCacheDir:
       overrides.repositoryCacheDir ??
-      join(dirname(overrides.appDataRoot), ".agentenv-manager-cache", "repositories"),
+      join(cacheRoot, "repositories"),
+    captureReceiptsDir:
+      overrides.captureReceiptsDir ?? join(cacheRoot, "capture-receipts"),
     profilesDir: overrides.profilesDir ?? join(overrides.appDataRoot, "profiles"),
     backupsDir: overrides.backupsDir ?? join(overrides.appDataRoot, "backups"),
     targetStatesDir:

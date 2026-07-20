@@ -19,6 +19,8 @@ The command creates `src/main/targets/integrations/example-agent/index.ts`. Comp
 - `mcp` owns conversion from Library MCP entries into the Agent's native format.
 - `assets` owns Target-specific validation and deployment behavior. Reuse shared deployment helpers whenever the ownership semantics match.
 
+Skill ownership semantics belong to the shared deployment Planner. A Target asset driver receives only explicitly approved unmanaged paths with their expected content hashes; it must re-check those hashes before writing and must not infer takeover permission from Target-specific conditions.
+
 Do not load code dynamically at runtime. Static registration keeps Electron packaging deterministic and makes every supported Agent auditable.
 
 ## Required behavior
@@ -42,6 +44,7 @@ npm run build
 npx vitest run tests/main/targets tests/main/targetDiscovery.test.ts
 npx vitest run tests/main/profileStore.test.ts tests/main/activationService.test.ts
 npx vitest run tests/main/skillLibraryStore.test.ts tests/main/targetCaptureService.test.ts
+npx vitest run tests/main/skillDeploymentPlanner.test.ts tests/main/targets/skillRefs.test.ts
 npm run test:e2e
 ```
 

@@ -11,6 +11,7 @@ import { createTargetCaptureService } from "../../src/main/targetCaptureService"
 import type { TargetDiscoveryService } from "../../src/main/targetDiscovery";
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import type { TargetInfo } from "../../src/shared/types";
+import { createCaptureReceiptStore } from "../../src/main/captureReceiptStore";
 
 let root = "";
 afterEach(async () => {
@@ -134,6 +135,22 @@ describe("Codex Profile v2 switching e2e", () => {
       previewId: capturePreview.id,
       name: "Captured Codex"
     });
+    const captureReceiptStore = createCaptureReceiptStore(paths);
+    await expect(captureReceiptStore.read(captured.profile.id, "codex")).resolves.toEqual(
+      expect.objectContaining({
+        profileId: captured.profile.id,
+        targetId: "codex",
+        skills: [
+          expect.objectContaining({
+            libraryId: skillId,
+            copies: expect.arrayContaining([
+              expect.objectContaining({ path: privateSkill }),
+              expect.objectContaining({ path: sharedSkill })
+            ])
+          })
+        ]
+      })
+    );
 
     const applyPreview = await activationService.previewProfile(captured.profile.id, "codex");
     expect(applyPreview.errors).toEqual([]);
@@ -150,6 +167,8 @@ describe("Codex Profile v2 switching e2e", () => {
       applyPreview.id
     );
     if (!applied.ok) throw new Error(applied.errors.join("; "));
+    await expect(captureReceiptStore.read(captured.profile.id, "codex"))
+      .resolves.toBeUndefined();
 
     expect((await lstat(privateSkill)).isSymbolicLink()).toBe(true);
     await expect(readFile(`${privateSkill}.agentenv-owner.json`, "utf8"))
@@ -158,6 +177,15 @@ describe("Codex Profile v2 switching e2e", () => {
       .resolves.toBe(skillContent);
     await expect(readFile(join(sharedSkill, ".agentenv-owner.json"), "utf8"))
       .rejects.toThrow();
+
+    const stablePreview = await activationService.previewProfile(
+      captured.profile.id,
+      "codex"
+    );
+    expect(stablePreview.errors).toEqual([]);
+    expect(stablePreview.changes).toEqual([]);
+    expect(stablePreview.resourceChanges).toEqual([]);
+    expect(stablePreview.sharedSkillPreparationChanged).toBe(false);
 
     const rollbackPreview = await activationService.previewRollback(applied.backupId);
     expect(rollbackPreview.errors).toEqual([]);

@@ -17,6 +17,10 @@ import type { TargetRegistry } from "./targets/registry";
 import type { TargetScope } from "./targets/targetScope";
 import type { CapturedTargetProfile } from "./targets/types";
 import { isTargetInstalled } from "../shared/targetHealth";
+import {
+  createCaptureReceiptStore,
+  type CaptureSkillCopy
+} from "./captureReceiptStore";
 
 interface CapturedSkill {
   targetName: string;
@@ -24,6 +28,7 @@ interface CapturedSkill {
   sourcePath: string;
   sourcePaths: string[];
   contentHash: string;
+  copies: CaptureSkillCopy[];
   existing: boolean;
   conflictResolution?: SkillImportConflictResolution;
 }
@@ -87,6 +92,7 @@ export const createTargetCaptureService = ({
   targetScope
 }: TargetCaptureServiceOptions): TargetCaptureService => {
   const previews = new Map<string, InternalCapture>();
+  const captureReceiptStore = createCaptureReceiptStore(paths);
 
   const buildCapture = async (targetId: string): Promise<InternalCapture> => {
     await targetScope?.assertEnabled(targetId);
@@ -198,6 +204,12 @@ export const createTargetCaptureService = ({
         sourcePath,
         sourcePaths,
         contentHash,
+        copies: entries.map((entry) => ({
+          path: entry.path,
+          contentHash: entry.contentHash,
+          locationRole: entry.locationRole,
+          sharedLocation: entry.sharedLocation
+        })),
         existing: Boolean(existing),
         conflictResolution
       });
@@ -343,13 +355,33 @@ export const createTargetCaptureService = ({
           }
         }
       });
+      const receiptWarnings: string[] = [];
+      try {
+        await captureReceiptStore.write({
+          formatVersion: 1,
+          profileId: saved.id,
+          targetId: capture.preview.targetId,
+          createdAt: capture.preview.createdAt,
+          skills: capture.skills.map((skill) => ({
+            libraryId: skill.libraryId,
+            targetName: skill.targetName,
+            copies: skill.copies
+          }))
+        });
+      } catch (error) {
+        receiptWarnings.push(
+          `Capture handoff evidence could not be saved; first Apply will use current content validation. ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
       previews.delete(input.previewId);
       return {
         profile: await profileStore.readProfile(saved.id),
         targetId: capture.preview.targetId,
         importedSkillCount: importedSkillPaths.length,
         importedMcpCount: 0,
-        warnings: capture.preview.warnings
+        warnings: [...capture.preview.warnings, ...receiptWarnings]
       };
     } catch (error) {
       if (profileId) await profileStore.deleteProfile(profileId);

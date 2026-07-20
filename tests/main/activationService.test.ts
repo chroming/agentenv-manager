@@ -297,6 +297,38 @@ describe("activation service v2", () => {
       .resolves.toBe("# Changed after preview\n");
   });
 
+  it("rejects a Preview when any deployment-relevant Skill fact changes", async () => {
+    const { paths, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    const lateSkill = join(paths.codexHome, "skills", "late-skill");
+    await mkdir(lateSkill, { recursive: true });
+    await writeFile(join(lateSkill, "SKILL.md"), "---\nname: late-skill\n---\n# Late\n");
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
+      ok: false,
+      errors: ["Skill environment changed after preview; review the latest version"]
+    });
+    await expect(readFile(paths.globalAgentsPath, "utf8"))
+      .resolves.toBe("# Old guidance\n");
+    await expect(readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
+      .rejects.toThrow();
+  });
+
+  it("rejects a Preview when Skill deployment settings change", async () => {
+    const { paths, service, settingsStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    await settingsStore.updateSettings({ skillSyncMethod: "copy" });
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
+      ok: false,
+      errors: ["Skill deployment settings changed after preview; review the latest version"]
+    });
+    await expect(readFile(paths.globalAgentsPath, "utf8"))
+      .resolves.toBe("# Old guidance\n");
+  });
+
   it("restores the pre-Apply environment from its backup", async () => {
     const { paths, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

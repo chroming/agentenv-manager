@@ -67,6 +67,7 @@ import type { GitCliSkillSource } from "./skillSources/contract";
 import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { createSkillChanges } from "./skillFileChanges";
+import { hashSkillContent } from "./skillContentHash";
 
 interface SkillMetadataFile {
   sourceType?: SkillSourceType;
@@ -341,34 +342,7 @@ const readJsonIfExists = async <T>(path: string): Promise<T | undefined> => {
   }
 };
 
-const hashPath = async (
-  path: string,
-  hash = createHash("sha256"),
-  ancestorPaths = new Set<string>()
-) => {
-  const canonicalPath = await realpath(path);
-  if (ancestorPaths.has(canonicalPath)) {
-    throw new Error(`Skill contains a symbolic link cycle: ${path}`);
-  }
-  const nextAncestors = new Set(ancestorPaths).add(canonicalPath);
-  const entries = await readdir(path, { withFileTypes: true });
-  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    if (entry.name === ".agentenv-skill.json" || entry.name === ".agentenv-owner.json") {
-      continue;
-    }
-    const child = join(path, entry.name);
-    hash.update(entry.name);
-    const childStats = entry.isSymbolicLink() ? await stat(child) : undefined;
-    if (entry.isDirectory() || childStats?.isDirectory()) {
-      await hashPath(child, hash, nextAncestors);
-    } else if (entry.isFile() || childStats?.isFile()) {
-      hash.update(await readFile(child));
-    }
-  }
-  return hash;
-};
-
-const computeContentHash = async (path: string) => (await hashPath(path)).digest("hex");
+const computeContentHash = hashSkillContent;
 
 const validateSkillFrontmatter = async (skillDir: string) => {
   const frontmatter = parseSkillFrontmatter(await readFile(join(skillDir, "SKILL.md"), "utf8"));

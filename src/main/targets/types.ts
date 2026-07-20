@@ -19,8 +19,7 @@ export interface TargetAssetInput {
   targetPaths: TargetPaths;
   skillLibraryDir?: string;
   skillSyncMethod?: "symlink" | "copy" | "auto";
-  allowMatchingUnmanagedSkills?: boolean;
-  allowMatchingUnmanagedAssets?: boolean;
+  approvedUnmanagedSkillHashes?: ReadonlyMap<string, string>;
   replaceablePaths?: ReadonlySet<string>;
   isolateSkillRoot?: boolean;
 }

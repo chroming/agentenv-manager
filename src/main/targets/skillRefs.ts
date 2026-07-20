@@ -1,7 +1,7 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { TargetPaths } from "../../shared/types";
 import { pathEntryExists, pathExists } from "../fileUtils";
-import { hashComparableResource } from "../resourceHash";
+import { hashSkillContent } from "../skillContentHash";
 import {
   createOwnerMarkerContent,
   isAgentEnvOwnedDir
@@ -18,12 +18,6 @@ const isOwnedSkillDir = async (targetDir: string, targetPaths: TargetPaths) =>
     kind: "skill"
   });
 
-const contentMatches = async (sourceDir: string, targetDir: string) =>
-  (await pathExists(sourceDir)) &&
-  (await pathExists(targetDir)) &&
-  (await hashComparableResource(sourceDir)) ===
-    (await hashComparableResource(targetDir));
-
 export const skillTargetNames = ({ profile }: TargetAssetInput) =>
   new Set(
     profile.resources.skills
@@ -35,7 +29,7 @@ export const validateSkillRefs = async ({
   profile,
   targetPaths,
   skillLibraryDir,
-  allowMatchingUnmanagedSkills,
+  approvedUnmanagedSkillHashes,
   replaceablePaths,
   isolateSkillRoot
 }: TargetAssetInput) => {
@@ -69,10 +63,12 @@ export const validateSkillRefs = async ({
       errors.push(`Library Skill does not exist: ${sourceDir}`);
       continue;
     }
-    const matchingUnmanaged =
+    const approvedHash = approvedUnmanagedSkillHashes?.get(resolve(targetDir));
+    const matchingUnmanaged = Boolean(
       targetExists &&
-      allowMatchingUnmanagedSkills &&
-      await contentMatches(sourceDir, targetDir);
+      approvedHash &&
+      (await hashSkillContent(targetDir)) === approvedHash
+    );
     const replaceable = replaceablePaths?.has(targetDir) === true;
     if (targetExists && !owned && !matchingUnmanaged && !replaceable) {
       errors.push(`Skill target already exists and is not AgentEnv-owned: ${targetDir}`);
@@ -99,7 +95,7 @@ export const applySkillRefs = async ({
   targetPaths,
   skillLibraryDir,
   skillSyncMethod = "symlink",
-  allowMatchingUnmanagedSkills,
+  approvedUnmanagedSkillHashes,
   replaceablePaths
 }: TargetAssetInput) => {
   if (!targetPaths.skillsDir || !skillLibraryDir) return;
@@ -109,10 +105,12 @@ export const applySkillRefs = async ({
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
     const targetExists = await pathEntryExists(targetDir);
     const owned = targetExists && await isOwnedSkillDir(targetDir, targetPaths);
-    const matchingUnmanaged =
+    const approvedHash = approvedUnmanagedSkillHashes?.get(resolve(targetDir));
+    const matchingUnmanaged = Boolean(
       targetExists &&
-      allowMatchingUnmanagedSkills &&
-      await contentMatches(sourceDir, targetDir);
+      approvedHash &&
+      (await hashSkillContent(targetDir)) === approvedHash
+    );
     const replaceable = replaceablePaths?.has(targetDir) === true;
     if (targetExists && !owned && !matchingUnmanaged && !replaceable) {
       throw new Error(

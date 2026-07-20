@@ -85,6 +85,7 @@ Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data ro
 - Applying an OpenCode Profile MUST NOT change Codex or Claude Code Skill directories, and equivalent isolation applies to every Target pair.
 - Compatibility copies MAY be captured into a Profile, but MUST remain in place while any installed consumer lacks a current prepared Profile intent.
 - Importing a compatibility copy creates an independent Library copy and MUST NOT replace, link, or remove the compatibility location.
+- An exact Target-specific copy that already existed beside a compatibility copy MAY be adopted during first Take over only when its current canonical Skill hash matches the current Library hash. Adoption is previewed, backed up, verified again immediately before replacement, and MUST remain a no-op on the next Preview while shared migration is still pending.
 - A compatibility copy is switched only through an explicit Scan local migration action after every installed consumer Target has applied a current preparation; Capture never removes it as a side effect.
 - Completing migration MUST create one restorable backup for the shared paths, every affected Target path, and every affected Target state. It removes the shared paths first, deploys or omits the Skill according to each prepared Profile, verifies the result, and restores the whole transaction on any failure.
 - AgentEnv MUST NOT edit per-Agent configuration to suppress duplicate discovery during this migration.
@@ -104,6 +105,8 @@ A Profile is a saved environment recipe. It owns:
 - An independent MCP policy for each Target: `Leave unchanged` or a sparse set of `On` and `Off` choices for MCP servers already defined by that Agent.
 
 A Profile MAY record a preferred Target for default UI context and the Target it was created from for provenance. Neither field binds deployment: the same Profile MAY be applied to every compatible Target, and each Target still has at most one active Profile.
+
+Create from Target MAY record a machine-local Capture receipt containing source paths, location roles, and content hashes. The receipt is optional takeover evidence, lives outside portable AgentEnv data, is never part of the Profile or data backup, cannot authorize content that differs from the current Library hash, and is consumed after the first successful Apply to that Target. Missing or malformed receipt data falls back to current content and ownership validation.
 
 Source of truth: the saved Profile directory in AgentEnv data.
 
@@ -221,8 +224,8 @@ It MUST include enough information to distinguish:
 | Check update | Compare canonical Library content with its explicit tracked source. It does not write. |
 | Update | Replace canonical Library content after preview. It marks affected deployments pending; it does not deploy. |
 | Add to Profile | Add a Library reference to the Profile draft. Save is still required. |
-| Preview | Compute a fresh, complete deployment plan against current Profile, Library, and Target state. It does not write. |
-| Apply | Transactionally replace the AgentEnv-managed Target environment with the selected saved Profile after Preview, using compensating rollback when a multi-path write fails. |
+| Preview | Compute one fresh, complete deployment plan against current Profile, Library, and Target facts. It records the inventory fingerprint, approved transitions, expected content hashes, and backup scope without writing. |
+| Apply | Verify that the reviewed Profile, Library, inventory, native state, sources, and live paths still match Preview, then execute that exact deployment plan transactionally. Apply MUST NOT reinterpret the same facts through a second ownership planner. Every approved unmanaged replacement is hash-checked again immediately before execution, and a multi-path failure uses compensating rollback. |
 | Take over | First Apply to an unmanaged Target. It establishes ownership after previewing existing content. |
 | Create from Target | Read a Target's portable environment into a new saved Profile and import reusable resources into Library without changing or taking over the Target. |
 | Stop managing | End AgentEnv ownership through an explicit keep-current or restore-pre-takeover path. |
@@ -974,6 +977,8 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Applying the same Library Skill to OpenCode, Codex, Claude Code, Antigravity, and Trae CLI creates isolated Target-specific runtime copies.
 - Create from Target followed by first Apply isolates a Target Skills root that aliases a shared directory, preserves the shared destination byte-for-byte, installs Target-owned child references, and restores the original root link through Rollback.
 - Create from Target followed by first Apply adopts an exact Agent-private duplicate transactionally even when an identical shared compatibility copy remains active; Rollback restores the original unowned private copy and shared content byte-for-byte.
+- The machine-local Capture receipt is consumed after that first successful Apply. Missing, malformed, stale, or content-mismatched evidence never expands replacement authority.
+- Any Skill inventory fact used by Preview changing before Apply invalidates the whole deployment plan. An approved unmanaged copy is checked against its Preview content hash again inside the Adapter immediately before replacement.
 - Shared compatibility copies remain unchanged during capture; later removal requires the explicit reviewed Scan local cleanup workflow.
 - Adding a shared compatibility Skill to Library keeps one shared runtime copy active and removes redundant Target-specific copies. Apply prepares each installed consumer without creating duplicate runtime copies; Replace shared copy then performs one backed-up, verified cross-Target switch without deleting Library content.
 
