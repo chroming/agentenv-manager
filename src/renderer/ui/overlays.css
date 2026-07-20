@@ -37,16 +37,32 @@
 }
 
 .resource-icon-trigger {
+  --resource-icon-artwork-size: 18px;
+  align-items: center;
   appearance: none;
+  background: transparent;
   border: 0;
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: var(--muted);
   cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
   min-height: 0;
   padding: 0;
-  transition: box-shadow 140ms ease, transform 140ms ease;
+  transition: background-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+
+.resource-icon-trigger > svg,
+.resource-icon-trigger > .resource-favicon {
+  height: var(--resource-icon-artwork-size);
+  width: var(--resource-icon-artwork-size);
 }
 
 .resource-icon-trigger:hover {
-  box-shadow: 0 0 0 2px rgba(23, 105, 245, 0.12);
+  background: rgba(60, 60, 67, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(60, 60, 67, 0.08);
+  color: var(--text);
 }
 
 .resource-icon-trigger:focus-visible {
@@ -145,37 +161,94 @@
   color: #aa7410;
 }
 
+.resource-icon-trigger[data-icon] {
+  background: transparent;
+}
+
+.resource-icon-trigger[data-icon]:hover {
+  background: rgba(60, 60, 67, 0.08);
+}
+
+.resource-favicon {
+  border-radius: 3px;
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
 .resource-icon-menu {
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 8px;
   box-sizing: border-box;
   box-shadow: var(--shadow-popover);
-  display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(5, 34px);
-  padding: 10px;
+  display: block;
+  max-height: 425px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 4px 8px;
   position: fixed;
-  width: 214px;
+  width: 224px;
   z-index: var(--z-popover);
+}
+
+.resource-icon-group + .resource-icon-group {
+  border-top: 1px solid var(--border);
+  margin-top: 5px;
+  padding-top: 5px;
+}
+
+.resource-icon-group > span {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  margin: 0 2px 3px;
+}
+
+.resource-icon-grid {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(6, 30px);
 }
 
 .resource-icon-option {
   align-items: center;
+  background: var(--surface-muted);
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 6px;
+  color: var(--muted);
   cursor: pointer;
   display: inline-flex;
-  height: 34px;
+  height: 28px;
   justify-content: center;
   padding: 0;
-  width: 34px;
+  width: 30px;
+}
+
+.resource-icon-option[data-icon] {
+  background: var(--surface-muted);
 }
 
 .resource-icon-option:hover,
 .resource-icon-option[aria-checked="true"] {
-  border-color: #8cb4fa;
-  box-shadow: 0 0 0 2px rgba(23, 105, 245, 0.1);
+  background: var(--surface);
+  border-color: rgba(23, 105, 245, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(23, 105, 245, 0.08);
+  color: var(--accent);
+}
+
+.resource-icon-option--source {
+  gap: 8px;
+  justify-content: flex-start;
+  padding: 0 9px;
+  width: 100%;
+}
+
+.resource-icon-option--source strong {
+  font-size: 11px;
+  font-weight: 600;
 }
 
 /* Menus and dialogs share hit targets and edge treatment regardless of owner page. */

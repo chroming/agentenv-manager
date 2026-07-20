@@ -1509,8 +1509,10 @@ export const SkillLibraryPanel = ({
                 <div className="library-resource-cell">
                   <ResourceIconPicker
                     className="resource-avatar"
-                    iconKey={skill.iconKey ?? (skill.sourceType === "github" || skill.sourceType === "git" ? "github" : "folder")}
+                    fallbackIconKey={skill.sourceType === "github" || skill.sourceType === "git" ? "github" : "folder"}
+                    iconKey={skill.iconKey}
                     label={skill.name}
+                    sourceUrl={skill.sourceType === "github" || skill.sourceType === "git" ? skill.source : undefined}
                     onChange={(iconKey) => onSetIcon({ id: skill.id, iconKey })}
                   />
                   <div className="skill-title-stack">

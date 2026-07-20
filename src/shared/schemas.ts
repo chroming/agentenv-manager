@@ -19,7 +19,27 @@ export const ResourceIconKeySchema = z.enum([
   "book",
   "palette",
   "bot",
-  "sparkles"
+  "sparkles",
+  "bug",
+  "cloud",
+  "cpu",
+  "file",
+  "globe",
+  "key",
+  "layers",
+  "lightbulb",
+  "lock",
+  "message",
+  "package",
+  "plug",
+  "settings",
+  "test",
+  "wand",
+  "wrench",
+  "chart",
+  "boxes",
+  "braces",
+  "server"
 ]);
 
 export const ProfileManifestSchema = z.object({

@@ -2011,12 +2011,16 @@ describe("Electron UI profile switching e2e", () => {
         )
       };
     });
-    expect(skillIconGeometry.iconSize).toEqual([32, 32]);
+    expect(skillIconGeometry.iconSize).toEqual([28, 28]);
     expect(skillIconGeometry.glyphSize).toEqual([18, 18]);
-    expect(skillIconGeometry.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
+    expect(skillIconGeometry.backgroundColor).toBe("rgba(0, 0, 0, 0)");
     expect(skillIconGeometry.centerDelta.every((delta) => delta <= 0.5)).toBe(true);
     expect(skillIconGeometry.identityCenterDelta).toBeLessThanOrEqual(1);
     expect(skillIconGeometry.rowCenterDelta).toBeLessThanOrEqual(1);
+    await sharedRow.locator(".resource-avatar").hover();
+    await expect.poll(() =>
+      sharedRow.locator(".resource-avatar").evaluate((icon) => getComputedStyle(icon).backgroundColor)
+    ).not.toBe("rgba(0, 0, 0, 0)");
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
     const popover = page.getByRole("menu", { name: "Actions for shared-reviewer" });
     await popover.waitFor({ state: "visible" });
@@ -6275,6 +6279,41 @@ describe("Electron UI profile switching e2e", () => {
       });
     await expect(readFile(join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md"), "utf8"))
       .resolves.toContain("Review code changes before applying them.");
+
+    const skillIcon = page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByRole("button", { name: "Change icon for Shared Reviewer" });
+    await expect.poll(() => skillIcon.getAttribute("data-icon")).toBe("source");
+    await skillIcon.click();
+    const iconMenu = page.getByRole("menu", { name: "Icons for Shared Reviewer" });
+    expect(await iconMenu.getByRole("menuitemradio").count()).toBeGreaterThan(30);
+    const iconMenuOverflow = await iconMenu.evaluate((menu) => ({
+      clientHeight: menu.clientHeight,
+      scrollHeight: menu.scrollHeight
+    }));
+    expect(iconMenuOverflow.scrollHeight).toBeLessThanOrEqual(iconMenuOverflow.clientHeight);
+    await iconMenu.getByRole("menuitemradio", { name: "Code", exact: true }).click();
+    await expect.poll(async () =>
+      (await readJson<{ iconKey?: string }>(
+        join(appDataRoot, "skills-library", "shared-reviewer", ".agentenv-skill.json")
+      )).iconKey
+    ).toBe("code");
+    await expect.poll(() => skillIcon.getAttribute("data-icon")).toBe("code");
+
+    await skillIcon.click();
+    await page
+      .getByRole("menu", { name: "Icons for Shared Reviewer" })
+      .getByRole("menuitemradio", { name: "Use source icon" })
+      .click();
+    await expect.poll(async () =>
+      Object.hasOwn(
+        await readJson<Record<string, unknown>>(
+          join(appDataRoot, "skills-library", "shared-reviewer", ".agentenv-skill.json")
+        ),
+        "iconKey"
+      )
+    ).toBe(false);
+    await expect.poll(() => skillIcon.getAttribute("data-icon")).toBe("source");
   }, 45_000);
 
   it("updates a local library skill from its tracked source", async () => {

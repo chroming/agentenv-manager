@@ -992,7 +992,7 @@ export const createSkillLibraryStore = (
       | "globallyEnabled"
       | "upstream"
       | "provenance"
-    > & { iconKey?: ResourceIconKey }
+    > & { iconKey?: ResourceIconKey | null }
   ) => {
     const current = await readLibraryMetadata(skillDir);
     const sourceType = metadata.sourceType ?? "local";
@@ -1008,7 +1008,7 @@ export const createSkillLibraryStore = (
           remoteRevision: metadata.remoteRevision,
           upstream: metadata.upstream ?? current.upstream,
           provenance: metadata.provenance ?? current.provenance,
-          iconKey: metadata.iconKey ?? current.iconKey,
+          iconKey: metadata.iconKey === null ? undefined : metadata.iconKey ?? current.iconKey,
           globallyEnabled: metadata.globallyEnabled ?? current.globallyEnabled ?? true,
           updatePolicy:
             metadata.updatePolicy ??
@@ -2835,7 +2835,7 @@ export const createSkillLibraryStore = (
       remotePath: metadata.remotePath,
       remoteRevision: metadata.remoteRevision,
       updatePolicy: updatePolicyFor(metadata),
-      iconKey
+      iconKey: iconKey ?? null
     });
     return entryFor(safeId, targetDir);
   };

@@ -773,6 +773,12 @@ description: >
     await expect(
       readFile(join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json"), "utf8")
     ).resolves.toContain('"iconKey": "shield"');
+
+    const automatic = await store.setIcon({ id: "reviewer", iconKey: undefined });
+    expect(automatic.iconKey).toBeUndefined();
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json"), "utf8")
+    ).resolves.not.toContain('"iconKey"');
   });
 
   it("removes managed installs with a library skill and restores both from history", async () => {

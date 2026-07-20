@@ -386,7 +386,7 @@ export interface SkillAvailabilityInput {
 
 export interface SkillIconInput {
   id: string;
-  iconKey: ResourceIconKey;
+  iconKey?: ResourceIconKey;
 }
 
 export interface ManageTargetSkillInput {

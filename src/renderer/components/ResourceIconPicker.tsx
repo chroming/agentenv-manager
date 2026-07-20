@@ -3,46 +3,123 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   BookOpen,
   Bot,
+  Boxes,
+  Braces,
+  Bug,
+  ChartNoAxesCombined,
+  Cloud,
   Code2,
+  Cpu,
   Database,
+  FileText,
   FlaskConical,
   Folder,
   GitBranch,
+  Globe2,
+  KeyRound,
+  Layers3,
+  Lightbulb,
+  LockKeyhole,
+  MessageSquare,
+  Package,
   Palette,
   PenLine,
+  PlugZap,
   Rocket,
   SearchCheck,
+  Server,
+  Settings2,
   ShieldCheck,
   Sparkles,
   TerminalSquare,
+  TestTube2,
+  WandSparkles,
   Workflow,
+  Wrench,
   type LucideIcon
 } from "lucide-react";
 import type { ResourceIconKey } from "../../shared/types";
 import { useI18n } from "../i18n";
 
-const iconOptions: Array<{ key: ResourceIconKey; label: string; icon: LucideIcon }> = [
-  { key: "github", label: "Repository", icon: GitBranch },
-  { key: "folder", label: "Folder", icon: Folder },
-  { key: "code", label: "Code", icon: Code2 },
-  { key: "terminal", label: "Terminal", icon: TerminalSquare },
-  { key: "database", label: "Database", icon: Database },
-  { key: "rocket", label: "Rocket", icon: Rocket },
-  { key: "workflow", label: "Automation", icon: Workflow },
-  { key: "shield", label: "Shield", icon: ShieldCheck },
-  { key: "search", label: "Code review", icon: SearchCheck },
-  { key: "flask", label: "Experiment", icon: FlaskConical },
-  { key: "pen", label: "Writing", icon: PenLine },
-  { key: "book", label: "Documentation", icon: BookOpen },
-  { key: "palette", label: "Design", icon: Palette },
-  { key: "bot", label: "Assistant", icon: Bot },
-  { key: "sparkles", label: "Sparkles", icon: Sparkles }
+interface IconOption {
+  key: ResourceIconKey;
+  label: string;
+  icon: LucideIcon;
+}
+
+const iconGroups: Array<{ label: string; options: IconOption[] }> = [
+  {
+    label: "Development",
+    options: [
+      { key: "code", label: "Code", icon: Code2 },
+      { key: "terminal", label: "Terminal", icon: TerminalSquare },
+      { key: "braces", label: "Syntax", icon: Braces },
+      { key: "bug", label: "Debugging", icon: Bug },
+      { key: "test", label: "Testing", icon: TestTube2 },
+      { key: "search", label: "Code review", icon: SearchCheck },
+      { key: "database", label: "Database", icon: Database },
+      { key: "server", label: "Server", icon: Server },
+      { key: "cloud", label: "Cloud", icon: Cloud },
+      { key: "cpu", label: "Compute", icon: Cpu },
+      { key: "package", label: "Package", icon: Package },
+      { key: "github", label: "Repository", icon: GitBranch }
+    ]
+  },
+  {
+    label: "Workflow",
+    options: [
+      { key: "workflow", label: "Automation", icon: Workflow },
+      { key: "rocket", label: "Rocket", icon: Rocket },
+      { key: "plug", label: "Integration", icon: PlugZap },
+      { key: "settings", label: "Configuration", icon: Settings2 },
+      { key: "wrench", label: "Tools", icon: Wrench },
+      { key: "layers", label: "Layers", icon: Layers3 },
+      { key: "boxes", label: "Components", icon: Boxes },
+      { key: "chart", label: "Analytics", icon: ChartNoAxesCombined }
+    ]
+  },
+  {
+    label: "Content",
+    options: [
+      { key: "file", label: "Document", icon: FileText },
+      { key: "book", label: "Documentation", icon: BookOpen },
+      { key: "pen", label: "Writing", icon: PenLine },
+      { key: "palette", label: "Design", icon: Palette },
+      { key: "message", label: "Communication", icon: MessageSquare },
+      { key: "globe", label: "Web", icon: Globe2 }
+    ]
+  },
+  {
+    label: "General",
+    options: [
+      { key: "folder", label: "Folder", icon: Folder },
+      { key: "bot", label: "Assistant", icon: Bot },
+      { key: "shield", label: "Shield", icon: ShieldCheck },
+      { key: "lock", label: "Security", icon: LockKeyhole },
+      { key: "key", label: "Credentials", icon: KeyRound },
+      { key: "flask", label: "Experiment", icon: FlaskConical },
+      { key: "lightbulb", label: "Idea", icon: Lightbulb },
+      { key: "wand", label: "Magic", icon: WandSparkles },
+      { key: "sparkles", label: "Sparkles", icon: Sparkles }
+    ]
+  }
 ];
 
-const iconMenuRows = Math.ceil(iconOptions.length / 5);
-const iconMenuHeight = 20 + iconMenuRows * 34 + Math.max(0, iconMenuRows - 1) * 6;
-
+const iconOptions = iconGroups.flatMap((group) => group.options);
 const iconByKey = new Map(iconOptions.map((option) => [option.key, option.icon]));
+const iconMenuWidth = 224;
+const iconMenuHeight = 425;
+
+export const faviconUrlFor = (sourceUrl?: string) => {
+  const value = sourceUrl?.trim();
+  if (!value) return undefined;
+  try {
+    const host = value.match(/^[^@\s]+@([^:\s]+):/)?.[1] ?? new URL(value).hostname;
+    return host ? `https://${host.toLowerCase()}/favicon.ico` : undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 export const ResourceIcon = ({
   iconKey,
@@ -52,19 +129,55 @@ export const ResourceIcon = ({
   size?: number;
 }) => {
   const Icon = iconByKey.get(iconKey) ?? Folder;
-  return <Icon size={size} strokeWidth={2.15} aria-hidden="true" />;
+  return <Icon size={size} strokeWidth={2.1} aria-hidden="true" />;
+};
+
+export const ResourceIconArtwork = ({
+  iconKey,
+  sourceUrl,
+  fallbackIconKey = "folder",
+  size = 18
+}: {
+  iconKey?: ResourceIconKey;
+  sourceUrl?: string;
+  fallbackIconKey?: ResourceIconKey;
+  size?: number;
+}) => {
+  const faviconUrl = iconKey ? undefined : faviconUrlFor(sourceUrl);
+  const [faviconFailed, setFaviconFailed] = useState(false);
+
+  useEffect(() => setFaviconFailed(false), [faviconUrl]);
+
+  if (faviconUrl && !faviconFailed) {
+    return (
+      <img
+        alt=""
+        aria-hidden="true"
+        className="resource-favicon"
+        height={size}
+        src={faviconUrl}
+        width={size}
+        onError={() => setFaviconFailed(true)}
+      />
+    );
+  }
+  return <ResourceIcon iconKey={iconKey ?? fallbackIconKey} size={size} />;
 };
 
 export const ResourceIconPicker = ({
   iconKey,
   label,
   onChange,
+  sourceUrl,
+  fallbackIconKey = "folder",
   triggerLabel,
   className = ""
 }: {
-  iconKey: ResourceIconKey;
+  iconKey?: ResourceIconKey;
   label: string;
-  onChange: (iconKey: ResourceIconKey) => void;
+  onChange: (iconKey: ResourceIconKey | undefined) => void;
+  sourceUrl?: string;
+  fallbackIconKey?: ResourceIconKey;
   triggerLabel?: string;
   className?: string;
 }) => {
@@ -73,11 +186,11 @@ export const ResourceIconPicker = ({
   const [position, setPosition] = useState<CSSProperties>();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const faviconUrl = faviconUrlFor(sourceUrl);
+  const selectedKey = !iconKey && faviconUrl ? "source" : iconKey ?? fallbackIconKey;
 
   useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
+    if (!open) return undefined;
     const dismiss = (event: MouseEvent) => {
       const target = event.target;
       if (
@@ -99,14 +212,14 @@ export const ResourceIconPicker = ({
     document.addEventListener("keydown", closeOnEscape);
     window.setTimeout(() => {
       menuRef.current
-        ?.querySelector<HTMLButtonElement>(`[data-icon-key="${iconKey}"]`)
+        ?.querySelector<HTMLButtonElement>(`[data-icon-key="${selectedKey}"]`)
         ?.focus();
     });
     return () => {
       document.removeEventListener("mousedown", dismiss);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [iconKey, open]);
+  }, [open, selectedKey]);
 
   const toggle = () => {
     if (open) {
@@ -115,17 +228,21 @@ export const ResourceIconPicker = ({
     }
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
-      const menuWidth = 214;
-      const menuHeight = iconMenuHeight;
       setPosition({
-        left: Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12)),
+        left: Math.max(12, Math.min(rect.left, window.innerWidth - iconMenuWidth - 12)),
         top:
-          rect.bottom + menuHeight + 8 <= window.innerHeight
+          rect.bottom + iconMenuHeight + 8 <= window.innerHeight
             ? rect.bottom + 6
-            : Math.max(12, rect.top - menuHeight - 6)
+            : Math.max(12, rect.top - iconMenuHeight - 6)
       });
     }
     setOpen(true);
+  };
+
+  const choose = (nextIconKey?: ResourceIconKey) => {
+    onChange(nextIconKey);
+    setOpen(false);
+    triggerRef.current?.focus();
   };
 
   return (
@@ -133,7 +250,7 @@ export const ResourceIconPicker = ({
       <button
         ref={triggerRef}
         className={`resource-icon-trigger ${className}`.trim()}
-        data-icon={iconKey}
+        data-icon={selectedKey}
         type="button"
         aria-label={triggerLabel ?? t("Change icon for {{name}}", { name: label })}
         aria-expanded={open}
@@ -141,7 +258,11 @@ export const ResourceIconPicker = ({
         title={t("Change icon for {{name}}", { name: label })}
         onClick={toggle}
       >
-        <ResourceIcon iconKey={iconKey} />
+        <ResourceIconArtwork
+          fallbackIconKey={fallbackIconKey}
+          iconKey={iconKey}
+          sourceUrl={sourceUrl}
+        />
       </button>
       {open
         ? createPortal(
@@ -152,25 +273,47 @@ export const ResourceIconPicker = ({
               aria-label={t("Icons for {{name}}", { name: label })}
               style={position}
             >
-              {iconOptions.map((option) => (
-                <button
-                  className="resource-icon-option"
-                  data-icon={option.key}
-                  data-icon-key={option.key}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={option.key === iconKey}
-                  aria-label={t(option.label)}
-                  title={t(option.label)}
-                  key={option.key}
-                  onClick={() => {
-                    onChange(option.key);
-                    setOpen(false);
-                    triggerRef.current?.focus();
-                  }}
-                >
-                  <ResourceIcon iconKey={option.key} size={17} />
-                </button>
+              {faviconUrl ? (
+                <div className="resource-icon-group resource-icon-group--source">
+                  <span>{t("Source")}</span>
+                  <button
+                    className="resource-icon-option resource-icon-option--source"
+                    data-icon="source"
+                    data-icon-key="source"
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={!iconKey}
+                    aria-label={t("Use source icon")}
+                    title={t("Use source icon")}
+                    onClick={() => choose(undefined)}
+                  >
+                    <ResourceIconArtwork sourceUrl={sourceUrl} fallbackIconKey={fallbackIconKey} size={17} />
+                    <strong>{t("Use source icon")}</strong>
+                  </button>
+                </div>
+              ) : null}
+              {iconGroups.map((group) => (
+                <div className="resource-icon-group" key={group.label}>
+                  <span>{t(group.label)}</span>
+                  <div className="resource-icon-grid">
+                    {group.options.map((option) => (
+                      <button
+                        className="resource-icon-option"
+                        data-icon={option.key}
+                        data-icon-key={option.key}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={option.key === iconKey}
+                        aria-label={t(option.label)}
+                        title={t(option.label)}
+                        key={option.key}
+                        onClick={() => choose(option.key)}
+                      >
+                        <ResourceIcon iconKey={option.key} size={17} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>,
             document.body

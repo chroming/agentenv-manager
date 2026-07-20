@@ -643,7 +643,10 @@ export const registerIpcHandlers = ({
   handleMutation("skills:set-icon", (_event, input: SkillIconInput) =>
     skillLibraryStore.setIcon({
       id: parseId(input?.id, "skill id"),
-      iconKey: ResourceIconKeySchema.parse(input?.iconKey)
+      iconKey:
+        typeof input?.iconKey === "undefined"
+          ? undefined
+          : ResourceIconKeySchema.parse(input.iconKey)
     })
   );
   ipcMain.handle("skills:preview-update", (_event, id: unknown) =>

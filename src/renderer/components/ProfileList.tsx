@@ -116,7 +116,9 @@ export const ProfileList = ({
                   iconKey={iconKey}
                   label={profile.name}
                   triggerLabel={t("Change icon for profile {{id}}", { id: profile.id })}
-                  onChange={(nextIconKey) => onIconChange(profile.id, nextIconKey)}
+                  onChange={(nextIconKey) => {
+                    if (nextIconKey) onIconChange(profile.id, nextIconKey);
+                  }}
                 />
               )}
               <button

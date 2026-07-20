@@ -3942,7 +3942,9 @@ const AppContent = ({
                         iconKey={draftProfile.manifest.iconKey ?? "folder"}
                         label={draftProfile.manifest.name}
                         triggerLabel={t("Change icon for profile {{id}}", { id: draftProfile.id })}
-                        onChange={(iconKey) => changeProfileIcon(draftProfile.id, iconKey)}
+                        onChange={(iconKey) => {
+                          if (iconKey) changeProfileIcon(draftProfile.id, iconKey);
+                        }}
                       />
                       <div className="profile-hero__body">
                         <div className="profile-hero__title">

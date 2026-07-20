@@ -397,19 +397,14 @@
 
 .skill-library-panel .library-resource-cell .resource-avatar {
   align-self: center;
-  border-radius: 7px;
-  height: 32px;
+  border-radius: 6px;
+  height: 28px;
   justify-self: center;
-  width: 32px;
+  width: 28px;
 }
 
 .skill-library-panel .library-resource-cell {
-  grid-template-columns: 32px minmax(0, 1fr);
-}
-
-.skill-library-panel .library-resource-cell .resource-avatar svg {
-  height: 18px;
-  width: 18px;
+  grid-template-columns: 30px minmax(0, 1fr);
 }
 
 .skill-library-panel .library-table__head > span:last-child {

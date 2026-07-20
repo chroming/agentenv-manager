@@ -535,7 +535,14 @@ describe("SkillLibraryPanel", () => {
     expect(onSetIcon).toHaveBeenCalledWith({ id: "shared-reviewer", iconKey: "rocket" });
     expect(
       screen.getByRole("button", { name: "Change icon for GitHub Reviewer" })
-    ).toHaveAttribute("data-icon", "github");
+    ).toHaveAttribute("data-icon", "source");
+    expect(screen.getByRole("button", { name: "Change icon for GitHub Reviewer" }).querySelector("img"))
+      .toHaveAttribute("src", "https://github.com/favicon.ico");
+    fireEvent.click(screen.getByRole("button", { name: "Change icon for GitHub Reviewer" }));
+    const sourceIconMenu = screen.getByRole("menu", { name: "Icons for GitHub Reviewer" });
+    expect(within(sourceIconMenu).getAllByRole("menuitemradio").length).toBeGreaterThan(30);
+    fireEvent.click(within(sourceIconMenu).getByRole("menuitemradio", { name: "Use source icon" }));
+    expect(onSetIcon).toHaveBeenCalledWith({ id: "github-reviewer", iconKey: undefined });
     expect(screen.getByLabelText("Source details for github-reviewer"))
       .toHaveTextContent(/Updated Jul 18, 2026/);
 

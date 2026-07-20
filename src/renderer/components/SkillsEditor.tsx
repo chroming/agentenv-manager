@@ -9,7 +9,7 @@ import type {
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { ResourceIcon } from "./ResourceIconPicker";
+import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { Switch } from "./ui";
 
 interface SkillsEditorProps {
@@ -202,8 +202,10 @@ export const SkillsEditor = ({
               aria-label={t("Profile skill {{name}}", { name: reference.libraryId })}
             >
               <span className="profile-skill-icon" aria-hidden="true">
-                <ResourceIcon
-                  iconKey={skill?.iconKey ?? (skill?.sourceType === "github" ? "github" : "folder")}
+                <ResourceIconArtwork
+                  fallbackIconKey={skill?.sourceType === "github" || skill?.sourceType === "git" ? "github" : "folder"}
+                  iconKey={skill?.iconKey}
+                  sourceUrl={skill?.sourceType === "github" || skill?.sourceType === "git" ? skill.source : undefined}
                   size={16}
                 />
               </span>
