@@ -1408,8 +1408,8 @@
   display: grid;
   gap: 10px;
   grid-template-columns:
-    34px minmax(120px, 1fr) minmax(90px, auto)
-    auto 42px 34px;
+    34px minmax(120px, 1fr) 112px
+    72px 44px 38px;
   min-height: 62px;
   min-width: 0;
   padding: 6px 9px 6px 10px;
@@ -1430,7 +1430,7 @@
 }
 
 .profile-skill-row--owned {
-  grid-template-columns: 34px minmax(120px, 1fr) minmax(82px, auto) auto 34px;
+  grid-template-columns: 34px minmax(120px, 1fr) 112px 72px 38px;
 }
 
 .profile-skill-row--owned > .icon-action {
@@ -1478,15 +1478,19 @@
 }
 
 .profile-skill-state {
+  align-content: start;
+  align-self: center;
   color: #5d6c83;
   display: grid;
   font-size: 11px;
   gap: 2px;
   justify-items: start;
   line-height: 15px;
+  min-height: 32px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  width: 100%;
 }
 
 .profile-skill-state strong,
@@ -1525,6 +1529,7 @@
   grid-column: 4;
   min-height: 32px;
   padding-inline: 10px;
+  width: 100%;
 }
 
 .profile-skill-switch {
@@ -1587,8 +1592,8 @@
   .profile-skill-row {
     gap: 10px;
     grid-template-columns:
-      32px minmax(100px, 1fr) minmax(78px, auto)
-      auto 42px 34px;
+      32px minmax(92px, 1fr) 100px
+      72px 44px 38px;
     padding-inline: 8px;
   }
 

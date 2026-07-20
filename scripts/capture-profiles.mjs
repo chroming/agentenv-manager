@@ -735,6 +735,27 @@ try {
   await capturePage(page, join(outputDir, "profile-skills-applied-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "profile-skills-applied-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  const mixedSkillRegion = page.getByRole("region", { name: "Profile skills" });
+  await mixedSkillRegion
+    .getByRole("listitem", { name: "Profile skill testing-strategies" })
+    .getByRole("switch", { name: "Disable testing-strategies" })
+    .click();
+  await mixedSkillRegion.getByRole("button", { name: "Add", exact: true }).click();
+  const mixedSkillPicker = page.getByRole("dialog", { name: "Add library skills" });
+  await mixedSkillPicker.getByLabel("react-best-practices", { exact: true }).check();
+  await mixedSkillPicker.getByRole("button", { name: /^Add 1$/ }).click();
+  await mixedSkillPicker.waitFor({ state: "hidden" });
+  await capturePage(page, join(outputDir, "profile-skill-statuses-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "profile-skill-statuses-1180x728.png"));
+  await page.reload();
+  await page.waitForLoadState("domcontentloaded");
+  await page.getByRole("complementary", { name: "Global navigation" }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Profiles", exact: true }).click();
+  await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
+  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page.getByRole("heading", { name: "Code Review" }).waitFor({ state: "visible" });
   await page
     .locator('[data-profile-composer-id="skills"]')
     .getByRole("button", { name: "Skills", exact: true })

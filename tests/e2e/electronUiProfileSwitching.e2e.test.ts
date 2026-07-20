@@ -5930,6 +5930,56 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, 30_000);
 
+  it("keeps mixed Profile Skill status and action lanes aligned", async () => {
+    const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 2 });
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    await expandComposerSection(page, "Skills");
+
+    const readyRow = page.getByRole("listitem", { name: "Profile skill ui-alpha-skill" });
+    const disabledRow = page.getByRole("listitem", { name: "Profile skill layout-skill-2" });
+    await disabledRow.getByRole("switch", { name: "Disable layout-skill-2" }).click();
+    await addLibrarySkillToProfile(page, "Static Reference");
+    const newRow = page.getByRole("listitem", { name: "Profile skill static-reference" });
+    await expect.poll(() => readyRow.locator(".profile-skill-state").textContent())
+      .toContain("Ready");
+    await expect.poll(() => disabledRow.locator(".profile-skill-state").textContent())
+      .toContain("Apply pending");
+    await expect.poll(() => newRow.locator(".profile-skill-state").textContent())
+      .toBe("Apply pending");
+
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      const geometry = await page.locator(".profile-skill-row").evaluateAll((rows) =>
+        rows.map((row) => {
+          const rowBox = row.getBoundingClientRect();
+          const state = row.querySelector<HTMLElement>(".profile-skill-state")!;
+          const stateTitle = state.querySelector<HTMLElement>("strong")!;
+          const action = state.nextElementSibling as HTMLElement;
+          const stateBox = state.getBoundingClientRect();
+          return {
+            actionLeft: action.getBoundingClientRect().left,
+            contained: row.scrollWidth <= row.clientWidth + 1,
+            stateLeft: stateBox.left,
+            stateTitleFits: stateTitle.scrollWidth <= stateTitle.clientWidth + 1,
+            stateTitleTop: stateTitle.getBoundingClientRect().top - rowBox.top
+          };
+        })
+      );
+      expect(geometry.length).toBeGreaterThanOrEqual(4);
+      expect(Math.max(...geometry.map((item) => item.stateLeft)) -
+        Math.min(...geometry.map((item) => item.stateLeft))).toBeLessThanOrEqual(1);
+      expect(Math.max(...geometry.map((item) => item.actionLeft)) -
+        Math.min(...geometry.map((item) => item.actionLeft))).toBeLessThanOrEqual(1);
+      expect(Math.max(...geometry.map((item) => item.stateTitleTop)) -
+        Math.min(...geometry.map((item) => item.stateTitleTop))).toBeLessThanOrEqual(1);
+      expect(geometry.every((item) => item.contained && item.stateTitleFits)).toBe(true);
+    }
+  }, 30_000);
+
   it("keeps Profile Skill edits, Save, and Preview responsive with many Skills", async () => {
     const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 30 });
     await selectProfile(page, "UI OpenCode alpha");
@@ -6807,6 +6857,12 @@ describe("Electron UI profile switching e2e", () => {
     const targetListGeometry = await page.locator(".target-list").evaluate((list) => {
       const rows = Array.from(list.querySelectorAll<HTMLElement>(".target-card--workflow"));
       const listBox = list.getBoundingClientRect();
+      const statusLefts = rows.map((row) =>
+        row.querySelector<HTMLElement>(".target-health-status")!.getBoundingClientRect().left
+      );
+      const actionLefts = rows.map((row) =>
+        row.querySelector<HTMLElement>(".target-workflow-actions")!.getBoundingClientRect().left
+      );
       return {
         contained: rows.every((row) => {
           const box = row.getBoundingClientRect();
@@ -6823,14 +6879,18 @@ describe("Electron UI profile switching e2e", () => {
         healthBackgroundsAreNeutral: rows.every((row) => {
           const status = row.querySelector<HTMLElement>(".target-health-status")!;
           return getComputedStyle(status).backgroundColor === "rgba(0, 0, 0, 0)";
-        })
+        }),
+        statusLanesAligned: Math.max(...statusLefts) - Math.min(...statusLefts) <= 1,
+        actionLanesAligned: Math.max(...actionLefts) - Math.min(...actionLefts) <= 1
       };
     });
     expect(targetListGeometry).toEqual({
+      actionLanesAligned: true,
       contained: true,
       continuous: true,
       flatRows: true,
-      healthBackgroundsAreNeutral: true
+      healthBackgroundsAreNeutral: true,
+      statusLanesAligned: true
     });
 
     await sidebar.getByRole("button", { name: "Settings", exact: true }).click();

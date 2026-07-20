@@ -113,16 +113,18 @@
   align-items: center;
   display: grid;
   gap: 8px 10px;
-  grid-template-columns: 32px minmax(160px, 1fr) auto auto;
+  grid-template-columns: 32px minmax(160px, 1fr) 88px 240px;
   min-width: 0;
 }
 
 .target-workflow-actions {
   align-items: center;
-  display: flex;
+  display: grid;
   gap: 8px;
   grid-column: auto;
+  grid-template-columns: 88px minmax(0, 1fr);
   justify-self: end;
+  width: 240px;
 }
 
 .target-workflow-actions .secondary-action,
@@ -152,7 +154,11 @@
   display: inline-flex;
   font-size: var(--font-size-metadata);
   gap: 6px;
+  justify-content: flex-start;
+  min-width: 0;
+  overflow: hidden;
   white-space: nowrap;
+  width: 88px;
 }
 
 .target-health-status::before {
@@ -266,7 +272,7 @@
 
 @container (max-width: 780px) {
   .target-workflow-header {
-    grid-template-columns: 32px minmax(100px, 1fr) auto auto;
+    grid-template-columns: 32px minmax(100px, 1fr) 88px 240px;
   }
 
   .target-workflow-actions {
