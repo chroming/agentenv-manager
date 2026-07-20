@@ -7,11 +7,12 @@ import type {
   TargetManagementState
 } from "../shared/types";
 import { isTargetInstalled } from "../shared/targetHealth";
+import { profileManagesResource } from "../shared/profileResources";
 
 export interface ProfileResourceSummary {
-  instructions: { count: 0 | 1 };
-  skills: { count: number; names: string[] };
-  mcp: { count: number; names: string[] };
+  instructions: { count: 0 | 1; managed: boolean };
+  skills: { count: number; names: string[]; managed: boolean };
+  mcp: { count: number; names: string[]; managed: boolean };
 }
 
 export interface RecentProfileApplication {
@@ -98,16 +99,27 @@ export const summarizeProfile = (
       .map((skill) => skill.targetName)
   );
   const mcpPolicy = profile.resources.mcpByTarget[target.id];
-  const mcpNames = mcpPolicy?.mode === "manage"
-    ? unique(mcpPolicy.selections.filter((selection) => selection.enabled).map((selection) => selection.name))
-    : [];
+  const mcpNames = unique(
+    mcpPolicy?.selections
+      .filter((selection) => selection.enabled)
+      .map((selection) => selection.name) ?? []
+  );
 
   return {
     instructions: {
-      count: profile.instructions.trim().length > 0 ? 1 : 0
+      count: profile.instructions.trim().length > 0 ? 1 : 0,
+      managed: profileManagesResource(profile.resources, target.id, "instructions")
     },
-    skills: { count: skillNames.length, names: skillNames },
-    mcp: { count: mcpNames.length, names: mcpNames }
+    skills: {
+      count: skillNames.length,
+      names: skillNames,
+      managed: profileManagesResource(profile.resources, target.id, "skills")
+    },
+    mcp: {
+      count: mcpNames.length,
+      names: mcpNames,
+      managed: profileManagesResource(profile.resources, target.id, "mcp")
+    }
   };
 };
 

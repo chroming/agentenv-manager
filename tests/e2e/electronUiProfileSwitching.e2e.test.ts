@@ -2450,7 +2450,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(mcpRowGeometry.length).toBeGreaterThan(0);
     expect(mcpRowGeometry.every((row) => row.contained)).toBe(true);
     expect(mcpRowGeometry.every((row) => row.height <= 58)).toBe(true);
-    expect(mcpRowGeometry.every((row) => row.controlHeight === 36)).toBe(true);
+    expect(mcpRowGeometry.every((row) => row.controlHeight === 32)).toBe(true);
     await expectInViewport(page, page.getByLabel("shared-docs Profile behavior"));
     expect(await workbench.evaluate((element) => getComputedStyle(element).gridTemplateColumns))
       .toMatch(/^220px /);
@@ -3326,11 +3326,83 @@ describe("Electron UI profile switching e2e", () => {
     const sharedDocsControl = page.getByLabel("shared-docs Profile behavior");
     await sharedDocsControl.scrollIntoViewIfNeeded();
     await expectInViewport(page, sharedDocsControl);
-    expect(await editor.getByText("OpenCode", { exact: true }).count()).toBe(1);
+    expect(
+      await page
+        .getByRole("switch", { name: "Manage MCPs for OpenCode" })
+        .getAttribute("aria-checked")
+    ).toBe("true");
     expect(await editor.getByRole("button", { name: /Add|Remove|Delete/ }).count()).toBe(0);
     expect(await page.getByLabel("ui-alpha-mcp Profile behavior").inputValue()).toBe("on");
     expect(await page.getByLabel("ui-beta-mcp Profile behavior").inputValue()).toBe("off");
     expect(await page.getByLabel("shared-docs Profile behavior").inputValue()).toBe("on");
+  }, 30_000);
+
+  it("keeps resource management on the Composer rows and persists it per Agent", async () => {
+    const { appDataRoot, page } = await launchApp();
+    await selectProfile(page, "UI OpenCode alpha");
+
+    const composer = page.getByRole("region", { name: "Profile composer" });
+    const instructionsRow = composer.getByRole("button", { name: "Instructions", exact: true });
+    const skillsRow = composer.getByRole("button", { name: "Skills", exact: true });
+    const mcpRow = composer.getByRole("button", { name: "MCPs", exact: true });
+    const instructionsSwitch = composer.getByRole("switch", {
+      name: "Manage Instructions for OpenCode"
+    });
+    const skillsSwitch = composer.getByRole("switch", {
+      name: "Manage Skills for OpenCode"
+    });
+    const mcpSwitch = composer.getByRole("switch", { name: "Manage MCPs for OpenCode" });
+
+    expect(await instructionsSwitch.getAttribute("aria-checked")).toBe("true");
+    expect(await skillsSwitch.getAttribute("aria-checked")).toBe("true");
+    expect(await mcpSwitch.getAttribute("aria-checked")).toBe("true");
+    expect(await mcpRow.textContent()).toContain("2");
+
+    await instructionsSwitch.click();
+    await skillsSwitch.click();
+    await mcpSwitch.click();
+
+    expect(await instructionsRow.getAttribute("aria-expanded")).toBe("false");
+    expect(await skillsRow.getAttribute("aria-expanded")).toBe("false");
+    expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
+    expect(await mcpRow.textContent()).toContain("2");
+    expect(await composer.getByText("Not managed", { exact: true }).count()).toBe(3);
+
+    await saveProfile(page);
+    const resources = await readJson<{
+      skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
+      managementByTarget: Record<
+        string,
+        { instructions: "ignore" | "manage"; skills: "ignore" | "manage" }
+      >;
+      mcpByTarget: Record<
+        string,
+        {
+          mode: "ignore" | "manage";
+          selections: Array<{ name: string; enabled: boolean }>;
+        }
+      >;
+    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
+
+    expect(resources.managementByTarget.opencode).toEqual({
+      instructions: "ignore",
+      skills: "ignore"
+    });
+    expect(resources.skills).toEqual([
+      { libraryId: "ui-alpha-skill", targetName: "ui-alpha-skill", enabled: true }
+    ]);
+    expect(resources.mcpByTarget.opencode.mode).toBe("ignore");
+    expect(resources.mcpByTarget.opencode.selections).toEqual([
+      { name: "ui-alpha-mcp", enabled: true },
+      { name: "ui-beta-mcp", enabled: false },
+      { name: "shared-docs", enabled: true }
+    ]);
+
+    await expandComposerSection(page, "MCPs");
+    expect(
+      await composer.getByRole("switch", { name: "Manage MCPs for OpenCode" }).count()
+    ).toBe(1);
+    expect(await page.getByLabel("shared-docs Profile behavior").count()).toBe(0);
   }, 30_000);
 
   it("edits and persists Instructions from the default-collapsed Composer", async () => {
@@ -4565,7 +4637,11 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "MCPs");
     const editor = page.locator(".profile-mcp-editor");
     await editor.waitFor({ state: "visible" });
-    expect(await editor.getByText("Agent controlled", { exact: true }).count()).toBe(1);
+    const managementSwitch = page.getByRole("switch", {
+      name: "Manage MCPs for Claude Code"
+    });
+    expect(await managementSwitch.isDisabled()).toBe(true);
+    expect(await managementSwitch.textContent()).toContain("Agent controlled");
     expect(await editor.locator("select").count()).toBe(0);
 
     await previewAndApply(page, "Claude Code");
@@ -6262,7 +6338,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(codexConfig).toMatch(/\[mcp_servers\.shared-docs\][\s\S]*?enabled = true/);
   }, 30_000);
 
-  it("persists Use Agent setting without deleting the native MCP definition", async () => {
+  it("persists an unchanged MCP choice without deleting the native definition", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
     await selectProfile(page, "UI OpenCode alpha");
     await expandComposerSection(page, "MCPs");

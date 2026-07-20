@@ -21,6 +21,7 @@ import type {
   TargetActivationPreview,
   TargetState
 } from "../../../../shared/types";
+import { profileManagesResource } from "../../../../shared/profileResources";
 import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
@@ -492,7 +493,12 @@ export const traeCliIntegration: AgentTargetIntegration = {
       targetPaths,
       state = DEFAULT_STATE
     }): Promise<TargetActivationPreview> => {
-      const warnings = findSecretWarnings(profile.instructions);
+      const managesInstructions = profileManagesResource(
+        profile.resources,
+        targetPaths.targetId,
+        "instructions"
+      );
+      const warnings = managesInstructions ? findSecretWarnings(profile.instructions) : [];
       const errors: string[] = [];
       const changes: PlannedFileChange[] = [];
       const instructionAliases = [
@@ -501,21 +507,25 @@ export const traeCliIntegration: AgentTargetIntegration = {
         join(targetPaths.configDir, "..", ".agents", "AGENTS.md")
       ];
       const legacyYamlPath = join(targetPaths.configDir, "traecli.yaml");
-      const [liveInstructions, ...aliasInstructions] = await Promise.all([
-        readTextIfExists(targetPaths.instructionsPath),
-        ...instructionAliases.map((path) => readTextIfExists(path))
-      ]);
-      if (aliasInstructions.some((content) => content.trim())) {
+      const [liveInstructions, ...aliasInstructions] = managesInstructions
+        ? await Promise.all([
+            readTextIfExists(targetPaths.instructionsPath),
+            ...instructionAliases.map((path) => readTextIfExists(path))
+          ])
+        : [""];
+      if (managesInstructions && aliasInstructions.some((content) => content.trim())) {
         warnings.push(
           "Trae CLI also has user instruction aliases outside AgentEnv management; they may add guidance."
         );
       }
-      addChange(
-        changes,
-        targetPaths.instructionsPath,
-        liveInstructions,
-        profile.instructions
-      );
+      if (managesInstructions) {
+        addChange(
+          changes,
+          targetPaths.instructionsPath,
+          liveInstructions,
+          profile.instructions
+        );
+      }
 
       const policy = profile.resources.mcpByTarget["trae-cli"] ?? {
         mode: "ignore" as const,
@@ -625,7 +635,9 @@ export const traeCliIntegration: AgentTargetIntegration = {
         errors,
         changes,
         liveFingerprints: {
-          [targetPaths.instructionsPath]: hashText(liveInstructions),
+          ...(managesInstructions
+            ? { [targetPaths.instructionsPath]: hashText(liveInstructions) }
+            : {}),
           ...(policy.mode === "manage" && policy.selections.length > 0
             ? {
                 [targetPaths.configPath]: hashText(yamlText),

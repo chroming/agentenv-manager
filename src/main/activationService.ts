@@ -24,6 +24,7 @@ import {
   type SkillLibraryStore
 } from "./skillLibraryStore";
 import { normalizeSkillKey } from "../shared/skillIdentity";
+import { profileManagesResource } from "../shared/profileResources";
 import {
   createTargetRegistry,
   type TargetRegistry
@@ -127,6 +128,11 @@ class InvalidTargetStateError extends Error {
 }
 
 interface InternalActivationPreview extends ActivationPreview {
+  resourceManagement: {
+    instructions: boolean;
+    skills: boolean;
+    pausedSkillPaths: string[];
+  };
   skillDeployment: {
     plan: SkillDeploymentPlan;
     profile: ProfileDetail;
@@ -138,7 +144,11 @@ interface InternalActivationPreview extends ActivationPreview {
 }
 
 const publicPreview = (preview: InternalActivationPreview): ActivationPreview => {
-  const { skillDeployment: _skillDeployment, ...publicValue } = preview;
+  const {
+    resourceManagement: _resourceManagement,
+    skillDeployment: _skillDeployment,
+    ...publicValue
+  } = preview;
   return {
     ...publicValue,
     warnings: preview.warnings.map(redactSensitiveValues),
@@ -318,6 +328,14 @@ const restoreBackupEntries = async (backup: BackupManifest) => {
   }
 };
 
+const materializeManagedSkillLink = async (path: string) => {
+  const stats = await lstat(path).catch(() => undefined);
+  if (!stats?.isSymbolicLink()) return;
+  await replacePathAtomically(path, (stagingPath) =>
+    cp(path, stagingPath, { recursive: true, dereference: true })
+  );
+};
+
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
@@ -354,8 +372,12 @@ const effectivePayloadFor = (
   targetId: string,
   mcpActivationSupported: boolean
 ): EffectiveProfilePayload => {
-  const instructions = 1;
-  const skills = profile.resources.skills.filter((reference) => reference.enabled).length;
+  const instructions = profileManagesResource(profile.resources, targetId, "instructions")
+    ? 1
+    : 0;
+  const skills = profileManagesResource(profile.resources, targetId, "skills")
+    ? profile.resources.skills.filter((reference) => reference.enabled).length
+    : 0;
   const policy = profile.resources.mcpByTarget[targetId];
   const mcpServers =
     mcpActivationSupported && policy?.mode === "manage"
@@ -484,8 +506,11 @@ export const createActivationService = ({
             ) {
               return undefined;
             }
+            const activeManagedResources = (state.managedResources ?? []).filter(
+              (resource) => !resource.paused
+            );
             const driftChecks = await Promise.all(
-              (state.managedResources ?? [])
+              activeManagedResources
                 .filter((resource) => resource.kind !== "config")
                 .map(async (resource) => {
                   const currentHash = await hashPath(resource.path);
@@ -509,7 +534,11 @@ export const createActivationService = ({
                 const expectedHash =
                   profile.targetContentHashes?.[targetId] ??
                   createProfileContentHash(profile, targetId);
-                const currentVersions = collectLibraryResourceVersions(profile, skillLibrary);
+                const currentVersions = collectLibraryResourceVersions(
+                  profile,
+                  skillLibrary,
+                  targetId
+                );
                 const isCurrent =
                   Boolean(expectedHash) &&
                   expectedHash === state.appliedProfileHash &&
@@ -533,7 +562,7 @@ export const createActivationService = ({
               lifecycleStatus,
               lifecycleReason,
               lastAppliedAt: state.lastAppliedAt,
-              managedResourceCount: state.managedResources?.length ?? 0,
+              managedResourceCount: activeManagedResources.length,
               sharedSkillPreparations: state.sharedSkillPreparations ?? [],
               warningCount: 0,
               errorCount: driftCount
@@ -659,8 +688,13 @@ export const createActivationService = ({
     targetPaths: TargetPaths
   ) => {
     const desired = new Set<string>();
-    desired.add(targetPaths.instructionsPath);
-    if (targetPaths.skillsDir) {
+    if (profileManagesResource(profile.resources, targetPaths.targetId, "instructions")) {
+      desired.add(targetPaths.instructionsPath);
+    }
+    if (
+      targetPaths.skillsDir &&
+      profileManagesResource(profile.resources, targetPaths.targetId, "skills")
+    ) {
       for (const targetName of desiredSkillTargets(profile)) {
         desired.add(join(targetPaths.skillsDir, targetName));
       }
@@ -783,6 +817,9 @@ export const createActivationService = ({
         markerSource: string;
       }
     >();
+    if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
+      return desired;
+    }
     for (const skillRef of profile.resources.skills.filter(
       (reference) => reference.enabled
     )) {
@@ -808,6 +845,13 @@ export const createActivationService = ({
     skillLibraryDir: string,
     skillRootTransition?: SkillRootTransition
   ) => {
+    if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
+      return {
+        resourceChanges: [] as PlannedResourceChange[],
+        resourceFingerprints: {} as Record<string, string>,
+        sourceFingerprints: {} as Record<string, string>
+      };
+    }
     const desired = desiredAssetResources(profile, targetPaths, skillLibraryDir);
     const resourceChanges: PlannedResourceChange[] = skillRootTransition
       ? [{
@@ -1028,7 +1072,13 @@ export const createActivationService = ({
     const skillLibrary = await skillLibraryStore.listSkills();
     const adapter = targetRegistry.get(targetId);
     const profile = applyLibrarySkillAvailability(sourceProfile, skillLibrary);
-    const disabledLibrarySkills = sourceProfile.resources.skills
+    const managesInstructions = profileManagesResource(
+      profile.resources,
+      targetId,
+      "instructions"
+    );
+    const managesSkills = profileManagesResource(profile.resources, targetId, "skills");
+    const disabledLibrarySkills = (managesSkills ? sourceProfile.resources.skills : [])
       .filter(
         (reference) =>
           reference.enabled &&
@@ -1044,13 +1094,17 @@ export const createActivationService = ({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
     });
-    const skillRootInspection = await inspectSkillRoot(targetPaths.skillsDir);
+    const skillRootInspection = managesSkills
+      ? await inspectSkillRoot(targetPaths.skillsDir)
+      : undefined;
     const skillRootTransition =
-      skillRootInspection.kind === "symlink"
+      skillRootInspection?.kind === "symlink"
         ? skillRootInspection.transition
         : undefined;
     const inventoryTargetPaths =
-      skillRootInspection.kind === "directory" || skillRootInspection.kind === "missing"
+      !skillRootInspection ||
+      skillRootInspection.kind === "directory" ||
+      skillRootInspection.kind === "missing"
         ? targetPaths
         : {
             ...targetPaths,
@@ -1059,16 +1113,15 @@ export const createActivationService = ({
               (path) => resolve(path) !== resolve(targetPaths.skillsDir ?? "")
             )
           };
-    const inventory = await skillLibraryStore.scanInventory(
-      [inventoryTargetPaths],
-      skillLibrary
-    );
+    const inventory = managesSkills
+      ? await skillLibraryStore.scanInventory([inventoryTargetPaths], skillLibrary)
+      : [];
     const stateFile = await readTargetStateFile(adapter.descriptor.id);
     const isTakeover = !stateFile.state.activeProfileId;
     const profileContentHash =
       sourceProfile.targetContentHashes?.[adapter.descriptor.id] ??
       createProfileContentHash(sourceProfile, adapter.descriptor.id);
-    const captureReceipt = isTakeover
+    const captureReceipt = isTakeover && managesSkills
       ? await captureReceiptStore.read(profile.id, adapter.descriptor.id)
       : undefined;
     const skillDeploymentPlan = buildSkillDeploymentPlan({
@@ -1080,6 +1133,9 @@ export const createActivationService = ({
       takeover: isTakeover,
       captureReceipt
     });
+    if (!managesSkills) {
+      skillDeploymentPlan.sharedPreparations = stateFile.state.sharedSkillPreparations ?? [];
+    }
     const deploymentProfile: ProfileDetail = {
       ...profile,
       resources: {
@@ -1087,11 +1143,14 @@ export const createActivationService = ({
         skills: skillDeploymentPlan.effectiveSkills
       }
     };
-    const externallyResolved = await resolveExternalSkills(
-      deploymentProfile,
-      inventory,
-      skillLibrary
-    );
+    const externallyResolved = managesSkills
+      ? await resolveExternalSkills(deploymentProfile, inventory, skillLibrary)
+      : {
+          profile: deploymentProfile,
+          errors: [] as string[],
+          warnings: [] as string[],
+          paths: new Set<string>()
+        };
     const materializedProfile = externallyResolved.profile;
     const approvedUnmanagedSkillHashes = new Map(
       skillDeploymentPlan.approvedUnmanagedSkills.map((skill) => [
@@ -1099,13 +1158,15 @@ export const createActivationService = ({
         skill.contentHash
       ])
     );
-    const runtimeValidation = await validateRuntimeSkills(
-      adapter,
-      targetPaths,
-      materializedProfile,
-      skillLibrary,
-      inventory
-    );
+    const runtimeValidation = managesSkills
+      ? await validateRuntimeSkills(
+          adapter,
+          targetPaths,
+          materializedProfile,
+          skillLibrary,
+          inventory
+        )
+      : { errors: [] as string[], warnings: [] as string[] };
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     const targetPreview = await adapter.createPreview({
@@ -1118,7 +1179,9 @@ export const createActivationService = ({
       isolateSkillRoot: Boolean(skillRootTransition)
     });
     const profileErrors: string[] =
-      skillRootInspection.kind === "invalid" ? [skillRootInspection.error] : [];
+      skillRootInspection?.kind === "invalid"
+        ? [skillRootInspection.error]
+        : [];
     const recoveryErrors = stateFile.state.recoveryRequired
       ? [
           `${adapter.descriptor.name} requires recovery before another Apply: ${stateFile.state.recoveryRequired.error}`
@@ -1135,7 +1198,7 @@ export const createActivationService = ({
     if (skillRootTransition) {
       assetBackupPaths.push(skillRootTransition.path);
     }
-    const legacySkillPaths = inventory
+    const legacySkillPaths = (managesSkills ? inventory : [])
       .filter(
         (skill) =>
           skill.legacyLocation &&
@@ -1144,6 +1207,26 @@ export const createActivationService = ({
       )
       .map((skill) => skill.path);
     assetBackupPaths.push(...legacySkillPaths);
+    const pausedSkillPaths = managesSkills
+      ? []
+      : (
+          await Promise.all(
+            (stateFile.state.managedResources ?? [])
+              .filter((resource) => resource.kind === "skill")
+              .map(async (resource) => {
+                const stats = await lstat(resource.path).catch(() => undefined);
+                return stats?.isSymbolicLink() ? resource.path : undefined;
+              })
+          )
+        ).filter((path): path is string => Boolean(path));
+    const pausedSkillFingerprints = Object.fromEntries(
+      await Promise.all(
+        pausedSkillPaths.map(async (path) => [path, (await hashPath(path)) ?? ""])
+      )
+    );
+    assetBackupPaths.push(
+      ...pausedSkillPaths.flatMap((path) => [path, markerPathForFile(path)])
+    );
     const affectedManagedPaths = new Set([
       ...targetPreview.changes.map((change) => change.path),
       ...assetBackupPaths
@@ -1163,8 +1246,12 @@ export const createActivationService = ({
       replaceablePaths: drift.paths,
       isolateSkillRoot: Boolean(skillRootTransition)
     });
-    const unmanagedWarnings = await unmanagedSkillWarnings(materializedProfile, inventory);
-    const ignoredErrors = await ignoredSkillConflicts(materializedProfile, inventory);
+    const unmanagedWarnings = managesSkills
+      ? await unmanagedSkillWarnings(materializedProfile, inventory)
+      : [];
+    const ignoredErrors = managesSkills
+      ? await ignoredSkillConflicts(materializedProfile, inventory)
+      : [];
     const withoutGenericExternalConflicts = (errors: string[]) =>
       errors.filter(
         (error) =>
@@ -1205,7 +1292,7 @@ export const createActivationService = ({
       id: randomUUID(),
       profileId: profile.id,
       profileContentHash,
-      libraryVersions: collectLibraryResourceVersions(profile, skillLibrary),
+      libraryVersions: collectLibraryResourceVersions(profile, skillLibrary, targetId),
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
       warnings: [
@@ -1226,7 +1313,15 @@ export const createActivationService = ({
       ],
       errors: previewErrors,
       changes: targetPreview.changes,
-      resourceChanges: assetPlan.resourceChanges,
+      resourceChanges: assetPlan.resourceChanges.concat(
+        pausedSkillPaths.map((path) => ({
+          kind: "skill" as const,
+          action: "replace" as const,
+          name: basename(path),
+          path,
+          source: "Keep current content and pause Profile management"
+        }))
+      ),
       replaceableTargetPaths,
       liveFingerprints: {
         ...targetPreview.liveFingerprints,
@@ -1234,6 +1329,7 @@ export const createActivationService = ({
       },
       resourceFingerprints: {
         ...assetPlan.resourceFingerprints,
+        ...pausedSkillFingerprints,
         ...sharedFingerprints
       },
       sourceFingerprints: assetPlan.sourceFingerprints,
@@ -1249,6 +1345,11 @@ export const createActivationService = ({
       operation: isTakeover ? "takeover" : "apply",
       skillRootTransition,
       legacySkillPaths,
+      resourceManagement: {
+        instructions: managesInstructions,
+        skills: managesSkills,
+        pausedSkillPaths
+      },
       skillDeployment: {
         plan: skillDeploymentPlan,
         profile: materializedProfile,
@@ -1330,7 +1431,11 @@ export const createActivationService = ({
     if (currentProfileHash !== preview.profileContentHash) {
       return { ok: false, errors: ["Profile changed after preview; review the latest version"] };
     }
-    const currentLibraryVersions = collectLibraryResourceVersions(profile, skillLibrary);
+    const currentLibraryVersions = collectLibraryResourceVersions(
+      profile,
+      skillLibrary,
+      preview.targetId
+    );
     if (!libraryResourceVersionsEqual(currentLibraryVersions, preview.libraryVersions)) {
       return { ok: false, errors: ["Library resources changed after preview; review the latest versions"] };
     }
@@ -1347,8 +1452,11 @@ export const createActivationService = ({
       homeDir: paths.homeDir,
       fakeHomeRoot: paths.fakeHomeRoot
     });
-    const currentSkillRoot = await inspectSkillRoot(targetPaths.skillsDir);
+    const currentSkillRoot = preview.resourceManagement.skills
+      ? await inspectSkillRoot(targetPaths.skillsDir)
+      : undefined;
     if (
+      currentSkillRoot &&
       !preview.skillRootTransition &&
       (currentSkillRoot.kind === "symlink" || currentSkillRoot.kind === "invalid")
     ) {
@@ -1363,10 +1471,9 @@ export const createActivationService = ({
           )
         }
       : targetPaths;
-    const inventory = await skillLibraryStore.scanInventory(
-      [inventoryTargetPaths],
-      skillLibrary
-    );
+    const inventory = preview.resourceManagement.skills
+      ? await skillLibraryStore.scanInventory([inventoryTargetPaths], skillLibrary)
+      : [];
     if (
       fingerprintSkillInventory(inventory) !==
       preview.skillDeployment.inventoryFingerprint
@@ -1385,13 +1492,15 @@ export const createActivationService = ({
         skill.contentHash
       ])
     );
-    const runtimeValidation = await validateRuntimeSkills(
-      adapter,
-      targetPaths,
-      materializedProfile,
-      skillLibrary,
-      inventory
-    );
+    const runtimeValidation = preview.resourceManagement.skills
+      ? await validateRuntimeSkills(
+          adapter,
+          targetPaths,
+          materializedProfile,
+          skillLibrary,
+          inventory
+        )
+      : { errors: [] as string[], warnings: [] as string[] };
     if (runtimeValidation.errors.length > 0) {
       return { ok: false, errors: runtimeValidation.errors };
     }
@@ -1438,6 +1547,12 @@ export const createActivationService = ({
       assetBackupPaths.push(preview.skillRootTransition.path);
     }
     assetBackupPaths.push(...(preview.legacySkillPaths ?? []));
+    assetBackupPaths.push(
+      ...preview.resourceManagement.pausedSkillPaths.flatMap((path) => [
+        path,
+        markerPathForFile(path)
+      ])
+    );
     const affectedManagedPaths = new Set([
       ...preview.changes.map((change) => change.path),
       ...assetBackupPaths
@@ -1501,6 +1616,9 @@ export const createActivationService = ({
       if (preview.skillRootTransition) {
         await isolateSkillRoot(preview.skillRootTransition);
       }
+      for (const path of preview.resourceManagement.pausedSkillPaths) {
+        await materializeManagedSkillLink(path);
+      }
       if (preview.resourceChanges.length > 0) {
         await adapter.applyAssets({
           profile: materializedProfile,
@@ -1528,12 +1646,30 @@ export const createActivationService = ({
       }
       const managedAssetPaths = preview.skillRootTransition
         ? [...desiredAssetResources(materializedProfile, targetPaths, skillLibraryDir).keys()]
-        : assetBackupPaths;
-      const managedResources = await snapshotManagedResources(
+        : assetBackupPaths.filter(
+            (path) =>
+              !preview.resourceManagement.pausedSkillPaths.some(
+                (skillPath) => path === markerPathForFile(skillPath)
+              )
+          );
+      const refreshedManagedResources = await snapshotManagedResources(
         [...preview.changes.map((change) => change.path), ...managedAssetPaths],
         targetPaths
       );
-      for (const resource of managedResources) {
+      const retainedManagedResources = (preOperationState.managedResources ?? [])
+        .filter(
+          (resource) =>
+            (!preview.resourceManagement.instructions && resource.kind === "instructions") ||
+            (!preview.resourceManagement.skills && resource.kind === "skill")
+        )
+        .map((resource) => ({ ...resource, paused: true }));
+      const managedResources = [...refreshedManagedResources, ...retainedManagedResources]
+        .filter(
+          (resource, index, resources) =>
+            resources.findIndex((candidate) => candidate.path === resource.path) === index
+        )
+        .sort((left, right) => left.path.localeCompare(right.path));
+      for (const resource of refreshedManagedResources) {
         if ((await hashPath(resource.path)) !== resource.contentHash) {
           throw new Error(`Post-apply verification failed for ${resource.path}`);
         }
@@ -1676,7 +1812,8 @@ export const createActivationService = ({
           createProfileContentHash(sourceProfile, targetId);
         const currentLibraryVersions = collectLibraryResourceVersions(
           effectiveProfile,
-          skillLibrary
+          skillLibrary,
+          targetId
         );
         if (
           preparation.profileId !== sourceProfile.id ||

@@ -104,6 +104,15 @@ A Profile is a saved environment recipe. It owns:
 - References to Library Skills, each with an install name and enabled state.
 - An independent MCP policy for each Target: `Leave unchanged` or a sparse set of `On` and `Off` choices for MCP servers already defined by that Agent.
 
+Instructions, Skills, and MCPs each have an independent management mode for every Target. The mode is part of the saved Profile recipe, not a global application preference.
+
+- `Managed by Profile` includes that resource category in Save, Preview, Apply, drift detection, Backup, and verification for the selected Target.
+- `Not managed` preserves the saved Profile content and visible resource count but excludes that category from the selected Target's effective payload. In steady state, Apply MUST NOT inspect, fingerprint, validate, write, remove, or claim new ownership over the Target's corresponding resources.
+- Turning management off is a Profile edit and does not mutate the Target until Save, Preview, and Apply. Turning it back on uses the same fresh Preview and explicit drift confirmation as any other managed replacement.
+- The transition to `Not managed` MAY touch only resources already owned by AgentEnv when detachment is required. An already AgentEnv-managed Skill live link MUST first be materialized as a standalone copy of its current content. Preview names that transition and Backup protects it. This prevents later Library updates from changing an opted-out Target without Apply while retaining enough paused ownership evidence for safe drift review when management resumes.
+- Paused ownership evidence MUST NOT contribute to ordinary managed-resource counts or drift status. It is consulted only when management resumes, and a refreshed managed snapshot replaces it after a successful Apply.
+- Missing legacy Instructions and Skills modes default to `Managed by Profile`; a missing MCP mode defaults to `Not managed`.
+
 A Profile MAY record a preferred Target for default UI context and the Target it was created from for provenance. Neither field binds deployment: the same Profile MAY be applied to every compatible Target, and each Target still has at most one active Profile.
 
 Create from Target MAY record a machine-local Capture receipt containing source paths, location roles, and content hashes. The receipt is optional takeover evidence, lives outside portable AgentEnv data, is never part of the Profile or data backup, cannot authorize content that differs from the current Library hash, and is consumed after the first successful Apply to that Target. Missing or malformed receipt data falls back to current content and ownership validation.
@@ -204,8 +213,8 @@ It MUST include enough information to distinguish:
 - An MCP connection is identified by stable Target ID plus the name in that Target's native configuration.
 - Definitions, commands, URLs, authentication, credentials, and installation lifecycle remain Agent-owned.
 - A Profile MUST NOT copy one Target's MCP definition to another Target.
-- A Profile selection is three-state: missing means `Use Agent setting`, `enabled: true` means `On`, and `enabled: false` means `Off`.
-- Returning a previously selected MCP to `Use Agent setting` MUST preserve its current native value and remove it from AgentEnv deployment state. It MUST NOT implicitly turn the connection off.
+- A Profile selection is three-state: missing means `Unchanged`, `enabled: true` means `On`, and `enabled: false` means `Off`.
+- Returning a previously selected MCP to `Unchanged` MUST preserve its current native value and remove it from AgentEnv deployment state. It MUST NOT implicitly turn the connection off.
 - The external v1 migration backup MAY retain legacy MCP Library references for recovery. Conversion maps known Target/name pairs to native Target selections once; v2 runtime MUST NOT read or write legacy definition references.
 
 ### 5.4 Target Identity
@@ -676,7 +685,7 @@ Status: local, recursive GitHub, and System Git Repository import/update; in-pla
 - Each Agent is the source of truth for MCP definitions, installation, sign-in, authentication, and credentials.
 - AgentEnv discovers only user/global MCP names, activation state, transport hint, source path, and control capability. Project, plugin, workspace, and policy-managed MCPs MAY be observed but MUST NOT be adopted or mutated.
 - Discovery MUST include credential-bearing definitions such as `computer-use` and `node_repl`; secret values MUST NOT enter Profile data, renderer payloads, logs, or diagnostics.
-- A Profile stores a policy per Target. `Leave unchanged` opts that Target entirely out of MCP management. Managed mode stores sparse three-state rows: an absent or `Use Agent setting` row performs no mutation, while `On` and `Off` update only a verified native activation field.
+- A Profile stores a policy per Target. `Not managed` opts that Target entirely out of MCP management. Managed mode stores sparse three-state rows: an absent or `Unchanged` row performs no mutation, while `On` and `Off` update only a verified native activation field.
 - Codex, OpenCode, and Trae CLI activation control are `Implemented`. Claude Code and Antigravity are read-only until an official, reliable user-scope activation mechanism is verified.
 - Apply MUST preserve command, URL, arguments, headers, environment, OAuth state, and every unknown definition field byte-for-byte or semantically unchanged.
 - A managed `On` selection missing from the Target is `Setup required` and blocks Apply because AgentEnv cannot create definitions. A managed `Off` selection missing from the Target is equivalent to Off and is a no-op.
@@ -786,7 +795,9 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Skills Library uses one stable five-lane reading order at every supported width: `Skill -> Source -> Usage -> Status -> Actions`. Source includes version metadata, Usage combines Profile references with Agent installs, and Status exposes only the highest-priority current maintenance action while retaining complete details in selectable overflow help.
 - Skills quick tabs are limited to `All`, `Updates`, and `Disabled`. Source, Usage, and Agent-install filters live in one on-demand filter region, while `Update all` is rendered only when an update can actually be reviewed.
 - Disabled Skills remain readable and use one neutral row treatment plus the explicit `Disabled` status. They MUST NOT accumulate decorative grayscale, inset rules, badges, and opacity effects, and they are excluded from Updates and non-All Usage filters.
-- Profile MCP rows use `name -> native source/status -> activation choice`. Definition editing and deletion are intentionally absent because those actions belong to the source Agent.
+- Every Profile Composer resource row owns its Target-specific `Managed` / `Not managed` switch beside the row summary. The switch MUST remain visible while collapsed, MUST NOT expand the editor when clicked, and MUST NOT be duplicated inside the expanded panel. Unsupported categories show `Agent controlled` in the same stable control lane.
+- Counts and saved summaries describe the Profile recipe and MUST remain visible when a category is not managed for the selected Target. The management state is not represented by replacing the count with zero.
+- Profile MCP rows use `name -> native source/status -> activation choice`. Definition editing and deletion are intentionally absent because those actions belong to the source Agent. The expanded editor uses compact content-sized rows and labels the sparse no-op state `Unchanged`.
 - Profile Composer resource triggers remain `52px` high before, during, and after expansion. Expanding one resource MUST NOT compress, hide metadata from, or reposition its sibling triggers. The expanded trigger and editor surface MUST be visually distinguishable from ordinary collapsed rows without turning the editor into a nested card.
 - Profile Skills with zero or one item fit their content without stretching empty list space. Larger collections grow only within the available editor region and keep the Skill list as the scroll owner.
 - Agents use one continuous ordered management list at every supported width, with ordinary healthy state rendered as quiet metadata rather than a filled badge or separate card. Diagnostics expands to the full width of its owning Agent, shifts only later rows, leaves no peer-column void, and opening a second Diagnostics region closes the first.
@@ -890,7 +901,7 @@ AgentEnv discovers user MCP definitions from the current CLI file `~/.trae/trae_
 and `~/.trae/mcp.json`. A unique selected server MAY change only its `disabled` scalar.
 The documented alternate `~/.trae/traecli.yaml` is read-only. A same-name server in more
 than one user source is Agent-controlled and blocks a persisted Profile switch until the user
-keeps one definition or chooses `Use Agent setting`. MCP command, URL, headers, environment,
+keeps one definition or chooses `Unchanged`. MCP command, URL, headers, environment,
 credentials, unknown fields, project sources, plugins, and built-ins remain Agent-owned.
 
 ## 23.1 AgentEnv Data Lifecycle

@@ -7,7 +7,6 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Switch } from "./ui";
 
 type McpSelectionMode = "agent" | "on" | "off";
 
@@ -82,42 +81,18 @@ export const ProfileMcpEditor = ({
 
   return (
     <div className="profile-mcp-editor">
-      <header className="profile-mcp-editor__header">
-        <div>
-          <strong>{target.name}</strong>
-          <span>
-            {canManage
-              ? t("Manage only the MCP switches selected below. Definitions and credentials stay in the Agent.")
-              : t("MCP settings stay Agent-controlled for this Agent.")}
-          </span>
-        </div>
-        <div className="profile-mcp-editor__controls">
-          {canManage ? (
-            <Switch
-              checked={managing}
-              label={t("Manage MCPs for {{name}}", { name: target.name })}
-              onClick={() => updatePolicy(
-                managing
-                  ? { mode: "ignore", selections: policy.selections }
-                  : { mode: "manage", selections: policy.selections }
-              )}
+      <div className="profile-mcp-toolbar">
+        <span>{t("{{count}} MCPs", { count: rows.length })}</span>
+        <span className="profile-mcp-toolbar__actions">
+          {!canManage && policy.mode === "manage" ? (
+            <button
+              className="secondary-action"
+              type="button"
+              onClick={() => updatePolicy({ mode: "ignore", selections: policy.selections })}
             >
-              {t(managing ? "Managed by Profile" : "Leave unchanged")}
-            </Switch>
-          ) : (
-            <>
-              <span className="profile-mcp-readonly">{t("Agent controlled")}</span>
-              {policy.mode === "manage" ? (
-                <button
-                  className="secondary-action"
-                  type="button"
-                  onClick={() => updatePolicy({ mode: "ignore", selections: policy.selections })}
-                >
-                  {t("Leave unchanged")}
-                </button>
-              ) : null}
-            </>
-          )}
+              {t("Remove override")}
+            </button>
+          ) : null}
           <button
             className="icon-action"
             type="button"
@@ -127,15 +102,10 @@ export const ProfileMcpEditor = ({
           >
             <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
           </button>
-        </div>
-      </header>
+        </span>
+      </div>
 
-      {!managing && canManage ? (
-        <div className="profile-mcp-empty profile-mcp-empty--policy">
-          <Network size={17} strokeWidth={2} aria-hidden="true" />
-          <span>{t("Apply leaves every MCP setting in {{name}} unchanged.", { name: target.name })}</span>
-        </div>
-      ) : connections === undefined ? (
+      {connections === undefined ? (
         <div className="profile-mcp-empty">{t("Loading MCP connections...")}</div>
       ) : targetIssues.length > 0 ? (
         <div className="profile-mcp-inspection-error" role="alert">
@@ -160,14 +130,17 @@ export const ProfileMcpEditor = ({
             const duplicate = connection.detail === "duplicate-user-sources";
             const mode = modeFor(connection.name);
             return (
-              <div className="profile-mcp-row" key={`${target.id}:${connection.name}`}>
+              <div
+                className={`profile-mcp-row${managing ? "" : " is-unmanaged"}`}
+                key={`${target.id}:${connection.name}`}
+              >
                 <span className="profile-mcp-row__identity">
                   <strong>
                     <OverflowTooltip className="profile-mcp-name" text={connection.name} />
                   </strong>
                   <small>
                     {duplicate
-                      ? t("Defined in multiple Agent files · Leave unchanged")
+                      ? t("Defined in multiple Agent files · Unchanged")
                       : missing
                       ? mode === "on"
                         ? t("Missing in Agent · Apply blocked")
@@ -176,14 +149,15 @@ export const ProfileMcpEditor = ({
                     {connection.transport ? ` · ${connection.transport}` : ""}
                   </small>
                 </span>
-                {canManage && connection.controllable ? (
+                {!managing ? null : canManage && connection.controllable ? (
                   <select
                     className="profile-mcp-mode"
                     aria-label={t("{{name}} Profile behavior", { name: connection.name })}
                     value={mode}
+                    disabled={!managing}
                     onChange={(event) => updateMode(connection.name, event.target.value as McpSelectionMode)}
                   >
-                    <option value="agent">{t("Use Agent setting")}</option>
+                    <option value="agent">{t("Unchanged")}</option>
                     <option value="on">{t("On")}</option>
                     <option value="off">{t("Off")}</option>
                   </select>
@@ -193,7 +167,7 @@ export const ProfileMcpEditor = ({
                     type="button"
                     onClick={() => updateMode(connection.name, "agent")}
                   >
-                    {t("Use Agent setting")}
+                    {t("Remove override")}
                   </button>
                 ) : (
                   <span className="profile-mcp-agent-state">

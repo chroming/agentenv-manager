@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ProfileDetail } from "../shared/types";
+import { profileResourceMode } from "../shared/profileResources";
 
 type ProfileFingerprintInput = Pick<
   ProfileDetail,
@@ -11,15 +12,28 @@ export const createProfileContentHash = (
   targetId?: string
 ): string => {
   const mcpPolicy = targetId ? profile.resources.mcpByTarget[targetId] : undefined;
+  const instructionsMode = targetId
+    ? profileResourceMode(profile.resources, targetId, "instructions")
+    : "manage";
+  const skillsMode = targetId
+    ? profileResourceMode(profile.resources, targetId, "skills")
+    : "manage";
   const deployment = {
     version: profile.manifest.version,
     targetId: targetId ?? null,
-    instructions: profile.instructions,
-    skills: [...profile.resources.skills].sort(
-      (left, right) =>
-        left.targetName.localeCompare(right.targetName) ||
-        left.libraryId.localeCompare(right.libraryId)
-    ),
+    management: {
+      instructions: instructionsMode,
+      skills: skillsMode,
+      mcp: mcpPolicy?.mode ?? "ignore"
+    },
+    instructions: instructionsMode === "manage" ? profile.instructions : null,
+    skills: skillsMode === "manage"
+      ? [...profile.resources.skills].sort(
+          (left, right) =>
+            left.targetName.localeCompare(right.targetName) ||
+            left.libraryId.localeCompare(right.libraryId)
+        )
+      : [],
     mcp: mcpPolicy?.mode === "manage"
       ? {
           mode: mcpPolicy.mode,

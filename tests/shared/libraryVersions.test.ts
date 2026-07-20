@@ -24,4 +24,23 @@ describe("library resource versions", () => {
       skills: { enabled: "enabled-hash" }
     });
   });
+
+  it("does not make ignored Target Skills stale when Library content changes", () => {
+    const profile = {
+      resources: {
+        skills: [{ libraryId: "enabled", targetName: "enabled", enabled: true }],
+        managementByTarget: {
+          opencode: { instructions: "manage", skills: "ignore" }
+        },
+        mcpByTarget: {}
+      }
+    } as Pick<ProfileDetail, "resources">;
+    const skills = [
+      { id: "enabled", contentHash: "enabled-hash" }
+    ] as SkillLibraryEntry[];
+
+    expect(collectLibraryResourceVersions(profile, skills, "opencode")).toEqual({
+      skills: {}
+    });
+  });
 });

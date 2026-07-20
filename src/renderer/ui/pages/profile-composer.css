@@ -2,14 +2,14 @@
   height: var(--profile-composer-row-height);
 }
 
-.profile-composer-section.is-expanded > .profile-composer-section__trigger {
+.profile-composer-section.is-expanded > .profile-composer-section__header {
   background: var(--profile-expanded-trigger);
   box-shadow: inset 2px 0 0 var(--profile-expanded-accent);
 }
 
-.profile-composer-section.is-expanded > .profile-composer-section__trigger
+.profile-composer-section.is-expanded > .profile-composer-section__header
   .profile-composer-section__icon,
-.profile-composer-section.is-expanded > .profile-composer-section__trigger
+.profile-composer-section.is-expanded > .profile-composer-section__header
   .profile-composer-section__chevron {
   color: #356fca;
 }

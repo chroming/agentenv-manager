@@ -21,8 +21,11 @@ describe("ProfileComposerSection", () => {
         description="Choose reusable capabilities"
         count={2}
         chipNames={["Reviewer", "Planner"]}
+        managed
+        managementLabel="Manage Skills for OpenCode"
         expanded
         onToggle={onToggle}
+        onManagementChange={() => undefined}
       >
         <button type="button">Edit skills</button>
       </ProfileComposerSection>
@@ -55,8 +58,11 @@ describe("ProfileComposerSection", () => {
         description="Connect shared tools"
         count={6}
         chipNames={["Context7", "Filesystem", "Context7", "GitHub", "Figma", "Slack"]}
+        managed={false}
+        managementLabel="Manage MCPs for OpenCode"
         expanded={false}
         onToggle={() => undefined}
+        onManagementChange={() => undefined}
       >
         <div>Server editor</div>
       </ProfileComposerSection>
@@ -87,8 +93,11 @@ describe("ProfileComposerSection", () => {
           description="Choose skills"
           count={1}
           chipNames={["Reviewer"]}
+          managed
+          managementLabel="Manage Skills for OpenCode"
           expanded
           onToggle={() => undefined}
+          onManagementChange={() => undefined}
         >
           <div>Skills panel</div>
         </ProfileComposerSection>
@@ -99,8 +108,11 @@ describe("ProfileComposerSection", () => {
           description="Choose servers"
           count={1}
           chipNames={["Context7"]}
+          managed
+          managementLabel="Manage MCPs for OpenCode"
           expanded
           onToggle={() => undefined}
+          onManagementChange={() => undefined}
         >
           <div>MCP panel</div>
         </ProfileComposerSection>
@@ -140,14 +152,17 @@ describe("ProfileComposerSection", () => {
         description="Set the operating guidance"
         count={1}
         chipNames={["AGENTS.md"]}
+        managed
+        managementLabel="Manage Instructions for OpenCode"
         expanded={false}
         onToggle={() => undefined}
+        onManagementChange={() => undefined}
       >
         <textarea aria-label="Instructions editor" />
       </ProfileComposerSection>
     );
 
-    expect(screen.getByRole("button", { name: /Instructions/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Instructions" })).toHaveAttribute(
       "aria-expanded",
       "false"
     );
@@ -155,8 +170,41 @@ describe("ProfileComposerSection", () => {
     expect(screen.queryByRole("textbox", { name: "Instructions editor" })).not.toBeInTheDocument();
     expect(
       document.getElementById(
-        screen.getByRole("button", { name: /Instructions/i }).getAttribute("aria-controls")!
+        screen.getByRole("button", { name: "Instructions" }).getAttribute("aria-controls")!
       )
     ).toBeNull();
+  });
+
+  it("changes resource management without expanding the section", () => {
+    const onToggle = vi.fn();
+    const onManagementChange = vi.fn();
+    render(
+      <ProfileComposerSection
+        id="profile-skills"
+        icon={<BookOpen />}
+        title="Skills"
+        description="Choose skills"
+        count={3}
+        chipNames={["Reviewer"]}
+        managed={false}
+        managementLabel="Manage Skills for OpenCode"
+        expanded={false}
+        onToggle={onToggle}
+        onManagementChange={onManagementChange}
+      >
+        <div>Skills panel</div>
+      </ProfileComposerSection>
+    );
+
+    const management = screen.getByRole("switch", { name: "Manage Skills for OpenCode" });
+    expect(management).toHaveAttribute("aria-checked", "false");
+    expect(management).toHaveTextContent("Not managed");
+    expect(screen.getByText("3", { selector: ".profile-composer-section__count" })).toBeVisible();
+
+    fireEvent.click(management);
+
+    expect(onManagementChange).toHaveBeenCalledWith(true);
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });
 });

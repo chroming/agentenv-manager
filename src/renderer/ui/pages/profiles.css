@@ -764,9 +764,33 @@
 .profile-composer-section__trigger,
 .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
   gap: 10px;
-  grid-template-columns: 30px minmax(140px, 1fr) auto minmax(0, 1fr) 18px;
+  grid-template-columns: 30px minmax(140px, 1fr) auto minmax(0, 1fr);
   min-height: 52px;
   padding: 6px 12px;
+}
+
+.profile-composer-section__header {
+  grid-template-columns: minmax(0, 1fr) auto 34px;
+  min-height: var(--profile-composer-row-height);
+}
+
+.profile-composer-section__management {
+  gap: 6px;
+  min-width: 116px;
+}
+
+.profile-composer-section__management .ui-switch__track {
+  height: 20px;
+  width: 34px;
+}
+
+.profile-composer-section__management .ui-switch__thumb {
+  height: 14px;
+  width: 14px;
+}
+
+.profile-composer-section__management.is-on .ui-switch__thumb {
+  transform: translateX(14px);
 }
 
 .profile-composer-section.is-expanded > .profile-composer-section__panel {
@@ -1251,9 +1275,13 @@
 
   .profile-composer-section__trigger,
   .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
-    grid-template-columns: 32px minmax(0, 1fr) auto 18px;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
     min-height: 52px;
     padding-block: 6px;
+  }
+
+  .profile-composer-section__management {
+    min-width: 116px;
   }
 
   .profile-composer-section__icon {

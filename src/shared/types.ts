@@ -15,8 +15,10 @@ export type {
   ProfileManifest,
   ProfileMcpPolicy,
   ProfileMcpSelection,
+  ProfileResourceMode,
   ProfileResources,
   ProfileSkill,
+  ProfileTargetResourcePolicy,
   ResourceIconKey
 } from "./schemas";
 import type {
@@ -861,6 +863,7 @@ export interface ManagedResourceSnapshot {
   path: string;
   contentHash: string;
   source?: string;
+  paused?: boolean;
 }
 
 export type TargetHealthStatus = "ready" | "needs-setup" | "missing" | "guarded";

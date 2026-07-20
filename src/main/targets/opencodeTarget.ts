@@ -12,6 +12,7 @@ import type {
   TargetActivationPreview,
   TargetState
 } from "../../shared/types";
+import { profileManagesResource } from "../../shared/profileResources";
 import { createUnifiedDiff } from "../diff";
 import { readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -212,11 +213,20 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     targetPaths,
     state = DEFAULT_STATE
   }): Promise<TargetActivationPreview> => {
-    const warnings = findSecretWarnings(profile.instructions);
+    const managesInstructions = profileManagesResource(
+      profile.resources,
+      targetPaths.targetId,
+      "instructions"
+    );
+    const warnings = managesInstructions ? findSecretWarnings(profile.instructions) : [];
     const errors: string[] = [];
     const changes: PlannedFileChange[] = [];
-    const liveInstructions = await readTextIfExists(targetPaths.instructionsPath);
-    addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
+    const liveInstructions = managesInstructions
+      ? await readTextIfExists(targetPaths.instructionsPath)
+      : "";
+    if (managesInstructions) {
+      addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
+    }
 
     const policy = profile.resources.mcpByTarget.opencode ?? {
       mode: "ignore" as const,
@@ -262,7 +272,9 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       errors,
       changes,
       liveFingerprints: {
-        [targetPaths.instructionsPath]: hashText(liveInstructions),
+        ...(managesInstructions
+          ? { [targetPaths.instructionsPath]: hashText(liveInstructions) }
+          : {}),
         ...(policy.mode === "manage" && policy.selections.length > 0
           ? { [targetPaths.configPath]: hashText(liveConfigText) }
           : {})

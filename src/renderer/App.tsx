@@ -87,6 +87,10 @@ import {
 } from "../shared/libraryVersions";
 import { isTargetInstalled } from "../shared/targetHealth";
 import { isExternalSkillImportable } from "../shared/skillIdentity";
+import {
+  setProfileResourceMode,
+  type ManagedProfileResource
+} from "../shared/profileResources";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { DiffViewer } from "./components/DiffViewer";
@@ -129,6 +133,7 @@ import {
 import { createTargetNameIndex } from "./targetPresentation";
 const emptyProfileResources: ProfileResources = {
   skills: [],
+  managementByTarget: {},
   mcpByTarget: {}
 };
 
@@ -823,13 +828,14 @@ const AppContent = ({
     const nextProfileResourceCounts: Record<string, ProfileResourceSummary> = {};
     const nextProfileLibraryVersions: Record<string, LibraryResourceVersions> = {};
     for (const profile of profileDetails) {
-      nextProfileLibraryVersions[profile.id] = collectLibraryResourceVersions(
-        profile,
-        skillItems
-      );
       const profileTarget = supportedTargetItems.find(
         (targetItem) => targetItem.id === profile.manifest.preferredTargetId
       ) ?? supportedTargetItems[0];
+      nextProfileLibraryVersions[profile.id] = collectLibraryResourceVersions(
+        profile,
+        skillItems,
+        profileTarget?.id
+      );
       if (profileTarget) {
         nextProfileResourceCounts[profile.id] = summarizeProfile(
           profile,
@@ -1375,7 +1381,11 @@ const AppContent = ({
       }
       setProfileLibraryVersions((current) => ({
         ...current,
-        [saved.id]: collectLibraryResourceVersions(saved, librarySkills)
+        [saved.id]: collectLibraryResourceVersions(
+          saved,
+          librarySkills,
+          preferredTarget?.id
+        )
       }));
       setSkillUsage((current) => reconcileProfileUsage(
         current,
@@ -1944,6 +1954,21 @@ const AppContent = ({
     draftProfile && profileTarget
       ? summarizeProfile(draftProfile, profileTarget, librarySkills)
       : undefined;
+  const updateSelectedResourceManagement = (
+    resource: ManagedProfileResource,
+    managed: boolean
+  ) => {
+    if (!draftProfile || !selectedTargetId) return;
+    updateDraftProfile({
+      ...draftProfile,
+      resources: setProfileResourceMode(
+        draftProfile.resources ?? emptyProfileResources,
+        selectedTargetId,
+        resource,
+        managed ? "manage" : "ignore"
+      )
+    });
+  };
   const selectedTargetProfileHash =
     selectedTarget && draftProfile
       ? draftProfile.targetContentHashes?.[selectedTarget.id]
@@ -1959,7 +1984,11 @@ const AppContent = ({
         ? libraryResourceVersionsEqual(
             selectedTargetState?.appliedLibraryVersions,
             draftProfile
-              ? collectLibraryResourceVersions(draftProfile, librarySkills)
+              ? collectLibraryResourceVersions(
+                  draftProfile,
+                  librarySkills,
+                  selectedTarget?.id
+                )
               : undefined
           )
         : undefined,
@@ -4059,8 +4088,24 @@ const AppContent = ({
                               ]
                             : []
                         }
+                        managed={Boolean(
+                          profileTarget?.capabilities.instructions &&
+                          resourceSummary?.instructions.managed
+                        )}
+                        managementDisabled={!profileTarget?.capabilities.instructions}
+                        managementLabel={t("Manage Instructions for {{name}}", {
+                          name: activeTargetName
+                        })}
+                        managementStatus={
+                          profileTarget?.capabilities.instructions
+                            ? undefined
+                            : t("Agent controlled")
+                        }
                         expanded={activeComposerSection === "instructions"}
                         onToggle={() => toggleComposerSection("instructions")}
+                        onManagementChange={(managed) =>
+                          updateSelectedResourceManagement("instructions", managed)
+                        }
                       >
                         <AgentsEditor
                           label={
@@ -4083,8 +4128,23 @@ const AppContent = ({
                         description={t("Reusable skills and workflows")}
                         count={resourceSummary?.skills.count ?? 0}
                         chipNames={resourceSummary?.skills.names ?? []}
+                        managed={Boolean(
+                          profileTarget?.capabilities.skills && resourceSummary?.skills.managed
+                        )}
+                        managementDisabled={!profileTarget?.capabilities.skills}
+                        managementLabel={t("Manage Skills for {{name}}", {
+                          name: activeTargetName
+                        })}
+                        managementStatus={
+                          profileTarget?.capabilities.skills
+                            ? undefined
+                            : t("Agent controlled")
+                        }
                         expanded={activeComposerSection === "skills"}
                         onToggle={() => toggleComposerSection("skills")}
+                        onManagementChange={(managed) =>
+                          updateSelectedResourceManagement("skills", managed)
+                        }
                       >
                         <SkillsEditor
                           value={draftProfile.resources ?? emptyProfileResources}
@@ -4122,8 +4182,23 @@ const AppContent = ({
                         )}
                         count={resourceSummary?.mcp.count ?? 0}
                         chipNames={resourceSummary?.mcp.names ?? []}
+                        managed={Boolean(
+                          profileTarget?.capabilities.mcpActivation && resourceSummary?.mcp.managed
+                        )}
+                        managementDisabled={!profileTarget?.capabilities.mcpActivation}
+                        managementLabel={t("Manage MCPs for {{name}}", {
+                          name: activeTargetName
+                        })}
+                        managementStatus={
+                          profileTarget?.capabilities.mcpActivation
+                            ? undefined
+                            : t("Agent controlled")
+                        }
                         expanded={activeComposerSection === "mcp"}
                         onToggle={() => toggleComposerSection("mcp")}
+                        onManagementChange={(managed) =>
+                          updateSelectedResourceManagement("mcp", managed)
+                        }
                       >
                         <ProfileMcpEditor
                           target={selectedTarget}

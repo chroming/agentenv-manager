@@ -6,6 +6,7 @@ import type {
   TargetActivationPreview,
   TargetState
 } from "../../shared/types";
+import { profileManagesResource } from "../../shared/profileResources";
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -169,11 +170,19 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     targetPaths,
     state = DEFAULT_STATE
   }): Promise<TargetActivationPreview> => {
-    const warnings = findSecretWarnings(profile.instructions);
+    const managesInstructions = profileManagesResource(
+      profile.resources,
+      targetPaths.targetId,
+      "instructions"
+    );
+    const warnings = managesInstructions ? findSecretWarnings(profile.instructions) : [];
     const errors: string[] = [];
     const changes: PlannedFileChange[] = [];
-    const liveInstructions = await readTextIfExists(targetPaths.instructionsPath);
+    const liveInstructions = managesInstructions
+      ? await readTextIfExists(targetPaths.instructionsPath)
+      : "";
     if (
+      managesInstructions &&
       targetPaths.instructionsOverridePath &&
       await pathExists(targetPaths.instructionsOverridePath)
     ) {
@@ -181,7 +190,9 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
         `${targetPaths.instructionsOverridePath} exists and may override AGENTS.md`
       );
     }
-    addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
+    if (managesInstructions) {
+      addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
+    }
 
     const policy = profile.resources.mcpByTarget.codex ?? {
       mode: "ignore" as const,
@@ -226,7 +237,9 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       errors,
       changes,
       liveFingerprints: {
-        [targetPaths.instructionsPath]: hashText(liveInstructions),
+        ...(managesInstructions
+          ? { [targetPaths.instructionsPath]: hashText(liveInstructions) }
+          : {}),
         ...(policy.mode === "manage" && policy.selections.length > 0
           ? { [targetPaths.configPath]: hashText(liveConfig) }
           : {})

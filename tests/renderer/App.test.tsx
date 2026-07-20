@@ -693,7 +693,9 @@ describe("App", () => {
     fireEvent.click(within(composer).getByRole("button", { name: "Instructions" }));
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
     fireEvent.click(within(composer).getByRole("button", { name: "MCPs" }));
-    expect(screen.getByText("Apply leaves every MCP setting in OpenCode unchanged.")).toBeInTheDocument();
+    expect(within(composer).getByRole("switch", { name: "Manage MCPs for OpenCode" }))
+      .toHaveTextContent("Not managed");
+    expect(screen.getByText("0 MCPs")).toBeInTheDocument();
   });
 
   it("renders Library Skills before startup discovery and update checks finish", async () => {
@@ -1418,9 +1420,9 @@ describe("App", () => {
     const row = (await screen.findByText("docs", {
       selector: ".profile-mcp-name"
     })).closest(".profile-mcp-row");
-    expect(row).toHaveTextContent("Defined in multiple Agent files · Leave unchanged");
+    expect(row).toHaveTextContent("Defined in multiple Agent files · Unchanged");
     expect(screen.queryByLabelText("docs Profile behavior")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Use Agent setting" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove override" }));
     expect(screen.getByText("Agent controlled")).toBeInTheDocument();
   });
 

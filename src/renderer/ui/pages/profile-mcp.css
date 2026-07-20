@@ -3,44 +3,33 @@
   min-width: 0;
 }
 
-.profile-mcp-editor__header {
+.profile-mcp-toolbar {
   align-items: center;
   border-bottom: 1px solid var(--border);
   display: flex;
-  gap: 16px;
   justify-content: space-between;
-  min-height: 56px;
-  padding: 10px 14px;
+  min-height: 38px;
+  padding: 3px 8px 3px 12px;
 }
 
-.profile-mcp-editor__header > div {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.profile-mcp-editor__header > div:first-child {
-  flex: 1 1 auto;
-}
-
-.profile-mcp-editor__header > .profile-mcp-editor__controls {
+.profile-mcp-toolbar__actions {
   align-items: center;
   display: flex;
   flex: 0 0 auto;
-  gap: 8px;
+  gap: 6px;
 }
 
-.profile-mcp-editor__controls .secondary-action {
-  min-height: 34px;
-  white-space: nowrap;
+.profile-mcp-toolbar > span:first-child {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
 }
 
-.profile-mcp-editor__header strong {
-  color: var(--text);
-  font-size: 13px;
+.profile-mcp-toolbar__actions .secondary-action {
+  min-height: 30px;
+  padding-inline: 9px;
 }
 
-.profile-mcp-editor__header span,
 .profile-mcp-empty {
   color: var(--muted);
   font-size: 12px;
@@ -57,8 +46,12 @@
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(0, 1fr) 154px;
-  min-height: 54px;
-  padding: 8px 14px;
+  min-height: 50px;
+  padding: 6px 12px;
+}
+
+.profile-mcp-row.is-unmanaged {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .profile-mcp-row:last-child {
@@ -98,8 +91,8 @@
   color: var(--text);
   font: inherit;
   font-size: 12px;
-  height: 36px;
-  min-height: 36px;
+  height: 32px;
+  min-height: 32px;
   min-width: 0;
   padding: 0 28px 0 10px;
   width: 100%;
@@ -126,8 +119,8 @@
   align-items: center;
   display: flex;
   gap: 8px;
-  min-height: 64px;
-  padding: 12px 14px;
+  min-height: 50px;
+  padding: 9px 12px;
 }
 
 .profile-mcp-inspection-error {
@@ -136,8 +129,18 @@
   display: grid;
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  min-height: 68px;
-  padding: 12px 14px;
+  min-height: 56px;
+  padding: 8px 12px;
+}
+
+.profile-composer-section[data-profile-composer-id="mcp"].is-expanded {
+  flex: 0 1 auto;
+}
+
+.profile-composer-section[data-profile-composer-id="mcp"]
+  .profile-composer-section__panel {
+  max-height: min(340px, 44vh);
+  padding: 6px;
 }
 
 .profile-mcp-inspection-error > span {

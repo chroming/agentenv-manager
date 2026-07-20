@@ -54,8 +54,18 @@ export const ProfileMcpPolicySchema = z.object({
   selections: z.array(ProfileMcpSelectionSchema).default([])
 });
 
+export const ProfileResourceModeSchema = z.enum(["ignore", "manage"]);
+
+export const ProfileTargetResourcePolicySchema = z.object({
+  instructions: ProfileResourceModeSchema.default("manage"),
+  skills: ProfileResourceModeSchema.default("manage")
+});
+
 export const ProfileResourcesSchema = z.object({
   skills: z.array(ProfileSkillSchema).default([]),
+  managementByTarget: z
+    .record(SafeIdSchema, ProfileTargetResourcePolicySchema)
+    .optional(),
   mcpByTarget: z.record(SafeIdSchema, ProfileMcpPolicySchema).default({})
 }).superRefine((resources, context) => {
   const libraryIds = new Set<string>();
@@ -97,5 +107,7 @@ export type ProfileManifest = z.infer<typeof ProfileManifestSchema>;
 export type ProfileSkill = z.infer<typeof ProfileSkillSchema>;
 export type ProfileMcpSelection = z.infer<typeof ProfileMcpSelectionSchema>;
 export type ProfileMcpPolicy = z.infer<typeof ProfileMcpPolicySchema>;
+export type ProfileResourceMode = z.infer<typeof ProfileResourceModeSchema>;
+export type ProfileTargetResourcePolicy = z.infer<typeof ProfileTargetResourcePolicySchema>;
 export type ProfileResources = z.infer<typeof ProfileResourcesSchema>;
 export type ResourceIconKey = z.infer<typeof ResourceIconKeySchema>;

@@ -48,12 +48,45 @@ describe("Profile summaries", () => {
       { id: "paused", globallyEnabled: true },
       { id: "hidden", globallyEnabled: false }
     ] as never[])).toEqual({
-      instructions: { count: 1 },
-      skills: { count: 1, names: ["review"] },
-      mcp: { count: 1, names: ["docs"] }
+      instructions: { count: 1, managed: true },
+      skills: { count: 1, names: ["review"], managed: true },
+      mcp: { count: 1, names: ["docs"], managed: true }
     });
 
-    expect(summarizeProfile(profile, { id: "codex" }).mcp).toEqual({ count: 0, names: [] });
+    expect(summarizeProfile(profile, { id: "codex" }).mcp).toEqual({
+      count: 0,
+      names: [],
+      managed: false
+    });
+  });
+
+  it("keeps configured counts visible while a resource category is not managed", () => {
+    const ignored = {
+      ...profile,
+      resources: {
+        ...profile.resources,
+        managementByTarget: {
+          opencode: { instructions: "ignore" as const, skills: "ignore" as const }
+        },
+        mcpByTarget: {
+          ...profile.resources.mcpByTarget,
+          opencode: {
+            ...profile.resources.mcpByTarget.opencode,
+            mode: "ignore" as const
+          }
+        }
+      }
+    };
+
+    expect(summarizeProfile(ignored, { id: "opencode" }, [
+      { id: "review", globallyEnabled: true },
+      { id: "paused", globallyEnabled: true },
+      { id: "hidden", globallyEnabled: false }
+    ] as never[])).toEqual({
+      instructions: { count: 1, managed: false },
+      skills: { count: 1, names: ["review"], managed: false },
+      mcp: { count: 1, names: ["docs"], managed: false }
+    });
   });
 
   it("chooses remembered, active, preferred, then installed Agents", () => {

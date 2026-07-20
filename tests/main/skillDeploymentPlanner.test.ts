@@ -101,6 +101,22 @@ const plan = ({
   });
 
 describe("skill deployment planner", () => {
+  it("does not plan or validate Skill deployment when this Agent is not managed", () => {
+    const selectedProfile = profile();
+    selectedProfile.resources.managementByTarget = {
+      codex: { instructions: "manage", skills: "ignore" }
+    };
+    const result = plan({
+      selectedProfile,
+      inventory: [inventoryEntry({ contentHash: "occupied", contentMatchesLibrary: false })]
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.decisions).toEqual([]);
+    expect(result.approvedUnmanagedSkills).toEqual([]);
+    expect(result.effectiveSkills).toEqual(selectedProfile.resources.skills);
+  });
+
   it.each(["codex", "opencode", "claude-code", "antigravity", "trae-cli"])(
     "plans a missing dedicated copy for %s without Target-specific branches",
     (targetId) => {

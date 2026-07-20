@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "jsonc-parser";
@@ -16,6 +16,120 @@ afterEach(async () => {
 });
 
 describe("OpenCode Profile v2 switching e2e", () => {
+  it("pauses and resumes Instructions, Skills, and MCP management without losing Profile data", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-opencode-resource-policy-e2e-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const profileStore = createProfileStore({ appDataRoot: paths.appDataRoot, homeDir: paths.homeDir });
+    const settingsStore = createSettingsStore(paths);
+    const skillLibraryStore = createSkillLibraryStore(paths, settingsStore);
+    const source = join(root, "sources", "reviewer");
+    await mkdir(source, { recursive: true });
+    await writeFile(
+      join(source, "SKILL.md"),
+      "---\nname: reviewer\ndescription: Review\n---\n# Managed v1\n"
+    );
+    const librarySkill = await skillLibraryStore.importSkill({ sourcePath: source, id: "reviewer" });
+    const manifest = {
+      id: "opencode-daily",
+      name: "OpenCode daily",
+      description: "",
+      preferredTargetId: "opencode",
+      version: 2 as const
+    };
+    const managedResources = {
+      skills: [{ libraryId: "reviewer", targetName: "reviewer", enabled: true }],
+      managementByTarget: {
+        opencode: { instructions: "manage" as const, skills: "manage" as const }
+      },
+      mcpByTarget: {
+        opencode: {
+          mode: "manage" as const,
+          selections: [{ name: "docs", enabled: true }]
+        }
+      }
+    };
+    await profileStore.saveProfile({
+      manifest,
+      instructions: "# Profile instructions\n",
+      resources: managedResources
+    });
+    const targetDir = join(paths.homeDir, ".config", "opencode");
+    const targetSkill = join(targetDir, "skills", "reviewer");
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(join(targetDir, "AGENTS.md"), "# Before\n");
+    await writeFile(
+      join(targetDir, "opencode.jsonc"),
+      '{"mcp":{"docs":{"type":"local","command":["docs"],"enabled":false}}}\n'
+    );
+    const service = createActivationService({ paths, profileStore, settingsStore, skillLibraryStore });
+    const apply = async () => {
+      const preview = await service.previewProfile(manifest.id, "opencode");
+      expect(preview.errors).toEqual([]);
+      const applied = await service.applyProfile(manifest.id, preview.id);
+      expect(applied.ok).toBe(true);
+      return preview;
+    };
+
+    await apply();
+    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(true);
+
+    await profileStore.saveProfile({
+      manifest,
+      instructions: "# Profile instructions\n",
+      resources: {
+        ...managedResources,
+        managementByTarget: {
+          opencode: { instructions: "ignore", skills: "ignore" }
+        },
+        mcpByTarget: {
+          opencode: { ...managedResources.mcpByTarget.opencode, mode: "ignore" }
+        }
+      }
+    });
+    expect((await service.listTargetStates())[0]?.lifecycleStatus).toBe("pending");
+    await writeFile(join(targetDir, "AGENTS.md"), "# Local instructions\n");
+    const pausedPreview = await apply();
+    expect(pausedPreview.changes.map((change) => change.path)).not.toContain(
+      join(targetDir, "AGENTS.md")
+    );
+    expect(pausedPreview.resourceChanges).toContainEqual(
+      expect.objectContaining({ path: targetSkill, action: "replace" })
+    );
+    expect((await lstat(targetSkill)).isSymbolicLink()).toBe(false);
+    await expect(readFile(join(targetDir, "AGENTS.md"), "utf8"))
+      .resolves.toBe("# Local instructions\n");
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "applied",
+      errorCount: 0
+    });
+
+    await writeFile(
+      join(librarySkill.path, "SKILL.md"),
+      "---\nname: reviewer\ndescription: Review\n---\n# Managed v2\n"
+    );
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Managed v1");
+    expect((await service.listTargetStates())[0]?.lifecycleStatus).toBe("applied");
+
+    await profileStore.saveProfile({
+      manifest,
+      instructions: "# Profile instructions\n",
+      resources: managedResources
+    });
+    const resumePreview = await service.previewProfile(manifest.id, "opencode");
+    expect(resumePreview.errors).toEqual([
+      expect.stringContaining("External changes detected in AgentEnv-managed instructions")
+    ]);
+    const resumed = await service.applyProfile(manifest.id, resumePreview.id, {
+      allowManagedDrift: true
+    });
+    expect(resumed.ok).toBe(true);
+    await expect(readFile(join(targetDir, "AGENTS.md"), "utf8"))
+      .resolves.toBe("# Profile instructions\n");
+    await expect(readFile(join(targetSkill, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Managed v2");
+  });
+
   it("switches Instructions, Library Skills, and selected MCP activation only", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-opencode-v2-e2e-"));
     const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });

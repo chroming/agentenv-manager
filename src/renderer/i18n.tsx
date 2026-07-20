@@ -51,15 +51,21 @@ const zhCN: Record<string, string> = {
   "{{name}} Profile behavior": "{{name}} 的配置方案行为",
   "Use Agent setting": "沿用 Agent 设置",
   "Agent controlled": "由 Agent 控制",
-  "Defined in multiple Agent files · Leave unchanged":
+  "Defined in multiple Agent files · Unchanged":
     "在多个 Agent 文件中重复定义 · 保持不变",
   "Manage only the MCP switches selected below. Definitions and credentials stay in the Agent.":
     "仅管理下方选中的 MCP 开关；定义和凭据仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":
     "此 Agent 的 MCP 设置仍由 Agent 自行控制。",
   "Manage MCPs for {{name}}": "管理 {{name}} 的 MCP",
+  "Manage Instructions for {{name}}": "管理 {{name}} 的指令",
+  "Manage Skills for {{name}}": "管理 {{name}} 的技能",
   "Managed by Profile": "由配置方案管理",
   "Leave unchanged": "保持不变",
+  "Unchanged": "保持不变",
+  "Remove override": "移除覆盖设置",
+  "Expand {{name}}": "展开 {{name}}",
+  "Collapse {{name}}": "收起 {{name}}",
   "Apply leaves every MCP setting in {{name}} unchanged.":
     "应用时不会更改 {{name}} 的任何 MCP 设置。",
   "Missing in Agent · Apply blocked": "Agent 中缺失 · 将阻止应用",
@@ -1365,15 +1371,21 @@ const zhTW: Record<string, string> = {
   "{{name}} Profile behavior": "{{name}} 的設定檔行為",
   "Use Agent setting": "沿用 Agent 設定",
   "Agent controlled": "由 Agent 控制",
-  "Defined in multiple Agent files · Leave unchanged":
+  "Defined in multiple Agent files · Unchanged":
     "在多個 Agent 檔案中重複定義 · 保持不變",
   "Manage only the MCP switches selected below. Definitions and credentials stay in the Agent.":
     "僅管理下方選取的 MCP 開關；定義與憑證仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":
     "此 Agent 的 MCP 設定仍由 Agent 自行控制。",
   "Manage MCPs for {{name}}": "管理 {{name}} 的 MCP",
+  "Manage Instructions for {{name}}": "管理 {{name}} 的指令",
+  "Manage Skills for {{name}}": "管理 {{name}} 的技能",
   "Managed by Profile": "由設定檔管理",
   "Leave unchanged": "保持不變",
+  "Unchanged": "保持不變",
+  "Remove override": "移除覆寫設定",
+  "Expand {{name}}": "展開 {{name}}",
+  "Collapse {{name}}": "收起 {{name}}",
   "Apply leaves every MCP setting in {{name}} unchanged.":
     "套用時不會更改 {{name}} 的任何 MCP 設定。",
   "Missing in Agent · Apply blocked": "Agent 中缺少 · 將阻止套用",

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import type { ProfileSkill } from "../shared/schemas";
+import { profileManagesResource } from "../shared/profileResources";
 import type {
   ProfileDetail,
   SharedSkillPreparation,
@@ -134,6 +135,17 @@ export const buildSkillDeploymentPlan = ({
   takeover,
   captureReceipt
 }: SkillDeploymentPlanInput): SkillDeploymentPlan => {
+  if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
+    return {
+      effectiveSkills: profile.resources.skills,
+      approvedUnmanagedSkills: [],
+      decisions: [],
+      sharedPreparations: [],
+      sharedPaths: [],
+      errors: [],
+      warnings: []
+    };
+  }
   const inventoryByPath = new Map(
     inventory.map((entry) => [resolve(entry.path), entry])
   );

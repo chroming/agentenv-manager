@@ -6,7 +6,8 @@ const ManagedResourceSchema = z.object({
   id: z.string().min(1),
   path: z.string().min(1),
   contentHash: z.string().min(1),
-  source: z.string().optional()
+  source: z.string().optional(),
+  paused: z.boolean().optional()
 });
 
 const SharedSkillPreparationSchema = z.object({

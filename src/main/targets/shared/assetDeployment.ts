@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { profileManagesResource } from "../../../shared/profileResources";
 import { pathExists } from "../../fileUtils";
 import { isAgentEnvOwnedDir, markerPathForFile } from "../../ownershipMarkers";
 import { removeSkillDeployment } from "../../skillDeployment";
@@ -18,6 +19,9 @@ const isOwnedTargetSkill = (path: string, input: TargetAssetInput) =>
     kind: "skill"
   });
 
+const managesSkills = (input: TargetAssetInput) =>
+  profileManagesResource(input.profile.resources, input.targetPaths.targetId, "skills");
+
 const staleOwnedSkillPaths = async (input: TargetAssetInput) => {
   const root = input.targetPaths.skillsDir;
   if (!root || input.isolateSkillRoot || !(await pathExists(root))) return [];
@@ -35,8 +39,9 @@ const staleOwnedSkillPaths = async (input: TargetAssetInput) => {
 export const createDirectoryAssetDriver = (
   _options: { targetName: string; markerTargetId?: (input: TargetAssetInput) => string }
 ): TargetAssetDriver => ({
-  validateAssets: (input) => validateSkillRefs(input),
+  validateAssets: (input) => managesSkills(input) ? validateSkillRefs(input) : Promise.resolve([]),
   getAssetBackupPaths: async (input) => {
+    if (!managesSkills(input)) return [];
     const paths = new Set<string>();
     addSkillRefBackupPaths(paths, input.targetPaths, input);
     for (const stalePath of await staleOwnedSkillPaths(input)) {
@@ -46,6 +51,7 @@ export const createDirectoryAssetDriver = (
     return [...paths];
   },
   applyAssets: async (input) => {
+    if (!managesSkills(input)) return;
     for (const stalePath of await staleOwnedSkillPaths(input)) {
       await removeSkillDeployment(stalePath);
     }

@@ -34,4 +34,36 @@ describe("Profile target fingerprint", () => {
     expect(createProfileContentHash(profile("manage", true), "codex"))
       .not.toBe(createProfileContentHash(profile("manage", false), "codex"));
   });
+
+  it("tracks category management while excluding content that is not managed", () => {
+    const managed = profile("ignore", true);
+    managed.resources.skills = [
+      { libraryId: "reviewer", targetName: "reviewer", enabled: true }
+    ];
+    managed.resources.managementByTarget = {
+      codex: { instructions: "manage", skills: "manage" }
+    };
+    const ignored: ProfileDetail = {
+      ...managed,
+      resources: {
+        ...managed.resources,
+        managementByTarget: {
+          codex: { instructions: "ignore", skills: "ignore" }
+        }
+      }
+    };
+    const changedIgnoredContent: ProfileDetail = {
+      ...ignored,
+      instructions: "# Local-only draft\n",
+      resources: {
+        ...ignored.resources,
+        skills: [{ libraryId: "other", targetName: "other", enabled: true }]
+      }
+    };
+
+    expect(createProfileContentHash(managed, "codex"))
+      .not.toBe(createProfileContentHash(ignored, "codex"));
+    expect(createProfileContentHash(ignored, "codex"))
+      .toBe(createProfileContentHash(changedIgnoredContent, "codex"));
+  });
 });

@@ -1,5 +1,6 @@
 import { join, resolve } from "node:path";
 import type { TargetPaths } from "../../shared/types";
+import { profileManagesResource } from "../../shared/profileResources";
 import { pathEntryExists, pathExists } from "../fileUtils";
 import { hashSkillContent } from "../skillContentHash";
 import {
@@ -18,9 +19,11 @@ const isOwnedSkillDir = async (targetDir: string, targetPaths: TargetPaths) =>
     kind: "skill"
   });
 
-export const skillTargetNames = ({ profile }: TargetAssetInput) =>
+export const skillTargetNames = ({ profile, targetPaths }: TargetAssetInput) =>
   new Set(
-    profile.resources.skills
+    (profileManagesResource(profile.resources, targetPaths.targetId, "skills")
+      ? profile.resources.skills
+      : [])
       .filter((skill) => skill.enabled)
       .map((skill) => skill.targetName)
   );
@@ -34,6 +37,9 @@ export const validateSkillRefs = async ({
   isolateSkillRoot
 }: TargetAssetInput) => {
   const errors: string[] = [];
+  if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
+    return errors;
+  }
   const skillRefs = profile.resources.skills;
   if (skillRefs.length === 0) return errors;
   if (!targetPaths.skillsDir) {
@@ -98,6 +104,7 @@ export const applySkillRefs = async ({
   approvedUnmanagedSkillHashes,
   replaceablePaths
 }: TargetAssetInput) => {
+  if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) return;
   if (!targetPaths.skillsDir || !skillLibraryDir) return;
 
   for (const skillRef of profile.resources.skills.filter((skill) => skill.enabled)) {
