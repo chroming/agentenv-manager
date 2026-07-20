@@ -27,7 +27,8 @@ import {
   expectInViewport,
   expectNoHorizontalOverflow,
   expectTextFits,
-  expectTopmost
+  expectTopmost,
+  findVisibleTextLayoutDefects
 } from "./layoutAssertions";
 
 let root = "";
@@ -1814,6 +1815,8 @@ describe("Electron UI profile switching e2e", () => {
     await applyActionButton(page, "OpenCode").click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
+    await resizeAppWindow(page, 920, 620);
+    expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
     await expect
       .poll(() => previewDialog.textContent())
       .toContain("Cannot install ui-alpha-skill because an ignored unmanaged skill already exists");
@@ -1842,6 +1845,8 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
+    await resizeAppWindow(page, 920, 620);
+    expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
     await expect
       .poll(() => previewDialog.textContent())
       .toContain("OpenCode instructions changed outside AgentEnv");
@@ -3216,6 +3221,70 @@ describe("Electron UI profile switching e2e", () => {
     expect(footerAfter?.y).toBe(footerBefore?.y);
     await resizeAppWindow(page, 920, 620);
     await expectPreviewGeometry();
+  }, 30_000);
+
+  it("keeps visible control and status text inside its component contract", async () => {
+    const { page } = await launchApp({ includeClaudeTarget: true, includeTraeTarget: true });
+
+    const expectTextContracts = async (context: string) => {
+      const defects = await findVisibleTextLayoutDefects(page);
+      expect(defects, context).toEqual([]);
+    };
+
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      for (const destination of ["Skills", "Profiles", "Agents", "Settings"] as const) {
+        await page
+          .getByRole("complementary", { name: "Global navigation" })
+          .getByRole("button", { name: destination, exact: true })
+          .click();
+        await page.getByRole("heading", { name: destination, exact: true }).waitFor();
+        await expectTextContracts(`${destination} at ${viewport.width}x${viewport.height}`);
+      }
+    }
+
+    await resizeAppWindow(page, 920, 620);
+    await selectProfile(page, "UI OpenCode alpha");
+    await applyActionButton(page, "OpenCode").click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await expectTextContracts("Apply Preview at 920x620");
+    await previewDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Import skills" }).click();
+    const importDialog = page.getByRole("dialog", { name: "Import skills" });
+    await importDialog.waitFor({ state: "visible" });
+    await expectTextContracts("Import Skills at 920x620");
+    await page.keyboard.press("Escape");
+    await importDialog.waitFor({ state: "hidden" });
+
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const cleanupDrawer = page.getByRole("region", { name: "Environment skills" });
+    await cleanupDrawer.waitFor({ state: "visible" });
+    await expectTextContracts("Local Skill Cleanup at 920x620");
+    await cleanupDrawer.getByRole("button", { name: "Close library tool" }).click();
+
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Skills");
+    await openProfileSkillPicker(page);
+    const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
+    await skillPicker.waitFor({ state: "visible" });
+    await expectTextContracts("Add Profile Skills at 920x620");
+    await page.keyboard.press("Escape");
+    await skillPicker.waitFor({ state: "hidden" });
+
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByTestId("locale-select").selectOption("zh_CN");
+    await page.getByRole("heading", { name: "设置", exact: true }).waitFor();
+    for (const destination of ["技能", "配置方案", "Agents", "设置"] as const) {
+      await page.getByRole("button", { name: destination, exact: true }).click();
+      await page.getByRole("heading", { name: destination, exact: true }).waitFor();
+      await expectTextContracts(`${destination} at 920x620`);
+    }
   }, 30_000);
 
   it("lays out Agents as one ordered management list with on-demand diagnostics", async () => {

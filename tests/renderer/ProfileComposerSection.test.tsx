@@ -77,7 +77,7 @@ describe("ProfileComposerSection", () => {
     const chips = within(summary!).getAllByTestId("profile-composer-chip");
 
     expect(chips.map((chip) => chip.textContent)).toEqual(["Context7", "Filesystem"]);
-    expect(chips.every((chip) => chip.getAttribute("title") === chip.textContent)).toBe(true);
+    expect(chips.every((chip) => chip.getAttribute("data-ui-overflow-detail") === "true")).toBe(true);
     expect(within(summary!).getByText("+3")).toBeInTheDocument();
     const count = document.querySelector(".profile-composer-section__count");
     expect(count).toHaveAttribute("title", "4 of 6 enabled");

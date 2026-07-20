@@ -94,6 +94,7 @@ describe("renderer UI primitives", () => {
     );
 
     const trigger = screen.getByText("Truncated");
+    expect(trigger).toHaveAttribute("data-ui-overflow-detail", "true");
     fireEvent.mouseEnter(trigger);
     const tooltip = screen.getByRole("tooltip");
     fireEvent.mouseLeave(trigger);

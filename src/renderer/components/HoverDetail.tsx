@@ -25,10 +25,12 @@ interface HoverDetailProps {
   className: string;
   content: ReactNode;
   focusable?: boolean;
+  id?: string;
   maxWidth?: number;
   popoverClassName?: string;
   preferredPlacement?: "top" | "bottom";
   showArrow?: boolean;
+  testId?: string;
 }
 
 const clamp = (value: number, min: number, max: number) =>
@@ -42,10 +44,12 @@ export const HoverDetail = ({
   className,
   content,
   focusable = true,
+  id,
   maxWidth = 420,
   popoverClassName = "",
   preferredPlacement,
-  showArrow = false
+  showArrow = false,
+  testId
 }: HoverDetailProps) => {
   const popoverId = useId();
   const [isOpen, setIsOpen] = useState(false);
@@ -164,6 +168,9 @@ export const HoverDetail = ({
         aria-label={ariaLabel}
         aria-describedby={isOpen ? popoverId : undefined}
         className={className}
+        data-testid={testId}
+        data-ui-overflow-detail="true"
+        id={id}
         ref={triggerRef}
         tabIndex={focusable ? 0 : undefined}
         onBlur={scheduleClose}

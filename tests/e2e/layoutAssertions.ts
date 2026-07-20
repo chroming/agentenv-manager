@@ -3,6 +3,14 @@ import { expect } from "vitest";
 
 type Box = NonNullable<Awaited<ReturnType<Locator["boundingBox"]>>>;
 
+export interface TextLayoutDefect {
+  className: string;
+  horizontalOverflow: number;
+  selector: string;
+  text: string;
+  verticalOverflow: number;
+}
+
 const readBox = async (locator: Locator): Promise<Box> => {
   const box = await locator.boundingBox();
   expect(box).not.toBeNull();
@@ -54,6 +62,73 @@ export const expectTextFits = async (locator: Locator) => {
   expect(metrics.horizontalOverflow).toBeLessThanOrEqual(1);
   expect(metrics.verticalOverflow).toBeLessThanOrEqual(1);
 };
+
+export const findVisibleTextLayoutDefects = async (page: Page) =>
+  page.evaluate(() => {
+    const selectors = [
+      "button",
+      "[role='button']",
+      "[role='tab']",
+      "[role='menuitem']",
+      "[role='menuitemradio']",
+      ".ui-badge",
+      ".change-kind",
+      ".library-primary-status",
+      ".library-status-action",
+      ".profile-skill-state",
+      ".capture-resource__status",
+      ".profile-composer-section__count",
+      ".agent-settings-status",
+      ".target-health-status"
+    ];
+    const contractCandidates = new Set(
+      selectors.flatMap((selector) => Array.from(document.querySelectorAll<HTMLElement>(selector)))
+    );
+    const truncatedTextCandidates = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .filter((element) => Array.from(element.childNodes).some(
+        (node) => node.nodeType === Node.TEXT_NODE && Boolean(node.textContent?.trim())
+      ))
+      .filter((element) => !element.classList.contains("ui-visually-hidden"));
+    const candidates = Array.from(new Set([...contractCandidates, ...truncatedTextCandidates]));
+    const selectorFor = (element: HTMLElement) => {
+      const id = element.id ? `#${element.id}` : "";
+      const classes = [...element.classList].slice(0, 3).map((name) => `.${name}`).join("");
+      return `${element.tagName.toLowerCase()}${id}${classes}`;
+    };
+
+    return candidates.flatMap((element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      const text = (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
+      if (
+        !text ||
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        Number(style.opacity) === 0 ||
+        rect.width <= 0 ||
+        rect.height <= 0
+      ) {
+        return [];
+      }
+      const horizontalOverflow = Math.max(0, element.scrollWidth - element.clientWidth);
+      const verticalOverflow = Math.max(0, element.scrollHeight - element.clientHeight);
+      if (horizontalOverflow <= 1 && verticalOverflow <= 1) return [];
+
+      const isControlContract = contractCandidates.has(element);
+      const clipsContent = [style.overflow, style.overflowX, style.overflowY]
+        .some((value) => value === "hidden" || value === "clip");
+      const exposesFullValue = element.dataset.uiOverflowDetail === "true";
+      if (!isControlContract && (!clipsContent || exposesFullValue)) return [];
+
+      return [{
+        className: element.className,
+        horizontalOverflow,
+        selector: selectorFor(element),
+        text: text.slice(0, 120),
+        verticalOverflow
+      }];
+    });
+  });
 
 export const expectNoOverlap = async (first: Locator, second: Locator) => {
   const [firstBox, secondBox] = await Promise.all([readBox(first), readBox(second)]);

@@ -834,16 +834,6 @@
   white-space: nowrap;
 }
 
-.profile-composer-section__count-label {
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  height: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-}
-
 .profile-composer-section__count-visual {
   align-items: baseline;
   display: inline-grid;

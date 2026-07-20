@@ -1,6 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { Fragment, useId, type ReactNode } from "react";
 import { useI18n } from "../i18n";
+import { OverflowTooltip } from "./OverflowTooltip";
 import { Switch } from "./ui";
 
 export interface ProfileComposerSectionProps {
@@ -48,6 +49,7 @@ export const ProfileComposerSection = ({
   const panelId = `${generatedId}-panel`;
   const uniqueChipNames = [...new Set(chipNames)];
   const visibleChipNames = uniqueChipNames.slice(0, 2);
+  const hiddenChipNames = uniqueChipNames.slice(visibleChipNames.length);
   const overflowCount = Math.max(0, uniqueChipNames.length - visibleChipNames.length);
   const countLabel = t("{{enabled}} of {{total}} enabled", {
     enabled: enabledCount,
@@ -77,16 +79,21 @@ export const ProfileComposerSection = ({
             <span className="profile-composer-section__title" id={titleId}>
               {title}
             </span>
-            <span className="profile-composer-section__description" id={descriptionId}>
-              {description}
-            </span>
+            <OverflowTooltip
+              className="profile-composer-section__description"
+              focusable={false}
+              id={descriptionId}
+              text={description}
+            />
           </span>
           <span
             className="profile-composer-section__count"
             id={countId}
             title={countLabel}
           >
-            <span className="profile-composer-section__count-label">{countLabel}</span>
+            <span className="profile-composer-section__count-label ui-visually-hidden">
+              {countLabel}
+            </span>
             <span className="profile-composer-section__count-visual" aria-hidden="true">
               <strong>{enabledCount}</strong>
               <span>/</span>
@@ -97,19 +104,23 @@ export const ProfileComposerSection = ({
             {visibleChipNames.map((chipName, index) => (
               <Fragment key={chipName}>
                 {index > 0 ? " " : null}
-                <span
+                <OverflowTooltip
                   className="resource-chip"
-                  data-testid="profile-composer-chip"
-                  title={chipName}
-                >
-                  {chipName}
-                </span>
+                  focusable={false}
+                  testId="profile-composer-chip"
+                  text={chipName}
+                />
               </Fragment>
             ))}
             {overflowCount > 0 ? (
               <>
                 {visibleChipNames.length > 0 ? " " : null}
-                <span className="resource-chip resource-chip--muted">+{overflowCount}</span>
+                <OverflowTooltip
+                  className="resource-chip resource-chip--muted"
+                  displayText={`+${overflowCount}`}
+                  focusable={false}
+                  text={hiddenChipNames.join(", ")}
+                />
               </>
             ) : null}
           </span>

@@ -54,7 +54,7 @@ button {
   justify-content: center;
   line-height: 1.2;
   min-height: var(--control-height-default);
-  overflow: hidden;
+  max-width: 100%;
   padding: 0 12px;
   text-align: center;
   transition:

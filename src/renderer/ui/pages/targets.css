@@ -113,7 +113,7 @@
   align-items: center;
   display: grid;
   gap: 8px 10px;
-  grid-template-columns: 32px minmax(160px, 1fr) 88px 240px;
+  grid-template-columns: 32px minmax(160px, 1fr) 88px 248px;
   min-width: 0;
 }
 
@@ -122,9 +122,9 @@
   display: grid;
   gap: 8px;
   grid-column: auto;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: 96px minmax(0, 1fr);
   justify-self: end;
-  width: 240px;
+  width: 248px;
 }
 
 .target-workflow-actions .secondary-action,

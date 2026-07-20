@@ -15,6 +15,7 @@ import type {
   TargetInfo
 } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { OverflowTooltip } from "./OverflowTooltip";
 
 const appIconUrl = new URL("../assets/app-icon.png", import.meta.url).href;
 const antigravityIconUrl = new URL("../assets/target-icons/antigravity.png", import.meta.url).href;
@@ -238,6 +239,15 @@ export const ProfileSidebar = ({
     .sort((left, right) => targetDisplayRank(left) - targetDisplayRank(right));
   const statusTargets = orderedTargets.slice(0, 3);
   const hiddenTargets = orderedTargets.slice(statusTargets.length);
+  const statusSummary = t("{{ready}}/{{total}} Agents · {{profiles}}", {
+    ready: readyTargets,
+    total: targets.length,
+    profiles: isLoading
+      ? t("Loading")
+      : t(profiles.length === 1 ? "{{count}} profile" : "{{count}} profiles", {
+          count: profiles.length
+        })
+  });
 
   const workspaceItems: Array<{
     id: AppWorkspace;
@@ -316,17 +326,7 @@ export const ProfileSidebar = ({
           <span className="status-dot is-ready" />
           <strong>{t("Local Agents")}</strong>
         </div>
-        <small>
-          {t("{{ready}}/{{total}} Agents · {{profiles}}", {
-            ready: readyTargets,
-            total: targets.length,
-            profiles: isLoading
-              ? t("Loading")
-              : t(profiles.length === 1 ? "{{count}} profile" : "{{count}} profiles", {
-                  count: profiles.length
-                })
-          })}
-        </small>
+        <OverflowTooltip className="system-status-summary" text={statusSummary} />
         <div className="agent-chip-row" aria-label={t("Enabled Agents")}>
           {statusTargets.map((target) => {
             const targetIcon = targetIconFor(target);

@@ -256,6 +256,17 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   font-size: 12px;
 }
 
+.system-status-summary {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  line-height: 17px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .page-header h2,
 .profile-page-header h2 {
   color: var(--text);

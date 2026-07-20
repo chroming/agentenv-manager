@@ -22,6 +22,8 @@ const files = (await listCssFiles(rendererRoot))
   .sort();
 
 const rendererIndex = await readFile(resolve(rendererRoot, "ui/index.css"), "utf8");
+const baseStyles = await readFile(resolve(rendererRoot, "ui/base.css"), "utf8");
+const baseButtonBlock = baseStyles.match(/(?:^|\n)button\s*\{([\s\S]*?)\}/)?.[1] ?? "";
 const primitiveRootSelectors = new Set([
   ".ui-action-menu",
   ".ui-badge",
@@ -156,6 +158,9 @@ if (shouldCheck) {
       : undefined,
     result.totals.importantDeclarations !== 4
       ? "The reduced-motion contract must remain the only four !important declarations"
+      : undefined,
+    /overflow(?:-x|-y)?:\s*(?:hidden|clip)/.test(baseButtonBlock)
+      ? "Base buttons must expose sizing defects instead of clipping visible command text"
       : undefined
   ].filter(Boolean);
 
