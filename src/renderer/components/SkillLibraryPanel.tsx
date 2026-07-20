@@ -380,7 +380,7 @@ export const SkillLibraryPanel = ({
   scrollOwnerRef,
   importConflictOpen = false
 }: SkillLibraryPanelProps) => {
-  const { formatDate, t } = useI18n();
+  const { formatDate, localeTag, t } = useI18n();
   const [githubUrl, setGithubUrl] = useState("");
   const [githubScanResult, setGithubScanResult] = useState<GitHubSkillScanResult>();
   const [githubSelectedIds, setGithubSelectedIds] = useState<string[]>([]);
@@ -924,30 +924,7 @@ export const SkillLibraryPanel = ({
     setGithubImportProgress({});
     setGithubApiRetryAvailable(false);
     try {
-      let useGitHubApi = false;
-      if (!forceSystemGit && repositoryConnection === "auto" && !repositoryRef.trim() && !repositoryDirectory.trim()) {
-        try {
-          const parsed = new URL(url);
-          const [, owner, repo] = parsed.pathname.split("/");
-          useGitHubApi =
-            parsed.protocol === "https:" &&
-            parsed.hostname.toLowerCase() === "github.com" &&
-            Boolean(owner && repo) &&
-            !repo.toLowerCase().endsWith(".git");
-        } catch {
-          useGitHubApi = false;
-        }
-      }
-
-      let result: GitHubSkillScanResult;
-      if (useGitHubApi) {
-        setRepositoryOperationCancelable(false);
-        const githubResult = await onScanGitHubSkills(url);
-        result = githubResult;
-        setRepositoryScanKind("github-api");
-        setRepositoryScanSummary(`${githubResult.owner}/${githubResult.repo} · ${githubResult.ref}`);
-        setRepositoryCandidateInputs({});
-      } else {
+      const scanWithSystemGit = async (): Promise<GitHubSkillScanResult> => {
         setRepositoryOperationCancelable(true);
         const repositoryResult = await onScanRepositorySkills({
           repository: url,
@@ -966,7 +943,16 @@ export const SkillLibraryPanel = ({
             return [repositoryImportProgressKey(input), input];
           })
         );
-        result = {
+        setRepositoryScanKind("system-git");
+        setRepositoryScanSummary([
+          repositoryResult.repository,
+          repositoryResult.ref,
+          repositoryResult.accessTransport === "ssh" && /^https:\/\//i.test(url)
+            ? t("SSH fallback")
+            : t("System Git")
+        ].join(" · "));
+        setRepositoryCandidateInputs(inputs);
+        return {
           owner: "Repository",
           repo: repositoryResult.repository,
           ref: repositoryResult.ref,
@@ -988,9 +974,40 @@ export const SkillLibraryPanel = ({
             existingLibraryId: candidate.existingLibraryId
           }))
         };
-        setRepositoryScanKind("system-git");
-        setRepositoryScanSummary(`${repositoryResult.repository} · ${repositoryResult.ref}`);
-        setRepositoryCandidateInputs(inputs);
+      };
+      let useGitHubApi = false;
+      if (!forceSystemGit && repositoryConnection === "auto" && !repositoryRef.trim() && !repositoryDirectory.trim()) {
+        try {
+          const parsed = new URL(url);
+          const [, owner, repo] = parsed.pathname.split("/");
+          useGitHubApi =
+            parsed.protocol === "https:" &&
+            parsed.hostname.toLowerCase() === "github.com" &&
+            Boolean(owner && repo) &&
+            !repo.toLowerCase().endsWith(".git");
+        } catch {
+          useGitHubApi = false;
+        }
+      }
+
+      let result: GitHubSkillScanResult;
+      if (useGitHubApi) {
+        setRepositoryOperationCancelable(false);
+        try {
+          const githubResult = await onScanGitHubSkills(url);
+          result = githubResult;
+          setRepositoryScanKind("github-api");
+          setRepositoryScanSummary(`${githubResult.owner}/${githubResult.repo} · ${githubResult.ref}`);
+          setRepositoryCandidateInputs({});
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (!/GitHub request failed \((?:401|403|404)\b|GitHub branch or commit could not be resolved/i.test(message)) {
+            throw error;
+          }
+          result = await scanWithSystemGit();
+        }
+      } else {
+        result = await scanWithSystemGit();
       }
       setGithubScanResult(result);
       setGithubSelectedIds(
@@ -1434,8 +1451,27 @@ export const SkillLibraryPanel = ({
               : skill.sourceType === "git"
                 ? t("Repository")
                 : t("Local");
-            const sourceMeta = `${sourceTypeLabel} · ${versionLabel}`;
-            const sourceDetail = [sourceLabel(skill), skill.version, revisionLabel]
+            const sourceUpdatedAt = updateInfo?.latestUpdatedAt ?? skill.upstream?.updatedAt;
+            const sourceUpdatedLabel = sourceUpdatedAt
+              ? new Date(sourceUpdatedAt).toLocaleDateString(localeTag, {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric"
+                })
+              : undefined;
+            const sourceMeta = [
+              sourceTypeLabel,
+              versionLabel,
+              sourceUpdatedLabel ? t("Updated {{date}}", { date: sourceUpdatedLabel }) : undefined
+            ].filter(Boolean).join(" · ");
+            const sourceDetail = [
+              sourceLabel(skill),
+              skill.version,
+              revisionLabel,
+              sourceUpdatedAt
+                ? t("Source updated {{date}}", { date: formatDate(sourceUpdatedAt) })
+                : undefined
+            ]
               .filter(Boolean)
               .join(" · ");
             const staleInstallDetail = staleCopies.length > 0
@@ -3559,11 +3595,17 @@ export const SkillLibraryPanel = ({
                                 tooltipClassName="library-source-tooltip"
                               />
                               {candidate.description ? <small>{candidate.description}</small> : null}
-                              {progress ? (
-                                <small className={progress.status === "failed" ? "field-error" : "github-import-state-label"}>
-                                  {progress.error ?? t(progress.status)}
-                                </small>
-                              ) : failure ? <small className="field-error">{failure.error}</small> : null}
+                              {progress?.status === "failed" || failure ? (
+                                <PreviewText
+                                  ariaLabel={t("Import failure for {{name}}", { name: candidate.name })}
+                                  className="github-import-state-label field-error"
+                                  displayText={t("Import failed")}
+                                  text={progress?.error ?? failure?.error ?? t("Import failed")}
+                                  tooltipClassName="library-source-tooltip import-error-tooltip"
+                                />
+                              ) : progress ? (
+                                <small className="github-import-state-label">{t(progress.status)}</small>
+                              ) : null}
                             </span>
                             {selectable ? (
                               <input

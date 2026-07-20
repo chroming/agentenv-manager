@@ -92,6 +92,20 @@ const createGitHubFixtureFetch = (fixtureRoot: string) => {
     }
 
     if (resource === "commits") {
+      const queryRef = parsed.searchParams.get("sha");
+      if (queryRef && pathParts.length === 0) {
+        const contentRoot = join(fixtureRoot, owner, repo, queryRef);
+        try {
+          await stat(contentRoot);
+        } catch {
+          return fileResponse("Not found", { status: 404, statusText: "Not Found" });
+        }
+        return fileResponse(JSON.stringify([
+          { commit: { committer: { date: "2026-07-18T08:30:00Z" } } }
+        ]), {
+          headers: { "content-type": "application/json" }
+        });
+      }
       const ref = decodeURIComponent(pathParts.join("/"));
       if (ref !== "main") {
         return fileResponse("Not found", { status: 404, statusText: "Not Found" });
@@ -145,7 +159,12 @@ const createGitHubFixtureFetch = (fixtureRoot: string) => {
     const ref = parsed.searchParams.get("ref") ?? "main";
     const contentRoot = join(fixtureRoot, owner, repo, ref);
     const contentPath = join(contentRoot, ...pathParts.map(decodeURIComponent));
-    const entries = await readdir(contentPath, { withFileTypes: true });
+    let entries;
+    try {
+      entries = await readdir(contentPath, { withFileTypes: true });
+    } catch {
+      return fileResponse("Not found", { status: 404, statusText: "Not Found" });
+    }
     const body = await Promise.all(
       entries.map(async (entry) => {
         const child = join(contentPath, entry.name);
@@ -163,7 +182,6 @@ const createGitHubFixtureFetch = (fixtureRoot: string) => {
         };
       })
     );
-    await stat(contentPath);
     return fileResponse(JSON.stringify(body), {
       headers: { "content-type": "application/json" }
     });

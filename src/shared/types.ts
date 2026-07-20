@@ -146,6 +146,7 @@ export interface SkillUpstream {
   ref?: string;
   subpath?: string;
   revision?: string;
+  updatedAt?: string;
 }
 
 export interface SkillProvenance {
@@ -336,6 +337,7 @@ export interface RepositorySkillScanResult {
   ref: string;
   directory: string;
   transport: RepositorySkillTransport;
+  accessTransport?: "https" | "ssh" | "file";
   truncated: boolean;
   candidates: RepositorySkillCandidate[];
 }
@@ -359,6 +361,7 @@ export interface SkillUpdateInfo {
   sourceType: SkillSourceType;
   currentRevision?: string;
   latestRevision?: string;
+  latestUpdatedAt?: string;
   updateAvailable: boolean;
   error?: string;
 }

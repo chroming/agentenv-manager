@@ -178,7 +178,14 @@ describe("SkillLibraryPanel", () => {
             remoteRef: "main",
             remoteRevision: "revision-1",
             contentHash: "def456",
-            updatedAt: "2026-07-02T00:00:00.000Z"
+            updatedAt: "2026-07-02T00:00:00.000Z",
+            upstream: {
+              kind: "github",
+              locator: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
+              ref: "main",
+              subpath: "skills/reviewer",
+              updatedAt: "2026-07-18T08:30:00.000Z"
+            }
           },
           {
             id: "represented-external",
@@ -529,6 +536,8 @@ describe("SkillLibraryPanel", () => {
     expect(
       screen.getByRole("button", { name: "Change icon for GitHub Reviewer" })
     ).toHaveAttribute("data-icon", "github");
+    expect(screen.getByLabelText("Source details for github-reviewer"))
+      .toHaveTextContent(/Updated Jul 18, 2026/);
 
     fireEvent.change(screen.getByRole("textbox", { name: "Search skills" }), {
       target: { value: "github" }
@@ -801,7 +810,10 @@ describe("SkillLibraryPanel", () => {
     continueSecondWrite?.();
     expect(screen.getByRole("status", { name: "GitHub Reviewer: imported" })).toBeInTheDocument();
     await screen.findByRole("status", { name: "Release Check: failed" });
-    expect(screen.getByText("GitHub request failed")).toBeInTheDocument();
+    const importFailure = screen.getByLabelText("Import failure for Release Check");
+    expect(importFailure).toHaveTextContent("Import failed");
+    fireEvent.mouseEnter(importFailure);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("GitHub request failed");
     expect(screen.getByText("1 imported · 1 failed")).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Import skills" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -1108,12 +1120,13 @@ describe("SkillLibraryPanel", () => {
     ]);
   }, 15_000);
 
-  it("scans and imports skills from an SSH repository ref and directory", async () => {
+  it("falls back from a private GitHub URL to SSH-backed System Git and preserves its directory scope", async () => {
     const scanResult = {
-      repository: "git@code.example:platform/agent-skills.git",
-      ref: "release/v2",
+      repository: "https://github.com/acme/agent-skills.git",
+      ref: "main",
       directory: "skills/engineering",
       transport: "system-git" as const,
+      accessTransport: "ssh" as const,
       truncated: false,
       candidates: [
         {
@@ -1123,8 +1136,8 @@ describe("SkillLibraryPanel", () => {
           directory: "skills/engineering/review",
           source: {
             kind: "git" as const,
-            locator: "git@code.example:platform/agent-skills.git",
-            ref: "release/v2",
+            locator: "https://github.com/acme/agent-skills.git",
+            ref: "main",
             subpath: "skills/engineering/review"
           },
           contentRevision: "tree-123",
@@ -1142,6 +1155,9 @@ describe("SkillLibraryPanel", () => {
     const onCancelRepositoryOperations = vi.fn().mockImplementation(async () => {
       rejectFirstScan?.(new Error("Git command was cancelled"));
     });
+    const onScanGitHubSkills = vi.fn().mockRejectedValue(
+      new Error("GitHub request failed (404 Not Found): private repository")
+    );
     const onImportRepositorySkills = vi.fn().mockImplementation(async (
       inputs: RepositorySkillImportInput[],
       onProgress?: (progress: GitHubSkillImportProgress) => void
@@ -1179,7 +1195,7 @@ describe("SkillLibraryPanel", () => {
         onSelectLocalSkillFolder={vi.fn().mockResolvedValue(undefined)}
         onImportUnmanaged={vi.fn().mockResolvedValue(false)}
         onImportExternal={vi.fn().mockResolvedValue(false)}
-        onScanGitHubSkills={vi.fn()}
+        onScanGitHubSkills={onScanGitHubSkills}
         onImportGitHubSkills={vi.fn()}
         onScanRepositorySkills={onScanRepositorySkills}
         onImportRepositorySkills={onImportRepositorySkills}
@@ -1218,14 +1234,7 @@ describe("SkillLibraryPanel", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Repository" }));
     fireEvent.change(screen.getByLabelText("Repository address"), {
-      target: { value: "git@code.example:platform/agent-skills.git" }
-    });
-    fireEvent.click(screen.getByText("Advanced"));
-    fireEvent.change(screen.getByLabelText("Repository ref"), {
-      target: { value: "release/v2" }
-    });
-    fireEvent.change(screen.getByLabelText("Repository directory"), {
-      target: { value: "skills/engineering" }
+      target: { value: "https://github.com/acme/agent-skills/tree/main/skills/engineering" }
     });
     const scanButton = screen.getByRole("button", { name: "Scan" });
     fireEvent.click(scanButton);
@@ -1238,17 +1247,21 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(scanButton);
 
     await screen.findByRole("checkbox", { name: "Select Internal Review" });
+    expect(onScanGitHubSkills).toHaveBeenCalledWith(
+      "https://github.com/acme/agent-skills/tree/main/skills/engineering"
+    );
     expect(onScanRepositorySkills).toHaveBeenLastCalledWith({
-      repository: "git@code.example:platform/agent-skills.git",
-      ref: "release/v2",
-      directory: "skills/engineering",
+      repository: "https://github.com/acme/agent-skills/tree/main/skills/engineering",
+      ref: undefined,
+      directory: undefined,
       transport: "system-git"
     });
+    expect(screen.getByLabelText("Repository scan source")).toHaveTextContent("SSH fallback");
     fireEvent.click(screen.getByRole("button", { name: "Import 1" }));
     await waitFor(() => expect(onImportRepositorySkills).toHaveBeenCalledWith([
       {
-        repository: "git@code.example:platform/agent-skills.git",
-        ref: "release/v2",
+        repository: "https://github.com/acme/agent-skills.git",
+        ref: "main",
         directory: "skills/engineering/review",
         transport: "system-git",
         id: "review-internal"

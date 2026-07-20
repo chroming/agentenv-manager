@@ -4,7 +4,11 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { findExecutable } from "../../../src/main/executableDiscovery";
 import { createPaths } from "../../../src/main/paths";
-import { createGitCommandRunner } from "../../../src/main/skillSources/gitCommandRunner";
+import {
+  createGitCommandRunner,
+  GitCommandError,
+  type GitCommandRunner
+} from "../../../src/main/skillSources/gitCommandRunner";
 import { createGitRepositoryCache } from "../../../src/main/skillSources/gitRepositoryCache";
 import { createGitTestRepository, runGit } from "./gitTestRepository";
 
@@ -30,6 +34,91 @@ const setup = async () => {
 };
 
 describe("git repository cache", () => {
+  it("falls back from GitHub HTTPS access errors to the user's SSH transport", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-git-fallback-"));
+    let remote = "";
+    const run = vi.fn<GitCommandRunner["run"]>(async (args, commandOptions) => {
+      const initIndex = args.indexOf("--bare");
+      if (args[0] === "init" && initIndex >= 0) {
+        await mkdir(args[initIndex + 1], { recursive: true });
+      }
+      if (args.includes("remote") && args.includes("add")) {
+        remote = args.at(-1) ?? "";
+      }
+      if (args.includes("fetch") && remote.startsWith("https://")) {
+        throw new GitCommandError("Git command failed: Authentication failed", {
+          exitCode: 128,
+          stderr: "fatal: Authentication failed"
+        });
+      }
+      if (args.includes("fetch")) {
+        expect(commandOptions?.env?.GIT_SSH_COMMAND).toContain("BatchMode=yes");
+      }
+      if (args.includes("rev-parse")) {
+        return { stdout: `${"a".repeat(40)}\n`, stderr: "", exitCode: 0 };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+    const runner: GitCommandRunner = {
+      run,
+      cancelActive: vi.fn(),
+      dispose: vi.fn()
+    };
+    const cache = createGitRepositoryCache({ cacheRoot: join(root, "cache"), runner });
+
+    const snapshot = await cache.fetch({
+      repository: "https://github.com/acme/private-skills",
+      ref: "main"
+    });
+
+    expect(snapshot).toMatchObject({
+      repository: "https://github.com/acme/private-skills.git",
+      accessTransport: "ssh"
+    });
+    expect(
+      run.mock.calls
+        .filter(([args]) => args.includes("remote") && args.includes("add"))
+        .map(([args]) => args.at(-1))
+    ).toEqual([
+      "https://github.com/acme/private-skills.git",
+      "git@github.com:acme/private-skills.git"
+    ]);
+  });
+
+  it("does not try SSH for non-access GitHub failures", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-git-no-fallback-"));
+    let remote = "";
+    const run = vi.fn<GitCommandRunner["run"]>(async (args) => {
+      const initIndex = args.indexOf("--bare");
+      if (args[0] === "init" && initIndex >= 0) {
+        await mkdir(args[initIndex + 1], { recursive: true });
+      }
+      if (args.includes("remote") && args.includes("add")) remote = args.at(-1) ?? "";
+      if (args.includes("fetch")) {
+        throw new GitCommandError("Git command failed: connection timed out", {
+          exitCode: 128,
+          stderr: "fatal: unable to access repository: connection timed out"
+        });
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+    const runner: GitCommandRunner = {
+      run,
+      cancelActive: vi.fn(),
+      dispose: vi.fn()
+    };
+    const cache = createGitRepositoryCache({ cacheRoot: join(root, "cache"), runner });
+
+    await expect(cache.fetch({
+      repository: "https://github.com/acme/private-skills",
+      ref: "main"
+    })).rejects.toThrow("connection timed out");
+    expect(remote).toBe("https://github.com/acme/private-skills.git");
+    expect(run.mock.calls.flatMap(([args]) => args)).not.toContain(
+      "git@github.com:acme/private-skills.git"
+    );
+  });
+
   it("keeps repository objects outside the backed-up application data root", () => {
     const paths = createPaths({ appDataRoot: "/tmp/agentenv-data" });
     expect(resolve(paths.repositoryCacheDir).startsWith(`${resolve(paths.appDataRoot)}/`)).toBe(false);

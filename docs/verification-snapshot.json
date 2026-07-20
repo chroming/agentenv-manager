@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-07-20T07:11:10.626Z",
+  "generatedAt": "2026-07-20T07:44:56.318Z",
   "source": {
-    "commit": "4918c4ba7244cf163ddd3e1d6fc7aa13f055c8a8",
+    "commit": "b1bca4d89b1823e5988f4f1f61e3a6d3fa11a85b",
     "dirty": true
   },
   "tests": {
     "passed": true,
     "files": 74,
-    "assertions": 542,
+    "assertions": 545,
     "e2eFiles": 8,
-    "e2eAssertions": 101,
+    "e2eAssertions": 102,
     "electronUiFiles": 1,
-    "electronUiAssertions": 92
+    "electronUiAssertions": 93
   },
   "audits": {
     "styles": "passed",

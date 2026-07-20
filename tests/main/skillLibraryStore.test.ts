@@ -1814,6 +1814,11 @@ description: >
     await mkdir(sourceDir, { recursive: true });
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# local\n", "utf8");
     const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/repos/acme/agent-skills/commits?sha=main")) {
+        return new Response(JSON.stringify([
+          { commit: { committer: { date: "2026-07-18T08:30:00Z" } } }
+        ]));
+      }
       if (url.endsWith("/repos/acme/agent-skills/contents/skills/reviewer?ref=main")) {
         return new Response(
           JSON.stringify([
@@ -1852,6 +1857,7 @@ description: >
         sourceType: "github",
         currentRevision: undefined,
         latestRevision: "2ae0ba4cfd9c5eb970776d3bd9ffad6e00682cee",
+        latestUpdatedAt: "2026-07-18T08:30:00.000Z",
         updateAvailable: true
       }
     ]);
@@ -2083,6 +2089,10 @@ description: >
       [
         "skills/engineering/research/SKILL.md",
         "---\nname: Research\ndescription: Research primary sources.\n---\n"
+      ],
+      [
+        "skills/design/SKILL.md",
+        "---\nname: Product Design\ndescription: Outside the requested directory.\n---\n"
       ]
     ]);
     const fetchImpl = vi.fn(async (url: string) => {
@@ -2147,6 +2157,9 @@ description: >
       expect.objectContaining({ id: "code-review", name: "Code Review", status: "ready" }),
       expect.objectContaining({ id: "research", name: "Research", status: "ready" })
     ]);
+    expect(scan.candidates).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "Product Design" })])
+    );
 
     const result = await store.importGitHubSkills(
       scan.candidates.map((candidate) => ({
@@ -2168,6 +2181,11 @@ description: >
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/repos/acme/agent-skills/commits?sha=main")) {
+        return new Response(JSON.stringify([
+          { commit: { committer: { date: "2026-07-18T08:30:00Z" } } }
+        ]));
+      }
       if (url.endsWith("/repos/acme/agent-skills/contents/skills/reviewer?ref=main")) {
         return new Response(
           JSON.stringify([
@@ -2223,7 +2241,8 @@ description: >
       source: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
       updatePolicy: "tracked",
       remoteRef: "main",
-      remoteRevision: "1056668e8f218b8cadafa95d64b401fbf7d9e87c"
+      remoteRevision: "1056668e8f218b8cadafa95d64b401fbf7d9e87c",
+      upstream: expect.objectContaining({ updatedAt: "2026-07-18T08:30:00.000Z" })
     });
     await expect(
       readFile(join(paths.skillsLibraryDir, "github-reviewer", "references", "guide.md"), "utf8")

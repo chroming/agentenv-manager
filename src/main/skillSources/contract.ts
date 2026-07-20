@@ -12,6 +12,7 @@ export interface ResolvedGitRepository {
   resolvedCommit: string;
   cachePath: string;
   cacheRef: string;
+  accessTransport: "https" | "ssh" | "file";
 }
 
 export interface ResolvedGitSkillSource extends ResolvedGitRepository {

@@ -12,6 +12,7 @@ describe("repository location", () => {
       transportLocator: "https://github.com/acme/skills.git",
       displayLocator: "https://github.com/acme/skills",
       cacheKeyLocator: "https://github.com/acme/skills",
+      sshFallbackLocator: "git@github.com:acme/skills.git",
       host: "github.com",
       webUrl: "https://github.com/acme/skills/tree/main/skills/review",
       inferredRef: "main",

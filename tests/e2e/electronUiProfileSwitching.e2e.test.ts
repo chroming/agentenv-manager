@@ -5998,6 +5998,8 @@ describe("Electron UI profile switching e2e", () => {
       });
     });
     const githubRow = page.getByRole("group", { name: "Library item github-reviewer" });
+    await expect.poll(() => githubRow.getByLabel("Source details for github-reviewer").textContent())
+      .toContain("Updated Jul 18, 2026");
     const sourcePreview = githubRow.getByLabel("Full source for github-reviewer");
     await sourcePreview.hover();
     const sourceTooltip = page.getByRole("tooltip").filter({ hasText: sourceUrl });
@@ -6140,6 +6142,48 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toContain("Verify releases before shipping");
   }, 30_000);
 
+  it("keeps a batch import partial failure visible with a selectable full reason", async () => {
+    const { appDataRoot, githubFixtureRoot, page } = await launchApp();
+    await writeGitHubFixtureDirectory(githubFixtureRoot);
+    await resizeAppWindow(page, 920, 620);
+
+    await page.getByRole("button", { name: "Import skills" }).click();
+    const dialog = page.getByRole("dialog", { name: "Import skills" });
+    await dialog.getByRole("tab", { name: "Repository" }).click();
+    await dialog.getByLabel("Repository address")
+      .fill("https://github.com/acme/agent-skills/tree/main/skills/engineering");
+    await dialog.getByRole("button", { name: "Scan", exact: true }).click();
+    await dialog.getByRole("checkbox", { name: "Select Release Check" })
+      .waitFor({ state: "visible", timeout: 5_000 });
+
+    await rm(
+      join(githubFixtureRoot, "acme", "agent-skills", "main", "skills", "engineering", "release-check"),
+      { recursive: true, force: true }
+    );
+    await dialog.getByRole("button", { name: "Import 2" }).click();
+    await dialog.getByText("1 imported · 1 failed", { exact: true })
+      .waitFor({ state: "visible", timeout: 5_000 });
+    await dialog.getByRole("status", { name: "API Design: imported" })
+      .waitFor({ state: "visible", timeout: 5_000 });
+    await dialog.getByRole("status", { name: "Release Check: failed" })
+      .waitFor({ state: "visible", timeout: 5_000 });
+
+    const failure = dialog.getByLabel("Import failure for Release Check");
+    expect(await failure.textContent()).toBe("Import failed");
+    await failure.hover();
+    const tooltip = page.getByRole("tooltip").filter({ hasText: "GitHub request failed (404 Not Found)" });
+    await tooltip.waitFor({ state: "visible", timeout: 5_000 });
+    await expectInViewport(page, tooltip);
+    expect(await tooltip.evaluate((element) => getComputedStyle(element).userSelect)).toBe("text");
+
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await dialog.waitFor({ state: "hidden" });
+    await expect(fileExists(join(appDataRoot, "skills-library", "api-design", "SKILL.md")))
+      .resolves.toBe(true);
+    await expect(fileExists(join(appDataRoot, "skills-library", "release-check", "SKILL.md")))
+      .resolves.toBe(false);
+  }, 30_000);
+
   it("reviews a GitHub same-name conflict before replacing the Library copy", async () => {
     const { appDataRoot, githubFixtureRoot, page } = await launchApp();
     const remotePath = "skills/shared-reviewer-next";
@@ -6165,6 +6209,8 @@ describe("Electron UI profile switching e2e", () => {
     await conflict.waitFor({ state: "visible" });
     await expect.poll(() => conflict.textContent()).toContain("3.0");
     await expect.poll(() => conflict.textContent()).toContain("Different");
+    await expect.poll(() => conflict.textContent()).toContain("Updated");
+    await expect.poll(() => conflict.textContent()).toContain("2026");
     await conflict.getByRole("button", { name: "Replace Skill" }).click();
     await conflict.waitFor({ state: "hidden" });
     await closeCompletedGitHubImport(page, "All 1 skills imported", ["Shared Reviewer"]);

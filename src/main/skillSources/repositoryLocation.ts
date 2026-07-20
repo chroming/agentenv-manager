@@ -8,6 +8,7 @@ export interface RepositoryLocation {
   transportLocator: string;
   displayLocator: string;
   cacheKeyLocator: string;
+  sshFallbackLocator?: string;
   host?: string;
   webUrl?: string;
   inferredRef?: string;
@@ -147,6 +148,7 @@ const parseUrlLocation = (value: string): RepositoryLocation => {
       transportLocator: `https://${url.host.toLowerCase()}${repositoryPath}.git`,
       displayLocator: `https://${url.host.toLowerCase()}${repositoryPath}`,
       cacheKeyLocator: `https://${url.host.toLowerCase()}${repositoryPath}`,
+      sshFallbackLocator: `git@github.com:${owner}/${repo}.git`,
       host,
       webUrl: `https://${url.host.toLowerCase()}${webPath}`,
       inferredRef: isTreeUrl ? ref : undefined,

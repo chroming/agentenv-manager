@@ -72,6 +72,20 @@ const resolvedSkill = async (
   signal?: AbortSignal
 ): Promise<ResolvedGitSkillSource> => {
   const contentRevision = await readTreeOid(runner, repository, directory, signal);
+  const updated = await runner.run(
+    [
+      "--git-dir",
+      repository.cachePath,
+      "log",
+      "-1",
+      "--format=%cI",
+      repository.resolvedCommit,
+      "--",
+      ...(directory ? [directory] : [])
+    ],
+    { signal, timeoutMs: 30_000 }
+  );
+  const updatedAt = updated.stdout.trim();
   return {
     ...repository,
     directory,
@@ -81,7 +95,10 @@ const resolvedSkill = async (
       locator: repository.repository,
       ref: repository.ref,
       subpath: directory || undefined,
-      revision: repository.resolvedCommit
+      revision: repository.resolvedCommit,
+      ...(updatedAt && !Number.isNaN(Date.parse(updatedAt))
+        ? { updatedAt: new Date(updatedAt).toISOString() }
+        : {})
     }
   };
 };
@@ -234,6 +251,7 @@ export const createGitCliSkillSource = (
       ref: repository.ref,
       directory,
       transport: "system-git",
+      accessTransport: repository.accessTransport,
       truncated: roots.length > maxCandidates,
       candidates
     };

@@ -936,6 +936,7 @@ const AppContent = ({
           sourceType: skill.sourceType,
           currentRevision: skill.remoteRevision ?? skill.contentHash,
           latestRevision: skill.remoteRevision ?? skill.contentHash,
+          latestUpdatedAt: skill.upstream?.updatedAt,
           updateAvailable: false
         }))
     ]);
@@ -5071,7 +5072,10 @@ const AppContent = ({
                     <dl>
                       <div><dt>{t("Version")}</dt><dd>{item.version ?? t("Not declared")}</dd></div>
                       <div><dt>{t("Hash")}</dt><dd><code title={item.contentHash}>{item.contentHash.slice(0, 12)}</code></dd></div>
-                      <div><dt>{t("Source")}</dt><dd title={item.source}>{item.sourceType === "github" ? item.source : t("Local")}</dd></div>
+                      <div><dt>{t("Source")}</dt><dd title={item.source}>{item.sourceType === "github" || item.sourceType === "git" ? item.source : t("Local")}</dd></div>
+                      {item.upstream?.updatedAt ? (
+                        <div><dt>{t("Updated")}</dt><dd title={formatDate(item.upstream.updatedAt)}>{formatDate(item.upstream.updatedAt)}</dd></div>
+                      ) : null}
                       <div><dt>{t("ID")}</dt><dd><code>{item.id}</code></dd></div>
                     </dl>
                   </article>

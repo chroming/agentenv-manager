@@ -274,7 +274,11 @@ interface GitHubRepositoryResponse {
 }
 
 interface GitHubCommitResponse {
-  commit?: { tree?: { sha?: string } };
+  commit?: {
+    tree?: { sha?: string };
+    author?: { date?: string };
+    committer?: { date?: string };
+  };
 }
 
 interface GitHubTreeResponse {
@@ -760,6 +764,24 @@ export const createSkillLibraryStore = (
     };
   };
 
+  const readGitHubSkillUpdatedAt = async (
+    source: ParsedGitHubSkillSource
+  ): Promise<string | undefined> => {
+    const query = new URLSearchParams({ sha: source.ref, per_page: "1" });
+    if (source.remotePath) query.set("path", source.remotePath);
+    try {
+      const commits = await fetchGitHubJson(
+        `https://api.github.com/repos/${source.owner}/${source.repo}/commits?${query.toString()}`
+      ) as GitHubCommitResponse[];
+      const value = commits[0]?.commit?.committer?.date ?? commits[0]?.commit?.author?.date;
+      return value && !Number.isNaN(Date.parse(value))
+        ? new Date(value).toISOString()
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
   const entryFor = async (id: string, skillDir: string): Promise<SkillLibraryEntry> => {
     const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
     const frontmatter = parseSkillFrontmatter(content);
@@ -924,7 +946,10 @@ export const createSkillLibraryStore = (
     });
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-preview-"));
     try {
-      const { hasSkillMd } = await readGitHubTree(parsedSource, tempDir);
+      const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
+        readGitHubTree(parsedSource, tempDir),
+        readGitHubSkillUpdatedAt(parsedSource)
+      ]);
       if (!hasSkillMd) {
         throw new Error(`GitHub skill source is missing SKILL.md: ${source.input.url}`);
       }
@@ -939,7 +964,9 @@ export const createSkillLibraryStore = (
             kind: "github",
             locator: parsedSource.sourceUrl,
             ref: parsedSource.ref,
-            subpath: parsedSource.remotePath
+            subpath: parsedSource.remotePath,
+            revision,
+            updatedAt: sourceUpdatedAt
           }
         }
       );
@@ -1776,7 +1803,10 @@ export const createSkillLibraryStore = (
 
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-"));
     try {
-      const { hasSkillMd, revision } = await readGitHubTree(source, tempDir);
+      const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
+        readGitHubTree(source, tempDir),
+        readGitHubSkillUpdatedAt(source)
+      ]);
       if (!hasSkillMd) {
         throw new Error(`GitHub skill source is missing SKILL.md: ${url}`);
       }
@@ -1797,7 +1827,8 @@ export const createSkillLibraryStore = (
             locator: source.sourceUrl,
             ref: source.ref,
             subpath: source.remotePath,
-            revision
+            revision,
+            updatedAt: sourceUpdatedAt
           }
         }
       );
@@ -1826,7 +1857,8 @@ export const createSkillLibraryStore = (
             locator: source.sourceUrl,
             ref: source.ref,
             subpath: source.remotePath,
-            revision
+            revision,
+            updatedAt: sourceUpdatedAt
           },
           provenance: previousMetadata?.provenance ?? { importedVia: "agentenv" }
         });
@@ -1849,7 +1881,8 @@ export const createSkillLibraryStore = (
             locator: source.sourceUrl,
             ref: source.ref,
             subpath: source.remotePath,
-            revision
+            revision,
+            updatedAt: sourceUpdatedAt
           },
           provenance: { importedVia: "agentenv" }
         });
@@ -2625,6 +2658,7 @@ export const createSkillLibraryStore = (
             sourceType: "git",
             currentRevision: metadata.remoteRevision,
             latestRevision: latest.contentRevision,
+            latestUpdatedAt: latest.upstream.updatedAt,
             updateAvailable: latest.contentRevision !== metadata.remoteRevision
           };
         }
@@ -2635,13 +2669,17 @@ export const createSkillLibraryStore = (
           ref: metadata.remoteRef,
           remotePath: metadata.remotePath
         });
-        const latest = await readGitHubTree(source);
+        const [latest, latestUpdatedAt] = await Promise.all([
+          readGitHubTree(source),
+          readGitHubSkillUpdatedAt(source)
+        ]);
         return {
           id: skill.id,
           name: skill.name,
           sourceType: "github",
           currentRevision: metadata.remoteRevision,
           latestRevision: latest.revision,
+          latestUpdatedAt,
           updateAvailable: latest.revision !== metadata.remoteRevision
         };
       } catch (error) {
@@ -2939,7 +2977,10 @@ export const createSkillLibraryStore = (
       });
       const candidateDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-update-"));
       try {
-        const { hasSkillMd, revision } = await readGitHubTree(source, candidateDir);
+        const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
+          readGitHubTree(source, candidateDir),
+          readGitHubSkillUpdatedAt(source)
+        ]);
         if (!hasSkillMd) {
           throw new Error(`GitHub skill source is missing SKILL.md: ${metadata.source}`);
         }
@@ -2956,7 +2997,8 @@ export const createSkillLibraryStore = (
             locator: metadata.source,
             ref: source.ref,
             subpath: source.remotePath,
-            revision
+            revision,
+            updatedAt: sourceUpdatedAt
           }
         }, revision);
       } catch (error) {

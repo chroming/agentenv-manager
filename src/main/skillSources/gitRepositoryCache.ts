@@ -47,6 +47,36 @@ const isFilterUnsupported = (error: unknown) =>
   error instanceof GitCommandError &&
   /filtering not recognized|does not support filter|filter.*not supported/i.test(error.stderr);
 
+const isRepositoryAccessError = (error: unknown) => {
+  if (!(error instanceof GitCommandError)) return false;
+  const detail = `${error.message}\n${error.stderr}`;
+  return /authentication failed|access denied|permission denied|repository not found|could not read username|terminal prompts disabled|http.*(?:401|403)|publickey|host key verification failed/i.test(
+    detail
+  );
+};
+
+const transportRunOptions = (transportLocator: string) =>
+  /^(?:ssh:\/\/|[^@\s]+@[^:\s]+:)/i.test(transportLocator)
+    ? { env: { GIT_SSH_COMMAND: "ssh -o BatchMode=yes -o ConnectTimeout=10" } }
+    : {};
+
+const accessFailureMessage = (attempts: Array<{ transport: string; error: unknown }>) => {
+  const labels = attempts.map(({ transport, error }) => {
+    const protocol = /^(?:ssh:\/\/|[^@\s]+@[^:\s]+:)/i.test(transport) ? "SSH" : "HTTPS";
+    const detail = error instanceof Error ? error.message : String(error);
+    return `${protocol}: ${detail}`;
+  });
+  return new GitCommandError(
+    `Repository access failed over HTTPS and SSH. ${labels.join(" | ")} Configure a GitHub SSH key and verify it with ssh -T git@github.com.`,
+    {
+      stderr: attempts
+        .map(({ error }) => error instanceof GitCommandError ? error.stderr : "")
+        .filter(Boolean)
+        .join("\n")
+    }
+  );
+};
+
 export const createGitRepositoryCache = (
   options: GitRepositoryCacheOptions
 ): GitRepositoryCache => {
@@ -136,7 +166,8 @@ export const createGitRepositoryCache = (
   const resolveDefaultRef = async (repository: string, signal?: AbortSignal) => {
     const result = await options.runner.run(["ls-remote", "--symref", repository, "HEAD"], {
       signal,
-      timeoutMs: 15_000
+      timeoutMs: 15_000,
+      ...transportRunOptions(repository)
     });
     const match = result.stdout.match(/^ref:\s+refs\/heads\/(.+)\tHEAD$/m);
     return match?.[1] ?? "HEAD";
@@ -155,55 +186,95 @@ export const createGitRepositoryCache = (
     const operation = serializeRepository(location.cacheKeyLocator, async () => {
       await acquire();
       try {
-        const ref = requestedRef ?? (await resolveDefaultRef(location.transportLocator, signal));
         const cacheKey = createHash("sha256").update(location.cacheKeyLocator).digest("hex");
         const cachePath = join(options.cacheRoot, `${cacheKey}.git`);
-        const marker: RepositoryCacheMarker = {
-          formatVersion: 1,
-          cacheKeyLocator: location.cacheKeyLocator,
-          transportLocator: location.transportLocator
-        };
-        await ensureCache(cachePath, marker, signal);
-
-        const baseFetchArgs = [
-          "--git-dir",
-          cachePath,
-          "fetch",
-          "--depth=1",
-          "--no-tags",
-          "origin",
-          ref
+        const existingMarker = await readMarker(cachePath);
+        const allowedTransports = [
+          location.transportLocator,
+          location.sshFallbackLocator
+        ].filter((item): item is string => Boolean(item));
+        const preferredTransport =
+          existingMarker?.cacheKeyLocator === location.cacheKeyLocator &&
+          allowedTransports.includes(existingMarker.transportLocator)
+            ? existingMarker.transportLocator
+            : location.transportLocator;
+        const transports = [
+          preferredTransport,
+          ...allowedTransports.filter((transport) => transport !== preferredTransport)
         ];
-        try {
-          await options.runner.run(
-            [...baseFetchArgs.slice(0, 4), "--filter=blob:none", ...baseFetchArgs.slice(4)],
-            { signal, timeoutMs: 120_000 }
-          );
-        } catch (error) {
-          if (!isFilterUnsupported(error)) throw error;
-          await options.runner.run(baseFetchArgs, { signal, timeoutMs: 120_000 });
+        const attempts: Array<{ transport: string; error: unknown }> = [];
+
+        for (const transport of transports) {
+          try {
+            const ref = requestedRef ?? (await resolveDefaultRef(transport, signal));
+            const marker: RepositoryCacheMarker = {
+              formatVersion: 1,
+              cacheKeyLocator: location.cacheKeyLocator,
+              transportLocator: transport
+            };
+            await ensureCache(cachePath, marker, signal);
+
+            const baseFetchArgs = [
+              "--git-dir",
+              cachePath,
+              "fetch",
+              "--depth=1",
+              "--no-tags",
+              "origin",
+              ref
+            ];
+            const remoteOptions = {
+              signal,
+              timeoutMs: 120_000,
+              ...transportRunOptions(transport)
+            };
+            try {
+              await options.runner.run(
+                [...baseFetchArgs.slice(0, 4), "--filter=blob:none", ...baseFetchArgs.slice(4)],
+                remoteOptions
+              );
+            } catch (error) {
+              if (!isFilterUnsupported(error)) throw error;
+              await options.runner.run(baseFetchArgs, remoteOptions);
+            }
+            const resolved = await options.runner.run(
+              ["--git-dir", cachePath, "rev-parse", "FETCH_HEAD^{commit}"],
+              { signal, timeoutMs: 30_000 }
+            );
+            const resolvedCommit = resolved.stdout.trim();
+            if (!/^[a-f0-9]{40,64}$/i.test(resolvedCommit)) {
+              throw new Error("Repository returned an invalid commit revision");
+            }
+            const cacheRef = `refs/agentenv/${createHash("sha256").update(ref).digest("hex")}`;
+            await options.runner.run(
+              ["--git-dir", cachePath, "update-ref", cacheRef, resolvedCommit],
+              { signal, timeoutMs: 30_000 }
+            );
+            const accessTransport: ResolvedGitRepository["accessTransport"] =
+              transport === location.transportLocator && location.kind === "file"
+                ? "file"
+                : /^(?:ssh:\/\/|[^@\s]+@[^:\s]+:)/i.test(transport)
+                  ? "ssh"
+                  : "https";
+            return {
+              repository: location.transportLocator,
+              location,
+              ref,
+              resolvedCommit,
+              cachePath,
+              cacheRef,
+              accessTransport
+            };
+          } catch (error) {
+            attempts.push({ transport, error });
+            if (transports.length === 1 || transport === transports.at(-1)) {
+              if (attempts.length > 1) throw accessFailureMessage(attempts);
+              throw error;
+            }
+            if (!isRepositoryAccessError(error)) throw error;
+          }
         }
-        const resolved = await options.runner.run(
-          ["--git-dir", cachePath, "rev-parse", "FETCH_HEAD^{commit}"],
-          { signal, timeoutMs: 30_000 }
-        );
-        const resolvedCommit = resolved.stdout.trim();
-        if (!/^[a-f0-9]{40,64}$/i.test(resolvedCommit)) {
-          throw new Error("Repository returned an invalid commit revision");
-        }
-        const cacheRef = `refs/agentenv/${createHash("sha256").update(ref).digest("hex")}`;
-        await options.runner.run(
-          ["--git-dir", cachePath, "update-ref", cacheRef, resolvedCommit],
-          { signal, timeoutMs: 30_000 }
-        );
-        return {
-          repository: location.transportLocator,
-          location,
-          ref,
-          resolvedCommit,
-          cachePath,
-          cacheRef
-        };
+        throw new Error("Repository transport could not be resolved");
       } finally {
         release();
       }
