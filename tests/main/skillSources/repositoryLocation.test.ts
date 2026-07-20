@@ -29,6 +29,7 @@ describe("repository location", () => {
       transportLocator: "https://git.example.test/platform/skills",
       displayLocator: "https://git.example.test/platform/skills",
       cacheKeyLocator: "https://git.example.test/platform/skills",
+      sshFallbackLocator: "git@git.example.test:platform/skills.git",
       host: "git.example.test"
     });
     expect(withSuffix).toMatchObject({
@@ -93,14 +94,28 @@ describe("repository location", () => {
     expect(() => parseRepositoryLocation(locator, { allowLocal: true })).toThrow();
   });
 
-  it("does not infer vendor-specific tree semantics for unknown hosts", () => {
+  it("infers repository, ref, directory, and SSH fallback for Git web tree URLs", () => {
     const location = parseRepositoryLocation(
-      "https://git.example.test/team/skills/tree/main/review"
+      "https://git.example.test/ep/Skills/tree/main/internal"
     );
     expect(location).toMatchObject({
-      transportLocator: "https://git.example.test/team/skills/tree/main/review"
+      transportLocator: "https://git.example.test/ep/Skills.git",
+      displayLocator: "https://git.example.test/ep/Skills",
+      cacheKeyLocator: "https://git.example.test/ep/Skills",
+      sshFallbackLocator: "git@git.example.test:ep/Skills.git",
+      inferredRef: "main",
+      inferredDirectory: "internal"
     });
-    expect(location).not.toHaveProperty("inferredRef");
-    expect(location).not.toHaveProperty("inferredDirectory");
+  });
+
+  it("supports GitLab-style tree separators for nested repository namespaces", () => {
+    expect(parseRepositoryLocation(
+      "https://git.example.test/platform/agents/skills/-/tree/main/internal/review"
+    )).toMatchObject({
+      transportLocator: "https://git.example.test/platform/agents/skills.git",
+      sshFallbackLocator: "git@git.example.test:platform/agents/skills.git",
+      inferredRef: "main",
+      inferredDirectory: "internal/review"
+    });
   });
 });

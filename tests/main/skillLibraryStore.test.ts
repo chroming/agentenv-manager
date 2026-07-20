@@ -61,14 +61,20 @@ describe("skill library store", () => {
       input: { sourcePath: incomingDir, id: "reviewer" }
     });
     expect(preview).toMatchObject({
-      incoming: { name: "reviewer", version: "2.0.0", versionSource: "version" },
+      incoming: {
+        name: "reviewer",
+        version: "2.0.0",
+        versionSource: "version",
+        modifiedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+      },
       suggestedId: "reviewer-2",
       conflicts: [
         {
           existing: {
             id: "reviewer",
             version: "1.0",
-            versionSource: "metadata.version"
+            versionSource: "metadata.version",
+            modifiedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
           },
           identical: false
         }

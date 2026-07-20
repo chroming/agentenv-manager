@@ -694,7 +694,7 @@ describe("App", () => {
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
     fireEvent.click(within(composer).getByRole("button", { name: "MCPs" }));
     expect(within(composer).getByRole("switch", { name: "Manage MCPs for OpenCode" }))
-      .toHaveTextContent("Not managed");
+      .toHaveTextContent("Manage");
     expect(screen.getByText("0 MCPs")).toBeInTheDocument();
   });
 

@@ -156,17 +156,61 @@ const parseUrlLocation = (value: string): RepositoryLocation => {
     };
   }
 
+  if (protocol === "https:") {
+    const treeMarkerIndex = segments.findIndex(
+      (segment, index) => segment === "tree" && index >= 2 && Boolean(segments[index + 1])
+    );
+    const hasGitLabSeparator = treeMarkerIndex > 0 && segments[treeMarkerIndex - 1] === "-";
+    const repositorySegments = treeMarkerIndex >= 2
+      ? segments.slice(0, hasGitLabSeparator ? treeMarkerIndex - 1 : treeMarkerIndex)
+      : segments;
+    const repositoryPath = repositorySegments.join("/");
+    assertSafeRepositoryPath(repositoryPath);
+    const clonePath = withoutGitSuffix(repositoryPath);
+    const sshFallbackLocator = url.port
+      ? undefined
+      : `git@${host}:${clonePath}.git`;
+    if (treeMarkerIndex >= 2) {
+      const ref = segments[treeMarkerIndex + 1];
+      const directory = segments.slice(treeMarkerIndex + 2).join("/");
+      return {
+        kind: "https",
+        transportLocator: `https://${url.host.toLowerCase()}/${clonePath}.git`,
+        displayLocator: `https://${url.host.toLowerCase()}/${clonePath}`,
+        cacheKeyLocator: `https://${url.host.toLowerCase()}/${clonePath}`,
+        sshFallbackLocator,
+        host,
+        webUrl: `https://${url.host.toLowerCase()}${url.pathname}`,
+        inferredRef: ref,
+        inferredDirectory: directory || undefined
+      };
+    }
+
+    const path = trimRepositoryPath(url.pathname);
+    assertSafeRepositoryPath(path);
+    const transportLocator = `${protocol}//${authority}${path}`;
+    const displayLocator = `${protocol}//${authority}${withoutGitSuffix(path)}`;
+    return {
+      kind: "https",
+      transportLocator,
+      displayLocator,
+      cacheKeyLocator: displayLocator,
+      sshFallbackLocator,
+      host,
+      webUrl: displayLocator
+    };
+  }
+
   const path = trimRepositoryPath(url.pathname);
   assertSafeRepositoryPath(path);
   const transportLocator = `${protocol}//${authority}${path}`;
   const displayLocator = `${protocol}//${authority}${withoutGitSuffix(path)}`;
   return {
-    kind: protocol === "https:" ? "https" : "ssh",
+    kind: "ssh",
     transportLocator,
     displayLocator,
     cacheKeyLocator: displayLocator,
-    host,
-    ...(protocol === "https:" ? { webUrl: displayLocator } : {})
+    host
   };
 };
 

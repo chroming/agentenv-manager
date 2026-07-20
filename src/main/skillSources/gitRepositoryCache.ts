@@ -50,7 +50,7 @@ const isFilterUnsupported = (error: unknown) =>
 const isRepositoryAccessError = (error: unknown) => {
   if (!(error instanceof GitCommandError)) return false;
   const detail = `${error.message}\n${error.stderr}`;
-  return /authentication failed|access denied|permission denied|repository not found|could not read username|terminal prompts disabled|http.*(?:401|403)|publickey|host key verification failed/i.test(
+  return /authentication failed|access denied|permission denied|repository not found|could not read username|could not read from remote repository|terminal prompts disabled|http.*(?:401|403)|publickey|host key verification failed/i.test(
     detail
   );
 };
@@ -67,7 +67,7 @@ const accessFailureMessage = (attempts: Array<{ transport: string; error: unknow
     return `${protocol}: ${detail}`;
   });
   return new GitCommandError(
-    `Repository access failed over HTTPS and SSH. ${labels.join(" | ")} Configure a GitHub SSH key and verify it with ssh -T git@github.com.`,
+    `Repository access failed over HTTPS and SSH. ${labels.join(" | ")} Configure an SSH key for this repository host and verify Git access.`,
     {
       stderr: attempts
         .map(({ error }) => error instanceof GitCommandError ? error.stderr : "")

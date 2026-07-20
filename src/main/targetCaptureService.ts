@@ -117,10 +117,20 @@ export const createTargetCaptureService = ({
         entry.locationRole !== "discovery-only" ||
         (entry.legacyLocation && entry.status === "managed" && entry.managedByTarget === true)
     );
-    const ignoredInventory = runtimeInventory.filter((entry) => entry.status === "ignored");
-    const externalInventory = runtimeInventory.filter((entry) => entry.status === "external");
+    const isUnavailableSkill = (entry: (typeof runtimeInventory)[number]) =>
+      entry.runtimeIssues?.some((issue) => issue.code === "unreadable-skill") === true;
+    const unavailableInventory = runtimeInventory.filter(isUnavailableSkill);
+    const ignoredInventory = runtimeInventory.filter(
+      (entry) => entry.status === "ignored" && !isUnavailableSkill(entry)
+    );
+    const externalInventory = runtimeInventory.filter(
+      (entry) => entry.status === "external" && !isUnavailableSkill(entry)
+    );
     const skillInventory = runtimeInventory.filter(
-      (entry) => entry.status !== "ignored" && entry.status !== "external"
+      (entry) =>
+        entry.status !== "ignored" &&
+        entry.status !== "external" &&
+        !isUnavailableSkill(entry)
     );
     const groupedSkills = new Map<string, typeof skillInventory>();
     for (const entry of skillInventory) {
@@ -133,6 +143,21 @@ export const createTargetCaptureService = ({
     const resources: TargetCaptureResource[] = [];
     const errors: string[] = [];
     const warnings = [...captured.warnings];
+    for (const entry of unavailableInventory) {
+      const runtimeIssue = entry.runtimeIssues?.find(
+        (issue) => issue.code === "unreadable-skill"
+      );
+      const isBrokenLink = runtimeIssue?.message.includes("link target") === true;
+      resources.push({
+        kind: "skill",
+        id: entry.id,
+        name: entry.name,
+        sourcePath: entry.path,
+        action: "exclude",
+        detail: isBrokenLink ? "Broken link; skipped" : "Unavailable; skipped"
+      });
+      warnings.push(`Skill ${entry.name} was skipped. ${runtimeIssue?.message ?? entry.path}`);
+    }
     for (const entry of ignoredInventory) {
       resources.push({
         kind: "skill",

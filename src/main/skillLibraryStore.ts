@@ -818,6 +818,7 @@ export const createSkillLibraryStore = (
     source: Pick<SkillImportSnapshot, "sourceType" | "source" | "upstream">
   ): Promise<SkillImportSnapshot> => {
     const frontmatter = await validateSkillFrontmatter(skillDir);
+    const skillStats = await stat(join(skillDir, "SKILL.md"));
     return {
       id,
       name: frontmatter.name || id,
@@ -825,6 +826,7 @@ export const createSkillLibraryStore = (
       version: frontmatter.version,
       versionSource: frontmatter.versionSource,
       contentHash: await computeContentHash(skillDir),
+      modifiedAt: skillStats.mtime.toISOString(),
       ...source,
       skillMarkdown: await readFile(join(skillDir, "SKILL.md"), "utf8")
     };

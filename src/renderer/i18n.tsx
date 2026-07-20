@@ -1030,6 +1030,8 @@ Object.assign(zhCN, {
   "Open Profile": "打开配置方案",
   "Choose Profile": "选择配置方案",
   "Manage": "管理",
+  "Modified": "修改时间",
+  "Unknown": "未知",
   "Management": "管理状态",
   "Not managed": "未托管",
   "Applied": "已应用",

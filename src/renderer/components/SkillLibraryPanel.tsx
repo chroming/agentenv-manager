@@ -3543,30 +3543,38 @@ export const SkillLibraryPanel = ({
                         const failure = githubImportResult?.failed.find(
                           (item) => item.sourceUrl === candidate.sourceUrl
                         );
+                        const failureMessage = progress?.error ?? failure?.error;
+                        const progressStatus = progress?.status ?? (failureMessage ? "failed" : undefined);
                         return (
                           <div
                             className={`github-candidate-row${selectable ? "" : " is-disabled"}`}
                             key={candidate.sourceUrl}
                           >
-                            {progress ? (
+                            {progressStatus ? (
                               <span
-                                className={`github-import-state github-import-state--${progress.status}`}
+                                className={`github-import-state github-import-state--${progressStatus}`}
                                 role="status"
                                 aria-label={t("{{name}}: {{status}}", {
                                   name: candidate.name,
-                                  status: t(progress.status)
+                                  status: t(progressStatus)
                                 })}
                               >
-                                {progress.status === "waiting" ? (
+                                {progressStatus === "waiting" ? (
                                   <Circle size={16} strokeWidth={2} aria-hidden="true" />
-                                ) : progress.status === "reviewing" || progress.status === "importing" ? (
+                                ) : progressStatus === "reviewing" || progressStatus === "importing" ? (
                                   <LoaderCircle className="is-spinning" size={16} aria-hidden="true" />
-                                ) : progress.status === "imported" ? (
+                                ) : progressStatus === "imported" ? (
                                   <CheckCircle2 size={16} strokeWidth={2.2} aria-hidden="true" />
-                                ) : progress.status === "skipped" ? (
+                                ) : progressStatus === "skipped" ? (
                                   <CircleSlash2 size={16} strokeWidth={2.1} aria-hidden="true" />
                                 ) : (
-                                  <XCircle size={16} strokeWidth={2.2} aria-hidden="true" />
+                                  <PreviewText
+                                    ariaLabel={t("Import failure for {{name}}", { name: candidate.name })}
+                                    className="github-import-state__failure"
+                                    displayContent={<XCircle size={16} strokeWidth={2.2} aria-hidden="true" />}
+                                    text={failureMessage ?? t("Import failed")}
+                                    tooltipClassName="library-source-tooltip import-error-tooltip"
+                                  />
                                 )}
                               </span>
                             ) : (
@@ -3597,14 +3605,8 @@ export const SkillLibraryPanel = ({
                                 tooltipClassName="library-source-tooltip"
                               />
                               {candidate.description ? <small>{candidate.description}</small> : null}
-                              {progress?.status === "failed" || failure ? (
-                                <PreviewText
-                                  ariaLabel={t("Import failure for {{name}}", { name: candidate.name })}
-                                  className="github-import-state-label field-error"
-                                  displayText={t("Import failed")}
-                                  text={progress?.error ?? failure?.error ?? t("Import failed")}
-                                  tooltipClassName="library-source-tooltip import-error-tooltip"
-                                />
+                              {progressStatus === "failed" ? (
+                                <small className="github-import-state-label field-error">{t("Import failed")}</small>
                               ) : progress ? (
                                 <small className="github-import-state-label">{t(progress.status)}</small>
                               ) : null}
@@ -3667,39 +3669,47 @@ export const SkillLibraryPanel = ({
                     {t(githubImportResult ? "Close" : "Cancel")}
                   </button>
                   {importSource === "local" ? (
-                      <button
-                        className="primary-action"
-                        type="button"
-                        disabled={
-                          !localSkillPath.trim() ||
-                          localImportOperation ||
-                          Boolean(githubOperation) ||
-                          localImportBlocked
-                        }
-                        onClick={() => void importLocalSkill()}
-                      >
-                        {localImportOperation ? t("Importing...") : t(localImportLabel)}
-                      </button>
+                    <button
+                      className="primary-action"
+                      type="button"
+                      aria-busy={localImportOperation}
+                      disabled={
+                        !localSkillPath.trim() ||
+                        localImportOperation ||
+                        Boolean(githubOperation) ||
+                        localImportBlocked
+                      }
+                      onClick={() => void importLocalSkill()}
+                    >
+                      {localImportOperation ? (
+                        <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+                      ) : null}
+                      {localImportOperation ? t("Importing...") : t(localImportLabel)}
+                    </button>
                   ) : !githubScanResult ? (
-                      <button
-                        className="primary-action"
-                        type="button"
-                        disabled={!githubUrl.trim() || Boolean(githubOperation) || localImportOperation}
-                        onClick={() => {
-                          void scanRepository();
-                        }}
-                      >
-                        {t(githubOperation === "scanning" ? "Scanning..." : "Scan")}
-                      </button>
+                    <button
+                      className="primary-action"
+                      type="button"
+                      disabled={!githubUrl.trim() || Boolean(githubOperation) || localImportOperation}
+                      onClick={() => {
+                        void scanRepository();
+                      }}
+                    >
+                      {t(githubOperation === "scanning" ? "Scanning..." : "Scan")}
+                    </button>
                   ) : githubImportResult ? null : (
                     <button
                       className="primary-action"
                       type="button"
+                      aria-busy={githubOperation === "importing"}
                       disabled={githubSelectedIds.length === 0 || Boolean(githubOperation)}
                       onClick={() => {
                         void importSelectedGitHubSkills();
                       }}
                     >
+                      {githubOperation === "importing" ? (
+                        <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+                      ) : null}
                       {githubOperation === "importing" ? t("Importing...") : t("Import {{count}}", { count: githubSelectedIds.length })}
                     </button>
                   )}

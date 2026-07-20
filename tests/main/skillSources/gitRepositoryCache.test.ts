@@ -34,7 +34,7 @@ const setup = async () => {
 };
 
 describe("git repository cache", () => {
-  it("falls back from GitHub HTTPS access errors to the user's SSH transport", async () => {
+  it("falls back from an internal Git HTTPS access error to the user's SSH transport", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-git-fallback-"));
     let remote = "";
     const run = vi.fn<GitCommandRunner["run"]>(async (args, commandOptions) => {
@@ -67,12 +67,12 @@ describe("git repository cache", () => {
     const cache = createGitRepositoryCache({ cacheRoot: join(root, "cache"), runner });
 
     const snapshot = await cache.fetch({
-      repository: "https://github.com/acme/private-skills",
-      ref: "main"
+      repository: "https://git.example.test/ep/Skills/tree/main/internal"
     });
 
     expect(snapshot).toMatchObject({
-      repository: "https://github.com/acme/private-skills.git",
+      repository: "https://git.example.test/ep/Skills.git",
+      ref: "main",
       accessTransport: "ssh"
     });
     expect(
@@ -80,8 +80,8 @@ describe("git repository cache", () => {
         .filter(([args]) => args.includes("remote") && args.includes("add"))
         .map(([args]) => args.at(-1))
     ).toEqual([
-      "https://github.com/acme/private-skills.git",
-      "git@github.com:acme/private-skills.git"
+      "https://git.example.test/ep/Skills.git",
+      "git@git.example.test:ep/Skills.git"
     ]);
   });
 

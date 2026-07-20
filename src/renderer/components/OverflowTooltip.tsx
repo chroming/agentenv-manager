@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -20,6 +21,7 @@ interface OverflowTooltipProps {
   ariaLabel?: string;
   className: string;
   displayText?: string;
+  displayContent?: ReactNode;
   focusable?: boolean;
   preferredPlacement?: "top" | "bottom";
   text: string;
@@ -34,6 +36,7 @@ export const OverflowTooltip = ({
   ariaLabel,
   className,
   displayText,
+  displayContent,
   focusable = true,
   preferredPlacement,
   text,
@@ -148,7 +151,7 @@ export const OverflowTooltip = ({
         onMouseEnter={openTooltip}
         onMouseLeave={scheduleClose}
       >
-        {displayText ?? text}
+        {displayContent ?? displayText ?? text}
       </span>
       {isOpen
         ? createPortal(

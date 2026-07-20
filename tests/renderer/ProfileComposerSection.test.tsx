@@ -198,12 +198,13 @@ describe("ProfileComposerSection", () => {
 
     const management = screen.getByRole("switch", { name: "Manage Skills for OpenCode" });
     expect(management).toHaveAttribute("aria-checked", "false");
-    expect(management).toHaveTextContent("Not managed");
+    expect(management).toHaveTextContent("Manage");
     expect(screen.getByText("3", { selector: ".profile-composer-section__count" })).toBeVisible();
 
     fireEvent.click(management);
 
     expect(onManagementChange).toHaveBeenCalledWith(true);
+    expect(management).toHaveTextContent("Manage");
     expect(onToggle).not.toHaveBeenCalled();
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });

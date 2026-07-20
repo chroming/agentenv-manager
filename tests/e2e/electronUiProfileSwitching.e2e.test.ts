@@ -1999,6 +1999,7 @@ describe("Electron UI profile switching e2e", () => {
         iconSize: [iconBox.width, iconBox.height],
         glyphSize: [glyphBox.width, glyphBox.height],
         backgroundColor: getComputedStyle(icon).backgroundColor,
+        boxShadow: getComputedStyle(icon).boxShadow,
         centerDelta: [
           Math.abs(iconBox.left + iconBox.width / 2 - (glyphBox.left + glyphBox.width / 2)),
           Math.abs(iconBox.top + iconBox.height / 2 - (glyphBox.top + glyphBox.height / 2))
@@ -2014,6 +2015,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(skillIconGeometry.iconSize).toEqual([28, 28]);
     expect(skillIconGeometry.glyphSize).toEqual([18, 18]);
     expect(skillIconGeometry.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+    expect(skillIconGeometry.boxShadow).toBe("none");
     expect(skillIconGeometry.centerDelta.every((delta) => delta <= 0.5)).toBe(true);
     expect(skillIconGeometry.identityCenterDelta).toBeLessThanOrEqual(1);
     expect(skillIconGeometry.rowCenterDelta).toBeLessThanOrEqual(1);
@@ -3370,7 +3372,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await skillsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.textContent()).toContain("2");
-    expect(await composer.getByText("Not managed", { exact: true }).count()).toBe(3);
+    expect(await composer.getByText("Manage", { exact: true }).count()).toBe(3);
 
     await saveProfile(page);
     const resources = await readJson<{
@@ -5269,6 +5271,36 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => capturedSkillRow.textContent()).not.toContain("Not tracked");
   }, 30_000);
 
+  it("captures Trae CLI while warning about and skipping a broken Skill link", async () => {
+    const { appDataRoot, page, traeDir } = await launchApp({ includeTraeTarget: true });
+    const brokenSkill = join(traeDir, "skills", "api-mock");
+    await mkdir(join(traeDir, "skills"), { recursive: true });
+    await symlink("../../.agents/skills/api-mock", brokenSkill);
+
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    const targetCard = page.getByRole("article", { name: "Agent Trae CLI" });
+    await targetCard.getByRole("button", { name: "Create profile from Trae CLI" }).click();
+    let dialog = page.getByRole("dialog", { name: "Create profile from Trae CLI" });
+    await dialog.getByRole("button", { name: "Review" }).click();
+
+    dialog = page.getByRole("dialog", { name: "Review Trae CLI capture" });
+    await expect.poll(() => dialog.textContent()).toContain("Broken link; skipped");
+    await dialog.getByText(/items will remain outside AgentEnv/).click();
+    await expect.poll(() => dialog.textContent()).toContain(
+      `Skill api-mock was skipped. Skill link target is unavailable: ${brokenSkill}`
+    );
+    await dialog.getByRole("button", { name: "Save Profile" }).click();
+    await dialog.waitFor({ state: "hidden" });
+
+    const manifests = await Promise.all(
+      (await readdir(join(appDataRoot, "profiles"), { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => readJson<{ name: string }>(join(appDataRoot, "profiles", entry.name, "profile.json")))
+    );
+    expect(manifests.some((manifest) => manifest.name === "Trae CLI Current")).toBe(true);
+    expect((await lstat(brokenSkill)).isSymbolicLink()).toBe(true);
+  }, 30_000);
+
   it("keeps capture actions visible with long, high-density review content", async () => {
     const { app: electronApp, page } = await launchApp();
     await electronApp.evaluate(({ ipcMain }) => {
@@ -6173,7 +6205,7 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible", timeout: 5_000 });
 
     const failure = dialog.getByLabel("Import failure for Release Check");
-    expect(await failure.textContent()).toBe("Import failed");
+    expect(await failure.locator("svg").count()).toBe(1);
     await failure.hover();
     const tooltip = page.getByRole("tooltip").filter({ hasText: "GitHub request failed (404 Not Found)" });
     await tooltip.waitFor({ state: "visible", timeout: 5_000 });
@@ -6213,7 +6245,7 @@ describe("Electron UI profile switching e2e", () => {
     await conflict.waitFor({ state: "visible" });
     await expect.poll(() => conflict.textContent()).toContain("3.0");
     await expect.poll(() => conflict.textContent()).toContain("Different");
-    await expect.poll(() => conflict.textContent()).toContain("Updated");
+    await expect.poll(() => conflict.textContent()).toContain("Modified");
     await expect.poll(() => conflict.textContent()).toContain("2026");
     await conflict.getByRole("button", { name: "Replace Skill" }).click();
     await conflict.waitFor({ state: "hidden" });

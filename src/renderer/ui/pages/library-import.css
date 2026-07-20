@@ -216,6 +216,19 @@
   color: var(--accent);
 }
 
+.github-import-state .is-spinning,
+.import-dialog-actions .is-spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+.github-import-state__failure {
+  align-items: center;
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  width: 18px;
+}
+
 .github-import-state--imported {
   color: var(--success);
 }

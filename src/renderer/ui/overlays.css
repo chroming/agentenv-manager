@@ -50,6 +50,7 @@
   justify-content: center;
   min-height: 0;
   padding: 0;
+  box-shadow: none;
   transition: background-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
 }
 

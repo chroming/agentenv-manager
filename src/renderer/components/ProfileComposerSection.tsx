@@ -106,7 +106,7 @@ export const ProfileComposerSection = ({
           label={managementLabel}
           onClick={() => onManagementChange(!managed)}
         >
-          {managementStatus ?? t(managed ? "Managed" : "Not managed")}
+          {managementStatus ?? t("Manage")}
         </Switch>
         <button
           className="profile-composer-section__disclosure"

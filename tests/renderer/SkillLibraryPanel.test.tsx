@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SkillLibraryPanel,
@@ -818,7 +818,8 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("status", { name: "GitHub Reviewer: imported" })).toBeInTheDocument();
     await screen.findByRole("status", { name: "Release Check: failed" });
     const importFailure = screen.getByLabelText("Import failure for Release Check");
-    expect(importFailure).toHaveTextContent("Import failed");
+    expect(importFailure).toHaveClass("github-import-state__failure");
+    expect(importFailure.querySelector("svg")).not.toBeNull();
     fireEvent.mouseEnter(importFailure);
     expect(await screen.findByRole("tooltip")).toHaveTextContent("GitHub request failed");
     expect(screen.getByText("1 imported · 1 failed")).toBeInTheDocument();
@@ -1165,27 +1166,33 @@ describe("SkillLibraryPanel", () => {
     const onScanGitHubSkills = vi.fn().mockRejectedValue(
       new Error("GitHub request failed (404 Not Found): private repository")
     );
-    const onImportRepositorySkills = vi.fn().mockImplementation(async (
+    let completeRepositoryImport: (() => void) | undefined;
+    const onImportRepositorySkills = vi.fn().mockImplementation((
       inputs: RepositorySkillImportInput[],
       onProgress?: (progress: GitHubSkillImportProgress) => void
     ) => {
       const sourceUrl = `${inputs[0].repository}\0${inputs[0].ref}\0${inputs[0].directory}`;
-      onProgress?.({ sourceUrl, status: "imported" });
-      return {
-        imported: [{
-          id: "review-internal",
-          name: "Internal Review",
-          description: "Company review workflow",
-          path: "/tmp/library/review-internal",
-          sourceType: "git" as const,
-          source: inputs[0].repository,
-          updatePolicy: "tracked" as const,
-          remoteRef: inputs[0].ref,
-          contentHash: "tree-123",
-          updatedAt: "2026-07-17T00:00:00.000Z"
-        }],
-        failed: []
-      };
+      onProgress?.({ sourceUrl, status: "importing" });
+      return new Promise((resolve) => {
+        completeRepositoryImport = () => {
+          onProgress?.({ sourceUrl, status: "imported" });
+          resolve({
+            imported: [{
+              id: "review-internal",
+              name: "Internal Review",
+              description: "Company review workflow",
+              path: "/tmp/library/review-internal",
+              sourceType: "git" as const,
+              source: inputs[0].repository,
+              updatePolicy: "tracked" as const,
+              remoteRef: inputs[0].ref,
+              contentHash: "tree-123",
+              updatedAt: "2026-07-17T00:00:00.000Z"
+            }],
+            failed: []
+          });
+        };
+      });
     });
     const noop = vi.fn();
 
@@ -1265,6 +1272,12 @@ describe("SkillLibraryPanel", () => {
     });
     expect(screen.getByLabelText("Repository scan source")).toHaveTextContent("SSH fallback");
     fireEvent.click(screen.getByRole("button", { name: "Import 1" }));
+    const importingButton = screen.getByRole("button", { name: "Importing..." });
+    expect(importingButton).toHaveAttribute("aria-busy", "true");
+    expect(importingButton.querySelector("svg")).toHaveClass("is-spinning");
+    expect(
+      screen.getByRole("status", { name: "Internal Review: importing" }).querySelector("svg")
+    ).toHaveClass("is-spinning");
     await waitFor(() => expect(onImportRepositorySkills).toHaveBeenCalledWith([
       {
         repository: "https://github.com/acme/agent-skills.git",
@@ -1274,6 +1287,7 @@ describe("SkillLibraryPanel", () => {
         id: "review-internal"
       }
     ], expect.any(Function)));
+    await act(async () => completeRepositoryImport?.());
     expect(await screen.findByText("All 1 skills imported")).toBeInTheDocument();
   });
 

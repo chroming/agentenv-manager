@@ -188,6 +188,7 @@ export interface SkillImportSnapshot {
   version?: string;
   versionSource?: "version" | "metadata.version";
   contentHash: string;
+  modifiedAt?: string;
   sourceType: SkillSourceType;
   source: string;
   upstream?: SkillUpstream;

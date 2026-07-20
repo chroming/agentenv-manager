@@ -775,8 +775,12 @@
 }
 
 .profile-composer-section__management {
+  display: grid;
   gap: 6px;
-  min-width: 116px;
+  grid-template-columns: 34px 58px;
+  justify-content: start;
+  min-width: 98px;
+  width: 98px;
 }
 
 .profile-composer-section__management .ui-switch__track {
@@ -1281,7 +1285,7 @@
   }
 
   .profile-composer-section__management {
-    min-width: 116px;
+    min-width: 98px;
   }
 
   .profile-composer-section__icon {

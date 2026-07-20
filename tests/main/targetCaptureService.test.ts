@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -207,5 +207,35 @@ describe("target capture service v2", () => {
       mode: "ignore",
       selections: []
     });
+  });
+
+  it("warns and skips a broken Trae Skill link without blocking Profile capture", async () => {
+    const { homeDir, service } = await setup("trae-cli");
+    const traeDir = join(homeDir, ".trae");
+    const skillLink = join(traeDir, "skills", "api-mock");
+    await mkdir(join(traeDir, "skills"), { recursive: true });
+    await writeFile(join(traeDir, "AGENTS.md"), "# Trae\n");
+    await symlink("../../.agents/skills/api-mock", skillLink);
+
+    const preview = await service.previewTarget("trae-cli");
+
+    expect(preview.errors).toEqual([]);
+    expect(preview.resources).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      name: "api-mock",
+      sourcePath: skillLink,
+      action: "exclude",
+      detail: "Broken link; skipped"
+    }));
+    expect(preview.warnings).toContain(
+      `Skill api-mock was skipped. Skill link target is unavailable: ${skillLink}`
+    );
+
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "Trae with broken link"
+    });
+    expect(result.profile.resources.skills).toEqual([]);
+    expect((await lstat(skillLink)).isSymbolicLink()).toBe(true);
   });
 });

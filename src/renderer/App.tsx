@@ -5075,9 +5075,14 @@ const AppContent = ({
                       <div><dt>{t("Version")}</dt><dd>{item.version ?? t("Not declared")}</dd></div>
                       <div><dt>{t("Hash")}</dt><dd><code title={item.contentHash}>{item.contentHash.slice(0, 12)}</code></dd></div>
                       <div><dt>{t("Source")}</dt><dd title={item.source}>{item.sourceType === "github" || item.sourceType === "git" ? item.source : t("Local")}</dd></div>
-                      {item.upstream?.updatedAt ? (
-                        <div><dt>{t("Updated")}</dt><dd title={formatDate(item.upstream.updatedAt)}>{formatDate(item.upstream.updatedAt)}</dd></div>
-                      ) : null}
+                      <div>
+                        <dt>{t("Modified")}</dt>
+                        <dd title={item.upstream?.updatedAt ?? item.modifiedAt}>
+                          {item.upstream?.updatedAt || item.modifiedAt
+                            ? formatDate(item.upstream?.updatedAt ?? item.modifiedAt!)
+                            : t("Unknown")}
+                        </dd>
+                      </div>
                       <div><dt>{t("ID")}</dt><dd><code>{item.id}</code></dd></div>
                     </dl>
                   </article>
