@@ -363,12 +363,12 @@ Preview MUST:
 2. Resolve current canonical Skill Library versions and, only for a managed destination policy, the selected native MCP definitions.
 3. Read current Target files and deployment state.
 4. Describe every managed text and resource change.
-5. Group changes as add, replace, remove, preserve, omit, warning, or blocking conflict.
+5. Separate the final effective payload from this Apply's actual add, replace, remove, cleanup, warning, preservation, or blocking effects.
 6. Include destination paths and human-readable resource identities.
 7. Indicate whether the Target is being taken over or switched.
 8. Leave the Target unchanged.
 
-Preview hierarchy MUST put concrete resource identities and actions before secondary filesystem detail. Preserve counts stay in the summary; long preserved paths live in a compact expandable detail section. Resource paths remain available through selectable overflow detail rather than dominating the primary scan path. A resource list that overflows MUST show its total count, a persistent scrollbar, and an explicit remaining-item cue; the default viewport shows at least three complete resource rows without moving the Apply actions out of view. Configuration changes are an explicit summary action that opens and focuses the first collapsed file diff; long diff lines scroll only inside the diff surface and MUST NOT widen the dialog.
+Preview hierarchy MUST name the Profile and Target, then show one of `Ready to apply`, `Review required`, or `Cannot apply` before any evidence. True blockers appear before the change plan. Replaceable Agent drift is a review requirement, not a duplicate blocker, and requires explicit backup-and-replace acknowledgement. `After Apply` describes the final effective Instructions, Skills, and MCP payload; `Changes this Apply` contains only actual mutations grouped by semantic resource type. Concrete identities and actions precede secondary filesystem detail. Full paths remain selectable through hover/focus detail, file diffs expand on their owning rows, and preserved unmanaged items and non-blocking notes remain collapsed after the change plan. Header and footer stay fixed while one dialog body owns vertical scrolling; only large diff content may own nested code scrolling. Preview does not display generation timestamps because freshness is enforced by the stale-preview contract rather than user inspection.
 
 A Preview becomes stale when any of these changes:
 
@@ -828,7 +828,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Text line boxes, icon boxes, and control padding MUST fit inside their controls without vertical clipping.
 - A framed work surface has one edge owner painted above its scrolling children. Toolbars, rows, backgrounds, and scroll regions MUST stay inside that edge and MUST NOT redraw, cover, or visually interrupt any side or corner.
 - Composite icon-and-input controls draw one border on the parent control. Their transparent borderless input remains inside the parent's content box and MUST NOT cover the parent edge at any supported width.
-- Apply Preview keeps its header and footer stable. The modal owns the primary vertical scroll; large resource plans remain bounded, and long diff lines own only their horizontal overflow.
+- Apply Preview keeps its header and footer stable. One modal body owns vertical scrolling; semantic resource groups never create another vertical scroll region, and long diff content owns only its code overflow.
 - Create from Target keeps its step header and action footer visible at both supported viewports. Only the dialog body scrolls; resource groups MUST NOT introduce a second nested scroll region.
 - Menus, tooltips, and dialogs remain above rows and inside the visible viewport.
 - Context menus use one surface, `220px` width, shared item height, icon alignment, and danger treatment. Selection grids such as icon pickers are the only intentional menu-layout exception.
@@ -1105,7 +1105,7 @@ The current machine-readable totals, source commit, dirty state, viewport list, 
 - Claude Code and Antigravity expose Agent-owned MCPs read-only. Antigravity CLI requires `agy`, applies and rolls back `GEMINI.md` and dedicated CLI Skills, transactionally migrates AgentEnv-owned legacy Skill copies, and leaves `mcp_config.json` unchanged.
 - All five built-in adapters expose the same read-only Skill runtime contract. Tests cover direct and recursive discovery, symlink-cycle safety, frontmatter runtime identity, duplicate declarations, Claude plugin ownership, duplicate desired runtime names, Antigravity legacy migration with rollback, and Trae CLI primary and alias runtime locations. Profile Skill On/Off is represented only by managed install presence, never by an Agent configuration switch.
 - GitHub Device Flow respects server polling intervals, absorbs `slow_down` as a longer pending interval, blocks overlapping token requests, and refreshes connected account state after browser authorization.
-- Apply Preview summary cards contain long warning paths at both supported viewports without overlapping adjacent cards; Configuration changes is a keyboard-focusable review action that opens the first collapsed diff without widening the dialog.
+- Apply Preview puts readiness or blocking state first, separates final payload from actual mutations, groups changes by resource meaning, keeps full paths in selectable detail, and opens each file diff on its owning row without widening the dialog. Replaceable drift is shown once as an explicit review requirement.
 - Profile list icon and content columns remain aligned at the minimum viewport, and a deliberately long truncated Profile name keeps the same text origin before and after selection.
 - JSON/JSONC, TOML, YAML, assignment-style, token-prefix, and private-key detection reject new literal credentials; legacy Preview before/after/diff payloads are redacted before reaching the renderer.
 - Drift recovery adopts compatible Instructions and existing managed MCP activation choices into a backed-up Profile while naming excluded native configuration and unmapped items.

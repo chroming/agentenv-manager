@@ -104,6 +104,10 @@ describe("activation service v2", () => {
       paths.globalAgentsPath,
       paths.codexConfigPath
     ]));
+    expect(preview.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: paths.globalAgentsPath, category: "instructions" }),
+      expect.objectContaining({ path: paths.codexConfigPath, category: "mcp" })
+    ]));
     expect(preview.resourceChanges).toContainEqual(expect.objectContaining({
       kind: "skill",
       action: "install",

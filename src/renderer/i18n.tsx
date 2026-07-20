@@ -1367,7 +1367,7 @@ const toTraditionalChinese = (value: string) => {
     "动": "動", "护": "護", "写": "寫", "读": "讀", "并": "並", "仅": "僅",
     "属": "屬", "认": "認", "议": "議", "见": "見", "遗": "遺", "择": "擇",
     "历": "歷", "记": "記", "独": "獨", "暂": "暫", "无": "無",
-    "试": "試", "验": "驗", "灵": "靈"
+    "试": "試", "验": "驗", "灵": "靈", "确": "確"
   };
   let result = value;
   for (const [source, target] of phrases) {
@@ -1375,6 +1375,49 @@ const toTraditionalChinese = (value: string) => {
   }
   return [...result].map((character) => characters[character] ?? character).join("");
 };
+
+Object.assign(zhCN, {
+  "Apply {{profile}} to {{target}}?": "将 {{profile}} 应用到 {{target}}？",
+  "Based on the current {{target}} environment.": "基于 {{target}} 当前环境生成。",
+  "Ready to apply": "可以应用",
+  "Review required": "需要确认",
+  "Cannot apply": "无法应用",
+  "Review the changes below before applying this Profile.": "应用前请检查下方变更。",
+  "Review the changes below before continuing.": "继续前请检查下方变更。",
+  "Existing Agent resources need confirmation before they can be replaced.":
+    "替换现有 Agent 资源前需要你的确认。",
+  "Resolve {{count}} blocking issues before applying this Profile.":
+    "请先解决 {{count}} 个阻断问题，再应用此配置方案。",
+  "Resolve {{count}} blocking issues before continuing.":
+    "请先解决 {{count}} 个阻断问题，再继续。",
+  "Protected Agent changes confirmation": "确认受保护的 Agent 变更",
+  "Back up and replace protected resources": "备份并替换受保护的资源",
+  "Cancel keeps the Agent unchanged.": "取消将保持 Agent 不变。",
+  "After Apply": "应用后",
+  "Instruction files": "指令文件",
+  "Instruction file": "指令文件",
+  "File": "文件",
+  "MCP overrides": "MCP 覆盖项",
+  "Changes this Apply": "本次变更",
+  "Planned changes": "计划变更",
+  "{{count}} changes": "{{count}} 项变更",
+  "More changes below": "下方还有变更",
+  "MCP configuration": "MCP 配置",
+  "Skill storage": "技能存储",
+  "Configuration files": "配置文件",
+  "Full source for {{name}}": "{{name}} 的完整来源",
+  "Full location for {{name}}": "{{name}} 的完整位置",
+  "{{before}} before · {{after}} after": "变更前 {{before}} 行 · 变更后 {{after}} 行",
+  "Install as {{name}}": "安装为 {{name}}",
+  "Remove from this Agent": "从此 Agent 移除",
+  "Full issue detail": "完整问题详情",
+  "Review notes": "检查提示",
+  "Preserved outside this Profile": "保留在此配置方案之外",
+  "A recovery point will be created before changes.": "变更前将自动创建恢复点。",
+  "Resolve blocking issues before Apply.": "解决阻断问题后才能应用。",
+  "Resolve blocking issues before continuing.": "解决阻断问题后才能继续。",
+  "Confirm protected changes to continue.": "确认受保护的变更后继续。"
+});
 
 const zhTW: Record<string, string> = {
   ...Object.fromEntries(

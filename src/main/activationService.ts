@@ -1312,7 +1312,16 @@ export const createActivationService = ({
           : [])
       ],
       errors: previewErrors,
-      changes: targetPreview.changes,
+      changes: targetPreview.changes.map((change) => ({
+        ...change,
+        category:
+          change.path === targetPaths.instructionsPath
+            ? "instructions"
+            : change.path === targetPaths.configPath ||
+                change.path === targetPaths.mcpConfigPath
+              ? "mcp"
+              : "configuration"
+      })),
       resourceChanges: assetPlan.resourceChanges.concat(
         pausedSkillPaths.map((path) => ({
           kind: "skill" as const,

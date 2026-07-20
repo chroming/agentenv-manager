@@ -721,8 +721,29 @@ try {
   await capturePage(page, join(outputDir, "apply-preview-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "apply-preview-920x620.png"));
-  await previewDialog.getByRole("button", { name: "Apply profile" }).click();
+  await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
   await previewDialog.waitFor({ state: "hidden" });
+
+  await writeFile(
+    join(homeDir, ".config", "opencode", "AGENTS.md"),
+    "# Changed outside AgentEnv\n",
+    "utf8"
+  );
+  await page.reload();
+  await page.waitForLoadState("domcontentloaded");
+  await page.getByRole("button", { name: "Profiles", exact: true }).click();
+  await page.getByRole("button", { name: /^Code Review/ }).click();
+  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  const driftPreviewDialog = page.getByRole("dialog", { name: "Preview" });
+  await driftPreviewDialog.waitFor({ state: "visible" });
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "apply-preview-review-required-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "apply-preview-review-required-920x620.png"));
+  await driftPreviewDialog.getByLabel(/Back up and replace protected resources/).check();
+  await driftPreviewDialog.getByRole("button", { name: "Back up and replace" }).click();
+  await driftPreviewDialog.waitFor({ state: "hidden" });
+
   await page.reload();
   await page.waitForLoadState("domcontentloaded");
   await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });

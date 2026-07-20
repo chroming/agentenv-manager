@@ -39,8 +39,7 @@ describe("PreviewDialog", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText("Replace")).toBeInTheDocument();
-    expect(screen.getByText("1 line before")).toBeInTheDocument();
-    expect(screen.getByText("3 lines after")).toBeInTheDocument();
+    expect(screen.getByText("1 before · 3 after")).toBeInTheDocument();
 
     const diff = await screen.findByRole("table", {
       name: "Formatted diff for /tmp/home/.config/opencode/opencode.jsonc"
@@ -54,16 +53,18 @@ describe("PreviewDialog", () => {
     expect(diff.querySelector(".syntax-token")).toBeTruthy();
   });
 
-  it("makes configuration changes an explicit review action", () => {
+  it("keeps each configuration diff attached to its semantic change row", () => {
     render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
 
-    const review = screen.getByRole("button", { name: "Review 1 file" });
-    const details = screen.getByText("/tmp/home/.config/opencode/opencode.jsonc").closest("details");
+    const details = screen.getAllByText("opencode.jsonc")[0].closest("details");
     expect(details).not.toHaveAttribute("open");
 
-    fireEvent.click(review);
+    fireEvent.click(details!.querySelector("summary")!);
 
     expect(details).toHaveAttribute("open");
+    expect(screen.getByRole("table", {
+      name: "Formatted diff for /tmp/home/.config/opencode/opencode.jsonc"
+    })).toBeInTheDocument();
   });
 
   it("shows install, replace, and remove resource operations explicitly", () => {
@@ -80,13 +81,13 @@ describe("PreviewDialog", () => {
       />
     );
 
-    const plan = screen.getByRole("region", { name: "Resource changes" });
-    expect(plan).toHaveTextContent("1 install · 1 replace · 1 remove");
+    const plan = screen.getByRole("region", { name: "Changes this Apply" });
     expect(plan).toHaveTextContent("new-skill");
     expect(plan).toHaveTextContent("shared");
     expect(plan).toHaveTextContent("old.md");
-    expect(screen.getByText("1 install · 1 replace · 1 remove")).toBeInTheDocument();
-    expect(plan.querySelectorAll(".preview-resource-plan__icon")).toHaveLength(3);
+    expect(plan.querySelectorAll(".apply-preview-change-row")).toHaveLength(3);
+    expect(within(plan).getByText("Skills")).toBeInTheDocument();
+    expect(within(plan).getByText("Instructions")).toBeInTheDocument();
   });
 
   it("describes shared Skill changes as final cleanup outcomes", () => {
@@ -111,11 +112,9 @@ describe("PreviewDialog", () => {
     );
 
     expect(screen.getByText("Shared Skill cleanup")).toBeInTheDocument();
-    expect(screen.getByText("1 Skill affected")).toBeInTheDocument();
-    const outcome = screen.getByText("After cleanup: install as reviewer");
+    const outcome = screen.getByText("Install as reviewer");
     expect(outcome).toBeInTheDocument();
-    expect(outcome.closest("p")).toHaveClass("preview-shared-skill-change");
-    expect(outcome.closest("p")).not.toHaveClass("warning");
+    expect(outcome.closest("article")).toHaveClass("apply-preview-change-row");
     expect(screen.queryByText(/preparation|migration decision/i)).not.toBeInTheDocument();
   });
 
@@ -138,11 +137,10 @@ describe("PreviewDialog", () => {
       />
     );
 
-    expect(
-      screen.getByText(
-        "Claude Code will receive 1 instruction file."
-      )
-    ).toBeInTheDocument();
+    const payload = screen.getByRole("region", { name: "After Apply" });
+    expect(payload).toHaveTextContent("1Instruction files");
+    expect(payload).toHaveTextContent("0Skills");
+    expect(payload).toHaveTextContent("0MCP overrides");
   });
 
   it("presents an unmanaged Skill destination as an explicit backup replacement", () => {
@@ -168,14 +166,58 @@ describe("PreviewDialog", () => {
     );
 
     expect(screen.getByText("Existing unmanaged Skill will be replaced")).toBeInTheDocument();
-    expect(screen.getAllByText(path).length).toBeGreaterThan(0);
-    expect(screen.getByText("Existing Agent resources are protected")).toBeInTheDocument();
+    const issueLocation = screen.getByLabelText("Full issue detail");
+    fireEvent.focus(issueLocation);
+    expect(screen.getByText(path)).toBeInTheDocument();
+    expect(screen.getByText("Review required")).toBeInTheDocument();
+    expect(screen.queryByText("Blocking issues")).not.toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("checkbox", {
-        name: "I understand; back up and replace these changes"
+        name: /Back up and replace protected resources/
       })
     );
     expect(onAcknowledgedChange).toHaveBeenCalledWith(true);
+  });
+
+  it("puts true blockers before the change plan", () => {
+    render(
+      <PreviewDialog
+        preview={{
+          ...preview,
+          errors: ["Library Skill does not exist: missing-skill"],
+          resourceChanges: [
+            { kind: "skill", action: "install", name: "missing-skill", path: "/skills/missing-skill" }
+          ]
+        }}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Preview" });
+    const blocker = within(dialog).getByText("Blocking issues").closest("section")!;
+    const changes = within(dialog).getByRole("region", { name: "Changes this Apply" });
+    expect(screen.getByText("Cannot apply")).toBeInTheDocument();
+    expect(blocker.compareDocumentPosition(changes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("separates preserved resources from non-blocking review notes", () => {
+    render(
+      <PreviewDialog
+        preview={{
+          ...preview,
+          warnings: [
+            "Unmanaged local skill kept: /skills/local-only",
+            "Library Skill dormant is globally disabled and will not be applied"
+          ]
+        }}
+      />
+    );
+
+    expect(screen.getByText("Preserved outside this Profile")).toBeInTheDocument();
+    expect(screen.getByText("Review notes")).toBeInTheDocument();
+    expect(screen.getByText("Preserved outside this Profile").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Review notes").parentElement).toHaveTextContent("1");
   });
 
   it("dismisses modal previews with Escape and backdrop clicks", async () => {
@@ -232,7 +274,7 @@ describe("PreviewDialog", () => {
   it("wraps Tab from the last modal control to the first", () => {
     render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = within(dialog).getByRole("button", { name: "Review 1 file" });
+    const firstControl = dialog.querySelector<HTMLElement>("summary")!;
     const lastControl = within(dialog).getByRole("button", { name: "Confirm" });
     lastControl.focus();
 
@@ -244,7 +286,7 @@ describe("PreviewDialog", () => {
   it("wraps Shift+Tab from the first modal control to the last", () => {
     render(<PreviewDialog preview={preview} onCancel={vi.fn()} onConfirm={vi.fn()} />);
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = within(dialog).getByRole("button", { name: "Review 1 file" });
+    const firstControl = dialog.querySelector<HTMLElement>("summary")!;
     const lastControl = within(dialog).getByRole("button", { name: "Confirm" });
     firstControl?.focus();
 
@@ -266,7 +308,7 @@ describe("PreviewDialog", () => {
     );
     const { rerender } = render(renderDialog(false));
     const dialog = screen.getByRole("dialog", { name: "Preview" });
-    const firstControl = within(dialog).getByRole("button", { name: "Review 1 file" });
+    const firstControl = dialog.querySelector<HTMLElement>("summary")!;
     const confirm = within(dialog).getByRole("button", { name: "Confirm" });
     confirm.focus();
 

@@ -4260,13 +4260,14 @@ const AppContent = ({
                       <PreviewDialog
                         preview={preview}
                         targetNames={targetNames}
-                        title={t("Apply preview for {{name}}", {
-                          name: activeTargetName
+                        title={t("Apply {{profile}} to {{target}}?", {
+                          profile: draftProfile.manifest.name,
+                          target: activeTargetName
                         })}
                         confirmLabel={t(
                           replaceProtectedTargetChanges
                             ? "Back up and replace"
-                            : "Apply profile"
+                            : "Apply"
                         )}
                         confirmDisabled={!canApply || busy}
                         confirmBusy={isProfileApplying}

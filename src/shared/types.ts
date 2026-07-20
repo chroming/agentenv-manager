@@ -950,6 +950,7 @@ export interface PlannedFileChange {
   before: string;
   after: string;
   diff: string;
+  category?: "instructions" | "mcp" | "configuration";
 }
 
 export interface PlannedResourceChange {

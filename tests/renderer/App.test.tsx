@@ -2242,7 +2242,7 @@ describe("App", () => {
     fireEvent.click(action);
     await waitFor(() => expect(readyApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     let dialog = screen.getByRole("dialog", { name: "Preview" });
-    expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: /^Apply$/ })).toBeEnabled();
     expect(readyApi.applyProfile).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
@@ -2259,7 +2259,7 @@ describe("App", () => {
     await openProfiles();
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("Ready for OpenCode");
-    action = screen.getByRole("button", { name: "Apply" });
+    action = document.querySelector<HTMLButtonElement>(".profile-apply-button")!;
     expect(action).toHaveAttribute("title", "Preview & apply to OpenCode");
 
     cleanup();
@@ -2294,7 +2294,7 @@ describe("App", () => {
     await waitFor(() => expect(unavailableApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(dialog).toHaveTextContent("opencode CLI not found");
-    expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: /^Apply$/ })).toBeDisabled();
 
     cleanup();
     const invalidProfile = {
@@ -2311,7 +2311,7 @@ describe("App", () => {
     await waitFor(() => expect(invalidApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(dialog).not.toHaveTextContent("Instructions are empty");
-    expect(within(dialog).getByRole("button", { name: "Apply profile" })).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: /^Apply$/ })).toBeEnabled();
 
     cleanup();
     const driftError =
@@ -2326,17 +2326,17 @@ describe("App", () => {
     await openProfiles();
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(driftApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
-    action = screen.getByRole("button", { name: "Apply" });
+    action = document.querySelector<HTMLButtonElement>(".profile-apply-button")!;
     expect(action).toHaveAttribute("title", "Resolve OpenCode drift");
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("Changes need review on OpenCode");
     expect(screen.queryByRole("button", { name: "Review preview" })).not.toBeInTheDocument();
     dialog = screen.getByRole("dialog", { name: "Preview" });
-    const driftConfirm = within(dialog).getByRole("button", { name: "Apply profile" });
+    const driftConfirm = within(dialog).getByRole("button", { name: /^Apply$/ });
     expect(driftConfirm).toBeDisabled();
     expect(within(dialog).getByRole("button", { name: "Open recovery history" })).toBeInTheDocument();
     fireEvent.click(
-      within(dialog).getByLabelText("I understand; back up and replace these changes")
+      within(dialog).getByLabelText(/Back up and replace protected resources/)
     );
     const replaceButton = within(dialog).getByRole("button", { name: "Back up and replace" });
     expect(replaceButton).toBeEnabled();
@@ -2885,7 +2885,10 @@ describe("App", () => {
     await waitFor(() => expect(api.previewRollback).toHaveBeenCalledWith(backup.id));
     const rollbackDialog = screen.getByRole("dialog", { name: "Preview" });
     expect(within(rollbackDialog).getByText("Rollback preview")).toBeInTheDocument();
-    expect(screen.getAllByText("/tmp/home/.config/opencode/AGENTS.md").length).toBeGreaterThan(0);
+    expect(within(rollbackDialog).getAllByText("AGENTS.md").length).toBeGreaterThan(0);
+    expect(
+      within(rollbackDialog).getByLabelText("Full location for AGENTS.md")
+    ).toBeInTheDocument();
 
     expect(within(history).queryByRole("button", { name: "Restore backup" })).not.toBeInTheDocument();
     fireEvent.click(within(rollbackDialog).getByRole("button", { name: "Restore backup" }));

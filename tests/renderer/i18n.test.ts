@@ -25,6 +25,13 @@ describe("renderer i18n", () => {
     expect(translate("zh_TW", "Apply preview for {{name}}", { name: "OpenCode" })).toBe(
       "套用至 OpenCode 的預覽"
     );
+    expect(
+      translate("zh_CN", "Apply {{profile}} to {{target}}?", {
+        profile: "Code Review",
+        target: "OpenCode"
+      })
+    ).toBe("将 Code Review 应用到 OpenCode？");
+    expect(translate("zh_TW", "Review required")).toBe("需要確認");
   });
 
   it("falls back to the source message and exposes stable locale tags", () => {

@@ -665,7 +665,7 @@ const previewAndApply = async (
   await applyActionButton(page, targetName).click();
   const previewDialog = page.getByRole("dialog", { name: "Preview" });
   await previewDialog.waitFor({ state: "visible" });
-  await previewDialog.getByRole("button", { name: "Apply profile" }).click();
+  await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
   await previewDialog.waitFor({ state: "hidden" });
 };
 
@@ -1456,7 +1456,15 @@ describe("Electron UI profile switching e2e", () => {
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
     await expect.poll(() => previewDialog.textContent()).toContain("Library Skill does not exist");
-    await expect.poll(() => previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled())
+    const blockedIssues = previewDialog.locator(".apply-preview-issues--blocked");
+    await expect.poll(() => blockedIssues.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return [...element.children].every((child) => {
+        const childBox = child.getBoundingClientRect();
+        return childBox.top >= box.top && childBox.bottom <= box.bottom + 1;
+      });
+    })).toBe(true);
+    await expect.poll(() => previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled())
       .toBe(true);
     await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
   }, 30_000);
@@ -1810,7 +1818,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() => previewDialog.textContent())
       .toContain("Cannot install ui-alpha-skill because an ignored unmanaged skill already exists");
     await expect
-      .poll(() => previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled())
+      .poll(() => previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled())
       .toBe(true);
   }, 30_000);
 
@@ -1837,11 +1845,19 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => previewDialog.textContent())
       .toContain("OpenCode instructions changed outside AgentEnv");
+    const reviewIssues = previewDialog.locator(".apply-preview-issues--review");
+    await expect.poll(() => reviewIssues.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return box.height >= 72 && [...element.children].every((child) => {
+        const childBox = child.getBoundingClientRect();
+        return childBox.top >= box.top && childBox.bottom <= box.bottom + 1;
+      });
+    })).toBe(true);
     await expect
-      .poll(() => previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled())
+      .poll(() => previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled())
       .toBe(true);
     await previewDialog
-      .getByLabel("I understand; back up and replace these changes")
+      .getByLabel(/Back up and replace protected resources/)
       .check();
     await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
     await previewDialog.waitFor({ state: "hidden" });
@@ -1879,7 +1895,7 @@ describe("Electron UI profile switching e2e", () => {
       "Skill target already exists and is not AgentEnv-owned"
     );
     await previewDialog
-      .getByLabel("I understand; back up and replace these changes")
+      .getByLabel(/Back up and replace protected resources/)
       .check();
     await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
     await previewDialog.waitFor({ state: "hidden" });
@@ -1917,7 +1933,7 @@ describe("Electron UI profile switching e2e", () => {
     await previewDialog.waitFor({ state: "visible" });
     expect(await previewDialog.textContent()).not.toContain(settingsPath);
     expect(await previewDialog.textContent()).not.toContain("bypassPermissions");
-    await previewDialog.getByRole("button", { name: "Apply profile" }).click();
+    await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
 
     await expect(readJson(settingsPath)).resolves.toEqual(nativeSettings);
@@ -1947,10 +1963,12 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => previewDialog.textContent()).toContain(
       "Existing unmanaged Skill will be replaced"
     );
-    await expect.poll(() => previewDialog.textContent()).toContain(targetSkill);
-    expect(await previewDialog.getByRole("button", { name: "Apply profile" }).isDisabled()).toBe(true);
+    await previewDialog.getByLabel("Full issue detail").hover();
+    await expect.poll(() => page.locator(".skill-description-tooltip").textContent())
+      .toContain(targetSkill);
+    expect(await previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled()).toBe(true);
     await previewDialog
-      .getByLabel("I understand; back up and replace these changes")
+      .getByLabel(/Back up and replace protected resources/)
       .check();
     await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
     await previewDialog.waitFor({ state: "hidden" });
@@ -3095,7 +3113,7 @@ describe("Electron UI profile switching e2e", () => {
     }
   }, 30_000);
 
-  it("opens the apply preview at its summary instead of scrolling to the footer", async () => {
+  it("keeps Apply context and actions fixed around one semantic evidence scroller", async () => {
     const { page } = await launchApp({ openCodeAlphaLibrarySkillCount: 8 });
     await resizeAppWindow(page, 1180, 728);
     await selectProfile(page, "UI OpenCode alpha");
@@ -3104,68 +3122,30 @@ describe("Electron UI profile switching e2e", () => {
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
 
-    expect(await previewDialog.evaluate((element) => element.scrollTop)).toBe(0);
     await expectInViewport(page, previewDialog.locator(".preview-header"));
     await expectInViewport(page, previewDialog.locator(".preview-actions"));
-    const summaryGrid = previewDialog.locator(".preview-summary-grid");
-    const resourcePlan = previewDialog.getByRole("region", { name: "Resource changes" });
-    const resourceList = resourcePlan.getByRole("list", {
-      name: "Scrollable resource changes"
-    });
-    const resourceRows = resourceList.locator("article");
-    const resourceCount = await resourceRows.count();
-    expect(resourceCount).toBeGreaterThan(4);
-    await expect.poll(() => resourcePlan.locator("header").textContent())
-      .toContain(`${resourceCount} total`);
+    const body = previewDialog.locator(".apply-preview-body");
+    await previewDialog.locator(".apply-preview-scroll-cue").waitFor({ state: "visible" });
+    const status = previewDialog.getByRole("region", { name: "Ready to apply" });
+    const changes = previewDialog.getByRole("region", { name: "Changes this Apply" });
+    const [statusBox, changesBox] = await Promise.all([
+      status.boundingBox(),
+      changes.boundingBox()
+    ]);
+    expect(statusBox).not.toBeNull();
+    expect(changesBox).not.toBeNull();
+    expect(statusBox!.y).toBeLessThan(changesBox!.y);
+    expect(await changes.locator(".apply-preview-change-row").count()).toBeGreaterThan(4);
 
-    const resourceGeometry = await resourceList.evaluate((list) => {
-      const listBox = list.getBoundingClientRect();
-      const visibleRows = [...list.querySelectorAll("article")].filter((row) => {
-        const rowBox = row.getBoundingClientRect();
-        return rowBox.top >= listBox.top - 1 && rowBox.bottom <= listBox.bottom + 1;
-      }).length;
-      return {
-        visibleRows,
-        listHeight: listBox.height,
-        planHeight: list.closest(".preview-resource-plan")?.getBoundingClientRect().height,
-        dialogHeight: list.closest(".preview-dialog")?.getBoundingClientRect().height,
-        diffHeight: list.closest(".preview-dialog")?.querySelector(".diff-list")?.getBoundingClientRect().height
-      };
-    });
-    expect(resourceGeometry.visibleRows, JSON.stringify(resourceGeometry)).toBeGreaterThanOrEqual(3);
-    await resourcePlan.locator(".preview-resource-plan__more").waitFor({ state: "visible" });
-    await resourceList.evaluate((list) => {
-      list.scrollTop = list.scrollHeight;
-      list.dispatchEvent(new Event("scroll", { bubbles: true }));
-    });
-    await resourcePlan.locator(".preview-resource-plan__more").waitFor({ state: "hidden" });
-    await resourceList.evaluate((list) => {
-      list.scrollTop = 0;
-      list.dispatchEvent(new Event("scroll", { bubbles: true }));
-    });
-    await resourcePlan.locator(".preview-resource-plan__more").waitFor({ state: "visible" });
-    await expect.poll(() => summaryGrid.evaluate((element) => getComputedStyle(element).alignItems))
-      .toBe("start");
-    const summaryCardAlignment = await previewDialog
-      .locator(".preview-summary-card")
-      .evaluateAll((cards) => cards.map((card) => getComputedStyle(card).alignSelf));
-    expect(summaryCardAlignment.length).toBeGreaterThan(0);
-    expect(summaryCardAlignment.every((alignment) => alignment === "start")).toBe(true);
-    const configurationReview = previewDialog.getByRole("button", {
-      name: /Review \d+ files?/
-    });
-    await configurationReview.click();
-    const firstConfigurationChange = previewDialog.locator(".diff-list details").first();
-    await expect.poll(() => firstConfigurationChange.getAttribute("open")).not.toBeNull();
-    await expect.poll(() => firstConfigurationChange.locator("summary").evaluate(
-      (summary) => document.activeElement === summary
-    )).toBe(true);
-    await expectInViewport(page, firstConfigurationChange.locator("summary"));
-    await previewDialog.evaluate((dialog) => { dialog.scrollTop = 0; });
+    const firstFileChange = previewDialog.locator(".apply-preview-file-change").first();
+    if (await firstFileChange.count()) {
+      await firstFileChange.locator("summary").click();
+      await expect.poll(() => firstFileChange.getAttribute("open")).not.toBeNull();
+    }
 
     const expectPreviewGeometry = async () => {
       const cancelButton = previewDialog.getByRole("button", { name: "Cancel" });
-      const confirmButton = previewDialog.getByRole("button", { name: "Apply profile" });
+      const confirmButton = previewDialog.getByRole("button", { name: "Apply", exact: true });
       const [cancelBox, confirmBox] = await Promise.all([
         cancelButton.boundingBox(),
         confirmButton.boundingBox()
@@ -3174,7 +3154,6 @@ describe("Electron UI profile switching e2e", () => {
       expect(confirmBox).not.toBeNull();
       expect(Math.round(cancelBox!.height)).toBe(40);
       expect(Math.abs(cancelBox!.height - confirmBox!.height)).toBeLessThanOrEqual(1);
-      expect(Math.abs(cancelBox!.width - confirmBox!.width)).toBeLessThanOrEqual(1);
       await expectInViewport(page, previewDialog.locator(".preview-header"));
       await expectInViewport(page, previewDialog.locator(".preview-actions"));
 
@@ -3186,12 +3165,15 @@ describe("Electron UI profile switching e2e", () => {
             Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
           return lineHeight + verticalPadding <= (element as HTMLElement).clientHeight + 1;
         };
-        const resourceRows = [...dialog.querySelectorAll<HTMLElement>(".preview-resource-plan article")];
+        const body = dialog.querySelector<HTMLElement>(".apply-preview-body");
+        const resourceRows = [...dialog.querySelectorAll<HTMLElement>(".apply-preview-change-row")];
         return {
           buttonsFitText: [...dialog.querySelectorAll(".preview-actions button")].every(textFits),
           dialogOverflow: dialog.scrollWidth - dialog.clientWidth,
+          dialogOverflowY: getComputedStyle(dialog).overflowY,
+          bodyOverflowY: body ? getComputedStyle(body).overflowY : "missing",
           resourceRows: resourceRows.map((row) => row.getBoundingClientRect().height),
-          summaryCardsFit: [...dialog.querySelectorAll<HTMLElement>(".preview-summary-card")].every(
+          statusFits: [...dialog.querySelectorAll<HTMLElement>(".apply-preview-status")].every(
             (card) => {
               const box = card.getBoundingClientRect();
               return (
@@ -3212,12 +3194,26 @@ describe("Electron UI profile switching e2e", () => {
       });
       expect(geometry.buttonsFitText).toBe(true);
       expect(geometry.dialogOverflow).toBeLessThanOrEqual(1);
+      expect(geometry.dialogOverflowY).toBe("hidden");
+      expect(geometry.bodyOverflowY).toBe("auto");
       expect(geometry.resourceRows.length).toBeGreaterThan(0);
-      expect(geometry.resourceRows.every((height) => height >= 49)).toBe(true);
-      expect(geometry.summaryCardsFit).toBe(true);
+      expect(geometry.resourceRows.every((height) => height >= 47)).toBe(true);
+      expect(geometry.statusFits).toBe(true);
     };
 
     await expectPreviewGeometry();
+    const [headerBefore, footerBefore] = await Promise.all([
+      previewDialog.locator(".preview-header").boundingBox(),
+      previewDialog.locator(".preview-actions").boundingBox()
+    ]);
+    await body.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await previewDialog.locator(".apply-preview-scroll-cue").waitFor({ state: "hidden" });
+    const [headerAfter, footerAfter] = await Promise.all([
+      previewDialog.locator(".preview-header").boundingBox(),
+      previewDialog.locator(".preview-actions").boundingBox()
+    ]);
+    expect(headerAfter?.y).toBe(headerBefore?.y);
+    expect(footerAfter?.y).toBe(footerBefore?.y);
     await resizeAppWindow(page, 920, 620);
     await expectPreviewGeometry();
   }, 30_000);
@@ -4102,9 +4098,9 @@ describe("Electron UI profile switching e2e", () => {
     const preparationPreview = page.getByRole("dialog", { name: "Preview" });
     await expect.poll(() => preparationPreview.textContent()).toContain("Shared Skill cleanup");
     await expect.poll(() => preparationPreview.textContent()).toContain(
-      `After cleanup: install as ${skillId}`
+      `Install as ${skillId}`
     );
-    await preparationPreview.getByRole("button", { name: "Apply profile" }).click();
+    await preparationPreview.getByRole("button", { name: "Apply", exact: true }).click();
     await preparationPreview.waitFor({ state: "hidden" });
     await expect(fileExists(join(opencodeDir, "skills", skillId))).resolves.toBe(false);
 
@@ -6135,10 +6131,10 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
-    const resourceChanges = previewDialog.getByRole("region", { name: "Resource changes" });
+    const resourceChanges = previewDialog.getByRole("region", { name: "Changes this Apply" });
     await expect.poll(() => resourceChanges.textContent()).toContain("layout-skill-1");
-    await expect.poll(() => resourceChanges.textContent()).toContain("remove");
-    await previewDialog.getByRole("button", { name: "Apply profile" }).click();
+    await expect.poll(() => resourceChanges.textContent()).toContain("Remove");
+    await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
 
@@ -6671,7 +6667,7 @@ describe("Electron UI profile switching e2e", () => {
 
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
-    await previewDialog.getByRole("button", { name: "Apply profile" }).click();
+    await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
 
     await expect(readFile(join(codexDir, "AGENTS.md"), "utf8")).resolves.toContain(
