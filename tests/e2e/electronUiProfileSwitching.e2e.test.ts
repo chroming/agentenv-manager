@@ -2086,6 +2086,21 @@ describe("Electron UI profile switching e2e", () => {
 
   it("keeps menus, dialogs, and info tips inside the visible app window", async () => {
     const { page } = await launchApp();
+    const electronApp = app;
+    if (!electronApp) throw new Error("Electron application is not running");
+    await electronApp.evaluate(({ ipcMain }) => {
+      const state = globalThis as typeof globalThis & {
+        __agentEnvContextMenuRequests?: unknown[][];
+      };
+      state.__agentEnvContextMenuRequests = [];
+      ipcMain.removeHandler("menu:open-context");
+      ipcMain.handle("menu:open-context", (_event, items: unknown[]) => {
+        state.__agentEnvContextMenuRequests?.push(items);
+        return items.some((item) =>
+          Boolean(item && typeof item === "object" && (item as { id?: string }).id === "settings")
+        ) ? "settings" : undefined;
+      });
+    });
     await page.setViewportSize({ width: 1180, height: 728 });
 
     await page.locator(".skill-description").first().hover();
@@ -2128,12 +2143,23 @@ describe("Electron UI profile switching e2e", () => {
 
     const selectedProfileRow = page.getByRole("group", { name: "Profile UI OpenCode alpha" });
     await selectedProfileRow.click({ button: "right" });
-    const actionsMenu = page.getByRole("menu", { name: "Profile actions" });
-    await actionsMenu.waitFor({ state: "visible" });
-    expect(await actionsMenu.getAttribute("class")).toContain("profile-context-menu");
-    await expectInViewport(page, actionsMenu);
-    await page.mouse.click(240, 120);
-    await actionsMenu.waitFor({ state: "hidden" });
+    await expect.poll(() => electronApp.evaluate(() => {
+      const state = globalThis as typeof globalThis & {
+        __agentEnvContextMenuRequests?: unknown[][];
+      };
+      return state.__agentEnvContextMenuRequests?.length ?? 0;
+    })).toBe(1);
+    const profileContextMenu = await electronApp.evaluate(() => {
+      const state = globalThis as typeof globalThis & {
+        __agentEnvContextMenuRequests?: Array<Array<{ id?: string; label?: string; type?: string }>>;
+      };
+      return state.__agentEnvContextMenuRequests?.[0];
+    });
+    expect(profileContextMenu).toEqual([
+      { id: "duplicate", label: "Duplicate profile" },
+      { type: "separator" },
+      { id: "delete", label: "Delete profile" }
+    ]);
 
     await expandComposerSection(page, "Skills");
     await openProfileSkillPicker(page);
@@ -2147,15 +2173,23 @@ describe("Electron UI profile switching e2e", () => {
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
     await sharedRow.click({ button: "right" });
-    const rowMenu = page.getByRole("menu", { name: "Actions for shared-reviewer" });
-    await rowMenu.waitFor({ state: "visible" });
-    await expectInViewport(page, rowMenu);
-    await expectTopmost(rowMenu);
-    await rowMenu.getByRole("menuitem", { name: "Update settings" }).click();
     const updateSettings = page.getByRole("dialog", {
       name: "Update settings for shared-reviewer"
     });
     await updateSettings.waitFor({ state: "visible" });
+    const skillContextMenu = await electronApp.evaluate(() => {
+      const state = globalThis as typeof globalThis & {
+        __agentEnvContextMenuRequests?: Array<Array<{ id?: string; label?: string; type?: string }>>;
+      };
+      return state.__agentEnvContextMenuRequests?.[1];
+    });
+    expect(skillContextMenu?.map((item) => item.id ?? item.type)).toEqual([
+      "update",
+      "availability",
+      "settings",
+      "separator",
+      "remove"
+    ]);
     await expectInViewport(page, updateSettings);
     await expectTopmost(updateSettings);
     await updateSettings.locator(".info-tip").hover();
@@ -6812,6 +6846,7 @@ describe("Electron UI profile switching e2e", () => {
             copyBox.left >= rowBox.left &&
             controlBox.right <= rowBox.right + 1 &&
             row.scrollWidth <= row.clientWidth + 1,
+          height: controlBox.height,
           overlaps: !(
             copyBox.right <= controlBox.left ||
             controlBox.right <= copyBox.left ||
@@ -6823,6 +6858,16 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(preferenceGeometry.length).toBeGreaterThanOrEqual(5);
     expect(preferenceGeometry.every((row) => row.contained && !row.overlaps)).toBe(true);
+    expect(preferenceGeometry.every((row) => Math.abs(row.height - 34) <= 1)).toBe(true);
+    const settingsActionHeights = await page
+      .locator(
+        ".settings-data-actions button, .backup-settings-row > button, .backup-settings-row > select, .github-settings-actions button, .github-device-actions button"
+      )
+      .evaluateAll((controls) =>
+        controls.map((control) => (control as HTMLElement).getBoundingClientRect().height)
+      );
+    expect(settingsActionHeights.length).toBeGreaterThanOrEqual(4);
+    expect(settingsActionHeights.every((height) => Math.abs(height - 34) <= 1)).toBe(true);
 
     await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("button", { name: "Scan local" }).click();

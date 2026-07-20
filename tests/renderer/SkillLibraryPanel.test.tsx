@@ -13,10 +13,16 @@ import type {
 
 afterEach(() => {
   cleanup();
+  Reflect.deleteProperty(window, "agentEnv");
 });
 
 describe("SkillLibraryPanel", () => {
   it("keeps the skill list clean and routes secondary workflows through drawers and row actions", async () => {
+    const openContextMenu = vi.fn().mockResolvedValue("settings");
+    Object.defineProperty(window, "agentEnv", {
+      configurable: true,
+      value: { openContextMenu }
+    });
     const onImportUnmanaged = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
     const onScanGitHubSkills = vi.fn().mockResolvedValue({
       owner: "acme",
@@ -592,19 +598,17 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseLeave(descriptionTooltip);
     await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
     fireEvent.contextMenu(sharedRow, { clientX: 320, clientY: 240 });
-    const contextMenu = screen.getByRole("menu", { name: "Actions for shared-reviewer" });
-    expect(within(contextMenu).getByRole("menuitem", { name: "Update settings" }))
-      .toBeInTheDocument();
-    expect(within(contextMenu).getByRole("menuitem", { name: "Disable globally" }))
-      .toBeInTheDocument();
-    expect(within(contextMenu).getByRole("menuitem", { name: "Remove from library" }))
-      .toBeInTheDocument();
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("menu", { name: "Actions for shared-reviewer" }))
-      .not.toBeInTheDocument();
-    await waitFor(() => expect(
-      within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" })
-    ).toHaveFocus());
+    expect(openContextMenu).toHaveBeenCalledWith([
+      { id: "update", label: "Preview update" },
+      { id: "availability", label: "Disable globally", enabled: true },
+      { id: "settings", label: "Update settings" },
+      { type: "separator" },
+      { id: "remove", label: "Remove from library" }
+    ]);
+    const settingsDialog = await screen.findByRole("dialog", {
+      name: "Update settings for shared-reviewer"
+    });
+    fireEvent.click(within(settingsDialog).getByRole("button", { name: "Close" }));
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
     expect(
       within(githubRow).getByRole("button", { name: "Review update github-reviewer" })

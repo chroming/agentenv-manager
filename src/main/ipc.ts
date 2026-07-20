@@ -1,4 +1,12 @@
-import { BrowserWindow, clipboard, dialog, ipcMain, shell } from "electron";
+import {
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  shell,
+  type MenuItemConstructorOptions
+} from "electron";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import type { ActivationService } from "./activationService";
 import type { BackupMaintenanceService } from "./backupMaintenanceService";
@@ -41,6 +49,7 @@ import { isTargetInstalled } from "../shared/targetHealth";
 import { isExternalSkillImportable } from "../shared/skillIdentity";
 import type { MutationCoordinator } from "./mutationCoordinator";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
+import { parseDesktopContextMenuItems } from "../shared/desktopContextMenu";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -171,6 +180,33 @@ export const registerIpcHandlers = ({
 
   ipcMain.handle("clipboard:write-text", (_event, text: unknown) => {
     clipboard.writeText(String(text));
+  });
+  ipcMain.handle("menu:open-context", (event, value: unknown) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) return undefined;
+    const items = parseDesktopContextMenuItems(value);
+
+    return new Promise<string | undefined>((resolveSelection) => {
+      let resolved = false;
+      const finish = (selection?: string) => {
+        if (resolved) return;
+        resolved = true;
+        resolveSelection(selection);
+      };
+      const template: MenuItemConstructorOptions[] = items.map((item) =>
+        "type" in item
+          ? { type: "separator" }
+          : {
+              label: item.label,
+              enabled: item.enabled,
+              click: () => finish(item.id)
+            }
+      );
+      Menu.buildFromTemplate(template).popup({
+        window,
+        callback: () => setImmediate(() => finish())
+      });
+    });
   });
   ipcMain.handle("dialog:select-skill-folder", async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);

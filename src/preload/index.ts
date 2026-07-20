@@ -11,6 +11,7 @@ const api: AgentEnvApi = {
   setWindowCloseGuard: (enabled) => ipcRenderer.send("window:set-close-guard", enabled),
   confirmWindowClose: () => ipcRenderer.send("window:confirm-close"),
   cancelWindowClose: () => ipcRenderer.send("window:cancel-close"),
+  openContextMenu: (items) => ipcRenderer.invoke("menu:open-context", items),
   copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),
   listSupportedTargets: () => ipcRenderer.invoke("targets:list-supported"),

@@ -26,6 +26,7 @@ import type {
   ProfileResources,
   ResourceIconKey
 } from "./schemas";
+import type { DesktopContextMenuItem } from "./desktopContextMenu";
 
 export interface AgentEnvApi {
   readonly platform: string;
@@ -33,6 +34,7 @@ export interface AgentEnvApi {
   setWindowCloseGuard(enabled: boolean): void;
   confirmWindowClose(): void;
   cancelWindowClose(): void;
+  openContextMenu(items: DesktopContextMenuItem[]): Promise<string | undefined>;
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
   listSupportedTargets(): Promise<TargetDescriptor[]>;

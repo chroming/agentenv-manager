@@ -66,8 +66,15 @@
 }
 
 .backup-settings-row > select {
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
   min-width: 158px;
   width: 158px;
+}
+
+.backup-settings-row > button {
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
 }
 
 .backup-settings-icon {
@@ -516,6 +523,8 @@
 
 .settings-preference-row > select,
 .settings-preference-row > .settings-readonly-value {
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
   justify-self: end;
   max-width: 320px;
   width: 100%;
@@ -578,12 +587,14 @@
 
 .settings-interval-control {
   display: block;
+  height: var(--control-height-default);
   position: relative;
   width: 138px;
 }
 
 .settings-interval-control input {
-  min-height: 36px;
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
   padding-right: 42px;
   width: 100%;
 }
@@ -630,6 +641,12 @@
 .github-settings-actions {
   flex: 0 0 auto;
   justify-content: flex-end;
+}
+
+.github-settings-actions button,
+.github-device-actions button {
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
 }
 
 .github-settings-section .primary-button {

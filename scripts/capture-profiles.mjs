@@ -786,6 +786,22 @@ try {
     "settings",
     () => page.getByRole("region", { name: "Settings", exact: true })
   );
+  const settingsScroller = page.locator(".editor-panel");
+  await settingsScroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await page.waitForTimeout(150);
+  await capturePage(page, join(outputDir, "settings-controls-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await settingsScroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await page.waitForTimeout(150);
+  await capturePage(page, join(outputDir, "settings-controls-1180x728.png"));
+  await settingsScroller.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await setWindowSize(page, windowHandle, 920, 620);
   await page.getByLabel("Interface language").selectOption("zh_CN");
   await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-zh-cn-920x620.png"));

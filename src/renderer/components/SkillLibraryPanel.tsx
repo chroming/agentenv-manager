@@ -1,5 +1,4 @@
 import {
-  type MouseEvent as ReactMouseEvent,
   type RefObject,
   useEffect,
   useLayoutEffect,
@@ -61,6 +60,7 @@ import type {
   SkillUpdatePlan,
   SkillUpdateSourceInput
 } from "../../shared/types";
+import type { DesktopContextMenuItem } from "../../shared/desktopContextMenu";
 import { InfoTip } from "./InfoTip";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { ResourceIconPicker } from "./ResourceIconPicker";
@@ -111,6 +111,15 @@ export interface PreparedSkillTarget {
   targetName: string;
   disposition: "install" | "omit";
 }
+
+type SkillMenuAction = "update" | "availability" | "settings" | "merge" | "remove";
+
+const isSkillMenuAction = (value: string): value is SkillMenuAction =>
+  value === "update" ||
+  value === "availability" ||
+  value === "settings" ||
+  value === "merge" ||
+  value === "remove";
 
 interface SkillLibraryPanelProps {
   isLoading?: boolean;
@@ -756,21 +765,6 @@ export const SkillLibraryPanel = ({
         : belowTop;
     setOpenAction({ id: skillId, left, top });
   };
-  const openActionMenuAtPointer = (
-    skillId: string,
-    event: ReactMouseEvent<HTMLDivElement>
-  ) => {
-    event.preventDefault();
-    const row = event.currentTarget;
-    const fallback = row.querySelector<HTMLElement>(".library-actions-cell .icon-action");
-    actionReturnFocusRef.current = fallback ?? row;
-    const rect = row.getBoundingClientRect();
-    setOpenAction({
-      id: skillId,
-      left: event.clientX || rect.left + 24,
-      top: event.clientY || rect.top + 24
-    });
-  };
   const advancedFilterCount = [sourceFilter, targetFilter, usageFilter].filter(
     (value) => value !== "all"
   ).length;
@@ -787,6 +781,77 @@ export const SkillLibraryPanel = ({
       }
     } finally {
       setAvailabilityOperation(undefined);
+    }
+  };
+  const runSkillMenuAction = (
+    skill: SkillLibraryEntry,
+    action: SkillMenuAction,
+    returnFocus?: HTMLElement | null
+  ) => {
+    const fallback = returnFocus ?? document.querySelector<HTMLElement>(
+      `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
+    );
+    actionReturnFocusRef.current = fallback;
+    modalFallbackFocusRef.current = fallback;
+    setOpenAction(undefined);
+
+    if (action === "update") {
+      onPreviewLibrarySkillUpdate(skill.id);
+    } else if (action === "availability") {
+      if (skill.globallyEnabled !== false) {
+        setDisableCandidate(skill);
+      } else {
+        void runAvailabilityChange({ id: skill.id, enabled: true });
+      }
+    } else if (action === "settings") {
+      setSourceCandidate(skill);
+    } else if (action === "merge") {
+      void openMergePreview(skill);
+    } else {
+      setDeleteCandidate(skill);
+    }
+  };
+  const skillContextMenuItems = (skill: SkillLibraryEntry): DesktopContextMenuItem[] => {
+    const globallyEnabled = skill.globallyEnabled !== false;
+    const updateInfo = updatesById.get(skill.id);
+    const hasUpdate = globallyEnabled && skill.updatePolicy === "tracked" &&
+      Boolean(updateInfo?.updateAvailable);
+    const hasUpdateSource = Boolean(skill.source);
+    const duplicateCount = skillNameCounts.get(
+      skill.name.normalize("NFKC").trim().toLowerCase()
+    ) ?? 0;
+    return [
+      ...(globallyEnabled && hasUpdateSource && skill.updatePolicy === "tracked"
+        ? [{
+            id: "update",
+            label: t(hasUpdate ? "Preview update" : "Check update")
+          } satisfies DesktopContextMenuItem]
+        : []),
+      {
+        id: "availability",
+        label: t(globallyEnabled ? "Disable globally" : "Enable globally"),
+        enabled: !availabilityOperation
+      },
+      { id: "settings", label: t("Update settings") },
+      ...(duplicateCount > 1
+        ? [{
+            id: "merge",
+            label: t("Merge duplicates"),
+            enabled: !mergeOperation
+          } satisfies DesktopContextMenuItem]
+        : []),
+      { type: "separator" },
+      { id: "remove", label: t("Remove from library") }
+    ];
+  };
+  const openSkillContextMenu = async (
+    skill: SkillLibraryEntry,
+    row: HTMLDivElement
+  ) => {
+    const fallback = row.querySelector<HTMLElement>(".library-actions-cell .icon-action") ?? row;
+    const selection = await window.agentEnv.openContextMenu(skillContextMenuItems(skill));
+    if (selection && isSkillMenuAction(selection)) {
+      runSkillMenuAction(skill, selection, fallback);
     }
   };
   const cleanupGroups = useMemo(
@@ -1527,7 +1592,10 @@ export const SkillLibraryPanel = ({
                 key={skill.id}
                 role="group"
                 onContextMenu={(event) => {
-                  if (!availabilityIsChanging) openActionMenuAtPointer(skill.id, event);
+                  event.preventDefault();
+                  if (!availabilityIsChanging) {
+                    void openSkillContextMenu(skill, event.currentTarget);
+                  }
                 }}
               >
                 <div className="library-resource-cell">
@@ -1728,13 +1796,7 @@ export const SkillLibraryPanel = ({
                               className="row-action-item"
                               type="button"
                               role="menuitem"
-                              onClick={() => {
-                                modalFallbackFocusRef.current = document.querySelector(
-                                  `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
-                                );
-                                onPreviewLibrarySkillUpdate(skill.id);
-                                setOpenAction(undefined);
-                              }}
+                              onClick={() => runSkillMenuAction(skill, "update")}
                             >
                               <RefreshCw size={14} strokeWidth={2.2} />
                               <span>{t(hasUpdate ? "Preview update" : "Check update")}</span>
@@ -1745,17 +1807,7 @@ export const SkillLibraryPanel = ({
                             type="button"
                             role="menuitem"
                             disabled={Boolean(availabilityOperation)}
-                            onClick={() => {
-                              if (globallyEnabled) {
-                                modalFallbackFocusRef.current = document.querySelector(
-                                  `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
-                                );
-                                setDisableCandidate(skill);
-                              } else {
-                                void runAvailabilityChange({ id: skill.id, enabled: true });
-                              }
-                              setOpenAction(undefined);
-                            }}
+                            onClick={() => runSkillMenuAction(skill, "availability")}
                           >
                             <Power size={14} strokeWidth={2.2} />
                             <span>{t(globallyEnabled ? "Disable globally" : "Enable globally")}</span>
@@ -1764,13 +1816,7 @@ export const SkillLibraryPanel = ({
                             className="row-action-item"
                             type="button"
                             role="menuitem"
-                            onClick={() => {
-                              modalFallbackFocusRef.current = document.querySelector(
-                                `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
-                              );
-                              setSourceCandidate(skill);
-                              setOpenAction(undefined);
-                            }}
+                            onClick={() => runSkillMenuAction(skill, "settings")}
                           >
                             <Settings2 size={14} strokeWidth={2.2} />
                             <span>{t("Update settings")}</span>
@@ -1781,12 +1827,7 @@ export const SkillLibraryPanel = ({
                               type="button"
                               role="menuitem"
                               disabled={Boolean(mergeOperation)}
-                              onClick={() => {
-                                modalFallbackFocusRef.current = document.querySelector(
-                                  `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
-                                );
-                                void openMergePreview(skill);
-                              }}
+                              onClick={() => runSkillMenuAction(skill, "merge")}
                             >
                               {mergeOperation === "loading" ? (
                                 <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
@@ -1800,13 +1841,7 @@ export const SkillLibraryPanel = ({
                             className="row-action-item row-action-item--danger"
                             type="button"
                             role="menuitem"
-                            onClick={() => {
-                              modalFallbackFocusRef.current = document.querySelector(
-                                `[aria-label="More actions for ${CSS.escape(skill.id)}"]`
-                              );
-                              setDeleteCandidate(skill);
-                              setOpenAction(undefined);
-                            }}
+                            onClick={() => runSkillMenuAction(skill, "remove")}
                           >
                             <Trash2 size={14} strokeWidth={2.2} />
                             <span>{t("Remove from library")}</span>

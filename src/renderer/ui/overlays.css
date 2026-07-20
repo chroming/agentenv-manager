@@ -333,12 +333,6 @@
   white-space: nowrap;
 }
 
-.profile-context-menu {
-  position: fixed;
-  right: auto;
-  z-index: var(--z-popover);
-}
-
 .profile-dialog-header,
 .preview-header,
 .capture-dialog__header,
