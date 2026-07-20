@@ -5447,7 +5447,7 @@ button svg,
   }
 
   .profile-composer-section__trigger {
-    grid-template-columns: 38px minmax(0, 1fr) auto;
+    grid-template-columns: 38px minmax(0, 1fr) 54px;
   }
 
   .profile-readiness-strip {

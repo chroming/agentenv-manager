@@ -20,6 +20,7 @@ describe("ProfileComposerSection", () => {
         title="Skills"
         description="Choose reusable capabilities"
         count={2}
+        enabledCount={1}
         chipNames={["Reviewer", "Planner"]}
         managed
         managementLabel="Manage Skills for OpenCode"
@@ -41,7 +42,7 @@ describe("ProfileComposerSection", () => {
     expect(panel).toHaveAttribute("id", panelId);
     expect(panel).toHaveAttribute("aria-labelledby", trigger.id);
     expect(trigger).toHaveAccessibleDescription(
-      "Choose reusable capabilities 2 Reviewer Planner"
+      "Choose reusable capabilities 1 of 2 enabled Reviewer Planner"
     );
     expect(screen.getByTestId("section-icon")).toBeInTheDocument();
 
@@ -57,6 +58,7 @@ describe("ProfileComposerSection", () => {
         title="MCP Servers"
         description="Connect shared tools"
         count={6}
+        enabledCount={4}
         chipNames={["Context7", "Filesystem", "Context7", "GitHub", "Figma", "Slack"]}
         managed={false}
         managementLabel="Manage MCPs for OpenCode"
@@ -77,9 +79,11 @@ describe("ProfileComposerSection", () => {
     expect(chips.map((chip) => chip.textContent)).toEqual(["Context7", "Filesystem"]);
     expect(chips.every((chip) => chip.getAttribute("title") === chip.textContent)).toBe(true);
     expect(within(summary!).getByText("+3")).toBeInTheDocument();
-    expect(screen.getByText("6", { selector: ".profile-composer-section__count" })).toBeVisible();
+    const count = document.querySelector(".profile-composer-section__count");
+    expect(count).toHaveAttribute("title", "4 of 6 enabled");
+    expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("4/6");
     expect(trigger).toHaveAccessibleDescription(
-      "Connect shared tools 6 Context7 Filesystem +3"
+      "Connect shared tools 4 of 6 enabled Context7 Filesystem +3"
     );
   });
 
@@ -92,6 +96,7 @@ describe("ProfileComposerSection", () => {
           title="Skills"
           description="Choose skills"
           count={1}
+          enabledCount={1}
           chipNames={["Reviewer"]}
           managed
           managementLabel="Manage Skills for OpenCode"
@@ -107,6 +112,7 @@ describe("ProfileComposerSection", () => {
           title="MCP Servers"
           description="Choose servers"
           count={1}
+          enabledCount={0}
           chipNames={["Context7"]}
           managed
           managementLabel="Manage MCPs for OpenCode"
@@ -151,6 +157,7 @@ describe("ProfileComposerSection", () => {
         title="Instructions"
         description="Set the operating guidance"
         count={1}
+        enabledCount={1}
         chipNames={["AGENTS.md"]}
         managed
         managementLabel="Manage Instructions for OpenCode"
@@ -185,6 +192,7 @@ describe("ProfileComposerSection", () => {
         title="Skills"
         description="Choose skills"
         count={3}
+        enabledCount={2}
         chipNames={["Reviewer"]}
         managed={false}
         managementLabel="Manage Skills for OpenCode"
@@ -199,7 +207,9 @@ describe("ProfileComposerSection", () => {
     const management = screen.getByRole("switch", { name: "Manage Skills for OpenCode" });
     expect(management).toHaveAttribute("aria-checked", "false");
     expect(management).toHaveTextContent("Manage");
-    expect(screen.getByText("3", { selector: ".profile-composer-section__count" })).toBeVisible();
+    const count = document.querySelector(".profile-composer-section__count");
+    expect(count).toHaveAttribute("title", "2 of 3 enabled");
+    expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("2/3");
 
     fireEvent.click(management);
 

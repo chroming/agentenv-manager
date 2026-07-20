@@ -2454,30 +2454,48 @@ export const SkillLibraryPanel = ({
         >
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact"
+            className="profile-form-dialog profile-form-dialog--compact skill-availability-dialog"
             role="dialog"
             aria-label={t("Disable library skill")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">
-                  {t("Disable {{name}} globally?", { name: disableCandidate.name })}
-                </div>
-                <p className="muted">
-                  {(skillUsage[disableCandidate.id] ?? []).length > 0
-                    ? t(
-                        (skillUsage[disableCandidate.id] ?? []).length === 1
-                          ? "This skill stays in Library and in 1 Profile, but it will be excluded from Apply. Its managed Agent installs are removed the next time that Profile is applied."
-                          : "This skill stays in Library and in {{count}} Profiles, but it will be excluded from Apply. Managed Agent installs are removed the next time each Profile is applied.",
-                        { count: (skillUsage[disableCandidate.id] ?? []).length }
-                      )
-                    : t("This skill stays in Library but cannot be added to or applied by Profiles until it is enabled again.")}
-                </p>
-              </div>
+            <header className="skill-availability-dialog__header">
+              <span className="skill-availability-dialog__icon" aria-hidden="true">
+                <CircleSlash2 size={18} strokeWidth={2.2} />
+              </span>
+              <span>
+                <strong>{t("Disable skill?")}</strong>
+                <small>{disableCandidate.name}</small>
+              </span>
             </header>
-            <footer className="preview-actions">
+            <div className="skill-availability-dialog__effects" role="list">
+              <span role="listitem">
+                <CheckCircle2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                {t("Keep in Library")}
+              </span>
+              <span role="listitem">
+                <CircleSlash2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                {t("Hide from Profile selection")}
+              </span>
+              {(skillUsage[disableCandidate.id] ?? []).length > 0 ? (
+                <span role="listitem">
+                  <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
+                  {t("Remove managed installs on next Apply")}
+                </span>
+              ) : null}
+            </div>
+            {(skillUsage[disableCandidate.id] ?? []).length > 0 ? (
+              <p className="skill-availability-dialog__usage">
+                {t(
+                  (skillUsage[disableCandidate.id] ?? []).length === 1
+                    ? "1 Profile references this skill."
+                    : "{{count}} Profiles reference this skill.",
+                  { count: (skillUsage[disableCandidate.id] ?? []).length }
+                )}
+              </p>
+            ) : null}
+            <footer className="preview-actions skill-availability-dialog__actions">
               <button
                 ref={modalInitialFocusRef}
                 className="secondary-action"

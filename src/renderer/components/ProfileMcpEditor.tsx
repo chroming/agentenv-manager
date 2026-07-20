@@ -82,7 +82,10 @@ export const ProfileMcpEditor = ({
   return (
     <div className="profile-mcp-editor">
       <div className="profile-mcp-toolbar">
-        <span>{t("{{count}} MCPs", { count: rows.length })}</span>
+        <span>{t("{{count}} in {{name}}", {
+          count: targetConnections.length,
+          name: target.name
+        })}</span>
         <span className="profile-mcp-toolbar__actions">
           {!canManage && policy.mode === "manage" ? (
             <button
@@ -140,7 +143,7 @@ export const ProfileMcpEditor = ({
                   </strong>
                   <small>
                     {duplicate
-                      ? t("Defined in multiple Agent files · Unchanged")
+                      ? t("Defined in multiple Agent files · Agent controlled")
                       : missing
                       ? mode === "on"
                         ? t("Missing in Agent · Apply blocked")
@@ -151,13 +154,13 @@ export const ProfileMcpEditor = ({
                 </span>
                 {!managing ? null : canManage && connection.controllable ? (
                   <select
-                    className="profile-mcp-mode"
+                    className={`profile-mcp-mode${mode === "agent" ? " is-agent-setting" : " is-profile-override"}`}
                     aria-label={t("{{name}} Profile behavior", { name: connection.name })}
                     value={mode}
                     disabled={!managing}
                     onChange={(event) => updateMode(connection.name, event.target.value as McpSelectionMode)}
                   >
-                    <option value="agent">{t("Unchanged")}</option>
+                    <option value="agent">{t("Use Agent setting")}</option>
                     <option value="on">{t("On")}</option>
                     <option value="off">{t("Off")}</option>
                   </select>

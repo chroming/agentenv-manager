@@ -10,6 +10,7 @@
 @import "./pages/settings.css" layer(pages);
 @import "./pages/library-import.css" layer(pages);
 @import "./pages/skills.css" layer(pages);
+@import "./pages/skills-dialogs.css" layer(pages);
 @import "./pages/profiles.css" layer(pages);
 @import "./pages/profile-mcp.css" layer(pages);
 @import "./pages/profile-composer.css" layer(pages);

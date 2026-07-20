@@ -4098,7 +4098,8 @@ const AppContent = ({
                         icon={<BookOpenText size={18} strokeWidth={2.2} />}
                         title={t("Instructions")}
                         description={t("Agent instructions and rule files")}
-                        count={resourceSummary?.instructions.count ?? 0}
+                        count={resourceSummary?.instructions.total ?? 0}
+                        enabledCount={resourceSummary?.instructions.count ?? 0}
                         chipNames={
                           resourceSummary?.instructions.count
                             ? [
@@ -4145,7 +4146,8 @@ const AppContent = ({
                         icon={<Database size={18} strokeWidth={2.2} />}
                         title={t("Skills")}
                         description={t("Reusable skills and workflows")}
-                        count={resourceSummary?.skills.count ?? 0}
+                        count={resourceSummary?.skills.total ?? 0}
+                        enabledCount={resourceSummary?.skills.count ?? 0}
                         chipNames={resourceSummary?.skills.names ?? []}
                         managed={Boolean(
                           profileTarget?.capabilities.skills && resourceSummary?.skills.managed
@@ -4199,7 +4201,8 @@ const AppContent = ({
                         description={t(
                           "External tools and service connections"
                         )}
-                        count={resourceSummary?.mcp.count ?? 0}
+                        count={resourceSummary?.mcp.total ?? 0}
+                        enabledCount={resourceSummary?.mcp.count ?? 0}
                         chipNames={resourceSummary?.mcp.names ?? []}
                         managed={Boolean(
                           profileTarget?.capabilities.mcpActivation && resourceSummary?.mcp.managed

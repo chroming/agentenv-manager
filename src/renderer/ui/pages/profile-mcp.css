@@ -98,6 +98,24 @@
   width: 100%;
 }
 
+.profile-mcp-mode.is-agent-setting {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.profile-mcp-mode.is-agent-setting:hover,
+.profile-mcp-mode.is-agent-setting:focus-visible {
+  background: var(--surface-muted);
+  border-color: var(--border);
+}
+
+.profile-mcp-mode.is-profile-override {
+  border-color: #b9cff3;
+  color: var(--text);
+  font-weight: 650;
+}
+
 .profile-mcp-readonly,
 .profile-mcp-agent-state {
   white-space: nowrap;

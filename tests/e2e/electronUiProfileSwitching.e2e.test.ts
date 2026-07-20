@@ -2757,6 +2757,33 @@ describe("Electron UI profile switching e2e", () => {
       }));
       expect(heroContent.description).not.toBe("none");
       expect(heroContent.meta).not.toBe("none");
+
+      const composerCountGeometry = await page
+        .locator(".profile-composer-section__count")
+        .evaluateAll((counts) =>
+          counts.map((count) => {
+            const visual = count.querySelector<HTMLElement>(
+              ".profile-composer-section__count-visual"
+            );
+            const box = count.getBoundingClientRect();
+            const visualBox = visual?.getBoundingClientRect();
+            return {
+              left: box.left,
+              width: box.width,
+              visualFits:
+                Boolean(visualBox) &&
+                visualBox!.left >= box.left - 1 &&
+                visualBox!.right <= box.right + 1
+            };
+          })
+        );
+      expect(composerCountGeometry).toHaveLength(3);
+      const firstCount = composerCountGeometry[0];
+      for (const count of composerCountGeometry) {
+        expect(count.left).toBeCloseTo(firstCount.left, 1);
+        expect(count.width).toBeCloseTo(54, 1);
+        expect(count.visualFits).toBe(true);
+      }
     };
 
     await expectCommitActionsToFit();
@@ -3379,6 +3406,7 @@ describe("Electron UI profile switching e2e", () => {
 
     const editor = page.locator(".profile-mcp-editor");
     await editor.waitFor({ state: "visible" });
+    await expect.poll(() => editor.getByText("4 in OpenCode", { exact: true }).count()).toBe(1);
     const sharedDocsControl = page.getByLabel("shared-docs Profile behavior");
     await sharedDocsControl.scrollIntoViewIfNeeded();
     await expectInViewport(page, sharedDocsControl);
@@ -3391,6 +3419,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByLabel("ui-alpha-mcp Profile behavior").inputValue()).toBe("on");
     expect(await page.getByLabel("ui-beta-mcp Profile behavior").inputValue()).toBe("off");
     expect(await page.getByLabel("shared-docs Profile behavior").inputValue()).toBe("on");
+    const agentOwnedControl = page.getByLabel("user-managed Profile behavior");
+    expect(await agentOwnedControl.inputValue()).toBe("agent");
+    expect(await agentOwnedControl.locator('option[value="agent"]').textContent())
+      .toBe("Use Agent setting");
   }, 30_000);
 
   it("keeps resource management on the Composer rows and persists it per Agent", async () => {
@@ -3412,7 +3444,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(await instructionsSwitch.getAttribute("aria-checked")).toBe("true");
     expect(await skillsSwitch.getAttribute("aria-checked")).toBe("true");
     expect(await mcpSwitch.getAttribute("aria-checked")).toBe("true");
-    expect(await mcpRow.textContent()).toContain("2");
+    expect(await instructionsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
+    expect(await skillsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
+    expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
 
     await instructionsSwitch.click();
     await skillsSwitch.click();
@@ -3421,7 +3455,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await instructionsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await skillsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
-    expect(await mcpRow.textContent()).toContain("2");
+    expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
     expect(await composer.getByText("Manage", { exact: true }).count()).toBe(3);
 
     await saveProfile(page);
@@ -6030,6 +6064,33 @@ describe("Electron UI profile switching e2e", () => {
     await libraryRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
     await page.getByRole("menuitem", { name: /Disable globally/ }).click();
     const disableDialog = page.getByRole("dialog", { name: "Disable library skill" });
+    await expect.poll(() => disableDialog.getByText("Disable skill?", { exact: true }).count())
+      .toBe(1);
+    expect(await disableDialog.getByRole("listitem").count()).toBe(3);
+    const disableDialogGeometry = await disableDialog.evaluate((dialog) => {
+      const box = dialog.getBoundingClientRect();
+      const title = dialog.querySelector<HTMLElement>(".skill-availability-dialog__header strong")!;
+      const actions = [...dialog.querySelectorAll<HTMLElement>(".skill-availability-dialog__actions button")];
+      return {
+        actionsContained: actions.every((action) => {
+          const actionBox = action.getBoundingClientRect();
+          return actionBox.left >= box.left && actionBox.right <= box.right;
+        }),
+        actionHeights: actions.map((action) => Math.round(action.getBoundingClientRect().height)),
+        contained: dialog.scrollWidth <= dialog.clientWidth + 1,
+        titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
+        titleTransform: getComputedStyle(title).textTransform,
+        width: Math.round(box.width)
+      };
+    });
+    expect(disableDialogGeometry).toMatchObject({
+      actionsContained: true,
+      contained: true,
+      titleTransform: "none"
+    });
+    expect(new Set(disableDialogGeometry.actionHeights).size).toBe(1);
+    expect(disableDialogGeometry.titleFontSize).toBeGreaterThanOrEqual(16);
+    expect(disableDialogGeometry.width).toBeLessThanOrEqual(440);
     await disableDialog.getByRole("button", { name: "Disable globally" }).click();
     await disableDialog.waitFor({ state: "hidden" });
     await page.mouse.move(8, 8);

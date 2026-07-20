@@ -9,6 +9,7 @@ export interface ProfileComposerSectionProps {
   title: string;
   description: string;
   count: number;
+  enabledCount: number;
   chipNames: string[];
   managed: boolean;
   managementDisabled?: boolean;
@@ -26,6 +27,7 @@ export const ProfileComposerSection = ({
   title,
   description,
   count,
+  enabledCount,
   chipNames,
   managed,
   managementDisabled = false,
@@ -47,6 +49,10 @@ export const ProfileComposerSection = ({
   const uniqueChipNames = [...new Set(chipNames)];
   const visibleChipNames = uniqueChipNames.slice(0, 2);
   const overflowCount = Math.max(0, uniqueChipNames.length - visibleChipNames.length);
+  const countLabel = t("{{enabled}} of {{total}} enabled", {
+    enabled: enabledCount,
+    total: count
+  });
 
   return (
     <section
@@ -75,8 +81,17 @@ export const ProfileComposerSection = ({
               {description}
             </span>
           </span>
-          <span className="profile-composer-section__count" id={countId}>
-            {count}
+          <span
+            className="profile-composer-section__count"
+            id={countId}
+            title={countLabel}
+          >
+            <span className="profile-composer-section__count-label">{countLabel}</span>
+            <span className="profile-composer-section__count-visual" aria-hidden="true">
+              <strong>{enabledCount}</strong>
+              <span>/</span>
+              <span>{count}</span>
+            </span>
           </span>
           <span className="profile-composer-section__summary" id={summaryId}>
             {visibleChipNames.map((chipName, index) => (

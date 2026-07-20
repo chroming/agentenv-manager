@@ -1,0 +1,80 @@
+.skill-availability-dialog {
+  gap: 14px;
+  max-width: 440px;
+  overflow: hidden;
+}
+
+.skill-availability-dialog__header {
+  align-items: center;
+  display: grid;
+  gap: 11px;
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.skill-availability-dialog__header > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.skill-availability-dialog__header strong {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 21px;
+}
+
+.skill-availability-dialog__header small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-availability-dialog__icon {
+  align-items: center;
+  background: var(--surface-muted);
+  border-radius: 7px;
+  color: var(--muted);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.skill-availability-dialog__effects {
+  border-bottom: 1px solid var(--border-soft);
+  border-top: 1px solid var(--border-soft);
+  display: grid;
+  padding: 5px 0;
+}
+
+.skill-availability-dialog__effects > span {
+  align-items: center;
+  color: var(--text-secondary);
+  display: grid;
+  font-size: 12px;
+  gap: 9px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  line-height: 18px;
+  min-height: 32px;
+  padding: 4px 6px;
+}
+
+.skill-availability-dialog__effects svg {
+  color: var(--muted);
+  justify-self: center;
+}
+
+.skill-availability-dialog__usage {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  margin: -4px 6px 0;
+}
+
+.skill-availability-dialog__actions {
+  padding-top: 12px;
+}

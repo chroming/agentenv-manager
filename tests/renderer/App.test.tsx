@@ -685,7 +685,10 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
     expect(screen.getByText("Preferred: OpenCode")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
-    expect(within(composer).getByRole("button", { name: "MCPs" })).toBeInTheDocument();
+    const emptyMcpRow = within(composer).getByRole("button", { name: "MCPs" });
+    expect(emptyMcpRow).toBeInTheDocument();
+    expect(emptyMcpRow.querySelector('.profile-composer-section__count'))
+      .toHaveAttribute("title", "0 of 0 enabled");
     expect(within(composer).queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
     for (const oldTab of ["Overview", "Instructions", "Config", "Resources", "Validation"]) {
       expect(screen.queryByRole("tab", { name: oldTab })).not.toBeInTheDocument();
@@ -696,7 +699,7 @@ describe("App", () => {
     fireEvent.click(within(composer).getByRole("button", { name: "MCPs" }));
     expect(within(composer).getByRole("switch", { name: "Manage MCPs for OpenCode" }))
       .toHaveTextContent("Manage");
-    expect(screen.getByText("0 MCPs")).toBeInTheDocument();
+    expect(screen.getByText("0 in OpenCode")).toBeInTheDocument();
   });
 
   it("renders Library Skills before startup discovery and update checks finish", async () => {
@@ -1286,6 +1289,14 @@ describe("App", () => {
     fireEvent.click(await screen.findByRole("switch", { name: "Manage MCPs for OpenCode" }));
     const behavior = await screen.findByLabelText("context7 Profile behavior");
     expect(behavior).toHaveValue("agent");
+    expect(within(behavior).getByRole("option", { name: "Use Agent setting" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(api.saveProfile).toHaveBeenCalled());
+    expect(
+      vi.mocked(api.saveProfile).mock.calls.at(-1)?.[0].resources.mcpByTarget.opencode
+    ).toEqual({ mode: "manage", selections: [] });
+    vi.mocked(api.saveProfile).mockClear();
+
     fireEvent.change(behavior, { target: { value: "off" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -1421,7 +1432,7 @@ describe("App", () => {
     const row = (await screen.findByText("docs", {
       selector: ".profile-mcp-name"
     })).closest(".profile-mcp-row");
-    expect(row).toHaveTextContent("Defined in multiple Agent files · Unchanged");
+    expect(row).toHaveTextContent("Defined in multiple Agent files · Agent controlled");
     expect(screen.queryByLabelText("docs Profile behavior")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Remove override" }));
     expect(screen.getByText("Agent controlled")).toBeInTheDocument();

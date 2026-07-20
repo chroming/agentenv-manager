@@ -535,6 +535,12 @@ try {
     state: "visible"
   });
   await capturePage(page, join(outputDir, "skills-actions-920x620.png"));
+  await page.getByRole("menuitem", { name: "Disable globally" }).click();
+  const disableSkillDialog = page.getByRole("dialog", { name: "Disable library skill" });
+  await disableSkillDialog.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-disable-confirmation-920x620.png"));
+  await page.keyboard.press("Escape");
+  await skillActionsButton.click();
   await page.getByRole("menuitem", { name: "Update settings" }).click();
   const updateSettingsDialog = page.getByRole("dialog", {
     name: "Update settings for react-best-practices"

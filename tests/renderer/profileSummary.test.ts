@@ -48,13 +48,14 @@ describe("Profile summaries", () => {
       { id: "paused", globallyEnabled: true },
       { id: "hidden", globallyEnabled: false }
     ] as never[])).toEqual({
-      instructions: { count: 1, managed: true },
-      skills: { count: 1, names: ["review"], managed: true },
-      mcp: { count: 1, names: ["docs"], managed: true }
+      instructions: { count: 1, total: 1, managed: true },
+      skills: { count: 1, total: 3, names: ["review"], managed: true },
+      mcp: { count: 1, total: 2, names: ["docs"], managed: true }
     });
 
     expect(summarizeProfile(profile, { id: "codex" }).mcp).toEqual({
       count: 0,
+      total: 0,
       names: [],
       managed: false
     });
@@ -83,9 +84,9 @@ describe("Profile summaries", () => {
       { id: "paused", globallyEnabled: true },
       { id: "hidden", globallyEnabled: false }
     ] as never[])).toEqual({
-      instructions: { count: 1, managed: false },
-      skills: { count: 1, names: ["review"], managed: false },
-      mcp: { count: 1, names: ["docs"], managed: false }
+      instructions: { count: 1, total: 1, managed: false },
+      skills: { count: 1, total: 3, names: ["review"], managed: false },
+      mcp: { count: 1, total: 2, names: ["docs"], managed: false }
     });
   });
 

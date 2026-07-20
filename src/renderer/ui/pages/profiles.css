@@ -764,7 +764,7 @@
 .profile-composer-section__trigger,
 .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
   gap: 10px;
-  grid-template-columns: 30px minmax(140px, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: 30px minmax(140px, 1fr) 54px minmax(0, 1fr);
   min-height: 52px;
   padding: 6px 12px;
 }
@@ -824,9 +824,36 @@
 .profile-composer-section__count {
   background: transparent;
   color: var(--muted);
+  display: inline-flex;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
   line-height: 22px;
-  min-width: 22px;
+  min-width: 54px;
+  width: 54px;
+  white-space: nowrap;
+}
+
+.profile-composer-section__count-label {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.profile-composer-section__count-visual {
+  align-items: baseline;
+  display: inline-grid;
+  gap: 3px;
+  grid-template-columns: minmax(10px, auto) auto minmax(10px, auto);
+}
+
+.profile-composer-section__count-visual strong {
+  color: var(--text-secondary);
+  font: inherit;
 }
 
 .profile-composer-section[data-profile-composer-id="instructions"]
@@ -1279,7 +1306,7 @@
 
   .profile-composer-section__trigger,
   .profile-composer:not(:has(.profile-composer-section.is-expanded)) .profile-composer-section__trigger {
-    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-columns: 32px minmax(0, 1fr) 54px;
     min-height: 52px;
     padding-block: 6px;
   }

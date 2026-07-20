@@ -723,7 +723,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /Disable globally/ }));
     const disableDialog = screen.getByRole("dialog", { name: "Disable library skill" });
     expect(disableDialog).toHaveTextContent("1 Profile");
-    expect(disableDialog).toHaveTextContent("removed the next time that Profile is applied");
+    expect(disableDialog).toHaveTextContent("Remove managed installs on next Apply");
     fireEvent.click(within(disableDialog).getByRole("button", { name: "Disable globally" }));
     expect(onSetAvailability).toHaveBeenCalledWith({ id: "shared-reviewer", enabled: false });
     expect(within(sharedRow).getByText("Disabling...")).toBeInTheDocument();

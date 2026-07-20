@@ -37,6 +37,19 @@ afterEach(async () => {
 });
 
 describe("profile store v2", () => {
+  it("creates a blank Profile without adopting native Agent resources", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-create-"));
+
+    const created = await createProfileStore({ appDataRoot: root }).createProfile({
+      preferredTargetId: "opencode",
+      name: "Blank workspace",
+      description: "Start without captured resources"
+    });
+
+    expect(created.instructions).toBe("");
+    expect(created.resources).toEqual({ skills: [], mcpByTarget: {} });
+  });
+
   it("lists valid profiles with per-target hashes", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-profile-v2-"));
     await writeProfile(root);

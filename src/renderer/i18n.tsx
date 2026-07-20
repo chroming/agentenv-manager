@@ -43,6 +43,7 @@ const zhCN: Record<string, string> = {
   "Loading MCP connections...": "正在载入 MCP 连接...",
   "No MCP connections are configured in {{name}}.":
     "{{name}} 中未配置 MCP 连接。",
+  "{{count}} in {{name}}": "{{name}} 中有 {{count}} 个",
   "Could not inspect MCP connections": "无法读取 MCP 连接",
   "Retry": "重试",
   "Setup required": "需要设置",
@@ -53,6 +54,8 @@ const zhCN: Record<string, string> = {
   "Agent controlled": "由 Agent 控制",
   "Defined in multiple Agent files · Unchanged":
     "在多个 Agent 文件中重复定义 · 保持不变",
+  "Defined in multiple Agent files · Agent controlled":
+    "在多个 Agent 文件中重复定义 · 由 Agent 控制",
   "Manage only the MCP switches selected below. Definitions and credentials stay in the Agent.":
     "仅管理下方选中的 MCP 开关；定义和凭据仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":
@@ -63,6 +66,7 @@ const zhCN: Record<string, string> = {
   "Managed by Profile": "由配置方案管理",
   "Leave unchanged": "保持不变",
   "Unchanged": "保持不变",
+  "{{enabled}} of {{total}} enabled": "已开启 {{enabled}} / {{total}}",
   "Remove override": "移除覆盖设置",
   "Expand {{name}}": "展开 {{name}}",
   "Collapse {{name}}": "收起 {{name}}",
@@ -198,6 +202,12 @@ const zhCN: Record<string, string> = {
   "Enable this skill in Library first": "请先在资源库中启用此技能",
   "{{name}} is disabled in Library": "{{name}} 已在资源库中停用",
   "Disable library skill": "停用资源库技能",
+  "Disable skill?": "停用技能？",
+  "Keep in Library": "保留在资源库",
+  "Hide from Profile selection": "从配置方案选择器中隐藏",
+  "Remove managed installs on next Apply": "下次应用时移除托管安装",
+  "1 Profile references this skill.": "1 个配置方案引用此技能。",
+  "{{count}} Profiles reference this skill.": "{{count}} 个配置方案引用此技能。",
   "Disable {{name}} globally?": "在所有配置中停用 {{name}}？",
   "Disable globally": "全局停用",
   "Enable globally": "全局启用",
@@ -1396,6 +1406,7 @@ const zhTW: Record<string, string> = {
   "Loading MCP connections...": "正在載入 MCP 連線...",
   "No MCP connections are configured in {{name}}.":
     "{{name}} 中未設定 MCP 連線。",
+  "{{count}} in {{name}}": "{{name}} 中有 {{count}} 個",
   "Setup required": "需要設定",
   "On in Agent": "Agent 中已開啟",
   "Off in Agent": "Agent 中已關閉",
@@ -1404,6 +1415,8 @@ const zhTW: Record<string, string> = {
   "Agent controlled": "由 Agent 控制",
   "Defined in multiple Agent files · Unchanged":
     "在多個 Agent 檔案中重複定義 · 保持不變",
+  "Defined in multiple Agent files · Agent controlled":
+    "在多個 Agent 檔案中重複定義 · 由 Agent 控制",
   "Manage only the MCP switches selected below. Definitions and credentials stay in the Agent.":
     "僅管理下方選取的 MCP 開關；定義與憑證仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":
@@ -1414,6 +1427,7 @@ const zhTW: Record<string, string> = {
   "Managed by Profile": "由設定檔管理",
   "Leave unchanged": "保持不變",
   "Unchanged": "保持不變",
+  "{{enabled}} of {{total}} enabled": "已開啟 {{enabled}} / {{total}}",
   "Remove override": "移除覆寫設定",
   "Expand {{name}}": "展開 {{name}}",
   "Collapse {{name}}": "收起 {{name}}",
@@ -1468,6 +1482,12 @@ const zhTW: Record<string, string> = {
   "Enable this skill in Library first": "請先在資源庫中啟用此技能",
   "{{name}} is disabled in Library": "{{name}} 已在資源庫中停用",
   "Disable library skill": "停用資源庫技能",
+  "Disable skill?": "停用技能？",
+  "Keep in Library": "保留在資源庫",
+  "Hide from Profile selection": "從設定檔選擇器中隱藏",
+  "Remove managed installs on next Apply": "下次套用時移除受管安裝",
+  "1 Profile references this skill.": "1 個設定檔引用此技能。",
+  "{{count}} Profiles reference this skill.": "{{count}} 個設定檔引用此技能。",
   "Disable {{name}} globally?": "在所有設定檔中停用 {{name}}？",
   "Disable globally": "全域停用",
   "Enable globally": "全域啟用",
