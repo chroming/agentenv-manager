@@ -36,6 +36,55 @@
   }
 }
 
+.ui-hover-detail {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-soft);
+  color: var(--text);
+  cursor: text;
+  font-family: inherit;
+  font-size: var(--font-size-metadata);
+  font-weight: 400;
+  line-height: 1.5;
+  max-height: min(240px, calc(100vh - 24px));
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 9px 10px;
+  pointer-events: auto;
+  position: fixed;
+  text-align: left;
+  text-transform: none;
+  user-select: text;
+  white-space: pre-wrap;
+  width: max-content;
+  z-index: var(--z-tooltip);
+}
+
+.ui-hover-detail--arrow::after {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-strong);
+  border-right: 1px solid var(--border-strong);
+  content: "";
+  height: 7px;
+  left: var(--hover-detail-arrow-left, 24px);
+  position: absolute;
+  transform: translateX(-50%) rotate(45deg);
+  width: 7px;
+}
+
+.ui-hover-detail--top.ui-hover-detail--arrow::after {
+  bottom: -5px;
+}
+
+.ui-hover-detail--bottom.ui-hover-detail--arrow::after {
+  border-bottom: 0;
+  border-right: 0;
+  border-left: 1px solid var(--border-strong);
+  border-top: 1px solid var(--border-strong);
+  top: -5px;
+}
+
 .resource-icon-trigger {
   --resource-icon-artwork-size: 18px;
   align-items: center;
@@ -282,6 +331,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.profile-context-menu {
+  position: fixed;
+  right: auto;
+  z-index: var(--z-popover);
 }
 
 .profile-dialog-header,

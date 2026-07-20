@@ -1,4 +1,5 @@
 import {
+  type MouseEvent as ReactMouseEvent,
   type RefObject,
   useEffect,
   useLayoutEffect,
@@ -454,6 +455,7 @@ export const SkillLibraryPanel = ({
   const importFallbackFocusRef = useRef<HTMLElement>(null);
   const modalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const modalFallbackFocusRef = useRef<HTMLElement>(null);
+  const actionReturnFocusRef = useRef<HTMLElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const updatesById = new Map(skillUpdates.map((update) => [update.id, update]));
   const skillsById = new Map(librarySkills.map((skill) => [skill.id, skill]));
@@ -587,8 +589,10 @@ export const SkillLibraryPanel = ({
       setOpenAction((current) =>
         current?.id === openActionId ? { ...current, left: nextLeft, top: nextTop } : current
       );
+      return;
     }
-  }, [openActionId]);
+    popover.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
+  }, [openAction?.left, openAction?.top, openActionId]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") {
@@ -599,6 +603,7 @@ export const SkillLibraryPanel = ({
       }
       if (openActionId) {
         setOpenAction(undefined);
+        window.requestAnimationFrame(() => actionReturnFocusRef.current?.focus());
         return;
       }
       if (filtersOpen) {
@@ -739,6 +744,7 @@ export const SkillLibraryPanel = ({
       return;
     }
 
+    actionReturnFocusRef.current = button;
     const rect = button.getBoundingClientRect();
     const popoverWidth = Math.min(220, window.innerWidth - 32);
     const estimatedHeight = 190;
@@ -749,6 +755,21 @@ export const SkillLibraryPanel = ({
         ? Math.max(16, rect.top - estimatedHeight - 8)
         : belowTop;
     setOpenAction({ id: skillId, left, top });
+  };
+  const openActionMenuAtPointer = (
+    skillId: string,
+    event: ReactMouseEvent<HTMLDivElement>
+  ) => {
+    event.preventDefault();
+    const row = event.currentTarget;
+    const fallback = row.querySelector<HTMLElement>(".library-actions-cell .icon-action");
+    actionReturnFocusRef.current = fallback ?? row;
+    const rect = row.getBoundingClientRect();
+    setOpenAction({
+      id: skillId,
+      left: event.clientX || rect.left + 24,
+      top: event.clientY || rect.top + 24
+    });
   };
   const advancedFilterCount = [sourceFilter, targetFilter, usageFilter].filter(
     (value) => value !== "all"
@@ -1505,6 +1526,9 @@ export const SkillLibraryPanel = ({
                 className={`library-table-row${globallyEnabled ? "" : " is-globally-disabled"}`}
                 key={skill.id}
                 role="group"
+                onContextMenu={(event) => {
+                  if (!availabilityIsChanging) openActionMenuAtPointer(skill.id, event);
+                }}
               >
                 <div className="library-resource-cell">
                   <ResourceIconPicker

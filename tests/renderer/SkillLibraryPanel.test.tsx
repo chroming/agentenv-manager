@@ -591,6 +591,20 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("Review code");
     fireEvent.mouseLeave(descriptionTooltip);
     await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+    fireEvent.contextMenu(sharedRow, { clientX: 320, clientY: 240 });
+    const contextMenu = screen.getByRole("menu", { name: "Actions for shared-reviewer" });
+    expect(within(contextMenu).getByRole("menuitem", { name: "Update settings" }))
+      .toBeInTheDocument();
+    expect(within(contextMenu).getByRole("menuitem", { name: "Disable globally" }))
+      .toBeInTheDocument();
+    expect(within(contextMenu).getByRole("menuitem", { name: "Remove from library" }))
+      .toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Actions for shared-reviewer" }))
+      .not.toBeInTheDocument();
+    await waitFor(() => expect(
+      within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" })
+    ).toHaveFocus());
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
     expect(
       within(githubRow).getByRole("button", { name: "Review update github-reviewer" })

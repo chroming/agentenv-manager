@@ -1,4 +1,11 @@
-import type { RefObject } from "react";
+import {
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState
+} from "react";
+import { createPortal } from "react-dom";
 import { Monitor, Search, TriangleAlert } from "lucide-react";
 import type {
   LibraryResourceVersions,
@@ -17,6 +24,7 @@ import {
 } from "../profileSummary";
 import { targetIconFor } from "./ProfileSidebar";
 import { OverflowTooltip } from "./OverflowTooltip";
+import { ProfileActionsMenu } from "./ProfileActionsMenu";
 import { ResourceIconPicker } from "./ResourceIconPicker";
 
 interface ProfileListProps {
@@ -31,6 +39,9 @@ interface ProfileListProps {
   profileLibraryVersions: Record<string, LibraryResourceVersions>;
   targets: TargetInfo[];
   targetStates: TargetManagementState[];
+  actionsDisabled?: boolean;
+  onDelete(profileId: string, returnFocus: HTMLElement): void;
+  onDuplicate(profileId: string): void;
   onSearchChange(value: string): void;
   onSelect(profileId: string): void;
   onIconChange(profileId: string, iconKey: ResourceIconKey): void;
@@ -48,11 +59,21 @@ export const ProfileList = ({
   profileLibraryVersions,
   targets,
   targetStates,
+  actionsDisabled = false,
+  onDelete,
+  onDuplicate,
   onSearchChange,
   onSelect,
   onIconChange
 }: ProfileListProps) => {
   const { t } = useI18n();
+  const [contextMenu, setContextMenu] = useState<{
+    profileId: string;
+    left: number;
+    top: number;
+  }>();
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const contextReturnFocusRef = useRef<HTMLElement>(null);
   const normalizedSearch = search.trim().toLowerCase();
   const visibleProfiles = profiles
     .filter((profile) =>
@@ -60,6 +81,53 @@ export const ProfileList = ({
       `${profile.name} ${profile.description}`.toLowerCase().includes(normalizedSearch)
     )
     .sort(compareProfilesByCreationTime);
+
+  const closeContextMenu = (restoreFocus = false) => {
+    setContextMenu(undefined);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => contextReturnFocusRef.current?.focus());
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const rect = contextMenuRef.current.getBoundingClientRect();
+    const margin = 12;
+    const left = Math.min(
+      Math.max(contextMenu.left, margin),
+      Math.max(margin, window.innerWidth - rect.width - margin)
+    );
+    const top = Math.min(
+      Math.max(contextMenu.top, margin),
+      Math.max(margin, window.innerHeight - rect.height - margin)
+    );
+    if (left !== contextMenu.left || top !== contextMenu.top) {
+      setContextMenu((current) => current ? { ...current, left, top } : current);
+      return;
+    }
+    contextMenuRef.current.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) closeContextMenu();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeContextMenu(true);
+    };
+    const handleViewportChange = () => closeContextMenu();
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [contextMenu]);
 
   return (
     <aside className="profile-index" aria-label={t("Profile list")}>
@@ -105,6 +173,19 @@ export const ProfileList = ({
               key={profile.id}
               role="group"
               aria-label={t("Profile {{name}}", { name: profile.name })}
+              onContextMenu={(event) => {
+                if (isBroken || actionsDisabled) return;
+                event.preventDefault();
+                const row = event.currentTarget;
+                const content = row.querySelector<HTMLElement>(".profile-row__content") ?? row;
+                const rect = row.getBoundingClientRect();
+                contextReturnFocusRef.current = content;
+                setContextMenu({
+                  profileId: profile.id,
+                  left: event.clientX || rect.left + 24,
+                  top: event.clientY || rect.top + 24
+                });
+              }}
             >
               {isBroken ? (
                 <span className="profile-row__icon profile-row__icon--invalid" aria-hidden="true">
@@ -222,6 +303,28 @@ export const ProfileList = ({
           );
         })}
       </div>
+      {contextMenu
+        ? createPortal(
+            <ProfileActionsMenu
+              className="profile-context-menu"
+              disabled={actionsDisabled}
+              menuRef={contextMenuRef}
+              style={{ left: contextMenu.left, top: contextMenu.top }}
+              onDuplicate={() => {
+                const profileId = contextMenu.profileId;
+                closeContextMenu();
+                onDuplicate(profileId);
+              }}
+              onDelete={() => {
+                const profileId = contextMenu.profileId;
+                const returnFocus = contextReturnFocusRef.current;
+                closeContextMenu();
+                if (returnFocus) onDelete(profileId, returnFocus);
+              }}
+            />,
+            document.body
+          )
+        : null}
     </aside>
   );
 };

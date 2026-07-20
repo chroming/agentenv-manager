@@ -98,6 +98,7 @@ import { InfoTip } from "./components/InfoTip";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
 import { ProfileList } from "./components/ProfileList";
+import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { ResourceIconPicker } from "./components/ResourceIconPicker";
 import {
@@ -570,7 +571,7 @@ const AppContent = ({
     name: "",
     description: ""
   });
-  const [deleteProfileDialogOpen, setDeleteProfileDialogOpen] = useState(false);
+  const [deleteProfileCandidateId, setDeleteProfileCandidateId] = useState<string>();
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -1614,8 +1615,8 @@ const AppContent = ({
     }
   };
 
-  const duplicateSelectedProfileNow = async () => {
-    if (!selectedProfileId) {
+  const duplicateProfileNow = async (profileId: string | undefined) => {
+    if (!profileId) {
       return;
     }
     setBusy(true);
@@ -1623,7 +1624,7 @@ const AppContent = ({
     setIsProfileActionsOpen(false);
     profileActionsButtonRef.current?.focus();
     try {
-      const saved = await window.agentEnv.duplicateProfile(selectedProfileId);
+      const saved = await window.agentEnv.duplicateProfile(profileId);
       await refreshProfiles();
       setSelectedTargetId(saved.manifest.preferredTargetId ?? selectedTargetId);
       setProfileTargetSelections((current) => ({
@@ -1644,40 +1645,44 @@ const AppContent = ({
     }
   };
 
-  const duplicateSelectedProfile = () => {
-    guardProfileAction("duplicate this profile", duplicateSelectedProfileNow);
+  const duplicateProfile = (profileId: string | undefined = selectedProfileId) => {
+    if (!profileId) return;
+    guardProfileAction("duplicate this profile", () => duplicateProfileNow(profileId));
   };
 
-  const deleteSelectedProfile = async () => {
-    if (!selectedProfileId) {
+  const deleteProfile = async () => {
+    if (!deleteProfileCandidateId) {
       return;
     }
-    const deletedProfileId = selectedProfileId;
+    const deletedProfileId = deleteProfileCandidateId;
+    const deletingSelectedProfile = deletedProfileId === selectedProfileId;
     const deletedTargetId = draftProfile?.manifest.preferredTargetId ?? selectedTargetId;
     setBusy(true);
     setError(undefined);
     try {
       await window.agentEnv.deleteProfile(deletedProfileId);
       const { profileItems } = await refreshProfiles();
-      const nextProfile = profileItems.find(
-        (profile) => !profile.loadError && profile.preferredTargetId === deletedTargetId
-      );
-      if (nextProfile) {
-        const nextDetail = await window.agentEnv.readProfile(nextProfile.id);
-        setSelectedProfileId(nextProfile.id);
-        setSelectedTargetId(nextProfile.preferredTargetId ?? deletedTargetId);
-        setProfileTargetSelections((current) => ({
-          ...current,
-          ...(nextProfile.preferredTargetId
-            ? { [nextProfile.id]: nextProfile.preferredTargetId }
-            : {})
-        }));
-        setDraftProfile(nextDetail);
-      } else {
-        setSelectedProfileId(undefined);
-        setDraftProfile(undefined);
+      if (deletingSelectedProfile) {
+        const nextProfile = profileItems.find(
+          (profile) => !profile.loadError && profile.preferredTargetId === deletedTargetId
+        );
+        if (nextProfile) {
+          const nextDetail = await window.agentEnv.readProfile(nextProfile.id);
+          setSelectedProfileId(nextProfile.id);
+          setSelectedTargetId(nextProfile.preferredTargetId ?? deletedTargetId);
+          setProfileTargetSelections((current) => ({
+            ...current,
+            ...(nextProfile.preferredTargetId
+              ? { [nextProfile.id]: nextProfile.preferredTargetId }
+              : {})
+          }));
+          setDraftProfile(nextDetail);
+        } else {
+          setSelectedProfileId(undefined);
+          setDraftProfile(undefined);
+        }
       }
-      setDeleteProfileDialogOpen(false);
+      setDeleteProfileCandidateId(undefined);
       setIsProfileActionsOpen(false);
       setPreview(undefined);
       setRollbackPreview(undefined);
@@ -1688,9 +1693,18 @@ const AppContent = ({
     }
   };
 
-  const openDeleteProfileDialog = () => {
-    appModalFallbackFocusRef.current = profileActionsButtonRef.current;
-    guardProfileAction("delete this profile", () => setDeleteProfileDialogOpen(true));
+  const openDeleteProfileDialog = (
+    profileId: string | undefined = selectedProfileId,
+    returnFocus: HTMLElement | null = profileActionsButtonRef.current
+  ) => {
+    if (!profileId) return;
+    appModalFallbackFocusRef.current = returnFocus;
+    const open = () => setDeleteProfileCandidateId(profileId);
+    if (profileId === selectedProfileId) {
+      guardProfileAction("delete this profile", open);
+    } else {
+      open();
+    }
   };
 
   const cancelPendingProfileAction = () => {
@@ -1704,7 +1718,7 @@ const AppContent = ({
 
   const closeProfileDialog = () => {
     setProfileDialogMode(undefined);
-    setDeleteProfileDialogOpen(false);
+    setDeleteProfileCandidateId(undefined);
     setPreview(undefined);
     setRollbackPreview(undefined);
     setTargetCapturePreview(undefined);
@@ -1714,7 +1728,7 @@ const AppContent = ({
   };
 
   const appModalOpen = Boolean(
-    pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileDialogOpen || dataRestorePreview || backupManagerOpen
+    pendingSkillImport || pendingProfileAction || profileDialogMode || deleteProfileCandidateId || dataRestorePreview || backupManagerOpen
   );
   const dismissAppModal = () => {
     if (pendingSkillImport) {
@@ -1746,7 +1760,7 @@ const AppContent = ({
         ? `skill-import:${pendingSkillImport.preview.incoming.contentHash}`
         : profileDialogMode === "create" && profileCreateSource === "target"
         ? `target-capture:${targetCapturePreview ? "review" : "setup"}`
-        : profileDialogMode ?? (deleteProfileDialogOpen
+        : profileDialogMode ?? (deleteProfileCandidateId
             ? "delete"
             : dataRestorePreview
               ? "restore"
@@ -1931,12 +1945,21 @@ const AppContent = ({
     [targetStates]
   );
   const selectedTargetState = targetStates.find((state) => state.targetId === selectedTarget?.id);
-  const isSelectedProfileActive = Boolean(
-    selectedProfileId && targetStates.some((state) => state.activeProfileId === selectedProfileId)
+  const deleteProfileCandidate = deleteProfileCandidateId
+    ? profiles.find((profile) => profile.id === deleteProfileCandidateId)
+    : undefined;
+  const deleteProfileCandidateName = deleteProfileCandidate?.name ??
+    (draftProfile && draftProfile.id === deleteProfileCandidateId
+      ? draftProfile.manifest.name
+      : deleteProfileCandidateId) ?? t("Profile");
+  const isDeleteProfileCandidateActive = Boolean(
+    deleteProfileCandidateId && targetStates.some(
+      (state) => state.activeProfileId === deleteProfileCandidateId
+    )
   );
-  const selectedProfileActiveTargets = selectedProfileId
+  const deleteProfileCandidateActiveTargets = deleteProfileCandidateId
     ? targetStates
-        .filter((state) => state.activeProfileId === selectedProfileId)
+        .filter((state) => state.activeProfileId === deleteProfileCandidateId)
         .map(
           (state) =>
             targets.find((target) => target.id === state.targetId)?.name ?? state.targetId
@@ -3890,6 +3913,9 @@ const AppContent = ({
                 profileLibraryVersions={profileLibraryVersions}
                 targets={targets}
                 targetStates={targetStates}
+                actionsDisabled={busy}
+                onDelete={openDeleteProfileDialog}
+                onDuplicate={duplicateProfile}
                 onSearchChange={setProfileSearch}
                 onSelect={selectProfile}
                 onIconChange={changeProfileIcon}
@@ -4025,24 +4051,14 @@ const AppContent = ({
                             <MoreHorizontal size={16} strokeWidth={2.2} />
                           </button>
                           {isProfileActionsOpen ? (
-                            <div className="profile-actions-menu ui-action-menu" role="menu" aria-label={t("Profile actions")}>
-                              <button type="button" role="menuitem" onClick={duplicateSelectedProfile}>
-                                <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
-                                <span>{t("Duplicate profile")}</span>
-                              </button>
-                              <button
-                                className="is-danger"
-                                type="button"
-                                role="menuitem"
-                                onClick={() => {
-                                  setIsProfileActionsOpen(false);
-                                  openDeleteProfileDialog();
-                                }}
-                              >
-                                <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                                <span>{t("Delete profile")}</span>
-                              </button>
-                            </div>
+                            <ProfileActionsMenu
+                              disabled={busy}
+                              onDuplicate={() => duplicateProfile()}
+                              onDelete={() => {
+                                setIsProfileActionsOpen(false);
+                                openDeleteProfileDialog();
+                              }}
+                            />
                           ) : null}
                         </div>
                         <div
@@ -4450,7 +4466,7 @@ const AppContent = ({
                   </section>
                 </div>
               ) : null}
-              {deleteProfileDialogOpen && draftProfile ? (
+              {deleteProfileCandidateId ? (
                 <div className="preview-modal-backdrop" onClick={busy ? undefined : closeProfileDialog}>
                   <section
                     ref={appModalDialogRef}
@@ -4464,9 +4480,9 @@ const AppContent = ({
                       <div>
                         <div className="section-title">{t("Delete profile")}</div>
                         <p className="muted">
-                          {isSelectedProfileActive
-                            ? t("{{name}} is active on {{targets}}. Apply another profile or stop managing each Agent before removing it.", { name: draftProfile.manifest.name, targets: selectedProfileActiveTargets.join(", ") })
-                            : t("Remove {{name}}? Applied Agent files and backups are not removed.", { name: draftProfile.manifest.name })}
+                          {isDeleteProfileCandidateActive
+                            ? t("{{name}} is active on {{targets}}. Apply another profile or stop managing each Agent before removing it.", { name: deleteProfileCandidateName, targets: deleteProfileCandidateActiveTargets.join(", ") })
+                            : t("Remove {{name}}? Applied Agent files and backups are not removed.", { name: deleteProfileCandidateName })}
                         </p>
                       </div>
                     </header>
@@ -4474,8 +4490,8 @@ const AppContent = ({
                       <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
                         {t("Cancel")}
                       </button>
-                      {!isSelectedProfileActive ? (
-                        <button className="danger-action" type="button" disabled={busy} onClick={deleteSelectedProfile}>
+                      {!isDeleteProfileCandidateActive ? (
+                        <button className="danger-action" type="button" disabled={busy} onClick={deleteProfile}>
                           {t("Remove profile")}
                         </button>
                       ) : (

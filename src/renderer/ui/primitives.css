@@ -212,13 +212,6 @@
   min-width: 0;
 }
 
-.skill-description-tooltip,
-.info-tip__bubble--portal {
-  cursor: text;
-  pointer-events: auto;
-  user-select: text;
-}
-
 /* Framed work surfaces paint one uninterrupted edge above scrolling children. */
 .ui-surface-frame {
   border: 1px solid transparent;

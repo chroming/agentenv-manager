@@ -2094,12 +2094,26 @@ describe("Electron UI profile switching e2e", () => {
       .filter({ hasText: "Shared review guidance" });
     await descriptionTip.waitFor({ state: "visible" });
     await expectInViewport(page, descriptionTip);
+    const detailStyle = await descriptionTip.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        fontWeight: style.fontWeight,
+        borderTopWidth: style.borderTopWidth,
+        userSelect: style.userSelect
+      };
+    });
+    expect(detailStyle).toEqual({
+      fontWeight: "400",
+      borderTopWidth: "1px",
+      userSelect: "text"
+    });
     await page.mouse.move(10, 10);
     await descriptionTip.waitFor({ state: "hidden" });
 
     await page.locator(".page-header .info-tip").first().hover();
     const headerTip = page.getByRole("tooltip");
     await headerTip.waitFor({ state: "visible" });
+    expect(await headerTip.getAttribute("class")).toContain("ui-hover-detail");
     await expectInViewport(page, headerTip);
     await page.mouse.move(10, 10);
     await headerTip.waitFor({ state: "hidden" });
@@ -2112,9 +2126,11 @@ describe("Electron UI profile switching e2e", () => {
     await page.mouse.click(240, 120);
     await targetMenu.waitFor({ state: "hidden" });
 
-    await page.getByRole("button", { name: "More profile actions" }).click();
+    const selectedProfileRow = page.getByRole("group", { name: "Profile UI OpenCode alpha" });
+    await selectedProfileRow.click({ button: "right" });
     const actionsMenu = page.getByRole("menu", { name: "Profile actions" });
     await actionsMenu.waitFor({ state: "visible" });
+    expect(await actionsMenu.getAttribute("class")).toContain("profile-context-menu");
     await expectInViewport(page, actionsMenu);
     await page.mouse.click(240, 120);
     await actionsMenu.waitFor({ state: "hidden" });
@@ -2130,7 +2146,7 @@ describe("Electron UI profile switching e2e", () => {
     await openSkillLibrary(page);
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
-    await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
+    await sharedRow.click({ button: "right" });
     const rowMenu = page.getByRole("menu", { name: "Actions for shared-reviewer" });
     await rowMenu.waitFor({ state: "visible" });
     await expectInViewport(page, rowMenu);

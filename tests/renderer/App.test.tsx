@@ -1671,6 +1671,34 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Select apply Agent" })).not.toBeInTheDocument();
   });
 
+  it("opens the shared Profile actions from a list-row context menu", async () => {
+    const api = installApi({
+      listProfiles: vi.fn().mockResolvedValue([summaryOf(profile), summaryOf(profileB)]),
+      readProfile: vi.fn().mockImplementation(async (profileId) =>
+        profileId === profileB.id ? profileB : profile
+      )
+    });
+    render(<App />);
+
+    await openProfiles();
+    const row = screen.getByRole("group", { name: "Profile Profile B" });
+    fireEvent.contextMenu(row, { clientX: 280, clientY: 220 });
+    const menu = screen.getByRole("menu", { name: "Profile actions" });
+    expect(menu).toHaveClass("profile-context-menu");
+    expect(within(menu).getByRole("menuitem", { name: "Duplicate profile" }))
+      .toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: "Delete profile" }))
+      .toBeInTheDocument();
+
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Delete profile" }));
+    expect(screen.queryByRole("menu", { name: "Profile actions" })).not.toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Delete profile" });
+    expect(dialog).toHaveTextContent("Remove Profile B?");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove profile" }));
+    await waitFor(() => expect(api.deleteProfile).toHaveBeenCalledWith("profile-b"));
+    expect(screen.getByRole("heading", { name: "Daily Coding" })).toBeInTheDocument();
+  });
+
   it("keeps whole-profile Save beside Apply in their workflow order", async () => {
     installApi();
     render(<App />);

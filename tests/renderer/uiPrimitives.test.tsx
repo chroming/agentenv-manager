@@ -13,6 +13,7 @@ import {
   Switch
 } from "../../src/renderer/components/ui";
 import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
+import { InfoTip } from "../../src/renderer/components/InfoTip";
 
 afterEach(cleanup);
 
@@ -100,8 +101,20 @@ describe("renderer UI primitives", () => {
     act(() => vi.advanceTimersByTime(200));
 
     expect(tooltip).toBeInTheDocument();
+    expect(tooltip).toHaveClass("ui-hover-detail");
     expect(tooltip).toHaveTextContent("A complete long value that the user needs to copy");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     vi.useRealTimers();
+  });
+
+  it("uses the same hover detail primitive for contextual information", () => {
+    render(<InfoTip label="A complete explanation" />);
+    fireEvent.mouseEnter(screen.getByLabelText("A complete explanation"));
+    expect(screen.getByRole("tooltip")).toHaveClass(
+      "ui-hover-detail",
+      "info-tip__bubble"
+    );
   });
 
   it("keeps page identity and page actions in one shared header contract", () => {
