@@ -87,37 +87,6 @@
   padding: 16px 20px;
 }
 
-.skill-source-merge-selection {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  max-height: 280px;
-  overflow-y: auto;
-}
-
-.skill-source-merge-option {
-  align-items: center;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 18px minmax(0, 1fr);
-  min-height: 54px;
-  padding: 8px 12px;
-}
-
-.skill-source-merge-option + .skill-source-merge-option {
-  border-top: 1px solid var(--border);
-}
-
-.skill-source-merge-option:hover {
-  background: var(--surface-muted);
-}
-
-.skill-source-merge-option input {
-  height: 16px;
-  margin: 0;
-  width: 16px;
-}
-
-.skill-source-merge-option > span,
 .skill-source-merge-field,
 .skill-source-merge-result {
   display: grid;
@@ -125,14 +94,12 @@
   min-width: 0;
 }
 
-.skill-source-merge-option strong,
 .skill-source-merge-field > span,
 .skill-source-merge-result > span {
   font-size: var(--font-size-metadata);
   font-weight: 650;
 }
 
-.skill-source-merge-option .overflow-tooltip,
 .skill-source-merge-result .overflow-tooltip {
   color: var(--muted);
   font-size: var(--font-size-metadata);
@@ -153,7 +120,7 @@
 }
 
 .skill-source-merge-result.is-preview {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
 }
 
 .skill-source-merge-summary {
@@ -229,16 +196,36 @@
   border-bottom: 1px solid var(--border);
 }
 
+.skill-source-group.is-selected > .skill-source-group-row {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
 .skill-source-group-row {
   align-items: center;
   display: grid;
   gap: 6px 10px;
   grid-template-areas:
-    "disclosure artwork identity check"
-    ". . counts error";
-  grid-template-columns: 24px 28px minmax(0, 1fr) auto;
+    "select disclosure artwork identity check"
+    ". . . counts error";
+  grid-template-columns: 20px 24px 28px minmax(0, 1fr) auto;
   min-height: 70px;
   padding: 9px 12px;
+}
+
+.skill-source-select {
+  align-items: center;
+  display: inline-flex;
+  grid-area: select;
+  height: 28px;
+  justify-content: center;
+  width: 20px;
+}
+
+.skill-source-select input {
+  accent-color: var(--accent);
+  height: 15px;
+  margin: 0;
+  width: 15px;
 }
 
 .skill-source-group.is-expanded .skill-source-group-row {
@@ -505,8 +492,8 @@
 
 @container skill-library (min-width: 920px) {
   .skill-source-group-row {
-    grid-template-areas: "disclosure artwork identity counts error check";
-    grid-template-columns: 24px 28px minmax(260px, 1fr) auto auto auto;
+    grid-template-areas: "select disclosure artwork identity counts error check";
+    grid-template-columns: 20px 24px 28px minmax(240px, 1fr) auto auto auto;
   }
 }
 

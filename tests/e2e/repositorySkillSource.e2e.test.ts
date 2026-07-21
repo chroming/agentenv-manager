@@ -207,16 +207,15 @@ describe("Repository Skill source", () => {
 
     await page.getByRole("tab", { name: "By source" }).click();
     await expect.poll(() => page.locator(".skill-source-group").count()).toBe(2);
-    await page.getByRole("button", { name: "Merge", exact: true }).click();
-    const mergeDialog = page.getByRole("dialog", { name: "Merge sources" });
-    const sourceChoices = mergeDialog.getByRole("checkbox");
+    const sourceChoices = page.locator(".skill-source-list").getByRole("checkbox");
     await sourceChoices.nth(0).check();
     await sourceChoices.nth(1).check();
+    await page.getByRole("button", { name: "Merge selected (2)", exact: true }).click();
+    const mergeDialog = page.getByRole("dialog", { name: "Confirm source merge" });
     await expect.poll(() => mergeDialog.getByLabel("Merged source directory").inputValue())
       .toBe("skills/engineering");
-    await mergeDialog.getByRole("button", { name: "Preview merge" }).click();
-    await mergeDialog.getByText("New check scope", { exact: true }).waitFor({ state: "visible" });
-    await mergeDialog.getByRole("button", { name: "Merge sources" }).click();
+    await expect.poll(() => mergeDialog.getByText("2", { exact: true }).count()).toBeGreaterThan(0);
+    await mergeDialog.getByRole("button", { name: "Confirm merge" }).click();
     await mergeDialog.waitFor({ state: "hidden" });
     await expect.poll(() => page.locator(".skill-source-group").count()).toBe(1);
 

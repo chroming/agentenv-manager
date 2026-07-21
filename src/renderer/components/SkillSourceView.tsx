@@ -53,6 +53,22 @@ const stateLabel = (state: SkillSourceGroupCandidate["state"]) => {
 
 const sourceIsOpenable = (source: string) => /^https?:\/\//i.test(source);
 
+const sourceRepositoryLabel = (repository: string) => {
+  try {
+    const url = new URL(repository);
+    const path = url.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "");
+    if (!path) return url.hostname;
+    return url.hostname === "github.com" ? path : `${url.hostname}/${path}`;
+  } catch {
+    const scpPath = repository.includes(":") ? repository.slice(repository.indexOf(":") + 1) : repository;
+    const segments = scpPath.replace(/\.git$/i, "").split(/[\\/]/).filter(Boolean);
+    return segments.slice(-2).join("/") || repository;
+  }
+};
+
+const sourceScopeLabel = (group: SkillSourceGroupView) =>
+  `${group.ref} · /${group.directory || "."}`;
+
 export const SkillSourceView = ({
   active,
   groups,
@@ -107,11 +123,13 @@ export const SkillSourceView = ({
     }
     return common.join("/");
   }, [selectedMergeGroups]);
+  const activeMergeDirectory = mergeDirectory ?? computedMergeDirectory;
+  const mergePreviewIsCurrent = mergePreview?.mergedSource.directory === activeMergeDirectory;
 
-  const closeMerge = (force = false) => {
+  const closeMerge = (force = false, clearSelection = false) => {
     if (mergeBusy && !force) return;
     setMergeOpen(false);
-    setMergeSelection(new Set());
+    if (clearSelection) setMergeSelection(new Set());
     setMergeDirectory(undefined);
     setMergePreview(undefined);
     setMergeError(undefined);
@@ -122,7 +140,7 @@ export const SkillSourceView = ({
     dialogRef: mergeDialogRef,
     dismissDisabled: mergeBusy,
     onDismiss: closeMerge,
-    focusKey: mergePreview?.id ?? "selection"
+    focusKey: mergePreview?.id ?? "merge-source"
   });
 
   const runCheck = async (sourceId: string) => {
@@ -138,28 +156,47 @@ export const SkillSourceView = ({
     }
   };
 
-  const previewMerge = async () => {
+  const previewMerge = async (directory: string) => {
     setMergeBusy(true);
     setMergeError(undefined);
     try {
-      setMergePreview(await onPreviewMerge({
+      const preview = await onPreviewMerge({
         sourceIds: [...mergeSelection],
-        directory: mergeDirectory ?? computedMergeDirectory
-      }));
+        directory
+      });
+      setMergeDirectory(preview.mergedSource.directory);
+      setMergePreview(preview);
+      return preview;
     } catch (error) {
       setMergeError(error instanceof Error ? error.message : String(error));
+      return undefined;
     } finally {
       setMergeBusy(false);
     }
   };
 
+  const openMerge = () => {
+    const directory = computedMergeDirectory;
+    setMergeDirectory(directory);
+    setMergePreview(undefined);
+    setMergeError(undefined);
+    setMergeOpen(true);
+    void previewMerge(directory);
+  };
+
   const confirmMerge = async () => {
-    if (!mergePreview) return;
+    const directory = mergeDirectory ?? computedMergeDirectory;
     setMergeBusy(true);
     setMergeError(undefined);
     try {
-      await onMerge(mergePreview.id);
-      closeMerge(true);
+      const currentPreview = mergePreview?.mergedSource.directory === directory
+        ? mergePreview
+        : await onPreviewMerge({ sourceIds: [...mergeSelection], directory });
+      setMergeDirectory(currentPreview.mergedSource.directory);
+      setMergePreview(currentPreview);
+      if (currentPreview.blockers.length > 0) return;
+      await onMerge(currentPreview.id);
+      closeMerge(true, true);
     } catch (error) {
       setMergeError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -219,11 +256,11 @@ export const SkillSourceView = ({
         <button
           className="secondary-action"
           type="button"
-          disabled={groups.length < 2 || checkingAll || Boolean(operation)}
-          onClick={() => setMergeOpen(true)}
+          disabled={mergeSelection.size < 2 || checkingAll || Boolean(operation)}
+          onClick={openMerge}
         >
           <GitMerge size={15} strokeWidth={2.2} />
-          <span>{t("Merge")}</span>
+          <span>{t("Merge selected")}{mergeSelection.size > 0 ? ` (${mergeSelection.size})` : ""}</span>
         </button>
       </div>
 
@@ -248,13 +285,32 @@ export const SkillSourceView = ({
         {visibleGroups.map((group) => {
           const isExpanded = expanded.has(group.sourceId);
           const isChecking = checking.has(group.sourceId);
+          const isSelected = mergeSelection.has(group.sourceId);
           const hasAttention = group.counts.updates + group.counts.new + group.counts.removed > 0;
           return (
             <article
-              className={`skill-source-group${isExpanded ? " is-expanded" : ""}${hasAttention ? " has-attention" : ""}`}
+              className={`skill-source-group${isExpanded ? " is-expanded" : ""}${isSelected ? " is-selected" : ""}${hasAttention ? " has-attention" : ""}`}
               key={group.sourceId}
             >
               <div className="skill-source-group-row">
+                <label className="skill-source-select">
+                  <input
+                    type="checkbox"
+                    aria-label={t("Select source {{name}}", {
+                      name: group.directory || t("Repository root")
+                    })}
+                    checked={isSelected}
+                    onChange={(event) => {
+                      const checked = event.currentTarget.checked;
+                      setMergeSelection((current) => {
+                        const next = new Set(current);
+                        if (checked) next.add(group.sourceId);
+                        else next.delete(group.sourceId);
+                        return next;
+                      });
+                    }}
+                  />
+                </label>
                 <button
                   className="skill-source-disclosure"
                   type="button"
@@ -286,6 +342,7 @@ export const SkillSourceView = ({
                   >
                     <OverflowTooltip
                       className="skill-source-link-text"
+                      displayText={sourceRepositoryLabel(group.repository)}
                       focusable={false}
                       text={group.canonicalLink}
                     />
@@ -296,7 +353,7 @@ export const SkillSourceView = ({
                     )}
                   </button>
                   <span className="skill-source-checked">
-                    {group.error
+                    {sourceScopeLabel(group)} · {group.error
                       ? t("Last check failed")
                       : group.checkedAt
                         ? t("Checked {{date}}", { date: formatDate(group.checkedAt) })
@@ -419,7 +476,7 @@ export const SkillSourceView = ({
 
       {mergeOpen ? (
         <ModalFrame
-          ariaLabel={t("Merge sources")}
+          ariaLabel={t("Confirm source merge")}
           className="skill-source-merge-dialog"
           dialogRef={mergeDialogRef}
           dismissDisabled={mergeBusy}
@@ -427,114 +484,62 @@ export const SkillSourceView = ({
         >
           <header className="profile-form-dialog__header">
             <div>
-              <strong>{t(mergePreview ? "Review source merge" : "Merge sources")}</strong>
-              <span>{t(mergePreview
-                ? "Review the new check scope before changing source groups."
-                : "Select sources from the same repository and revision.")}</span>
+              <strong>{t("Confirm source merge")}</strong>
+              <span>{t("Review and adjust the shared source before merging selected groups.")}</span>
             </div>
           </header>
           <div className="skill-source-merge-body">
-            {!mergePreview ? (
-              <>
-                <div className="skill-source-merge-selection">
-                  {groups.map((group) => (
-                    <label key={group.sourceId} className="skill-source-merge-option">
-                      <input
-                        type="checkbox"
-                        checked={mergeSelection.has(group.sourceId)}
-                        onChange={(event) => {
-                          const checked = event.currentTarget.checked;
-                          setMergeSelection((current) => {
-                            const next = new Set(current);
-                            if (checked) next.add(group.sourceId);
-                            else next.delete(group.sourceId);
-                            return next;
-                          });
-                          setMergeDirectory(undefined);
-                          setMergeError(undefined);
-                        }}
-                      />
-                      <span>
-                        <strong>{group.directory || t("Repository root")}</strong>
-                        <OverflowTooltip
-                          className="skill-source-merge-path"
-                          focusable={false}
-                          text={group.canonicalLink}
-                        />
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <label className="skill-source-merge-field">
-                  <span>{t("Merged source directory")}</span>
-                  <input
-                    value={mergeDirectory ?? computedMergeDirectory}
-                    disabled={selectedMergeGroups.length < 2}
-                    placeholder={t("Repository root")}
-                    onChange={(event) => setMergeDirectory(event.currentTarget.value)}
-                  />
-                </label>
-                <div className="skill-source-merge-result">
-                  <span>{t("Resulting source")}</span>
-                  <OverflowTooltip
-                    className="skill-source-merge-path"
-                    focusable={false}
-                    text={selectedMergeGroups.length > 0
-                      ? `${selectedMergeGroups[0]!.repository} · ${selectedMergeGroups[0]!.ref} · /${mergeDirectory ?? computedMergeDirectory}`
-                      : t("Select at least two sources")}
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="skill-source-merge-summary">
-                  <div><span>{t("Sources")}</span><strong>{mergePreview.sources.length}</strong></div>
-                  <div><span>{t("Library Skills")}</span><strong>{mergePreview.affectedSkillCount}</strong></div>
-                  <div><span>{t("Discovered")}</span><strong>{mergePreview.discoveredSkillCount}</strong></div>
-                </div>
-                <div className="skill-source-merge-result is-preview">
-                  <span>{t("New check scope")}</span>
-                  <OverflowTooltip
-                    className="skill-source-merge-path"
-                    focusable={false}
-                    text={mergePreview.mergedSource.canonicalLink}
-                  />
-                </div>
-                {mergePreview.warnings.map((warning) => (
-                  <p className="skill-source-merge-notice" key={warning}>{t(warning)}</p>
-                ))}
-                {mergePreview.blockers.map((blocker) => (
-                  <p className="skill-source-merge-notice is-error" key={blocker}>{blocker}</p>
-                ))}
-              </>
-            )}
+            <div className="skill-source-merge-summary">
+              <div><span>{t("Selected sources")}</span><strong>{mergeSelection.size}</strong></div>
+              <div><span>{t("Library Skills")}</span><strong>{mergePreview?.affectedSkillCount ?? "—"}</strong></div>
+              <div><span>{t("Discovered")}</span><strong>{mergePreview?.discoveredSkillCount ?? "—"}</strong></div>
+            </div>
+            <label className="skill-source-merge-field">
+              <span>{t("Merged source directory")}</span>
+              <input
+                value={activeMergeDirectory}
+                placeholder={t("Repository root")}
+                onChange={(event) => {
+                  setMergeDirectory(event.currentTarget.value);
+                  setMergeError(undefined);
+                }}
+              />
+            </label>
+            <div className={`skill-source-merge-result${mergePreviewIsCurrent ? " is-preview" : ""}`}>
+              <span>{t("Resulting source")}</span>
+              <OverflowTooltip
+                className="skill-source-merge-path"
+                focusable={false}
+                text={`${sourceRepositoryLabel(selectedMergeGroups[0]!.repository)} · ${selectedMergeGroups[0]!.ref} · /${activeMergeDirectory || "."}`}
+              />
+            </div>
+            {mergeBusy && !mergePreview ? (
+              <div className="inline-state inline-state--loading" role="status">
+                <span className="inline-state__icon" aria-hidden="true" />
+                <span>{t("Checking merged source...")}</span>
+              </div>
+            ) : null}
+            {!mergePreviewIsCurrent && mergePreview ? (
+              <p className="skill-source-merge-notice">{t("The edited source will be checked before merging.")}</p>
+            ) : null}
+            {mergePreviewIsCurrent ? mergePreview.warnings.map((warning) => (
+              <p className="skill-source-merge-notice" key={warning}>{t(warning)}</p>
+            )) : null}
+            {mergePreviewIsCurrent ? mergePreview.blockers.map((blocker) => (
+              <p className="skill-source-merge-notice is-error" key={blocker}>{blocker}</p>
+            )) : null}
             {mergeError ? <p className="skill-source-merge-notice is-error">{mergeError}</p> : null}
           </div>
           <footer className="profile-form-dialog__actions">
-            {mergePreview ? (
-              <Button disabled={mergeBusy} onClick={() => setMergePreview(undefined)}>{t("Back")}</Button>
-            ) : (
-              <Button disabled={mergeBusy} onClick={() => closeMerge()}>{t("Cancel")}</Button>
-            )}
-            {mergePreview ? (
-              <Button
-                variant="primary"
-                disabled={mergeBusy || mergePreview.blockers.length > 0}
-                icon={mergeBusy ? <LoaderCircle className="is-spinning" size={15} /> : <GitMerge size={15} />}
-                onClick={() => void confirmMerge()}
-              >
-                {t("Merge sources")}
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                disabled={mergeBusy || mergeSelection.size < 2}
-                icon={mergeBusy ? <LoaderCircle className="is-spinning" size={15} /> : undefined}
-                onClick={() => void previewMerge()}
-              >
-                {t("Preview merge")}
-              </Button>
-            )}
+            <Button disabled={mergeBusy} onClick={() => closeMerge()}>{t("Cancel")}</Button>
+            <Button
+              variant="primary"
+              disabled={mergeBusy || (mergePreviewIsCurrent && (mergePreview?.blockers.length ?? 0) > 0)}
+              icon={mergeBusy ? <LoaderCircle className="is-spinning" size={15} /> : <GitMerge size={15} />}
+              onClick={() => void confirmMerge()}
+            >
+              {t("Confirm merge")}
+            </Button>
           </footer>
         </ModalFrame>
       ) : null}

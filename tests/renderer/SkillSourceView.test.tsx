@@ -119,7 +119,7 @@ describe("SkillSourceView", () => {
     fireEvent.change(screen.getByLabelText("Search sources and skills"), {
       target: { value: "testing" }
     });
-    expect(screen.getByText(group.canonicalLink)).toBeInTheDocument();
+    expect(screen.getByText("acme/skills")).toBeInTheDocument();
     rerender(
       <SkillSourceView
         active={false}
@@ -190,19 +190,19 @@ describe("SkillSourceView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
     const checkboxes = screen.getAllByRole("checkbox");
     fireEvent.click(checkboxes[0]!);
     fireEvent.click(checkboxes[1]!);
+    fireEvent.click(screen.getByRole("button", { name: "Merge selected (2)" }));
+    const dialog = screen.getByRole("dialog", { name: "Confirm source merge" });
     expect(screen.getByLabelText("Merged source directory")).toHaveValue("engineering");
-    fireEvent.click(screen.getByRole("button", { name: "Preview merge" }));
     await waitFor(() => expect(onPreviewMerge).toHaveBeenCalledWith({
       sourceIds: [group.sourceId, secondGroup.sourceId],
       directory: "engineering"
     }));
-    expect(await screen.findByText("New check scope")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Merge sources" }));
+    expect(within(dialog).getByText("4")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm merge" }));
     await waitFor(() => expect(onMerge).toHaveBeenCalledWith("merge-preview"));
-    expect(screen.queryByRole("dialog", { name: "Merge sources" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Confirm source merge" })).not.toBeInTheDocument();
   });
 });
