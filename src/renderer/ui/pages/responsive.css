@@ -24,7 +24,9 @@
 
   .target-workflow-header {
     gap: 10px;
-    grid-template-columns: 32px minmax(100px, 1fr) auto auto;
+    grid-template-columns: 32px minmax(110px, 1fr) auto;
+    grid-template-rows: auto auto;
+    min-height: 70px;
   }
 
   .target-workflow-actions .secondary-action {
@@ -32,27 +34,35 @@
     padding-inline: 8px;
   }
 
+  .target-workflow-actions {
+    grid-column: 3;
+    grid-row: 1 / 3;
+  }
+
+  .target-workflow-last-applied {
+    display: none;
+  }
+
+  .target-workflow-summary {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
   .target-workflow-icon {
     height: 32px;
     width: 32px;
   }
 
-  .target-workflow-title > small {
+  .target-workflow-description {
     display: none;
   }
 
   .target-card--workflow {
-    gap: 8px;
-    padding: 10px 12px;
-  }
-
-  .target-state-grid > span {
-    gap: 2px;
-    padding: 6px 8px;
+    padding: 0 12px;
   }
 
   .target-diagnostics-toggle {
-    min-height: 22px;
+    min-height: var(--control-height-compact);
   }
 }
 

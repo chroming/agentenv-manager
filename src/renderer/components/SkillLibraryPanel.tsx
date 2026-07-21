@@ -69,7 +69,6 @@ import type {
   SkillUpdatePlan,
   SkillUpdateSourceInput
 } from "../../shared/types";
-import type { DesktopContextMenuItem } from "../../shared/desktopContextMenu";
 import { InfoTip } from "./InfoTip";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 import { ResourceIconPicker } from "./ResourceIconPicker";
@@ -127,13 +126,6 @@ export interface PreparedSkillTarget {
 
 type SkillMenuAction = "update" | "availability" | "settings" | "merge" | "remove";
 
-const isSkillMenuAction = (value: string): value is SkillMenuAction =>
-  value === "update" ||
-  value === "availability" ||
-  value === "settings" ||
-  value === "merge" ||
-  value === "remove";
-
 interface SkillLibraryPanelProps {
   isLoading?: boolean;
   isBusy?: boolean;
@@ -181,11 +173,11 @@ interface SkillLibraryPanelProps {
   onSetUpdatePolicy(input: SkillUpdatePolicyInput): void;
   onSetAvailability(input: SkillAvailabilityInput): Promise<boolean>;
   onSetIcon(input: SkillIconInput): void;
-  onPreviewLibrarySkillUpdate(id: string): void;
+  onPreviewLibrarySkillUpdate(id: string): Promise<void>;
   onCloseUpdatePreview(): void;
   onUpdateLibrarySkill(plan: SkillUpdatePlan): void;
   onUpdateAllLibrarySkills(plans: SkillUpdatePlan[]): void;
-  onPreviewAllLibrarySkillUpdates(ids: string[]): void;
+  onPreviewAllLibrarySkillUpdates(ids: string[]): Promise<void>;
   onCloseBulkUpdatePreview(): void;
   onSyncSkillInstalls(id: string): void;
   onRemoveLibrarySkill(id: string): void;
@@ -499,6 +491,7 @@ export const SkillLibraryPanel = ({
   const [mergeCompareId, setMergeCompareId] = useState("");
   const [mergeOperation, setMergeOperation] = useState<"loading" | "merging">();
   const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
+  const [previewingSkillId, setPreviewingSkillId] = useState<string>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
   const [sharedTargetReviewKey, setSharedTargetReviewKey] = useState<string>();
   const [sharedRetireKey, setSharedRetireKey] = useState<string>();
@@ -829,6 +822,15 @@ export const SkillLibraryPanel = ({
         : belowTop;
     setOpenAction({ id: skillId, left, top });
   };
+  const openActionMenuAt = (
+    skillId: string,
+    left: number,
+    top: number,
+    returnFocus: HTMLElement
+  ) => {
+    actionReturnFocusRef.current = returnFocus;
+    setOpenAction({ id: skillId, left, top });
+  };
   const advancedFilterCount = [sourceFilter, targetFilter, usageFilter].filter(
     (value) => value !== "all"
   ).length;
@@ -847,6 +849,15 @@ export const SkillLibraryPanel = ({
       setAvailabilityOperation(undefined);
     }
   };
+  const runSkillUpdatePreview = async (id: string) => {
+    if (previewingSkillId) return;
+    setPreviewingSkillId(id);
+    try {
+      await onPreviewLibrarySkillUpdate(id);
+    } finally {
+      setPreviewingSkillId(undefined);
+    }
+  };
   const runSkillMenuAction = (
     skill: SkillLibraryEntry,
     action: SkillMenuAction,
@@ -860,7 +871,7 @@ export const SkillLibraryPanel = ({
     setOpenAction(undefined);
 
     if (action === "update") {
-      onPreviewLibrarySkillUpdate(skill.id);
+      void runSkillUpdatePreview(skill.id);
     } else if (action === "availability") {
       if (skill.globallyEnabled !== false) {
         setDisableCandidate(skill);
@@ -873,49 +884,6 @@ export const SkillLibraryPanel = ({
       void openMergePreview(skill);
     } else {
       setDeleteCandidate(skill);
-    }
-  };
-  const skillContextMenuItems = (skill: SkillLibraryEntry): DesktopContextMenuItem[] => {
-    const globallyEnabled = skill.globallyEnabled !== false;
-    const updateInfo = updatesById.get(skill.id);
-    const hasUpdate = globallyEnabled && skill.updatePolicy === "tracked" &&
-      Boolean(updateInfo?.updateAvailable);
-    const hasUpdateSource = Boolean(skill.source);
-    const duplicateCount = skillNameCounts.get(
-      skill.name.normalize("NFKC").trim().toLowerCase()
-    ) ?? 0;
-    return [
-      ...(globallyEnabled && hasUpdateSource && skill.updatePolicy === "tracked"
-        ? [{
-            id: "update",
-            label: t(hasUpdate ? "Preview update" : "Check update")
-          } satisfies DesktopContextMenuItem]
-        : []),
-      {
-        id: "availability",
-        label: t(globallyEnabled ? "Disable globally" : "Enable globally"),
-        enabled: !availabilityOperation
-      },
-      { id: "settings", label: t("Update settings") },
-      ...(duplicateCount > 1
-        ? [{
-            id: "merge",
-            label: t("Merge duplicates"),
-            enabled: !mergeOperation
-          } satisfies DesktopContextMenuItem]
-        : []),
-      { type: "separator" },
-      { id: "remove", label: t("Remove from library") }
-    ];
-  };
-  const openSkillContextMenu = async (
-    skill: SkillLibraryEntry,
-    row: HTMLDivElement
-  ) => {
-    const fallback = row.querySelector<HTMLElement>(".library-actions-cell .icon-action") ?? row;
-    const selection = await window.agentEnv.openContextMenu(skillContextMenuItems(skill));
-    if (selection && isSkillMenuAction(selection)) {
-      runSkillMenuAction(skill, selection, fallback);
     }
   };
   const cleanupGroups = useMemo(
@@ -1606,13 +1574,13 @@ export const SkillLibraryPanel = ({
             hidden={libraryMode !== "skills"}
           >
           <button
-            className={`library-quick-tab${statusFilter === "all" ? " is-active" : ""}`}
+            className={`library-quick-tab${statusFilter === "enabled" ? " is-active" : ""}`}
             type="button"
             role="tab"
-            aria-selected={statusFilter === "all"}
-            onClick={() => updateControls({ statusFilter: "all" })}
+            aria-selected={statusFilter === "enabled"}
+            onClick={() => updateControls({ statusFilter: "enabled" })}
           >
-            {t("All")} <strong>{librarySkills.length}</strong>
+            {t("Enabled")} <strong>{librarySkills.length - disabledSkillCount}</strong>
           </button>
           <button
             className={`library-quick-tab${statusFilter === "updates" ? " is-active" : ""}`}
@@ -1868,7 +1836,12 @@ export const SkillLibraryPanel = ({
                 onContextMenu={(event) => {
                   event.preventDefault();
                   if (!availabilityIsChanging) {
-                    void openSkillContextMenu(skill, event.currentTarget);
+                    openActionMenuAt(
+                      skill.id,
+                      event.clientX,
+                      event.clientY,
+                      event.currentTarget.querySelector<HTMLElement>(".library-actions-cell .icon-action") ?? event.currentTarget
+                    );
                   }
                 }}
               >
@@ -1972,30 +1945,40 @@ export const SkillLibraryPanel = ({
                     </strong>
                   ) : hasUpdate ? (
                     <button
+                      aria-busy={previewingSkillId === skill.id}
                       className="library-status-action is-update"
                       type="button"
                       aria-label={t("Review update {{id}}", { id: skill.id })}
-                      disabled={updateCheckStatus?.state === "checking"}
+                      disabled={updateCheckStatus?.state === "checking" || Boolean(previewingSkillId)}
                       onClick={(event) => {
                         modalFallbackFocusRef.current = event.currentTarget;
-                        onPreviewLibrarySkillUpdate(skill.id);
+                        void runSkillUpdatePreview(skill.id);
                       }}
                     >
-                      <RefreshCw size={13} strokeWidth={2.2} />
+                      {previewingSkillId === skill.id ? (
+                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
+                      ) : (
+                        <RefreshCw size={13} strokeWidth={2.2} />
+                      )}
                       <span>{t("Review")}</span>
                     </button>
                   ) : hasError ? (
                     <button
+                      aria-busy={previewingSkillId === skill.id}
                       className="library-status-action is-error"
                       type="button"
                       aria-label={t("Retry update check {{id}}", { id: skill.id })}
-                      disabled={updateCheckStatus?.state === "checking"}
+                      disabled={updateCheckStatus?.state === "checking" || Boolean(previewingSkillId)}
                       onClick={(event) => {
                         modalFallbackFocusRef.current = event.currentTarget;
-                        onPreviewLibrarySkillUpdate(skill.id);
+                        void runSkillUpdatePreview(skill.id);
                       }}
                     >
-                      <TriangleAlert size={13} strokeWidth={2.2} />
+                      {previewingSkillId === skill.id ? (
+                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
+                      ) : (
+                        <TriangleAlert size={13} strokeWidth={2.2} />
+                      )}
                       <span>{t("Retry")}</span>
                     </button>
                   ) : staleCopies.length > 0 ? (
@@ -2070,9 +2053,14 @@ export const SkillLibraryPanel = ({
                               className="row-action-item"
                               type="button"
                               role="menuitem"
+                              disabled={Boolean(previewingSkillId)}
                               onClick={() => runSkillMenuAction(skill, "update")}
                             >
-                              <RefreshCw size={14} strokeWidth={2.2} />
+                              {previewingSkillId === skill.id ? (
+                                <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
+                              ) : (
+                                <RefreshCw size={14} strokeWidth={2.2} />
+                              )}
                               <span>{t(hasUpdate ? "Preview update" : "Check update")}</span>
                             </button>
                           ) : null}

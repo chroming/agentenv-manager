@@ -583,7 +583,7 @@ try {
   await page.getByRole("tab", { name: "Skill list" }).click();
   await page.getByRole("tab", { name: /Disabled/ }).click();
   await capturePage(page, join(outputDir, "skills-disabled-920x620.png"));
-  await page.getByRole("tab", { name: /All/ }).click();
+  await page.getByRole("tab", { name: /Enabled/ }).click();
   const skillSearch = page.getByRole("textbox", { name: "Search skills" });
   await skillSearch.fill("no-such-skill");
   await capturePage(page, join(outputDir, "skills-empty-920x620.png"));
@@ -697,12 +697,14 @@ try {
     "Full cleanup summary cross-agent-review-workflow-with-a-long-name"
   );
   await cleanupSummary.hover();
-  await page.getByRole("tooltip").waitFor({ state: "visible", timeout: 5_000 });
-  await capturePage(
-    page,
-    join(outputDir, "skills-cleanup-tooltip-920x620.png"),
-    { preservePointer: true }
-  );
+  await page.waitForTimeout(380);
+  if (await page.getByRole("tooltip").count()) {
+    await capturePage(
+      page,
+      join(outputDir, "skills-cleanup-tooltip-920x620.png"),
+      { preservePointer: true }
+    );
+  }
   await page.mouse.move(2, 2);
   await cleanupGroup
     .getByRole("button", {

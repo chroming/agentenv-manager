@@ -100,7 +100,6 @@ import {
 import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { DiffViewer } from "./components/DiffViewer";
-import { InfoTip } from "./components/InfoTip";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
 import { ProfileList } from "./components/ProfileList";
@@ -3345,6 +3344,22 @@ const AppContent = ({
         setSelectedSkillUpdatePlan(
           updatePlan.updateAvailable && updatePlan.changes.length > 0 ? updatePlan : undefined
         );
+        if (!updatePlan.updateAvailable && updatePlan.latestRevision) {
+          setSkillUpdates((current) => current.map((update) =>
+            update.id === id
+              ? {
+                  ...update,
+                  currentRevision: updatePlan.latestRevision,
+                  latestRevision: updatePlan.latestRevision,
+                  updateAvailable: false,
+                  error: undefined
+                }
+              : update
+          ));
+          if (librarySkills.some((skill) => skill.id === id && skill.sourceCollection)) {
+            await refreshSkillSourceGroups();
+          }
+        }
         setSkillUpdateCheckStatus({
           state: "success",
           message: updatePlan.updateAvailable
@@ -3958,13 +3973,6 @@ const AppContent = ({
             <PageHeader
               className="page-header library-page-header"
               title={t("Skills")}
-              help={
-                <InfoTip
-                  label={t(
-                    "Library stores canonical Skills that Profiles can reuse without duplicating files."
-                  )}
-                />
-              }
               actions={
                 <ControlGroup
                   className="page-actions"
@@ -4066,7 +4074,7 @@ const AppContent = ({
                 onCloseUpdatePreview={() => setSelectedSkillUpdatePlan(undefined)}
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onUpdateAllLibrarySkills={updateAllLibrarySkills}
-                onPreviewAllLibrarySkillUpdates={(ids) => void previewAllLibrarySkillUpdates(ids)}
+                onPreviewAllLibrarySkillUpdates={previewAllLibrarySkillUpdates}
                 onCloseBulkUpdatePreview={() => setBulkSkillUpdatePlans(undefined)}
                 onSyncSkillInstalls={(id) => void syncSkillInstalls(id)}
                 onRemoveLibrarySkill={removeLibrarySkill}

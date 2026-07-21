@@ -18,11 +18,6 @@ afterEach(() => {
 
 describe("SkillLibraryPanel", () => {
   it("keeps the skill list clean and routes secondary workflows through drawers and row actions", async () => {
-    const openContextMenu = vi.fn().mockResolvedValue("settings");
-    Object.defineProperty(window, "agentEnv", {
-      configurable: true,
-      value: { openContextMenu }
-    });
     const onImportUnmanaged = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);
     const onScanGitHubSkills = vi.fn().mockResolvedValue({
       owner: "acme",
@@ -596,30 +591,18 @@ describe("SkillLibraryPanel", () => {
     expect(sharedRow).toHaveTextContent("1 profile");
     expect(sharedRow).toHaveTextContent("2 Agents");
     const sharedUsage = within(sharedRow).getByLabelText("Usage details for shared-reviewer");
-    fireEvent.mouseEnter(sharedUsage);
+    fireEvent.focus(sharedUsage);
     expect(screen.getByRole("tooltip")).toHaveTextContent("Daily Coding");
     expect(screen.getByRole("tooltip")).toHaveTextContent("OpenCode, Codex");
     fireEvent.mouseLeave(sharedUsage);
     await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
     const sharedDescription = screen.getByText("Review code");
     expect(sharedDescription).not.toHaveAttribute("title");
-    fireEvent.mouseEnter(sharedDescription);
-    const descriptionTooltip = screen.getByRole("tooltip");
-    expect(descriptionTooltip).toHaveTextContent("Review code");
-    fireEvent.mouseLeave(sharedDescription);
-    fireEvent.mouseEnter(descriptionTooltip);
-    await new Promise((resolve) => setTimeout(resolve, 180));
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Review code");
-    fireEvent.mouseLeave(descriptionTooltip);
-    await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
+    fireEvent.focus(sharedDescription);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     fireEvent.contextMenu(sharedRow, { clientX: 320, clientY: 240 });
-    expect(openContextMenu).toHaveBeenCalledWith([
-      { id: "update", label: "Preview update" },
-      { id: "availability", label: "Disable globally", enabled: true },
-      { id: "settings", label: "Update settings" },
-      { type: "separator" },
-      { id: "remove", label: "Remove from library" }
-    ]);
+    const rowMenu = screen.getByRole("menu", { name: "Actions for shared-reviewer" });
+    fireEvent.click(within(rowMenu).getByRole("menuitem", { name: "Update settings" }));
     const settingsDialog = await screen.findByRole("dialog", {
       name: "Update settings for shared-reviewer"
     });
@@ -630,7 +613,7 @@ describe("SkillLibraryPanel", () => {
     ).toHaveTextContent("Review");
     const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
     expect(githubSource).not.toHaveAttribute("title");
-    fireEvent.mouseEnter(githubSource);
+    fireEvent.focus(githubSource);
     expect(screen.getByRole("tooltip")).toHaveTextContent(
       "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
     );
@@ -733,6 +716,9 @@ describe("SkillLibraryPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Review update shared-reviewer" }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("shared-reviewer");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Review update shared-reviewer" })).toBeEnabled()
+    );
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Preview update/ }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledTimes(2);
@@ -1116,7 +1102,7 @@ describe("SkillLibraryPanel", () => {
       "Full cleanup locations conflict-reviewer"
     );
     const closeCountBeforeTooltipClick = onCloseTool.mock.calls.length;
-    fireEvent.mouseEnter(conflictLocations);
+    fireEvent.focus(conflictLocations);
     const conflictLocationsTooltip = screen.getByRole("tooltip");
     expect(conflictLocationsTooltip).toHaveTextContent(
       "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
@@ -1147,11 +1133,14 @@ describe("SkillLibraryPanel", () => {
     const codexLocation = within(conflictDialog).getByRole("checkbox", { name: /Codex/ });
     expect(codexLocation).toBeChecked();
     expect(codexLocation).toBeDisabled();
-    fireEvent.focus(
-      within(conflictDialog).getByLabelText(
-        "Full source path /tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
-      )
+    const fullSourcePath = within(conflictDialog).getByLabelText(
+      "Full source path /tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
     );
+    Object.defineProperties(fullSourcePath, {
+      clientWidth: { configurable: true, value: 120 },
+      scrollWidth: { configurable: true, value: 420 }
+    });
+    fireEvent.focus(fullSourcePath);
     expect(screen.getByRole("tooltip")).toHaveTextContent(
       "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
     );

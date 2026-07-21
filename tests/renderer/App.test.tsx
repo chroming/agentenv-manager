@@ -1713,7 +1713,6 @@ describe("App", () => {
 
   it("opens the shared Profile actions from a list-row context menu", async () => {
     const api = installApi({
-      openContextMenu: vi.fn().mockResolvedValue("delete"),
       listProfiles: vi.fn().mockResolvedValue([summaryOf(profile), summaryOf(profileB)]),
       readProfile: vi.fn().mockImplementation(async (profileId) =>
         profileId === profileB.id ? profileB : profile
@@ -1724,11 +1723,9 @@ describe("App", () => {
     await openProfiles();
     const row = screen.getByRole("group", { name: "Profile Profile B" });
     fireEvent.contextMenu(row, { clientX: 280, clientY: 220 });
-    expect(api.openContextMenu).toHaveBeenCalledWith([
-      { id: "duplicate", label: "Duplicate profile" },
-      { type: "separator" },
-      { id: "delete", label: "Delete profile" }
-    ]);
+    const menu = screen.getByRole("menu", { name: "Profile actions" });
+    expect(menu).toHaveClass("profile-row-context-menu");
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Delete profile" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete profile" });
     expect(dialog).toHaveTextContent("Remove Profile B?");
     fireEvent.click(within(dialog).getByRole("button", { name: "Remove profile" }));
@@ -2501,7 +2498,6 @@ describe("App", () => {
 
     const openCodeCard = await screen.findByRole("article", { name: "Agent OpenCode" });
     expect(within(openCodeCard).getByText("Applied")).toBeInTheDocument();
-    expect(within(openCodeCard).getByText("Active profile")).toBeInTheDocument();
     expect(within(openCodeCard).getByText("Daily Coding")).toBeInTheDocument();
   });
 

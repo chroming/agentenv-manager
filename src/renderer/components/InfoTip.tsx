@@ -12,6 +12,7 @@ export const InfoTip = ({ label }: InfoTipProps) => {
       ariaLabel={label}
       className="info-tip"
       content={label}
+      hoverDelay={180}
       maxWidth={320}
       popoverClassName="info-tip__bubble info-tip__bubble--portal"
       preferredPlacement="top"

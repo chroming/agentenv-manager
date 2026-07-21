@@ -1,4 +1,5 @@
-import type { RefObject } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Monitor, Search, TriangleAlert } from "lucide-react";
 import type {
   LibraryResourceVersions,
@@ -18,6 +19,7 @@ import {
 import { targetIconFor } from "./ProfileSidebar";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconPicker } from "./ResourceIconPicker";
+import { ProfileActionsMenu } from "./ProfileActionsMenu";
 
 interface ProfileListProps {
   isLoading: boolean;
@@ -59,6 +61,13 @@ export const ProfileList = ({
   onIconChange
 }: ProfileListProps) => {
   const { t } = useI18n();
+  const [contextMenu, setContextMenu] = useState<{
+    profileId: string;
+    left: number;
+    top: number;
+  }>();
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const contextReturnFocusRef = useRef<HTMLElement>(null);
   const normalizedSearch = search.trim().toLowerCase();
   const visibleProfiles = profiles
     .filter((profile) =>
@@ -67,21 +76,73 @@ export const ProfileList = ({
     )
     .sort(compareProfilesByCreationTime);
 
+  useLayoutEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const rect = contextMenuRef.current.getBoundingClientRect();
+    const margin = 12;
+    const left = Math.min(
+      Math.max(margin, contextMenu.left),
+      Math.max(margin, window.innerWidth - rect.width - margin)
+    );
+    const top = Math.min(
+      Math.max(margin, contextMenu.top),
+      Math.max(margin, window.innerHeight - rect.height - margin)
+    );
+    if (left !== contextMenu.left || top !== contextMenu.top) {
+      setContextMenu((current) => current ? { ...current, left, top } : current);
+      return;
+    }
+    contextMenuRef.current.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    const dismiss = (restoreFocus = false) => {
+      setContextMenu(undefined);
+      if (restoreFocus) {
+        window.requestAnimationFrame(() => contextReturnFocusRef.current?.focus());
+      }
+    };
+    const handlePointerDown = (event: MouseEvent) => {
+      if (event.target instanceof Element && !event.target.closest(".profile-row-context-menu")) {
+        dismiss();
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dismiss(true);
+      }
+    };
+    const handleWindowChange = () => dismiss();
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleWindowChange);
+    window.addEventListener("scroll", handleWindowChange, true);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleWindowChange);
+      window.removeEventListener("scroll", handleWindowChange, true);
+    };
+  }, [contextMenu]);
+
   return (
-    <aside className="profile-index" aria-label={t("Profile list")}>
-      <div className="profile-list-toolbar">
-        <label className="profile-search ui-composite-field">
-          <Search size={15} strokeWidth={2.2} aria-hidden="true" />
-          <input
-            ref={searchInputRef}
-            aria-label={t("Search profiles")}
-            placeholder={t("Search Profile name...")}
-            value={search}
-            onChange={(event) => onSearchChange(event.currentTarget.value)}
-          />
-        </label>
-      </div>
-      <div className="profile-list">
+    <>
+      <aside className="profile-index" aria-label={t("Profile list")}>
+        <div className="profile-list-toolbar">
+          <label className="profile-search ui-composite-field">
+            <Search size={15} strokeWidth={2.2} aria-hidden="true" />
+            <input
+              ref={searchInputRef}
+              aria-label={t("Search profiles")}
+              placeholder={t("Search Profile name...")}
+              value={search}
+              onChange={(event) => onSearchChange(event.currentTarget.value)}
+            />
+          </label>
+        </div>
+        <div className="profile-list">
         {isLoading ? (
           <div className="inline-state inline-state--loading" role="status">
             <span className="inline-state__icon" aria-hidden="true" />
@@ -116,13 +177,11 @@ export const ProfileList = ({
                 if (isBroken || actionsDisabled) return;
                 const row = event.currentTarget;
                 const content = row.querySelector<HTMLElement>(".profile-row__content") ?? row;
-                void window.agentEnv.openContextMenu([
-                  { id: "duplicate", label: t("Duplicate profile") },
-                  { type: "separator" },
-                  { id: "delete", label: t("Delete profile") }
-                ]).then((selection) => {
-                  if (selection === "duplicate") onDuplicate(profile.id);
-                  if (selection === "delete") onDelete(profile.id, content);
+                contextReturnFocusRef.current = content;
+                setContextMenu({
+                  profileId: profile.id,
+                  left: event.clientX,
+                  top: event.clientY
                 });
               }}
             >
@@ -241,7 +300,26 @@ export const ProfileList = ({
             </div>
           );
         })}
-      </div>
-    </aside>
+        </div>
+      </aside>
+      {contextMenu ? createPortal(
+        <ProfileActionsMenu
+          className="profile-row-context-menu"
+          disabled={actionsDisabled}
+          menuRef={contextMenuRef}
+          style={{ left: contextMenu.left, top: contextMenu.top }}
+          onDuplicate={() => {
+            onDuplicate(contextMenu.profileId);
+            setContextMenu(undefined);
+          }}
+          onDelete={() => {
+            const returnFocus = contextReturnFocusRef.current;
+            setContextMenu(undefined);
+            if (returnFocus) onDelete(contextMenu.profileId, returnFocus);
+          }}
+        />,
+        document.body
+      ) : null}
+    </>
   );
 };

@@ -65,8 +65,8 @@ describe("SkillSourceView", () => {
   it("shows source-level counts and routes each remote state to one explicit action", async () => {
     const onCheckGroup = vi.fn().mockResolvedValue(undefined);
     const onAdd = vi.fn().mockResolvedValue(true);
-    const onUpdate = vi.fn();
-    const onReviewUpdates = vi.fn();
+    const onUpdate = vi.fn().mockResolvedValue(undefined);
+    const onReviewUpdates = vi.fn().mockResolvedValue(undefined);
     const onDelete = vi.fn();
     render(
       <SkillSourceView
@@ -93,6 +93,7 @@ describe("SkillSourceView", () => {
     expect(document.querySelector(".skill-source-counts .is-update")).toHaveClass("has-value");
     fireEvent.click(screen.getByRole("button", { name: "Review 1" }));
     expect(onReviewUpdates).toHaveBeenCalledWith(["review"]);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Review 1" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
 
     const candidates = document.querySelector<HTMLElement>(".skill-source-candidates");
@@ -101,6 +102,9 @@ describe("SkillSourceView", () => {
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(group, group.candidates[0]));
     fireEvent.click(within(candidates!).getByRole("button", { name: "Review update review" }));
     expect(onUpdate).toHaveBeenCalledWith("review");
+    await waitFor(() =>
+      expect(within(candidates!).getByRole("button", { name: "Review update review" })).toBeEnabled()
+    );
     fireEvent.click(within(candidates!).getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledWith("docs");
 
@@ -154,6 +158,80 @@ describe("SkillSourceView", () => {
       .toHaveClass("is-inactive");
     expect(document.querySelector<HTMLInputElement>("[aria-label='Search sources and skills']"))
       .toHaveValue("testing");
+  });
+
+  it("selects consecutive source groups by dragging through the selection rail", () => {
+    const groups = ["frontend", "backend", "platform"].map((name, index) => ({
+      ...group,
+      sourceId: `source-${name}`,
+      canonicalLink: `https://github.com/acme/skills/tree/main/${name}`,
+      directory: name,
+      counts: { total: 1, updates: 0, new: 0, removed: 0 },
+      candidates: [],
+      displayName: name
+    }));
+    render(
+      <SkillSourceView
+        active
+        groups={groups}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn().mockResolvedValue(undefined)}
+        onReviewUpdates={vi.fn().mockResolvedValue(undefined)}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    const rows = document.querySelectorAll<HTMLElement>(".skill-source-group");
+    fireEvent.pointerDown(checkboxes[0]!.closest("label")!, { button: 0 });
+    fireEvent.pointerEnter(rows[1]!);
+    fireEvent.pointerUp(window);
+
+    expect(checkboxes[0]).toBeChecked();
+    expect(checkboxes[1]).toBeChecked();
+    expect(checkboxes[2]).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Merge selected (2)" })).toBeEnabled();
+  });
+
+  it("animates the action that is waiting for an update preview", async () => {
+    let finishUpdate!: () => void;
+    const onUpdate = vi.fn(() => new Promise<void>((resolve) => {
+      finishUpdate = resolve;
+    }));
+    render(
+      <SkillSourceView
+        active
+        groups={[group]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={onUpdate}
+        onReviewUpdates={vi.fn().mockResolvedValue(undefined)}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
+    const review = screen.getByRole("button", { name: "Review update review" });
+    fireEvent.click(review);
+    expect(review.querySelector(".is-spinning")).not.toBeNull();
+
+    finishUpdate();
+    await waitFor(() => expect(review.querySelector(".is-spinning")).toBeNull());
   });
 
   it("requires an explicit preview before merging selected source scopes", async () => {

@@ -333,6 +333,14 @@
   white-space: nowrap;
 }
 
+.profile-actions-menu.profile-row-context-menu {
+  left: auto;
+  position: fixed;
+  right: auto;
+  top: auto;
+  z-index: var(--z-popover);
+}
+
 .profile-dialog-header,
 .preview-header,
 .capture-dialog__header,

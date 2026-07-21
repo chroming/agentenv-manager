@@ -2938,6 +2938,15 @@ export const createSkillLibraryStore = (
       }
       const candidateContentHash = await computeContentHash(candidateDir);
       if (changes.length === 0) {
+        // The source may use a different revision encoding (for example Git tree
+        // versus GitHub Contents API) while the actual Skill files are identical.
+        // Advance the tracking checkpoint so subsequent source checks do not keep
+        // reporting an update that has already been verified as a no-op.
+        await writeMetadata(targetDir, {
+          ...metadata,
+          remoteRevision: nextMetadata.remoteRevision,
+          upstream: nextMetadata.upstream
+        });
         await rm(candidateDir, { recursive: true, force: true });
         return {
           id: skill.id,

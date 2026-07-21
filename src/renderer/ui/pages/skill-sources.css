@@ -220,6 +220,11 @@
   overscroll-behavior: contain;
 }
 
+.skill-source-list.is-selecting {
+  cursor: crosshair;
+  user-select: none;
+}
+
 .skill-source-empty {
   align-content: center;
   color: var(--muted);
@@ -266,6 +271,7 @@
 
 .skill-source-select {
   align-items: center;
+  cursor: crosshair;
   display: inline-flex;
   grid-area: select;
   height: 28px;
@@ -275,6 +281,7 @@
 
 .skill-source-select input {
   accent-color: var(--accent);
+  cursor: inherit;
   height: 15px;
   margin: 0;
   width: 15px;

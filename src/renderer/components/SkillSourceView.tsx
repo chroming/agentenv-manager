@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -37,8 +37,8 @@ interface SkillSourceViewProps {
   onPreviewMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   onMerge(previewId: string): Promise<SkillSourceMergeResult>;
   onAdd(group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate): Promise<boolean>;
-  onUpdate(libraryId: string): void;
-  onReviewUpdates(libraryIds: string[]): void;
+  onUpdate(libraryId: string): Promise<void>;
+  onReviewUpdates(libraryIds: string[]): Promise<void>;
   onDelete(libraryId: string): void;
   onOpenSource(url: string): void;
   onCopySource(source: string): void;
@@ -108,6 +108,7 @@ export const SkillSourceView = ({
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const [checkingAll, setCheckingAll] = useState(false);
   const [operation, setOperation] = useState<string>();
+  const [selectionDragging, setSelectionDragging] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set());
   const [mergeDirectory, setMergeDirectory] = useState<string>();
@@ -120,6 +121,8 @@ export const SkillSourceView = ({
   const [renameError, setRenameError] = useState<string>();
   const mergeDialogRef = useRef<HTMLElement>(null);
   const renameDialogRef = useRef<HTMLElement>(null);
+  const selectionDragRef = useRef<{ selected: boolean; visited: Set<string> } | undefined>(undefined);
+  const suppressSelectionClickRef = useRef(false);
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const visibleGroups = useMemo(() => {
     if (!normalizedSearch) return groups;
@@ -151,6 +154,60 @@ export const SkillSourceView = ({
   const activeMergeDirectory = mergeDirectory ?? computedMergeDirectory;
   const mergePreviewIsCurrent = mergePreview?.mergedSource.directory === activeMergeDirectory;
   const canMergeSources = groups.length >= 2;
+
+  useEffect(() => {
+    if (!selectionDragging) return;
+    const finishSelectionDrag = () => {
+      selectionDragRef.current = undefined;
+      setSelectionDragging(false);
+      window.setTimeout(() => {
+        suppressSelectionClickRef.current = false;
+      }, 0);
+    };
+    window.addEventListener("pointerup", finishSelectionDrag, { once: true });
+    window.addEventListener("pointercancel", finishSelectionDrag, { once: true });
+    return () => {
+      window.removeEventListener("pointerup", finishSelectionDrag);
+      window.removeEventListener("pointercancel", finishSelectionDrag);
+    };
+  }, [selectionDragging]);
+
+  const setSourceSelected = (sourceId: string, selected: boolean) => {
+    setMergeSelection((current) => {
+      const next = new Set(current);
+      if (selected) next.add(sourceId);
+      else next.delete(sourceId);
+      return next;
+    });
+  };
+
+  const extendSelectionDrag = (sourceId: string) => {
+    const drag = selectionDragRef.current;
+    if (!drag || drag.visited.has(sourceId)) return;
+    drag.visited.add(sourceId);
+    setSourceSelected(sourceId, drag.selected);
+  };
+
+  const beginSelectionDrag = (
+    event: ReactPointerEvent<HTMLLabelElement>,
+    sourceId: string,
+    selected: boolean
+  ) => {
+    if (event.button !== 0 || event.target !== event.currentTarget) return;
+    event.preventDefault();
+    suppressSelectionClickRef.current = true;
+    selectionDragRef.current = { selected: !selected, visited: new Set() };
+    setSelectionDragging(true);
+    extendSelectionDrag(sourceId);
+  };
+
+  const scrollSelectionList = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!selectionDragRef.current) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const edge = 36;
+    if (event.clientY < bounds.top + edge) event.currentTarget.scrollBy({ top: -18 });
+    else if (event.clientY > bounds.bottom - edge) event.currentTarget.scrollBy({ top: 18 });
+  };
 
   const closeMerge = (force = false, clearSelection = false) => {
     if (mergeBusy && !force) return;
@@ -279,10 +336,30 @@ export const SkillSourceView = ({
   };
 
   const runAdd = async (group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate) => {
-    const key = `${group.canonicalLink}\0${candidate.sourceSubpath}`;
+    const key = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
     setOperation(key);
     try {
       await onAdd(group, candidate);
+    } finally {
+      setOperation(undefined);
+    }
+  };
+
+  const runUpdate = async (libraryId: string) => {
+    const key = `update\0${libraryId}`;
+    setOperation(key);
+    try {
+      await onUpdate(libraryId);
+    } finally {
+      setOperation(undefined);
+    }
+  };
+
+  const runReviewUpdates = async (libraryIds: string[]) => {
+    const key = `review\0${libraryIds.join("\0")}`;
+    setOperation(key);
+    try {
+      await onReviewUpdates(libraryIds);
     } finally {
       setOperation(undefined);
     }
@@ -306,6 +383,7 @@ export const SkillSourceView = ({
           />
         </label>
         <button
+          aria-busy={checkingAll}
           className="secondary-action"
           type="button"
           disabled={checkingAll || checking.size > 0 || Boolean(operation) || groups.length === 0}
@@ -331,7 +409,10 @@ export const SkillSourceView = ({
         ) : null}
       </div>
 
-      <div className={`skill-source-list${canMergeSources ? " can-merge" : ""}`}>
+      <div
+        className={`skill-source-list${canMergeSources ? " can-merge" : ""}${selectionDragging ? " is-selecting" : ""}`}
+        onPointerMove={scrollSelectionList}
+      >
         {loading && groups.length === 0 ? (
           <div className="inline-state inline-state--loading skill-source-empty" role="status">
             <span className="inline-state__icon" aria-hidden="true" />
@@ -367,10 +448,23 @@ export const SkillSourceView = ({
             <article
               className={`skill-source-group${isExpanded ? " is-expanded" : ""}${isSelected ? " is-selected" : ""}${hasAttention ? " has-attention" : ""}`}
               key={group.sourceId}
+              onPointerEnter={() => extendSelectionDrag(group.sourceId)}
             >
               <div className="skill-source-group-row">
                 {canMergeSources ? (
-                  <label className="skill-source-select">
+                  <label
+                    className="skill-source-select"
+                    onPointerDown={(event) => beginSelectionDrag(
+                      event,
+                      group.sourceId,
+                      isSelected
+                    )}
+                    onClick={(event) => {
+                      if (!suppressSelectionClickRef.current) return;
+                      event.preventDefault();
+                      suppressSelectionClickRef.current = false;
+                    }}
+                  >
                     <input
                       type="checkbox"
                       aria-label={t("Select source {{name}}", {
@@ -378,13 +472,7 @@ export const SkillSourceView = ({
                       })}
                       checked={isSelected}
                       onChange={(event) => {
-                        const checked = event.currentTarget.checked;
-                        setMergeSelection((current) => {
-                          const next = new Set(current);
-                          if (checked) next.add(group.sourceId);
-                          else next.delete(group.sourceId);
-                          return next;
-                        });
+                        setSourceSelected(group.sourceId, event.currentTarget.checked);
                       }}
                     />
                   </label>
@@ -469,16 +557,22 @@ export const SkillSourceView = ({
                   {reviewableUpdateIds.length > 0 ? (
                     <button
                       aria-label={`${t("Review")} ${reviewableUpdateIds.length}`}
+                      aria-busy={operation === `review\0${reviewableUpdateIds.join("\0")}`}
                       className="secondary-action skill-source-review"
                       type="button"
                       disabled={isChecking || checkingAll || Boolean(operation)}
-                      onClick={() => onReviewUpdates(reviewableUpdateIds)}
+                      onClick={() => void runReviewUpdates(reviewableUpdateIds)}
                     >
-                      <RefreshCw size={14} strokeWidth={2.2} />
+                      {operation === `review\0${reviewableUpdateIds.join("\0")}` ? (
+                        <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
+                      ) : (
+                        <RefreshCw size={14} strokeWidth={2.2} />
+                      )}
                       <span>{t("Review")} {reviewableUpdateIds.length}</span>
                     </button>
                   ) : null}
                   <button
+                    aria-busy={isChecking}
                     className="secondary-action skill-source-check"
                     type="button"
                     disabled={isChecking || checkingAll || Boolean(operation)}
@@ -504,8 +598,10 @@ export const SkillSourceView = ({
                     <span>{t("Action")}</span>
                   </div>
                   {group.candidates.map((candidate) => {
-                    const key = `${group.canonicalLink}\0${candidate.sourceSubpath}`;
-                    const isWorking = operation === key;
+                    const addKey = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
+                    const updateKey = candidate.libraryId ? `update\0${candidate.libraryId}` : "";
+                    const isAdding = operation === addKey;
+                    const isUpdating = operation === updateKey;
                     return (
                       <div
                         className={`skill-source-candidate is-${candidate.state}${candidate.globallyEnabled === false ? " is-disabled" : ""}`}
@@ -541,12 +637,13 @@ export const SkillSourceView = ({
                         <div className="skill-source-candidate-action">
                           {candidate.state === "new" ? (
                             <button
+                              aria-busy={isAdding}
                               className="text-action"
                               type="button"
                               disabled={Boolean(operation) || checkingAll || checking.size > 0}
                               onClick={() => void runAdd(group, candidate)}
                             >
-                              {isWorking ? <LoaderCircle className="is-spinning" size={13} /> : null}
+                              {isAdding ? <LoaderCircle className="is-spinning" size={13} /> : null}
                               <span>{t("Add")}</span>
                             </button>
                           ) : candidate.state === "update" &&
@@ -554,12 +651,14 @@ export const SkillSourceView = ({
                             candidate.globallyEnabled !== false &&
                             candidate.updatePolicy !== "untracked" ? (
                             <button
+                              aria-busy={isUpdating}
                               className="text-action"
                               type="button"
                               aria-label={t("Review update {{id}}", { id: candidate.libraryId })}
                               disabled={Boolean(operation) || checkingAll || checking.size > 0}
-                              onClick={() => onUpdate(candidate.libraryId!)}
+                              onClick={() => void runUpdate(candidate.libraryId!)}
                             >
+                              {isUpdating ? <LoaderCircle className="is-spinning" size={13} /> : null}
                               <span>{t("Review")}</span>
                             </button>
                           ) : candidate.state === "removed" && candidate.libraryId ? (

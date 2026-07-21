@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   type ReactNode,
+  type WheelEvent,
   useCallback,
   useEffect,
   useId,
@@ -25,11 +26,13 @@ interface HoverDetailProps {
   className: string;
   content: ReactNode;
   focusable?: boolean;
+  hoverDelay?: number;
   id?: string;
   maxWidth?: number;
   popoverClassName?: string;
   preferredPlacement?: "top" | "bottom";
   showArrow?: boolean;
+  showOnlyWhenOverflowing?: boolean;
   testId?: string;
 }
 
@@ -44,11 +47,13 @@ export const HoverDetail = ({
   className,
   content,
   focusable = true,
+  hoverDelay = 160,
   id,
   maxWidth = 420,
   popoverClassName = "",
   preferredPlacement,
   showArrow = false,
+  showOnlyWhenOverflowing = false,
   testId
 }: HoverDetailProps) => {
   const popoverId = useId();
@@ -57,6 +62,14 @@ export const HoverDetail = ({
   const triggerRef = useRef<HTMLSpanElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | undefined>(undefined);
+  const openTimerRef = useRef<number | undefined>(undefined);
+
+  const cancelOpen = () => {
+    if (openTimerRef.current !== undefined) {
+      window.clearTimeout(openTimerRef.current);
+      openTimerRef.current = undefined;
+    }
+  };
 
   const cancelClose = () => {
     if (closeTimerRef.current !== undefined) {
@@ -66,14 +79,30 @@ export const HoverDetail = ({
   };
 
   const close = useCallback(() => {
+    cancelOpen();
     cancelClose();
     setIsOpen(false);
   }, []);
 
   const open = () => {
+    const trigger = triggerRef.current;
+    if (
+      showOnlyWhenOverflowing &&
+      trigger &&
+      trigger.scrollWidth <= trigger.clientWidth + 1 &&
+      trigger.scrollHeight <= trigger.clientHeight + 1
+    ) {
+      return;
+    }
+    cancelOpen();
     cancelClose();
     document.dispatchEvent(new CustomEvent(hoverDetailOpenEvent, { detail: popoverId }));
     setIsOpen(true);
+  };
+
+  const scheduleOpen = () => {
+    cancelOpen();
+    openTimerRef.current = window.setTimeout(open, hoverDelay);
   };
 
   const scheduleClose = () => {
@@ -140,16 +169,19 @@ export const HoverDetail = ({
       }
     };
     window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("scroll", close, true);
     document.addEventListener("keydown", handleKeyDown, true);
     return () => {
       window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("scroll", close, true);
       document.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [close, isOpen, updatePosition]);
 
-  useEffect(() => () => cancelClose(), []);
+  useEffect(() => () => {
+    cancelOpen();
+    cancelClose();
+  }, []);
 
   useEffect(() => {
     const closeForAnotherDetail = (event: Event) => {
@@ -166,6 +198,29 @@ export const HoverDetail = ({
     top: position?.top ?? -9999
   } as CSSProperties;
 
+  const forwardWheelToScrollOwner = (event: WheelEvent<HTMLDivElement>) => {
+    const popover = popoverRef.current;
+    if (!popover) return;
+    const canScrollUp = popover.scrollTop > 0;
+    const canScrollDown = popover.scrollTop + popover.clientHeight < popover.scrollHeight - 1;
+    if ((event.deltaY < 0 && canScrollUp) || (event.deltaY > 0 && canScrollDown)) return;
+
+    let scrollOwner = triggerRef.current?.parentElement;
+    while (scrollOwner) {
+      const style = window.getComputedStyle(scrollOwner);
+      if (
+        /(auto|scroll)/.test(style.overflowY) &&
+        scrollOwner.scrollHeight > scrollOwner.clientHeight
+      ) {
+        event.preventDefault();
+        scrollOwner.scrollBy({ top: event.deltaY, left: event.deltaX });
+        close();
+        return;
+      }
+      scrollOwner = scrollOwner.parentElement;
+    }
+  };
+
   return (
     <>
       <span
@@ -179,8 +234,11 @@ export const HoverDetail = ({
         tabIndex={focusable ? 0 : undefined}
         onBlur={scheduleClose}
         onFocus={open}
-        onMouseEnter={open}
-        onMouseLeave={scheduleClose}
+        onMouseEnter={scheduleOpen}
+        onMouseLeave={() => {
+          cancelOpen();
+          scheduleClose();
+        }}
       >
         {children}
       </span>
@@ -198,6 +256,7 @@ export const HoverDetail = ({
               onPointerDown={(event) => event.stopPropagation()}
               onMouseEnter={cancelClose}
               onMouseLeave={scheduleClose}
+              onWheel={forwardWheelToScrollOwner}
             >
               {content}
             </div>,

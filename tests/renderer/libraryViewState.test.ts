@@ -12,7 +12,7 @@ describe("library view state", () => {
     expect(defaultSkillLibraryViewState).toEqual({
       search: "",
       sourceFilter: "all",
-      statusFilter: "all",
+      statusFilter: "enabled",
       targetFilter: "all",
       usageFilter: "all",
       scrollTop: 0
@@ -65,6 +65,7 @@ describe("library view state", () => {
     };
 
     expect(matchesSkillStatusFilter("updates", enabledSkill, availableUpdate)).toBe(true);
+    expect(matchesSkillStatusFilter("enabled", enabledSkill, availableUpdate)).toBe(true);
     expect(matchesSkillStatusFilter("disabled", enabledSkill, availableUpdate)).toBe(false);
     expect(matchesSkillUsageFilter("referenced", true)).toBe(true);
     expect(matchesSkillUsageFilter("referenced", false)).toBe(false);
@@ -72,6 +73,7 @@ describe("library view state", () => {
     expect(matchesSkillUsageFilter("referenced", true, false)).toBe(false);
 
     const disabledSkill = { ...enabledSkill, globallyEnabled: false };
+    expect(matchesSkillStatusFilter("enabled", disabledSkill, availableUpdate)).toBe(false);
     expect(matchesSkillStatusFilter("updates", disabledSkill, availableUpdate)).toBe(false);
     expect(matchesSkillStatusFilter("disabled", disabledSkill, availableUpdate)).toBe(true);
   });

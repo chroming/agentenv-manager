@@ -32,9 +32,11 @@ export const OverflowTooltip = ({
       className={className}
       content={text}
       focusable={focusable}
+      hoverDelay={320}
       id={id}
       popoverClassName={`skill-description-tooltip${tooltipClassName ? ` ${tooltipClassName}` : ""}`}
       preferredPlacement={preferredPlacement}
+      showOnlyWhenOverflowing={displayContent == null && (displayText ?? text) === text}
       testId={testId}
     >
       {displayContent ?? displayText ?? text}

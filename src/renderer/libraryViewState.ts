@@ -8,7 +8,7 @@ import type {
 export interface SkillLibraryViewState {
   search: string;
   sourceFilter: "all" | SkillSourceType;
-  statusFilter: "all" | "updates" | "disabled";
+  statusFilter: "enabled" | "updates" | "disabled";
   targetFilter: "all" | SkillInventoryEntry["status"] | "not-installed";
   usageFilter: "all" | "referenced" | "unreferenced";
   scrollTop: number;
@@ -17,7 +17,7 @@ export interface SkillLibraryViewState {
 export const defaultSkillLibraryViewState: SkillLibraryViewState = {
   search: "",
   sourceFilter: "all",
-  statusFilter: "all",
+  statusFilter: "enabled",
   targetFilter: "all",
   usageFilter: "all",
   scrollTop: 0
@@ -33,7 +33,7 @@ export const matchesSkillStatusFilter = (
   skill: SkillLibraryEntry,
   update?: SkillUpdateInfo
 ) => {
-  if (statusFilter === "all") return true;
+  if (statusFilter === "enabled") return skill.globallyEnabled !== false;
   if (statusFilter === "disabled") return skill.globallyEnabled === false;
   if (skill.globallyEnabled === false) return false;
   return (

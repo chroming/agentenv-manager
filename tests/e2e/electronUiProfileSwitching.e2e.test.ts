@@ -1181,7 +1181,7 @@ describe("Electron UI profile switching e2e", () => {
         await expect.poll(() => allRows.count()).toBe(testCase.count + 4);
       }
       const updatesTab = page.getByRole("tab", { name: /Updates/ });
-      const allTab = page.getByRole("tab", { name: /All/ });
+      const allTab = page.getByRole("tab", { name: /Enabled/ });
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
         await updatesTab.click();
@@ -1413,8 +1413,8 @@ describe("Electron UI profile switching e2e", () => {
 
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await openCodeCard.waitFor({ state: "visible" });
-    await expect.poll(() => openCodeCard.textContent()).toContain("ManagementApplied");
-    await expect.poll(() => openCodeCard.textContent()).toContain("Active profileUI OpenCode alpha");
+    await expect.poll(() => openCodeCard.textContent()).toContain("Applied");
+    await expect.poll(() => openCodeCard.textContent()).toContain("UI OpenCode alpha");
     await expect
       .poll(() =>
         openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).textContent()
@@ -1775,7 +1775,8 @@ describe("Electron UI profile switching e2e", () => {
       "Full cleanup history details target-only-reviewer"
     );
     await historyDetails.focus();
-    await page.getByRole("tooltip").waitFor({ state: "visible", timeout: 5_000 });
+    await page.waitForTimeout(380);
+    expect(await page.getByRole("tooltip").count()).toBe(0);
     await historyDetails.evaluate((element) => element.blur());
     await cleanupHistory
       .getByRole("button", { name: "Restore cleanup target-only-reviewer" })
@@ -2103,28 +2104,16 @@ describe("Electron UI profile switching e2e", () => {
 
   it("keeps menus, dialogs, and info tips inside the visible app window", async () => {
     const { page } = await launchApp();
-    const electronApp = app;
-    if (!electronApp) throw new Error("Electron application is not running");
-    await electronApp.evaluate(({ ipcMain }) => {
-      const state = globalThis as typeof globalThis & {
-        __agentEnvContextMenuRequests?: unknown[][];
-      };
-      state.__agentEnvContextMenuRequests = [];
-      ipcMain.removeHandler("menu:open-context");
-      ipcMain.handle("menu:open-context", (_event, items: unknown[]) => {
-        state.__agentEnvContextMenuRequests?.push(items);
-        return items.some((item) =>
-          Boolean(item && typeof item === "object" && (item as { id?: string }).id === "settings")
-        ) ? "settings" : undefined;
-      });
-    });
     await page.setViewportSize({ width: 1180, height: 728 });
 
-    await page.locator(".skill-description").first().hover();
-    const descriptionTip = page
-      .getByRole("tooltip")
-      .filter({ hasText: "Shared review guidance" });
+    const shortDescription = page.locator(".skill-description").first();
+    await shortDescription.hover();
+    await page.waitForTimeout(380);
+    expect(await page.getByRole("tooltip").count()).toBe(0);
+    await page.getByLabel("Full source for shared-reviewer").focus();
+    const descriptionTip = page.getByRole("tooltip");
     await descriptionTip.waitFor({ state: "visible" });
+    expect(await descriptionTip.textContent()).toContain("shared-reviewer");
     await expectInViewport(page, descriptionTip);
     const detailStyle = await descriptionTip.evaluate((element) => {
       const style = getComputedStyle(element);
@@ -2139,10 +2128,10 @@ describe("Electron UI profile switching e2e", () => {
       borderTopWidth: "1px",
       userSelect: "text"
     });
-    await page.mouse.move(10, 10);
+    await page.keyboard.press("Escape");
     await descriptionTip.waitFor({ state: "hidden" });
 
-    await page.locator(".page-header .info-tip").first().hover();
+    await page.locator(".library-table__head .info-tip").first().hover();
     const headerTip = page.getByRole("tooltip");
     await headerTip.waitFor({ state: "visible" });
     expect(await headerTip.getAttribute("class")).toContain("ui-hover-detail");
@@ -2160,23 +2149,15 @@ describe("Electron UI profile switching e2e", () => {
 
     const selectedProfileRow = page.getByRole("group", { name: "Profile UI OpenCode alpha" });
     await selectedProfileRow.click({ button: "right" });
-    await expect.poll(() => electronApp.evaluate(() => {
-      const state = globalThis as typeof globalThis & {
-        __agentEnvContextMenuRequests?: unknown[][];
-      };
-      return state.__agentEnvContextMenuRequests?.length ?? 0;
-    })).toBe(1);
-    const profileContextMenu = await electronApp.evaluate(() => {
-      const state = globalThis as typeof globalThis & {
-        __agentEnvContextMenuRequests?: Array<Array<{ id?: string; label?: string; type?: string }>>;
-      };
-      return state.__agentEnvContextMenuRequests?.[0];
-    });
-    expect(profileContextMenu).toEqual([
-      { id: "duplicate", label: "Duplicate profile" },
-      { type: "separator" },
-      { id: "delete", label: "Delete profile" }
+    const profileContextMenu = page.getByRole("menu", { name: "Profile actions" });
+    await profileContextMenu.waitFor({ state: "visible" });
+    await expectInViewport(page, profileContextMenu);
+    expect(await profileContextMenu.getByRole("menuitem").allTextContents()).toEqual([
+      "Duplicate profile",
+      "Delete profile"
     ]);
+    await page.keyboard.press("Escape");
+    await profileContextMenu.waitFor({ state: "hidden" });
 
     await expandComposerSection(page, "Skills");
     await openProfileSkillPicker(page);
@@ -2190,23 +2171,14 @@ describe("Electron UI profile switching e2e", () => {
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.waitFor({ state: "visible" });
     await sharedRow.click({ button: "right" });
+    const skillContextMenu = page.getByRole("menu", { name: "Actions for shared-reviewer" });
+    await skillContextMenu.waitFor({ state: "visible" });
+    await expectInViewport(page, skillContextMenu);
+    await skillContextMenu.getByRole("menuitem", { name: "Update settings" }).click();
     const updateSettings = page.getByRole("dialog", {
       name: "Update settings for shared-reviewer"
     });
     await updateSettings.waitFor({ state: "visible" });
-    const skillContextMenu = await electronApp.evaluate(() => {
-      const state = globalThis as typeof globalThis & {
-        __agentEnvContextMenuRequests?: Array<Array<{ id?: string; label?: string; type?: string }>>;
-      };
-      return state.__agentEnvContextMenuRequests?.[1];
-    });
-    expect(skillContextMenu?.map((item) => item.id ?? item.type)).toEqual([
-      "update",
-      "availability",
-      "settings",
-      "separator",
-      "remove"
-    ]);
     await expectInViewport(page, updateSettings);
     await expectTopmost(updateSettings);
     await updateSettings.locator(".info-tip").hover();
@@ -3366,12 +3338,14 @@ describe("Electron UI profile switching e2e", () => {
       claudeCard.evaluate((element) => Math.round(element.getBoundingClientRect().height))
     ]);
     expect(expandedHeights[0]).toBeGreaterThan(expandedHeights[1]);
-    const diagnosticsAlignment = await openCodeCard.evaluate((card) => {
-      const toggle = card.querySelector<HTMLElement>(".target-diagnostics-toggle")!;
-      const state = card.querySelector<HTMLElement>(".target-state-grid > span")!;
-      return Math.abs(toggle.getBoundingClientRect().left - state.getBoundingClientRect().left);
-    });
-    expect(diagnosticsAlignment).toBeLessThanOrEqual(4);
+    const diagnosticsGeometry = await openCodeCard
+      .getByRole("button", { name: "Hide OpenCode diagnostics" })
+      .evaluate((button) => {
+        const box = button.getBoundingClientRect();
+        return { height: Math.round(box.height), width: Math.round(box.width) };
+      });
+    expect(diagnosticsGeometry.height).toBe(diagnosticsGeometry.width);
+    expect(diagnosticsGeometry.width).toBeGreaterThanOrEqual(28);
     expect(
       await openCodeCard
         .getByRole("region", { name: "OpenCode diagnostics" })
@@ -6338,6 +6312,10 @@ describe("Electron UI profile switching e2e", () => {
         join(appDataRoot, "skills-library", "layout-skill-1", ".agentenv-skill.json")
       )).globallyEnabled
     ).toBe(false);
+    await expect.poll(() => libraryRow.count()).toBe(0);
+    const disabledTab = page.getByRole("tab", { name: /Disabled 1/ });
+    await disabledTab.click();
+    await libraryRow.waitFor({ state: "visible" });
     await expect.poll(() => libraryRow.textContent()).toContain("Disabled");
     expect(await libraryRow.getAttribute("class")).toContain("is-globally-disabled");
     await expect
@@ -6346,13 +6324,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
       .toBe("none");
-    const disabledTab = page.getByRole("tab", { name: /Disabled 1/ });
-    await disabledTab.click();
     expect(await disabledTab.getAttribute("aria-selected")).toBe("true");
     expect(await page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
     await page.getByRole("tab", { name: /Updates/ }).click();
     expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);
-    await page.getByRole("tab", { name: /^All / }).click();
+    await page.getByRole("tab", { name: /^Enabled / }).click();
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     const usageFilter = page.getByRole("combobox", { name: "Skill usage filter" });
     await usageFilter.selectOption("referenced");
@@ -6382,6 +6358,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(installedSkillDir)).resolves.toBe(false);
 
     await openSkillLibrary(page);
+    await page.getByRole("tab", { name: /Disabled 1/ }).click();
     await libraryRow.getByRole("button", { name: "More actions for layout-skill-1" }).click();
     await page.getByRole("menuitem", { name: /Enable globally/ }).click();
     await expect.poll(async () =>
@@ -7184,8 +7161,8 @@ describe("Electron UI profile switching e2e", () => {
     const targetListGeometry = await page.locator(".target-list").evaluate((list) => {
       const rows = Array.from(list.querySelectorAll<HTMLElement>(".target-card--workflow"));
       const listBox = list.getBoundingClientRect();
-      const statusLefts = rows.map((row) =>
-        row.querySelector<HTMLElement>(".target-health-status")!.getBoundingClientRect().left
+      const summaryLefts = rows.map((row) =>
+        row.querySelector<HTMLElement>(".target-workflow-summary")!.getBoundingClientRect().left
       );
       const actionLefts = rows.map((row) =>
         row.querySelector<HTMLElement>(".target-workflow-actions")!.getBoundingClientRect().left
@@ -7207,7 +7184,7 @@ describe("Electron UI profile switching e2e", () => {
           const status = row.querySelector<HTMLElement>(".target-health-status")!;
           return getComputedStyle(status).backgroundColor === "rgba(0, 0, 0, 0)";
         }),
-        statusLanesAligned: Math.max(...statusLefts) - Math.min(...statusLefts) <= 1,
+        summaryLanesAligned: Math.max(...summaryLefts) - Math.min(...summaryLefts) <= 1,
         actionLanesAligned: Math.max(...actionLefts) - Math.min(...actionLefts) <= 1
       };
     });
@@ -7217,7 +7194,7 @@ describe("Electron UI profile switching e2e", () => {
       continuous: true,
       flatRows: true,
       healthBackgroundsAreNeutral: true,
-      statusLanesAligned: true
+      summaryLanesAligned: true
     });
 
     await sidebar.getByRole("button", { name: "Settings", exact: true }).click();

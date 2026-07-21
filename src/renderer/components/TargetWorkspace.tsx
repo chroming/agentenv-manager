@@ -1,8 +1,7 @@
 import {
+  Activity,
   ArchiveRestore,
   ArrowRight,
-  ChevronDown,
-  ChevronUp,
   Clock3,
   Monitor,
   Plus,
@@ -21,6 +20,7 @@ import type {
 } from "../../shared/types";
 import { HistoryView } from "./HistoryView";
 import { InfoTip } from "./InfoTip";
+import { OverflowTooltip } from "./OverflowTooltip";
 import { PreviewDialog } from "./PreviewDialog";
 import { targetIconFor } from "./ProfileSidebar";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -176,11 +176,25 @@ export const TargetWorkspace = ({
                   {icon.assetUrl ? <img src={icon.assetUrl} alt="" /> : <TerminalSquare size={20} />}
                 </span>
                 <span className="target-workflow-title">
-                  <strong>{target.name}</strong>
-                  <small>{t(target.description)}</small>
+                  <span className="target-workflow-name-line">
+                    <strong>{target.name}</strong>
+                    <span className={`target-health-status target-health-status--${target.health.status}`}>
+                      {t(targetStatusLabel[target.health.status])}
+                    </span>
+                  </span>
+                  <OverflowTooltip
+                    className="target-workflow-description"
+                    focusable={false}
+                    text={t(target.description)}
+                  />
                 </span>
-                <span className={`target-health-status target-health-status--${target.health.status}`}>
-                  {t(targetStatusLabel[target.health.status])}
+                <span className="target-workflow-summary">
+                  <strong>{t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}</strong>
+                  <span>{state?.activeProfileName ?? t("None")}</span>
+                  <span className="target-workflow-last-applied">
+                    <Clock3 size={12} />
+                    {formatLastApplied(state?.lastAppliedAt, localeTag, t("Never applied"))}
+                  </span>
                 </span>
                 <span className="target-workflow-actions">
                   <button
@@ -188,11 +202,11 @@ export const TargetWorkspace = ({
                     type="button"
                     aria-label={t("Create profile from {{name}}", { name: target.name })}
                     disabled={busy || !isTargetInstalled(target.health)}
-                    title={isTargetInstalled(target.health) ? undefined : t("{{name}} is not detected", { name: target.name })}
+                    title={isTargetInstalled(target.health) ? t("Capture") : t("{{name}} is not detected", { name: target.name })}
                     onClick={() => onCreateProfileFromTarget(target.id)}
                   >
                     <Plus size={14} strokeWidth={2.2} />
-                    {t("Capture")}
+                    <span>{t("Capture")}</span>
                   </button>
                   <button
                     className="secondary-action"
@@ -200,37 +214,21 @@ export const TargetWorkspace = ({
                     aria-label={t("Open {{name}} in Profiles", { name: target.name })}
                     onClick={() => onManageTarget(target.id)}
                   >
-                    {t(isManaged ? "Open Profile" : "Choose Profile")}
+                    <span>{t(isManaged ? "Open Profile" : "Choose Profile")}</span>
                     <ArrowRight size={14} strokeWidth={2.2} />
+                  </button>
+                  <button
+                    className="icon-action target-diagnostics-toggle"
+                    type="button"
+                    aria-expanded={isExpanded}
+                    aria-label={t(isExpanded ? "Hide {{name}} diagnostics" : "Show {{name}} diagnostics", { name: target.name })}
+                    title={t("Diagnostics")}
+                    onClick={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
+                  >
+                    <Activity size={15} strokeWidth={2.2} />
                   </button>
                 </span>
               </header>
-
-              <div className="target-state-grid">
-                <span>
-                  <small>{t("Management")}</small>
-                  <strong>{t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}</strong>
-                </span>
-                <span>
-                  <small>{t("Active profile")}</small>
-                  <strong>{state?.activeProfileName ?? t("None")}</strong>
-                </span>
-                <span>
-                  <small>{t("Last applied")}</small>
-                  <strong><Clock3 size={13} />{formatLastApplied(state?.lastAppliedAt, localeTag, t("Never applied"))}</strong>
-                </span>
-              </div>
-
-              <button
-                className="target-diagnostics-toggle"
-                type="button"
-                aria-expanded={isExpanded}
-                aria-label={t(isExpanded ? "Hide {{name}} diagnostics" : "Show {{name}} diagnostics", { name: target.name })}
-                onClick={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
-              >
-                {t("Diagnostics")}
-                {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-              </button>
               {isExpanded ? (
                 <section className="target-diagnostics" role="region" aria-label={t("{{name}} diagnostics", { name: target.name })}>
                   <div className="target-checks">

@@ -748,6 +748,24 @@ description: >
       expect.objectContaining({ id: imported.id, updateAvailable: false })
     ]);
 
+    const metadataPath = join(imported.path, ".agentenv-skill.json");
+    const staleMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
+    staleMetadata.remoteRevision = "stale-transport-revision";
+    await writeFile(metadataPath, `${JSON.stringify(staleMetadata, null, 2)}\n`, "utf8");
+    const reconciledPlan = await store.previewUpdate(imported.id);
+    expect(reconciledPlan).toMatchObject({
+      updateAvailable: false,
+      changes: [],
+      latestRevision: expect.stringMatching(/^[a-f0-9]{40,64}$/)
+    });
+    const reconciledMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
+      remoteRevision?: string;
+    };
+    expect(reconciledMetadata.remoteRevision).toBe(reconciledPlan.latestRevision);
+    await expect(store.checkUpdates([imported.id])).resolves.toEqual([
+      expect.objectContaining({ id: imported.id, updateAvailable: false })
+    ]);
+
     await repository.write("skills/review/prompt.md", "Review the new behavior.\n");
     await repository.commit("update repository skill");
     await expect(store.checkUpdates([imported.id])).resolves.toEqual([

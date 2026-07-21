@@ -95,7 +95,11 @@ describe("renderer UI primitives", () => {
 
     const trigger = screen.getByText("Truncated");
     expect(trigger).toHaveAttribute("data-ui-overflow-detail", "true");
-    fireEvent.mouseEnter(trigger);
+    Object.defineProperties(trigger, {
+      clientWidth: { configurable: true, value: 80 },
+      scrollWidth: { configurable: true, value: 220 }
+    });
+    fireEvent.focus(trigger);
     const tooltip = screen.getByRole("tooltip");
     fireEvent.mouseLeave(trigger);
     fireEvent.mouseEnter(tooltip);
@@ -109,9 +113,47 @@ describe("renderer UI primitives", () => {
     vi.useRealTimers();
   });
 
+  it("does not open an overflow detail for text that already fits", () => {
+    render(<OverflowTooltip className="description" text="Short value" />);
+    const trigger = screen.getByText("Short value");
+    Object.defineProperties(trigger, {
+      clientWidth: { configurable: true, value: 120 },
+      scrollWidth: { configurable: true, value: 80 }
+    });
+
+    fireEvent.focus(trigger);
+
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("passes boundary wheel movement back to the owning list", () => {
+    render(
+      <div data-testid="scroll-owner" style={{ height: 80, overflowY: "auto" }}>
+        <OverflowTooltip
+          className="description"
+          displayText="Truncated"
+          text="A complete value"
+        />
+      </div>
+    );
+    const scrollOwner = screen.getByTestId("scroll-owner");
+    const scrollBy = vi.fn();
+    Object.defineProperties(scrollOwner, {
+      clientHeight: { configurable: true, value: 80 },
+      scrollHeight: { configurable: true, value: 240 },
+      scrollBy: { configurable: true, value: scrollBy }
+    });
+    fireEvent.focus(screen.getByText("Truncated"));
+
+    fireEvent.wheel(screen.getByRole("tooltip"), { deltaY: 40 });
+
+    expect(scrollBy).toHaveBeenCalledWith({ left: 0, top: 40 });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
   it("uses the same hover detail primitive for contextual information", () => {
     render(<InfoTip label="A complete explanation" />);
-    fireEvent.mouseEnter(screen.getByLabelText("A complete explanation"));
+    fireEvent.focus(screen.getByLabelText("A complete explanation"));
     expect(screen.getByRole("tooltip")).toHaveClass(
       "ui-hover-detail",
       "info-tip__bubble"

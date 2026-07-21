@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import electronPath from "electron";
@@ -100,7 +100,7 @@ describe("Repository Skill source", () => {
     ).toBe(true);
 
     await page.getByRole("tab", { name: "By source" }).click();
-    expect(await page.getByRole("tab", { name: /^All / }).count()).toBe(0);
+    expect(await page.getByRole("tab", { name: /^Enabled / }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Refresh skills" }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
     const sourceGroup = page.locator(".skill-source-group");
@@ -113,6 +113,23 @@ describe("Repository Skill source", () => {
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
     ).toBe(true);
+
+    const metadataPath = join(librarySkill, ".agentenv-skill.json");
+    const staleMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
+    staleMetadata.remoteRevision = "stale-transport-revision";
+    await writeFile(metadataPath, `${JSON.stringify(staleMetadata, null, 2)}\n`, "utf8");
+    await sourceGroup.getByRole("button", { name: "Check", exact: true }).click();
+    await sourceGroup.getByRole("button", { name: "Review 1", exact: true })
+      .waitFor({ state: "visible" });
+    await sourceGroup.getByRole("button", { name: "Review update api-design-internal" }).click();
+    await page.getByText("api-design-internal source is current", { exact: true })
+      .waitFor({ state: "visible" });
+    await expect.poll(() => sourceGroup.getByRole("button", { name: "Review 1" }).count()).toBe(0);
+    const reconciledMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
+      remoteRevision?: string;
+    };
+    expect(reconciledMetadata.remoteRevision).not.toBe("stale-transport-revision");
+
     await page.getByRole("tab", { name: "Skill list" }).click();
 
     const row = page.getByRole("group", { name: "Library item api-design-internal" });
@@ -228,8 +245,20 @@ describe("Repository Skill source", () => {
     await page.getByRole("tab", { name: "By source" }).click();
     await expect.poll(() => page.locator(".skill-source-group").count()).toBe(2);
     const sourceChoices = page.locator(".skill-source-list").getByRole("checkbox");
-    await sourceChoices.nth(0).check();
-    await sourceChoices.nth(1).check();
+    const selectionRails = page.locator(".skill-source-select");
+    const firstChoice = await selectionRails.nth(0).boundingBox();
+    const secondChoice = await selectionRails.nth(1).boundingBox();
+    if (!firstChoice || !secondChoice) throw new Error("Source selection controls are not visible");
+    await page.mouse.move(firstChoice.x + 1, firstChoice.y + firstChoice.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(
+      secondChoice.x + 1,
+      secondChoice.y + secondChoice.height / 2,
+      { steps: 6 }
+    );
+    await page.mouse.up();
+    await expect.poll(() => sourceChoices.nth(0).isChecked()).toBe(true);
+    await expect.poll(() => sourceChoices.nth(1).isChecked()).toBe(true);
     await page.getByRole("button", { name: "Merge selected (2)", exact: true }).click();
     const mergeDialog = page.getByRole("dialog", { name: "Confirm source merge" });
     await expect.poll(() => mergeDialog.getByLabel("Merged source directory").inputValue())

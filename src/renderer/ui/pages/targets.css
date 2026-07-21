@@ -3,8 +3,9 @@
   container-type: inline-size;
   display: grid;
   gap: 16px;
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .workspace-page-header > .target-page-actions {
@@ -32,48 +33,6 @@
   padding: 0 5px;
 }
 
-.target-summary {
-  align-items: center;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
-  display: flex;
-  gap: 0;
-  min-height: 52px;
-  overflow: hidden;
-}
-
-.target-summary > span {
-  align-items: center;
-  border-right: 1px solid var(--border);
-  color: var(--muted);
-  display: inline-flex;
-  flex: 1 1 0;
-  font-size: 12px;
-  gap: 7px;
-  justify-content: center;
-  min-width: 0;
-  padding: 0 14px;
-}
-
-.target-summary > span:last-child {
-  border-right: 0;
-}
-
-.target-summary svg {
-  color: var(--accent);
-}
-
-.target-summary strong {
-  color: var(--text);
-  font-size: 14px;
-}
-
-.target-summary .is-warning svg,
-.target-summary .is-warning strong {
-  color: var(--warning);
-}
-
 .target-list {
   align-items: start;
   background: var(--surface);
@@ -82,7 +41,10 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  overflow: hidden;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .target-card--workflow {
@@ -94,9 +56,9 @@
   display: grid;
   box-shadow: none;
   flex: 0 0 auto;
-  gap: 7px;
+  gap: 0;
   min-height: 0;
-  padding: 10px 14px;
+  padding: 0 14px;
   transform: none;
   width: 100%;
 }
@@ -112,19 +74,17 @@
 .target-workflow-header {
   align-items: center;
   display: grid;
-  gap: 8px 10px;
-  grid-template-columns: 32px minmax(160px, 1fr) 88px 248px;
+  gap: 10px;
+  grid-template-columns: 32px minmax(150px, 1fr) minmax(210px, 280px) auto;
+  min-height: 66px;
   min-width: 0;
 }
 
 .target-workflow-actions {
   align-items: center;
-  display: grid;
-  gap: 8px;
-  grid-column: auto;
-  grid-template-columns: 96px minmax(0, 1fr);
+  display: flex;
+  gap: 5px;
   justify-self: end;
-  width: 248px;
 }
 
 .target-workflow-actions .secondary-action,
@@ -143,6 +103,20 @@
   color: var(--muted);
 }
 
+.target-workflow-actions .target-diagnostics-toggle {
+  flex: 0 0 var(--control-height-compact);
+  height: var(--control-height-compact);
+  justify-content: center;
+  min-height: var(--control-height-compact);
+  min-width: var(--control-height-compact);
+  width: var(--control-height-compact);
+}
+
+.target-workflow-actions .target-diagnostics-toggle[aria-expanded="true"] {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
 .target-workflow-actions .secondary-action:first-child:hover:not(:disabled) {
   background: rgba(60, 60, 67, 0.07);
   color: var(--text);
@@ -154,11 +128,9 @@
   display: inline-flex;
   font-size: var(--font-size-metadata);
   gap: 6px;
+  flex: 0 0 auto;
   justify-content: flex-start;
-  min-width: 0;
-  overflow: hidden;
   white-space: nowrap;
-  width: 88px;
 }
 
 .target-health-status::before {
@@ -206,91 +178,101 @@
   min-width: 0;
 }
 
-.target-workflow-title > strong {
+.target-workflow-name-line {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+}
+
+.target-workflow-name-line > strong {
   font-size: 15px;
-}
-
-.target-workflow-title > small {
-  color: var(--muted);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.target-state-grid {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  border-top: 1px solid var(--border);
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.target-state-grid > span {
-  border-right: 0;
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  padding: 7px 4px 0;
-}
-
-.target-state-grid > span:last-child {
-  border-right: 0;
-}
-
-.target-state-grid small {
+.target-workflow-description {
   color: var(--muted);
-  font-size: 10px;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-workflow-summary {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: var(--font-size-metadata);
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.target-workflow-summary > strong,
+.target-workflow-summary > span {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.target-workflow-summary > strong {
+  color: var(--text);
   font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
 }
 
-.target-state-grid strong {
+.target-workflow-summary > span {
   align-items: center;
   display: inline-flex;
-  font-size: 12px;
-  gap: 5px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  gap: 4px;
 }
 
-.target-diagnostics-toggle {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: var(--muted);
-  display: inline-flex;
-  gap: 8px;
-  justify-self: start;
-  min-height: 26px;
-  padding: 0;
-  text-align: left;
+.target-workflow-summary > span::before {
+  color: var(--border-strong);
+  content: "·";
+  flex: 0 0 auto;
+  margin: 0 7px;
 }
 
 @container (max-width: 780px) {
   .target-workflow-header {
-    grid-template-columns: 32px minmax(100px, 1fr) 88px 240px;
+    grid-template-columns: 32px minmax(110px, 1fr) auto;
+    grid-template-rows: auto auto;
+    min-height: 70px;
   }
 
   .target-workflow-actions {
-    grid-column: auto;
+    grid-column: 3;
+    grid-row: 1 / 3;
     justify-self: end;
   }
+
+  .target-workflow-summary {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .target-workflow-summary .target-workflow-last-applied {
+    display: none;
+  }
+
 }
 
 .target-diagnostics {
-  background: transparent;
+  background: var(--surface-subtle, #fafbfc);
   border-top: 1px solid var(--border);
   display: grid;
   gap: 8px;
   max-height: 250px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 4px;
-  padding-top: 10px;
+  margin: 0 -14px;
+  padding: 10px 18px 12px 56px;
 }
 
 .target-recovery-dialog {
