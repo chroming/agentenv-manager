@@ -4467,11 +4467,25 @@ describe("Electron UI profile switching e2e", () => {
   }, 30_000);
 
   it("backs up Library drift, removes broken links, and leaves Profile membership unchanged", async () => {
-    const { appDataRoot, opencodeDir, page } = await launchApp();
+    const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
     const skillId = "cleanup-library-drift";
     const libraryDir = join(appDataRoot, "skills-library", skillId);
     const targetDir = join(opencodeDir, "skills", skillId);
     const brokenDir = join(opencodeDir, "skills", "cleanup-broken-link");
+    const lockPath = join(homeDir, ".agents", ".skill-lock.json");
+    const lockContent = `${JSON.stringify({
+      version: 3,
+      skills: {
+        "cleanup-broken-link": {
+          source: "acme/skills",
+          sourceType: "github",
+          sourceUrl: "https://github.com/acme/skills",
+          ref: "main",
+          skillPath: "skills/cleanup-broken-link/SKILL.md",
+          skillFolderHash: "missing"
+        }
+      }
+    })}\n`;
     await mkdir(libraryDir, { recursive: true });
     await mkdir(targetDir, { recursive: true });
     await writeFile(
@@ -4489,6 +4503,8 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
     await symlink(join(root, "missing-cleanup-source"), brokenDir, "dir");
+    await mkdir(dirname(lockPath), { recursive: true });
+    await writeFile(lockPath, lockContent, "utf8");
 
     const resourcesPath = join(
       appDataRoot,
@@ -4512,6 +4528,16 @@ describe("Electron UI profile switching e2e", () => {
     await brokenGroup.waitFor({ state: "visible" });
     await expect.poll(() => driftGroup.textContent()).toContain("Ready");
     await expect.poll(() => brokenGroup.textContent()).toContain("Ready");
+    await brokenGroup
+      .getByRole("button", { name: "More cleanup actions for cleanup-broken-link" })
+      .click();
+    await page.getByRole("menuitem", { name: "Details" }).click();
+    const brokenDetails = page.getByRole("dialog", {
+      name: "Skill details cleanup-broken-link"
+    });
+    await expect.poll(() => brokenDetails.textContent()).toContain("Unavailable");
+    await expect.poll(() => brokenDetails.textContent()).not.toContain("External");
+    await brokenDetails.getByRole("button", { name: "Close" }).click();
 
     await page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).click();
     const dialog = page.getByRole("dialog", { name: "Clean up local Skills" });
@@ -4535,6 +4561,7 @@ describe("Electron UI profile switching e2e", () => {
       }
     }).toBe(false);
     await expect(readFile(resourcesPath, "utf8")).resolves.toBe(resourcesBefore);
+    await expect(readFile(lockPath, "utf8")).resolves.toBe(lockContent);
 
     const history = page.getByRole("region", { name: "Cleanup history" });
     const brokenHistory = history

@@ -265,6 +265,14 @@ const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
   return "Managed";
 };
 
+const cleanupInventoryStatusLabel = (item: SkillInventoryEntry) =>
+  item.externalOwnership?.state === "broken-link"
+    ? "Unavailable"
+    : inventoryStatusLabel(item.status);
+
+const cleanupInventoryStatusClass = (item: SkillInventoryEntry) =>
+  item.externalOwnership?.state === "broken-link" ? "stale" : item.status;
+
 const externalManagerLabel = (skill: SkillInventoryEntry | undefined) =>
   skill?.externalOwnership?.displayName ??
   (skill?.externalOwnership?.manager === "skills-cli"
@@ -2888,8 +2896,10 @@ export const SkillLibraryPanel = ({
                     <div className="cleanup-details-location" key={`${item.status}-${item.path}`}>
                       <div>
                         <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
-                        <span className={`resource-chip resource-chip--${item.status}`}>
-                          {t(inventoryStatusLabel(item.status))}
+                        <span
+                          className={`resource-chip resource-chip--${cleanupInventoryStatusClass(item)}`}
+                        >
+                          {t(cleanupInventoryStatusLabel(item))}
                         </span>
                       </div>
                       <PreviewText

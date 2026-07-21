@@ -336,6 +336,12 @@ description: >
       contentHash: "",
       externalOwnership: { state: "broken-link" }
     });
+    expect(buildSkillCleanupGroups(inventory)[0]).toMatchObject({
+      state: "broken",
+      resolution: "automatic",
+      bucket: "ready",
+      automaticEffect: "remove-broken-link"
+    });
   });
 
   it("removes an unclaimed broken Skill link with a restorable backup", async () => {

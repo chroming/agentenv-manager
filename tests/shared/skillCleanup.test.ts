@@ -79,6 +79,63 @@ describe("skill cleanup groups", () => {
     });
   });
 
+  it("makes stale externally tracked broken links ready without relaxing healthy ownership", () => {
+    const brokenOwnership = {
+      manager: "skills-cli" as const,
+      displayName: "Skills CLI",
+      canonicalPath: "/tmp/missing/reviewer",
+      confidence: "confirmed" as const,
+      state: "broken-link" as const
+    };
+    const brokenIssues = [{
+      code: "unreadable-skill" as const,
+      severity: "warning" as const,
+      message: "Skill link target is unavailable"
+    }];
+    const brokenGroup = buildSkillCleanupGroups([
+      inventoryItem({
+        path: "/tmp/trae/skills/reviewer",
+        status: "external",
+        contentHash: "",
+        externalOwnership: brokenOwnership,
+        runtimeIssues: brokenIssues
+      }),
+      inventoryItem({
+        path: "/tmp/trae-cn/skills/reviewer",
+        status: "external",
+        contentHash: "",
+        externalOwnership: brokenOwnership,
+        runtimeIssues: brokenIssues
+      }),
+      inventoryItem({
+        path: "/tmp/coco/skills/reviewer",
+        status: "external",
+        contentHash: "",
+        externalOwnership: brokenOwnership,
+        runtimeIssues: brokenIssues
+      })
+    ])[0];
+
+    expect(brokenGroup).toMatchObject({
+      state: "broken",
+      resolution: "automatic",
+      bucket: "ready",
+      automaticEffect: "remove-broken-link"
+    });
+    expect(automaticSkillCleanupRequest(brokenGroup)?.locations).toHaveLength(3);
+
+    const healthyExternal = buildSkillCleanupGroups([
+      inventoryItem({
+        status: "external",
+        contentHash: "",
+        externalOwnership: { ...brokenOwnership, state: "healthy" },
+        runtimeIssues: brokenIssues
+      })
+    ])[0];
+    expect(healthyExternal).toMatchObject({ resolution: "manual", bucket: "decision" });
+    expect(automaticSkillCleanupRequest(healthyExternal)).toBeUndefined();
+  });
+
   it("keeps an unreadable manifest decision-only", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({

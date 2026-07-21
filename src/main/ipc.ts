@@ -529,7 +529,7 @@ export const registerIpcHandlers = ({
         const current = inventoryByPath.get(resolve(String(location.path)));
         return Boolean(
           current &&
-          current.status !== "external" &&
+          (current.status !== "external" || current.externalOwnership?.state === "broken-link") &&
           current.contentHash === "" &&
           current.runtimeIssues?.some(
             (issue) =>

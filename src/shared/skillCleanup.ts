@@ -115,6 +115,10 @@ export const buildSkillCleanupGroups = (
           item.contentMatchesLibrary !== true
       );
       const hasExternal = statuses.has("external");
+      const hasBlockingExternal = activeItems.some(
+        (item) =>
+          item.status === "external" && item.externalOwnership?.state !== "broken-link"
+      );
       const hasUnreadable = activeItems.some((item) =>
         item.runtimeIssues?.some((issue) => issue.code === "unreadable-skill")
       );
@@ -200,7 +204,7 @@ export const buildSkillCleanupGroups = (
       const canRemoveBrokenLinks =
         state === "broken" &&
         hasBrokenLink &&
-        !hasExternal &&
+        !hasBlockingExternal &&
         !missingTarget &&
         activeItems.every((item) =>
           item.runtimeIssues?.some((issue) =>
@@ -370,7 +374,7 @@ export const automaticSkillCleanupRequest = (
     const brokenLocations = group.activeItems.filter(
       (item) =>
         item.status !== "ignored" &&
-        item.status !== "external" &&
+        (item.status !== "external" || item.externalOwnership?.state === "broken-link") &&
         item.runtimeIssues?.some(
           (issue) =>
             issue.code === "unreadable-skill" &&
