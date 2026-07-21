@@ -1,0 +1,384 @@
+import { execFile } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { afterEach, describe, expect, it } from "vitest";
+import { createBackupStore } from "../../src/main/backupStore";
+import { createPaths } from "../../src/main/paths";
+import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRunner";
+import { createGitSyncTransport } from "../../src/main/workspaceSync/gitSyncTransport";
+import { createPortableWorkspaceCodec } from "../../src/main/workspaceSync/portableWorkspaceCodec";
+import type { PortableWorkspaceManifest } from "../../src/main/workspaceSync/portableSchemas";
+import { validatePortableWorkspace } from "../../src/main/workspaceSync/portableWorkspaceValidator";
+import {
+  materializeMergedWorkspace,
+  planWorkspaceSync,
+  type WorkspaceSnapshotDescriptor
+} from "../../src/main/workspaceSync/syncPlanner";
+import { createWorkspaceSyncTransaction } from "../../src/main/workspaceSync/workspaceSyncTransaction";
+import { createWorkspaceSyncService } from "../../src/main/workspaceSync/workspaceSyncService";
+import { createWorkspaceSyncStateStore, parseWorkspaceSyncConnection } from "../../src/main/workspaceSync/syncStateStore";
+import { canonicalJson, hashJson, hashPortableTree, snapshotHashFor } from "../../src/main/workspaceSync/workspaceSnapshotHasher";
+
+const execFileAsync = promisify(execFile);
+let roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+  roots = [];
+});
+
+const tempRoot = async (prefix: string) => {
+  const root = await mkdtemp(join(tmpdir(), prefix));
+  roots.push(root);
+  return root;
+};
+
+const writeSnapshot = async (root: string, input: {
+  workspaceId?: string;
+  profileName?: string;
+  instructions?: string;
+  skillContent?: string;
+} = {}): Promise<WorkspaceSnapshotDescriptor> => {
+  const profileRoot = join(root, "workspace", "profiles", "daily");
+  const skillRoot = join(root, "workspace", "skills", "review", "content");
+  await Promise.all([mkdir(profileRoot, { recursive: true }), mkdir(skillRoot, { recursive: true })]);
+  const profile = {
+    id: "daily",
+    name: input.profileName ?? "Daily",
+    description: "Default",
+    createdAt: "2026-07-20T00:00:00.000Z",
+    version: 2 as const
+  };
+  const resources = { skills: [{ libraryId: "review", targetName: "review", enabled: true }], mcpByTarget: {} };
+  const instructions = input.instructions ?? "# Agent\n";
+  const metadata = {
+    formatVersion: 1 as const,
+    id: "review",
+    globallyEnabled: true,
+    updatePolicy: "untracked" as const,
+    sourceType: "local" as const
+  };
+  await Promise.all([
+    writeFile(join(profileRoot, "profile.json"), canonicalJson(profile)),
+    writeFile(join(profileRoot, "INSTRUCTIONS.md"), instructions),
+    writeFile(join(profileRoot, "resources.json"), canonicalJson(resources)),
+    writeFile(join(skillRoot, "SKILL.md"), input.skillContent ?? "---\nname: review\ndescription: Review code\n---\n"),
+    writeFile(join(root, "workspace", "skills", "review", "metadata.json"), canonicalJson(metadata)),
+    writeFile(join(root, "workspace", "skill-sources.json"), canonicalJson({ formatVersion: 1, sources: [] }))
+  ]);
+  const profileSections = {
+    manifest: hashJson(profile),
+    instructions: hashJson(instructions),
+    resources: hashJson(resources)
+  };
+  const skillSections = {
+    content: await hashPortableTree(skillRoot),
+    metadata: hashJson(metadata)
+  };
+  const unsigned = {
+    formatVersion: 1 as const,
+    workspaceId: input.workspaceId ?? "11111111-1111-4111-8111-111111111111",
+    profileHashes: { daily: { ...profileSections, total: hashJson(profileSections) } },
+    skillHashes: { review: { ...skillSections, total: hashJson(skillSections) } },
+    sourcesHash: hashJson({ formatVersion: 1, sources: [] })
+  };
+  const manifest: PortableWorkspaceManifest = { ...unsigned, snapshotHash: snapshotHashFor(unsigned) };
+  await writeFile(join(root, "agentenv-sync.json"), canonicalJson(manifest));
+  return { root, manifest };
+};
+
+describe("Workspace Sync", () => {
+  it("accepts SSH identities but rejects embedded HTTPS credentials and option-like repositories", () => {
+    expect(parseWorkspaceSyncConnection({
+      repository: "ssh://git@example.com/team/workspace.git",
+      branch: "main"
+    }).repository).toContain("git@example.com");
+    expect(() => parseWorkspaceSyncConnection({
+      repository: "https://token@example.com/team/workspace.git",
+      branch: "main"
+    })).toThrow("credentials");
+    expect(() => parseWorkspaceSyncConnection({
+      repository: "--upload-pack=malicious",
+      branch: "main"
+    })).toThrow();
+  });
+
+  it("combines changes to different Profile sections without a conflict", async () => {
+    const base = await writeSnapshot(await tempRoot("agentenv-sync-base-"));
+    const local = await writeSnapshot(await tempRoot("agentenv-sync-local-"), { instructions: "# Local instructions\n" });
+    const remote = await writeSnapshot(await tempRoot("agentenv-sync-remote-"), { profileName: "Remote Daily" });
+    const destination = await tempRoot("agentenv-sync-merged-");
+    const plan = planWorkspaceSync({ base, local, remote, baseRevision: "base", remoteRevision: "remote" });
+
+    expect(plan.review.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "profile:daily:instructions", direction: "local" }),
+      expect.objectContaining({ key: "profile:daily:manifest", direction: "remote" })
+    ]));
+    expect(plan.review.changes.some((change) => change.direction === "conflict")).toBe(false);
+
+    const merged = await materializeMergedWorkspace({ plan, local, remote, destination });
+    await expect(validatePortableWorkspace(merged.root)).resolves.toBeDefined();
+    expect(JSON.parse(await readFile(join(destination, "workspace", "profiles", "daily", "profile.json"), "utf8")).name).toBe("Remote Daily");
+    await expect(readFile(join(destination, "workspace", "profiles", "daily", "INSTRUCTIONS.md"), "utf8")).resolves.toBe("# Local instructions\n");
+  });
+
+  it("requires an explicit choice when both Macs change the same section", async () => {
+    const base = await writeSnapshot(await tempRoot("agentenv-sync-base-"));
+    const local = await writeSnapshot(await tempRoot("agentenv-sync-local-"), { instructions: "# Local\n" });
+    const remote = await writeSnapshot(await tempRoot("agentenv-sync-remote-"), { instructions: "# Remote\n" });
+    const plan = planWorkspaceSync({ base, local, remote });
+    const conflict = plan.review.changes.find((change) => change.key === "profile:daily:instructions");
+
+    expect(conflict?.direction).toBe("conflict");
+    await expect(materializeMergedWorkspace({
+      plan,
+      local,
+      remote,
+      destination: await tempRoot("agentenv-sync-conflict-")
+    })).rejects.toThrow("needs a choice");
+  });
+
+  it("rejects symbolic links before importing a remote snapshot", async () => {
+    const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-malicious-"));
+    await symlink("/etc/passwd", join(snapshot.root, "workspace", "skills", "review", "content", "escape"));
+
+    await expect(validatePortableWorkspace(snapshot.root)).rejects.toThrow("symbolic links");
+  });
+
+  it("rejects internal ownership metadata hidden inside portable Skill content", async () => {
+    const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-reserved-"));
+    await writeFile(
+      join(snapshot.root, "workspace", "skills", "review", "content", ".agentenv-owner.json"),
+      "{}\n"
+    );
+
+    await expect(validatePortableWorkspace(snapshot.root)).rejects.toThrow("reserved AgentEnv data");
+  });
+
+  it("excludes machine-local source paths from a portable Skill", async () => {
+    const appDataRoot = await tempRoot("agentenv-sync-codec-");
+    const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
+    const skillPath = join(appDataRoot, "skills-library", "local-only");
+    await mkdir(skillPath, { recursive: true });
+    await writeFile(join(skillPath, "SKILL.md"), "---\nname: local-only\ndescription: Local\n---\n");
+    const destination = join(appDataRoot, "export");
+    const codec = createPortableWorkspaceCodec({
+      paths,
+      profileStore: { listProfiles: async () => [] } as never,
+      skillLibraryStore: {
+        listSkills: async () => [{
+          id: "local-only",
+          name: "local-only",
+          description: "Local",
+          path: skillPath,
+          sourceType: "git",
+          source: "/Users/other/private-skills",
+          updatePolicy: "tracked",
+          contentHash: "local",
+          updatedAt: "2026-07-20T00:00:00.000Z",
+          upstream: { kind: "git", locator: "/Users/other/private-skills", ref: "main" }
+        }]
+      } as never
+    });
+
+    await codec.exportSnapshot(destination, "11111111-1111-4111-8111-111111111111");
+    const metadata = JSON.parse(await readFile(join(destination, "workspace", "skills", "local-only", "metadata.json"), "utf8"));
+
+    expect(metadata).toMatchObject({ sourceType: "local", updatePolicy: "untracked" });
+    expect(metadata).not.toHaveProperty("source");
+    expect(metadata).not.toHaveProperty("upstream");
+  });
+
+  it("backs up and replaces Profiles, Skills, and sources as one recoverable operation", async () => {
+    const appDataRoot = await tempRoot("agentenv-sync-transaction-");
+    const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
+    await Promise.all([
+      mkdir(join(paths.profilesDir, "old"), { recursive: true }),
+      mkdir(join(paths.skillsLibraryDir, "old"), { recursive: true })
+    ]);
+    await writeFile(join(paths.profilesDir, "old", "marker"), "old");
+    await writeFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "old");
+    await writeFile(paths.skillSourcesPath, canonicalJson({ formatVersion: 1, sources: [] }));
+    const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-candidate-"));
+    const transaction = createWorkspaceSyncTransaction({ paths, backupStore: createBackupStore(paths) });
+
+    const result = await transaction.apply(snapshot.root);
+
+    expect(result.backupId).toBeTruthy();
+    await expect(readFile(join(paths.profilesDir, "daily", "INSTRUCTIONS.md"), "utf8")).resolves.toBe("# Agent\n");
+    await expect(readFile(join(paths.skillsLibraryDir, "review", "SKILL.md"), "utf8")).resolves.toContain("Review code");
+    await expect(transaction.isRecoveryRequired()).resolves.toBe(false);
+  });
+
+  it.each(["profiles", "skills", "sources", "verify"] as const)(
+    "restores every Workspace root after a failure at the %s stage",
+    async (failurePhase) => {
+      const appDataRoot = await tempRoot(`agentenv-sync-rollback-${failurePhase}-`);
+      const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
+      await Promise.all([
+        mkdir(join(paths.profilesDir, "old"), { recursive: true }),
+        mkdir(join(paths.skillsLibraryDir, "old"), { recursive: true })
+      ]);
+      await writeFile(join(paths.profilesDir, "old", "marker"), "old profile");
+      await writeFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "old skill");
+      await writeFile(paths.skillSourcesPath, canonicalJson({ formatVersion: 1, sources: [] }));
+      const snapshot = await writeSnapshot(await tempRoot(`agentenv-sync-rollback-candidate-${failurePhase}-`));
+      const transaction = createWorkspaceSyncTransaction({
+        paths,
+        backupStore: createBackupStore(paths),
+        failureInjector: (phase) => {
+          if (phase === failurePhase) throw new Error(`Injected ${phase} failure`);
+        }
+      });
+
+      await expect(transaction.apply(snapshot.root)).rejects.toThrow(`Injected ${failurePhase} failure`);
+      await expect(readFile(join(paths.profilesDir, "old", "marker"), "utf8")).resolves.toBe("old profile");
+      await expect(readFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "utf8")).resolves.toBe("old skill");
+      await expect(transaction.isRecoveryRequired()).resolves.toBe(false);
+    }
+  );
+
+  it("recovers an interrupted Workspace transaction during startup", async () => {
+    const appDataRoot = await tempRoot("agentenv-sync-startup-recovery-");
+    const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
+    await mkdir(join(paths.profilesDir, "old"), { recursive: true });
+    await mkdir(join(paths.skillsLibraryDir, "old"), { recursive: true });
+    await writeFile(join(paths.profilesDir, "old", "marker"), "old profile");
+    await writeFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "old skill");
+    await writeFile(paths.skillSourcesPath, canonicalJson({ formatVersion: 1, sources: [] }));
+    const store = createBackupStore(paths);
+    const backup = await store.createBackup(
+      [paths.profilesDir, paths.skillsLibraryDir, paths.skillSourcesPath],
+      { operation: "workspace-sync" }
+    );
+    await rm(paths.profilesDir, { recursive: true, force: true });
+    await rm(paths.skillsLibraryDir, { recursive: true, force: true });
+    await writeFile(paths.workspaceSyncJournalPath, canonicalJson({
+      formatVersion: 1,
+      backupId: backup.id,
+      createdAt: new Date().toISOString(),
+      phase: "rollback-required"
+    }));
+
+    const transaction = createWorkspaceSyncTransaction({ paths, backupStore: store });
+    await transaction.recover();
+
+    await expect(readFile(join(paths.profilesDir, "old", "marker"), "utf8")).resolves.toBe("old profile");
+    await expect(readFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "utf8")).resolves.toBe("old skill");
+    await expect(transaction.isRecoveryRequired()).resolves.toBe(false);
+  });
+
+  it("publishes and fetches through a real local bare Git repository", async () => {
+    const root = await tempRoot("agentenv-sync-git-");
+    const bare = join(root, "remote.git");
+    await execFileAsync("/usr/bin/git", ["init", "--bare", bare]);
+    const snapshot = await writeSnapshot(join(root, "snapshot"));
+    const runner = createGitCommandRunner({ executablePath: "/usr/bin/git" });
+    const transport = createGitSyncTransport(runner);
+
+    const revision = await transport.publish({
+      connection: { repository: bare, branch: "main" },
+      snapshotRoot: snapshot.root,
+      workDir: join(root, "publish")
+    });
+    const fetched = await transport.fetch({ repository: bare, branch: "main" }, join(root, "fetched"));
+    const unchangedRevision = await transport.publish({
+      connection: { repository: bare, branch: "main" },
+      snapshotRoot: snapshot.root,
+      expectedRevision: revision,
+      workDir: join(root, "publish-unchanged")
+    });
+
+    expect(revision).toMatch(/^[a-f0-9]{40}$/);
+    expect(fetched.revision).toBe(revision);
+    expect(unchangedRevision).toBe(revision);
+    await expect(validatePortableWorkspace(fetched.snapshotRoot!)).resolves.toBeDefined();
+
+    const external = join(root, "external");
+    await execFileAsync("/usr/bin/git", ["clone", bare, external]);
+    await execFileAsync("/usr/bin/git", ["config", "user.name", "Test"], { cwd: external });
+    await execFileAsync("/usr/bin/git", ["config", "user.email", "test@example.com"], { cwd: external });
+    await writeFile(join(external, "README.md"), "Unrelated repository content\n");
+    await execFileAsync("/usr/bin/git", ["add", "README.md"], { cwd: external });
+    await execFileAsync("/usr/bin/git", ["commit", "-m", "External change"], { cwd: external });
+    await execFileAsync("/usr/bin/git", ["push", "origin", "main"], { cwd: external });
+    await expect(transport.publish({
+      connection: { repository: bare, branch: "main" },
+      snapshotRoot: snapshot.root,
+      expectedRevision: revision,
+      workDir: join(root, "stale-publish")
+    })).rejects.toThrow("changed");
+
+    await execFileAsync("/usr/bin/git", ["checkout", "--orphan", "rewritten"], { cwd: external });
+    await execFileAsync("/usr/bin/git", ["add", "-A"], { cwd: external });
+    await execFileAsync("/usr/bin/git", ["commit", "--allow-empty", "-m", "Rewritten history"], { cwd: external });
+    await execFileAsync("/usr/bin/git", ["push", "--force", "origin", "HEAD:main"], { cwd: external });
+    await expect(transport.fetch(
+      { repository: bare, branch: "main" },
+      join(root, "rewritten-fetch"),
+      revision
+    )).rejects.toThrow("history was rewritten");
+    transport.dispose();
+  });
+
+  it("keeps a correct three-way base across two isolated Macs", async () => {
+    const root = await tempRoot("agentenv-sync-two-macs-");
+    const bare = join(root, "remote.git");
+    await execFileAsync("/usr/bin/git", ["init", "--bare", bare]);
+    const createDevice = async (name: string, initialInstructions: string) => {
+      const paths = createPaths({
+        appDataRoot: join(root, name, "data"),
+        homeDir: join(root, name, "home"),
+        repositoryCacheDir: join(root, name, "cache", "repositories"),
+        workspaceSyncCacheDir: join(root, name, "cache", "workspace-sync")
+      });
+      let instructions = initialInstructions;
+      const runner = createGitCommandRunner({ executablePath: "/usr/bin/git" });
+      const transport = createGitSyncTransport(runner);
+      const service = createWorkspaceSyncService({
+        paths,
+        codec: {
+          exportSnapshot: async (destination, workspaceId) =>
+            (await writeSnapshot(destination, { workspaceId, instructions })).manifest
+        },
+        stateStore: createWorkspaceSyncStateStore(paths),
+        transaction: {
+          recover: async () => undefined,
+          isRecoveryRequired: async () => false,
+          apply: async (snapshotRoot) => {
+            instructions = await readFile(join(snapshotRoot, "workspace", "profiles", "daily", "INSTRUCTIONS.md"), "utf8");
+            return { backupId: `${name}-backup` };
+          }
+        },
+        loadTransport: async () => transport,
+        targetPathsProvider: () => [],
+        findManagedInstallPaths: async () => []
+      });
+      return { service, getInstructions: () => instructions, setInstructions: (value: string) => { instructions = value; } };
+    };
+
+    const first = await createDevice("first", "# Shared\n");
+    expect((await first.service.connect({ repository: bare, branch: "main" })).kind).toBe("local-changes");
+    expect((await first.service.publish()).status.kind).toBe("up-to-date");
+
+    const second = await createDevice("second", "# Shared\n");
+    expect((await second.service.connect({ repository: bare, branch: "main" })).kind).toBe("up-to-date");
+    first.setInstructions("# Changed on first\n");
+    expect((await first.service.check()).kind).toBe("local-changes");
+    await first.service.publish();
+
+    expect((await second.service.check()).kind).toBe("remote-changes");
+    const review = await second.service.review();
+    expect(review.changes).toContainEqual(expect.objectContaining({
+      key: "profile:daily:instructions",
+      direction: "remote"
+    }));
+    const updated = await second.service.update({ expectedRemoteRevision: review.remoteRevision });
+    expect(updated.status.kind).toBe("up-to-date");
+    expect(second.getInstructions()).toBe("# Changed on first\n");
+    first.service.dispose();
+    second.service.dispose();
+  });
+});

@@ -27,6 +27,29 @@ import type {
   ResourceIconKey
 } from "./schemas";
 import type { DesktopContextMenuItem } from "./desktopContextMenu";
+import type {
+  WorkspaceSyncConnectInput,
+  WorkspaceSyncOperationResult,
+  WorkspaceSyncReview,
+  WorkspaceSyncStatus,
+  WorkspaceSyncUpdateInput
+} from "./workspaceSync";
+
+export type {
+  WorkspaceSyncChange,
+  WorkspaceSyncChangeAction,
+  WorkspaceSyncChangeDirection,
+  WorkspaceSyncConflictChoice,
+  WorkspaceSyncConnection,
+  WorkspaceSyncConnectInput,
+  WorkspaceSyncOperationResult,
+  WorkspaceSyncResourceKind,
+  WorkspaceSyncReview,
+  WorkspaceSyncStatus,
+  WorkspaceSyncStatusKind,
+  WorkspaceSyncUpdateInput,
+  WorkspaceSyncWorkingState
+} from "./workspaceSync";
 
 export interface AgentEnvApi {
   readonly runtimeVersion: number;
@@ -80,6 +103,14 @@ export interface AgentEnvApi {
   updateLibrarySkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
+  readWorkspaceSyncStatus(): Promise<WorkspaceSyncStatus>;
+  connectWorkspaceSync(input: WorkspaceSyncConnectInput): Promise<WorkspaceSyncStatus>;
+  checkWorkspaceSync(): Promise<WorkspaceSyncStatus>;
+  reviewWorkspaceSync(): Promise<WorkspaceSyncReview>;
+  updateWorkspaceFromSync(input: WorkspaceSyncUpdateInput): Promise<WorkspaceSyncOperationResult>;
+  publishWorkspaceSync(): Promise<WorkspaceSyncOperationResult>;
+  recoverWorkspaceSync(): Promise<WorkspaceSyncStatus>;
+  disconnectWorkspaceSync(): Promise<WorkspaceSyncStatus>;
   readGitHubAuthStatus(): Promise<GitHubAuthStatus>;
   startGitHubDeviceLogin(): Promise<GitHubDeviceLogin>;
   pollGitHubDeviceLogin(id: string): Promise<GitHubDeviceLoginResult>;
@@ -731,9 +762,9 @@ export interface AgentEnvSettings {
 
 export type BackupRetentionDays = 7 | 30 | 90 | null;
 
-export type ManagedBackupKind = "target-recovery" | "skill-cleanup";
+export type ManagedBackupKind = "target-recovery" | "skill-cleanup" | "workspace-sync";
 export type ManagedBackupCleanupStatus = "required" | "retained" | "kept" | "eligible";
-export type ManagedBackupRequiredReason = "recovery-required" | "takeover-baseline";
+export type ManagedBackupRequiredReason = "recovery-required" | "takeover-baseline" | "workspace-sync-recovery";
 
 export interface ManagedBackupItem {
   id: string;
@@ -1191,7 +1222,7 @@ export interface BackupEntry {
 export interface BackupManifest {
   id: string;
   createdAt: string;
-  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration";
+  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration" | "workspace-sync";
   targetId?: string;
   targetIds?: string[];
   profileId?: string;
@@ -1203,7 +1234,7 @@ export interface BackupSummary {
   id: string;
   createdAt: string;
   fileCount: number;
-  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration";
+  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration" | "workspace-sync";
   targetId?: string;
   targetIds?: string[];
   profileId?: string;

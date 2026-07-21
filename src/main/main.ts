@@ -32,10 +32,15 @@ import {
   windowBackgroundColor,
   windowChromeOptionsFor
 } from "./windowConfig";
-import { recoverPendingReplacementsInDirectory } from "./fileUtils";
+import { pathEntryExists, recoverPendingReplacementsInDirectory } from "./fileUtils";
 import { createMutationCoordinator } from "./mutationCoordinator";
 import { ensureAppDataFormat } from "./appDataFormat";
 import { migrateAppDataToV2 } from "./appDataMigration";
+import { createPortableWorkspaceCodec } from "./workspaceSync/portableWorkspaceCodec";
+import { createWorkspaceSyncStateStore } from "./workspaceSync/syncStateStore";
+import { createWorkspaceSyncTransaction } from "./workspaceSync/workspaceSyncTransaction";
+import { createGitSyncTransport, type GitSyncTransport } from "./workspaceSync/gitSyncTransport";
+import { createWorkspaceSyncService } from "./workspaceSync/workspaceSyncService";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -383,6 +388,14 @@ const createServices = async () => {
     fakeHomeRoot: paths.fakeHomeRoot
   }, targetRegistry);
   const backupStore = createBackupStore(paths);
+  const workspaceSyncTransaction = createWorkspaceSyncTransaction({ paths, backupStore });
+  await mutationCoordinator.runExclusive("Recover Workspace Sync", async () => {
+    try {
+      await workspaceSyncTransaction.recover();
+    } catch (error) {
+      console.error("Workspace Sync recovery needs user attention", error);
+    }
+  });
   const skillLibraryStore = createSkillLibraryStore(
     paths,
     settingsStore,
@@ -437,10 +450,35 @@ const createServices = async () => {
     targetDiscoveryService,
     targetScope
   });
+  let syncTransport: GitSyncTransport | undefined;
+  let syncTransportDisposed = false;
+  const loadSyncTransport = async () => {
+    if (syncTransportDisposed) throw new Error("Workspace Sync is shutting down");
+    if (syncTransport) return syncTransport;
+    const executablePath = await findExecutable("git", { homeDir: paths.homeDir });
+    if (!executablePath) {
+      throw new Error("System Git is unavailable. Install Xcode Command Line Tools or Git, then retry.");
+    }
+    syncTransport = createGitSyncTransport(createGitCommandRunner({ executablePath }));
+    return syncTransport;
+  };
+  const workspaceSyncService = createWorkspaceSyncService({
+    paths,
+    codec: createPortableWorkspaceCodec({ paths, profileStore, skillLibraryStore }),
+    stateStore: createWorkspaceSyncStateStore(paths),
+    transaction: workspaceSyncTransaction,
+    loadTransport: loadSyncTransport,
+    targetPathsProvider: () => targetRegistry.listAdapters().map((adapter) =>
+      adapter.createTargetPaths({ homeDir: paths.homeDir, fakeHomeRoot: paths.fakeHomeRoot })
+    ),
+    findManagedInstallPaths: skillLibraryStore.findManagedInstallPaths
+  });
 
-  await mutationCoordinator.runExclusive("Initialize Profiles", () =>
-    seedDefaultProfiles(paths, targetRegistry)
-  );
+  if (!(await pathEntryExists(paths.workspaceSyncJournalPath))) {
+    await mutationCoordinator.runExclusive("Initialize Profiles", () =>
+      seedDefaultProfiles(paths, targetRegistry)
+    );
+  }
 
   return {
     paths,
@@ -455,9 +493,12 @@ const createServices = async () => {
     targetRegistry,
     targetDiscoveryService,
     mutationCoordinator,
+    workspaceSyncService,
     cancelRepositoryOperations: () => gitRunner?.cancelActive(),
     dispose: () => {
       repositoryServicesDisposed = true;
+      syncTransportDisposed = true;
+      workspaceSyncService.dispose();
       gitRunner?.dispose();
     }
   };
@@ -481,9 +522,21 @@ if (!ownsSingleInstance) {
 if (ownsSingleInstance) void app.whenReady().then(() => {
   void createServices()
     .then((services) => {
-      disposeServices = services.dispose;
+      let removeWorkspaceSyncFocusListener: () => void = () => undefined;
       registerIpcHandlers(services);
       if (process.env.AGENTENV_AUTOMATION !== "1") {
+        let lastWorkspaceCheckAt = 0;
+        const runWorkspaceCheck = () => {
+          const now = Date.now();
+          if (now - lastWorkspaceCheckAt < 5 * 60 * 1000) return;
+          lastWorkspaceCheckAt = now;
+          void services.mutationCoordinator
+            .runExclusive("Check Workspace Sync", () => services.workspaceSyncService.check())
+            .catch((error) => console.error("Workspace Sync check failed", error));
+        };
+        app.on("browser-window-focus", runWorkspaceCheck);
+        removeWorkspaceSyncFocusListener = () => app.off("browser-window-focus", runWorkspaceCheck);
+        runWorkspaceCheck();
         const runBackupCleanup = async () => {
           await services.mutationCoordinator.runExclusive("Clean up backups", async () => {
             const settings = await services.settingsStore.readSettings();
@@ -502,6 +555,10 @@ if (ownsSingleInstance) void app.whenReady().then(() => {
         }, 24 * 60 * 60 * 1000);
         timer.unref();
       }
+      disposeServices = () => {
+        removeWorkspaceSyncFocusListener();
+        services.dispose();
+      };
       servicesInitialized = true;
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     })

@@ -513,6 +513,20 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       backupRetentionDays: input.backupRetentionDays ?? null,
       enabledTargetIds: input.enabledTargetIds
     })),
+    readWorkspaceSyncStatus: vi.fn().mockResolvedValue({
+      kind: "not-connected",
+      localChangeCount: 0,
+      remoteChangeCount: 0,
+      conflictCount: 0,
+      immediateAgentCount: 0
+    }),
+    connectWorkspaceSync: vi.fn(),
+    checkWorkspaceSync: vi.fn(),
+    reviewWorkspaceSync: vi.fn(),
+    updateWorkspaceFromSync: vi.fn(),
+    publishWorkspaceSync: vi.fn(),
+    recoverWorkspaceSync: vi.fn(),
+    disconnectWorkspaceSync: vi.fn(),
     readGitHubAuthStatus: vi.fn().mockResolvedValue({
       state: "configured",
       clientId: "client-123"

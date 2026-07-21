@@ -122,6 +122,7 @@ import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
 import { SkillsEditor } from "./components/SkillsEditor";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
+import { WorkspaceSyncSettings } from "./components/WorkspaceSyncSettings";
 import {
   Button,
   ControlGroup,
@@ -217,6 +218,8 @@ const managedBackupTitle = (item: ManagedBackupItem, t: Translate): string =>
     ? t(item.restored ? "Restored skill cleanup · {{name}}" : "Skill cleanup · {{name}}", {
         name: item.libraryId ?? item.id
       })
+    : item.kind === "workspace-sync"
+      ? t("Workspace update")
     : item.profileName
       ? t("{{profile}} · {{target}}", {
           profile: item.profileName,
@@ -226,6 +229,7 @@ const managedBackupTitle = (item: ManagedBackupItem, t: Translate): string =>
 
 const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate): string => {
   if (item.requiredReason === "recovery-required") return t("Required for recovery");
+  if (item.requiredReason === "workspace-sync-recovery") return t("Required for Workspace recovery");
   if (item.requiredReason === "takeover-baseline") return t("Takeover baseline");
   if (item.cleanupStatus === "retained") return t("Latest recovery point");
   if (item.cleanupStatus === "eligible") return t("Ready to clean");
@@ -4928,6 +4932,7 @@ const AppContent = ({
                 </label>
               </div>
             </section>
+            <WorkspaceSyncSettings />
             <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">
               <div className="settings-section-header settings-data-header">
                 <div>
@@ -5181,7 +5186,7 @@ const AppContent = ({
                           managedBackups.items.map((item) => (
                             <article className="backup-manager-row" key={`${item.kind}:${item.id}`}>
                               <span className={`backup-kind-icon is-${item.kind}`} aria-hidden="true">
-                                {item.kind === "skill-cleanup" ? <Database size={17} /> : <History size={17} />}
+                                {item.kind === "skill-cleanup" ? <Database size={17} /> : item.kind === "workspace-sync" ? <GitFork size={17} /> : <History size={17} />}
                               </span>
                               <span className="backup-row-copy">
                                 <strong title={managedBackupTitle(item, t)}>{managedBackupTitle(item, t)}</strong>

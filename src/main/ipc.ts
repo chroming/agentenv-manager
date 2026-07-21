@@ -14,6 +14,7 @@ import type { BackupStore } from "./backupStore";
 import type { GitHubAuthService } from "./githubAuthService";
 import type { ProfileStore } from "./profileStore";
 import type { SettingsStore } from "./settingsStore";
+import type { WorkspaceSyncService } from "./workspaceSync/workspaceSyncService";
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetCaptureService } from "./targetCaptureService";
@@ -51,6 +52,7 @@ import { isExternalSkillImportable } from "../shared/skillIdentity";
 import type { MutationCoordinator } from "./mutationCoordinator";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { parseDesktopContextMenuItems } from "../shared/desktopContextMenu";
+import { pathEntryExists } from "./fileUtils";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -65,6 +67,7 @@ export interface IpcServices {
   targetCaptureService: TargetCaptureService;
   mutationCoordinator: MutationCoordinator;
   paths: AgentEnvPaths;
+  workspaceSyncService: WorkspaceSyncService;
   cancelRepositoryOperations(): void;
 }
 
@@ -79,7 +82,7 @@ const parseId = (value: unknown, label: string): string => {
 const parseManagedBackupInput = (value: unknown): DeleteManagedBackupInput => {
   if (!value || typeof value !== "object") throw new Error("Invalid backup selection");
   const input = value as { id?: unknown; kind?: unknown };
-  if (input.kind !== "target-recovery" && input.kind !== "skill-cleanup") {
+  if (input.kind !== "target-recovery" && input.kind !== "skill-cleanup" && input.kind !== "workspace-sync") {
     throw new Error("Invalid backup kind");
   }
   return { id: parseId(input.id, "backup id"), kind: input.kind };
@@ -98,6 +101,7 @@ export const registerIpcHandlers = ({
   targetCaptureService,
   mutationCoordinator,
   paths,
+  workspaceSyncService,
   cancelRepositoryOperations
 }: IpcServices) => {
   const handleMutation = (
@@ -105,7 +109,17 @@ export const registerIpcHandlers = ({
     handler: (event: any, ...args: any[]) => any
   ) => {
     ipcMain.handle(channel, (event, ...args) =>
-      mutationCoordinator.runExclusive(channel, () => handler(event, ...args))
+      mutationCoordinator.runExclusive(channel, async () => {
+        const changesWorkspace = /^(skills|profiles|activation|targets|data|settings|workspace-sync):/.test(channel);
+        if (
+          changesWorkspace &&
+          channel !== "workspace-sync:recover" &&
+          await pathEntryExists(paths.workspaceSyncJournalPath)
+        ) {
+          throw new Error("Workspace recovery is required before changing Profiles, Library resources, or Agents");
+        }
+        return handler(event, ...args);
+      })
     );
   };
   const sharedSkillTargetPaths: TargetPaths = {
@@ -757,6 +771,18 @@ export const registerIpcHandlers = ({
   handleMutation("settings:update", (_event, input: unknown) =>
     settingsStore.updateSettings(input && typeof input === "object" ? input : {})
   );
+  ipcMain.handle("workspace-sync:status", () => workspaceSyncService.readStatus());
+  handleMutation("workspace-sync:connect", (_event, input: unknown) =>
+    workspaceSyncService.connect(input as import("../shared/workspaceSync").WorkspaceSyncConnectInput)
+  );
+  handleMutation("workspace-sync:check", () => workspaceSyncService.check());
+  handleMutation("workspace-sync:review", () => workspaceSyncService.review());
+  handleMutation("workspace-sync:update", (_event, input: unknown) =>
+    workspaceSyncService.update(input as import("../shared/workspaceSync").WorkspaceSyncUpdateInput)
+  );
+  handleMutation("workspace-sync:publish", () => workspaceSyncService.publish());
+  handleMutation("workspace-sync:recover", () => workspaceSyncService.recover());
+  handleMutation("workspace-sync:disconnect", () => workspaceSyncService.disconnect());
   handleMutation("github:status", () => githubAuthService.readStatus());
   ipcMain.handle("github:start-device-login", () => githubAuthService.startDeviceLogin());
   handleMutation("github:poll-device-login", (_event, id: unknown) =>

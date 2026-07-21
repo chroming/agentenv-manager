@@ -40,6 +40,16 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 - Skill 与 Profile 可以从内置图标中选择并持久化显示图标。
 - Profile 应用时可以用 copy / symlink / auto 模式把 library skill 安装到目标 agent。
 
+### Workspace Sync
+
+- 在 `Settings > Workspace Sync` 连接一个用户自己的私有 Git 仓库。
+- 同步可移植的 Profile、Skill Library 与 Skill 来源信息，不同步 Target 状态、凭据、备份、缓存或本机绝对路径。
+- 后台只检查远程状态，不会自动拉取、推送或 Apply。
+- 更新本机前按资源展示新增、修改、删除与冲突；同一部分的双端修改必须手动选择版本。
+- 更新前创建可恢复备份，失败会整体恢复 Profile、Library 和来源注册表。
+- 复用系统 Git、SSH Agent 与 credential helper，不保存仓库密码、Token 或 SSH 私钥，也不会强推。
+- Live link Skill 可能立即影响正在运行的 Agent，更新前会单独提示并要求确认。
+
 ### MCP 管理
 
 - 自动发现各 Agent 已配置的 MCP，不复制定义或凭据。

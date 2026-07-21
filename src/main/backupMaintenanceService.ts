@@ -101,6 +101,16 @@ const readRestoredCleanupBackups = async (paths: AgentEnvPaths) => {
   return backups.filter((backup): backup is NonNullable<typeof backup> => Boolean(backup));
 };
 
+const readWorkspaceSyncRecoveryBackupId = async (paths: AgentEnvPaths) => {
+  try {
+    const journal = JSON.parse(await readFile(paths.workspaceSyncJournalPath, "utf8")) as { backupId?: unknown };
+    return typeof journal.backupId === "string" ? journal.backupId : undefined;
+  } catch (error) {
+    if (isMissingFileError(error)) return undefined;
+    throw new Error("Cannot safely evaluate Workspace Sync recovery state");
+  }
+};
+
 export const createBackupMaintenanceService = (
   paths: AgentEnvPaths,
   backupStore: Pick<BackupStore, "listBackups" | "deleteBackup">,
@@ -112,12 +122,13 @@ export const createBackupMaintenanceService = (
   let activeMutation = false;
 
   const listInventory = async (): Promise<ManagedBackupInventory> => {
-    const [backups, cleanupBackups, restoredCleanupBackups, settings, targetStates] = await Promise.all([
+    const [backups, cleanupBackups, restoredCleanupBackups, settings, targetStates, workspaceRecoveryBackupId] = await Promise.all([
       backupStore.listBackups(),
       skillLibraryStore.listCleanupBackups(),
       readRestoredCleanupBackups(paths),
       settingsStore.readSettings(),
-      readTargetStates(paths)
+      readTargetStates(paths),
+      readWorkspaceSyncRecoveryBackupId(paths)
     ]);
     const required = new Map<string, ManagedBackupRequiredReason>();
     for (const { state } of targetStates) {
@@ -125,6 +136,7 @@ export const createBackupMaintenanceService = (
         required.set(state.recoveryRequired.backupId, "recovery-required");
       }
     }
+    if (workspaceRecoveryBackupId) required.set(workspaceRecoveryBackupId, "workspace-sync-recovery");
     for (const { targetId, state } of targetStates) {
       if (!state.activeProfileId) continue;
       const baseline = backups
@@ -150,7 +162,7 @@ export const createBackupMaintenanceService = (
         new Date(backup.createdAt).getTime() < cutoff;
       return {
         id: backup.id,
-        kind: "target-recovery",
+        kind: backup.operation === "workspace-sync" ? "workspace-sync" : "target-recovery",
         createdAt: backup.createdAt,
         sizeBytes: await directorySize(join(paths.backupsDir, backup.id)),
         fileCount: backup.fileCount,
@@ -212,7 +224,7 @@ export const createBackupMaintenanceService = (
 
   const removeItem = async (item: ManagedBackupItem) => {
     if (!item.deletable) throw new Error("This backup is required for recovery and cannot be deleted");
-    if (item.kind === "target-recovery") await backupStore.deleteBackup(item.id);
+    if (item.kind === "target-recovery" || item.kind === "workspace-sync") await backupStore.deleteBackup(item.id);
     else if (item.restored) {
       const safeId = SafeIdSchema.parse(item.id);
       await rm(join(paths.backupsDir, "skill-cleanup-restored", safeId), {

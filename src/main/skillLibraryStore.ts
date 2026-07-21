@@ -507,7 +507,7 @@ export const createSkillLibraryStore = (
   const runtimeSnapshotProvider = options.runtimeSnapshotProvider ?? ((targetPaths) =>
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
   const pendingUpdates = new Map<string, PendingSkillUpdate>();
-  const skillSourceRegistry = createSkillSourceRegistry(join(paths.appDataRoot, "skill-sources.json"));
+  const skillSourceRegistry = createSkillSourceRegistry(paths.skillSourcesPath);
   const skillSourceService = createLibrarySkillSourceService(
     paths.skillSourceObservationsDir,
     repositorySource

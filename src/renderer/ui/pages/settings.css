@@ -780,6 +780,249 @@
 .github-login-result--error {
   color: var(--danger);
 }
+
+.workspace-sync-settings {
+  gap: 14px;
+}
+
+.workspace-sync-status {
+  align-items: center;
+  background: #f5f7fa;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+.workspace-sync-status.is-up-to-date {
+  background: #effaf5;
+  border-color: #ccebdd;
+  color: #17835a;
+}
+
+.workspace-sync-status.is-review-required,
+.workspace-sync-status.is-error,
+.workspace-sync-status.is-recovery-required {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #b45309;
+}
+
+.workspace-sync-connect {
+  align-items: end;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+}
+
+.workspace-sync-connect label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.workspace-sync-connect label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspace-sync-connect input {
+  min-width: 0;
+  width: 100%;
+}
+
+.workspace-sync-connect .primary-action,
+.workspace-sync-actions .primary-action,
+.workspace-sync-actions .secondary-action,
+.workspace-sync-review-actions .primary-action,
+.workspace-sync-review-actions .secondary-action {
+  min-height: 36px;
+  width: auto;
+}
+
+.workspace-sync-connection {
+  align-items: center;
+  background: #fafbfc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.workspace-sync-repository {
+  font-size: 13px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-sync-connection code {
+  background: #eef2f7;
+  border-radius: var(--radius-tight);
+  font-size: 12px;
+  padding: 4px 7px;
+}
+
+.workspace-sync-summary {
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.workspace-sync-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.workspace-sync-error {
+  background: #fff4f3;
+  border: 1px solid #ffd7d3;
+  border-radius: var(--radius-control);
+  color: #b42318;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  padding: 9px 10px;
+  user-select: text;
+}
+
+.workspace-sync-review {
+  display: grid;
+  max-height: min(720px, calc(100vh - 80px));
+  max-width: 780px;
+  overflow: hidden;
+  width: min(780px, calc(100vw - 80px));
+}
+
+.workspace-sync-review-list {
+  display: grid;
+  min-height: 80px;
+  overflow: auto;
+  padding: 4px 20px 12px;
+}
+
+.workspace-sync-change {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 58px minmax(0, 1fr) 80px minmax(124px, auto);
+  min-height: 58px;
+  padding: 8px 0;
+}
+
+.workspace-sync-change:last-child {
+  border-bottom: 0;
+}
+
+.workspace-sync-change > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workspace-sync-change strong,
+.workspace-sync-change small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-sync-change small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workspace-sync-change-kind,
+.workspace-sync-direction {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.workspace-sync-direction.is-conflict {
+  color: #b45309;
+}
+
+.workspace-sync-change select {
+  min-width: 124px;
+  width: 100%;
+}
+
+.workspace-sync-live-warning {
+  align-items: start;
+  background: #fffaf0;
+  border: 1px solid #fde7bd;
+  border-radius: var(--radius-control);
+  display: flex;
+  gap: 10px;
+  margin: 0 20px 12px;
+  padding: 10px;
+}
+
+.workspace-sync-live-warning span {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-sync-live-warning small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.workspace-sync-empty {
+  color: var(--muted);
+  padding: 24px;
+  text-align: center;
+}
+
+.workspace-sync-review-actions {
+  border-top: 1px solid var(--border);
+  padding: 12px 20px;
+}
+
+.spin {
+  animation: agentenv-spin 0.8s linear infinite;
+}
+
+@keyframes agentenv-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1040px) {
+  .workspace-sync-connect {
+    grid-template-columns: minmax(0, 1fr) 120px;
+  }
+
+  .workspace-sync-connect .primary-action {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .workspace-sync-connection {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .workspace-sync-summary {
+    display: none;
+  }
+}
 @container (max-width: 560px) {
   .settings-preference-row {
     gap: 12px;

@@ -6,6 +6,10 @@ export interface AgentEnvPaths {
   repositoryCacheDir: string;
   skillSourceObservationsDir: string;
   captureReceiptsDir: string;
+  workspaceSyncCacheDir: string;
+  workspaceSyncStatePath: string;
+  workspaceSyncJournalPath: string;
+  skillSourcesPath: string;
   profilesDir: string;
   backupsDir: string;
   targetStatesDir: string;
@@ -43,6 +47,14 @@ export const createPaths = (overrides: PathOverrides): AgentEnvPaths => {
       join(cacheRoot, "skill-source-observations"),
     captureReceiptsDir:
       overrides.captureReceiptsDir ?? join(cacheRoot, "capture-receipts"),
+    workspaceSyncCacheDir:
+      overrides.workspaceSyncCacheDir ?? join(cacheRoot, "workspace-sync"),
+    workspaceSyncStatePath:
+      overrides.workspaceSyncStatePath ?? join(overrides.appDataRoot, "workspace-sync.json"),
+    workspaceSyncJournalPath:
+      overrides.workspaceSyncJournalPath ?? join(overrides.appDataRoot, "workspace-sync-transaction.json"),
+    skillSourcesPath:
+      overrides.skillSourcesPath ?? join(overrides.appDataRoot, "skill-sources.json"),
     profilesDir: overrides.profilesDir ?? join(overrides.appDataRoot, "profiles"),
     backupsDir: overrides.backupsDir ?? join(overrides.appDataRoot, "backups"),
     targetStatesDir:

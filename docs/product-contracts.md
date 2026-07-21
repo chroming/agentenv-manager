@@ -96,6 +96,25 @@ Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data ro
 - A Target-specific Skills root MAY itself be a symbolic link to a shared or external directory. Capture MAY read that linked content, but Apply MUST treat the root link as one filesystem boundary: Preview names the link and resolved destination, Apply backs up and atomically replaces only the root link with a real Target-owned directory before installing child resources, and the linked destination remains untouched.
 - A broken or cyclic Target Skills root link is still a recoverable filesystem boundary: Preview MUST identify it as a reviewed root replacement, Backup MUST preserve the link itself without traversing it, and Apply MAY replace only that link with a Target-owned directory. A non-link file occupying the Skills root remains blocking. Rollback after root isolation MUST restore the exact original link and remove only the Target-owned directory created by AgentEnv.
 
+### 4.2.1 Workspace Sync
+
+Workspace Sync reuses portable environment intent across the user's Macs through a user-owned private Git repository. It is not Target deployment and MUST NOT automatically Apply a Profile.
+
+- The portable snapshot includes complete Profile v2 data, canonical Skill content and executable bits, portable Skill update metadata, global Skill availability, and the Skill source registry.
+- Target states, credentials, GitHub tokens, settings, backups, trash, history, observations, caches, absolute local paths, and external-manager lock paths MUST NOT enter a snapshot.
+- Snapshot output MUST be deterministic. A workspace with unchanged portable content produces the same content hash and no Git commit.
+- The application MAY check the remote repository in the background, but MUST NOT automatically update this Mac, publish, merge, or Apply.
+- Update and Publish require a fresh remote revision. Non-fast-forward changes and rewritten history MUST stop the operation; AgentEnv MUST NOT force-push.
+- Comparison is three-way against the last accepted base. Changes to different Profile or Skill sections MAY combine automatically. Concurrent changes to the same section, and delete-versus-modify, require an explicit local or remote choice.
+- Updating this Mac validates the complete candidate, creates one Workspace recovery backup, writes Profile, Library, and source registry data under the global mutation lock, verifies the result, and automatically restores all three on failure.
+- An interrupted or failed restore enters `Recovery required`. The referenced recovery backup MUST NOT be removed by retention or manual backup cleanup.
+- Remote symlinks, path traversal, duplicate ids, broken references, unsupported future formats, embedded URL credentials, private keys, high-confidence tokens, and resource or total size-limit violations MUST be rejected before local mutation.
+- System Git authentication belongs to the operating system SSH Agent or credential helper. AgentEnv MUST NOT store repository passwords, tokens, or private keys, modify global Git configuration, run repository hooks, sign commits, or prompt through a hidden terminal.
+- Ordinary non-AgentEnv files in the repository remain untouched. Only `agentenv-sync.json` and `workspace/` are managed.
+- A remote Skill content change that affects a currently linked deployment has immediate runtime impact. Review MUST identify that impact and require separate confirmation. Copy deployments and Profile-only changes remain pending until ordinary Profile Apply.
+
+Workspace Sync states are `Not connected`, `Up to date`, `Changes to publish`, `Changes to receive`, `Review required`, `Could not check`, and `Recovery required`. `Checking`, `Publishing`, and `Updating` are temporary activity states, not persisted outcomes.
+
 ### 4.3 Profile
 
 A Profile is a saved environment recipe. It owns:
@@ -1065,6 +1084,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Duplicate, conflict, ignored, linked, copied, and stale-copy states.
 - Referenced resource deletion is blocked.
 - Managed-install deletion is undoable; unmanaged copies remain.
+- Workspace Sync deterministic publish, remote receive, no-op, non-conflicting combination, same-section conflict, stale remote rejection, malicious snapshot rejection, linked-Skill impact confirmation, transaction rollback, and startup recovery.
 
 ### Failure and recovery
 
