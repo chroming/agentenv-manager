@@ -72,6 +72,12 @@ const sourceRepositoryLabel = (repository: string) => {
 const sourceScopeLabel = (group: SkillSourceGroupView) =>
   `${group.ref} · /${group.directory || "."}`;
 
+const sourceDefaultLabel = (group: SkillSourceGroupView) => {
+  const repository = sourceRepositoryLabel(group.repository);
+  const directory = group.directory.replace(/^\/+|\/+$/g, "");
+  return directory ? `${repository} · /${directory}` : repository;
+};
+
 const mergeErrorSummary = (message: string) => {
   if (/repository access failed|authentication failed|permission denied|publickey|host key verification/i.test(message)) {
     return "Could not access this repository. Check your Git credentials or SSH key.";
@@ -346,6 +352,7 @@ export const SkillSourceView = ({
           const isChecking = checking.has(group.sourceId);
           const isSelected = mergeSelection.has(group.sourceId);
           const hasAttention = group.counts.updates + group.counts.new + group.counts.removed > 0;
+          const groupName = group.displayName ?? sourceDefaultLabel(group);
           return (
             <article
               className={`skill-source-group${isExpanded ? " is-expanded" : ""}${isSelected ? " is-selected" : ""}${hasAttention ? " has-attention" : ""}`}
@@ -357,7 +364,7 @@ export const SkillSourceView = ({
                     <input
                       type="checkbox"
                       aria-label={t("Select source {{name}}", {
-                        name: group.displayName ?? sourceRepositoryLabel(group.repository)
+                        name: groupName
                       })}
                       checked={isSelected}
                       onChange={(event) => {
@@ -404,7 +411,7 @@ export const SkillSourceView = ({
                     >
                       <OverflowTooltip
                         className="skill-source-link-text"
-                        displayText={group.displayName ?? sourceRepositoryLabel(group.repository)}
+                        displayText={groupName}
                         focusable={false}
                         text={group.canonicalLink}
                       />
@@ -418,7 +425,7 @@ export const SkillSourceView = ({
                       className="skill-source-rename"
                       type="button"
                       aria-label={t("Rename source {{name}}", {
-                        name: group.displayName ?? sourceRepositoryLabel(group.repository)
+                        name: groupName
                       })}
                       onClick={() => openRename(group)}
                     >
@@ -426,7 +433,9 @@ export const SkillSourceView = ({
                     </button>
                   </div>
                   <span className="skill-source-checked">
-                    {group.displayName ? `${sourceRepositoryLabel(group.repository)} · ` : ""}{sourceScopeLabel(group)} · {group.error
+                    {group.displayName
+                      ? `${sourceRepositoryLabel(group.repository)} · ${sourceScopeLabel(group)}`
+                      : group.ref} · {group.error
                       ? t("Last check failed")
                       : group.checkedAt
                         ? t("Checked {{date}}", { date: formatDate(group.checkedAt) })
@@ -652,7 +661,7 @@ export const SkillSourceView = ({
               <span>{t("Source name")}</span>
               <input
                 maxLength={80}
-                placeholder={sourceRepositoryLabel(renameSource.repository)}
+                placeholder={sourceDefaultLabel(renameSource)}
                 value={renameValue}
                 onChange={(event) => {
                   setRenameValue(event.currentTarget.value);

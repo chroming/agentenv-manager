@@ -124,7 +124,7 @@ describe("SkillSourceView", () => {
     fireEvent.change(screen.getByLabelText("Search sources and skills"), {
       target: { value: "testing" }
     });
-    expect(screen.getByText("acme/skills")).toBeInTheDocument();
+    expect(screen.getByText("acme/skills · /engineering")).toBeInTheDocument();
     rerender(
       <SkillSourceView
         active={false}
@@ -235,7 +235,7 @@ describe("SkillSourceView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Rename source acme/skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename source acme/skills · /engineering" }));
     const dialog = screen.getByRole("dialog", { name: "Rename source" });
     expect(dialog.querySelector(".profile-dialog-header")).not.toBeNull();
     expect(dialog.querySelector(".preview-actions")).not.toBeNull();
