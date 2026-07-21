@@ -396,6 +396,11 @@
   color: #167445;
 }
 
+.apply-preview-dialog .change-kind--prepare {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
 .apply-preview-issues {
   border: 1px solid;
   border-radius: var(--radius-surface);

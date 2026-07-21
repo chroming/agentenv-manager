@@ -557,6 +557,7 @@ const AppContent = ({
   const [isProfilePreviewing, setIsProfilePreviewing] = useState(false);
   const [isProfileApplying, setIsProfileApplying] = useState(false);
   const [profileSaveStatus, setProfileSaveStatus] = useState("");
+  const [profileApplyRefreshDetail, setProfileApplyRefreshDetail] = useState<string>();
   const [settingsSaveStatus, setSettingsSaveStatus] = useState("");
   const [dataBackupStatus, setDataBackupStatus] = useState("");
   const [dataRestorePreview, setDataRestorePreview] = useState<DataRestorePreview>();
@@ -2213,11 +2214,13 @@ const AppContent = ({
     setIsProfileApplying(true);
     setError(undefined);
     setProfileSaveStatus("");
+    setProfileApplyRefreshDetail(undefined);
     try {
       const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id);
       if (!result.ok) {
         if (result.kind === "stale") {
           setProfileSaveStatus("The Agent changed while Preview was open. Preview refreshed.");
+          setProfileApplyRefreshDetail(result.errors.join("\n") || undefined);
           const refreshedPreview = await window.agentEnv.previewApply(
             draftProfile.id,
             preview.targetId
@@ -3692,6 +3695,7 @@ const AppContent = ({
     setError(undefined);
     setSkillUpdateCheckStatus(undefined);
     setProfileSaveStatus("");
+    setProfileApplyRefreshDetail(undefined);
     setSettingsSaveStatus("");
     setTargetRefreshStatus(undefined);
     setSkillRefreshStatus(undefined);
@@ -3801,7 +3805,11 @@ const AppContent = ({
                     profileSaveStatus === "Saving profile details"
                   ? "loading"
                   : "info",
-            title: profileSaveStatus
+            title: profileSaveStatus,
+            message:
+              profileSaveStatus === "The Agent changed while Preview was open. Preview refreshed."
+                ? profileApplyRefreshDetail
+                : undefined
           }
         : dataBackupStatus && activeWorkspace === "settings"
           ? {

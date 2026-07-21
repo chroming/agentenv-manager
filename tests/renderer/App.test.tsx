@@ -2428,6 +2428,7 @@ describe("App", () => {
     expect(api.applyProfile).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("The Agent changed while Preview was open. Preview refreshed."))
       .toBeInTheDocument();
+    expect(screen.getByText("Agent changed after preview")).toBeInTheDocument();
     dialog = screen.getByRole("dialog", { name: "Preview" });
     fireEvent.click(within(dialog).getByRole("button", { name: /^Apply$/ }));
 

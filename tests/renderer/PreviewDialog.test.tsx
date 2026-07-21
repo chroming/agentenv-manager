@@ -89,7 +89,7 @@ describe("PreviewDialog", () => {
     expect(within(plan).getByText("Instructions")).toBeInTheDocument();
   });
 
-  it("describes shared Skill changes as final cleanup outcomes", () => {
+  it("describes shared Skill changes as migration preparation rather than immediate installs", () => {
     render(
       <PreviewDialog
         preview={{
@@ -110,10 +110,11 @@ describe("PreviewDialog", () => {
       />
     );
 
-    expect(screen.getByText("Shared Skill cleanup")).toBeInTheDocument();
-    const outcome = screen.getByText("Install as reviewer");
+    expect(screen.getByText("Shared Skill migration plan")).toBeInTheDocument();
+    const outcome = screen.getByText("Keep enabled as reviewer after shared cleanup");
     expect(outcome).toBeInTheDocument();
     expect(outcome.closest("article")).toHaveClass("apply-preview-change-row");
+    expect(screen.getByText("Prepare")).toBeInTheDocument();
     expect(screen.queryByText(/preparation|migration decision/i)).not.toBeInTheDocument();
   });
 

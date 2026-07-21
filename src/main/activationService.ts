@@ -136,6 +136,7 @@ class InvalidTargetStateError extends Error {
 }
 
 interface InternalActivationPreview extends ActivationPreview {
+  targetStateFingerprint: string;
   resourceManagement: {
     instructions: boolean;
     skills: boolean;
@@ -153,6 +154,7 @@ interface InternalActivationPreview extends ActivationPreview {
 
 const publicPreview = (preview: InternalActivationPreview): ActivationPreview => {
   const {
+    targetStateFingerprint: _targetStateFingerprint,
     resourceManagement: _resourceManagement,
     skillDeployment: _skillDeployment,
     ...publicValue
@@ -179,6 +181,59 @@ const publicPreview = (preview: InternalActivationPreview): ActivationPreview =>
 
 const hashText = (content: string): string =>
   createHash("sha256").update(content).digest("hex");
+
+const normalizeSharedSkillPreparations = (
+  preparations: readonly SharedSkillPreparation[] = []
+) =>
+  preparations
+    .map((preparation) => ({
+      ...preparation,
+      sharedPaths: [...new Set(preparation.sharedPaths.map((path) => resolve(path)))].sort()
+    }))
+    .sort(
+      (left, right) =>
+        left.skillKey.localeCompare(right.skillKey) ||
+        left.libraryId.localeCompare(right.libraryId) ||
+        left.targetName.localeCompare(right.targetName) ||
+        left.disposition.localeCompare(right.disposition) ||
+        left.profileId.localeCompare(right.profileId) ||
+        left.profileHash.localeCompare(right.profileHash)
+    );
+
+const sharedSkillPreparationsEqual = (
+  left: readonly SharedSkillPreparation[] = [],
+  right: readonly SharedSkillPreparation[] = []
+) =>
+  JSON.stringify(normalizeSharedSkillPreparations(left)) ===
+  JSON.stringify(normalizeSharedSkillPreparations(right));
+
+const fingerprintTargetState = (state: TargetState): string => {
+  const managedResources = [...(state.managedResources ?? [])]
+    .map((resource) => ({ ...resource, path: resolve(resource.path) }))
+    .sort(
+      (left, right) =>
+        left.path.localeCompare(right.path) ||
+        left.kind.localeCompare(right.kind) ||
+        left.id.localeCompare(right.id)
+    );
+  const appliedSkillVersions = Object.fromEntries(
+    Object.entries(state.appliedLibraryVersions?.skills ?? {}).sort(([left], [right]) =>
+      left.localeCompare(right)
+    )
+  );
+  const comparable = {
+    activeProfileId: state.activeProfileId ?? null,
+    appliedProfileHash: state.appliedProfileHash ?? null,
+    appliedLibraryVersions: { skills: appliedSkillVersions },
+    managedMcpNames: [...new Set(state.managedMcpNames)].sort(),
+    managedResources,
+    sharedSkillPreparations: normalizeSharedSkillPreparations(
+      state.sharedSkillPreparations
+    ),
+    recoveryRequired: state.recoveryRequired ?? null
+  };
+  return hashText(JSON.stringify(comparable));
+};
 
 const hashPath = async (path: string): Promise<string | undefined> => {
   if (!(await pathExists(path))) {
@@ -708,7 +763,7 @@ export const createActivationService = ({
 
     await Promise.all(
       [...desired.values()].map(async ({ sourcePath }) => {
-        sourceFingerprints[sourcePath] = (await hashPath(sourcePath)) ?? "";
+        sourceFingerprints[sourcePath] = (await hashComparablePath(sourcePath)) ?? "";
       })
     );
 
@@ -1231,8 +1286,7 @@ export const createActivationService = ({
         }))
       ),
       liveFingerprints: {
-        ...targetPreview.liveFingerprints,
-        [stateFile.path]: hashText(stateFile.content)
+        ...targetPreview.liveFingerprints
       },
       resourceFingerprints: {
         ...assetPlan.resourceFingerprints,
@@ -1240,13 +1294,16 @@ export const createActivationService = ({
         ...sharedFingerprints
       },
       sourceFingerprints: assetPlan.sourceFingerprints,
-      sharedSkillPreparations: skillDeploymentPlan.sharedPreparations,
-      sharedSkillPreparationChanged:
-        JSON.stringify(stateFile.state.sharedSkillPreparations ?? []) !==
-        JSON.stringify(skillDeploymentPlan.sharedPreparations),
+      sharedSkillPreparations: normalizeSharedSkillPreparations(
+        skillDeploymentPlan.sharedPreparations
+      ),
+      sharedSkillPreparationChanged: !sharedSkillPreparationsEqual(
+        stateFile.state.sharedSkillPreparations,
+        skillDeploymentPlan.sharedPreparations
+      ),
       targetStateChanged:
-        JSON.stringify(stateFile.state.managedMcpNames) !==
-          JSON.stringify(targetPreview.targetState.managedMcpNames),
+        JSON.stringify([...new Set(stateFile.state.managedMcpNames)].sort()) !==
+          JSON.stringify([...new Set(targetPreview.targetState.managedMcpNames)].sort()),
       targetState: targetPreview.targetState,
       effectivePayload,
       operation: isTakeover ? "takeover" : "apply",
@@ -1264,7 +1321,8 @@ export const createActivationService = ({
         inventoryFingerprint: fingerprintSkillInventory(inventory),
         skillLibraryDir,
         skillSyncMethod: settings.skillSyncMethod
-      }
+      },
+      targetStateFingerprint: fingerprintTargetState(stateFile.state)
     };
     previews.set(preview.id, preview);
     return publicPreview(preview);
@@ -1369,6 +1427,14 @@ export const createActivationService = ({
         homeDir: paths.homeDir,
         fakeHomeRoot: paths.fakeHomeRoot
       });
+      const currentStateFile = await readTargetStateFile(preview.targetId);
+      if (fingerprintTargetState(currentStateFile.state) !== preview.targetStateFingerprint) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: ["AgentEnv management state changed after preview; review the latest version"]
+        };
+      }
       const currentSkillRoot = preview.resourceManagement.skills
         ? await inspectSkillRoot(targetPaths.skillsDir)
         : undefined;
@@ -1464,7 +1530,7 @@ export const createActivationService = ({
         }
       }
       for (const [path, fingerprint] of Object.entries(preview.sourceFingerprints)) {
-        const current = (await hashPath(path)) ?? "";
+        const current = (await hashComparablePath(path)) ?? "";
         if (current !== fingerprint) {
           return {
             ok: false,
@@ -1497,7 +1563,6 @@ export const createActivationService = ({
         ...preview.changes.map((change) => change.path),
         ...assetBackupPaths
       ]);
-      const currentStateFile = await readTargetStateFile(preview.targetId);
       const currentDrift = await findManagedDrift({
         state: currentStateFile.state,
         profile: materializedProfile,

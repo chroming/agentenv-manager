@@ -111,7 +111,7 @@ export const PreviewChangeList = ({
     if (id === "skills") return t("Skills");
     if (id === "mcp") return t("MCP configuration");
     if (id === "storage") return t("Skill storage");
-    if (id === "cleanup") return t("Shared Skill cleanup");
+    if (id === "cleanup") return t("Shared Skill migration plan");
     return t("Configuration files");
   };
   const resourceKindLabel = (kind: PlannedResourceChange["kind"]) => {
@@ -209,12 +209,14 @@ export const PreviewChangeList = ({
                           <strong>{preparation.skillKey}</strong>
                           <small>
                             {preparation.disposition === "install"
-                              ? t("Install as {{name}}", { name: preparation.targetName })
-                              : t("Remove from this Agent")}
+                              ? t("Keep enabled as {{name}} after shared cleanup", {
+                                  name: preparation.targetName
+                                })
+                              : t("Keep disabled after shared cleanup")}
                           </small>
                         </span>
-                        <span className={`change-kind change-kind--${preparation.disposition === "install" ? "install" : "remove"}`}>
-                          {t(preparation.disposition === "install" ? "Install" : "Remove")}
+                        <span className="change-kind change-kind--prepare">
+                          {t("Prepare")}
                         </span>
                       </article>
                     ))

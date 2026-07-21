@@ -151,6 +151,117 @@ describe("activation service v2", () => {
     });
   });
 
+  it("accepts a semantically identical AgentEnv state serialization", async () => {
+    const { paths, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    await mkdir(paths.targetStatesDir, { recursive: true });
+    await writeFile(
+      join(paths.targetStatesDir, "codex.json"),
+      JSON.stringify({
+        sharedSkillPreparations: [],
+        managedResources: [],
+        managedMcpNames: [],
+        formatVersion: 2
+      })
+    );
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual(
+      expect.objectContaining({ ok: true })
+    );
+  });
+
+  it("ignores Library metadata changes that do not affect deployed Skill content", async () => {
+    const { paths, service, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    const librarySkill = (await skillLibraryStore.listSkills()).find((skill) => skill.id === "review");
+    if (!librarySkill) throw new Error("Expected review in the Skill Library");
+    const metadataPath = join(librarySkill.path, ".agentenv-skill.json");
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
+    await writeFile(
+      metadataPath,
+      `${JSON.stringify({ ...metadata, updatedAt: "2026-07-21T12:00:00.000Z" }, null, 2)}\n`
+    );
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual(
+      expect.objectContaining({ ok: true })
+    );
+    await expect(readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
+      .resolves.toContain("# Review");
+  });
+
+  it("still rejects a real AgentEnv management state change after preview", async () => {
+    const { paths, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    await mkdir(paths.targetStatesDir, { recursive: true });
+    await writeFile(
+      join(paths.targetStatesDir, "codex.json"),
+      `${JSON.stringify({
+        formatVersion: 2,
+        managedMcpNames: [],
+        managedResources: [],
+        sharedSkillPreparations: [],
+        activeProfileId: "another-profile"
+      }, null, 2)}\n`
+    );
+
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
+      ok: false,
+      kind: "stale",
+      errors: ["AgentEnv management state changed after preview; review the latest version"]
+    });
+    await expect(readFile(paths.globalAgentsPath, "utf8")).resolves.toBe("# Old guidance\n");
+  });
+
+  it("treats reordered shared Skill preparation state as unchanged", async () => {
+    const { paths, service, profileStore, profile, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const secondSource = join(root, "source", "test");
+    await mkdir(secondSource, { recursive: true });
+    await writeFile(join(secondSource, "SKILL.md"), "---\nname: test\n---\n# Test\n");
+    await skillLibraryStore.importSkill({ sourcePath: secondSource, id: "test" });
+    await profileStore.saveProfile({
+      manifest: profile.manifest,
+      instructions: profile.instructions,
+      resources: {
+        ...profile.resources,
+        skills: [
+          { libraryId: "review", targetName: "review", enabled: true },
+          { libraryId: "test", targetName: "test", enabled: true }
+        ]
+      }
+    });
+    for (const id of ["review", "test"]) {
+      const librarySkill = (await skillLibraryStore.listSkills()).find((skill) => skill.id === id);
+      if (!librarySkill) throw new Error(`Expected ${id} in the Skill Library`);
+      await mkdir(join(paths.userSkillsDir, id), { recursive: true });
+      await cp(librarySkill.path, join(paths.userSkillsDir, id), { recursive: true });
+    }
+
+    const first = await service.previewProfile(profile.id, "codex");
+    expect(first.sharedSkillPreparations).toHaveLength(2);
+    expect((await service.applyProfile(profile.id, first.id)).ok).toBe(true);
+    const statePath = join(paths.targetStatesDir, "codex.json");
+    const state = JSON.parse(await readFile(statePath, "utf8")) as {
+      sharedSkillPreparations: Array<{ sharedPaths: string[] }>;
+    };
+    state.sharedSkillPreparations.reverse();
+    state.sharedSkillPreparations.forEach((preparation) => preparation.sharedPaths.reverse());
+    await writeFile(statePath, `${JSON.stringify(state, null, 4)}\n`);
+
+    const stable = await service.previewProfile(profile.id, "codex");
+    expect(stable.sharedSkillPreparationChanged).toBe(false);
+    expect(stable.changes).toEqual([]);
+    expect(stable.resourceChanges).toEqual([]);
+    await expect(service.applyProfile(profile.id, stable.id)).resolves.toEqual({
+      ok: false,
+      kind: "no-op",
+      errors: ["No changes to apply"]
+    });
+  });
+
   it("automatically re-adopts an exact unmanaged Skill copy on a later Apply", async () => {
     const { paths, service, skillLibraryStore } = await makeEnv();
     await writeCodexLiveFiles(paths);

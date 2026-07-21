@@ -1039,6 +1039,11 @@ Object.assign(zhCN, {
   "Install as {{name}}": "安装为 {{name}}",
   "Do not install": "不安装",
   "Shared Skill cleanup": "共享技能整理",
+  "Shared Skill migration plan": "共享 Skill 迁移准备",
+  "Keep enabled as {{name}} after shared cleanup":
+    "清理共享副本后继续以 {{name}} 启用",
+  "Keep disabled after shared cleanup": "清理共享副本后保持停用",
+  "Prepare": "准备",
   "1 Skill affected": "影响 1 个技能",
   "{{count}} Skills affected": "影响 {{count}} 个技能",
   "After cleanup: install as {{name}}": "整理后安装为 {{name}}",

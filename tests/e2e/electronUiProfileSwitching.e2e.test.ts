@@ -4191,9 +4191,9 @@ describe("Electron UI profile switching e2e", () => {
     await saveProfile(page);
     await applyActionButton(page, "OpenCode").click();
     const preparationPreview = page.getByRole("dialog", { name: "Preview" });
-    await expect.poll(() => preparationPreview.textContent()).toContain("Shared Skill cleanup");
+    await expect.poll(() => preparationPreview.textContent()).toContain("Shared Skill migration plan");
     await expect.poll(() => preparationPreview.textContent()).toContain(
-      `Install as ${skillId}`
+      `Keep enabled as ${skillId} after shared cleanup`
     );
     await preparationPreview.getByRole("button", { name: "Apply", exact: true }).click();
     await preparationPreview.waitFor({ state: "hidden" });

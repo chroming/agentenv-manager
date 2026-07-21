@@ -472,8 +472,12 @@ export const buildSkillDeploymentPlan = ({
         `${right.libraryId}:${right.targetName}`
       )
     ),
-    sharedPreparations: sharedPreparations.sort((left, right) =>
-      left.skillKey.localeCompare(right.skillKey)
+    sharedPreparations: sharedPreparations.sort(
+      (left, right) =>
+        left.skillKey.localeCompare(right.skillKey) ||
+        left.libraryId.localeCompare(right.libraryId) ||
+        left.targetName.localeCompare(right.targetName) ||
+        left.disposition.localeCompare(right.disposition)
     ),
     sharedPaths: [...sharedPaths].sort(),
     issues: dedupeApplyIssues(issues)
