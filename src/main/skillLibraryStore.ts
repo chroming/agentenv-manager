@@ -41,6 +41,9 @@ import type {
   SkillUpdateSourceInput,
   SkillRuntimeObservation,
   SkillRuntimeSnapshot,
+  SkillSourceCheckAllResult,
+  SkillSourceCollectionRef,
+  SkillSourceGroupView,
   TargetSkillLocationRole,
   TargetSkillLocation,
   TargetPaths,
@@ -69,22 +72,18 @@ import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { createSkillChanges } from "./skillFileChanges";
 import { hashSkillContent } from "./skillContentHash";
 import { removeUnavailableSkillLinksTransaction } from "./skillUnavailableCleanup";
-
-interface SkillMetadataFile {
-  sourceType?: SkillSourceType;
-  source?: string;
-  remoteRef?: string;
-  remotePath?: string;
-  remoteRevision?: string;
-  updateCheckEnabled?: boolean;
-  updatePolicy?: SkillUpdatePolicy;
-  globallyEnabled?: boolean;
-  iconKey?: ResourceIconKey;
-  contentHash?: string;
-  updatedAt?: string;
-  upstream?: SkillUpstream;
-  provenance?: SkillProvenance;
-}
+import {
+  createLibrarySkillSourceService,
+  createGitHubSourceScope,
+  createSkillSourceGroupStore,
+  githubCandidateStatus,
+  legacySkillSourceCollectionFor,
+  normalizeRepositorySkillScan,
+  resolveSkillSourceCollection,
+  validateGitHubImportCollection,
+  validateRepositoryImportCollection
+} from "./skillSourceLibrary";
+import type { SkillMetadataFile } from "./skillLibraryMetadata";
 
 interface SkillCleanupBackupManifest {
   id: string;
@@ -208,6 +207,9 @@ export interface SkillLibraryStore {
   scanRepositorySkills(input: RepositorySkillSourceInput): Promise<RepositorySkillScanResult>;
   importRepositorySkill(input: RepositorySkillImportInput): Promise<SkillLibraryEntry>;
   importRepositorySkills(inputs: RepositorySkillImportInput[]): Promise<RepositorySkillImportResult>;
+  listSourceGroups(): Promise<SkillSourceGroupView[]>;
+  checkSourceGroup(canonicalLink: string): Promise<SkillSourceGroupView>;
+  checkAllSourceGroups(): Promise<SkillSourceCheckAllResult>;
   removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   deployLibrarySkill(input: DeployLibrarySkillStoreInput): Promise<void>;
@@ -498,6 +500,10 @@ export const createSkillLibraryStore = (
   const runtimeSnapshotProvider = options.runtimeSnapshotProvider ?? ((targetPaths) =>
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
   const pendingUpdates = new Map<string, PendingSkillUpdate>();
+  const skillSourceService = createLibrarySkillSourceService(
+    paths.skillSourceObservationsDir,
+    repositorySource
+  );
 
   const metadataHash = (metadata: SkillMetadataFile) =>
     createHash("sha256").update(JSON.stringify(metadata)).digest("hex");
@@ -815,7 +821,8 @@ export const createSkillLibraryStore = (
       contentHash: metadata.contentHash ?? contentHash,
       updatedAt: metadata.updatedAt ?? stats.mtime.toISOString(),
       upstream: metadata.upstream,
-      provenance: metadata.provenance
+      provenance: metadata.provenance,
+      sourceCollection: legacySkillSourceCollectionFor(metadata)
     };
   };
 
@@ -1003,7 +1010,10 @@ export const createSkillLibraryStore = (
       | "globallyEnabled"
       | "upstream"
       | "provenance"
-    > & { iconKey?: ResourceIconKey | null }
+    > & {
+      iconKey?: ResourceIconKey | null;
+      sourceCollection?: SkillSourceCollectionRef | null;
+    }
   ) => {
     const current = await readLibraryMetadata(skillDir);
     const sourceType = metadata.sourceType ?? "local";
@@ -1019,6 +1029,10 @@ export const createSkillLibraryStore = (
           remoteRevision: metadata.remoteRevision,
           upstream: metadata.upstream ?? current.upstream,
           provenance: metadata.provenance ?? current.provenance,
+          sourceCollection: resolveSkillSourceCollection(
+            metadata.sourceCollection,
+            current.sourceCollection
+          ),
           iconKey: metadata.iconKey === null ? undefined : metadata.iconKey ?? current.iconKey,
           globallyEnabled: metadata.globallyEnabled ?? current.globallyEnabled ?? true,
           updatePolicy:
@@ -1087,6 +1101,7 @@ export const createSkillLibraryStore = (
 
   const scanGitHubSkills = async (rawUrl: string): Promise<GitHubSkillScanResult> => {
     const source = await resolveGitHubLocation(rawUrl);
+    const sourceScope = createGitHubSourceScope(rawUrl, source);
     const treeUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${encodeURIComponent(source.treeSha)}?recursive=1`;
     const treeResponse = await fetchGitHubJson(treeUrl) as GitHubTreeResponse;
     const treeItems = (treeResponse.tree ?? []).filter(
@@ -1174,23 +1189,32 @@ export const createSkillLibraryStore = (
         id,
         name: frontmatter.name || pathName,
         description: frontmatter.description,
+        version: frontmatter.version,
         remotePath,
         sourceUrl,
         ref: source.ref,
         revision,
-        status: existingSource ? "already-imported" : duplicate ? "duplicate" : "ready",
-        existingLibraryId: existingSource?.id ?? duplicate?.id
+        status: githubCandidateStatus(
+          frontmatter.errors,
+          Boolean(existingSource),
+          Boolean(duplicate)
+        ),
+        existingLibraryId: existingSource?.id ?? duplicate?.id,
+        error: frontmatter.errors.length > 0 ? frontmatter.errors.join("; ") : undefined
       });
     }
 
-    return {
+    const result: GitHubSkillScanResult = {
       owner: source.owner,
       repo: source.repo,
       ref: source.ref,
       rootPath: source.rootPath,
+      sourceScope,
       truncated: Boolean(treeResponse.truncated) || boundedSkillFiles.length > 500,
       candidates
     };
+    await skillSourceService.recordGitHubScan(sourceScope, result);
+    return result;
   };
 
   const ownedLibraryId = async (skillDir: string) => {
@@ -1807,10 +1831,15 @@ export const createSkillLibraryStore = (
     id,
     ref,
     remotePath,
+    sourceCollection,
     expectedContentHash,
     conflictResolution
   }: GitHubSkillImportInput): Promise<SkillLibraryEntry> => {
     const source = parseGitHubSkillUrl(url, { ref, remotePath });
+    const validatedSourceCollection = validateGitHubImportCollection(
+      { sourceCollection },
+      source
+    );
 
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-"));
     try {
@@ -1824,7 +1853,7 @@ export const createSkillLibraryStore = (
       await validateSkillFrontmatter(tempDir);
       const previewSource: SkillImportPreviewInput = {
         kind: "github",
-        input: { url, id, ref, remotePath }
+        input: { url, id, ref, remotePath, sourceCollection: validatedSourceCollection }
       };
       const preview = await previewDirectoryImport(
         previewSource,
@@ -1871,7 +1900,8 @@ export const createSkillLibraryStore = (
             revision,
             updatedAt: sourceUpdatedAt
           },
-          provenance: previousMetadata?.provenance ?? { importedVia: "agentenv" }
+          provenance: previousMetadata?.provenance ?? { importedVia: "agentenv" },
+          sourceCollection: validatedSourceCollection
         });
         return entryFor(plan.id, targetDir);
       }
@@ -1895,7 +1925,8 @@ export const createSkillLibraryStore = (
             revision,
             updatedAt: sourceUpdatedAt
           },
-          provenance: { importedVia: "agentenv" }
+          provenance: { importedVia: "agentenv" },
+          sourceCollection: validatedSourceCollection
         });
         return entryFor(plan.id, targetDir);
       } catch (error) {
@@ -1932,38 +1963,9 @@ export const createSkillLibraryStore = (
   ): Promise<RepositorySkillScanResult> => {
     const result = await requireRepositorySource().scan(input);
     const existingSkills = await listSkills();
-    const reservedIds = new Set(existingSkills.map((skill) => skill.id));
-    return {
-      ...result,
-      candidates: result.candidates.map((candidate) => {
-        const existingSource = existingSkills.find(
-          (skill) =>
-            skill.sourceType === "git" &&
-            skill.source === candidate.source.locator &&
-            skill.remoteRef === candidate.source.ref &&
-            (skill.upstream?.subpath ?? "") === (candidate.source.subpath ?? "")
-        );
-        const duplicate = existingSkills.find(
-          (skill) => !existingSource && skill.remoteRevision === candidate.contentRevision
-        );
-        let id = existingSource?.id ?? duplicate?.id ?? candidate.id;
-        const baseId = id;
-        for (
-          let suffix = 2;
-          !existingSource && !duplicate && reservedIds.has(id);
-          suffix += 1
-        ) {
-          id = `${baseId}-${suffix}`;
-        }
-        if (!existingSource && !duplicate) reservedIds.add(id);
-        return {
-          ...candidate,
-          id,
-          status: existingSource ? "already-imported" : duplicate ? "duplicate" : "ready",
-          existingLibraryId: existingSource?.id ?? duplicate?.id
-        };
-      })
-    };
+    const normalizedResult = normalizeRepositorySkillScan(result, existingSkills);
+    await skillSourceService.recordRepositoryScan(result.sourceScope, normalizedResult);
+    return normalizedResult;
   };
 
   const importRepositorySkill = async (
@@ -1972,11 +1974,15 @@ export const createSkillLibraryStore = (
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-"));
     try {
       const materialized = await requireRepositorySource().materialize(input, tempDir);
+      const validatedSourceCollection = validateRepositoryImportCollection(input, materialized);
       const frontmatter = await validateSkillFrontmatter(tempDir);
       const requestedId =
         input.id ??
         normalizeSkillKey(frontmatter.name || basename(materialized.directory) || "skill");
-      const previewSource: SkillImportPreviewInput = { kind: "repository", input };
+      const previewSource: SkillImportPreviewInput = {
+        kind: "repository",
+        input: { ...input, sourceCollection: validatedSourceCollection }
+      };
       const preview = await previewDirectoryImport(
         previewSource,
         tempDir,
@@ -2014,6 +2020,7 @@ export const createSkillLibraryStore = (
         | "iconKey"
         | "upstream"
         | "provenance"
+        | "sourceCollection"
       > = {
         sourceType: "git",
         source: materialized.repository,
@@ -2024,7 +2031,8 @@ export const createSkillLibraryStore = (
         iconKey: previousMetadata?.iconKey,
         globallyEnabled: previousMetadata?.globallyEnabled,
         upstream: materialized.upstream,
-        provenance: previousMetadata?.provenance ?? { importedVia: "agentenv" }
+        provenance: previousMetadata?.provenance ?? { importedVia: "agentenv" },
+        sourceCollection: validatedSourceCollection
       };
       if (plan.sourceOnly) {
         await writeMetadata(targetDir, metadata);
@@ -2068,6 +2076,9 @@ export const createSkillLibraryStore = (
     }
     return { imported, failed };
   };
+
+  const { listSourceGroups, checkSourceGroup, checkAllSourceGroups } =
+    createSkillSourceGroupStore(skillSourceService, listSkills);
 
   const deployLibrarySkill = async ({
     targetPaths,
@@ -2741,7 +2752,8 @@ export const createSkillLibraryStore = (
           locator: githubSource.sourceUrl,
           ref: githubSource.ref,
           subpath: githubSource.remotePath
-        }
+        },
+        sourceCollection: null
       });
       return entryFor(safeId, targetDir);
     }
@@ -2759,7 +2771,8 @@ export const createSkillLibraryStore = (
           remotePath: materialized.directory,
           remoteRevision: materialized.contentRevision,
           updatePolicy: "tracked",
-          upstream: materialized.upstream
+          upstream: materialized.upstream,
+          sourceCollection: null
         });
         return entryFor(safeId, targetDir);
       } finally {
@@ -2776,7 +2789,8 @@ export const createSkillLibraryStore = (
       sourceType: "local",
       source,
       updatePolicy: "tracked",
-      upstream: { kind: "local", locator: source }
+      upstream: { kind: "local", locator: source },
+      sourceCollection: null
     });
     return entryFor(safeId, targetDir);
   };
@@ -3204,6 +3218,9 @@ export const createSkillLibraryStore = (
     scanRepositorySkills,
     importRepositorySkill,
     importRepositorySkills,
+    listSourceGroups,
+    checkSourceGroup,
+    checkAllSourceGroups,
     removeSkill,
     manageTargetSkill,
     deployLibrarySkill,

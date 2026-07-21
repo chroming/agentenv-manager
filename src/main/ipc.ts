@@ -452,6 +452,13 @@ export const registerIpcHandlers = ({
     (_event, inputs: RepositorySkillImportInput[]) =>
       skillLibraryStore.importRepositorySkills(Array.isArray(inputs) ? inputs : [])
   );
+  ipcMain.handle("skills:list-source-groups", () => skillLibraryStore.listSourceGroups());
+  ipcMain.handle("skills:check-source-group", (_event, canonicalLink: unknown) =>
+    skillLibraryStore.checkSourceGroup(String(canonicalLink))
+  );
+  ipcMain.handle("skills:check-all-source-groups", () =>
+    skillLibraryStore.checkAllSourceGroups()
+  );
   ipcMain.handle("skills:cancel-repository", () => {
     cancelRepositoryOperations();
   });

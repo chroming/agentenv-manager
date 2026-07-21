@@ -55,6 +55,8 @@ import type {
   SkillInventoryEntry,
   SkillIconInput,
   SkillLibraryEntry,
+  SkillSourceGroupCandidate,
+  SkillSourceGroupView,
   SkillMergeInput,
   SkillMergePreview,
   SkillSourceType,
@@ -87,6 +89,8 @@ import { useI18n } from "../i18n";
 import { Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
+import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
+import { SkillSourceView } from "./SkillSourceView";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -130,6 +134,9 @@ interface SkillLibraryPanelProps {
   isLoading?: boolean;
   isBusy?: boolean;
   librarySkills: SkillLibraryEntry[];
+  sourceGroups: SkillSourceGroupView[];
+  sourceGroupsLoading?: boolean;
+  libraryMode: "skills" | "sources";
   skillUpdates: SkillUpdateInfo[];
   skillInventory: SkillInventoryEntry[];
   cleanupBackups: SkillCleanupBackupSummary[];
@@ -156,6 +163,9 @@ interface SkillLibraryPanelProps {
     inputs: RepositorySkillImportInput[],
     onProgress?: (progress: GitHubSkillImportProgress) => void
   ): Promise<RepositorySkillImportResult>;
+  onLibraryModeChange(mode: "skills" | "sources"): void;
+  onCheckSourceGroup(canonicalLink: string): Promise<void>;
+  onCheckAllSourceGroups(): Promise<void>;
   onCancelRepositoryOperations(): Promise<void>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): Promise<boolean>;
@@ -355,6 +365,9 @@ export const SkillLibraryPanel = ({
   isLoading = false,
   isBusy = false,
   librarySkills,
+  sourceGroups,
+  sourceGroupsLoading = false,
+  libraryMode,
   skillUpdates,
   skillInventory,
   cleanupBackups,
@@ -375,6 +388,9 @@ export const SkillLibraryPanel = ({
   onImportGitHubSkills,
   onScanRepositorySkills,
   onImportRepositorySkills,
+  onLibraryModeChange,
+  onCheckSourceGroup,
+  onCheckAllSourceGroups,
   onCancelRepositoryOperations,
   onManageTargetSkill,
   onConsolidateSkillGroup,
@@ -1067,7 +1083,14 @@ export const SkillLibraryPanel = ({
               repository: repositoryResult.repository,
               ref: repositoryResult.ref,
               directory: candidate.directory,
-              transport: "system-git"
+              transport: "system-git",
+              sourceCollection: {
+                ...repositoryResult.sourceScope,
+                sourceSubpath: sourceSubpathFor(
+                  repositoryResult.sourceScope.directory,
+                  candidate.directory
+                )
+              }
             };
             return [repositoryImportProgressKey(input), input];
           })
@@ -1086,11 +1109,13 @@ export const SkillLibraryPanel = ({
           repo: repositoryResult.repository,
           ref: repositoryResult.ref,
           rootPath: repositoryResult.directory,
+          sourceScope: repositoryResult.sourceScope,
           truncated: repositoryResult.truncated,
           candidates: repositoryResult.candidates.map((candidate) => ({
             id: candidate.id,
             name: candidate.name,
             description: candidate.description,
+            version: candidate.version,
             remotePath: candidate.directory,
             sourceUrl: repositoryImportProgressKey({
               repository: repositoryResult.repository,
@@ -1100,7 +1125,8 @@ export const SkillLibraryPanel = ({
             ref: repositoryResult.ref,
             revision: candidate.contentRevision,
             status: candidate.status,
-            existingLibraryId: candidate.existingLibraryId
+            existingLibraryId: candidate.existingLibraryId,
+            error: candidate.error
           }))
         };
       };
@@ -1209,7 +1235,14 @@ export const SkillLibraryPanel = ({
             url: candidate.sourceUrl,
             id: githubCandidateIds[candidate.id] || candidate.id,
             ref: candidate.ref,
-            remotePath: candidate.remotePath
+            remotePath: candidate.remotePath,
+            sourceCollection: {
+              ...githubScanResult.sourceScope,
+              sourceSubpath: sourceSubpathFor(
+                githubScanResult.sourceScope.directory,
+                candidate.remotePath
+              )
+            }
           })),
           onProgress
         );
@@ -1375,10 +1408,57 @@ export const SkillLibraryPanel = ({
     }
   };
 
+  const addSourceCandidate = async (
+    group: SkillSourceGroupView,
+    candidate: SkillSourceGroupCandidate
+  ) => {
+    const result = await onImportRepositorySkills([{
+      repository: group.repository,
+      ref: group.ref,
+      directory: candidate.directory,
+      transport: "system-git",
+      sourceCollection: {
+        formatVersion: 1,
+        canonicalLink: group.canonicalLink,
+        repository: group.repository,
+        ref: group.ref,
+        directory: group.directory,
+        sourceSubpath: candidate.sourceSubpath
+      }
+    }]);
+    return result.imported.length > 0;
+  };
+
   return (
     <section className="skill-library-panel ui-surface-frame" aria-label={t("Skill library")}>
       <div className="library-control-deck">
-        <div className="library-quick-tabs" role="tablist" aria-label={t("Skill status filters")}>
+        <div className="library-quick-tabs">
+          <div className="library-mode-switch" role="tablist" aria-label={t("Skill library view")}>
+            <button
+              className={`library-mode-tab${libraryMode === "skills" ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={libraryMode === "skills"}
+              onClick={() => onLibraryModeChange("skills")}
+            >
+              {t("Skill list")}
+            </button>
+            <button
+              className={`library-mode-tab${libraryMode === "sources" ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={libraryMode === "sources"}
+              onClick={() => onLibraryModeChange("sources")}
+            >
+              {t("By source")}
+            </button>
+          </div>
+          <div
+            className="library-status-tabs"
+            role="tablist"
+            aria-label={t("Skill status filters")}
+            hidden={libraryMode !== "skills"}
+          >
           <button
             className={`library-quick-tab${statusFilter === "all" ? " is-active" : ""}`}
             type="button"
@@ -1406,8 +1486,9 @@ export const SkillLibraryPanel = ({
           >
             {t("Disabled")} <strong>{disabledSkillCount}</strong>
           </button>
+          </div>
         </div>
-        <div className="library-toolbar">
+        <div className="library-toolbar" hidden={libraryMode !== "skills"}>
           <label className="library-search">
             <span>{t("Search")}</span>
             <Search size={16} strokeWidth={2.1} aria-hidden="true" />
@@ -1523,7 +1604,11 @@ export const SkillLibraryPanel = ({
         </div>
       </div>
 
-      <section className="library-table" aria-label={t("Library skills")}>
+      <section
+        className="library-table"
+        aria-label={t("Library skills")}
+        hidden={libraryMode !== "skills"}
+      >
         <div className="library-table__head">
           <span>{t("Skill")}</span>
           <span>{t("Source")}</span>
@@ -1899,6 +1984,22 @@ export const SkillLibraryPanel = ({
           })}
         </div>
       </section>
+
+      <SkillSourceView
+        active={libraryMode === "sources"}
+        groups={sourceGroups}
+        loading={sourceGroupsLoading}
+        onCheckGroup={onCheckSourceGroup}
+        onCheckAll={onCheckAllSourceGroups}
+        onAdd={addSourceCandidate}
+        onUpdate={onPreviewLibrarySkillUpdate}
+        onDelete={(libraryId) => {
+          const skill = skillsById.get(libraryId);
+          if (skill) setDeleteCandidate(skill);
+        }}
+        onOpenSource={onOpenSource}
+        onCopySource={onCopySource}
+      />
 
       <SkillUpdateDialog
         plan={selectedUpdatePlan}
@@ -3799,9 +3900,22 @@ export const SkillLibraryPanel = ({
                                 }}
                               />
                             ) : (
-                              <span className="resource-chip resource-chip--managed">
-                                {t(candidate.status === "duplicate" ? "Duplicate" : "Imported")}
-                              </span>
+                              <PreviewText
+                                ariaLabel={t("Status details for {{id}}", { id: candidate.id })}
+                                className={`resource-chip resource-chip--managed${
+                                  candidate.status === "invalid" ? " resource-chip--warning" : ""
+                                }`}
+                                displayText={t(
+                                  candidate.status === "duplicate"
+                                    ? "Duplicate"
+                                    : candidate.status === "invalid"
+                                      ? "Invalid"
+                                      : "Imported"
+                                )}
+                                focusable={candidate.status === "invalid"}
+                                text={candidate.error ?? t("Already in Library")}
+                                tooltipClassName="library-source-tooltip"
+                              />
                             )}
                           </div>
                         );

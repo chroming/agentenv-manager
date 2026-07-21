@@ -86,6 +86,22 @@ describe("Repository Skill source", () => {
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
     ).toBe(true);
 
+    await page.getByRole("tab", { name: "By source" }).click();
+    expect(await page.getByRole("tab", { name: /^All / }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "Refresh skills" }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
+    const sourceGroup = page.locator(".skill-source-group");
+    await expect.poll(() => sourceGroup.count()).toBe(1);
+    await sourceGroup.getByRole("button", { name: "Expand source" }).click();
+    await sourceGroup.getByRole("button", { name: "Add", exact: true }).click();
+    const releaseLibrarySkill = join(appDataRoot, "skills-library", "release-check-internal");
+    await expect.poll(() => exists(join(releaseLibrarySkill, "SKILL.md"))).toBe(true);
+    await expect.poll(() => sourceGroup.getByText("New", { exact: true }).count()).toBe(0);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+    ).toBe(true);
+    await page.getByRole("tab", { name: "Skill list" }).click();
+
     const row = page.getByRole("group", { name: "Library item api-design-internal" });
     await repository.write("README.md", "Unrelated repository notes changed.\n");
     await repository.commit("unrelated change");
@@ -128,5 +144,15 @@ describe("Repository Skill source", () => {
       remoteRef: "main",
       remotePath: "skills/engineering/api-design"
     });
+
+    await rm(
+      join(repository.workDir, "skills", "engineering", "release-check"),
+      { recursive: true, force: true }
+    );
+    await repository.commit("remove release check skill");
+    await page.getByRole("tab", { name: "By source" }).click();
+    await sourceGroup.getByRole("button", { name: "Check", exact: true }).click();
+    await sourceGroup.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
+    expect(await sourceGroup.getByRole("button", { name: "Delete", exact: true }).count()).toBe(1);
   }, 90_000);
 });

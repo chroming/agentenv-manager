@@ -303,6 +303,10 @@ const createServices = async () => {
       process.env.AGENTENV_CACHE_ROOT ?? join(operatingSystemCacheRoot, "agentenv-manager"),
       "repositories"
     ),
+    skillSourceObservationsDir: join(
+      process.env.AGENTENV_CACHE_ROOT ?? join(operatingSystemCacheRoot, "agentenv-manager"),
+      "skill-source-observations"
+    ),
     homeDir,
     fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });

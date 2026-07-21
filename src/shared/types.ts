@@ -57,6 +57,9 @@ export interface AgentEnvApi {
   scanRepositorySkills(input: RepositorySkillSourceInput): Promise<RepositorySkillScanResult>;
   importRepositorySkillToLibrary(input: RepositorySkillImportInput): Promise<SkillLibraryEntry>;
   importRepositorySkills(inputs: RepositorySkillImportInput[]): Promise<RepositorySkillImportResult>;
+  listSkillSourceGroups(): Promise<SkillSourceGroupView[]>;
+  checkSkillSourceGroup(canonicalLink: string): Promise<SkillSourceGroupView>;
+  checkAllSkillSourceGroups(): Promise<SkillSourceCheckAllResult>;
   cancelRepositoryOperations(): Promise<void>;
   removeSkillFromLibrary(id: string): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
@@ -134,6 +137,7 @@ export interface SkillLibraryEntry {
   updatedAt: string;
   upstream?: SkillUpstream;
   provenance?: SkillProvenance;
+  sourceCollection?: SkillSourceCollectionRef;
 }
 
 export interface SkillUpstream {
@@ -264,22 +268,29 @@ export interface GitHubSkillImportInput {
   id?: string;
   ref?: string;
   remotePath?: string;
+  sourceCollection?: SkillSourceCollectionRef;
   expectedContentHash?: string;
   conflictResolution?: SkillImportConflictResolution;
 }
 
-export type GitHubSkillCandidateStatus = "ready" | "already-imported" | "duplicate";
+export type GitHubSkillCandidateStatus =
+  | "ready"
+  | "already-imported"
+  | "duplicate"
+  | "invalid";
 
 export interface GitHubSkillCandidate {
   id: string;
   name: string;
   description: string;
+  version?: string;
   remotePath: string;
   sourceUrl: string;
   ref: string;
   revision: string;
   status: GitHubSkillCandidateStatus;
   existingLibraryId?: string;
+  error?: string;
 }
 
 export interface GitHubSkillScanResult {
@@ -287,6 +298,7 @@ export interface GitHubSkillScanResult {
   repo: string;
   ref: string;
   rootPath: string;
+  sourceScope: SkillSourceScope;
   truncated: boolean;
   candidates: GitHubSkillCandidate[];
 }
@@ -313,6 +325,7 @@ export interface RepositorySkillSourceInput {
 
 export interface RepositorySkillImportInput extends RepositorySkillSourceInput {
   id?: string;
+  sourceCollection?: SkillSourceCollectionRef;
   expectedContentHash?: string;
   conflictResolution?: SkillImportConflictResolution;
 }
@@ -321,12 +334,15 @@ export interface RepositorySkillCandidate {
   id: string;
   name: string;
   description: string;
+  version?: string;
   directory: string;
   source: SkillUpstream;
   contentRevision: string;
   resolvedCommit: string;
+  upstreamUpdatedAt?: string;
   status: GitHubSkillCandidateStatus;
   existingLibraryId?: string;
+  error?: string;
 }
 
 export interface RepositorySkillScanResult {
@@ -335,8 +351,68 @@ export interface RepositorySkillScanResult {
   directory: string;
   transport: RepositorySkillTransport;
   accessTransport?: "https" | "ssh" | "file";
+  sourceScope: SkillSourceScope;
   truncated: boolean;
   candidates: RepositorySkillCandidate[];
+}
+
+export interface SkillSourceScope {
+  formatVersion: 1;
+  canonicalLink: string;
+  repository: string;
+  ref: string;
+  directory: string;
+}
+
+export interface SkillSourceCollectionRef extends SkillSourceScope {
+  sourceSubpath: string;
+}
+
+export type SkillSourceCandidateState =
+  | "current"
+  | "update"
+  | "new"
+  | "removed"
+  | "invalid"
+  | "conflict"
+  | "missing"
+  | "unchecked";
+
+export interface SkillSourceGroupCandidate {
+  sourceSubpath: string;
+  directory: string;
+  name: string;
+  description: string;
+  version?: string;
+  contentRevision?: string;
+  upstreamUpdatedAt?: string;
+  libraryId?: string;
+  libraryName?: string;
+  libraryVersion?: string;
+  globallyEnabled?: boolean;
+  state: SkillSourceCandidateState;
+  detail?: string;
+}
+
+export interface SkillSourceGroupCounts {
+  total: number;
+  updates: number;
+  new: number;
+  removed: number;
+}
+
+export interface SkillSourceGroupView extends SkillSourceScope {
+  checkedAt?: string;
+  observationState: "unchecked" | "ready" | "error";
+  error?: string;
+  counts: SkillSourceGroupCounts;
+  candidates: SkillSourceGroupCandidate[];
+}
+
+export interface SkillSourceCheckAllResult {
+  groups: SkillSourceGroupView[];
+  checked: number;
+  failed: number;
 }
 
 export interface RepositorySkillImportFailure {

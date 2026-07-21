@@ -70,6 +70,7 @@ import type {
   SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillLibraryEntry,
+  SkillSourceGroupView,
   SkillMergeInput,
   SkillMergePreview,
   SkillUpdatePolicyInput,
@@ -484,6 +485,9 @@ const AppContent = ({
   const [nativeMcpIssues, setNativeMcpIssues] = useState<NativeMcpInspectionIssue[]>([]);
   const [profiles, setProfiles] = useState<ProfileSummary[]>([]);
   const [librarySkills, setLibrarySkills] = useState<SkillLibraryEntry[]>([]);
+  const [skillSourceGroups, setSkillSourceGroups] = useState<SkillSourceGroupView[]>([]);
+  const [skillSourceGroupsLoading, setSkillSourceGroupsLoading] = useState(false);
+  const [skillLibraryMode, setSkillLibraryMode] = useState<"skills" | "sources">("skills");
   const [skillUpdates, setSkillUpdates] = useState<SkillUpdateInfo[]>([]);
   const [skillInventory, setSkillInventory] = useState<SkillInventoryEntry[]>([]);
   const [skillInventoryRefreshing, setSkillInventoryRefreshing] = useState(false);
@@ -600,7 +604,18 @@ const AppContent = ({
   const appModalDialogRef = useRef<HTMLElement>(null);
   const appModalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const appModalFallbackFocusRef = useRef<HTMLElement>(null);
-  const activeLibraryView = activeWorkspace === "library" ? "skills" : undefined;
+  const activeLibraryView =
+    activeWorkspace === "library" && skillLibraryMode === "skills" ? "skills" : undefined;
+  const refreshSkillSourceGroups = useCallback(async () => {
+    setSkillSourceGroupsLoading(true);
+    try {
+      setSkillSourceGroups(await window.agentEnv.listSkillSourceGroups());
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setSkillSourceGroupsLoading(false);
+    }
+  }, []);
   const refreshManagedBackups = useCallback(async () => {
     setManagedBackupsLoading(true);
     try {
@@ -639,6 +654,12 @@ const AppContent = ({
     if (activeWorkspace !== "settings") return;
     void refreshManagedBackups();
   }, [activeWorkspace, refreshManagedBackups]);
+
+  useEffect(() => {
+    if (activeWorkspace === "library" && skillLibraryMode === "sources") {
+      void refreshSkillSourceGroups();
+    }
+  }, [activeWorkspace, refreshSkillSourceGroups, skillLibraryMode]);
 
   useEffect(() => {
     if (rollbackPreview || busy) {
@@ -2466,6 +2487,7 @@ const AppContent = ({
       });
       setSelectedSkillUpdatePlan(undefined);
       applyLibraryContentUpdatesLocally([updated]);
+      await refreshSkillSourceGroups();
       setSkillUpdateCheckStatus(
         summarizeSkillUpdateResult(
           plan.id,
@@ -2488,6 +2510,7 @@ const AppContent = ({
       const result = await window.agentEnv.removeSkillFromLibrary(id);
       setSkillCleanupResult(result);
       await refreshProfiles();
+      await refreshSkillSourceGroups();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setSkillUpdateCheckStatus({
@@ -2828,6 +2851,72 @@ const AppContent = ({
     input: RepositorySkillSourceInput
   ): Promise<RepositorySkillScanResult> => window.agentEnv.scanRepositorySkills(input);
 
+  const checkSkillSourceGroup = async (canonicalLink: string) => {
+    setError(undefined);
+    setSkillUpdateFeedbackWorkspace("library");
+    setSkillUpdateCheckStatus({ state: "checking", message: t("Checking source...") });
+    try {
+      const group = await window.agentEnv.checkSkillSourceGroup(canonicalLink);
+      setSkillSourceGroups((current) => {
+        const next = current.some((candidate) => candidate.canonicalLink === canonicalLink)
+          ? current.map((candidate) => candidate.canonicalLink === canonicalLink ? group : candidate)
+          : [...current, group];
+        return next;
+      });
+      if (group.error) {
+        setSkillUpdateCheckStatus({ state: "error", message: t("Source check failed") });
+        setError(group.error);
+        return;
+      }
+      const changes = group.counts.updates + group.counts.new + group.counts.removed;
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: changes > 0
+          ? t("Source checked · {{count}} changes", { count: changes })
+          : t("Source is current")
+      });
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setSkillUpdateCheckStatus({ state: "error", message: t("Source check failed") });
+      setError(message);
+    }
+  };
+
+  const checkAllSkillSourceGroups = async () => {
+    setError(undefined);
+    setSkillUpdateFeedbackWorkspace("library");
+    setSkillUpdateCheckStatus({ state: "checking", message: t("Checking all sources...") });
+    try {
+      const result = await window.agentEnv.checkAllSkillSourceGroups();
+      setSkillSourceGroups(result.groups);
+      if (result.failed > 0) {
+        setSkillUpdateCheckStatus({
+          state: "error",
+          message: t("{{count}} source checks failed", { count: result.failed })
+        });
+        setError(t("Open each failed source for details and retry."));
+        return;
+      }
+      const changes = result.groups.reduce(
+        (count, group) => count + group.counts.updates + group.counts.new + group.counts.removed,
+        0
+      );
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: changes > 0
+          ? t("Checked {{sources}} sources · {{changes}} changes", {
+              sources: result.checked,
+              changes
+            })
+          : t("All sources are current")
+      });
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setSkillUpdateCheckStatus({ state: "error", message: t("Source checks failed") });
+      setError(message);
+    }
+  };
+
   const importGitHubSkills = async (
     inputs: GitHubSkillImportInput[],
     onProgress?: (progress: GitHubSkillImportProgress) => void
@@ -2867,6 +2956,7 @@ const AppContent = ({
       setSelectedSkillUpdatePlan(undefined);
       try {
         await refreshProfiles({ checkSkillUpdates: false });
+        await refreshSkillSourceGroups();
       } catch (refreshError) {
         setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
       }
@@ -2931,6 +3021,7 @@ const AppContent = ({
       setSelectedSkillUpdatePlan(undefined);
       try {
         await refreshProfiles({ checkSkillUpdates: false });
+        await refreshSkillSourceGroups();
       } catch (refreshError) {
         setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
       }
@@ -3810,17 +3901,25 @@ const AppContent = ({
                   <Button
                     className="secondary-action"
                     size="prominent"
-                    aria-label={t("Refresh skills")}
-                    disabled={skillRefreshStatus === "refreshing"}
+                    aria-label={t(skillLibraryMode === "sources" ? "Refresh sources" : "Refresh skills")}
+                    disabled={skillRefreshStatus === "refreshing" || skillSourceGroupsLoading}
                     icon={(
                       <RefreshCw
-                        className={skillRefreshStatus === "refreshing" ? "is-spinning" : ""}
+                        className={
+                          skillRefreshStatus === "refreshing" || skillSourceGroupsLoading
+                            ? "is-spinning"
+                            : ""
+                        }
                         size={15}
                         strokeWidth={2.2}
                       />
                     )}
                     onClick={() => {
-                      void refreshSkills();
+                      if (skillLibraryMode === "sources") {
+                        void refreshSkillSourceGroups();
+                      } else {
+                        void refreshSkills();
+                      }
                     }}
                   >
                     {t("Refresh")}
@@ -3832,6 +3931,9 @@ const AppContent = ({
                 isLoading={isLoading}
                 isBusy={busy}
                 librarySkills={librarySkills}
+                sourceGroups={skillSourceGroups}
+                sourceGroupsLoading={skillSourceGroupsLoading}
+                libraryMode={skillLibraryMode}
                 skillUpdates={skillUpdates}
                 skillInventory={skillInventory}
                 cleanupBackups={skillCleanupBackups}
@@ -3854,6 +3956,9 @@ const AppContent = ({
                 onImportGitHubSkills={importGitHubSkills}
                 onScanRepositorySkills={scanRepositorySkills}
                 onImportRepositorySkills={importRepositorySkills}
+                onLibraryModeChange={setSkillLibraryMode}
+                onCheckSourceGroup={checkSkillSourceGroup}
+                onCheckAllSourceGroups={checkAllSkillSourceGroups}
                 onCancelRepositoryOperations={() => window.agentEnv.cancelRepositoryOperations()}
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={consolidateSkillGroup}

@@ -29,6 +29,13 @@ describe("SkillLibraryPanel", () => {
       repo: "agent-skills",
       ref: "main",
       rootPath: "skills",
+      sourceScope: {
+        formatVersion: 1,
+        canonicalLink: "https://github.com/acme/agent-skills/tree/main/skills",
+        repository: "https://github.com/acme/agent-skills.git",
+        ref: "main",
+        directory: "skills"
+      },
       truncated: false,
       candidates: [
         {
@@ -160,6 +167,11 @@ describe("SkillLibraryPanel", () => {
       showSelectedUpdatePlan = false
     ) => (
       <SkillLibraryPanel
+        sourceGroups={[]}
+        libraryMode="skills"
+        onLibraryModeChange={vi.fn()}
+        onCheckSourceGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAllSourceGroups={vi.fn().mockResolvedValue(undefined)}
         targetNames={{ opencode: "OpenCode", codex: "Codex" }}
         librarySkills={[
           {
@@ -810,13 +822,29 @@ describe("SkillLibraryPanel", () => {
             url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer",
             id: "github-reviewer",
             ref: "main",
-            remotePath: "skills/reviewer"
+            remotePath: "skills/reviewer",
+            sourceCollection: {
+              formatVersion: 1,
+              canonicalLink: "https://github.com/acme/agent-skills/tree/main/skills",
+              repository: "https://github.com/acme/agent-skills.git",
+              ref: "main",
+              directory: "skills",
+              sourceSubpath: "reviewer"
+            }
           },
           {
             url: "https://github.com/acme/agent-skills/tree/main/skills/release-check",
             id: "release-check",
             ref: "main",
-            remotePath: "skills/release-check"
+            remotePath: "skills/release-check",
+            sourceCollection: {
+              formatVersion: 1,
+              canonicalLink: "https://github.com/acme/agent-skills/tree/main/skills",
+              repository: "https://github.com/acme/agent-skills.git",
+              ref: "main",
+              directory: "skills",
+              sourceSubpath: "release-check"
+            }
           }
         ],
         expect.any(Function)
@@ -1151,6 +1179,13 @@ describe("SkillLibraryPanel", () => {
       directory: "skills/engineering",
       transport: "system-git" as const,
       accessTransport: "ssh" as const,
+      sourceScope: {
+        formatVersion: 1 as const,
+        canonicalLink: "https://github.com/acme/agent-skills/tree/main/skills/engineering",
+        repository: "https://github.com/acme/agent-skills.git",
+        ref: "main",
+        directory: "skills/engineering"
+      },
       truncated: false,
       candidates: [
         {
@@ -1214,6 +1249,11 @@ describe("SkillLibraryPanel", () => {
 
     render(
       <SkillLibraryPanel
+        sourceGroups={[]}
+        libraryMode="skills"
+        onLibraryModeChange={vi.fn()}
+        onCheckSourceGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAllSourceGroups={vi.fn().mockResolvedValue(undefined)}
         librarySkills={[]}
         skillUpdates={[]}
         skillInventory={[]}
@@ -1300,7 +1340,15 @@ describe("SkillLibraryPanel", () => {
         ref: "main",
         directory: "skills/engineering/review",
         transport: "system-git",
-        id: "review-internal"
+        id: "review-internal",
+        sourceCollection: {
+          formatVersion: 1,
+          canonicalLink: "https://github.com/acme/agent-skills/tree/main/skills/engineering",
+          repository: "https://github.com/acme/agent-skills.git",
+          ref: "main",
+          directory: "skills/engineering",
+          sourceSubpath: "review"
+        }
       }
     ], expect.any(Function)));
     await act(async () => completeRepositoryImport?.());
@@ -1364,6 +1412,11 @@ describe("SkillLibraryPanel", () => {
 
     render(
       <SkillLibraryPanel
+        sourceGroups={[]}
+        libraryMode="skills"
+        onLibraryModeChange={vi.fn()}
+        onCheckSourceGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAllSourceGroups={vi.fn().mockResolvedValue(undefined)}
         librarySkills={preview.entries.map((entry) => ({
           id: entry.id,
           name: entry.name,

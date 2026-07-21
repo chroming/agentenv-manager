@@ -183,6 +183,12 @@ describe("skill library store", () => {
     });
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8"))
       .resolves.toBe(content);
+    await expect(store.listSourceGroups()).resolves.toMatchObject([{
+      canonicalLink: "https://github.com/acme/skills/tree/main/reviewer",
+      directory: "reviewer",
+      observationState: "unchecked",
+      candidates: [{ libraryId: "reviewer", state: "unchecked" }]
+    }]);
   });
 
   it("detects Skills CLI directory links and imports an independent tracked copy", async () => {

@@ -367,6 +367,13 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       repo: "skills",
       ref: "main",
       rootPath: "",
+      sourceScope: {
+        formatVersion: 1,
+        canonicalLink: "https://github.com/acme/skills/tree/main",
+        repository: "https://github.com/acme/skills.git",
+        ref: "main",
+        directory: ""
+      },
       truncated: false,
       candidates: []
     }),
@@ -376,6 +383,13 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       ref: "main",
       directory: "",
       transport: "system-git",
+      sourceScope: {
+        formatVersion: 1,
+        canonicalLink: "git@example.test:team/skills#ref=main",
+        repository: "git@example.test:team/skills.git",
+        ref: "main",
+        directory: ""
+      },
       truncated: false,
       candidates: []
     }),
@@ -391,6 +405,9 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       updatedAt: "2026-07-17T00:00:00.000Z"
     }),
     importRepositorySkills: vi.fn().mockResolvedValue({ imported: [], failed: [] }),
+    listSkillSourceGroups: vi.fn().mockResolvedValue([]),
+    checkSkillSourceGroup: vi.fn(),
+    checkAllSkillSourceGroups: vi.fn().mockResolvedValue({ groups: [], checked: 0, failed: 0 }),
     cancelRepositoryOperations: vi.fn().mockResolvedValue(undefined),
     removeSkillFromLibrary: vi.fn().mockResolvedValue({
       backupId: "remove-backup",

@@ -16,6 +16,7 @@ import type {
 } from "./contract";
 import type { GitCommandRunner } from "./gitCommandRunner";
 import type { GitRepositoryCache } from "./gitRepositoryCache";
+import { createSkillSourceScope } from "../skillSourceScope";
 
 export interface GitCliSkillSourceOptions {
   cache: GitRepositoryCache;
@@ -230,7 +231,6 @@ export const createGitCliSkillSource = (
         { signal, timeoutMs: 30_000 }
       );
       const frontmatter = parseSkillFrontmatter(markdown.stdout);
-      if (frontmatter.errors.length > 0) continue;
       const fallbackName = root ? basename(root) : "skill";
       const name = frontmatter.name || fallbackName;
       const id = normalizeSkillId(name) || normalizeSkillId(fallbackName);
@@ -239,14 +239,17 @@ export const createGitCliSkillSource = (
         id,
         name,
         description: frontmatter.description,
+        version: frontmatter.version,
         directory: root,
         source: source.upstream,
         contentRevision: source.contentRevision,
         resolvedCommit: repository.resolvedCommit,
-        status: "ready"
+        upstreamUpdatedAt: source.upstream.updatedAt,
+        status: frontmatter.errors.length > 0 ? "invalid" : "ready",
+        error: frontmatter.errors.length > 0 ? frontmatter.errors.join("; ") : undefined
       });
     }
-    return {
+    const result = {
       repository: repository.repository,
       ref: repository.ref,
       directory,
@@ -254,7 +257,8 @@ export const createGitCliSkillSource = (
       accessTransport: repository.accessTransport,
       truncated: roots.length > maxCandidates,
       candidates
-    };
+    } satisfies Omit<RepositorySkillScanResult, "sourceScope">;
+    return { ...result, sourceScope: createSkillSourceScope(input, result) };
   };
 
   const materialize = async (

@@ -37,6 +37,10 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("skills:import-repository", input),
   importRepositorySkills: (inputs) =>
     ipcRenderer.invoke("skills:import-repository-batch", inputs),
+  listSkillSourceGroups: () => ipcRenderer.invoke("skills:list-source-groups"),
+  checkSkillSourceGroup: (canonicalLink) =>
+    ipcRenderer.invoke("skills:check-source-group", canonicalLink),
+  checkAllSkillSourceGroups: () => ipcRenderer.invoke("skills:check-all-source-groups"),
   cancelRepositoryOperations: () => ipcRenderer.invoke("skills:cancel-repository"),
   removeSkillFromLibrary: (id) => ipcRenderer.invoke("skills:remove-library", id),
   manageTargetSkill: (input) => ipcRenderer.invoke("skills:manage-target", input),
