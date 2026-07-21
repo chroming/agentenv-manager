@@ -208,6 +208,11 @@
   z-index: var(--z-modal);
 }
 
+.ui-modal-backdrop.is-suspended {
+  pointer-events: none;
+  z-index: calc(var(--z-modal) - 1);
+}
+
 .ui-modal {
   min-width: 0;
 }

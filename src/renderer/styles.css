@@ -1838,28 +1838,6 @@ summary {
   gap: 12px;
 }
 
-.library-import-panel {
-  background: #ffffff;
-}
-
-.library-import-grid {
-  align-items: end;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.library-import-grid label {
-  display: grid;
-  flex: 1 1 240px;
-  gap: 5px;
-  min-width: 0;
-}
-
-.library-import-grid .library-import-action {
-  flex: 0 0 160px;
-}
-
 .mcp-server-form {
   align-items: end;
   display: grid;
@@ -3283,7 +3261,6 @@ summary {
 }
 
 .target-discovery-section,
-.library-import-panel,
 .skill-library-panel > .resource-section {
   border: 0;
   border-top: 1px solid var(--border);
@@ -3292,11 +3269,6 @@ summary {
   margin: 0;
   position: relative;
   z-index: var(--z-base);
-}
-
-.library-import-grid .library-import-action {
-  min-height: 36px;
-  width: auto;
 }
 
 .target-discovery-section {
@@ -4610,8 +4582,7 @@ button svg,
   padding: 0 10px;
 }
 
-.library-drawer .target-discovery-section,
-.library-drawer .library-import-panel {
+.library-drawer .target-discovery-section {
   border-top: 0;
 }
 

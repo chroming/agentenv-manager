@@ -8,6 +8,7 @@ interface ModalFrameProps {
   dialogRef?: RefObject<HTMLElement | null>;
   dismissDisabled?: boolean;
   onDismiss(): void;
+  suspended?: boolean;
 }
 
 export const ModalFrame = ({
@@ -17,21 +18,24 @@ export const ModalFrame = ({
   className = "",
   dialogRef,
   dismissDisabled = false,
-  onDismiss
+  onDismiss,
+  suspended = false
 }: ModalFrameProps) => {
   const stopPropagation = (event: MouseEvent<HTMLElement>) => event.stopPropagation();
 
   return (
     <div
-      className={`preview-modal-backdrop ui-modal-backdrop ${backdropClassName}`.trim()}
-      onClick={dismissDisabled ? undefined : onDismiss}
+      className={`preview-modal-backdrop ui-modal-backdrop${suspended ? " is-suspended" : ""} ${backdropClassName}`.trim()}
+      onClick={dismissDisabled || suspended ? undefined : onDismiss}
     >
       <section
         ref={dialogRef}
         className={`profile-form-dialog ui-modal ${className}`.trim()}
         role="dialog"
-        aria-modal="true"
+        aria-hidden={suspended || undefined}
+        aria-modal={suspended ? undefined : "true"}
         aria-label={ariaLabel}
+        inert={suspended}
         onClick={stopPropagation}
       >
         {children}

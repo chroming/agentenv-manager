@@ -74,6 +74,19 @@ describe("Repository Skill source", () => {
     expect(await releaseCheck.isChecked()).toBe(true);
     expect(await dialog.getByRole("checkbox", { name: "Select all discovered skills" }).isChecked())
       .toBe(true);
+    const selectAllGeometry = await dialog.locator(".github-select-all").evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const text = element.querySelector("span")!;
+      return {
+        height: Math.round(box.height),
+        textHeight: Math.round(text.getBoundingClientRect().height),
+        textScrollWidth: text.scrollWidth,
+        textWidth: Math.round(text.getBoundingClientRect().width)
+      };
+    });
+    expect(selectAllGeometry.height).toBeLessThanOrEqual(34);
+    expect(selectAllGeometry.textHeight).toBeLessThanOrEqual(18);
+    expect(selectAllGeometry.textScrollWidth).toBeLessThanOrEqual(selectAllGeometry.textWidth + 1);
     await releaseCheck.uncheck();
     await dialog.getByRole("button", { name: "Import 1" }).click();
     await dialog.getByText("All 1 skills imported", { exact: true }).waitFor({ state: "visible" });

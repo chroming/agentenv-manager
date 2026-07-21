@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-07-21T11:28:32.216Z",
+  "generatedAt": "2026-07-21T12:58:38.794Z",
   "source": {
-    "commit": "f9f3435608de62164495ad83aa8d8ad4de520c77",
+    "commit": "86e5f64ecf9ef956b37185a2e7a7abebde669916",
     "dirty": true
   },
   "tests": {
@@ -21,7 +21,7 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "files": 64,
+    "files": 66,
     "viewports": [
       "1180x728",
       "920x620"

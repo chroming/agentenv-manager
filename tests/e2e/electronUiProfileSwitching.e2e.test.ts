@@ -3762,9 +3762,17 @@ describe("Electron UI profile switching e2e", () => {
     );
 
     await page.getByRole("button", { name: "Import skills" }).click();
+    const importDialog = page.getByRole("dialog", { name: "Import skills" });
     await page.getByRole("button", { name: "Choose local skill folder" }).waitFor({
       state: "visible"
     });
+    await expectInViewport(page, importDialog);
+    await expectNoHorizontalOverflow(page, [".library-import-dialog"]);
+    const footerButtonHeights = await importDialog.locator(".import-dialog-actions .ui-button")
+      .evaluateAll((buttons) => buttons.map((button) =>
+        Math.round(button.getBoundingClientRect().height)
+      ));
+    expect(new Set(footerButtonHeights).size).toBe(1);
     await expect
       .poll(
         () =>
@@ -3814,8 +3822,7 @@ describe("Electron UI profile switching e2e", () => {
     await rm(localSkillDir, { recursive: true, force: true });
     const importedRow = page.getByRole("group", { name: "Library item path-reviewer" });
     await expect.poll(() => importedRow.textContent()).toContain("Checks disabled");
-    await page.getByRole("button", { name: "Close import" }).click();
-    await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
+    await importDialog.waitFor({ state: "hidden" });
   }, 30_000);
 
   it("reviews same-name Skill differences before keeping another Library copy", async () => {
@@ -3967,7 +3974,7 @@ describe("Electron UI profile switching e2e", () => {
       })
     ]);
 
-    await page.getByRole("button", { name: "Close import" }).click();
+    await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Scan local" }).click();
     await page.getByRole("button", { name: "Expand Managed" }).click();
     const cleanupGroup = page.getByRole("group", {

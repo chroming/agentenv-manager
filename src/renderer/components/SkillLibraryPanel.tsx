@@ -90,7 +90,7 @@ import {
   type SkillCleanupRecommendedAction
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { Switch } from "./ui";
+import { Button, IconButton, ModalFrame, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -733,6 +733,7 @@ export const SkillLibraryPanel = ({
       }
       if (
         activeTool &&
+        activeTool !== "import" &&
         !githubOperation &&
         !modalOpen &&
         !target.closest(".library-drawer") &&
@@ -1337,6 +1338,7 @@ export const SkillLibraryPanel = ({
         : await onImportUnmanaged(sourcePath);
       if (imported) {
         setLocalSkillPath("");
+        await closeImportTool();
       }
     } finally {
       setLocalImportOperation(false);
@@ -3650,30 +3652,30 @@ export const SkillLibraryPanel = ({
 
       {activeTool === "import"
         ? createPortal(
-            <div className="library-drawer-backdrop">
-              <section
-                ref={importDialogRef}
-                className="library-drawer library-import-dialog"
-                role="dialog"
-                aria-label={t("Import skills")}
-                aria-modal="true"
-                tabIndex={-1}
-              >
-                <div className="library-drawer__header">
-                  <strong>{t("Import skills")}</strong>
-                  <button
-                    className="icon-action"
-                    type="button"
-                    aria-label={t("Close import")}
+            <ModalFrame
+              ariaLabel={t("Import skills")}
+              backdropClassName="library-import-backdrop"
+              className="library-import-dialog"
+              dialogRef={importDialogRef}
+              dismissDisabled={Boolean(githubOperation) && !repositoryOperationCancelable}
+              onDismiss={() => void closeImportTool()}
+              suspended={importConflictOpen}
+            >
+                <header className="profile-dialog-header library-import-header">
+                  <div className="section-title">{t("Import skills")}</div>
+                  <IconButton
+                    label={t("Close import")}
                     disabled={
                       localImportOperation ||
                       (Boolean(githubOperation) && !repositoryOperationCancelable)
                     }
                     onClick={() => void closeImportTool()}
+                    size="default"
+                    variant="ghost"
                   >
                     <X size={16} strokeWidth={2.2} />
-                  </button>
-                </div>
+                  </IconButton>
+                </header>
 
                 <div className="library-import-source-tabs" role="tablist" aria-label={t("Import source")}>
                   <button
@@ -3702,11 +3704,10 @@ export const SkillLibraryPanel = ({
 
                 {importSource === "local" ? (
                   <div className="library-import-content">
-                    <section className="resource-section library-import-panel">
-                      <div className="resource-heading">{t("Choose a skill folder")}</div>
+                    <section className="library-import-panel">
                       <div className="library-import-grid">
                         <label>
-                          <span>{t("Selected folder")}</span>
+                          <span>{t("Skill folder")}</span>
                           <input
                             aria-label={t("Local skill folder path")}
                             placeholder={t("No folder selected")}
@@ -3714,17 +3715,16 @@ export const SkillLibraryPanel = ({
                             value={localSkillPath}
                           />
                         </label>
-                        <button
-                          className="secondary-action"
+                        <Button
                           aria-label={t("Choose local skill folder")}
-                          type="button"
                           disabled={localImportOperation || Boolean(githubOperation)}
+                          icon={<Folder size={15} strokeWidth={2.2} />}
                           onClick={() => {
                             void selectLocalSkillFolder();
                           }}
                         >
                           {t("Choose folder")}
-                        </button>
+                        </Button>
                       </div>
                       {localImportImpact ? (
                         <div
@@ -3747,13 +3747,12 @@ export const SkillLibraryPanel = ({
                   </div>
                 ) : !githubScanResult ? (
                   <div className="library-import-content">
-                    <section className="resource-section library-import-panel">
-                      <div className="resource-heading">
-                        {t("Scan repository")}
-                        <InfoTip label={t("Paste a GitHub URL or a Git HTTPS/SSH clone address. Repository scans never modify your checkout.")} />
-                      </div>
-                      <label className="github-scan-field">
-                        <span>{t("Repository")}</span>
+                    <section className="library-import-panel">
+                      <div className="github-scan-field">
+                        <span className="library-import-field-label">
+                          {t("Repository")}
+                          <InfoTip label={t("Paste a GitHub URL or a Git HTTPS/SSH clone address. Repository scans never modify your checkout.")} />
+                        </span>
                         <input
                           aria-label={t("Repository address")}
                           placeholder="https://github.com/owner/repo or git@host:team/repo.git"
@@ -3761,11 +3760,17 @@ export const SkillLibraryPanel = ({
                           value={githubUrl}
                           onChange={(event) => setGithubUrl(event.currentTarget.value)}
                         />
-                      </label>
+                      </div>
                       <details className="repository-advanced">
                         <summary>
                           <Settings2 size={14} strokeWidth={2.1} aria-hidden="true" />
                           {t("Advanced")}
+                          <ChevronDown
+                            className="repository-advanced-chevron"
+                            size={14}
+                            strokeWidth={2.1}
+                            aria-hidden="true"
+                          />
                         </summary>
                         <div className="repository-advanced-grid">
                           <label>
@@ -3818,9 +3823,7 @@ export const SkillLibraryPanel = ({
                           tooltipClassName="library-source-tooltip"
                         />
                       </div>
-                      <button
-                        className="secondary-action"
-                        type="button"
+                      <Button
                         disabled={Boolean(githubOperation) || Boolean(githubImportResult)}
                         onClick={() => {
                           setGithubScanResult(undefined);
@@ -3831,8 +3834,8 @@ export const SkillLibraryPanel = ({
                           setRepositoryCandidateInputs({});
                         }}
                       >
-                        {t("Change")}
-                      </button>
+                        {t("Change source")}
+                      </Button>
                     </div>
                     {githubScanResult.truncated ? (
                       <div className="inline-state inline-state--warning" role="status">
@@ -3899,6 +3902,7 @@ export const SkillLibraryPanel = ({
                           </>
                         ) : t("{{count}} selected", { count: githubSelectedIds.length })}
                       </span>
+                      <span className="github-selection-id-heading">{t("Library ID")}</span>
                     </div>
                     <div className="github-candidate-list">
                       {githubScanResult.candidates.length === 0 ? (
@@ -3961,7 +3965,7 @@ export const SkillLibraryPanel = ({
                                 }}
                               />
                             )}
-                            <span className="resource-avatar resource-avatar--github" aria-hidden="true">
+                            <span className="github-candidate-icon" aria-hidden="true">
                               <GitBranch size={16} strokeWidth={2.2} />
                             </span>
                             <span className="github-candidate-main">
@@ -4038,9 +4042,8 @@ export const SkillLibraryPanel = ({
                   </div>
                 ) : null}
                 <footer className="preview-actions import-dialog-actions">
-                  <button
-                    className={githubImportResult ? "primary-action" : "secondary-action"}
-                    type="button"
+                  <Button
+                    variant={githubImportResult ? "primary" : "secondary"}
                     disabled={
                       localImportOperation ||
                       (Boolean(githubOperation) && !repositoryOperationCancelable)
@@ -4048,11 +4051,10 @@ export const SkillLibraryPanel = ({
                     onClick={() => void closeImportTool()}
                   >
                     {t(githubImportResult ? "Close" : "Cancel")}
-                  </button>
+                  </Button>
                   {importSource === "local" ? (
-                    <button
-                      className="primary-action"
-                      type="button"
+                    <Button
+                      variant="primary"
                       aria-busy={localImportOperation}
                       disabled={
                         !localSkillPath.trim() ||
@@ -4061,42 +4063,43 @@ export const SkillLibraryPanel = ({
                         localImportBlocked
                       }
                       onClick={() => void importLocalSkill()}
+                      icon={localImportOperation
+                        ? <LoaderCircle className="is-spinning" size={15} />
+                        : undefined}
                     >
-                      {localImportOperation ? (
-                        <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
-                      ) : null}
                       {localImportOperation ? t("Importing...") : t(localImportLabel)}
-                    </button>
+                    </Button>
                   ) : !githubScanResult ? (
-                    <button
-                      className="primary-action"
-                      type="button"
+                    <Button
+                      variant="primary"
+                      aria-busy={githubOperation === "scanning"}
                       disabled={!githubUrl.trim() || Boolean(githubOperation) || localImportOperation}
+                      icon={githubOperation === "scanning"
+                        ? <LoaderCircle className="is-spinning" size={15} />
+                        : undefined}
                       onClick={() => {
                         void scanRepository();
                       }}
                     >
                       {t(githubOperation === "scanning" ? "Scanning..." : "Scan")}
-                    </button>
+                    </Button>
                   ) : githubImportResult ? null : (
-                    <button
-                      className="primary-action"
-                      type="button"
+                    <Button
+                      variant="primary"
                       aria-busy={githubOperation === "importing"}
                       disabled={githubSelectedIds.length === 0 || Boolean(githubOperation)}
+                      icon={githubOperation === "importing"
+                        ? <LoaderCircle className="is-spinning" size={15} />
+                        : undefined}
                       onClick={() => {
                         void importSelectedGitHubSkills();
                       }}
                     >
-                      {githubOperation === "importing" ? (
-                        <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
-                      ) : null}
                       {githubOperation === "importing" ? t("Importing...") : t("Import {{count}}", { count: githubSelectedIds.length })}
-                    </button>
+                    </Button>
                   )}
                 </footer>
-              </section>
-            </div>,
+            </ModalFrame>,
             document.body
           )
         : null}

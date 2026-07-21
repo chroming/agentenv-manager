@@ -634,6 +634,12 @@ try {
   await capturePage(page, join(outputDir, "skills-import-920x620.png"));
   await importDialog.getByRole("tab", { name: "Repository" }).click();
   await capturePage(page, join(outputDir, "skills-import-github-920x620.png"));
+  await importDialog.getByText("Advanced", { exact: true }).click();
+  await capturePage(page, join(outputDir, "skills-import-repository-advanced-920x620.png"));
+  await importDialog.getByLabel("Repository address").fill(gitFixtureRepo);
+  await importDialog.getByRole("button", { name: "Scan", exact: true }).click();
+  await importDialog.locator(".github-candidate-row").first().waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-import-results-920x620.png"));
   await importDialog.getByRole("button", { name: "Close import" }).click();
   await importDialog.waitFor({ state: "hidden" });
 

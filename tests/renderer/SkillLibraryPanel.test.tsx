@@ -777,6 +777,12 @@ describe("SkillLibraryPanel", () => {
     expect(onUpdateLibrarySkill).toHaveBeenCalledTimes(1);
 
     rerender(renderPanel("import"));
+    const importDialog = screen.getByRole("dialog", { name: "Import skills" });
+    expect(importDialog).toHaveClass("ui-modal", "library-import-dialog");
+    expect(within(importDialog).getByRole("button", { name: "Close import" }))
+      .toHaveClass("ui-icon-button");
+    expect(within(importDialog).getByRole("button", { name: "Cancel" }))
+      .toHaveClass("ui-button");
     fireEvent.click(screen.getByRole("button", { name: "Choose local skill folder" }));
     expect(onSelectLocalSkillFolder).toHaveBeenCalled();
     await waitFor(() =>
@@ -799,8 +805,12 @@ describe("SkillLibraryPanel", () => {
     expect(onImportUnmanaged).toHaveBeenCalledWith(
       "/tmp/opencode/skills/target-only-reviewer"
     );
+    expect(onCloseTool).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("tab", { name: "Repository" }));
+    expect(screen.getByRole("dialog", { name: "Import skills" })).toBeInTheDocument();
+    expect(screen.getByText("Advanced", { exact: true }).closest("details"))
+      .toHaveClass("repository-advanced");
     fireEvent.change(screen.getByLabelText("Repository address"), {
       target: { value: "https://github.com/acme/agent-skills/tree/main/skills/reviewer" }
     });
@@ -876,14 +886,14 @@ describe("SkillLibraryPanel", () => {
     expect(screen.getByText("1 imported · 1 failed")).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Import skills" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(onCloseTool).toHaveBeenCalledTimes(1);
+    expect(onCloseTool).toHaveBeenCalledTimes(2);
 
     rerender(renderPanel("discoveries"));
     const discoveries = screen.getByRole("region", { name: "Environment skills" });
     fireEvent.click(within(discoveries).getByRole("button", { name: "Refresh local skills" }));
     expect(onRefreshInventory).toHaveBeenCalledTimes(1);
     fireEvent.mouseDown(document.body);
-    expect(onCloseTool).toHaveBeenCalledTimes(2);
+    expect(onCloseTool).toHaveBeenCalledTimes(3);
     expect(discoveries).toHaveTextContent("Managed");
     expect(discoveries).toHaveTextContent("Needs your decision");
     expect(discoveries).toHaveTextContent("Ready to clean up");
@@ -1102,7 +1112,7 @@ describe("SkillLibraryPanel", () => {
     expect(conflictDialog).toHaveTextContent("Choose the copy whose contents you want to preserve");
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Review skill cleanup" })).not.toBeInTheDocument();
-    expect(onCloseTool).toHaveBeenCalledTimes(2);
+    expect(onCloseTool).toHaveBeenCalledTimes(3);
     fireEvent.click(
       within(conflictGroup).getByRole("button", { name: "Add to Library conflict-reviewer" })
     );
