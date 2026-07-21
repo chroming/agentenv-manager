@@ -111,7 +111,6 @@ export const normalizeRepositorySkillScan = (
   result: RepositorySkillScanResult,
   existingSkills: SkillLibraryEntry[]
 ): RepositorySkillScanResult => {
-  const reservedIds = new Set(existingSkills.map((skill) => skill.id));
   return {
     ...result,
     candidates: result.candidates.map((candidate) => {
@@ -126,12 +125,7 @@ export const normalizeRepositorySkillScan = (
       const duplicate = existingSkills.find(
         (skill) => !existingSource && skill.remoteRevision === candidate.contentRevision
       );
-      let id = existingSource?.id ?? duplicate?.id ?? candidate.id;
-      const baseId = id;
-      for (let suffix = 2; !existingSource && !duplicate && reservedIds.has(id); suffix += 1) {
-        id = `${baseId}-${suffix}`;
-      }
-      if (!existingSource && !duplicate) reservedIds.add(id);
+      const id = existingSource?.id ?? duplicate?.id ?? candidate.id;
       return {
         ...candidate,
         id,

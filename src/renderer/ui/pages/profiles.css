@@ -50,7 +50,7 @@
 .profile-readiness-strip__icon,
 .profile-readiness-strip__attention-icon {
   align-items: center;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   display: inline-flex;
   flex: 0 0 auto;
   height: 36px;
@@ -80,7 +80,7 @@
 .profile-apply-button {
   background: var(--accent);
   border: 1px solid var(--accent);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   color: #fff;
   justify-content: center;
   min-width: 184px;
@@ -95,7 +95,7 @@
   align-items: center;
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   color: var(--text);
   display: inline-flex;
   font-size: 12px;
@@ -130,7 +130,7 @@
   align-items: center;
   background: #fff9ed;
   border: 1px solid #f5d69a;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   display: grid;
   gap: 10px 16px;
   grid-template-columns: minmax(220px, 1fr) auto auto;
@@ -420,7 +420,7 @@
 .profile-row.is-active {
   background: rgba(60, 60, 67, 0.09);
   border-color: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   box-shadow: none;
   margin: 0;
 }
@@ -1055,7 +1055,7 @@
 .preview-resource-plan__list::-webkit-scrollbar-thumb {
   background: #b8c3d2;
   border: 2px solid #fbfcff;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
 }
 
 .preview-resource-plan__more {
@@ -1098,7 +1098,7 @@
 
 .preview-preserve-details {
   border: 1px solid var(--border-soft);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   flex: 0 0 auto;
   overflow: hidden;
 }
@@ -1581,7 +1581,7 @@
 .profile-skill-menu.row-action-menu {
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   box-shadow: 0 12px 28px rgba(26, 38, 59, 0.16);
   padding: 5px;
   position: fixed;

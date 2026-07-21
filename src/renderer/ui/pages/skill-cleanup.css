@@ -24,7 +24,7 @@
 
 .cleanup-bulk-effect > div > span {
   background: var(--surface-muted);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   flex: 0 0 auto;
   font-size: 11px;

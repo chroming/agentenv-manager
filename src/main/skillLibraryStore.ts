@@ -881,12 +881,7 @@ export const createSkillLibraryStore = (
         };
       })
     );
-    const usedIds = new Set(skills.map((skill) => skill.id));
-    let suggestedId = safeRequestedId;
-    for (let suffix = 2; usedIds.has(suggestedId); suffix += 1) {
-      suggestedId = `${safeRequestedId}-${suffix}`;
-    }
-    return { source, incoming, conflicts, suggestedId };
+    return { source, incoming, conflicts };
   };
 
   const previewImport = async (source: SkillImportPreviewInput): Promise<SkillImportPreview> => {
@@ -1114,7 +1109,6 @@ export const createSkillLibraryStore = (
           });
         });
     const existingSkills = await listSkills();
-    const reservedIds = new Set(existingSkills.map((skill) => skill.id));
     const candidates: GitHubSkillCandidate[] = [];
 
     for (const skillFile of boundedSkillFiles.slice(0, 500)) {
@@ -1142,20 +1136,7 @@ export const createSkillLibraryStore = (
       );
       const pathName = remotePath.split("/").filter(Boolean).at(-1) ?? source.repo;
       const baseId = skillIdFrom(pathName);
-      let id = existingSource?.id ?? duplicate?.id ?? baseId;
-      if (!existingSource && !duplicate && reservedIds.has(id)) {
-        const parentName = remotePath.split("/").filter(Boolean).at(-2) ?? source.repo;
-        id = skillIdFrom(`${parentName}-${baseId}`);
-      }
-      let suffix = 2;
-      const unsuffixedId = id;
-      while (!existingSource && !duplicate && reservedIds.has(id)) {
-        id = `${unsuffixedId}-${suffix}`;
-        suffix += 1;
-      }
-      if (!existingSource && !duplicate) {
-        reservedIds.add(id);
-      }
+      const id = existingSource?.id ?? duplicate?.id ?? baseId;
       const frontmatter = parseSkillFrontmatter(content);
       candidates.push({
         id,

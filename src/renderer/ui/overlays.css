@@ -91,7 +91,7 @@
   appearance: none;
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   box-sizing: border-box;
   color: var(--muted);
   cursor: pointer;
@@ -220,7 +220,7 @@
 }
 
 .resource-favicon {
-  border-radius: 3px;
+  border-radius: var(--radius-tight);
   display: block;
   flex: 0 0 auto;
   object-fit: contain;
@@ -229,7 +229,7 @@
 .resource-icon-menu {
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   box-sizing: border-box;
   box-shadow: var(--shadow-popover);
   display: block;
@@ -267,7 +267,7 @@
   align-items: center;
   background: var(--surface-muted);
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   cursor: pointer;
   display: inline-flex;

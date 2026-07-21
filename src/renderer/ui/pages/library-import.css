@@ -354,6 +354,11 @@
   width: 100%;
 }
 
+.github-candidate-retry {
+  justify-self: stretch;
+  width: 100%;
+}
+
 .github-import-state,
 .github-import-state__failure {
   align-items: center;

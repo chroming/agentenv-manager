@@ -310,8 +310,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
         source: "/tmp/skill",
         skillMarkdown: "# Skill\n"
       },
-      conflicts: [],
-      suggestedId: "skill"
+      conflicts: []
     })),
     previewSkillMerge: vi.fn().mockResolvedValue({
       name: "skill",

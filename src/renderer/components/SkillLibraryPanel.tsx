@@ -451,13 +451,14 @@ export const SkillLibraryPanel = ({
   const { formatDate, localeTag, t } = useI18n();
   const [githubUrl, setGithubUrl] = useState("");
   const [githubScanResult, setGithubScanResult] = useState<GitHubSkillScanResult>();
-  const [githubSelectedIds, setGithubSelectedIds] = useState<string[]>([]);
+  const [githubSelectedSources, setGithubSelectedSources] = useState<string[]>([]);
   const [githubCandidateIds, setGithubCandidateIds] = useState<Record<string, string>>({});
   const [githubImportResult, setGithubImportResult] = useState<GitHubSkillImportResult>();
   const [githubImportProgress, setGithubImportProgress] = useState<
     Record<string, GitHubSkillImportProgress>
   >({});
   const [githubOperation, setGithubOperation] = useState<"scanning" | "importing">();
+  const [githubRetrySourceUrl, setGithubRetrySourceUrl] = useState<string>();
   const [localImportOperation, setLocalImportOperation] = useState(false);
   const [automaticCleanupKey, setAutomaticCleanupKey] = useState<string>();
   const [cleanupOperationKey, setCleanupOperationKey] = useState<string>();
@@ -543,15 +544,15 @@ export const SkillLibraryPanel = ({
     .filter((update) => skillsById.get(update.id)?.updatePolicy === "tracked")
     .map((update) => update.id);
   const availableUpdateCount = updateableSkillIds.length;
-  const githubReadyCandidateIds = githubScanResult?.candidates
+  const githubReadyCandidateSources = githubScanResult?.candidates
     .filter((candidate) => candidate.status === "ready")
-    .map((candidate) => candidate.id) ?? [];
-  const githubSelectedReadyCount = githubReadyCandidateIds.filter((candidateId) =>
-    githubSelectedIds.includes(candidateId)
+    .map((candidate) => candidate.sourceUrl) ?? [];
+  const githubSelectedReadyCount = githubReadyCandidateSources.filter((sourceUrl) =>
+    githubSelectedSources.includes(sourceUrl)
   ).length;
   const githubAllReadySelected =
-    githubReadyCandidateIds.length > 0 &&
-    githubSelectedReadyCount === githubReadyCandidateIds.length;
+    githubReadyCandidateSources.length > 0 &&
+    githubSelectedReadyCount === githubReadyCandidateSources.length;
   const githubSomeReadySelected =
     githubSelectedReadyCount > 0 && !githubAllReadySelected;
   const githubImportProgressItems = Object.values(githubImportProgress);
@@ -754,7 +755,7 @@ export const SkillLibraryPanel = ({
     }
     setImportSource("local");
     setGithubScanResult(undefined);
-    setGithubSelectedIds([]);
+    setGithubSelectedSources([]);
     setGithubCandidateIds({});
     setGithubImportResult(undefined);
     setGithubImportProgress({});
@@ -1214,11 +1215,11 @@ export const SkillLibraryPanel = ({
         result = await scanWithSystemGit();
       }
       setGithubScanResult(result);
-      setGithubSelectedIds(
-        result.candidates.filter((candidate) => candidate.status === "ready").map((candidate) => candidate.id)
+      setGithubSelectedSources(
+        result.candidates.filter((candidate) => candidate.status === "ready").map((candidate) => candidate.sourceUrl)
       );
       setGithubCandidateIds(
-        Object.fromEntries(result.candidates.map((candidate) => [candidate.id, candidate.id]))
+        Object.fromEntries(result.candidates.map((candidate) => [candidate.sourceUrl, candidate.id]))
       );
     } catch (error) {
       setGithubOperationError(error instanceof Error ? error.message : String(error));
@@ -1232,11 +1233,11 @@ export const SkillLibraryPanel = ({
   };
 
   const importSelectedGitHubSkills = async () => {
-    if (!githubScanResult || githubSelectedIds.length === 0) {
+    if (!githubScanResult || githubSelectedSources.length === 0) {
       return;
     }
     const selected = githubScanResult.candidates.filter(
-      (candidate) => candidate.status === "ready" && githubSelectedIds.includes(candidate.id)
+      (candidate) => candidate.status === "ready" && githubSelectedSources.includes(candidate.sourceUrl)
     );
     setGithubOperation("importing");
     setRepositoryOperationCancelable(repositoryScanKind === "system-git");
@@ -1267,7 +1268,7 @@ export const SkillLibraryPanel = ({
       if (repositoryScanKind === "system-git") {
         const inputs = selected.map((candidate) => ({
           ...repositoryCandidateInputs[candidate.sourceUrl],
-          id: githubCandidateIds[candidate.id] || candidate.id
+          id: githubCandidateIds[candidate.sourceUrl] || candidate.id
         }));
         const result = await onImportRepositorySkills(inputs, onProgress);
         setGithubImportResult({
@@ -1282,7 +1283,7 @@ export const SkillLibraryPanel = ({
         const result = await onImportGitHubSkills(
           selected.map((candidate) => ({
             url: candidate.sourceUrl,
-            id: githubCandidateIds[candidate.id] || candidate.id,
+            id: githubCandidateIds[candidate.sourceUrl] || candidate.id,
             ref: candidate.ref,
             remotePath: candidate.remotePath,
             sourceCollection: {
@@ -1315,12 +1316,107 @@ export const SkillLibraryPanel = ({
       setGithubImportResult({
         imported: [],
         failed: failed.map((candidate) => ({
-          id: githubCandidateIds[candidate.id] || candidate.id,
+          id: githubCandidateIds[candidate.sourceUrl] || candidate.id,
           sourceUrl: candidate.sourceUrl,
           error: message
         }))
       });
     } finally {
+      setGithubOperation(undefined);
+      setRepositoryOperationCancelable(false);
+    }
+  };
+
+  const retryGitHubSkill = async (
+    candidate: GitHubSkillScanResult["candidates"][number]
+  ) => {
+    if (!githubScanResult || githubOperation || candidate.status !== "ready") {
+      return;
+    }
+    const sourceUrl = candidate.sourceUrl;
+    const requestedId = githubCandidateIds[sourceUrl] || candidate.id;
+    setGithubOperation("importing");
+    setGithubRetrySourceUrl(sourceUrl);
+    setRepositoryOperationCancelable(repositoryScanKind === "system-git");
+    setGithubOperationError("");
+    setGithubImportProgress((current) => ({
+      ...current,
+      [sourceUrl]: { sourceUrl, status: "reviewing" }
+    }));
+    setGithubImportResult((current) => current ? {
+      imported: current.imported,
+      failed: current.failed.filter((failure) => failure.sourceUrl !== sourceUrl)
+    } : current);
+
+    const onProgress = (progress: GitHubSkillImportProgress) => {
+      setGithubImportProgress((current) => ({
+        ...current,
+        [progress.sourceUrl]: progress
+      }));
+    };
+
+    try {
+      let retryResult: GitHubSkillImportResult;
+      if (repositoryScanKind === "system-git") {
+        const repositoryInput = repositoryCandidateInputs[sourceUrl];
+        if (!repositoryInput) {
+          throw new Error("Repository import details are no longer available. Scan the source again.");
+        }
+        const input = {
+          ...repositoryInput,
+          id: requestedId
+        };
+        const result = await onImportRepositorySkills([input], onProgress);
+        retryResult = {
+          imported: result.imported,
+          failed: result.failed.map((failure) => ({
+            id: failure.id,
+            sourceUrl: repositoryImportProgressKey(failure),
+            error: failure.error
+          }))
+        };
+      } else {
+        retryResult = await onImportGitHubSkills([{
+          url: sourceUrl,
+          id: requestedId,
+          ref: candidate.ref,
+          remotePath: candidate.remotePath,
+          sourceCollection: {
+            ...githubScanResult.sourceScope,
+            sourceSubpath: sourceSubpathFor(
+              githubScanResult.sourceScope.directory,
+              candidate.remotePath
+            )
+          }
+        }], onProgress);
+      }
+      setGithubImportResult((current) => ({
+        imported: [
+          ...(current?.imported ?? []).filter(
+            (skill) => !retryResult.imported.some((imported) => imported.id === skill.id)
+          ),
+          ...retryResult.imported
+        ],
+        failed: [
+          ...(current?.failed ?? []).filter((failure) => failure.sourceUrl !== sourceUrl),
+          ...retryResult.failed
+        ]
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setGithubImportProgress((current) => ({
+        ...current,
+        [sourceUrl]: { sourceUrl, status: "failed", error: message }
+      }));
+      setGithubImportResult((current) => ({
+        imported: current?.imported ?? [],
+        failed: [
+          ...(current?.failed ?? []).filter((failure) => failure.sourceUrl !== sourceUrl),
+          { id: requestedId, sourceUrl, error: message }
+        ]
+      }));
+    } finally {
+      setGithubRetrySourceUrl(undefined);
       setGithubOperation(undefined);
       setRepositoryOperationCancelable(false);
     }
@@ -3850,7 +3946,7 @@ export const SkillLibraryPanel = ({
                           aria-label={t("Select all discovered skills")}
                           checked={githubAllReadySelected}
                           disabled={
-                            githubReadyCandidateIds.length === 0 ||
+                            githubReadyCandidateSources.length === 0 ||
                             Boolean(githubOperation) ||
                             Boolean(githubImportResult)
                           }
@@ -3860,8 +3956,8 @@ export const SkillLibraryPanel = ({
                             }
                           }}
                           onChange={(event) =>
-                            setGithubSelectedIds(
-                              event.currentTarget.checked ? githubReadyCandidateIds : []
+                            setGithubSelectedSources(
+                              event.currentTarget.checked ? githubReadyCandidateSources : []
                             )
                           }
                         />
@@ -3900,7 +3996,7 @@ export const SkillLibraryPanel = ({
                               }
                             )}
                           </>
-                        ) : t("{{count}} selected", { count: githubSelectedIds.length })}
+                        ) : t("{{count}} selected", { count: githubSelectedSources.length })}
                       </span>
                       <span className="github-selection-id-heading">{t("Library ID")}</span>
                     </div>
@@ -3910,13 +4006,14 @@ export const SkillLibraryPanel = ({
                       ) : null}
                       {githubScanResult.candidates.map((candidate) => {
                         const selectable = candidate.status === "ready";
-                        const checked = githubSelectedIds.includes(candidate.id);
+                        const checked = githubSelectedSources.includes(candidate.sourceUrl);
                         const progress = githubImportProgress[candidate.sourceUrl];
                         const failure = githubImportResult?.failed.find(
                           (item) => item.sourceUrl === candidate.sourceUrl
                         );
                         const failureMessage = progress?.error ?? failure?.error;
                         const progressStatus = progress?.status ?? (failureMessage ? "failed" : undefined);
+                        const retrying = githubRetrySourceUrl === candidate.sourceUrl;
                         return (
                           <div
                             className={`github-candidate-row${selectable ? "" : " is-disabled"}`}
@@ -3957,10 +4054,10 @@ export const SkillLibraryPanel = ({
                                 checked={checked}
                                 onChange={(event) => {
                                   const checked = event.currentTarget.checked;
-                                  setGithubSelectedIds((current) =>
+                                  setGithubSelectedSources((current) =>
                                     checked
-                                      ? [...current, candidate.id]
-                                      : current.filter((id) => id !== candidate.id)
+                                      ? [...current, candidate.sourceUrl]
+                                      : current.filter((sourceUrl) => sourceUrl !== candidate.sourceUrl)
                                   );
                                 }}
                               />
@@ -3983,17 +4080,31 @@ export const SkillLibraryPanel = ({
                                 <small className="github-import-state-label">{t(progress.status)}</small>
                               ) : null}
                             </span>
-                            {selectable ? (
+                            {selectable && (progressStatus === "failed" || retrying) ? (
+                              <Button
+                                className="github-candidate-retry"
+                                size="compact"
+                                variant="secondary"
+                                aria-label={t("Retry {{name}}", { name: candidate.name })}
+                                disabled={Boolean(githubOperation)}
+                                icon={retrying
+                                  ? <LoaderCircle className="is-spinning" size={15} />
+                                  : <RotateCcw size={15} strokeWidth={2.2} />}
+                                onClick={() => void retryGitHubSkill(candidate)}
+                              >
+                                {t("Retry")}
+                              </Button>
+                            ) : selectable ? (
                               <input
                                 className="github-candidate-id"
                                 aria-label={t("Library ID for {{name}}", { name: candidate.name })}
                                 disabled={Boolean(githubOperation) || Boolean(githubImportResult)}
-                                value={githubCandidateIds[candidate.id] ?? candidate.id}
+                                value={githubCandidateIds[candidate.sourceUrl] ?? candidate.id}
                                 onChange={(event) => {
                                   const value = event.currentTarget.value;
                                   setGithubCandidateIds((current) => ({
                                     ...current,
-                                    [candidate.id]: value
+                                    [candidate.sourceUrl]: value
                                   }));
                                 }}
                               />
@@ -4087,7 +4198,7 @@ export const SkillLibraryPanel = ({
                     <Button
                       variant="primary"
                       aria-busy={githubOperation === "importing"}
-                      disabled={githubSelectedIds.length === 0 || Boolean(githubOperation)}
+                      disabled={githubSelectedSources.length === 0 || Boolean(githubOperation)}
                       icon={githubOperation === "importing"
                         ? <LoaderCircle className="is-spinning" size={15} />
                         : undefined}
@@ -4095,7 +4206,7 @@ export const SkillLibraryPanel = ({
                         void importSelectedGitHubSkills();
                       }}
                     >
-                      {githubOperation === "importing" ? t("Importing...") : t("Import {{count}}", { count: githubSelectedIds.length })}
+                      {githubOperation === "importing" ? t("Importing...") : t("Import {{count}}", { count: githubSelectedSources.length })}
                     </Button>
                   )}
                 </footer>

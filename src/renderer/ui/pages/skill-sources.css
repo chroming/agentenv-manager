@@ -25,7 +25,7 @@
 .skill-library-panel .library-mode-tab {
   background: transparent;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   font-size: var(--font-size-body);
   font-weight: 650;
@@ -315,7 +315,7 @@
 }
 
 .skill-source-artwork .resource-favicon {
-  border-radius: 4px;
+  border-radius: var(--radius-tight);
 }
 
 .skill-source-identity {
@@ -356,7 +356,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   display: inline-flex;
   flex: 0 0 24px;

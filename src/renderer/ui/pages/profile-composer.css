@@ -46,7 +46,7 @@
 
 .profile-loading-row__icon {
   background: #eef2f7;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   height: 30px;
   width: 30px;
 }
@@ -67,7 +67,7 @@
 
 .profile-loading-row__line {
   background: #eef2f7;
-  border-radius: 4px;
+  border-radius: var(--radius-tight);
   height: 8px;
 }
 

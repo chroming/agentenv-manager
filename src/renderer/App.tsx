@@ -1266,7 +1266,7 @@ const AppContent = ({
       preview.conflicts.find((conflict) => conflict.identical) ??
       preview.conflicts[0];
     setSelectedSkillConflictId(preferredConflict.existing.id);
-    setSkillImportAlternateId(preview.suggestedId);
+    setSkillImportAlternateId(preview.incoming.id);
     setSkillImportDecision(preferredConflict.contentIdentical ? "keep-both" : "replace");
     const resolution = await new Promise<SkillImportConflictResolution | undefined>((resolve) => {
       setPendingSkillImport({ preview, resolve });
@@ -5371,10 +5371,14 @@ const AppContent = ({
                       <span>{t("Library ID")}</span>
                       <input
                         disabled={pendingSkillImport.committing}
+                        aria-label={t("Library ID")}
                         value={skillImportAlternateId}
                         aria-invalid={!alternateSkillIdValid}
                         onChange={(event) => setSkillImportAlternateId(event.target.value)}
                       />
+                      {!alternateSkillIdValid ? (
+                        <small className="field-error">{t("Enter a unique Library ID")}</small>
+                      ) : null}
                     </label>
                   ) : null}
                 </div>

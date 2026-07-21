@@ -21,7 +21,7 @@
 .target-recovery-trigger > span {
   align-items: center;
   background: #eef2f7;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: #526176;
   display: inline-flex;
   font-size: 10px;
@@ -36,7 +36,7 @@
   align-items: center;
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   display: flex;
   gap: 0;
   min-height: 52px;
@@ -402,7 +402,7 @@
 .stop-managing-options label {
   align-items: flex-start;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   display: grid;
   gap: 10px;

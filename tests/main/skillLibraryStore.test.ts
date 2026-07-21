@@ -60,6 +60,7 @@ describe("skill library store", () => {
       kind: "local",
       input: { sourcePath: incomingDir, id: "reviewer" }
     });
+    expect(preview).not.toHaveProperty("suggestedId");
     expect(preview).toMatchObject({
       incoming: {
         name: "reviewer",
@@ -67,7 +68,6 @@ describe("skill library store", () => {
         versionSource: "version",
         modifiedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
       },
-      suggestedId: "reviewer-2",
       conflicts: [
         {
           existing: {
@@ -2260,6 +2260,13 @@ description: >
       throw new Error(`unexpected fetch ${url}`);
     });
     const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+    const existingDir = join(root, "existing-code-review");
+    await mkdir(existingDir, { recursive: true });
+    await writeFile(
+      join(existingDir, "SKILL.md"),
+      "---\nname: Existing Code Review\ndescription: Different local content.\n---\n"
+    );
+    await store.importSkill({ sourcePath: existingDir, id: "code-review" });
 
     const scan = await store.scanGitHubSkills(
       "https://github.com/acme/skills/tree/main/skills/engineering"
@@ -2279,6 +2286,7 @@ description: >
     expect(scan.candidates).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ name: "Product Design" })])
     );
+    await store.removeSkill("code-review");
 
     const result = await store.importGitHubSkills(
       scan.candidates.map((candidate) => ({

@@ -38,8 +38,11 @@
   --icon-size-default: 16px;
   --icon-box-compact: 30px;
   --icon-box-default: 34px;
+  /* Standalone controls, surfaces, and dialogs own radii; connected rows stay square inside them. */
+  --radius-tight: 4px;
   --radius-control: 6px;
   --radius-surface: 8px;
+  --radius-dialog: 10px;
   --radius-pill: 999px;
   --resource-row-compact: 50px;
   --resource-row-default: 58px;

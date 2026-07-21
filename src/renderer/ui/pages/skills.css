@@ -32,7 +32,7 @@
 
 .skill-library-panel .library-quick-tab {
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   gap: 6px;
   min-height: 30px;
@@ -295,7 +295,7 @@
 .skill-library-panel button.library-source-primary {
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-tight);
   padding: 0;
   width: fit-content;
 }
@@ -342,7 +342,7 @@
 .skill-library-panel .library-status-action {
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-tight);
   color: var(--accent);
   font-size: var(--font-size-body);
   font-weight: 600;
@@ -397,7 +397,7 @@
 
 .skill-library-panel .library-resource-cell .resource-avatar {
   align-self: center;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   height: 28px;
   justify-self: center;
   width: 28px;
@@ -437,7 +437,7 @@
 
 .skill-update-dialog .update-change-list details {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   overflow: hidden;
 }
 
@@ -526,7 +526,7 @@
 .cleanup-review-option {
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   display: grid;
   gap: 10px;
   grid-template-columns: 18px minmax(0, 1fr) auto;
@@ -586,7 +586,7 @@
   align-items: center;
   background: #f5f8ff;
   border: 1px solid #cfdbf5;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   display: grid;
   gap: 10px;
   grid-template-columns: 34px minmax(0, 1fr);
@@ -678,7 +678,7 @@
 }
 
 .cleanup-resolution {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: inline-flex;
   font-size: 10px;
   font-weight: 720;
@@ -913,7 +913,7 @@
 
 .cleanup-bulk-review-list > span {
   background: var(--surface-muted);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--text);
   font-size: 12px;
   font-weight: 680;
@@ -941,7 +941,7 @@
 .cleanup-migration-decisions > span {
   align-items: center;
   background: var(--surface-muted);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   display: flex;
   justify-content: space-between;
   min-height: 32px;
@@ -999,7 +999,7 @@
 
 .bulk-update-list details {
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   padding: 9px 10px;
 }
 
@@ -1036,7 +1036,7 @@
 .row-action-item {
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   display: flex;
   gap: 9px;
   grid-template-columns: none;
@@ -1068,7 +1068,7 @@
 
 .row-action-item--danger {
   border-top: 1px solid var(--border-soft);
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
   margin-top: 3px;
   padding-top: 9px;
 }
@@ -1181,7 +1181,7 @@
 .skill-import-match-state {
   flex: 0 0 auto;
   padding: 4px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   background: var(--warning-bg);
   color: var(--warning);
   font-size: 12px;
@@ -1207,7 +1207,7 @@
   min-height: 32px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--muted);
 }
@@ -1230,7 +1230,7 @@
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: var(--border);
 }
 
@@ -1286,7 +1286,7 @@
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
 }
 
 .skill-import-file-review__header {
@@ -1342,7 +1342,7 @@
   min-width: 0;
   padding: 10px 11px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 
@@ -1390,7 +1390,7 @@
   height: 32px;
   padding: 0 9px;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--text);
 }
@@ -1483,7 +1483,7 @@
   gap: 9px;
   padding: 10px 11px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 
@@ -1544,7 +1544,7 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
 }
 
 .skill-merge-diff > header {
@@ -1578,7 +1578,7 @@
   height: 30px;
   padding: 0 28px 0 9px;
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--text);
   font-size: 11px;

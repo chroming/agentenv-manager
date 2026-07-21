@@ -36,7 +36,7 @@
 .skill-availability-dialog__icon {
   align-items: center;
   background: var(--surface-muted);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: var(--muted);
   display: inline-flex;
   height: 34px;

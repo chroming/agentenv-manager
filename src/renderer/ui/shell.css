@@ -114,7 +114,7 @@ html[data-platform="darwin"] {
 .agent-overflow-popover {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   box-shadow: var(--shadow-popover);
   display: grid;
   gap: 2px;

@@ -4736,8 +4736,10 @@ describe("Electron UI profile switching e2e", () => {
     const duplicateDialog = page.getByRole("dialog", { name: "Review duplicate Skill" });
     await duplicateDialog.waitFor({ state: "visible" });
     await duplicateDialog.getByRole("radio", { name: /Keep both/ }).check();
-    await duplicateDialog.getByRole("textbox", { name: "Library ID", exact: true })
-      .fill("open-browser-use-2");
+    const alternateId = duplicateDialog.getByRole("textbox", { name: "Library ID", exact: true });
+    await expect.poll(() => alternateId.inputValue()).toBe("open-browser-use");
+    expect(await alternateId.getAttribute("aria-invalid")).toBe("true");
+    await alternateId.fill("open-browser-use-2");
     await duplicateDialog.getByRole("button", { name: "Save another Skill" }).click();
     await duplicateDialog.waitFor({ state: "hidden" });
 
@@ -6576,7 +6578,7 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toContain("Verify releases before shipping");
   }, 30_000);
 
-  it("keeps a batch import partial failure visible with a selectable full reason", async () => {
+  it("keeps a batch import failure visible and retries only the failed Skill", async () => {
     const { appDataRoot, githubFixtureRoot, page } = await launchApp();
     await writeGitHubFixtureDirectory(githubFixtureRoot);
     await resizeAppWindow(page, 920, 620);
@@ -6610,12 +6612,36 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, tooltip);
     expect(await tooltip.evaluate((element) => getComputedStyle(element).userSelect)).toBe("text");
 
+    const releaseCheckDir = join(
+      githubFixtureRoot,
+      "acme",
+      "agent-skills",
+      "main",
+      "skills",
+      "engineering",
+      "release-check"
+    );
+    await mkdir(releaseCheckDir, { recursive: true });
+    await writeFile(
+      join(releaseCheckDir, "SKILL.md"),
+      "---\nname: Release Check\ndescription: Verify releases before shipping.\n---\n# Release Check\n"
+    );
+    const retry = dialog.getByRole("button", { name: "Retry Release Check" });
+    await retry.waitFor({ state: "visible" });
+    await expectInViewport(page, retry);
+    await retry.click();
+    await dialog.getByText("All 2 skills imported", { exact: true })
+      .waitFor({ state: "visible", timeout: 5_000 });
+    await dialog.getByRole("status", { name: "Release Check: imported" })
+      .waitFor({ state: "visible", timeout: 5_000 });
+    expect(await dialog.getByRole("button", { name: "Retry Release Check" }).count()).toBe(0);
+
     await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await dialog.waitFor({ state: "hidden" });
     await expect(fileExists(join(appDataRoot, "skills-library", "api-design", "SKILL.md")))
       .resolves.toBe(true);
     await expect(fileExists(join(appDataRoot, "skills-library", "release-check", "SKILL.md")))
-      .resolves.toBe(false);
+      .resolves.toBe(true);
   }, 30_000);
 
   it("reviews a GitHub same-name conflict before replacing the Library copy", async () => {

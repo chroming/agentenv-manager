@@ -212,7 +212,6 @@ export interface SkillImportPreview {
   source: SkillImportPreviewInput;
   incoming: SkillImportSnapshot;
   conflicts: SkillImportConflict[];
-  suggestedId: string;
 }
 
 export type SkillImportConflictResolution =

@@ -152,7 +152,7 @@
 .backup-kind-icon {
   align-items: center;
   background: #f1f1ef;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: #5f615d;
   display: inline-flex;
   height: 34px;
@@ -244,7 +244,7 @@
 
 .backup-manager-notice {
   background: var(--surface-muted);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--text-secondary);
   font-size: 12px;
   line-height: 18px;
@@ -332,7 +332,7 @@
 .data-restore-summary code {
   background: var(--surface-muted);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   overflow: hidden;
   padding: 8px;
   text-overflow: ellipsis;
@@ -399,7 +399,7 @@
 .agent-settings-icon {
   align-items: center;
   background: var(--surface-muted);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: var(--text-secondary);
   display: inline-flex;
   height: 30px;
@@ -576,7 +576,7 @@
 }
 
 .metric-strip--compact .metric-icon {
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   height: 36px;
   width: 36px;
 }
@@ -629,7 +629,7 @@
   align-items: center;
   background: #f1f1ef;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   color: #24292f;
   display: inline-flex;
   flex: 0 0 auto;
@@ -665,7 +665,7 @@
   align-items: center;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(170px, 210px) minmax(170px, 1fr) auto;

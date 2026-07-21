@@ -57,6 +57,9 @@ const reports = [];
 for (const file of files) {
   const content = await readFile(resolve(projectRoot, file), "utf8");
   const selectors = selectorCounts(content);
+  const hardcodedRadii = [...content.matchAll(/border-radius:\s*([^;]+);/g)]
+    .map((match) => match[1].trim())
+    .filter((value) => /\d+(?:px|rem|em|%)/.test(value) && value !== "50%");
   reports.push({
     file,
     lines: content.split("\n").length,
@@ -66,6 +69,7 @@ for (const file of files) {
     containerQueries: (content.match(/@container\b/g) ?? []).length,
     importantDeclarations: (content.match(/!important\b/g) ?? []).length,
     rawNumericLayers: [...content.matchAll(/z-index:\s*([0-9]+)/g)].map((match) => Number(match[1])),
+    hardcodedRadii,
     selectors
   });
 }
@@ -104,7 +108,10 @@ const result = {
       (total, report) => total + report.importantDeclarations,
       0
     ),
-    rawNumericLayers: reports.flatMap((report) => report.rawNumericLayers)
+    rawNumericLayers: reports.flatMap((report) => report.rawNumericLayers),
+    hardcodedRadii: reports.flatMap((report) =>
+      report.hardcodedRadii.map((value) => ({ file: report.file, value }))
+    )
   },
   architecture: {
     pagePrimitiveRedefinitions,
@@ -150,6 +157,11 @@ if (shouldCheck) {
       : undefined,
     result.totals.rawNumericLayers.length > 0
       ? "Use named z-index tokens instead of numeric layers"
+      : undefined,
+    result.totals.hardcodedRadii.length > 0
+      ? `Use radius tokens instead of numeric radii: ${result.totals.hardcodedRadii
+          .map(({ file, value }) => `${file} (${value})`)
+          .join(", ")}`
       : undefined,
     importantOutsideAccessibility.length > 0
       ? `!important is only allowed in accessibility.css: ${importantOutsideAccessibility

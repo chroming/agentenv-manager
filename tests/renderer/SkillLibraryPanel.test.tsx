@@ -884,6 +884,31 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseEnter(importFailure);
     expect(await screen.findByRole("tooltip")).toHaveTextContent("GitHub request failed");
     expect(screen.getByText("1 imported · 1 failed")).toBeInTheDocument();
+    onImportGitHubSkills.mockImplementationOnce(async (inputs, onProgress) => {
+      const input = inputs[0]!;
+      onProgress?.({ sourceUrl: input.url, status: "reviewing" });
+      onProgress?.({ sourceUrl: input.url, status: "importing" });
+      onProgress?.({ sourceUrl: input.url, status: "imported" });
+      return {
+        imported: [{
+          id: input.id!,
+          name: "Release Check",
+          description: "Check a release from GitHub",
+          path: `/tmp/skills-library/${input.id}`,
+          sourceType: "github" as const,
+          source: input.url,
+          updatePolicy: "tracked" as const,
+          contentHash: "release-check-hash",
+          updatedAt: "2026-07-17T00:00:00.000Z"
+        }],
+        failed: []
+      };
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Retry Release Check" }));
+    await screen.findByRole("status", { name: "Release Check: imported" });
+    expect(onImportGitHubSkills).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("All 2 skills imported")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry Release Check" })).not.toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Import skills" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onCloseTool).toHaveBeenCalledTimes(2);
