@@ -2609,6 +2609,7 @@ const AppContent = ({
       );
       setSelectedSkillUpdatePlan(undefined);
       applyLibraryContentUpdatesLocally(updatedSkills);
+      await refreshSkillSourceGroups();
       const updatedIds = new Set(updatedSkills.map((skill) => skill.id));
       const remainingUpdates = skillUpdates.filter(
         (update) =>
@@ -2855,6 +2856,37 @@ const AppContent = ({
     input: RepositorySkillSourceInput
   ): Promise<RepositorySkillScanResult> => window.agentEnv.scanRepositorySkills(input);
 
+  const syncSkillUpdatesFromSourceGroups = (groups: SkillSourceGroupView[]) => {
+    const skillsById = new Map(librarySkills.map((skill) => [skill.id, skill]));
+    const sourceUpdates = new Map<string, SkillUpdateInfo>();
+    for (const candidate of groups.flatMap((group) => group.candidates)) {
+      if (!candidate.libraryId || candidate.state === "unchecked") continue;
+      const skill = skillsById.get(candidate.libraryId);
+      if (!skill || skill.globallyEnabled === false || skill.updatePolicy !== "tracked") continue;
+      const fallbackError = candidate.state === "removed"
+        ? t("Removed upstream")
+        : t("Source check failed");
+      const error = ["invalid", "removed", "conflict", "missing"].includes(candidate.state)
+        ? candidate.detail ?? fallbackError
+        : undefined;
+      sourceUpdates.set(skill.id, {
+        id: skill.id,
+        name: skill.name,
+        sourceType: skill.sourceType,
+        currentRevision: skill.remoteRevision ?? skill.contentHash,
+        latestRevision: candidate.contentRevision,
+        latestUpdatedAt: candidate.upstreamUpdatedAt,
+        updateAvailable: candidate.state === "update",
+        error
+      });
+    }
+    if (sourceUpdates.size === 0) return;
+    setSkillUpdates((current) => [
+      ...current.filter((update) => !sourceUpdates.has(update.id)),
+      ...sourceUpdates.values()
+    ]);
+  };
+
   const checkSkillSourceGroup = async (sourceId: string) => {
     setError(undefined);
     setSkillUpdateFeedbackWorkspace("library");
@@ -2867,6 +2899,7 @@ const AppContent = ({
           : [...current, group];
         return next;
       });
+      syncSkillUpdatesFromSourceGroups([group]);
       if (group.error) {
         setSkillUpdateCheckStatus({ state: "error", message: t("Source check failed") });
         setError(group.error);
@@ -2893,6 +2926,7 @@ const AppContent = ({
     try {
       const result = await window.agentEnv.checkAllSkillSourceGroups();
       setSkillSourceGroups(result.groups);
+      syncSkillUpdatesFromSourceGroups(result.groups);
       if (result.failed > 0) {
         setSkillUpdateCheckStatus({
           state: "error",

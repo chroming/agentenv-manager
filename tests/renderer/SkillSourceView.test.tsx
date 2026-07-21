@@ -34,6 +34,8 @@ const group: SkillSourceGroupView = {
       libraryId: "review",
       libraryName: "review",
       libraryVersion: "1.0.0",
+      globallyEnabled: true,
+      updatePolicy: "tracked",
       state: "update"
     },
     {
@@ -64,6 +66,7 @@ describe("SkillSourceView", () => {
     const onCheckGroup = vi.fn().mockResolvedValue(undefined);
     const onAdd = vi.fn().mockResolvedValue(true);
     const onUpdate = vi.fn();
+    const onReviewUpdates = vi.fn();
     const onDelete = vi.fn();
     render(
       <SkillSourceView
@@ -77,6 +80,7 @@ describe("SkillSourceView", () => {
         onMerge={vi.fn()}
         onAdd={onAdd}
         onUpdate={onUpdate}
+        onReviewUpdates={onReviewUpdates}
         onDelete={onDelete}
         onOpenSource={vi.fn()}
         onCopySource={vi.fn()}
@@ -87,13 +91,15 @@ describe("SkillSourceView", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Merge selected/ })).not.toBeInTheDocument();
     expect(document.querySelector(".skill-source-counts .is-update")).toHaveClass("has-value");
+    fireEvent.click(screen.getByRole("button", { name: "Review 1" }));
+    expect(onReviewUpdates).toHaveBeenCalledWith(["review"]);
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
 
     const candidates = document.querySelector<HTMLElement>(".skill-source-candidates");
     expect(candidates).not.toBeNull();
     fireEvent.click(within(candidates!).getByRole("button", { name: "Add" }));
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(group, group.candidates[0]));
-    fireEvent.click(within(candidates!).getByRole("button", { name: "Review update" }));
+    fireEvent.click(within(candidates!).getByRole("button", { name: "Review update review" }));
     expect(onUpdate).toHaveBeenCalledWith("review");
     fireEvent.click(within(candidates!).getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledWith("docs");
@@ -115,6 +121,7 @@ describe("SkillSourceView", () => {
         onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
         onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
         onDelete={vi.fn()}
         onOpenSource={vi.fn()}
         onCopySource={vi.fn()}
@@ -137,6 +144,7 @@ describe("SkillSourceView", () => {
         onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
         onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
         onDelete={vi.fn()}
         onOpenSource={vi.fn()}
         onCopySource={vi.fn()}
@@ -191,6 +199,7 @@ describe("SkillSourceView", () => {
         onMerge={onMerge}
         onAdd={vi.fn().mockResolvedValue(true)}
         onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
         onDelete={vi.fn()}
         onOpenSource={vi.fn()}
         onCopySource={vi.fn()}
@@ -229,6 +238,7 @@ describe("SkillSourceView", () => {
         onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
         onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
         onDelete={vi.fn()}
         onOpenSource={vi.fn()}
         onCopySource={vi.fn()}
@@ -263,6 +273,7 @@ describe("SkillSourceView", () => {
         onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
         onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
         onDelete={vi.fn()}
         onOpenSource={vi.fn()}
         onCopySource={vi.fn()}
@@ -297,6 +308,7 @@ describe("SkillSourceView", () => {
         onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
         onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
         onDelete={vi.fn()}
         onOpenSource={vi.fn()}
         onCopySource={vi.fn()}

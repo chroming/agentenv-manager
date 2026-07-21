@@ -445,6 +445,7 @@ Object.assign(zhCN, {
   "Retry": "重试",
   "available": "可用",
   "current": "当前",
+  "Removed upstream": "上游已删除",
   "Source check failed": "来源检查失败",
   "{{count}} check failed": "{{count}} 项检查失败",
   "{{count}} checks failed": "{{count}} 项检查失败",

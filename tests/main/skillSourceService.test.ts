@@ -107,6 +107,7 @@ describe("skill source service", () => {
           directory: "engineering/review",
           source: { kind: "git", locator: scope.repository, ref: "main", subpath: "engineering/review" },
           contentRevision: "review-2",
+          compatibleRevisions: ["review-1"],
           resolvedCommit: "commit-2",
           status: "ready"
         }]
@@ -121,11 +122,18 @@ describe("skill source service", () => {
     const group = await service.checkGroup(scope.canonicalLink, [librarySkill]);
 
     expect(group.observationState).toBe("ready");
-    expect(group.candidates).toMatchObject([{ libraryId: "review", state: "update" }]);
+    expect(group.candidates).toMatchObject([{
+      libraryId: "review",
+      contentRevision: "review-1",
+      state: "current"
+    }]);
     expect(store.write).toHaveBeenCalledWith(expect.objectContaining({
       checkedAt: "2026-07-21T00:00:00.000Z",
       accessTransport: "ssh",
       complete: true
+    }));
+    expect(store.write).toHaveBeenCalledWith(expect.objectContaining({
+      candidates: [expect.objectContaining({ compatibleRevisions: ["review-1"] })]
     }));
   });
 });

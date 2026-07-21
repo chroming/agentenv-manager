@@ -116,22 +116,29 @@ describe("Repository Skill source", () => {
       "---\nname: API Design Internal\ndescription: Updated internal API design workflow.\nversion: 1.1.0\n---\n# API Design\n\nReview compatibility.\n"
     );
     await repository.commit("update api design skill");
-    await page.getByRole("button", { name: "Check updates" }).click();
+    await page.getByRole("tab", { name: "By source" }).click();
+    await sourceGroup.getByRole("button", { name: "Check", exact: true }).click();
+    const reviewSourceUpdates = sourceGroup.getByRole("button", { name: "Review 1", exact: true });
+    await reviewSourceUpdates.waitFor({ state: "visible" });
+
+    await page.getByRole("tab", { name: "Skill list" }).click();
     const updateButton = row.getByRole("button", { name: "Review update api-design-internal" });
     await updateButton.waitFor({ state: "visible" });
-    await updateButton.click();
+    await page.getByRole("tab", { name: "By source" }).click();
+    await reviewSourceUpdates.click();
 
-    const preview = page.getByRole("dialog", { name: "Update preview for api-design-internal" });
+    const preview = page.getByRole("dialog", { name: "Review all skill updates" });
     await preview.waitFor({ state: "visible" });
     await expect.poll(() => preview.textContent()).toContain("SKILL.md");
     await expect.poll(() => readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .not.toContain("Review compatibility");
-    await preview.getByRole("button", { name: "Apply update api-design-internal" }).click();
+    await preview.getByRole("button", { name: "Apply 1 updates" }).click();
     await preview.waitFor({ state: "hidden" });
     await page.getByText(
-      "Updated api-design-internal · All tracked skills are up to date",
+      "Updated 1 skill · All tracked skills are up to date",
       { exact: true }
     ).waitFor({ state: "visible" });
+    await expect.poll(() => sourceGroup.getByRole("button", { name: "Review 1" }).count()).toBe(0);
     await expect(readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .resolves.toContain("Review compatibility");
     const backupRoot = join(appDataRoot, "backups", "skill-cleanup");

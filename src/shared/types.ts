@@ -292,6 +292,7 @@ export interface GitHubSkillCandidate {
   sourceUrl: string;
   ref: string;
   revision: string;
+  compatibleRevisions?: string[];
   status: GitHubSkillCandidateStatus;
   existingLibraryId?: string;
   error?: string;
@@ -342,6 +343,7 @@ export interface RepositorySkillCandidate {
   directory: string;
   source: SkillUpstream;
   contentRevision: string;
+  compatibleRevisions?: string[];
   resolvedCommit: string;
   upstreamUpdatedAt?: string;
   status: GitHubSkillCandidateStatus;
@@ -402,11 +404,13 @@ export interface SkillSourceGroupCandidate {
   description: string;
   version?: string;
   contentRevision?: string;
+  compatibleRevisions?: string[];
   upstreamUpdatedAt?: string;
   libraryId?: string;
   libraryName?: string;
   libraryVersion?: string;
   globallyEnabled?: boolean;
+  updatePolicy?: SkillUpdatePolicy;
   state: SkillSourceCandidateState;
   detail?: string;
 }

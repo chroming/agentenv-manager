@@ -38,6 +38,7 @@ interface SkillSourceViewProps {
   onMerge(previewId: string): Promise<SkillSourceMergeResult>;
   onAdd(group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate): Promise<boolean>;
   onUpdate(libraryId: string): void;
+  onReviewUpdates(libraryIds: string[]): void;
   onDelete(libraryId: string): void;
   onOpenSource(url: string): void;
   onCopySource(source: string): void;
@@ -96,6 +97,7 @@ export const SkillSourceView = ({
   onMerge,
   onAdd,
   onUpdate,
+  onReviewUpdates,
   onDelete,
   onOpenSource,
   onCopySource
@@ -353,6 +355,14 @@ export const SkillSourceView = ({
           const isSelected = mergeSelection.has(group.sourceId);
           const hasAttention = group.counts.updates + group.counts.new + group.counts.removed > 0;
           const groupName = group.displayName ?? sourceDefaultLabel(group);
+          const reviewableUpdateIds = group.candidates.flatMap((candidate) =>
+            candidate.state === "update" &&
+            candidate.libraryId &&
+            candidate.globallyEnabled !== false &&
+            candidate.updatePolicy !== "untracked"
+              ? [candidate.libraryId]
+              : []
+          );
           return (
             <article
               className={`skill-source-group${isExpanded ? " is-expanded" : ""}${isSelected ? " is-selected" : ""}${hasAttention ? " has-attention" : ""}`}
@@ -455,19 +465,33 @@ export const SkillSourceView = ({
                     displayText={t("Check failed")}
                   />
                 ) : null}
-                <button
-                  className="secondary-action skill-source-check"
-                  type="button"
-                  disabled={isChecking || checkingAll || Boolean(operation)}
-                  onClick={() => void runCheck(group.sourceId)}
-                >
-                  {isChecking ? (
-                    <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
-                  ) : (
-                    <RefreshCw size={14} strokeWidth={2.2} />
-                  )}
-                  <span>{t(group.error ? "Retry" : "Check")}</span>
-                </button>
+                <div className="skill-source-group-actions">
+                  {reviewableUpdateIds.length > 0 ? (
+                    <button
+                      aria-label={`${t("Review")} ${reviewableUpdateIds.length}`}
+                      className="secondary-action skill-source-review"
+                      type="button"
+                      disabled={isChecking || checkingAll || Boolean(operation)}
+                      onClick={() => onReviewUpdates(reviewableUpdateIds)}
+                    >
+                      <RefreshCw size={14} strokeWidth={2.2} />
+                      <span>{t("Review")} {reviewableUpdateIds.length}</span>
+                    </button>
+                  ) : null}
+                  <button
+                    className="secondary-action skill-source-check"
+                    type="button"
+                    disabled={isChecking || checkingAll || Boolean(operation)}
+                    onClick={() => void runCheck(group.sourceId)}
+                  >
+                    {isChecking ? (
+                      <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
+                    ) : (
+                      <RefreshCw size={14} strokeWidth={2.2} />
+                    )}
+                    <span>{t(group.error ? "Retry" : "Check")}</span>
+                  </button>
+                </div>
               </div>
 
               {isExpanded ? (
@@ -525,14 +549,18 @@ export const SkillSourceView = ({
                               {isWorking ? <LoaderCircle className="is-spinning" size={13} /> : null}
                               <span>{t("Add")}</span>
                             </button>
-                          ) : candidate.state === "update" && candidate.libraryId ? (
+                          ) : candidate.state === "update" &&
+                            candidate.libraryId &&
+                            candidate.globallyEnabled !== false &&
+                            candidate.updatePolicy !== "untracked" ? (
                             <button
                               className="text-action"
                               type="button"
+                              aria-label={t("Review update {{id}}", { id: candidate.libraryId })}
                               disabled={Boolean(operation) || checkingAll || checking.size > 0}
                               onClick={() => onUpdate(candidate.libraryId!)}
                             >
-                              <span>{t("Review update")}</span>
+                              <span>{t("Review")}</span>
                             </button>
                           ) : candidate.state === "removed" && candidate.libraryId ? (
                             <button

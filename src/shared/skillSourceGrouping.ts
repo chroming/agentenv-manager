@@ -12,6 +12,7 @@ export interface SkillSourceObservationCandidate {
   description: string;
   version?: string;
   contentRevision: string;
+  compatibleRevisions?: string[];
   upstreamUpdatedAt?: string;
   validity: "valid" | "invalid";
   error?: string;
@@ -71,6 +72,7 @@ const localCandidate = (
   libraryName: skill.name,
   libraryVersion: skill.version,
   globallyEnabled: skill.globallyEnabled !== false,
+  updatePolicy: skill.updatePolicy,
   state,
   detail
 });
@@ -118,6 +120,7 @@ export const deriveSkillSourceGroups = (
               libraryName: local[0]?.name,
               libraryVersion: local[0]?.version,
               globallyEnabled: local[0]?.globallyEnabled !== false,
+              updatePolicy: local[0]?.updatePolicy,
               state: "invalid",
               detail: remote.error ?? "SKILL.md is invalid"
             });
@@ -136,13 +139,17 @@ export const deriveSkillSourceGroups = (
             candidates.push({ ...remote, state: "new" });
             continue;
           }
+          const matchedRevision = [remote.contentRevision, ...(remote.compatibleRevisions ?? [])]
+            .find((revision) => revision === skill.remoteRevision);
           candidates.push({
             ...remote,
+            contentRevision: matchedRevision ?? remote.contentRevision,
             libraryId: skill.id,
             libraryName: skill.name,
             libraryVersion: skill.version,
             globallyEnabled: skill.globallyEnabled !== false,
-            state: skill.remoteRevision === remote.contentRevision ? "current" : "update"
+            updatePolicy: skill.updatePolicy,
+            state: matchedRevision ? "current" : "update"
           });
         }
         for (const skill of sourceSkills) {

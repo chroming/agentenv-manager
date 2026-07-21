@@ -2044,6 +2044,7 @@ export const SkillLibraryPanel = ({
         onMerge={onMergeSources}
         onAdd={addSourceCandidate}
         onUpdate={onPreviewLibrarySkillUpdate}
+        onReviewUpdates={onPreviewAllLibrarySkillUpdates}
         onDelete={(libraryId) => {
           const skill = skillsById.get(libraryId);
           if (skill) setDeleteCandidate(skill);

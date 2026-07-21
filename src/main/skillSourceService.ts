@@ -72,6 +72,7 @@ export const createSkillSourceService = (
         description: candidate.description,
         version: candidate.version,
         contentRevision: candidate.contentRevision,
+        compatibleRevisions: candidate.compatibleRevisions,
         upstreamUpdatedAt: candidate.upstreamUpdatedAt,
         validity: candidate.status === "invalid" ? "invalid" : "valid",
         error: candidate.error
@@ -96,6 +97,7 @@ export const createSkillSourceService = (
         description: candidate.description,
         version: candidate.version,
         contentRevision: candidate.revision,
+        compatibleRevisions: candidate.compatibleRevisions,
         validity: candidate.status === "invalid" ? "invalid" : "valid",
         error: candidate.error
       }))

@@ -87,6 +87,7 @@ import { readSkillLibraryEntry, type SkillMetadataFile } from "./skillLibraryMet
 import { bindSkillSourceCollection, createSkillSourceRegistry } from "./skillSourceRegistry";
 import { createSingleSkillSourceCollection } from "./skillSourceScope";
 import { createSkillSourceMergeService } from "./skillSourceMergeService";
+import { githubContentsRevision } from "./skillSources/revisionCompatibility";
 
 interface SkillCleanupBackupManifest {
   id: string;
@@ -1126,24 +1127,13 @@ export const createSkillLibraryStore = (
       );
       const rawSkillUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(source.ref)}/${encodeGitHubPath(skillFile.path)}`;
       const content = await fetchGitHubText(rawSkillUrl);
-      const subtree = treeItems
-        .filter((item) => !remotePath || item.path.startsWith(`${remotePath}/`))
-        .map((item) => ({
-          ...item,
-          relativePath: relativeGitHubPath(remotePath, item.path)
-        }))
-        .filter(
-          (item) =>
-            item.relativePath &&
-            !boundedSkillFiles.some((nested) => {
-              const nestedDir = dirname(nested.path) === "." ? "" : dirname(nested.path);
-              return nestedDir !== remotePath && item.path.startsWith(`${nestedDir}/`);
-            })
-        )
-        .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
-      const revision = createHash("sha1")
-        .update(subtree.map((item) => `${item.type}:${item.relativePath}:${item.sha}\n`).join(""))
-        .digest("hex");
+      const revisionEntries = treeItems
+        .filter((item): item is { path: string; type: "blob" | "tree"; sha: string } =>
+          item.type === "blob" || item.type === "tree");
+      const revision = githubContentsRevision(remotePath, revisionEntries);
+      const treeRevision = remotePath
+        ? revisionEntries.find((item) => item.type === "tree" && item.path === remotePath)?.sha
+        : source.treeSha;
       const existingSource = existingSkills.find(
         (skill) => skill.source?.replace(/\/$/, "") === sourceUrl.replace(/\/$/, "")
       );
@@ -1176,6 +1166,8 @@ export const createSkillLibraryStore = (
         sourceUrl,
         ref: source.ref,
         revision,
+        compatibleRevisions:
+          treeRevision && treeRevision !== revision ? [treeRevision] : [],
         status: githubCandidateStatus(
           frontmatter.errors,
           Boolean(existingSource),

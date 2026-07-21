@@ -64,6 +64,7 @@ describe("git CLI skill source", () => {
         id: "code-review",
         directory: "skills/engineering/review",
         contentRevision: expect.stringMatching(/^[a-f0-9]{40}$/),
+        compatibleRevisions: [expect.stringMatching(/^[a-f0-9]{40}$/)],
         resolvedCommit: expect.stringMatching(/^[a-f0-9]{40}$/),
         source: expect.objectContaining({
           kind: "git",

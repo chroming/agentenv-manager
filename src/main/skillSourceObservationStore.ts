@@ -35,6 +35,10 @@ const isObservation = (value: unknown): value is SkillSourceObservation => {
       typeof item.name === "string" &&
       typeof item.description === "string" &&
       typeof item.contentRevision === "string" &&
+      (item.compatibleRevisions === undefined ||
+        (Array.isArray(item.compatibleRevisions) && item.compatibleRevisions.every(
+          (revision) => typeof revision === "string"
+        ))) &&
       (item.validity === "valid" || item.validity === "invalid");
   });
 };

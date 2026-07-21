@@ -88,6 +88,28 @@ describe("skill source grouping", () => {
     expect(group.candidates.find((candidate) => candidate.name === "testing")?.state).toBe("new");
   });
 
+  it("treats transport-compatible revisions as current and displays the matching revision", () => {
+    const compatibleObservation: SkillSourceObservation = {
+      ...observation,
+      candidates: [{
+        ...observation.candidates[0]!,
+        contentRevision: "git-tree-review-1",
+        compatibleRevisions: ["github-api-review-1"]
+      }]
+    };
+    const [group] = deriveSkillSourceGroups(
+      [skill("review", "review", "github-api-review-1")],
+      new Map([[scope.canonicalLink, compatibleObservation]])
+    );
+
+    expect(group.counts.updates).toBe(0);
+    expect(group.candidates).toMatchObject([{
+      libraryId: "review",
+      contentRevision: "github-api-review-1",
+      state: "current"
+    }]);
+  });
+
   it("uses the exact canonical link as group identity and removes empty groups", () => {
     const other = {
       ...scope,

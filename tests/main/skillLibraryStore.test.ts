@@ -2251,7 +2251,7 @@ description: >
               type: "file",
               name: "SKILL.md",
               path,
-              sha: `contents-${path}`,
+              sha: `skill-${[...skillFiles.keys()].indexOf(path)}`,
               download_url: `https://raw.githubusercontent.com/acme/skills/main/${path}`
             }
           ])
@@ -2291,6 +2291,9 @@ description: >
 
     expect(result.failed).toEqual([]);
     expect(result.imported.map((skill) => skill.id)).toEqual(["code-review", "research"]);
+    expect(result.imported.map((skill) => skill.remoteRevision)).toEqual(
+      scan.candidates.map((candidate) => candidate.revision)
+    );
     await expect(
       readFile(join(paths.skillsLibraryDir, "research", "SKILL.md"), "utf8")
     ).resolves.toContain("Research primary sources");

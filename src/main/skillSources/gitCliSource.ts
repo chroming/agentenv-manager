@@ -17,6 +17,7 @@ import type {
 import type { GitCommandRunner } from "./gitCommandRunner";
 import type { GitRepositoryCache } from "./gitRepositoryCache";
 import { createSkillSourceScope } from "../skillSourceScope";
+import { githubContentsRevision } from "./revisionCompatibility";
 
 export interface GitCliSkillSourceOptions {
   cache: GitRepositoryCache;
@@ -107,6 +108,7 @@ const resolvedSkill = async (
 interface TreeEntry {
   mode: string;
   type: string;
+  sha: string;
   path: string;
 }
 
@@ -115,9 +117,9 @@ const parseTreeEntries = (stdout: string): TreeEntry[] =>
     .split("\0")
     .filter(Boolean)
     .map((record) => {
-      const match = /^(\d+)\s+(\S+)\s+[a-f0-9]+\t([\s\S]+)$/i.exec(record);
+      const match = /^(\d+)\s+(\S+)\s+([a-f0-9]+)\t([\s\S]+)$/i.exec(record);
       if (!match) throw new Error("Repository returned an invalid tree entry");
-      return { mode: match[1], type: match[2], path: match[3] };
+      return { mode: match[1], type: match[2], sha: match[3], path: match[4] };
     });
 
 const assertSafeTree = async (
@@ -203,17 +205,18 @@ export const createGitCliSkillSource = (
       repository.cachePath,
       "ls-tree",
       "-r",
+      "-t",
       "-z",
-      "--name-only",
       repository.resolvedCommit,
       "--",
       ...(directory ? [directory] : [])
     ];
     const listed = await options.runner.run(args, { signal, timeoutMs: 30_000 });
-    const roots = listed.stdout
-      .split("\0")
-      .filter((path) => path === "SKILL.md" || path.endsWith("/SKILL.md"))
-      .map((path) => posix.dirname(path) === "." ? "" : posix.dirname(path))
+    const treeEntries = parseTreeEntries(listed.stdout);
+    const roots = treeEntries
+      .filter((entry) => entry.type === "blob" &&
+        (entry.path === "SKILL.md" || entry.path.endsWith("/SKILL.md")))
+      .map((entry) => posix.dirname(entry.path) === "." ? "" : posix.dirname(entry.path))
       .sort((left, right) => {
         const depth = left.split("/").length - right.split("/").length;
         return depth || left.localeCompare(right);
@@ -235,6 +238,17 @@ export const createGitCliSkillSource = (
       const name = frontmatter.name || fallbackName;
       const id = normalizeSkillId(name) || normalizeSkillId(fallbackName);
       const source = await resolvedSkill(options.runner, repository, root, signal);
+      const compatibleRevision = githubContentsRevision(
+        root,
+        treeEntries
+          .filter((entry): entry is TreeEntry & { type: "blob" | "tree" } =>
+            entry.type === "blob" || entry.type === "tree")
+          .map((entry) => ({
+            path: entry.path,
+            type: entry.type,
+            sha: entry.sha
+          }))
+      );
       candidates.push({
         id,
         name,
@@ -243,6 +257,8 @@ export const createGitCliSkillSource = (
         directory: root,
         source: source.upstream,
         contentRevision: source.contentRevision,
+        compatibleRevisions:
+          compatibleRevision === source.contentRevision ? [] : [compatibleRevision],
         resolvedCommit: repository.resolvedCommit,
         upstreamUpdatedAt: source.upstream.updatedAt,
         status: frontmatter.errors.length > 0 ? "invalid" : "ready",

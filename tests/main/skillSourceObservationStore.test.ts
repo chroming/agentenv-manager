@@ -27,6 +27,7 @@ const observation: SkillSourceObservation = {
     name: "review",
     description: "Review code",
     contentRevision: "revision-1",
+    compatibleRevisions: ["legacy-revision-1"],
     validity: "valid"
   }]
 };

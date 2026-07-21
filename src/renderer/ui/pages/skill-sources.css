@@ -449,8 +449,19 @@
   white-space: nowrap;
 }
 
-.skill-source-check {
+.skill-source-group-actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
   grid-area: check;
+  justify-content: flex-end;
+}
+
+.skill-source-group-actions .secondary-action {
+  white-space: nowrap;
+}
+
+.skill-source-check {
   min-width: 78px;
 }
 
