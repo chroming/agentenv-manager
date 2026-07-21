@@ -9,6 +9,7 @@ import type {
   SkillLibraryEntry,
   TargetPaths
 } from "../../src/shared/types";
+import { blockingMessages, reviewMessages } from "../helpers/applyIssues";
 
 const librarySkill = (
   overrides: Partial<SkillLibraryEntry> = {}
@@ -77,14 +78,12 @@ const inventoryEntry = (
 
 const plan = ({
   inventory = [],
-  takeover = true,
   targetId = "codex",
   receipt,
   skill = librarySkill(),
   selectedProfile = profile()
 }: {
   inventory?: SkillInventoryEntry[];
-  takeover?: boolean;
   targetId?: string;
   receipt?: Parameters<typeof buildSkillDeploymentPlan>[0]["captureReceipt"];
   skill?: SkillLibraryEntry;
@@ -96,7 +95,6 @@ const plan = ({
     profileHash: "profile-hash",
     skillLibrary: [skill],
     inventory,
-    takeover,
     captureReceipt: receipt
   });
 
@@ -111,7 +109,7 @@ describe("skill deployment planner", () => {
       inventory: [inventoryEntry({ contentHash: "occupied", contentMatchesLibrary: false })]
     });
 
-    expect(result.errors).toEqual([]);
+    expect(blockingMessages(result.issues)).toEqual([]);
     expect(result.decisions).toEqual([]);
     expect(result.approvedUnmanagedSkills).toEqual([]);
     expect(result.effectiveSkills).toEqual(selectedProfile.resources.skills);
@@ -126,7 +124,7 @@ describe("skill deployment planner", () => {
     }
   );
 
-  it("approves only an exact unmanaged copy during first takeover", () => {
+  it("adopts an exact unmanaged copy during takeover and later Apply", () => {
     const firstTakeover = plan({ inventory: [inventoryEntry()] });
     expect(firstTakeover.approvedUnmanagedSkills).toEqual([
       { path: "/home/.codex/skills/reviewer", contentHash: "library-hash" }
@@ -136,15 +134,20 @@ describe("skill deployment planner", () => {
       reason: "matching-unmanaged"
     });
 
-    const managedApply = plan({ inventory: [inventoryEntry()], takeover: false });
-    expect(managedApply.approvedUnmanagedSkills).toEqual([]);
-    expect(managedApply.decisions[0]).toMatchObject({ action: "block" });
+    const managedApply = plan({ inventory: [inventoryEntry()] });
+    expect(managedApply.approvedUnmanagedSkills).toEqual([
+      { path: "/home/.codex/skills/reviewer", contentHash: "library-hash" }
+    ]);
+    expect(managedApply.decisions[0]).toMatchObject({ action: "adopt" });
 
     const changed = plan({
       inventory: [inventoryEntry({ contentHash: "changed", contentMatchesLibrary: false })]
     });
     expect(changed.approvedUnmanagedSkills).toEqual([]);
-    expect(changed.decisions[0]).toMatchObject({ action: "block" });
+    expect(changed.decisions[0]).toMatchObject({ action: "replace" });
+    expect(reviewMessages(changed.issues)).toEqual([
+      expect.stringContaining("backed up and replaced")
+    ]);
   });
 
   it("uses a current Capture receipt as explicit takeover evidence", () => {
@@ -186,7 +189,7 @@ describe("skill deployment planner", () => {
       ]
     });
     expect(staleLibrary.approvedUnmanagedSkills).toEqual([]);
-    expect(staleLibrary.decisions[0]).toMatchObject({ action: "block" });
+    expect(staleLibrary.decisions[0]).toMatchObject({ action: "replace" });
   });
 
   it("defers deployment while an exact shared compatibility copy remains active", () => {
@@ -220,7 +223,7 @@ describe("skill deployment planner", () => {
       ]
     });
 
-    expect(result.errors).toEqual([]);
+    expect(blockingMessages(result.issues)).toEqual([]);
     expect(result.effectiveSkills).toHaveLength(1);
     expect(result.approvedUnmanagedSkills).toEqual([
       { path: "/home/.codex/skills/reviewer", contentHash: "library-hash" }
@@ -231,7 +234,6 @@ describe("skill deployment planner", () => {
 
   it("keeps an already managed dedicated copy stable while shared migration is pending", () => {
     const result = plan({
-      takeover: false,
       inventory: [
         inventoryEntry({
           path: "/home/.agents/skills/reviewer",
@@ -246,7 +248,7 @@ describe("skill deployment planner", () => {
       ]
     });
 
-    expect(result.errors).toEqual([]);
+    expect(blockingMessages(result.issues)).toEqual([]);
     expect(result.effectiveSkills).toHaveLength(1);
     expect(result.decisions[0]).toMatchObject({
       action: "preserve",
@@ -254,7 +256,7 @@ describe("skill deployment planner", () => {
     });
   });
 
-  it("blocks a changed dedicated copy before preparing shared migration", () => {
+  it("backs up a changed dedicated copy while preserving shared migration intent", () => {
     const result = plan({
       inventory: [
         inventoryEntry({
@@ -266,10 +268,11 @@ describe("skill deployment planner", () => {
       ]
     });
 
-    expect(result.sharedPreparations).toEqual([]);
+    expect(result.sharedPreparations).toHaveLength(1);
     expect(result.approvedUnmanagedSkills).toEqual([]);
-    expect(result.errors).toEqual([
-      expect.stringContaining("occupied by a non-AgentEnv Skill")
+    expect(blockingMessages(result.issues)).toEqual([]);
+    expect(reviewMessages(result.issues)).toEqual([
+      expect.stringContaining("backed up and replaced")
     ]);
   });
 

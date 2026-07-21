@@ -33,7 +33,7 @@ import { createTargetScope, type TargetScope } from "./targets/targetScope";
 import type {
   ActivationPreview,
   AdoptTargetChangesResult,
-  ApplyProfileOptions,
+  ApplyIssue,
   ApplyResult,
   BackupManifest,
   EffectiveProfilePayload,
@@ -80,6 +80,19 @@ import {
   fingerprintSkillInventory,
   type SkillDeploymentPlan
 } from "./skillDeploymentPlanner";
+import {
+  blockingApplyIssues,
+  createApplyIssue,
+  dedupeApplyIssues,
+  replaceableApplyPaths
+} from "./applyIssues";
+import {
+  desiredRuntimeSkills,
+  desiredSkillTargets,
+  findManagedDrift,
+  preservedUnmanagedSkillIssues,
+  validateRuntimeSkills
+} from "./applySkillIssues";
 
 export interface ActivationServiceOptions {
   paths: AgentEnvPaths;
@@ -91,17 +104,12 @@ export interface ActivationServiceOptions {
   skillLibraryStore?: SkillLibraryStore;
 }
 
-interface InternalApplyProfileOptions extends ApplyProfileOptions {
-  additionalBackupPaths?: string[];
-}
-
 export interface ActivationService {
   listTargetStates(): Promise<TargetManagementState[]>;
   previewProfile(profileId: string, targetId?: string): Promise<ActivationPreview>;
   applyProfile(
     profileId: string,
-    previewId: string,
-    options?: InternalApplyProfileOptions
+    previewId: string
   ): Promise<ApplyResult>;
   completeSharedSkillMigration(input: {
     skillKey: string;
@@ -151,8 +159,11 @@ const publicPreview = (preview: InternalActivationPreview): ActivationPreview =>
   } = preview;
   return {
     ...publicValue,
-    warnings: preview.warnings.map(redactSensitiveValues),
-    errors: preview.errors.map(redactSensitiveValues),
+    issues: preview.issues.map((issue) => ({
+      ...issue,
+      message: redactSensitiveValues(issue.message),
+      detail: issue.detail ? redactSensitiveValues(issue.detail) : undefined
+    })),
     changes: preview.changes.map((change) => {
       const before = redactSensitiveValues(change.before);
       const after = redactSensitiveValues(change.after);
@@ -338,13 +349,6 @@ const materializeManagedSkillLink = async (path: string) => {
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
-
-const MANAGED_DRIFT_PREFIX = "External changes detected in AgentEnv-managed";
-const UNMANAGED_SKILL_CONFLICT =
-  /^skill target already exists and is not AgentEnv-owned: (.+)$/i;
-
-const unmanagedSkillConflictPath = (error: string) =>
-  error.match(UNMANAGED_SKILL_CONFLICT)?.[1];
 
 const applyLibrarySkillAvailability = (
   profile: ProfileDetail,
@@ -596,169 +600,6 @@ export const createActivationService = ({
     );
   };
 
-  const desiredSkillTargets = (profile: Awaited<ReturnType<ProfileStore["readProfile"]>>) =>
-    new Set(
-      profile.resources.skills
-        .filter((skillRef) => skillRef.enabled)
-        .map((skillRef) => skillRef.targetName)
-    );
-
-  const desiredRuntimeSkills = async (
-    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    skillLibrary: SkillLibraryEntry[]
-  ) => {
-    const librarySkills = profile.resources.skills
-      .filter((reference) => reference.enabled)
-      .map((reference) => ({
-        runtimeName:
-          skillLibrary.find((skill) => skill.id === reference.libraryId)?.name ||
-          reference.targetName,
-        deploymentName: reference.targetName,
-        source: `Library / ${reference.libraryId}`
-      }));
-    return librarySkills;
-  };
-
-  const validateRuntimeSkills = async (
-    adapter: ReturnType<TargetRegistry["get"]>,
-    targetPaths: TargetPaths,
-    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    skillLibrary: SkillLibraryEntry[],
-    inventory: SkillInventoryEntry[]
-  ) => {
-    const nativeState = await adapter.skills.readNativeState(targetPaths);
-    const desired = await desiredRuntimeSkills(profile, skillLibrary);
-    const byRuntimeName = new Map<string, typeof desired>();
-    for (const item of desired) {
-      const key = normalizeSkillKey(item.runtimeName);
-      byRuntimeName.set(key, [...(byRuntimeName.get(key) ?? []), item]);
-    }
-    const errors = [...byRuntimeName.entries()].flatMap(([runtimeName, items]) =>
-      items.length > 1
-        ? [
-            `Profile declares runtime Skill name ${runtimeName} more than once (${items
-              .map((item) => item.source)
-              .join(", ")})`
-          ]
-        : []
-    );
-    const warnings = nativeState.issues
-      .filter((issue) => issue.severity !== "error")
-      .map((issue) => issue.message);
-    errors.push(
-      ...nativeState.issues
-        .filter((issue) => issue.severity === "error")
-        .map((issue) => issue.message)
-    );
-    const desiredNames = new Set(byRuntimeName.keys());
-    for (const runtimeName of nativeState.disabledRuntimeNames) {
-      if (desiredNames.has(normalizeSkillKey(runtimeName))) {
-        errors.push(
-          `${adapter.descriptor.name} has Skill ${runtimeName} disabled in native settings; enable it there before applying this Profile`
-        );
-      }
-    }
-    for (const [runtimeName, desiredItems] of byRuntimeName) {
-      if (desiredItems.length !== 1) continue;
-      const desiredItem = desiredItems[0];
-      const conflictingPaths = [...new Set(
-        inventory
-          .filter(
-            (item) =>
-              item.locationRole !== "discovery-only" &&
-              item.runtimeAvailability !== "disabled" &&
-              normalizeSkillKey(item.runtimeName ?? item.name) === runtimeName &&
-              normalizeSkillKey(item.deploymentName ?? item.id) !==
-                normalizeSkillKey(desiredItem.deploymentName) &&
-              !(item.status === "managed" && item.managedByTarget === true)
-          )
-          .map((item) => item.path)
-      )].sort((left, right) => left.localeCompare(right));
-      for (const path of conflictingPaths) {
-        errors.push(
-          `Cannot install runtime Skill ${desiredItem.runtimeName} as ${desiredItem.deploymentName} because an existing Agent Skill declares the same runtime name at ${path}`
-        );
-      }
-    }
-    return { errors: [...new Set(errors)], warnings: [...new Set(warnings)] };
-  };
-
-  const desiredManagedPaths = (
-    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    targetPaths: TargetPaths
-  ) => {
-    const desired = new Set<string>();
-    if (profileManagesResource(profile.resources, targetPaths.targetId, "instructions")) {
-      desired.add(targetPaths.instructionsPath);
-    }
-    if (
-      targetPaths.skillsDir &&
-      profileManagesResource(profile.resources, targetPaths.targetId, "skills")
-    ) {
-      for (const targetName of desiredSkillTargets(profile)) {
-        desired.add(join(targetPaths.skillsDir, targetName));
-      }
-    }
-    return desired;
-  };
-
-  const findManagedDrift = async (
-    state: TargetState,
-    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    targetPaths: TargetPaths,
-    affectedPaths?: ReadonlySet<string>
-  ) => {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-    const paths = new Set<string>();
-    const desired = desiredManagedPaths(profile, targetPaths);
-    for (const resource of state.managedResources ?? []) {
-      // Native configuration files have shared ownership. Adapters compare and
-      // patch only their managed fields, while Preview freshness protects the
-      // whole file between confirmation and Apply.
-      if (resource.kind === "config") continue;
-      if (affectedPaths && !affectedPaths.has(resource.path)) {
-        continue;
-      }
-      const currentHash = await hashPath(resource.path);
-      if (!currentHash) {
-        if (desired.has(resource.path)) {
-          warnings.push(`Will restore missing managed ${resource.kind} ${resource.id}: ${resource.path}`);
-        }
-        continue;
-      }
-      if (currentHash !== resource.contentHash) {
-        paths.add(resource.path);
-        errors.push(
-          `External changes detected in AgentEnv-managed ${resource.kind} ${resource.id}: ${resource.path}`
-        );
-      }
-    }
-    return { errors, warnings, paths };
-  };
-
-  const unmanagedSkillWarnings = async (
-    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    inventory: SkillInventoryEntry[]
-  ) => {
-    const desired = desiredSkillTargets(profile);
-    return inventory
-      .filter(
-        (skill) =>
-          (skill.status === "unmanaged" ||
-            skill.status === "ignored" ||
-            skill.status === "external") &&
-          !desired.has(skill.id)
-      )
-      .map((skill) =>
-        skill.status === "ignored"
-          ? `Ignored local skill kept: ${skill.path}`
-          : skill.status === "external"
-            ? `${skill.externalOwnership?.displayName ?? skill.externalOwnership?.manager ?? "Externally"}-managed skill kept: ${skill.path}`
-          : `Unmanaged local skill kept: ${skill.path}`
-      );
-  };
-
   const resourceKindForPath = (
     path: string,
     targetPaths: TargetPaths
@@ -956,22 +797,29 @@ export const createActivationService = ({
 
     return inventory
       .filter((skill) => skill.status === "ignored" && desiredSkillTargets.has(skill.id))
-      .map(
-        (skill) =>
-          `Cannot install ${skill.id} because an ignored unmanaged skill already exists at ${skill.path}`
-      );
+      .map((skill) => createApplyIssue({
+        code: "ignored-skill-conflict",
+        disposition: "block",
+        resolution: "edit-profile",
+        resourceKind: "skill",
+        resourceId: skill.runtimeName ?? skill.id,
+        path: skill.path,
+        message: `Cannot install ${skill.runtimeName ?? skill.id} because it is explicitly ignored`
+      }));
   };
 
   const resolveExternalSkills = async (
     profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
     inventory: SkillInventoryEntry[],
-    skillLibrary: SkillLibraryEntry[]
+    skillLibrary: SkillLibraryEntry[],
+    targetPaths: TargetPaths,
+    deferredSharedPaths: ReadonlySet<string>
   ) => {
     const references = profile.resources.skills.filter((reference) => reference.enabled);
     const disabledReferences = profile.resources.skills.filter((reference) => !reference.enabled);
     const desired = desiredSkillTargets(profile);
     const desiredRuntimeNames = new Set(
-      (await desiredRuntimeSkills(profile, skillLibrary)).map((item) =>
+      desiredRuntimeSkills(profile, skillLibrary).map((item) =>
         normalizeSkillKey(item.runtimeName)
       )
     );
@@ -1019,6 +867,64 @@ export const createActivationService = ({
           ) === normalizeSkillKey(skill.runtimeName ?? skill.name)
       );
     });
+    const conflictIssues = conflicts.map((skill) => {
+      const manager = skill.externalOwnership?.displayName ??
+        skill.externalOwnership?.manager ??
+        "another tool";
+      return createApplyIssue({
+        code: "external-skill-conflict",
+        disposition: "block",
+        resolution: "external-action",
+        resourceKind: "skill",
+        resourceId: skill.runtimeName ?? skill.id,
+        path: skill.path,
+        message:
+          skill.externalOwnership?.manager === "skills-cli"
+            ? `Cannot install ${skill.runtimeName ?? skill.id} because Skills CLI manages the existing Skill. Remove it from Skills CLI, then rescan.`
+            : `Cannot install ${skill.runtimeName ?? skill.id} because ${manager} manages the existing Skill. Disable or remove it from ${manager}, then rescan.`
+      });
+    });
+    const disabledIssues = disabledConflicts.flatMap((skill) => {
+      const path = resolve(skill.path);
+      const exactManagedDestination = disabledReferences.some(
+        (reference) =>
+          targetPaths.skillsDir &&
+          resolve(join(targetPaths.skillsDir, reference.targetName)) === path
+      );
+      if (
+        deferredSharedPaths.has(path) &&
+        skill.status !== "external" &&
+        skill.status !== "ignored"
+      ) {
+        return [];
+      }
+      const externallyControlled =
+        skill.status === "external" ||
+        skill.status === "ignored" ||
+        !exactManagedDestination;
+      return createApplyIssue({
+        code: externallyControlled ? "external-skill-conflict" : "unmanaged-skill-removal",
+        disposition: externallyControlled ? "block" : "review",
+        resolution: externallyControlled ? "external-action" : "backup-replace",
+        resourceKind: "skill",
+        resourceId: skill.runtimeName ?? skill.id,
+        path: skill.path,
+        message: externallyControlled
+          ? `Cannot turn off Skill ${skill.runtimeName ?? skill.id} because its active copy is outside this Agent's managed Skills directory or controlled by another manager`
+          : `Active unmanaged Skill ${skill.runtimeName ?? skill.id} will be backed up and removed`
+      });
+    });
+    const preservedIssues = external
+      .filter((skill) => !conflicts.includes(skill))
+      .map((skill) => createApplyIssue({
+        code: "external-skill-preserved",
+        disposition: "notice",
+        resolution: "preserve",
+        resourceKind: "skill",
+        resourceId: skill.runtimeName ?? skill.id,
+        path: skill.path,
+        message: `${skill.runtimeName ?? skill.id} is already provided by ${skill.externalOwnership?.displayName ?? skill.externalOwnership?.manager ?? "another tool"} with matching content and will be preserved`
+      }));
     return {
       profile: preservedReferences.size === 0
         ? profile
@@ -1032,29 +938,7 @@ export const createActivationService = ({
               )
             }
           },
-      errors: conflicts.map(
-        (skill) => {
-          const manager = skill.externalOwnership?.displayName ??
-            skill.externalOwnership?.manager ??
-            "another tool";
-          if (skill.externalOwnership?.manager === "skills-cli") {
-            return `Cannot install ${skill.id} because Skills CLI manages the existing Skill at ${skill.path}. Remove it from Skills CLI, then rescan before applying this Profile.`;
-          }
-          return `Cannot install ${skill.runtimeName ?? skill.id} because ${manager} manages the existing Skill at ${skill.path}. Disable or remove it from ${manager}, then rescan before applying this Profile.`;
-        }
-      ).concat(
-        disabledConflicts.map(
-          (skill) =>
-            `Cannot turn off Skill ${skill.runtimeName ?? skill.id} because an active copy remains outside AgentEnv ownership at ${skill.path}`
-        )
-      ),
-      warnings: external
-        .filter((skill) => !conflicts.includes(skill))
-        .map(
-          (skill) =>
-            `${skill.runtimeName ?? skill.id} is already provided by ${skill.externalOwnership?.displayName ?? skill.externalOwnership?.manager ?? "another tool"} with matching content and will be preserved`
-        ),
-      paths: new Set([...external, ...disabledConflicts].map((skill) => skill.path))
+      issues: dedupeApplyIssues([...conflictIssues, ...disabledIssues, ...preservedIssues])
     };
   };
 
@@ -1130,7 +1014,6 @@ export const createActivationService = ({
       profileHash: profileContentHash,
       skillLibrary,
       inventory,
-      takeover: isTakeover,
       captureReceipt
     });
     if (!managesSkills) {
@@ -1144,12 +1027,16 @@ export const createActivationService = ({
       }
     };
     const externallyResolved = managesSkills
-      ? await resolveExternalSkills(deploymentProfile, inventory, skillLibrary)
+      ? await resolveExternalSkills(
+          deploymentProfile,
+          inventory,
+          skillLibrary,
+          targetPaths,
+          new Set(skillDeploymentPlan.sharedPaths.map((path) => resolve(path)))
+        )
       : {
           profile: deploymentProfile,
-          errors: [] as string[],
-          warnings: [] as string[],
-          paths: new Set<string>()
+          issues: [] as ApplyIssue[]
         };
     const materializedProfile = externallyResolved.profile;
     const approvedUnmanagedSkillHashes = new Map(
@@ -1166,7 +1053,7 @@ export const createActivationService = ({
           skillLibrary,
           inventory
         )
-      : { errors: [] as string[], warnings: [] as string[] };
+      : [];
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
     const targetPreview = await adapter.createPreview({
@@ -1178,14 +1065,27 @@ export const createActivationService = ({
       approvedUnmanagedSkillHashes,
       isolateSkillRoot: Boolean(skillRootTransition)
     });
-    const profileErrors: string[] =
+    const profileIssues: ApplyIssue[] =
       skillRootInspection?.kind === "invalid"
-        ? [skillRootInspection.error]
+        ? [createApplyIssue({
+            code: "invalid-skill-root",
+            disposition: "block",
+            resolution: "external-action",
+            resourceKind: "skills-root",
+            path: targetPaths.skillsDir,
+            message: skillRootInspection.error
+          })]
         : [];
-    const recoveryErrors = stateFile.state.recoveryRequired
-      ? [
-          `${adapter.descriptor.name} requires recovery before another Apply: ${stateFile.state.recoveryRequired.error}`
-        ]
+    const recoveryIssues: ApplyIssue[] = stateFile.state.recoveryRequired
+      ? [createApplyIssue({
+          code: "recovery-required",
+          disposition: "block",
+          resolution: "open-recovery",
+          resourceKind: "target",
+          resourceId: adapter.descriptor.id,
+          message: `${adapter.descriptor.name} requires recovery before another Apply`,
+          detail: stateFile.state.recoveryRequired.error
+        })]
       : [];
     const assetBackupPaths = await adapter.getAssetBackupPaths({
       profile: materializedProfile,
@@ -1231,34 +1131,65 @@ export const createActivationService = ({
       ...targetPreview.changes.map((change) => change.path),
       ...assetBackupPaths
     ]);
-    const drift = await findManagedDrift(
-      stateFile.state,
-      materializedProfile,
+    const drift = await findManagedDrift({
+      state: stateFile.state,
+      profile: materializedProfile,
       targetPaths,
-      affectedManagedPaths
-    );
-    const assetErrors = await adapter.validateAssets({
+      hashPath,
+      affectedPaths: affectedManagedPaths,
+      automaticallyAdoptablePaths: new Set(approvedUnmanagedSkillHashes.keys())
+    });
+    const unmanagedIssues = managesSkills
+      ? preservedUnmanagedSkillIssues(materializedProfile, inventory)
+      : [];
+    const ignoredIssues = managesSkills
+      ? await ignoredSkillConflicts(materializedProfile, inventory)
+      : [];
+    const rootTransitionIssues: ApplyIssue[] = skillRootTransition
+      ? [createApplyIssue({
+          code: "skill-root-isolation",
+          disposition: "review",
+          resolution: "backup-replace",
+          resourceKind: "skills-root",
+          resourceId: adapter.descriptor.id,
+          path: skillRootTransition.path,
+          message: `${adapter.descriptor.name} Skills root link will be backed up and replaced with a private directory`,
+          detail: skillRootTransition.resolvedPath
+            ? `Current destination: ${skillRootTransition.resolvedPath}`
+            : `Current link: ${skillRootTransition.linkTarget}`
+        })]
+      : [];
+    const disabledLibraryIssues = disabledLibrarySkills.map((id) => createApplyIssue({
+      code: "globally-disabled-skill",
+      disposition: "notice",
+      resolution: "automatic",
+      resourceKind: "skill",
+      resourceId: id,
+      message: `Library Skill ${id} is globally disabled and will not be applied`
+    }));
+    const preAssetIssues = dedupeApplyIssues([
+      ...targetPreview.issues,
+      ...recoveryIssues,
+      ...profileIssues,
+      ...drift.issues,
+      ...ignoredIssues,
+      ...externallyResolved.issues,
+      ...skillDeploymentPlan.issues,
+      ...runtimeValidation,
+      ...unmanagedIssues,
+      ...rootTransitionIssues,
+      ...disabledLibraryIssues
+    ]);
+    const replaceablePaths = replaceableApplyPaths(preAssetIssues);
+    const assetIssues = await adapter.validateAssets({
       profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
       skillSyncMethod: settings.skillSyncMethod,
       approvedUnmanagedSkillHashes,
-      replaceablePaths: drift.paths,
+      replaceablePaths,
       isolateSkillRoot: Boolean(skillRootTransition)
     });
-    const unmanagedWarnings = managesSkills
-      ? await unmanagedSkillWarnings(materializedProfile, inventory)
-      : [];
-    const ignoredErrors = managesSkills
-      ? await ignoredSkillConflicts(materializedProfile, inventory)
-      : [];
-    const withoutGenericExternalConflicts = (errors: string[]) =>
-      errors.filter(
-        (error) =>
-          ![...externallyResolved.paths].some(
-            (path) => error.includes(path) && error.includes("not AgentEnv-owned")
-          )
-      );
     const assetPlan = await planAssetResources(
       materializedProfile,
       targetPaths,
@@ -1271,23 +1202,7 @@ export const createActivationService = ({
         skillDeploymentPlan.sharedPaths.map(async (path) => [path, (await hashPath(path)) ?? ""])
       )
     );
-    const previewErrors = withoutGenericExternalConflicts(targetPreview.errors).concat(
-      recoveryErrors,
-      profileErrors,
-      withoutGenericExternalConflicts(assetErrors),
-      drift.errors,
-      ignoredErrors,
-      externallyResolved.errors,
-      skillDeploymentPlan.errors,
-      runtimeValidation.errors
-    );
-    const replaceableTargetPaths = [
-      ...new Set(
-        previewErrors
-          .map(unmanagedSkillConflictPath)
-          .filter((path): path is string => Boolean(path))
-      )
-    ];
+    const issues = dedupeApplyIssues([...preAssetIssues, ...assetIssues]);
     const preview: InternalActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
@@ -1295,23 +1210,7 @@ export const createActivationService = ({
       libraryVersions: collectLibraryResourceVersions(profile, skillLibrary, targetId),
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
-      warnings: [
-        ...disabledLibrarySkills.map(
-          (id) => `Library Skill ${id} is globally disabled and will not be applied`
-        ),
-        ...targetPreview.warnings,
-        ...runtimeValidation.warnings,
-        ...drift.warnings,
-        ...unmanagedWarnings,
-        ...skillDeploymentPlan.warnings,
-        ...externallyResolved.warnings,
-        ...(skillRootTransition
-          ? [
-              `${adapter.descriptor.name} Skills folder is linked to ${skillRootTransition.resolvedPath}. Apply will preserve that directory and replace only the Agent root link with a private Skills folder.`
-            ]
-          : [])
-      ],
-      errors: previewErrors,
+      issues,
       changes: targetPreview.changes.map((change) => ({
         ...change,
         category:
@@ -1331,7 +1230,6 @@ export const createActivationService = ({
           source: "Keep current content and pause Profile management"
         }))
       ),
-      replaceableTargetPaths,
       liveFingerprints: {
         ...targetPreview.liveFingerprints,
         [stateFile.path]: hashText(stateFile.content)
@@ -1374,32 +1272,28 @@ export const createActivationService = ({
 
   const applyProfile = async (
     profileId: string,
-    previewId: string,
-    options: InternalApplyProfileOptions = {}
+    previewId: string
   ): Promise<ApplyResult> => {
     const preview = previews.get(previewId);
     if (!preview || preview.profileId !== profileId) {
-      return { ok: false, errors: ["Preview not found for profile"] };
+      return { ok: false, kind: "stale", errors: ["Preview not found for profile"] };
     }
     try {
       await targetScope.assertEnabled(preview.targetId);
     } catch (error) {
-      return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+      return {
+        ok: false,
+        kind: "blocked",
+        errors: [error instanceof Error ? error.message : String(error)]
+      };
     }
-    const replaceableTargetPaths = new Set(preview.replaceableTargetPaths ?? []);
-    const blockingErrors = preview.errors.filter((error) => {
-      if (options.allowManagedDrift && error.startsWith(MANAGED_DRIFT_PREFIX)) {
-        return false;
-      }
-      const path = unmanagedSkillConflictPath(error);
-      return !(
-        options.allowUnmanagedSkillReplacement &&
-        path &&
-        replaceableTargetPaths.has(path)
-      );
-    });
-    if (blockingErrors.length > 0) {
-      return { ok: false, errors: blockingErrors };
+    const blockingIssues = blockingApplyIssues(preview.issues);
+    if (blockingIssues.length > 0) {
+      return {
+        ok: false,
+        kind: "blocked",
+        errors: blockingIssues.map((issue) => issue.message)
+      };
     }
     if (
       preview.operation !== "takeover" &&
@@ -1408,337 +1302,389 @@ export const createActivationService = ({
       !preview.sharedSkillPreparationChanged &&
       !preview.targetStateChanged
     ) {
-      return { ok: false, errors: ["No changes to apply"] };
+      return { ok: false, kind: "no-op", errors: ["No changes to apply"] };
     }
     if (activeTargetOperations.has(preview.targetId)) {
-      return { ok: false, errors: [`Another operation is already running for ${preview.targetId}`] };
+      return {
+        ok: false,
+        kind: "busy",
+        errors: [`Another operation is already running for ${preview.targetId}`]
+      };
     }
     activeTargetOperations.add(preview.targetId);
 
     try {
-    const sourceProfile = await profileStore.readProfile(profileId);
-    const adapter = targetRegistry.get(preview.targetId);
-    const settings = await settingsStore.readSettings();
-    const currentSkillLibraryDir = resolveSkillsLibraryDir(paths, settings);
-    if (
-      currentSkillLibraryDir !== preview.skillDeployment.skillLibraryDir ||
-      settings.skillSyncMethod !== preview.skillDeployment.skillSyncMethod
-    ) {
-      return {
-        ok: false,
-        errors: ["Skill deployment settings changed after preview; review the latest version"]
-      };
-    }
-    const skillLibrary = await skillLibraryStore.listSkills();
-    const profile = applyLibrarySkillAvailability(
-      sourceProfile,
-      skillLibrary
-    );
-    const currentProfileHash =
-      sourceProfile.targetContentHashes?.[preview.targetId] ??
-      createProfileContentHash(sourceProfile, preview.targetId);
-    if (currentProfileHash !== preview.profileContentHash) {
-      return { ok: false, errors: ["Profile changed after preview; review the latest version"] };
-    }
-    const currentLibraryVersions = collectLibraryResourceVersions(
-      profile,
-      skillLibrary,
-      preview.targetId
-    );
-    if (!libraryResourceVersionsEqual(currentLibraryVersions, preview.libraryVersions)) {
-      return { ok: false, errors: ["Library resources changed after preview; review the latest versions"] };
-    }
-    if (
-      JSON.stringify(profile.resources.skills) !==
-      JSON.stringify(preview.skillDeployment.sourceSkills)
-    ) {
-      return {
-        ok: false,
-        errors: ["Library Skill availability changed after preview; review the latest version"]
-      };
-    }
-    const targetPaths = adapter.createTargetPaths({
-      homeDir: paths.homeDir,
-      fakeHomeRoot: paths.fakeHomeRoot
-    });
-    const currentSkillRoot = preview.resourceManagement.skills
-      ? await inspectSkillRoot(targetPaths.skillsDir)
-      : undefined;
-    if (
-      currentSkillRoot &&
-      !preview.skillRootTransition &&
-      (currentSkillRoot.kind === "symlink" || currentSkillRoot.kind === "invalid")
-    ) {
-      return { ok: false, errors: ["Skills root changed after preview; review the latest version"] };
-    }
-    const inventoryTargetPaths = preview.skillRootTransition
-      ? {
-          ...targetPaths,
-          skillsDir: undefined,
-          skillScanDirs: (targetPaths.skillScanDirs ?? []).filter(
-            (path) => resolve(path) !== resolve(targetPaths.skillsDir ?? "")
-          )
-        }
-      : targetPaths;
-    const inventory = preview.resourceManagement.skills
-      ? await skillLibraryStore.scanInventory([inventoryTargetPaths], skillLibrary)
-      : [];
-    if (
-      fingerprintSkillInventory(inventory) !==
-      preview.skillDeployment.inventoryFingerprint
-    ) {
-      return {
-        ok: false,
-        errors: ["Skill environment changed after preview; review the latest version"]
-      };
-    }
-    const materializedProfile = preview.skillDeployment.profile;
-    const skillLibraryDir = preview.skillDeployment.skillLibraryDir;
-    const isTakeover = preview.operation === "takeover";
-    const approvedUnmanagedSkillHashes = new Map(
-      preview.skillDeployment.plan.approvedUnmanagedSkills.map((skill) => [
-        skill.path,
-        skill.contentHash
-      ])
-    );
-    const runtimeValidation = preview.resourceManagement.skills
-      ? await validateRuntimeSkills(
-          adapter,
-          targetPaths,
-          materializedProfile,
-          skillLibrary,
-          inventory
-        )
-      : { errors: [] as string[], warnings: [] as string[] };
-    if (runtimeValidation.errors.length > 0) {
-      return { ok: false, errors: runtimeValidation.errors };
-    }
-    if (
-      !allowRealHomeWrites &&
-      !adapter.descriptor.realWritesEnabled &&
-      resolve(paths.fakeHomeRoot) === resolve(paths.homeDir)
-    ) {
-      return {
-        ok: false,
-        errors: [`Real ${adapter.descriptor.name} writes are disabled`]
-      };
-    }
-
-    for (const [path, fingerprint] of Object.entries(preview.liveFingerprints)) {
-      const current = await readTextIfExists(path);
-      if (hashText(current) !== fingerprint) {
-        return { ok: false, errors: [`Live file changed after preview: ${path}`] };
-      }
-    }
-    for (const [path, fingerprint] of Object.entries(preview.resourceFingerprints)) {
-      const current = (await hashPath(path)) ?? "";
-      if (current !== fingerprint) {
-        return { ok: false, errors: [`Live resource changed after preview: ${path}`] };
-      }
-    }
-    for (const [path, fingerprint] of Object.entries(preview.sourceFingerprints)) {
-      const current = (await hashPath(path)) ?? "";
-      if (current !== fingerprint) {
-        return { ok: false, errors: [`Resource source changed after preview: ${path}`] };
-      }
-    }
-
-    const statePath = statePathFor(preview.targetId);
-    const assetBackupPaths = await adapter.getAssetBackupPaths({
-      profile: materializedProfile,
-      targetPaths,
-      skillLibraryDir,
-      skillSyncMethod: preview.skillDeployment.skillSyncMethod,
-      approvedUnmanagedSkillHashes,
-      isolateSkillRoot: Boolean(preview.skillRootTransition)
-    });
-    if (preview.skillRootTransition) {
-      assetBackupPaths.push(preview.skillRootTransition.path);
-    }
-    assetBackupPaths.push(...(preview.legacySkillPaths ?? []));
-    assetBackupPaths.push(
-      ...preview.resourceManagement.pausedSkillPaths.flatMap((path) => [
-        path,
-        markerPathForFile(path)
-      ])
-    );
-    const affectedManagedPaths = new Set([
-      ...preview.changes.map((change) => change.path),
-      ...assetBackupPaths
-    ]);
-    const currentStateFile = await readTargetStateFile(preview.targetId);
-    const currentDrift = await findManagedDrift(
-      currentStateFile.state,
-      materializedProfile,
-      targetPaths,
-      affectedManagedPaths
-    );
-    const replaceablePaths = new Set<string>([
-      ...(options.allowManagedDrift ? currentDrift.paths : []),
-      ...(options.allowUnmanagedSkillReplacement ? replaceableTargetPaths : [])
-    ]);
-
-    const assetErrors = await adapter.validateAssets({
-      profile: materializedProfile,
-      targetPaths,
-      skillLibraryDir,
-      skillSyncMethod: preview.skillDeployment.skillSyncMethod,
-      approvedUnmanagedSkillHashes,
-      replaceablePaths,
-      isolateSkillRoot: Boolean(preview.skillRootTransition)
-    });
-    if (assetErrors.length > 0) {
-      return { ok: false, errors: assetErrors };
-    }
-
-    const backup = await backupStore.createBackup(
-      [...new Set([
-        ...preview.changes.map((change) => change.path),
-        ...assetBackupPaths,
-        ...(options.additionalBackupPaths ?? []),
-        statePath
-      ])],
-      {
-        operation: "apply",
-        targetId: preview.targetId,
-        profileId: profile.id,
-        profileName: profile.manifest.name
-      }
-    );
-
-    const preOperationState = (await readTargetStateFile(preview.targetId)).state;
-    await writeTargetState(preview.targetId, {
-      ...preOperationState,
-      recoveryRequired: {
-        operation: "apply",
-        error: "Profile Apply was interrupted before completion",
-        backupId: backup.id,
-        occurredAt: new Date().toISOString()
-      }
-    });
-
-    try {
-      for (const change of preview.changes) {
-        await writeAtomic(change.path, change.after);
-      }
-
-      if (preview.skillRootTransition) {
-        await isolateSkillRoot(preview.skillRootTransition);
-      }
-      for (const path of preview.resourceManagement.pausedSkillPaths) {
-        await materializeManagedSkillLink(path);
-      }
-      if (preview.resourceChanges.length > 0) {
-        await adapter.applyAssets({
-          profile: materializedProfile,
-          targetPaths,
-          skillLibraryDir,
-          skillSyncMethod: preview.skillDeployment.skillSyncMethod,
-          approvedUnmanagedSkillHashes,
-          replaceablePaths,
-          isolateSkillRoot: Boolean(preview.skillRootTransition)
-        });
-      }
-      for (const legacyPath of preview.legacySkillPaths ?? []) {
-        await removeSkillDeployment(legacyPath);
-        if (await pathEntryExists(legacyPath)) {
-          throw new Error(`Post-apply verification failed for legacy Skill ${legacyPath}`);
-        }
-      }
-      if (preview.skillRootTransition) {
-        const isolatedRoot = await inspectSkillRoot(preview.skillRootTransition.path);
-        if (isolatedRoot.kind !== "directory") {
-          throw new Error(
-            `Post-apply verification failed for Skills root ${preview.skillRootTransition.path}`
-          );
-        }
-      }
-      const managedAssetPaths = preview.skillRootTransition
-        ? [...desiredAssetResources(materializedProfile, targetPaths, skillLibraryDir).keys()]
-        : assetBackupPaths.filter(
-            (path) =>
-              !preview.resourceManagement.pausedSkillPaths.some(
-                (skillPath) => path === markerPathForFile(skillPath)
-              )
-          );
-      const refreshedManagedResources = await snapshotManagedResources(
-        [...preview.changes.map((change) => change.path), ...managedAssetPaths],
-        targetPaths
-      );
-      const retainedManagedResources = (preOperationState.managedResources ?? [])
-        .filter(
-          (resource) =>
-            (!preview.resourceManagement.instructions && resource.kind === "instructions") ||
-            (!preview.resourceManagement.skills && resource.kind === "skill")
-        )
-        .map((resource) => ({ ...resource, paused: true }));
-      const managedResources = [...refreshedManagedResources, ...retainedManagedResources]
-        .filter(
-          (resource, index, resources) =>
-            resources.findIndex((candidate) => candidate.path === resource.path) === index
-        )
-        .sort((left, right) => left.path.localeCompare(right.path));
-      for (const resource of refreshedManagedResources) {
-        if ((await hashPath(resource.path)) !== resource.contentHash) {
-          throw new Error(`Post-apply verification failed for ${resource.path}`);
-        }
-      }
-      await writeTargetState(preview.targetId, {
-        ...preview.targetState,
-        activeProfileId: profile.id,
-        appliedProfileHash: currentProfileHash,
-        appliedLibraryVersions: currentLibraryVersions,
-        lastAppliedAt: new Date().toISOString(),
-        managedResources,
-        sharedSkillPreparations: preview.skillDeployment.plan.sharedPreparations,
-        recoveryRequired: undefined
-      });
-    } catch (error) {
-      try {
-        await restoreBackupSafely(backup);
-      } catch (restoreError) {
-        const recoveryError = `Apply failed: ${errorMessage(error)}; automatic restore failed: ${errorMessage(restoreError)}`;
-        try {
-          const currentState = (await readTargetStateFile(preview.targetId)).state;
-          await writeTargetState(preview.targetId, {
-            ...currentState,
-            recoveryRequired: {
-              operation: "apply",
-              error: recoveryError,
-              backupId: backup.id,
-              occurredAt: new Date().toISOString()
-            }
-          });
-        } catch {
-          // The returned error still identifies the backup when state persistence also fails.
-        }
+      const sourceProfile = await profileStore.readProfile(profileId);
+      const adapter = targetRegistry.get(preview.targetId);
+      const settings = await settingsStore.readSettings();
+      const currentSkillLibraryDir = resolveSkillsLibraryDir(paths, settings);
+      if (
+        currentSkillLibraryDir !== preview.skillDeployment.skillLibraryDir ||
+        settings.skillSyncMethod !== preview.skillDeployment.skillSyncMethod
+      ) {
         return {
           ok: false,
-          errors: [
-            `Recovery required for backup ${backup.id}: ${recoveryError}`
-          ]
+          kind: "stale",
+          errors: ["Skill deployment settings changed after preview; review the latest version"]
+        };
+      }
+      const skillLibrary = await skillLibraryStore.listSkills();
+      const profile = applyLibrarySkillAvailability(
+        sourceProfile,
+        skillLibrary
+      );
+      const currentProfileHash =
+        sourceProfile.targetContentHashes?.[preview.targetId] ??
+        createProfileContentHash(sourceProfile, preview.targetId);
+      if (currentProfileHash !== preview.profileContentHash) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: ["Profile changed after preview; review the latest version"]
+        };
+      }
+      const currentLibraryVersions = collectLibraryResourceVersions(
+        profile,
+        skillLibrary,
+        preview.targetId
+      );
+      if (!libraryResourceVersionsEqual(currentLibraryVersions, preview.libraryVersions)) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: ["Library resources changed after preview; review the latest versions"]
+        };
+      }
+      if (
+        JSON.stringify(profile.resources.skills) !==
+        JSON.stringify(preview.skillDeployment.sourceSkills)
+      ) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: ["Library Skill availability changed after preview; review the latest version"]
+        };
+      }
+      const targetPaths = adapter.createTargetPaths({
+        homeDir: paths.homeDir,
+        fakeHomeRoot: paths.fakeHomeRoot
+      });
+      const currentSkillRoot = preview.resourceManagement.skills
+        ? await inspectSkillRoot(targetPaths.skillsDir)
+        : undefined;
+      if (
+        currentSkillRoot &&
+        !preview.skillRootTransition &&
+        (currentSkillRoot.kind === "symlink" || currentSkillRoot.kind === "invalid")
+      ) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: ["Skills root changed after preview; review the latest version"]
+        };
+      }
+      const inventoryTargetPaths = preview.skillRootTransition
+        ? {
+            ...targetPaths,
+            skillsDir: undefined,
+            skillScanDirs: (targetPaths.skillScanDirs ?? []).filter(
+              (path) => resolve(path) !== resolve(targetPaths.skillsDir ?? "")
+            )
+          }
+        : targetPaths;
+      const inventory = preview.resourceManagement.skills
+        ? await skillLibraryStore.scanInventory([inventoryTargetPaths], skillLibrary)
+        : [];
+      if (
+        fingerprintSkillInventory(inventory) !==
+        preview.skillDeployment.inventoryFingerprint
+      ) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: ["Skill environment changed after preview; review the latest version"]
+        };
+      }
+      const materializedProfile = preview.skillDeployment.profile;
+      const skillLibraryDir = preview.skillDeployment.skillLibraryDir;
+      const isTakeover = preview.operation === "takeover";
+      const approvedUnmanagedSkillHashes = new Map(
+        preview.skillDeployment.plan.approvedUnmanagedSkills.map((skill) => [
+          skill.path,
+          skill.contentHash
+        ])
+      );
+      const runtimeValidation = preview.resourceManagement.skills
+        ? await validateRuntimeSkills(
+            adapter,
+            targetPaths,
+            materializedProfile,
+            skillLibrary,
+            inventory
+          )
+        : [];
+      const runtimeBlockers = blockingApplyIssues(runtimeValidation);
+      if (runtimeBlockers.length > 0) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: runtimeBlockers.map((issue) => issue.message)
+        };
+      }
+      if (
+        !allowRealHomeWrites &&
+        !adapter.descriptor.realWritesEnabled &&
+        resolve(paths.fakeHomeRoot) === resolve(paths.homeDir)
+      ) {
+        return {
+          ok: false,
+          kind: "blocked",
+          errors: [`Real ${adapter.descriptor.name} writes are disabled`]
         };
       }
 
-      return {
-        ok: false,
-        errors: [`Failed to apply profile; restored backup: ${errorMessage(error)}`]
-      };
-    }
+      for (const [path, fingerprint] of Object.entries(preview.liveFingerprints)) {
+        const current = await readTextIfExists(path);
+        if (hashText(current) !== fingerprint) {
+          return {
+            ok: false,
+            kind: "stale",
+            errors: [`Live file changed after preview: ${path}`]
+          };
+        }
+      }
+      for (const [path, fingerprint] of Object.entries(preview.resourceFingerprints)) {
+        const current = (await hashPath(path)) ?? "";
+        if (current !== fingerprint) {
+          return {
+            ok: false,
+            kind: "stale",
+            errors: [`Live resource changed after preview: ${path}`]
+          };
+        }
+      }
+      for (const [path, fingerprint] of Object.entries(preview.sourceFingerprints)) {
+        const current = (await hashPath(path)) ?? "";
+        if (current !== fingerprint) {
+          return {
+            ok: false,
+            kind: "stale",
+            errors: [`Resource source changed after preview: ${path}`]
+          };
+        }
+      }
 
-    await appendHistory(paths, {
-      type: "apply",
-      profileId,
-      targetId: preview.targetId,
-      previewId,
-      backupId: backup.id
-    });
-    if (isTakeover) {
-      await captureReceiptStore.remove(profile.id, preview.targetId).catch(() => undefined);
-    }
-    previews.delete(previewId);
+      const statePath = statePathFor(preview.targetId);
+      const assetBackupPaths = await adapter.getAssetBackupPaths({
+        profile: materializedProfile,
+        targetPaths,
+        skillLibraryDir,
+        skillSyncMethod: preview.skillDeployment.skillSyncMethod,
+        approvedUnmanagedSkillHashes,
+        isolateSkillRoot: Boolean(preview.skillRootTransition)
+      });
+      if (preview.skillRootTransition) {
+        assetBackupPaths.push(preview.skillRootTransition.path);
+      }
+      assetBackupPaths.push(...(preview.legacySkillPaths ?? []));
+      assetBackupPaths.push(
+        ...preview.resourceManagement.pausedSkillPaths.flatMap((path) => [
+          path,
+          markerPathForFile(path)
+        ])
+      );
+      const affectedManagedPaths = new Set([
+        ...preview.changes.map((change) => change.path),
+        ...assetBackupPaths
+      ]);
+      const currentStateFile = await readTargetStateFile(preview.targetId);
+      const currentDrift = await findManagedDrift({
+        state: currentStateFile.state,
+        profile: materializedProfile,
+        targetPaths,
+        hashPath,
+        affectedPaths: affectedManagedPaths,
+        automaticallyAdoptablePaths: new Set(approvedUnmanagedSkillHashes.keys())
+      });
+      const replaceablePaths = replaceableApplyPaths(preview.issues);
+      const unreviewedDrift = currentDrift.issues.filter(
+        (issue) => issue.path && !replaceablePaths.has(issue.path)
+      );
+      if (unreviewedDrift.length > 0) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: unreviewedDrift.map((issue) => issue.message)
+        };
+      }
 
-    return { ok: true, backupId: backup.id };
+      const assetIssues = await adapter.validateAssets({
+        profile: materializedProfile,
+        targetPaths,
+        skillLibraryDir,
+        skillSyncMethod: preview.skillDeployment.skillSyncMethod,
+        approvedUnmanagedSkillHashes,
+        replaceablePaths,
+        isolateSkillRoot: Boolean(preview.skillRootTransition)
+      });
+      const assetBlockers = blockingApplyIssues(assetIssues);
+      if (assetBlockers.length > 0) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: assetBlockers.map((issue) => issue.message)
+        };
+      }
+
+      const backup = await backupStore.createBackup(
+        [...new Set([
+          ...preview.changes.map((change) => change.path),
+          ...assetBackupPaths,
+          statePath
+        ])],
+        {
+          operation: "apply",
+          targetId: preview.targetId,
+          profileId: profile.id,
+          profileName: profile.manifest.name
+        }
+      );
+
+      const preOperationState = (await readTargetStateFile(preview.targetId)).state;
+      await writeTargetState(preview.targetId, {
+        ...preOperationState,
+        recoveryRequired: {
+          operation: "apply",
+          error: "Profile Apply was interrupted before completion",
+          backupId: backup.id,
+          occurredAt: new Date().toISOString()
+        }
+      });
+
+      try {
+        for (const change of preview.changes) {
+          await writeAtomic(change.path, change.after);
+        }
+
+        if (preview.skillRootTransition) {
+          await isolateSkillRoot(preview.skillRootTransition);
+        }
+        for (const path of preview.resourceManagement.pausedSkillPaths) {
+          await materializeManagedSkillLink(path);
+        }
+        if (preview.resourceChanges.length > 0) {
+          await adapter.applyAssets({
+            profile: materializedProfile,
+            targetPaths,
+            skillLibraryDir,
+            skillSyncMethod: preview.skillDeployment.skillSyncMethod,
+            approvedUnmanagedSkillHashes,
+            replaceablePaths,
+            isolateSkillRoot: Boolean(preview.skillRootTransition)
+          });
+        }
+        for (const legacyPath of preview.legacySkillPaths ?? []) {
+          await removeSkillDeployment(legacyPath);
+          if (await pathEntryExists(legacyPath)) {
+            throw new Error(`Post-apply verification failed for legacy Skill ${legacyPath}`);
+          }
+        }
+        if (preview.skillRootTransition) {
+          const isolatedRoot = await inspectSkillRoot(preview.skillRootTransition.path);
+          if (isolatedRoot.kind !== "directory") {
+            throw new Error(
+              `Post-apply verification failed for Skills root ${preview.skillRootTransition.path}`
+            );
+          }
+        }
+        const managedAssetPaths = preview.skillRootTransition
+          ? [...desiredAssetResources(materializedProfile, targetPaths, skillLibraryDir).keys()]
+          : assetBackupPaths.filter(
+              (path) =>
+                !preview.resourceManagement.pausedSkillPaths.some(
+                  (skillPath) => path === markerPathForFile(skillPath)
+                )
+            );
+        const refreshedManagedResources = await snapshotManagedResources(
+          [...preview.changes.map((change) => change.path), ...managedAssetPaths],
+          targetPaths
+        );
+        const retainedManagedResources = (preOperationState.managedResources ?? [])
+          .filter(
+            (resource) =>
+              (!preview.resourceManagement.instructions && resource.kind === "instructions") ||
+              (!preview.resourceManagement.skills && resource.kind === "skill")
+          )
+          .map((resource) => ({ ...resource, paused: true }));
+        const managedResources = [...refreshedManagedResources, ...retainedManagedResources]
+          .filter(
+            (resource, index, resources) =>
+              resources.findIndex((candidate) => candidate.path === resource.path) === index
+          )
+          .sort((left, right) => left.path.localeCompare(right.path));
+        for (const resource of refreshedManagedResources) {
+          if ((await hashPath(resource.path)) !== resource.contentHash) {
+            throw new Error(`Post-apply verification failed for ${resource.path}`);
+          }
+        }
+        await writeTargetState(preview.targetId, {
+          ...preview.targetState,
+          activeProfileId: profile.id,
+          appliedProfileHash: currentProfileHash,
+          appliedLibraryVersions: currentLibraryVersions,
+          lastAppliedAt: new Date().toISOString(),
+          managedResources,
+          sharedSkillPreparations: preview.skillDeployment.plan.sharedPreparations,
+          recoveryRequired: undefined
+        });
+      } catch (error) {
+        try {
+          await restoreBackupSafely(backup);
+        } catch (restoreError) {
+          const recoveryError = `Apply failed: ${errorMessage(error)}; automatic restore failed: ${errorMessage(restoreError)}`;
+          try {
+            const currentState = (await readTargetStateFile(preview.targetId)).state;
+            await writeTargetState(preview.targetId, {
+              ...currentState,
+              recoveryRequired: {
+                operation: "apply",
+                error: recoveryError,
+                backupId: backup.id,
+                occurredAt: new Date().toISOString()
+              }
+            });
+          } catch {
+            // The returned error still identifies the backup when state persistence also fails.
+          }
+          return {
+            ok: false,
+            kind: "recovery-required",
+            errors: [
+              `Recovery required for backup ${backup.id}: ${recoveryError}`
+            ]
+          };
+        }
+
+        return {
+          ok: false,
+          kind: "failed",
+          errors: [`Failed to apply profile; restored backup: ${errorMessage(error)}`]
+        };
+      }
+
+      await appendHistory(paths, {
+        type: "apply",
+        profileId,
+        targetId: preview.targetId,
+        previewId,
+        backupId: backup.id
+      });
+      if (isTakeover) {
+        await captureReceiptStore.remove(profile.id, preview.targetId).catch(() => undefined);
+      }
+      previews.delete(previewId);
+
+      return { ok: true, backupId: backup.id };
     } finally {
       activeTargetOperations.delete(preview.targetId);
     }

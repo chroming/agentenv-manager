@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import type { ProfileSkill } from "../shared/schemas";
 import { profileManagesResource } from "../shared/profileResources";
 import type {
+  ApplyIssue,
   ProfileDetail,
   SharedSkillPreparation,
   SkillInventoryEntry,
@@ -10,6 +11,7 @@ import type {
   TargetPaths
 } from "../shared/types";
 import type { CaptureReceipt } from "./captureReceiptStore";
+import { createApplyIssue, dedupeApplyIssues } from "./applyIssues";
 
 export type SkillDeploymentDecisionAction =
   | "install"
@@ -41,8 +43,7 @@ export interface SkillDeploymentPlan {
   decisions: SkillDeploymentDecision[];
   sharedPreparations: SharedSkillPreparation[];
   sharedPaths: string[];
-  errors: string[];
-  warnings: string[];
+  issues: ApplyIssue[];
 }
 
 export interface SkillDeploymentPlanInput {
@@ -51,7 +52,6 @@ export interface SkillDeploymentPlanInput {
   profileHash: string;
   skillLibrary: SkillLibraryEntry[];
   inventory: SkillInventoryEntry[];
-  takeover: boolean;
   captureReceipt?: CaptureReceipt;
 }
 
@@ -132,7 +132,6 @@ export const buildSkillDeploymentPlan = ({
   profileHash,
   skillLibrary,
   inventory,
-  takeover,
   captureReceipt
 }: SkillDeploymentPlanInput): SkillDeploymentPlan => {
   if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
@@ -142,8 +141,7 @@ export const buildSkillDeploymentPlan = ({
       decisions: [],
       sharedPreparations: [],
       sharedPaths: [],
-      errors: [],
-      warnings: []
+      issues: []
     };
   }
   const inventoryByPath = new Map(
@@ -155,8 +153,7 @@ export const buildSkillDeploymentPlan = ({
   const deferredReferences = new Set<string>();
   const approvedSkills = new Map<string, string>();
   const decisions: SkillDeploymentDecision[] = [];
-  const errors: string[] = [];
-  const warnings: string[] = [];
+  const issues: ApplyIssue[] = [];
   const sharedPaths = new Set<string>();
   const sharedPreparations: SharedSkillPreparation[] = [];
   const sharedBySkill = new Map<
@@ -208,21 +205,44 @@ export const buildSkillDeploymentPlan = ({
           currentLibraryHash
         ))
     );
-    const adoptTargetCopy = Boolean(reference && takeover && exactUnmanaged && targetPath);
+    const adoptTargetCopy = Boolean(reference && exactUnmanaged && targetPath);
     const keepManagedTargetCopy = Boolean(
       reference &&
       occupyingItem &&
       isTargetOwned(occupyingItem) &&
       occupyingItem.libraryId === shared.libraryId
     );
+    const replaceManagedTargetCopy = Boolean(
+      reference &&
+      occupyingItem &&
+      isTargetOwned(occupyingItem) &&
+      occupyingItem.libraryId !== shared.libraryId
+    );
+    const replaceTargetCopy = Boolean(
+      reference &&
+      occupyingItem &&
+      !isTargetOwned(occupyingItem) &&
+      occupyingItem.status !== "external" &&
+      occupyingItem.status !== "ignored" &&
+      !adoptTargetCopy &&
+      targetPath
+    );
 
     if (
-      occupyingItem?.status === "managed" &&
-      occupyingItem.libraryId !== shared.libraryId
+      occupyingItem &&
+      !isTargetOwned(occupyingItem) &&
+      !adoptTargetCopy &&
+      !replaceTargetCopy
     ) {
-      errors.push(
-        `Cannot prepare shared Skill ${shared.skillKey}: ${targetPath} is managed as Library Skill ${occupyingItem.libraryId}.`
-      );
+      issues.push(createApplyIssue({
+        code: "shared-skill-conflict",
+        disposition: "block",
+        resolution: occupyingItem.status === "ignored" ? "edit-profile" : "external-action",
+        resourceKind: "skill",
+        resourceId: shared.skillKey,
+        path: targetPath,
+        message: `Cannot prepare shared Skill ${shared.skillKey} because its Agent destination is controlled outside AgentEnv`
+      }));
       decisions.push({
         libraryId: shared.libraryId,
         targetName,
@@ -232,18 +252,17 @@ export const buildSkillDeploymentPlan = ({
       });
       continue;
     }
-    if (occupyingItem && !isTargetOwned(occupyingItem) && !adoptTargetCopy) {
-      errors.push(
-        `Cannot prepare shared Skill ${shared.skillKey}: ${targetPath} is occupied by a non-AgentEnv Skill.`
-      );
-      decisions.push({
-        libraryId: shared.libraryId,
-        targetName,
+
+    if (replaceTargetCopy && targetPath) {
+      issues.push(createApplyIssue({
+        code: "unmanaged-skill-replacement",
+        disposition: "review",
+        resolution: "backup-replace",
+        resourceKind: "skill",
+        resourceId: shared.skillKey,
         path: targetPath,
-        action: "block",
-        reason: "occupied"
-      });
-      continue;
+        message: `Existing unmanaged Skill ${shared.skillKey} will be backed up and replaced`
+      }));
     }
 
     const groupPaths = [...shared.paths].sort();
@@ -287,6 +306,22 @@ export const buildSkillDeploymentPlan = ({
         action: exact ? "preserve" : "replace",
         reason: exact ? "managed-exact" : "managed-changed"
       });
+    } else if (replaceTargetCopy && targetPath) {
+      decisions.push({
+        libraryId: shared.libraryId,
+        targetName,
+        path: targetPath,
+        action: "replace",
+        reason: "occupied"
+      });
+    } else if (replaceManagedTargetCopy && targetPath) {
+      decisions.push({
+        libraryId: shared.libraryId,
+        targetName,
+        path: targetPath,
+        action: "replace",
+        reason: "occupied"
+      });
     } else {
       if (reference) deferredReferences.add(referenceKey(reference));
       decisions.push({
@@ -297,15 +332,26 @@ export const buildSkillDeploymentPlan = ({
         reason: "shared-compatible"
       });
     }
-    warnings.push(
-      adoptTargetCopy
+    const message = adoptTargetCopy
         ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory; Apply will adopt the matching Agent copy before shared migration is completed.`
         : keepManagedTargetCopy
           ? `Shared Skill ${shared.skillKey} and its AgentEnv-managed Agent copy remain active until shared migration removes the compatibility copy.`
+          : replaceTargetCopy
+            ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory while Apply replaces the Agent copy.`
+          : replaceManagedTargetCopy
+            ? `Shared Skill ${shared.skillKey} stays active while Apply switches the Agent copy to this Library Skill.`
           : reference
             ? `Shared Skill ${shared.skillKey} stays active from its compatibility directory until shared migration installs the Agent-specific copy.`
-            : `Shared Skill ${shared.skillKey} stays active until shared migration removes the compatibility copy; this Profile will omit it afterward.`
-    );
+            : `Shared Skill ${shared.skillKey} stays active until shared migration removes the compatibility copy; this Profile will omit it afterward.`;
+    issues.push(createApplyIssue({
+      code: "shared-skill-deferred",
+      disposition: "notice",
+      resolution: "preserve",
+      resourceKind: "skill",
+      resourceId: shared.skillKey,
+      path: groupPaths[0],
+      message
+    }));
   }
 
   for (const reference of enabledReferences) {
@@ -372,7 +418,6 @@ export const buildSkillDeploymentPlan = ({
       currentLibraryHash
     );
     if (
-      takeover &&
       occupyingItem.status !== "external" &&
       occupyingItem.status !== "ignored" &&
       (capturedExact || matchingUnmanaged)
@@ -387,11 +432,30 @@ export const buildSkillDeploymentPlan = ({
       });
       continue;
     }
+    if (occupyingItem.status === "external" || occupyingItem.status === "ignored") {
+      decisions.push({
+        libraryId: reference.libraryId,
+        targetName: reference.targetName,
+        path: targetPath,
+        action: "block",
+        reason: "occupied"
+      });
+      continue;
+    }
+    issues.push(createApplyIssue({
+      code: "unmanaged-skill-replacement",
+      disposition: "review",
+      resolution: "backup-replace",
+      resourceKind: "skill",
+      resourceId: reference.targetName,
+      path: targetPath,
+      message: `Existing unmanaged Skill ${reference.targetName} will be backed up and replaced`
+    }));
     decisions.push({
       libraryId: reference.libraryId,
       targetName: reference.targetName,
       path: targetPath,
-      action: "block",
+      action: "replace",
       reason: "occupied"
     });
   }
@@ -412,7 +476,6 @@ export const buildSkillDeploymentPlan = ({
       left.skillKey.localeCompare(right.skillKey)
     ),
     sharedPaths: [...sharedPaths].sort(),
-    errors: [...new Set(errors)],
-    warnings: [...new Set(warnings)]
+    issues: dedupeApplyIssues(issues)
   };
 };

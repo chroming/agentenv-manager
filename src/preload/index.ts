@@ -72,8 +72,8 @@ const api: AgentEnvApi = {
   deleteProfile: (id) => ipcRenderer.invoke("profiles:delete", id),
   previewApply: (profileId, targetId) =>
     ipcRenderer.invoke("activation:preview", profileId, targetId),
-  applyProfile: (profileId, previewId, options) =>
-    ipcRenderer.invoke("activation:apply", profileId, previewId, options),
+  applyProfile: (profileId, previewId) =>
+    ipcRenderer.invoke("activation:apply", profileId, previewId),
   listBackups: () => ipcRenderer.invoke("backups:list"),
   listManagedBackups: () => ipcRenderer.invoke("backups:list-managed"),
   deleteManagedBackup: (input) => ipcRenderer.invoke("backups:delete-managed", input),

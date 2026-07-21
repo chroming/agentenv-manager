@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createAntigravityTargetAdapter } from "../../../src/main/targets/integrations/antigravity";
+import { blockingMessages } from "../../helpers/applyIssues";
 
 let root = "";
 afterEach(async () => {
@@ -29,7 +30,7 @@ describe("Antigravity Profile v2 adapter", () => {
       state: { managedMcpNames: [] }
     });
 
-    expect(preview.errors).toEqual([]);
+    expect(blockingMessages(preview.issues)).toEqual([]);
     expect(preview.changes.map(({ path }) => path)).toEqual([paths.instructionsPath]);
     expect(preview.liveFingerprints).not.toHaveProperty(paths.configPath);
   });
@@ -51,7 +52,7 @@ describe("Antigravity Profile v2 adapter", () => {
       state: { managedMcpNames: [] }
     });
 
-    expect(preview.errors).toEqual([
+    expect(blockingMessages(preview.issues)).toEqual([
       expect.stringContaining("12,000 character limit"),
       expect.stringContaining("Agent-controlled")
     ]);

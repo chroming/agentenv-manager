@@ -7,6 +7,7 @@ import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
+import { blockingMessages } from "../helpers/applyIssues";
 
 let root = "";
 
@@ -94,7 +95,7 @@ describe("Trae CLI Profile v2 switching e2e", () => {
     for (const id of ["alpha", "beta"] as const) {
       const profileId = `trae-${id}`;
       const preview = await service.previewProfile(profileId, "trae-cli");
-      expect(preview.errors).toEqual([]);
+      expect(blockingMessages(preview.issues)).toEqual([]);
       const applied = await service.applyProfile(profileId, preview.id);
       expect(applied.ok).toBe(true);
       if (id === "beta" && applied.ok) betaBackupId = applied.backupId;
@@ -115,7 +116,7 @@ describe("Trae CLI Profile v2 switching e2e", () => {
       .resolves.toContain("# beta");
 
     const noOp = await service.previewProfile("trae-beta", "trae-cli");
-    expect(noOp.errors).toEqual([]);
+    expect(blockingMessages(noOp.issues)).toEqual([]);
     expect(noOp.changes).toEqual([]);
 
     const rollbackPreview = await service.previewRollback(betaBackupId);

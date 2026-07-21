@@ -22,6 +22,7 @@ import type {
   TargetState
 } from "../../../../shared/types";
 import { profileManagesResource } from "../../../../shared/profileResources";
+import { createApplyIssue } from "../../../applyIssues";
 import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
@@ -498,8 +499,16 @@ export const traeCliIntegration: AgentTargetIntegration = {
         targetPaths.targetId,
         "instructions"
       );
-      const warnings = managesInstructions ? findSecretWarnings(profile.instructions) : [];
-      const errors: string[] = [];
+      const issues = (managesInstructions ? findSecretWarnings(profile.instructions) : []).map(
+        (message) =>
+          createApplyIssue({
+            code: "secret-warning",
+            disposition: "notice",
+            resolution: "automatic",
+            resourceKind: "instructions",
+            message
+          })
+      );
       const changes: PlannedFileChange[] = [];
       const instructionAliases = [
         join(targetPaths.configDir, "..", ".coco", "AGENTS.md"),
@@ -514,9 +523,13 @@ export const traeCliIntegration: AgentTargetIntegration = {
           ])
         : [""];
       if (managesInstructions && aliasInstructions.some((content) => content.trim())) {
-        warnings.push(
-          "Trae CLI also has user instruction aliases outside AgentEnv management; they may add guidance."
-        );
+        issues.push(createApplyIssue({
+          code: "instruction-alias",
+          disposition: "notice",
+          resolution: "preserve",
+          resourceKind: "instructions",
+          message: "Trae CLI also has user instruction aliases outside AgentEnv management; they may add guidance."
+        }));
       }
       if (managesInstructions) {
         addChange(
@@ -548,9 +561,36 @@ export const traeCliIntegration: AgentTargetIntegration = {
           true
         );
         const legacyYaml = parseYamlMcpSource(legacyYamlText, legacyYamlPath, false);
-        if (!yaml.ok) errors.push(yaml.message);
-        if (!json.ok) errors.push(json.message);
-        if (!legacyYaml.ok) errors.push(legacyYaml.message);
+        if (!yaml.ok) {
+          issues.push(createApplyIssue({
+            code: "invalid-native-config",
+            disposition: "block",
+            resolution: "external-action",
+            resourceKind: "configuration",
+            path: targetPaths.configPath,
+            message: yaml.message
+          }));
+        }
+        if (!json.ok) {
+          issues.push(createApplyIssue({
+            code: "invalid-native-config",
+            disposition: "block",
+            resolution: "external-action",
+            resourceKind: "configuration",
+            path: targetPaths.mcpConfigPath ?? targetPaths.configPath,
+            message: json.message
+          }));
+        }
+        if (!legacyYaml.ok) {
+          issues.push(createApplyIssue({
+            code: "invalid-native-config",
+            disposition: "block",
+            resolution: "external-action",
+            resourceKind: "configuration",
+            path: legacyYamlPath,
+            message: legacyYaml.message
+          }));
+        }
         if (yaml.ok && json.ok && legacyYaml.ok) {
           let nextYaml = yamlText;
           let nextJson = jsonText;
@@ -564,22 +604,38 @@ export const traeCliIntegration: AgentTargetIntegration = {
               Number(Boolean(jsonServer)) +
               Number(Boolean(legacyYamlServer));
             if (occurrenceCount > 1) {
-              errors.push(
-                `MCP server ${selection.name} is defined in multiple Trae CLI user files. Keep one definition or use the Agent setting.`
-              );
+              issues.push(createApplyIssue({
+                code: "duplicate-native-mcp",
+                disposition: "block",
+                resolution: "external-action",
+                resourceKind: "mcp",
+                resourceId: selection.name,
+                message: `MCP server ${selection.name} is defined in multiple Trae CLI user files. Keep one definition or use the Agent setting.`
+              }));
               continue;
             }
             if (legacyYamlServer) {
-              errors.push(
-                `MCP server ${selection.name} is defined in Agent-owned traecli.yaml. Move it to trae_cli.yaml or mcp.json, or use the Agent setting.`
-              );
+              issues.push(createApplyIssue({
+                code: "agent-owned-native-mcp",
+                disposition: "block",
+                resolution: "external-action",
+                resourceKind: "mcp",
+                resourceId: selection.name,
+                path: legacyYamlPath,
+                message: `MCP server ${selection.name} is defined in Agent-owned traecli.yaml. Move it to trae_cli.yaml or mcp.json, or use the Agent setting.`
+              }));
               continue;
             }
             if (occurrenceCount === 0) {
               if (selection.enabled) {
-                errors.push(
-                  `MCP server ${selection.name} is not configured in Trae CLI. Turn it off in this Profile or configure it in Trae CLI.`
-                );
+                issues.push(createApplyIssue({
+                  code: "missing-native-mcp",
+                  disposition: "block",
+                  resolution: "edit-profile",
+                  resourceKind: "mcp",
+                  resourceId: selection.name,
+                  message: `MCP server ${selection.name} is not configured in Trae CLI. Turn it off in this Profile or configure it in Trae CLI.`
+                }));
               }
               continue;
             }
@@ -589,11 +645,17 @@ export const traeCliIntegration: AgentTargetIntegration = {
                 ? currentYaml.value.byName.get(selection.name)
                 : undefined;
               if (!currentYaml.ok || !currentServer?.node) {
-                errors.push(
-                  currentYaml.ok
+                issues.push(createApplyIssue({
+                  code: "unsafe-native-mcp-update",
+                  disposition: "block",
+                  resolution: "external-action",
+                  resourceKind: "mcp",
+                  resourceId: selection.name,
+                  path: targetPaths.configPath,
+                  message: currentYaml.ok
                     ? `Cannot safely update Trae CLI MCP server ${selection.name}`
                     : currentYaml.message
-                );
+                }));
                 continue;
               }
               const updated = setYamlDisabled(
@@ -603,7 +665,15 @@ export const traeCliIntegration: AgentTargetIntegration = {
                 currentServer as { enabled: boolean; node: YAMLMap }
               );
               if (!updated.ok) {
-                errors.push(updated.message);
+                issues.push(createApplyIssue({
+                  code: "unsafe-native-mcp-update",
+                  disposition: "block",
+                  resolution: "external-action",
+                  resourceKind: "mcp",
+                  resourceId: selection.name,
+                  path: targetPaths.configPath,
+                  message: updated.message
+                }));
                 continue;
               }
               nextYaml = updated.content;
@@ -617,7 +687,7 @@ export const traeCliIntegration: AgentTargetIntegration = {
             }
             controlled.add(selection.name);
           }
-          if (errors.length === 0) {
+          if (!issues.some((issue) => issue.disposition === "block")) {
             managedMcpNames = [...controlled].sort();
             addChange(changes, targetPaths.configPath, yamlText, nextYaml);
             addChange(
@@ -631,8 +701,7 @@ export const traeCliIntegration: AgentTargetIntegration = {
       }
 
       return {
-        warnings,
-        errors,
+        issues,
         changes,
         liveFingerprints: {
           ...(managesInstructions

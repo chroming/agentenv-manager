@@ -6,6 +6,7 @@ import type {
   TargetState
 } from "../../../../shared/types";
 import { profileManagesResource } from "../../../../shared/profileResources";
+import { createApplyIssue } from "../../../applyIssues";
 import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
@@ -175,26 +176,44 @@ export const antigravityIntegration: AgentTargetIntegration = {
         targetPaths.targetId,
         "instructions"
       );
-      const warnings = managesInstructions ? findSecretWarnings(profile.instructions) : [];
-      const errors: string[] = [];
+      const issues = (managesInstructions ? findSecretWarnings(profile.instructions) : []).map(
+        (message) =>
+          createApplyIssue({
+            code: "secret-warning",
+            disposition: "notice",
+            resolution: "automatic",
+            resourceKind: "instructions",
+            message
+          })
+      );
       const changes: PlannedFileChange[] = [];
       const liveInstructions = managesInstructions
         ? await readTextIfExists(targetPaths.instructionsPath)
         : "";
       if (managesInstructions && [...profile.instructions].length > 12_000) {
-        errors.push("Antigravity GEMINI.md exceeds the 12,000 character limit");
+        issues.push(createApplyIssue({
+          code: "target-instruction-limit",
+          disposition: "block",
+          resolution: "edit-profile",
+          resourceKind: "instructions",
+          path: targetPaths.instructionsPath,
+          message: "Antigravity GEMINI.md exceeds the 12,000 character limit"
+        }));
       }
       if (managesInstructions) {
         addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
       }
       if (profile.resources.mcpByTarget.antigravity?.mode === "manage") {
-        errors.push(
-          "Antigravity MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Antigravity."
-        );
+        issues.push(createApplyIssue({
+          code: "unsupported-mcp-management",
+          disposition: "block",
+          resolution: "edit-profile",
+          resourceKind: "mcp",
+          message: "Antigravity MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Antigravity."
+        }));
       }
       return {
-        warnings,
-        errors,
+        issues,
         changes,
         liveFingerprints: {
           ...(managesInstructions

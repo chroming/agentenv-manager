@@ -13,6 +13,7 @@ import type {
   TargetState
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
+import { createApplyIssue } from "../applyIssues";
 import { createUnifiedDiff } from "../diff";
 import { readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -218,8 +219,16 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       targetPaths.targetId,
       "instructions"
     );
-    const warnings = managesInstructions ? findSecretWarnings(profile.instructions) : [];
-    const errors: string[] = [];
+    const issues = (managesInstructions ? findSecretWarnings(profile.instructions) : []).map(
+      (message) =>
+        createApplyIssue({
+          code: "secret-warning",
+          disposition: "notice",
+          resolution: "automatic",
+          resourceKind: "instructions",
+          message
+        })
+    );
     const changes: PlannedFileChange[] = [];
     const liveInstructions = managesInstructions
       ? await readTextIfExists(targetPaths.instructionsPath)
@@ -238,7 +247,14 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       liveConfigText = await readTextIfExists(targetPaths.configPath);
       const liveConfig = parseJsoncObject(liveConfigText, "Invalid live opencode.jsonc");
       if (!liveConfig.ok) {
-        errors.push(liveConfig.message);
+        issues.push(createApplyIssue({
+          code: "invalid-native-config",
+          disposition: "block",
+          resolution: "external-action",
+          resourceKind: "configuration",
+          path: targetPaths.configPath,
+          message: liveConfig.message
+        }));
       } else {
         const liveMcp = isRecord(liveConfig.value.mcp) ? liveConfig.value.mcp : {};
         let nextContent = liveConfigText;
@@ -247,9 +263,15 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
           const server = liveMcp[selection.name];
           if (!isRecord(server)) {
             if (selection.enabled) {
-              errors.push(
-                `MCP server ${selection.name} is not configured in OpenCode. Turn it off in this Profile or configure it in OpenCode.`
-              );
+              issues.push(createApplyIssue({
+                code: "missing-native-mcp",
+                disposition: "block",
+                resolution: "edit-profile",
+                resourceKind: "mcp",
+                resourceId: selection.name,
+                path: targetPaths.configPath,
+                message: `MCP server ${selection.name} is not configured in OpenCode. Turn it off in this Profile or configure it in OpenCode.`
+              }));
             }
             continue;
           }
@@ -260,7 +282,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
           );
           controlled.add(selection.name);
         }
-        if (errors.length === 0) {
+        if (!issues.some((issue) => issue.disposition === "block")) {
           managedMcpNames = [...controlled].sort();
           addChange(changes, targetPaths.configPath, liveConfigText, nextContent);
         }
@@ -268,8 +290,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     }
 
     return {
-      warnings,
-      errors,
+      issues,
       changes,
       liveFingerprints: {
         ...(managesInstructions

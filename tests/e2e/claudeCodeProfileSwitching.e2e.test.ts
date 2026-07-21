@@ -7,6 +7,7 @@ import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
+import { blockingMessages } from "../helpers/applyIssues";
 
 let root = "";
 afterEach(async () => {
@@ -53,7 +54,7 @@ describe("Claude Code Profile v2 switching e2e", () => {
     for (const id of ["alpha", "beta"] as const) {
       const profileId = `claude-${id}`;
       const preview = await service.previewProfile(profileId, "claude-code");
-      expect(preview.errors).toEqual([]);
+      expect(blockingMessages(preview.issues)).toEqual([]);
       expect(preview.changes.map(({ path }) => path)).not.toContain(join(claudeDir, "settings.json"));
       expect(preview.changes.map(({ path }) => path)).not.toContain(join(paths.homeDir, ".claude.json"));
       expect((await service.applyProfile(profileId, preview.id)).ok).toBe(true);

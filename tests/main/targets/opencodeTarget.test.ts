@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createOpenCodeTargetAdapter } from "../../../src/main/targets/opencodeTarget";
+import { blockingMessages } from "../../helpers/applyIssues";
 
 let root = "";
 afterEach(async () => {
@@ -41,7 +42,7 @@ describe("OpenCode Profile v2 adapter", () => {
       state: { managedMcpNames: ["old"] }
     });
 
-    expect(preview.errors).toEqual([]);
+    expect(blockingMessages(preview.issues)).toEqual([]);
     expect(preview.liveFingerprints).not.toHaveProperty(paths.configPath);
     expect(preview.changes.map(({ path }) => path)).not.toContain(paths.configPath);
     expect(preview.targetState.managedMcpNames).toEqual([]);
@@ -76,7 +77,7 @@ describe("OpenCode Profile v2 adapter", () => {
       state: { managedMcpNames: [] }
     });
 
-    expect(preview.errors).toEqual([]);
+    expect(blockingMessages(preview.issues)).toEqual([]);
     const configChange = preview.changes.find(({ path }) => path === paths.configPath);
     expect(configChange?.after).toContain('"theme": "dark"');
     expect(configChange?.after).toContain('"docs": {');
@@ -102,11 +103,11 @@ describe("OpenCode Profile v2 adapter", () => {
       state: { managedMcpNames: [] }
     });
 
-    expect((await previewFor(true)).errors).toEqual([
+    expect(blockingMessages((await previewFor(true)).issues)).toEqual([
       expect.stringContaining("not configured in OpenCode")
     ]);
     const disabled = await previewFor(false);
-    expect(disabled.errors).toEqual([]);
+    expect(blockingMessages(disabled.issues)).toEqual([]);
     expect(disabled.changes.map(({ path }) => path)).not.toContain(paths.configPath);
   });
 

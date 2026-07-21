@@ -13,6 +13,7 @@ import {
   ShieldCheck
 } from "lucide-react";
 import type {
+  ApplyIssue,
   ActivationPreview,
   RollbackPreview,
   StopManagingPreview
@@ -32,8 +33,6 @@ interface PreviewDialogProps {
   cancelLabel?: string;
   errorMessage?: string;
   targetNames?: TargetNameIndex;
-  replacementAcknowledged?: boolean;
-  onReplacementAcknowledgedChange?(acknowledged: boolean): void;
   onOpenRecovery?(): void;
   onAdoptTargetChanges?(): void;
   onCancel?(): void;
@@ -50,51 +49,35 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])"
 ].join(",");
 
-const prettifyIssue = (
-  message: string,
+const presentIssue = (
+  issue: ApplyIssue,
   targetName: string,
   t: (message: string, values?: TranslationValues) => string
 ) => {
-  const driftMatch = message.match(
-    /^External changes detected in AgentEnv-managed ([^ ]+) [^:]+: (.+)$/
-  );
-  if (driftMatch) {
-    const kind = driftMatch[1] === "instructions" ? "instructions" : driftMatch[1];
+  if (issue.code === "managed-resource-drift") {
+    const kind = issue.resourceKind === "instructions" ? "instructions" : issue.resourceKind;
     return {
       title: t("{{target}} {{kind}} changed outside AgentEnv", { target: targetName, kind }),
-      detail: driftMatch[2]
+      detail: issue.detail ?? issue.path
     };
   }
 
-  const keptMatch = message.match(/^(Unmanaged|Ignored) local skill kept: (.+)$/);
-  if (keptMatch) {
-    return {
-      title: t("{{status}} local skill kept", { status: t(keptMatch[1]) }),
-      detail: keptMatch[2]
-    };
-  }
-
-  const externalKeptMatch = message.match(/^(.+-managed skill kept): (.+)$/i);
-  if (externalKeptMatch) {
-    return { title: externalKeptMatch[1], detail: externalKeptMatch[2] };
-  }
-
-  const unmanagedSkillMatch = message.match(
-    /^skill target already exists and is not AgentEnv-owned: (.+)$/i
-  );
-  if (unmanagedSkillMatch) {
+  if (issue.code === "unmanaged-skill-replacement") {
     return {
       title: t("Existing unmanaged Skill will be replaced"),
-      detail: unmanagedSkillMatch[1]
+      detail: issue.detail ?? issue.path
     };
   }
 
-  return { title: message };
-};
+  if (issue.code === "unmanaged-skill-removal") {
+    return {
+      title: t("Existing unmanaged Skill will be removed"),
+      detail: issue.detail ?? issue.path
+    };
+  }
 
-const isPreservedWarning = (warning: string) =>
-  /^(Unmanaged|Ignored) local skill kept: /i.test(warning) ||
-  /^.+-managed skill kept: /i.test(warning);
+  return { title: issue.message, detail: issue.detail ?? issue.path };
+};
 
 export const PreviewDialog = ({
   preview,
@@ -106,8 +89,6 @@ export const PreviewDialog = ({
   cancelLabel = "Cancel",
   errorMessage,
   targetNames = {},
-  replacementAcknowledged = false,
-  onReplacementAcknowledgedChange,
   onOpenRecovery,
   onAdoptTargetChanges,
   onCancel,
@@ -209,35 +190,39 @@ export const PreviewDialog = ({
         ? targetNameFor(preview.targetId, targetNames, "Agent")
         : "Agent";
   const isActivationPreview = "profileId" in preview;
-  const managedDriftErrors = preview.errors.filter((error) =>
-    error.startsWith("External changes detected in AgentEnv-managed")
-  );
-  const replaceableTargetPaths = new Set(
-    isActivationPreview ? (preview.replaceableTargetPaths ?? []) : []
-  );
-  const unmanagedReplacementErrors = preview.errors.filter((error) => {
-    const path = error.match(
-      /^skill target already exists and is not AgentEnv-owned: (.+)$/i
-    )?.[1];
-    return Boolean(path && replaceableTargetPaths.has(path));
-  });
-  const protectedReplacementErrors = [
-    ...managedDriftErrors,
-    ...unmanagedReplacementErrors
-  ];
-  const protectedErrorSet = new Set(protectedReplacementErrors);
-  const blockedItems = preview.errors
-    .filter((error) => !protectedErrorSet.has(error))
-    .map((error) => prettifyIssue(error, targetName, t));
-  const reviewItems = protectedReplacementErrors.map((error) =>
-    prettifyIssue(error, targetName, t)
-  );
-  const preservedItems = preview.warnings
-    .filter(isPreservedWarning)
-    .map((warning) => prettifyIssue(warning, targetName, t));
-  const noteItems = preview.warnings
-    .filter((warning) => !isPreservedWarning(warning))
-    .map((warning) => prettifyIssue(warning, targetName, t));
+  const issues: ApplyIssue[] = isActivationPreview
+    ? preview.issues
+    : [
+        ...preview.errors.map((message, index) => ({
+          id: `legacy-block:${index}`,
+          code: "generic-blocker" as const,
+          disposition: "block" as const,
+          resolution: "external-action" as const,
+          resourceKind: "target" as const,
+          message
+        })),
+        ...preview.warnings.map((message, index) => ({
+          id: `legacy-notice:${index}`,
+          code: "generic-notice" as const,
+          disposition: "notice" as const,
+          resolution: "preserve" as const,
+          resourceKind: "target" as const,
+          message
+        }))
+      ];
+  const managedDriftIssues = issues.filter((issue) => issue.code === "managed-resource-drift");
+  const blockedItems = issues
+    .filter((issue) => issue.disposition === "block")
+    .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
+  const reviewItems = issues
+    .filter((issue) => issue.disposition === "review")
+    .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
+  const preservedItems = issues
+    .filter((issue) => issue.disposition === "notice" && issue.resolution === "preserve")
+    .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
+  const noteItems = issues
+    .filter((issue) => issue.disposition === "notice" && issue.resolution !== "preserve")
+    .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
   const payload = isActivationPreview ? preview.effectivePayload : undefined;
   const status =
     blockedItems.length > 0 ? "blocked" : reviewItems.length > 0 ? "review" : "ready";
@@ -273,7 +258,7 @@ export const PreviewDialog = ({
       : t("Review the changes below before continuing.");
 
   const issueList = (
-    items: Array<{ title: string; detail?: string }>,
+    items: Array<{ id: string; title: string; detail?: string }>,
     kind: "blocked" | "review"
   ) => (
     <section className={`apply-preview-issues apply-preview-issues--${kind}`}>
@@ -290,7 +275,7 @@ export const PreviewDialog = ({
       </header>
       <div>
         {items.map((item) => (
-          <article key={`${item.title}:${item.detail ?? ""}`}>
+          <article key={item.id}>
             <strong>{item.title}</strong>
             {item.detail ? (
               <OverflowTooltip
@@ -356,40 +341,27 @@ export const PreviewDialog = ({
           {blockedItems.length > 0 ? issueList(blockedItems, "blocked") : null}
           {reviewItems.length > 0 ? issueList(reviewItems, "review") : null}
 
-          {reviewItems.length > 0 && onReplacementAcknowledgedChange ? (
+          {managedDriftIssues.length > 0 && (onAdoptTargetChanges || onOpenRecovery) ? (
             <section
               className="preview-drift-recovery"
-              aria-label={t("Protected Agent changes confirmation")}
+              aria-label={t("Protected Agent change options")}
             >
-              <label>
-                <input
-                  type="checkbox"
-                  checked={replacementAcknowledged}
-                  onChange={(event) =>
-                    onReplacementAcknowledgedChange(event.currentTarget.checked)
-                  }
-                />
-                <span>
-                  <strong>{t("Back up and replace protected resources")}</strong>
-                  <small>{t("Cancel keeps the Agent unchanged.")}</small>
-                </span>
-              </label>
-              {onOpenRecovery ? (
-                <div className="preview-drift-actions">
-                  {onAdoptTargetChanges && managedDriftErrors.length > 0 ? (
-                    <button
-                      className="secondary-action"
-                      type="button"
-                      onClick={onAdoptTargetChanges}
-                    >
-                      {t("Adopt compatible changes")}
-                    </button>
-                  ) : null}
+              <div className="preview-drift-actions">
+                {onAdoptTargetChanges ? (
+                  <button
+                    className="secondary-action"
+                    type="button"
+                    onClick={onAdoptTargetChanges}
+                  >
+                    {t("Adopt compatible changes")}
+                  </button>
+                ) : null}
+                {onOpenRecovery ? (
                   <button className="secondary-action" type="button" onClick={onOpenRecovery}>
                     {t("Open recovery history")}
                   </button>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
             </section>
           ) : null}
 
@@ -434,7 +406,7 @@ export const PreviewDialog = ({
               </summary>
               <div>
                 {noteItems.map((item) => (
-                  <article key={`${item.title}:${item.detail ?? ""}`}>
+                  <article key={item.id}>
                     <strong>{item.title}</strong>
                     {item.detail ? <span>{item.detail}</span> : null}
                   </article>
@@ -451,7 +423,7 @@ export const PreviewDialog = ({
               </summary>
               <div>
                 {preservedItems.map((item) => (
-                  <article key={`${item.title}:${item.detail ?? ""}`}>
+                  <article key={item.id}>
                     <strong>{item.title}</strong>
                     {item.detail ? (
                       <OverflowTooltip
@@ -490,9 +462,7 @@ export const PreviewDialog = ({
                 ? isActivationPreview
                   ? t("Resolve blocking issues before Apply.")
                   : t("Resolve blocking issues before continuing.")
-                : status === "review" && !replacementAcknowledged
-                  ? t("Confirm protected changes to continue.")
-                  : isActivationPreview
+                : isActivationPreview
                     ? t("A recovery point will be created before changes.")
                     : t("Review the changes below before continuing.")}
             </span>

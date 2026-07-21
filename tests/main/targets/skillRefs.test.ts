@@ -8,6 +8,7 @@ import {
   validateSkillRefs
 } from "../../../src/main/targets/skillRefs";
 import type { ProfileDetail, TargetPaths } from "../../../src/shared/types";
+import { blockingMessages } from "../../helpers/applyIssues";
 
 let root = "";
 
@@ -61,8 +62,8 @@ describe("Skill deployment execution guard", () => {
       approvedUnmanagedSkillHashes
     };
 
-    await expect(validateSkillRefs(input)).resolves.toEqual([
-      `Skill target already exists and is not AgentEnv-owned: ${targetDir}`
+    expect(blockingMessages(await validateSkillRefs(input))).toEqual([
+      expect.stringContaining("Skill target already exists and is not AgentEnv-owned")
     ]);
     await expect(applySkillRefs(input)).rejects.toThrow(
       `Skill target changed after preview and is not AgentEnv-owned: ${targetDir}`

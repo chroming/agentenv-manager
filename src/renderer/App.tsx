@@ -26,6 +26,7 @@ import {
   X
 } from "lucide-react";
 import type {
+  ApplyIssue,
   ActivationPreview,
   BackupSummary,
   DataRestorePreview,
@@ -388,6 +389,7 @@ const isGitHubRateLimitError = (message: string) =>
 type ValidationLevel = "ok" | "warning" | "error" | "pending";
 
 interface ValidationRow {
+  source: "access" | "instructions" | "skills" | "conflicts";
   label: string;
   value: string;
   detail?: string;
@@ -408,8 +410,11 @@ const createValidationRows = (
           ? "warning"
           : "pending";
 
+  const blockingIssues = preview?.issues.filter((issue) => issue.disposition === "block") ?? [];
+
   return [
     {
+      source: "access",
       label: `${target?.name ?? "Agent"} access`,
       value:
         target?.health.status === "ready"
@@ -425,6 +430,7 @@ const createValidationRows = (
       level: targetLevel
     },
     {
+      source: "instructions",
       label: target?.instructionsLabel ?? "Instructions",
       value: profile.instructions.trim().length > 0 ? "OK" : "Empty",
       detail:
@@ -437,20 +443,22 @@ const createValidationRows = (
           : "ok"
     },
     {
+      source: "skills",
       label: "Skills",
       value: `${profile.resources.skills.length}`,
       detail: "Preview verifies Library availability and Agent ownership",
       level: "pending"
     },
     {
+      source: "conflicts",
       label: "Live conflicts",
-      value: preview ? (preview.errors.length > 0 ? "Blocked" : "OK") : "Pending",
+      value: preview ? (blockingIssues.length > 0 ? "Blocked" : "OK") : "Pending",
       detail: preview
-        ? preview.errors.length > 0
-          ? `${preview.errors.length} issue${preview.errors.length === 1 ? "" : "s"} found`
+        ? blockingIssues.length > 0
+          ? `${blockingIssues.length} issue${blockingIssues.length === 1 ? "" : "s"} found`
           : "Preview checks passed"
         : "Run preview to check live files",
-      level: preview ? (preview.errors.length > 0 ? "error" : "ok") : "pending"
+      level: preview ? (blockingIssues.length > 0 ? "error" : "ok") : "pending"
     }
   ];
 };
@@ -522,7 +530,6 @@ const AppContent = ({
   const [profileLoadingId, setProfileLoadingId] = useState<string>();
   const [draftProfile, setDraftProfile] = useState<ProfileDetail>();
   const [preview, setPreview] = useState<ActivationPreview>();
-  const [replaceProtectedTargetChanges, setReplaceProtectedTargetChanges] = useState(false);
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
@@ -1969,10 +1976,7 @@ const AppContent = ({
     ? createValidationRows(draftProfile, selectedTarget, preview)
     : [];
   const localValidationErrors = validationRows
-    .filter(
-      (row) =>
-        row.level === "error" && row.label !== "Agent access" && row.label !== "Live conflicts"
-    )
+    .filter((row) => row.level === "error" && row.source !== "access" && row.source !== "conflicts")
     .map((row) => row.detail ?? `${row.label} is invalid`);
   const resourceSummary =
     draftProfile && profileTarget
@@ -2049,6 +2053,10 @@ const AppContent = ({
                     ? t("{{name}} unavailable", { name: readinessTargetName })
                     : readiness.status === "validation-error"
                       ? t("Profile configuration needs review")
+                      : readiness.status === "review-required"
+                        ? t("Review protected changes on {{name}}", {
+                            name: readinessTargetName
+                          })
                       : readiness.status === "preview-error"
                         ? readiness.remediationLabel === "Open Recovery"
                           ? t("Recovery required on {{name}}", { name: readinessTargetName })
@@ -2072,28 +2080,17 @@ const AppContent = ({
         : profileMetadataSavingId === draftProfile.id
           ? t("Saving profile details")
         : t(readiness.message);
-  const previewReplaceableTargetPaths = new Set(preview?.replaceableTargetPaths ?? []);
-  const previewHasOnlyReplaceableErrors = Boolean(
-    preview &&
-      preview.errors.length > 0 &&
-      preview.errors.every((item) => {
-        if (item.startsWith("External changes detected in AgentEnv-managed")) {
-          return true;
-        }
-        const path = item.match(
-          /^skill target already exists and is not AgentEnv-owned: (.+)$/i
-        )?.[1];
-        return Boolean(path && previewReplaceableTargetPaths.has(path));
-      })
-  );
+  const previewHasBlockingIssues =
+    preview?.issues.some((issue) => issue.disposition === "block") === true;
+  const previewRequiresBackupReview =
+    preview?.issues.some((issue) => issue.disposition === "review") === true;
   const canApply = Boolean(
     preview &&
       (preview.changes.length > 0 ||
         preview.resourceChanges.length > 0 ||
         preview.sharedSkillPreparationChanged ||
         preview.targetStateChanged) &&
-      (preview.errors.length === 0 ||
-        (previewHasOnlyReplaceableErrors && replaceProtectedTargetChanges)) &&
+      !previewHasBlockingIssues &&
       localValidationErrors.length === 0 &&
       !rollbackPreview &&
       (selectedTarget?.health.canWrite ?? false)
@@ -2124,16 +2121,31 @@ const AppContent = ({
       if (requestId !== profileFlowRequestRef.current) {
         return;
       }
-      const rendererBlockers = [
+      const rendererBlockers: ApplyIssue[] = [
         ...(!selectedTarget?.health.canWrite
-          ? [selectedTarget?.health.summary || `${selectedTarget?.name ?? "Agent"} is unavailable`]
+          ? [{
+              id: `target-unavailable:${selectedTarget?.id ?? "unknown"}`,
+              code: "target-unavailable" as const,
+              disposition: "block" as const,
+              resolution: "external-action" as const,
+              resourceKind: "target" as const,
+              resourceId: selectedTarget?.id,
+              message:
+                selectedTarget?.health.summary || `${selectedTarget?.name ?? "Agent"} is unavailable`
+            }]
           : []),
-        ...localValidationErrors
+        ...localValidationErrors.map((message, index) => ({
+          id: `profile-validation:${index}`,
+          code: "profile-validation" as const,
+          disposition: "block" as const,
+          resolution: "edit-profile" as const,
+          resourceKind: "profile" as const,
+          message
+        }))
       ];
-      setReplaceProtectedTargetChanges(false);
       setPreview({
         ...nextPreview,
-        errors: [...new Set([...rendererBlockers, ...nextPreview.errors])]
+        issues: [...rendererBlockers, ...nextPreview.issues]
       });
     } catch (unknownError) {
       if (requestId === profileFlowRequestRef.current) {
@@ -2177,11 +2189,26 @@ const AppContent = ({
     setError(undefined);
     setProfileSaveStatus("");
     try {
-      const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id, {
-        allowManagedDrift: replaceProtectedTargetChanges,
-        allowUnmanagedSkillReplacement: replaceProtectedTargetChanges
-      });
+      const result = await window.agentEnv.applyProfile(draftProfile.id, preview.id);
       if (!result.ok) {
+        if (result.kind === "stale") {
+          setProfileSaveStatus("The Agent changed while Preview was open. Preview refreshed.");
+          const refreshedPreview = await window.agentEnv.previewApply(
+            draftProfile.id,
+            preview.targetId
+          );
+          setPreview(refreshedPreview);
+          return;
+        }
+        if (result.kind === "busy") {
+          setProfileSaveStatus("Another AgentEnv operation is still running. Try Apply again shortly.");
+          return;
+        }
+        if (result.kind === "no-op") {
+          setPreview(undefined);
+          setProfileSaveStatus("This Agent already matches the Profile.");
+          return;
+        }
         setError(result.errors.join("\n"));
         return;
       }
@@ -2199,7 +2226,7 @@ const AppContent = ({
           managedResourceCount: preview.effectivePayload?.total ??
             preview.changes.length + preview.resourceChanges.length,
           sharedSkillPreparations: preview.sharedSkillPreparations ?? [],
-          warningCount: preview.warnings.length,
+          warningCount: preview.issues.filter((issue) => issue.disposition === "notice").length,
           errorCount: 0
         };
         return current.some((state) => state.targetId === preview.targetId)
@@ -4265,26 +4292,19 @@ const AppContent = ({
                           target: activeTargetName
                         })}
                         confirmLabel={t(
-                          replaceProtectedTargetChanges
-                            ? "Back up and replace"
+                          previewRequiresBackupReview
+                            ? "Apply with backup"
                             : "Apply"
                         )}
                         confirmDisabled={!canApply || busy}
                         confirmBusy={isProfileApplying}
-                        replacementAcknowledged={replaceProtectedTargetChanges}
-                        onReplacementAcknowledgedChange={
-                          setReplaceProtectedTargetChanges
-                        }
                         onOpenRecovery={() => {
                           setPreview(undefined);
                           setActiveWorkspace("settings");
                           setBackupManagerOpen(true);
                         }}
                         onAdoptTargetChanges={adoptCompatibleTargetChanges}
-                        onCancel={() => {
-                          setReplaceProtectedTargetChanges(false);
-                          setPreview(undefined);
-                        }}
+                        onCancel={() => setPreview(undefined)}
                         onConfirm={applySelectedProfile}
                       />
                     ) : null}

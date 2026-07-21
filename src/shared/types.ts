@@ -91,8 +91,7 @@ export interface AgentEnvApi {
   previewApply(profileId: string, targetId?: string): Promise<ActivationPreview>;
   applyProfile(
     profileId: string,
-    previewId: string,
-    options?: ApplyProfileOptions
+    previewId: string
   ): Promise<ApplyResult>;
   listBackups(): Promise<BackupSummary[]>;
   listManagedBackups(): Promise<ManagedBackupInventory>;
@@ -115,11 +114,6 @@ export interface AdoptTargetChangesResult {
   profile: ProfileDetail;
   adopted: AdoptedTargetResource[];
   skipped: string[];
-}
-
-export interface ApplyProfileOptions {
-  allowManagedDrift?: boolean;
-  allowUnmanagedSkillReplacement?: boolean;
 }
 
 export interface SkillLibraryEntry {
@@ -916,8 +910,7 @@ export interface TargetInfo extends TargetDescriptor {
 
 export interface TargetActivationPreview {
   changes: PlannedFileChange[];
-  warnings: string[];
-  errors: string[];
+  issues: ApplyIssue[];
   liveFingerprints: Record<string, string>;
   targetState: TargetState;
 }
@@ -961,17 +954,81 @@ export interface PlannedResourceChange {
   source?: string;
 }
 
+export type ApplyIssueDisposition = "notice" | "review" | "block";
+
+export type ApplyIssueResolution =
+  | "automatic"
+  | "backup-replace"
+  | "edit-profile"
+  | "external-action"
+  | "open-recovery"
+  | "preserve";
+
+export type ApplyIssueResourceKind =
+  | "profile"
+  | "target"
+  | "instructions"
+  | "skill"
+  | "mcp"
+  | "configuration"
+  | "skills-root";
+
+export type ApplyIssueCode =
+  | "target-unavailable"
+  | "profile-validation"
+  | "secret-warning"
+  | "native-setting-preserved"
+  | "instruction-alias"
+  | "invalid-native-config"
+  | "missing-native-mcp"
+  | "unsupported-mcp-management"
+  | "target-instruction-limit"
+  | "duplicate-native-mcp"
+  | "agent-owned-native-mcp"
+  | "unsafe-native-mcp-update"
+  | "globally-disabled-skill"
+  | "missing-library-skill"
+  | "unmanaged-skill-replacement"
+  | "unmanaged-skill-removal"
+  | "managed-resource-drift"
+  | "managed-resource-missing"
+  | "ignored-skill-conflict"
+  | "external-skill-conflict"
+  | "external-skill-preserved"
+  | "unmanaged-skill-preserved"
+  | "ignored-skill-preserved"
+  | "duplicate-runtime-skill"
+  | "native-disabled-skill"
+  | "runtime-skill-conflict"
+  | "shared-skill-conflict"
+  | "shared-skill-deferred"
+  | "skill-root-isolation"
+  | "invalid-skill-root"
+  | "recovery-required"
+  | "generic-blocker"
+  | "generic-notice";
+
+export interface ApplyIssue {
+  id: string;
+  code: ApplyIssueCode;
+  disposition: ApplyIssueDisposition;
+  resolution: ApplyIssueResolution;
+  resourceKind: ApplyIssueResourceKind;
+  resourceId?: string;
+  path?: string;
+  message: string;
+  detail?: string;
+}
+
 export interface ActivationPreview {
   id: string;
   profileId: string;
   profileContentHash: string;
   libraryVersions: LibraryResourceVersions;
   createdAt: string;
-  warnings: string[];
-  errors: string[];
+  issues: ApplyIssue[];
   changes: PlannedFileChange[];
   resourceChanges: PlannedResourceChange[];
-  replaceableTargetPaths?: string[];
   liveFingerprints: Record<string, string>;
   resourceFingerprints: Record<string, string>;
   sourceFingerprints: Record<string, string>;
@@ -985,7 +1042,7 @@ export interface ActivationPreview {
   skillRootTransition?: {
     path: string;
     linkTarget: string;
-    resolvedPath: string;
+    resolvedPath?: string;
   };
   legacySkillPaths?: string[];
 }
@@ -1031,9 +1088,17 @@ export interface BackupSummary {
   profileName?: string;
 }
 
+export type ApplyFailureKind =
+  | "blocked"
+  | "stale"
+  | "busy"
+  | "no-op"
+  | "failed"
+  | "recovery-required";
+
 export type ApplyResult =
   | { ok: true; backupId: string }
-  | { ok: false; errors: string[] };
+  | { ok: false; kind: ApplyFailureKind; errors: string[] };
 
 export interface RollbackPreview {
   id: string;

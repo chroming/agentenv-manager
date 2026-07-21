@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTargetRegistry } from "../../../src/main/targets/registry";
+import { blockingMessages } from "../../helpers/applyIssues";
 
 let root = "";
 
@@ -40,7 +41,7 @@ describe("Target resource management contract", () => {
         state: { managedMcpNames: [] }
       });
 
-      expect(preview.errors).toEqual([]);
+      expect(blockingMessages(preview.issues)).toEqual([]);
       expect(preview.changes.map((change) => change.path)).not.toContain(
         targetPaths.instructionsPath
       );

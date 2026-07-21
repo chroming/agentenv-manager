@@ -3163,12 +3163,24 @@ describe("Electron UI profile switching e2e", () => {
           return lineHeight + verticalPadding <= (element as HTMLElement).clientHeight + 1;
         };
         const body = dialog.querySelector<HTMLElement>(".apply-preview-body");
+        const footerNote = dialog.querySelector<HTMLElement>(".apply-preview-footer-note");
+        const footerNoteText = footerNote?.querySelector<HTMLElement>("span");
+        const footerNoteBox = footerNote?.getBoundingClientRect();
+        const footerNoteTextBox = footerNoteText?.getBoundingClientRect();
         const resourceRows = [...dialog.querySelectorAll<HTMLElement>(".apply-preview-change-row")];
         return {
           buttonsFitText: [...dialog.querySelectorAll(".preview-actions button")].every(textFits),
           dialogOverflow: dialog.scrollWidth - dialog.clientWidth,
           dialogOverflowY: getComputedStyle(dialog).overflowY,
           bodyOverflowY: body ? getComputedStyle(body).overflowY : "missing",
+          footerNote: {
+            text: footerNoteText?.textContent?.trim() ?? "",
+            width: footerNoteBox?.width ?? 0,
+            textFits:
+              Boolean(footerNoteBox && footerNoteTextBox) &&
+              footerNoteTextBox!.left >= footerNoteBox!.left - 1 &&
+              footerNoteTextBox!.right <= footerNoteBox!.right + 1
+          },
           resourceRows: resourceRows.map((row) => row.getBoundingClientRect().height),
           statusFits: [...dialog.querySelectorAll<HTMLElement>(".apply-preview-status")].every(
             (card) => {
@@ -3193,6 +3205,9 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.dialogOverflow).toBeLessThanOrEqual(1);
       expect(geometry.dialogOverflowY).toBe("hidden");
       expect(geometry.bodyOverflowY).toBe("auto");
+      expect(geometry.footerNote.text).toContain("recovery point");
+      expect(geometry.footerNote.width).toBeGreaterThanOrEqual(240);
+      expect(geometry.footerNote.textFits).toBe(true);
       expect(geometry.resourceRows.length).toBeGreaterThan(0);
       expect(geometry.resourceRows.every((height) => height >= 47)).toBe(true);
       expect(geometry.statusFits).toBe(true);

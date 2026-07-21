@@ -77,8 +77,7 @@ export const fixtureAgentIntegration: AgentTargetIntegration = {
   preview: {
     createPreview: async () => ({
       changes: [],
-      warnings: [],
-      errors: [],
+      issues: [],
       liveFingerprints: {},
       targetState: { managedMcpNames: [] }
     })

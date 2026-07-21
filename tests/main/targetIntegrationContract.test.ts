@@ -69,7 +69,7 @@ describe("target integration contract", () => {
         targetPaths: paths,
         state: { managedMcpNames: [] }
       })
-    ).resolves.toEqual(expect.objectContaining({ changes: [], errors: [] }));
+    ).resolves.toEqual(expect.objectContaining({ changes: [], issues: [] }));
   });
 
   it("keeps registration ordered and returns defensive adapter lists", () => {

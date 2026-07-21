@@ -11,6 +11,7 @@ import type {
   TargetState
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
+import { createApplyIssue } from "../applyIssues";
 import { createUnifiedDiff } from "../diff";
 import { readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -174,8 +175,16 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       targetPaths.targetId,
       "instructions"
     );
-    const warnings = managesInstructions ? findSecretWarnings(profile.instructions) : [];
-    const errors: string[] = [];
+    const issues = (managesInstructions ? findSecretWarnings(profile.instructions) : []).map(
+      (message) =>
+        createApplyIssue({
+          code: "secret-warning",
+          disposition: "notice",
+          resolution: "automatic",
+          resourceKind: "instructions",
+          message
+        })
+    );
     const changes: PlannedFileChange[] = [];
     const liveInstructions = managesInstructions
       ? await readTextIfExists(targetPaths.instructionsPath)
@@ -184,13 +193,16 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
     }
     if (profile.resources.mcpByTarget["claude-code"]?.mode === "manage") {
-      errors.push(
-        "Claude Code MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Claude Code."
-      );
+      issues.push(createApplyIssue({
+        code: "unsupported-mcp-management",
+        disposition: "block",
+        resolution: "edit-profile",
+        resourceKind: "mcp",
+        message: "Claude Code MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Claude Code."
+      }));
     }
     return {
-      warnings,
-      errors,
+      issues,
       changes,
       liveFingerprints: {
         ...(managesInstructions

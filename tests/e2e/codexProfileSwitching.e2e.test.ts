@@ -12,6 +12,7 @@ import type { TargetDiscoveryService } from "../../src/main/targetDiscovery";
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import type { TargetInfo } from "../../src/shared/types";
 import { createCaptureReceiptStore } from "../../src/main/captureReceiptStore";
+import { blockingMessages, reviewMessages } from "../helpers/applyIssues";
 
 let root = "";
 afterEach(async () => {
@@ -62,7 +63,7 @@ describe("Codex Profile v2 switching e2e", () => {
 
     for (const id of ["alpha", "beta"] as const) {
       const preview = await service.previewProfile(id, "codex");
-      expect(preview.errors).toEqual([]);
+      expect(blockingMessages(preview.issues)).toEqual([]);
       expect((await service.applyProfile(id, preview.id)).ok).toBe(true);
     }
 
@@ -153,7 +154,7 @@ describe("Codex Profile v2 switching e2e", () => {
     );
 
     const applyPreview = await activationService.previewProfile(captured.profile.id, "codex");
-    expect(applyPreview.errors).toEqual([]);
+    expect(blockingMessages(applyPreview.issues)).toEqual([]);
     expect(applyPreview.resourceChanges).toContainEqual(
       expect.objectContaining({
         kind: "skill",
@@ -182,7 +183,7 @@ describe("Codex Profile v2 switching e2e", () => {
       captured.profile.id,
       "codex"
     );
-    expect(stablePreview.errors).toEqual([]);
+    expect(blockingMessages(stablePreview.issues)).toEqual([]);
     expect(stablePreview.changes).toEqual([]);
     expect(stablePreview.resourceChanges).toEqual([]);
     expect(stablePreview.sharedSkillPreparationChanged).toBe(false);
@@ -203,9 +204,10 @@ describe("Codex Profile v2 switching e2e", () => {
       captured.profile.id,
       "codex"
     );
-    expect(changedPreview.errors).toContainEqual(
-      expect.stringContaining(`${privateSkill} is occupied by a non-AgentEnv Skill`)
+    expect(reviewMessages(changedPreview.issues)).toContainEqual(
+      expect.stringContaining("Existing unmanaged Skill k8s-ops will be backed up and replaced")
     );
+    expect(reviewMessages(changedPreview.issues).join("\n")).toContain(privateSkill);
     expect((await lstat(privateSkill)).isDirectory()).toBe(true);
     await expect(readFile(join(privateSkill, "SKILL.md"), "utf8"))
       .resolves.toBe("# Changed after capture\n");

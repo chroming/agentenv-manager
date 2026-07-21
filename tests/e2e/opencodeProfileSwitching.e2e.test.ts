@@ -8,6 +8,7 @@ import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
+import { blockingMessages, reviewMessages } from "../helpers/applyIssues";
 
 let root = "";
 afterEach(async () => {
@@ -64,7 +65,7 @@ describe("OpenCode Profile v2 switching e2e", () => {
     const service = createActivationService({ paths, profileStore, settingsStore, skillLibraryStore });
     const apply = async () => {
       const preview = await service.previewProfile(manifest.id, "opencode");
-      expect(preview.errors).toEqual([]);
+      expect(blockingMessages(preview.issues)).toEqual([]);
       const applied = await service.applyProfile(manifest.id, preview.id);
       expect(applied.ok).toBe(true);
       return preview;
@@ -117,12 +118,10 @@ describe("OpenCode Profile v2 switching e2e", () => {
       resources: managedResources
     });
     const resumePreview = await service.previewProfile(manifest.id, "opencode");
-    expect(resumePreview.errors).toEqual([
-      expect.stringContaining("External changes detected in AgentEnv-managed instructions")
+    expect(reviewMessages(resumePreview.issues)).toEqual([
+      expect.stringContaining("AgentEnv-managed Instructions changed outside AgentEnv")
     ]);
-    const resumed = await service.applyProfile(manifest.id, resumePreview.id, {
-      allowManagedDrift: true
-    });
+    const resumed = await service.applyProfile(manifest.id, resumePreview.id);
     expect(resumed.ok).toBe(true);
     await expect(readFile(join(targetDir, "AGENTS.md"), "utf8"))
       .resolves.toBe("# Profile instructions\n");
@@ -180,7 +179,7 @@ describe("OpenCode Profile v2 switching e2e", () => {
 
     const apply = async (id: "alpha" | "beta") => {
       const preview = await service.previewProfile(`opencode-${id}`, "opencode");
-      expect(preview.errors).toEqual([]);
+      expect(blockingMessages(preview.issues)).toEqual([]);
       const result = await service.applyProfile(`opencode-${id}`, preview.id);
       expect(result.ok).toBe(true);
     };

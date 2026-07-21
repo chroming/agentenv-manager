@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readlink, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { inspectSkillRoot } from "../../src/main/skillRootTopology";
+import { inspectSkillRoot, isolateSkillRoot } from "../../src/main/skillRootTopology";
 
 let root = "";
 
@@ -28,7 +28,7 @@ describe("Skill root topology", () => {
     );
   });
 
-  it("reports broken and cyclic root links without traversing them", async () => {
+  it("treats broken and cyclic root links as replaceable boundaries without traversing them", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-root-invalid-"));
     const broken = join(root, "broken");
     const cycleA = join(root, "cycle-a");
@@ -38,10 +38,22 @@ describe("Skill root topology", () => {
     await symlink(cycleA, cycleB, "dir");
 
     await expect(inspectSkillRoot(broken)).resolves.toEqual(
-      expect.objectContaining({ kind: "invalid", error: expect.stringContaining("unavailable") })
+      expect.objectContaining({
+        kind: "symlink",
+        transition: expect.objectContaining({ path: broken })
+      })
     );
     await expect(inspectSkillRoot(cycleA)).resolves.toEqual(
-      expect.objectContaining({ kind: "invalid", error: expect.stringContaining("cycle") })
+      expect.objectContaining({
+        kind: "symlink",
+        transition: expect.objectContaining({ path: cycleA })
+      })
     );
+
+    const inspected = await inspectSkillRoot(broken);
+    if (inspected.kind !== "symlink") throw new Error("Expected a replaceable root link");
+    await isolateSkillRoot(inspected.transition);
+    expect((await lstat(broken)).isDirectory()).toBe(true);
+    expect(await readlink(cycleA)).toBe(cycleB);
   });
 });

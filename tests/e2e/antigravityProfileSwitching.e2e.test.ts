@@ -7,6 +7,7 @@ import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 import { createSettingsStore } from "../../src/main/settingsStore";
 import { createSkillLibraryStore } from "../../src/main/skillLibraryStore";
+import { blockingMessages } from "../helpers/applyIssues";
 
 let root = "";
 afterEach(async () => {
@@ -52,7 +53,7 @@ describe("Antigravity Profile v2 switching e2e", () => {
     for (const id of ["alpha", "beta"] as const) {
       const profileId = `antigravity-${id}`;
       const preview = await service.previewProfile(profileId, "antigravity");
-      expect(preview.errors).toEqual([]);
+      expect(blockingMessages(preview.issues)).toEqual([]);
       expect(preview.changes.map(({ path }) => path)).not.toContain(join(configDir, "mcp_config.json"));
       expect((await service.applyProfile(profileId, preview.id)).ok).toBe(true);
     }

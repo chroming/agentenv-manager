@@ -4,18 +4,13 @@ import { isMissingFileError, replacePathAtomically } from "./fileUtils";
 export interface SkillRootTransition {
   path: string;
   linkTarget: string;
-  resolvedPath: string;
+  resolvedPath?: string;
 }
 
 export type SkillRootInspection =
   | { kind: "missing" | "directory" }
   | { kind: "symlink"; transition: SkillRootTransition }
   | { kind: "invalid"; error: string };
-
-const errorCode = (error: unknown) =>
-  error && typeof error === "object" && "code" in error
-    ? String(error.code)
-    : undefined;
 
 export const inspectSkillRoot = async (
   path: string | undefined
@@ -39,24 +34,15 @@ export const inspectSkillRoot = async (
   const linkTarget = await readlink(path);
   try {
     const resolvedPath = await realpath(path);
-    if (!(await stat(resolvedPath)).isDirectory()) {
-      return {
-        kind: "invalid",
-        error: `Skills root link does not point to a directory: ${path} -> ${linkTarget}`
-      };
-    }
+    await stat(resolvedPath);
     return {
       kind: "symlink",
       transition: { path, linkTarget, resolvedPath }
     };
-  } catch (error) {
-    const code = errorCode(error);
+  } catch {
     return {
-      kind: "invalid",
-      error:
-        code === "ELOOP"
-          ? `Skills root contains a symbolic link cycle: ${path} -> ${linkTarget}`
-          : `Skills root link target is unavailable: ${path} -> ${linkTarget}`
+      kind: "symlink",
+      transition: { path, linkTarget }
     };
   }
 };
@@ -66,7 +52,8 @@ export const isolateSkillRoot = async (expected: SkillRootTransition) => {
   if (
     current.kind !== "symlink" ||
     current.transition.linkTarget !== expected.linkTarget ||
-    current.transition.resolvedPath !== expected.resolvedPath
+    (expected.resolvedPath !== undefined &&
+      current.transition.resolvedPath !== expected.resolvedPath)
   ) {
     throw new Error(`Skills root changed after preview: ${expected.path}`);
   }

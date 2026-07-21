@@ -11,8 +11,10 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App, AppFeedback } from "../../src/renderer/App";
 import type {
+  ActivationPreview,
   AgentEnvApi,
   AgentEnvSettings,
+  ApplyIssue,
   ProfileDetail,
   TargetInfo,
   TargetManagementState
@@ -38,17 +40,23 @@ const profile: ProfileDetail = {
   }
 };
 
-const preview = {
+const preview: ActivationPreview = {
   id: "preview-1",
   profileId: "daily-coding",
   profileContentHash: "profile-hash",
   libraryVersions: { skills: {} },
   targetId: "opencode",
   createdAt: "2026-06-30T00:00:00.000Z",
-  warnings: [
-    "Unmanaged local skill kept: /tmp/home/.config/opencode/skills/manual-reviewer"
-  ],
-  errors: [],
+  issues: [{
+    id: "unmanaged-skill-preserved:manual-reviewer",
+    code: "unmanaged-skill-preserved",
+    disposition: "notice",
+    resolution: "preserve",
+    resourceKind: "skill",
+    resourceId: "manual-reviewer",
+    path: "/tmp/home/.config/opencode/skills/manual-reviewer",
+    message: "Unmanaged local Skill manual-reviewer will be preserved"
+  }],
   changes: [
     {
       path: "/tmp/home/.config/opencode/AGENTS.md",
@@ -2314,38 +2322,38 @@ describe("App", () => {
     expect(within(dialog).getByRole("button", { name: /^Apply$/ })).toBeEnabled();
 
     cleanup();
-    const driftError =
-      "External changes detected in AgentEnv-managed instructions instructions: /tmp/home/.config/opencode/AGENTS.md";
+    const driftIssue: ApplyIssue = {
+      id: "managed-resource-drift:instructions",
+      code: "managed-resource-drift",
+      disposition: "review",
+      resolution: "backup-replace",
+      resourceKind: "instructions",
+      resourceId: "instructions",
+      path: "/tmp/home/.config/opencode/AGENTS.md",
+      message: "AgentEnv-managed Instructions changed outside AgentEnv"
+    };
     const driftApi = installApi({
       listTargetStates: vi.fn().mockResolvedValue([
         managedState({ activeProfileId: "another-profile" })
       ]),
-      previewApply: vi.fn().mockResolvedValue({ ...preview, warnings: [], errors: [driftError] })
+      previewApply: vi.fn().mockResolvedValue({ ...preview, issues: [driftIssue] })
     });
     render(<App />);
     await openProfiles();
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(driftApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     action = document.querySelector<HTMLButtonElement>(".profile-apply-button")!;
-    expect(action).toHaveAttribute("title", "Resolve OpenCode drift");
+    expect(action).toHaveAttribute("title", "Apply with backup to OpenCode");
     readiness = screen.getByRole("status", { name: "Profile readiness" });
-    expect(readiness).toHaveTextContent("Changes need review on OpenCode");
+    expect(readiness).toHaveTextContent("Review protected changes on OpenCode");
     expect(screen.queryByRole("button", { name: "Review preview" })).not.toBeInTheDocument();
     dialog = screen.getByRole("dialog", { name: "Preview" });
-    const driftConfirm = within(dialog).getByRole("button", { name: /^Apply$/ });
-    expect(driftConfirm).toBeDisabled();
-    expect(within(dialog).getByRole("button", { name: "Open recovery history" })).toBeInTheDocument();
-    fireEvent.click(
-      within(dialog).getByLabelText(/Back up and replace protected resources/)
-    );
-    const replaceButton = within(dialog).getByRole("button", { name: "Back up and replace" });
+    const replaceButton = within(dialog).getByRole("button", { name: "Apply with backup" });
     expect(replaceButton).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Open recovery history" })).toBeInTheDocument();
     fireEvent.click(replaceButton);
     await waitFor(() =>
-      expect(driftApi.applyProfile).toHaveBeenCalledWith("daily-coding", "preview-1", {
-        allowManagedDrift: true,
-        allowUnmanagedSkillReplacement: true
-      })
+      expect(driftApi.applyProfile).toHaveBeenCalledWith("daily-coding", "preview-1")
     );
   });
 
@@ -2364,6 +2372,48 @@ describe("App", () => {
     expect(action).toHaveTextContent("Apply");
     fireEvent.click(action);
     expect(api.previewApply).not.toHaveBeenCalled();
+  });
+
+  it("refreshes a stale Apply preview in place and requires confirmation again", async () => {
+    const refreshedPreview: ActivationPreview = {
+      ...preview,
+      id: "preview-2",
+      changes: preview.changes.map((change) => ({
+        ...change,
+        before: "# Changed while reviewing\n"
+      }))
+    };
+    const api = installApi({
+      previewApply: vi
+        .fn()
+        .mockResolvedValueOnce(preview)
+        .mockResolvedValueOnce(refreshedPreview),
+      applyProfile: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          kind: "stale",
+          errors: ["Agent changed after preview"]
+        })
+        .mockResolvedValueOnce({ ok: true, backupId: "backup-2" })
+    });
+    render(<App />);
+    await openProfiles();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    let dialog = await screen.findByRole("dialog", { name: "Preview" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Apply$/ }));
+
+    await waitFor(() => expect(api.previewApply).toHaveBeenCalledTimes(2));
+    expect(api.applyProfile).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("The Agent changed while Preview was open. Preview refreshed."))
+      .toBeInTheDocument();
+    dialog = screen.getByRole("dialog", { name: "Preview" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Apply$/ }));
+
+    await waitFor(() =>
+      expect(api.applyProfile).toHaveBeenLastCalledWith("daily-coding", "preview-2")
+    );
   });
 
   it("routes recovery readiness to the backup manager", async () => {

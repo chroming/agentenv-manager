@@ -1,11 +1,10 @@
 import type {
+  ApplyIssue,
   ActivationPreview,
   ProfileDetail,
   TargetInfo,
   TargetManagementState
 } from "../shared/types";
-
-const MANAGED_DRIFT_PREFIX = "External changes detected in AgentEnv-managed";
 
 export type ProfileReadinessStatus =
   | "no-profile"
@@ -13,6 +12,7 @@ export type ProfileReadinessStatus =
   | "dirty"
   | "target-unavailable"
   | "validation-error"
+  | "review-required"
   | "preview-error"
   | "apply-pending"
   | "applied"
@@ -32,12 +32,13 @@ export interface ProfileReadinessInput {
   targetState?: Pick<TargetManagementState, "status" | "lifecycleStatus" | "lifecycleReason" | "activeProfileId" | "appliedProfileHash" | "errorCount">;
   isDirty: boolean;
   localValidationErrors?: readonly string[];
-  preview?: Pick<ActivationPreview, "errors">;
+  preview?: Pick<ActivationPreview, "issues">;
   dependenciesCurrent?: boolean;
 }
 
-export const hasManagedTargetDrift = (errors: readonly string[]): boolean =>
-  errors.some((error) => error.startsWith(MANAGED_DRIFT_PREFIX));
+export const hasManagedTargetDrift = (
+  issues: readonly Pick<ApplyIssue, "code">[]
+): boolean => issues.some((issue) => issue.code === "managed-resource-drift");
 
 export const deriveProfileReadiness = ({
   profile,
@@ -90,11 +91,19 @@ export const deriveProfileReadiness = ({
     };
   }
 
-  if (preview && preview.errors.length > 0) {
+  if (preview?.issues.some((issue) => issue.disposition === "block")) {
     return {
       status: "preview-error",
       label: "Needs review",
       message: "Preview found blocking issues"
+    };
+  }
+
+  if (preview?.issues.some((issue) => issue.disposition === "review")) {
+    return {
+      status: "review-required",
+      label: "Needs review",
+      message: "Preview includes changes that will be protected by a Backup"
     };
   }
 
@@ -176,8 +185,8 @@ export const deriveApplyActionLabel = (input: ProfileReadinessInput): string => 
     return "Save profile first";
   }
 
-  if (preview && hasManagedTargetDrift(preview.errors)) {
-    return `Resolve ${target.name} drift`;
+  if (preview && hasManagedTargetDrift(preview.issues)) {
+    return `Apply with backup to ${target.name}`;
   }
 
   const readiness = deriveProfileReadiness(input);

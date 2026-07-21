@@ -7,6 +7,7 @@ import type {
   TargetState
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
+import { createApplyIssue } from "../applyIssues";
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -175,8 +176,16 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       targetPaths.targetId,
       "instructions"
     );
-    const warnings = managesInstructions ? findSecretWarnings(profile.instructions) : [];
-    const errors: string[] = [];
+    const issues = (managesInstructions ? findSecretWarnings(profile.instructions) : []).map(
+      (message) =>
+        createApplyIssue({
+          code: "secret-warning",
+          disposition: "notice",
+          resolution: "automatic",
+          resourceKind: "instructions",
+          message
+        })
+    );
     const changes: PlannedFileChange[] = [];
     const liveInstructions = managesInstructions
       ? await readTextIfExists(targetPaths.instructionsPath)
@@ -186,9 +195,14 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       targetPaths.instructionsOverridePath &&
       await pathExists(targetPaths.instructionsOverridePath)
     ) {
-      warnings.push(
-        `${targetPaths.instructionsOverridePath} exists and may override AGENTS.md`
-      );
+      issues.push(createApplyIssue({
+        code: "instruction-alias",
+        disposition: "notice",
+        resolution: "preserve",
+        resourceKind: "instructions",
+        path: targetPaths.instructionsOverridePath,
+        message: `${targetPaths.instructionsOverridePath} exists and may override AGENTS.md`
+      }));
     }
     if (managesInstructions) {
       addChange(changes, targetPaths.instructionsPath, liveInstructions, profile.instructions);
@@ -204,7 +218,14 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       liveConfig = await readTextIfExists(targetPaths.configPath);
       const validation = validateToml(liveConfig);
       if (!validation.ok) {
-        errors.push(`Invalid live config.toml: ${validation.message}`);
+        issues.push(createApplyIssue({
+          code: "invalid-native-config",
+          disposition: "block",
+          resolution: "external-action",
+          resourceKind: "configuration",
+          path: targetPaths.configPath,
+          message: `Invalid live config.toml: ${validation.message}`
+        }));
       } else {
         let nextConfig = liveConfig;
         const controlled = new Set<string>();
@@ -216,16 +237,22 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
           );
           if (!result.found) {
             if (selection.enabled) {
-              errors.push(
-                `MCP server ${selection.name} is not configured in Codex. Turn it off in this Profile or configure it in Codex.`
-              );
+              issues.push(createApplyIssue({
+                code: "missing-native-mcp",
+                disposition: "block",
+                resolution: "edit-profile",
+                resourceKind: "mcp",
+                resourceId: selection.name,
+                path: targetPaths.configPath,
+                message: `MCP server ${selection.name} is not configured in Codex. Turn it off in this Profile or configure it in Codex.`
+              }));
             }
             continue;
           }
           nextConfig = result.content;
           controlled.add(selection.name);
         }
-        if (errors.length === 0) {
+        if (!issues.some((issue) => issue.disposition === "block")) {
           managedMcpNames = [...controlled].sort();
           addChange(changes, targetPaths.configPath, liveConfig, nextConfig);
         }
@@ -233,8 +260,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     }
 
     return {
-      warnings,
-      errors,
+      issues,
       changes,
       liveFingerprints: {
         ...(managesInstructions

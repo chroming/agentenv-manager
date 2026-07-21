@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTraeCliTargetAdapter } from "../../../src/main/targets/integrations/trae-cli";
+import { blockingMessages } from "../../helpers/applyIssues";
 
 let root = "";
 
@@ -125,7 +126,7 @@ describe("Trae CLI Profile v2 adapter", () => {
       state: { managedMcpNames: ["old"] }
     });
 
-    expect(preview.errors).toEqual([]);
+    expect(blockingMessages(preview.issues)).toEqual([]);
     expect(preview.changes.map(({ path }) => path)).toEqual([paths.instructionsPath]);
     expect(preview.liveFingerprints).not.toHaveProperty(paths.configPath);
     expect(preview.liveFingerprints).not.toHaveProperty(paths.mcpConfigPath!);
@@ -171,7 +172,7 @@ describe("Trae CLI Profile v2 adapter", () => {
       state: { managedMcpNames: [] }
     });
 
-    expect(preview.errors).toEqual([]);
+    expect(blockingMessages(preview.issues)).toEqual([]);
     const change = preview.changes.find(({ path }) => path === paths.configPath);
     expect(change?.after).toBe([
       "model: fast",
@@ -225,7 +226,7 @@ describe("Trae CLI Profile v2 adapter", () => {
       state: { managedMcpNames: [] }
     });
 
-    expect(preview.errors).toEqual([]);
+    expect(blockingMessages(preview.issues)).toEqual([]);
     const change = preview.changes.find(({ path }) => path === paths.mcpConfigPath);
     expect(change?.after).toContain("// preserve this comment");
     expect(change?.after).toContain('"theme": "dark"');
@@ -252,11 +253,11 @@ describe("Trae CLI Profile v2 adapter", () => {
       state: { managedMcpNames: [] }
     });
 
-    expect((await previewFor(true)).errors).toEqual([
+    expect(blockingMessages((await previewFor(true)).issues)).toEqual([
       expect.stringContaining("not configured in Trae CLI")
     ]);
     const disabled = await previewFor(false);
-    expect(disabled.errors).toEqual([]);
+    expect(blockingMessages(disabled.issues)).toEqual([]);
     expect(disabled.changes.map(({ path }) => path)).not.toContain(paths.configPath);
     expect(disabled.changes.map(({ path }) => path)).not.toContain(paths.mcpConfigPath);
   });
@@ -339,7 +340,7 @@ describe("Trae CLI Profile v2 adapter", () => {
       targetPaths: paths,
       state: { managedMcpNames: [] }
     });
-    expect(preview.errors).toEqual([
+    expect(blockingMessages(preview.issues)).toEqual([
       expect.stringContaining("defined in multiple Trae CLI user files")
     ]);
     expect(preview.changes.map(({ path }) => path)).not.toContain(paths.configPath);
@@ -377,7 +378,7 @@ describe("Trae CLI Profile v2 adapter", () => {
       targetPaths: paths,
       state: { managedMcpNames: [] }
     });
-    expect(preview.errors).toEqual([
+    expect(blockingMessages(preview.issues)).toEqual([
       expect.stringContaining("Agent-owned traecli.yaml")
     ]);
     expect(preview.liveFingerprints).toHaveProperty(legacyPath);

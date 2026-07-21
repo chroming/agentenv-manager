@@ -1,4 +1,5 @@
 import type {
+  ApplyIssue,
   NativeMcpConnection,
   ProfileDetail,
   TargetActivationPreview,
@@ -61,7 +62,7 @@ export interface AgentTargetAdapter {
   createDefaultProfile(id: string): Omit<ProfileDetail, "profileDir">;
   captureProfile(targetPaths: TargetPaths): Promise<CapturedTargetProfile>;
   createPreview(input: TargetPreviewInput): Promise<TargetActivationPreview>;
-  validateAssets(input: TargetAssetInput): Promise<string[]>;
+  validateAssets(input: TargetAssetInput): Promise<ApplyIssue[]>;
   getAssetBackupPaths(input: TargetAssetInput): Promise<string[]>;
   applyAssets(input: TargetAssetInput): Promise<void>;
 }

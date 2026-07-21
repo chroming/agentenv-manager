@@ -12,8 +12,7 @@ const preview: ActivationPreview = {
   libraryVersions: { skills: {} },
   targetId: "opencode",
   createdAt: "2026-06-30T00:00:00.000Z",
-  warnings: [],
-  errors: [],
+  issues: [],
   changes: [
     {
       path: "/tmp/home/.config/opencode/opencode.jsonc",
@@ -145,21 +144,26 @@ describe("PreviewDialog", () => {
 
   it("presents an unmanaged Skill destination as an explicit backup replacement", () => {
     const path = "/Users/test/.claude/skills/bytedcli";
-    const onAcknowledgedChange = vi.fn();
     render(
       <PreviewDialog
         targetNames={{ "claude-code": "Claude Code" }}
         preview={{
           ...preview,
           targetId: "claude-code",
-          errors: [`Skill target already exists and is not AgentEnv-owned: ${path}`],
-          replaceableTargetPaths: [path],
+          issues: [{
+            id: `unmanaged-skill-replacement:${path}`,
+            code: "unmanaged-skill-replacement",
+            disposition: "review",
+            resolution: "backup-replace",
+            resourceKind: "skill",
+            resourceId: "bytedcli",
+            path,
+            message: "Existing unmanaged Skill bytedcli will be backed up and replaced"
+          }],
           resourceChanges: [
             { kind: "skill", action: "replace", name: "bytedcli", path }
           ]
         }}
-        replacementAcknowledged={false}
-        onReplacementAcknowledgedChange={onAcknowledgedChange}
         onCancel={vi.fn()}
         onConfirm={vi.fn()}
       />
@@ -171,12 +175,8 @@ describe("PreviewDialog", () => {
     expect(screen.getByText(path)).toBeInTheDocument();
     expect(screen.getByText("Review required")).toBeInTheDocument();
     expect(screen.queryByText("Blocking issues")).not.toBeInTheDocument();
-    fireEvent.click(
-      screen.getByRole("checkbox", {
-        name: /Back up and replace protected resources/
-      })
-    );
-    expect(onAcknowledgedChange).toHaveBeenCalledWith(true);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled();
   });
 
   it("puts true blockers before the change plan", () => {
@@ -184,7 +184,15 @@ describe("PreviewDialog", () => {
       <PreviewDialog
         preview={{
           ...preview,
-          errors: ["Library Skill does not exist: missing-skill"],
+          issues: [{
+            id: "missing-library-skill:missing-skill",
+            code: "missing-library-skill",
+            disposition: "block",
+            resolution: "edit-profile",
+            resourceKind: "skill",
+            resourceId: "missing-skill",
+            message: "Library Skill does not exist: missing-skill"
+          }],
           resourceChanges: [
             { kind: "skill", action: "install", name: "missing-skill", path: "/skills/missing-skill" }
           ]
@@ -206,9 +214,26 @@ describe("PreviewDialog", () => {
       <PreviewDialog
         preview={{
           ...preview,
-          warnings: [
-            "Unmanaged local skill kept: /skills/local-only",
-            "Library Skill dormant is globally disabled and will not be applied"
+          issues: [
+            {
+              id: "unmanaged-skill-preserved:/skills/local-only",
+              code: "unmanaged-skill-preserved",
+              disposition: "notice",
+              resolution: "preserve",
+              resourceKind: "skill",
+              resourceId: "local-only",
+              path: "/skills/local-only",
+              message: "Unmanaged local Skill local-only will be preserved"
+            },
+            {
+              id: "globally-disabled-skill:dormant",
+              code: "globally-disabled-skill",
+              disposition: "notice",
+              resolution: "automatic",
+              resourceKind: "skill",
+              resourceId: "dormant",
+              message: "Library Skill dormant is globally disabled and will not be applied"
+            }
           ]
         }}
       />

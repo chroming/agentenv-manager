@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   ActivationPreview,
+  ApplyIssue,
   ProfileDetail,
   TargetInfo,
   TargetManagementState
@@ -33,7 +34,21 @@ const unmanagedState = {
   status: "unmanaged"
 } as TargetManagementState;
 
-const previewWith = (...errors: string[]) => ({ errors }) as ActivationPreview;
+const issue = (
+  message: string,
+  code: ApplyIssue["code"] = "generic-blocker",
+  disposition: ApplyIssue["disposition"] = "block"
+): ApplyIssue => ({
+  id: `${code}:${message}`,
+  code,
+  disposition,
+  resolution: disposition === "review" ? "backup-replace" : "external-action",
+  resourceKind: "target",
+  message
+});
+
+const previewWith = (...issues: ApplyIssue[]) => ({ issues }) as ActivationPreview;
+const blockedPreview = (message: string) => previewWith(issue(message));
 
 describe("profile readiness", () => {
   it("prioritizes missing profile and target before draft and validation states", () => {
@@ -41,7 +56,7 @@ describe("profile readiness", () => {
       deriveProfileReadiness({
         isDirty: true,
         localValidationErrors: ["Instructions are empty"],
-        preview: previewWith("Preview blocked")
+        preview: blockedPreview("Preview blocked")
       })
     ).toEqual({
       status: "no-profile",
@@ -54,7 +69,7 @@ describe("profile readiness", () => {
         profile,
         isDirty: true,
         localValidationErrors: ["Instructions are empty"],
-        preview: previewWith("Preview blocked")
+        preview: blockedPreview("Preview blocked")
       })
     ).toEqual({
       status: "no-target",
@@ -100,12 +115,15 @@ describe("profile readiness", () => {
   });
 
   it("classifies managed drift from preview errors", () => {
-    const driftError =
-      "External changes detected in AgentEnv-managed instructions. Preview again after resolving them.";
+    const driftIssue = issue(
+      "AgentEnv-managed Instructions changed outside AgentEnv",
+      "managed-resource-drift",
+      "review"
+    );
 
-    expect(hasManagedTargetDrift([driftError])).toBe(true);
+    expect(hasManagedTargetDrift([driftIssue])).toBe(true);
     expect(
-      hasManagedTargetDrift(["External changes detected in agentenv-managed instructions"])
+      hasManagedTargetDrift([issue("Other issue")])
     ).toBe(false);
     expect(
       deriveApplyActionLabel({
@@ -113,9 +131,9 @@ describe("profile readiness", () => {
         target,
         targetState: managedState,
         isDirty: false,
-        preview: previewWith(driftError)
+        preview: previewWith(driftIssue)
       })
-    ).toBe("Resolve Codex drift");
+    ).toBe("Apply with backup to Codex");
   });
 
   it("distinguishes saved changes from the version applied to the target", () => {
@@ -184,7 +202,7 @@ describe("profile readiness", () => {
           target,
           isDirty: false,
           localValidationErrors: ["Instructions are empty"],
-          preview: previewWith("Preview blocked")
+          preview: blockedPreview("Preview blocked")
         },
         expected: ["validation-error", "This profile has validation issues", undefined]
       },
@@ -193,7 +211,7 @@ describe("profile readiness", () => {
           profile,
           target,
           isDirty: false,
-          preview: previewWith("Preview blocked")
+          preview: blockedPreview("Preview blocked")
         },
         expected: ["preview-error", "Preview found blocking issues", undefined]
       },

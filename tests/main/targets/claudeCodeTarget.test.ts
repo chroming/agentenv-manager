@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createClaudeCodeTargetAdapter } from "../../../src/main/targets/claudeCodeTarget";
+import { blockingMessages } from "../../helpers/applyIssues";
 
 let root = "";
 afterEach(async () => {
@@ -30,7 +31,7 @@ describe("Claude Code Profile v2 adapter", () => {
       state: { managedMcpNames: ["old"] }
     });
 
-    expect(preview.errors).toEqual([]);
+    expect(blockingMessages(preview.issues)).toEqual([]);
     expect(preview.changes.map(({ path }) => path)).toEqual([paths.instructionsPath]);
     expect(preview.liveFingerprints).not.toHaveProperty(paths.configPath);
     expect(preview.liveFingerprints).not.toHaveProperty(paths.mcpConfigPath!);
@@ -56,7 +57,7 @@ describe("Claude Code Profile v2 adapter", () => {
       state: { managedMcpNames: [] }
     });
 
-    expect(preview.errors).toEqual([expect.stringContaining("Agent-controlled")]);
+    expect(blockingMessages(preview.issues)).toEqual([expect.stringContaining("Agent-controlled")]);
     expect(preview.changes.map(({ path }) => path)).not.toContain(paths.configPath);
   });
 

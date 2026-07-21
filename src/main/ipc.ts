@@ -789,19 +789,10 @@ export const registerIpcHandlers = ({
   );
   handleMutation(
     "activation:apply",
-    (_event, profileId: unknown, previewId: unknown, options: unknown) =>
+    (_event, profileId: unknown, previewId: unknown) =>
       activationService.applyProfile(
         parseId(profileId, "profile id"),
-        String(previewId),
-        options && typeof options === "object"
-          ? {
-              allowManagedDrift:
-                (options as { allowManagedDrift?: unknown }).allowManagedDrift === true,
-              allowUnmanagedSkillReplacement:
-                (options as { allowUnmanagedSkillReplacement?: unknown })
-                  .allowUnmanagedSkillReplacement === true
-            }
-          : undefined
+        String(previewId)
       )
   );
   ipcMain.handle("backups:list", () => backupStore.listBackups());

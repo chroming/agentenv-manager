@@ -1,5 +1,6 @@
 import { join, resolve } from "node:path";
-import type { TargetPaths } from "../../shared/types";
+import { createApplyIssue } from "../applyIssues";
+import type { ApplyIssue, TargetPaths } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
 import { pathEntryExists, pathExists } from "../fileUtils";
 import { hashSkillContent } from "../skillContentHash";
@@ -7,7 +8,7 @@ import {
   createOwnerMarkerContent,
   isAgentEnvOwnedDir
 } from "../ownershipMarkers";
-import { deploySkillDirectory } from "../skillDeployment";
+import { deploySkillDirectory, removeSkillDeployment } from "../skillDeployment";
 import type { TargetAssetInput } from "./types";
 
 const librarySourceFor = (skillLibraryDir: string, libraryId: string) =>
@@ -36,19 +37,31 @@ export const validateSkillRefs = async ({
   replaceablePaths,
   isolateSkillRoot
 }: TargetAssetInput) => {
-  const errors: string[] = [];
+  const issues: ApplyIssue[] = [];
   if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) {
-    return errors;
+    return issues;
   }
   const skillRefs = profile.resources.skills;
-  if (skillRefs.length === 0) return errors;
+  if (skillRefs.length === 0) return issues;
   if (!targetPaths.skillsDir) {
     return skillRefs.some((skill) => skill.enabled)
-      ? ["Agent does not expose a Skills directory"]
+      ? [createApplyIssue({
+          code: "generic-blocker",
+          disposition: "block",
+          resolution: "edit-profile",
+          resourceKind: "skill",
+          message: "Agent does not expose a Skills directory"
+        })]
       : [];
   }
   if (!skillLibraryDir) {
-    return ["Skill Library directory is required for Profile Skills"];
+    return [createApplyIssue({
+      code: "missing-library-skill",
+      disposition: "block",
+      resolution: "edit-profile",
+      resourceKind: "skill",
+      message: "Skill Library directory is required for Profile Skills"
+    })];
   }
 
   for (const skillRef of skillRefs) {
@@ -56,17 +69,32 @@ export const validateSkillRefs = async ({
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
     const targetExists = !isolateSkillRoot && await pathEntryExists(targetDir);
     const owned = targetExists && await isOwnedSkillDir(targetDir, targetPaths);
+    const replaceable = replaceablePaths?.has(resolve(targetDir)) === true;
     if (!skillRef.enabled) {
-      if (targetExists && !owned) {
-        errors.push(
-          `Cannot turn off Skill ${skillRef.targetName} because the active copy is outside AgentEnv ownership: ${targetDir}`
-        );
+      if (targetExists && !owned && !replaceable) {
+        issues.push(createApplyIssue({
+          code: "external-skill-conflict",
+          disposition: "block",
+          resolution: "external-action",
+          resourceKind: "skill",
+          resourceId: skillRef.targetName,
+          path: targetDir,
+          message: `Cannot turn off Skill ${skillRef.targetName} because the active copy is outside AgentEnv ownership`
+        }));
       }
       continue;
     }
 
     if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
-      errors.push(`Library Skill does not exist: ${sourceDir}`);
+      issues.push(createApplyIssue({
+        code: "missing-library-skill",
+        disposition: "block",
+        resolution: "edit-profile",
+        resourceKind: "skill",
+        resourceId: skillRef.libraryId,
+        path: sourceDir,
+        message: `Library Skill does not exist: ${skillRef.libraryId}`
+      }));
       continue;
     }
     const approvedHash = approvedUnmanagedSkillHashes?.get(resolve(targetDir));
@@ -75,12 +103,19 @@ export const validateSkillRefs = async ({
       approvedHash &&
       (await hashSkillContent(targetDir)) === approvedHash
     );
-    const replaceable = replaceablePaths?.has(targetDir) === true;
     if (targetExists && !owned && !matchingUnmanaged && !replaceable) {
-      errors.push(`Skill target already exists and is not AgentEnv-owned: ${targetDir}`);
+      issues.push(createApplyIssue({
+        code: "external-skill-conflict",
+        disposition: "block",
+        resolution: "external-action",
+        resourceKind: "skill",
+        resourceId: skillRef.targetName,
+        path: targetDir,
+        message: `Skill target already exists and is not AgentEnv-owned: ${skillRef.targetName}`
+      }));
     }
   }
-  return errors;
+  return issues;
 };
 
 export const addSkillRefBackupPaths = (
@@ -107,6 +142,13 @@ export const applySkillRefs = async ({
   if (!profileManagesResource(profile.resources, targetPaths.targetId, "skills")) return;
   if (!targetPaths.skillsDir || !skillLibraryDir) return;
 
+  for (const skillRef of profile.resources.skills.filter((skill) => !skill.enabled)) {
+    const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
+    if (replaceablePaths?.has(resolve(targetDir))) {
+      await removeSkillDeployment(targetDir);
+    }
+  }
+
   for (const skillRef of profile.resources.skills.filter((skill) => skill.enabled)) {
     const sourceDir = librarySourceFor(skillLibraryDir, skillRef.libraryId);
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
@@ -118,7 +160,7 @@ export const applySkillRefs = async ({
       approvedHash &&
       (await hashSkillContent(targetDir)) === approvedHash
     );
-    const replaceable = replaceablePaths?.has(targetDir) === true;
+    const replaceable = replaceablePaths?.has(resolve(targetDir)) === true;
     if (targetExists && !owned && !matchingUnmanaged && !replaceable) {
       throw new Error(
         `Skill target changed after preview and is not AgentEnv-owned: ${targetDir}`
