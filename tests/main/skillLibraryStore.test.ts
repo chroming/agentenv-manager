@@ -789,6 +789,81 @@ description: >
     );
   });
 
+  it("merges repository source scopes without changing Library Skill contents", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-source-merge-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "app-data"),
+      homeDir: join(root, "home"),
+      repositoryCacheDir: join(root, "cache", "repositories")
+    });
+    const repository = await createGitTestRepository(root, {
+      "skills/engineering/frontend/review/SKILL.md":
+        "---\nname: review\ndescription: Review frontend code.\n---\n# Review\n",
+      "skills/engineering/backend/testing/SKILL.md":
+        "---\nname: testing\ndescription: Test backend code.\n---\n# Testing\n"
+    });
+    const executablePath = await findExecutable("git", { homeDir: paths.homeDir });
+    if (!executablePath) throw new Error("Git is required for repository source tests");
+    const runner = createGitCommandRunner({ executablePath });
+    const repositorySource = createGitCliSkillSource({
+      runner,
+      cache: createGitRepositoryCache({ cacheRoot: paths.repositoryCacheDir, runner })
+    });
+    const store = createSkillLibraryStore(paths, undefined, { repositorySource });
+
+    for (const directory of ["skills/engineering/frontend", "skills/engineering/backend"]) {
+      const scan = await store.scanRepositorySkills({
+        repository: repository.remoteDir,
+        ref: "main",
+        directory
+      });
+      const candidate = scan.candidates[0]!;
+      await store.importRepositorySkill({
+        repository: repository.remoteDir,
+        ref: "main",
+        directory: candidate.directory,
+        id: candidate.id,
+        sourceCollection: {
+          ...scan.sourceScope,
+          sourceSubpath: candidate.directory.slice(directory.length + 1)
+        }
+      });
+    }
+
+    const before = await store.listSkills();
+    const beforeContent = new Map(await Promise.all(before.map(async (skill) => [
+      skill.id,
+      await readFile(join(skill.path, "SKILL.md"), "utf8")
+    ] as const)));
+    const groups = await store.listSourceGroups();
+    expect(groups).toHaveLength(2);
+
+    const preview = await store.previewSourceMerge({ sourceIds: groups.map((group) => group.sourceId) });
+    expect(preview).toMatchObject({
+      mergedSource: { directory: "skills/engineering" },
+      affectedSkillCount: 2,
+      discoveredSkillCount: 2,
+      blockers: []
+    });
+    const result = await store.mergeSources(preview.id);
+    expect(result).toMatchObject({ mergedSourceCount: 2, affectedSkillCount: 2 });
+    await expect(lstat(result.backupPath)).resolves.toBeDefined();
+
+    const mergedGroups = await store.listSourceGroups();
+    expect(mergedGroups).toHaveLength(1);
+    expect(mergedGroups[0]).toMatchObject({
+      directory: "skills/engineering",
+      candidates: expect.arrayContaining([
+        expect.objectContaining({ sourceSubpath: "frontend/review" }),
+        expect.objectContaining({ sourceSubpath: "backend/testing" })
+      ])
+    });
+    for (const skill of await store.listSkills()) {
+      await expect(readFile(join(skill.path, "SKILL.md"), "utf8"))
+        .resolves.toBe(beforeContent.get(skill.id));
+    }
+  });
+
   it("persists a custom skill icon across source updates", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

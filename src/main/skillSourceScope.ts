@@ -47,6 +47,14 @@ export const createSkillSourceScope = (
   directory: result.directory
 });
 
+export const createSingleSkillSourceCollection = (
+  input: RepositorySkillSourceInput,
+  result: Pick<RepositorySkillScanResult, "repository" | "ref" | "directory">
+): SkillSourceCollectionRef => ({
+  ...createSkillSourceScope(input, result),
+  sourceSubpath: ""
+});
+
 export const validateSkillSourceCollection = (
   collection: SkillSourceCollectionRef | undefined,
   candidate: { repository: string; ref: string; directory: string }

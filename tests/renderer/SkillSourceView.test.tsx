@@ -8,6 +8,7 @@ afterEach(cleanup);
 
 const group: SkillSourceGroupView = {
   formatVersion: 1,
+  sourceId: "source-engineering",
   canonicalLink: "https://github.com/acme/skills/tree/main/engineering",
   repository: "https://github.com/acme/skills.git",
   ref: "main",
@@ -71,6 +72,8 @@ describe("SkillSourceView", () => {
         loading={false}
         onCheckGroup={onCheckGroup}
         onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
         onAdd={onAdd}
         onUpdate={onUpdate}
         onDelete={onDelete}
@@ -92,7 +95,7 @@ describe("SkillSourceView", () => {
     expect(onDelete).toHaveBeenCalledWith("docs");
 
     fireEvent.click(screen.getByRole("button", { name: "Check" }));
-    await waitFor(() => expect(onCheckGroup).toHaveBeenCalledWith(group.canonicalLink));
+    await waitFor(() => expect(onCheckGroup).toHaveBeenCalledWith(group.sourceId));
   });
 
   it("filters by source and Skill name without discarding the mounted view", () => {
@@ -103,6 +106,8 @@ describe("SkillSourceView", () => {
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
         onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
@@ -122,6 +127,8 @@ describe("SkillSourceView", () => {
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
         onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
         onUpdate={vi.fn()}
         onDelete={vi.fn()}
@@ -133,5 +140,69 @@ describe("SkillSourceView", () => {
       .toHaveClass("is-inactive");
     expect(document.querySelector<HTMLInputElement>("[aria-label='Search sources and skills']"))
       .toHaveValue("testing");
+  });
+
+  it("requires an explicit preview before merging selected source scopes", async () => {
+    const secondGroup: SkillSourceGroupView = {
+      ...group,
+      sourceId: "source-backend",
+      canonicalLink: "https://github.com/acme/skills/tree/main/engineering/backend",
+      directory: "engineering/backend",
+      candidates: []
+    };
+    const onPreviewMerge = vi.fn().mockResolvedValue({
+      id: "merge-preview",
+      sourceIds: [group.sourceId, secondGroup.sourceId],
+      sources: [group, secondGroup],
+      mergedSource: {
+        formatVersion: 1,
+        canonicalLink: "https://github.com/acme/skills/tree/main/engineering",
+        repository: group.repository,
+        ref: "main",
+        directory: "engineering"
+      },
+      affectedSkillCount: 4,
+      discoveredSkillCount: 5,
+      mergesIntoExistingSource: false,
+      warnings: [],
+      blockers: []
+    });
+    const onMerge = vi.fn().mockResolvedValue({
+      source: group,
+      mergedSourceCount: 2,
+      affectedSkillCount: 4,
+      backupPath: "/tmp/source-merge"
+    });
+    render(
+      <SkillSourceView
+        active
+        groups={[group, secondGroup]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={onPreviewMerge}
+        onMerge={onMerge}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]!);
+    fireEvent.click(checkboxes[1]!);
+    expect(screen.getByLabelText("Merged source directory")).toHaveValue("engineering");
+    fireEvent.click(screen.getByRole("button", { name: "Preview merge" }));
+    await waitFor(() => expect(onPreviewMerge).toHaveBeenCalledWith({
+      sourceIds: [group.sourceId, secondGroup.sourceId],
+      directory: "engineering"
+    }));
+    expect(await screen.findByText("New check scope")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Merge sources" }));
+    await waitFor(() => expect(onMerge).toHaveBeenCalledWith("merge-preview"));
+    expect(screen.queryByRole("dialog", { name: "Merge sources" })).not.toBeInTheDocument();
   });
 });

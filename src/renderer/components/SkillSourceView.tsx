@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -6,6 +6,7 @@ import {
   CircleAlert,
   Copy,
   ExternalLink,
+  GitMerge,
   LoaderCircle,
   RefreshCw,
   Search,
@@ -13,18 +14,25 @@ import {
 } from "lucide-react";
 import type {
   SkillSourceGroupCandidate,
-  SkillSourceGroupView
+  SkillSourceGroupView,
+  SkillSourceMergePreview,
+  SkillSourceMergePreviewInput,
+  SkillSourceMergeResult
 } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
+import { Button, ModalFrame } from "./ui";
 
 interface SkillSourceViewProps {
   active: boolean;
   groups: SkillSourceGroupView[];
   loading: boolean;
-  onCheckGroup(canonicalLink: string): Promise<void>;
+  onCheckGroup(sourceId: string): Promise<void>;
   onCheckAll(): Promise<void>;
+  onPreviewMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
+  onMerge(previewId: string): Promise<SkillSourceMergeResult>;
   onAdd(group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate): Promise<boolean>;
   onUpdate(libraryId: string): void;
   onDelete(libraryId: string): void;
@@ -51,6 +59,8 @@ export const SkillSourceView = ({
   loading,
   onCheckGroup,
   onCheckAll,
+  onPreviewMerge,
+  onMerge,
   onAdd,
   onUpdate,
   onDelete,
@@ -63,6 +73,13 @@ export const SkillSourceView = ({
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const [checkingAll, setCheckingAll] = useState(false);
   const [operation, setOperation] = useState<string>();
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set());
+  const [mergeDirectory, setMergeDirectory] = useState<string>();
+  const [mergePreview, setMergePreview] = useState<SkillSourceMergePreview>();
+  const [mergeBusy, setMergeBusy] = useState(false);
+  const [mergeError, setMergeError] = useState<string>();
+  const mergeDialogRef = useRef<HTMLElement>(null);
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const visibleGroups = useMemo(() => {
     if (!normalizedSearch) return groups;
@@ -75,16 +92,78 @@ export const SkillSourceView = ({
     );
   }, [groups, normalizedSearch]);
 
-  const runCheck = async (canonicalLink: string) => {
-    setChecking((current) => new Set(current).add(canonicalLink));
+  const selectedMergeGroups = useMemo(
+    () => groups.filter((group) => mergeSelection.has(group.sourceId)),
+    [groups, mergeSelection]
+  );
+  const computedMergeDirectory = useMemo(() => {
+    if (selectedMergeGroups.length < 2) return "";
+    const paths = selectedMergeGroups.map((group) => group.directory.split("/").filter(Boolean));
+    const common: string[] = [];
+    for (let index = 0; index < Math.min(...paths.map((path) => path.length)); index += 1) {
+      const segment = paths[0]![index];
+      if (!paths.every((path) => path[index] === segment)) break;
+      common.push(segment!);
+    }
+    return common.join("/");
+  }, [selectedMergeGroups]);
+
+  const closeMerge = (force = false) => {
+    if (mergeBusy && !force) return;
+    setMergeOpen(false);
+    setMergeSelection(new Set());
+    setMergeDirectory(undefined);
+    setMergePreview(undefined);
+    setMergeError(undefined);
+  };
+
+  useModalDialog({
+    open: mergeOpen,
+    dialogRef: mergeDialogRef,
+    dismissDisabled: mergeBusy,
+    onDismiss: closeMerge,
+    focusKey: mergePreview?.id ?? "selection"
+  });
+
+  const runCheck = async (sourceId: string) => {
+    setChecking((current) => new Set(current).add(sourceId));
     try {
-      await onCheckGroup(canonicalLink);
+      await onCheckGroup(sourceId);
     } finally {
       setChecking((current) => {
         const next = new Set(current);
-        next.delete(canonicalLink);
+        next.delete(sourceId);
         return next;
       });
+    }
+  };
+
+  const previewMerge = async () => {
+    setMergeBusy(true);
+    setMergeError(undefined);
+    try {
+      setMergePreview(await onPreviewMerge({
+        sourceIds: [...mergeSelection],
+        directory: mergeDirectory ?? computedMergeDirectory
+      }));
+    } catch (error) {
+      setMergeError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMergeBusy(false);
+    }
+  };
+
+  const confirmMerge = async () => {
+    if (!mergePreview) return;
+    setMergeBusy(true);
+    setMergeError(undefined);
+    try {
+      await onMerge(mergePreview.id);
+      closeMerge(true);
+    } catch (error) {
+      setMergeError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMergeBusy(false);
     }
   };
 
@@ -137,6 +216,15 @@ export const SkillSourceView = ({
           )}
           <span>{t("Check all")}</span>
         </button>
+        <button
+          className="secondary-action"
+          type="button"
+          disabled={groups.length < 2 || checkingAll || Boolean(operation)}
+          onClick={() => setMergeOpen(true)}
+        >
+          <GitMerge size={15} strokeWidth={2.2} />
+          <span>{t("Merge")}</span>
+        </button>
       </div>
 
       <div className="skill-source-list">
@@ -158,13 +246,13 @@ export const SkillSourceView = ({
           </div>
         ) : null}
         {visibleGroups.map((group) => {
-          const isExpanded = expanded.has(group.canonicalLink);
-          const isChecking = checking.has(group.canonicalLink);
+          const isExpanded = expanded.has(group.sourceId);
+          const isChecking = checking.has(group.sourceId);
           const hasAttention = group.counts.updates + group.counts.new + group.counts.removed > 0;
           return (
             <article
               className={`skill-source-group${isExpanded ? " is-expanded" : ""}${hasAttention ? " has-attention" : ""}`}
-              key={group.canonicalLink}
+              key={group.sourceId}
             >
               <div className="skill-source-group-row">
                 <button
@@ -174,8 +262,8 @@ export const SkillSourceView = ({
                   aria-expanded={isExpanded}
                   onClick={() => setExpanded((current) => {
                     const next = new Set(current);
-                    if (next.has(group.canonicalLink)) next.delete(group.canonicalLink);
-                    else next.add(group.canonicalLink);
+                    if (next.has(group.sourceId)) next.delete(group.sourceId);
+                    else next.add(group.sourceId);
                     return next;
                   })}
                 >
@@ -232,7 +320,7 @@ export const SkillSourceView = ({
                   className="secondary-action skill-source-check"
                   type="button"
                   disabled={isChecking || checkingAll || Boolean(operation)}
-                  onClick={() => void runCheck(group.canonicalLink)}
+                  onClick={() => void runCheck(group.sourceId)}
                 >
                   {isChecking ? (
                     <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
@@ -328,6 +416,128 @@ export const SkillSourceView = ({
           );
         })}
       </div>
+
+      {mergeOpen ? (
+        <ModalFrame
+          ariaLabel={t("Merge sources")}
+          className="skill-source-merge-dialog"
+          dialogRef={mergeDialogRef}
+          dismissDisabled={mergeBusy}
+          onDismiss={closeMerge}
+        >
+          <header className="profile-form-dialog__header">
+            <div>
+              <strong>{t(mergePreview ? "Review source merge" : "Merge sources")}</strong>
+              <span>{t(mergePreview
+                ? "Review the new check scope before changing source groups."
+                : "Select sources from the same repository and revision.")}</span>
+            </div>
+          </header>
+          <div className="skill-source-merge-body">
+            {!mergePreview ? (
+              <>
+                <div className="skill-source-merge-selection">
+                  {groups.map((group) => (
+                    <label key={group.sourceId} className="skill-source-merge-option">
+                      <input
+                        type="checkbox"
+                        checked={mergeSelection.has(group.sourceId)}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          setMergeSelection((current) => {
+                            const next = new Set(current);
+                            if (checked) next.add(group.sourceId);
+                            else next.delete(group.sourceId);
+                            return next;
+                          });
+                          setMergeDirectory(undefined);
+                          setMergeError(undefined);
+                        }}
+                      />
+                      <span>
+                        <strong>{group.directory || t("Repository root")}</strong>
+                        <OverflowTooltip
+                          className="skill-source-merge-path"
+                          focusable={false}
+                          text={group.canonicalLink}
+                        />
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <label className="skill-source-merge-field">
+                  <span>{t("Merged source directory")}</span>
+                  <input
+                    value={mergeDirectory ?? computedMergeDirectory}
+                    disabled={selectedMergeGroups.length < 2}
+                    placeholder={t("Repository root")}
+                    onChange={(event) => setMergeDirectory(event.currentTarget.value)}
+                  />
+                </label>
+                <div className="skill-source-merge-result">
+                  <span>{t("Resulting source")}</span>
+                  <OverflowTooltip
+                    className="skill-source-merge-path"
+                    focusable={false}
+                    text={selectedMergeGroups.length > 0
+                      ? `${selectedMergeGroups[0]!.repository} · ${selectedMergeGroups[0]!.ref} · /${mergeDirectory ?? computedMergeDirectory}`
+                      : t("Select at least two sources")}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="skill-source-merge-summary">
+                  <div><span>{t("Sources")}</span><strong>{mergePreview.sources.length}</strong></div>
+                  <div><span>{t("Library Skills")}</span><strong>{mergePreview.affectedSkillCount}</strong></div>
+                  <div><span>{t("Discovered")}</span><strong>{mergePreview.discoveredSkillCount}</strong></div>
+                </div>
+                <div className="skill-source-merge-result is-preview">
+                  <span>{t("New check scope")}</span>
+                  <OverflowTooltip
+                    className="skill-source-merge-path"
+                    focusable={false}
+                    text={mergePreview.mergedSource.canonicalLink}
+                  />
+                </div>
+                {mergePreview.warnings.map((warning) => (
+                  <p className="skill-source-merge-notice" key={warning}>{t(warning)}</p>
+                ))}
+                {mergePreview.blockers.map((blocker) => (
+                  <p className="skill-source-merge-notice is-error" key={blocker}>{blocker}</p>
+                ))}
+              </>
+            )}
+            {mergeError ? <p className="skill-source-merge-notice is-error">{mergeError}</p> : null}
+          </div>
+          <footer className="profile-form-dialog__actions">
+            {mergePreview ? (
+              <Button disabled={mergeBusy} onClick={() => setMergePreview(undefined)}>{t("Back")}</Button>
+            ) : (
+              <Button disabled={mergeBusy} onClick={() => closeMerge()}>{t("Cancel")}</Button>
+            )}
+            {mergePreview ? (
+              <Button
+                variant="primary"
+                disabled={mergeBusy || mergePreview.blockers.length > 0}
+                icon={mergeBusy ? <LoaderCircle className="is-spinning" size={15} /> : <GitMerge size={15} />}
+                onClick={() => void confirmMerge()}
+              >
+                {t("Merge sources")}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                disabled={mergeBusy || mergeSelection.size < 2}
+                icon={mergeBusy ? <LoaderCircle className="is-spinning" size={15} /> : undefined}
+                onClick={() => void previewMerge()}
+              >
+                {t("Preview merge")}
+              </Button>
+            )}
+          </footer>
+        </ModalFrame>
+      ) : null}
     </section>
   );
 };

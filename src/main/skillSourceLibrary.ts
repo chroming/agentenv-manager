@@ -145,11 +145,11 @@ export const createSkillSourceGroupStore = (
   listSkills: () => Promise<SkillLibraryEntry[]>
 ) => ({
   listSourceGroups: async () => service.listGroups(await listSkills()),
-  checkSourceGroup: async (canonicalLink: string) => {
-    if (!canonicalLink || canonicalLink.length > 4096) {
-      throw new Error("Skill source link is invalid");
+  checkSourceGroup: async (sourceId: string) => {
+    if (!sourceId || sourceId.length > 256) {
+      throw new Error("Skill source selection is invalid");
     }
-    return service.checkGroup(canonicalLink, await listSkills());
+    return service.checkGroup(sourceId, await listSkills());
   },
   checkAllSourceGroups: async () => service.checkAll(await listSkills())
 });

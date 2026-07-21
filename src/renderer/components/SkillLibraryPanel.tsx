@@ -57,6 +57,9 @@ import type {
   SkillLibraryEntry,
   SkillSourceGroupCandidate,
   SkillSourceGroupView,
+  SkillSourceMergePreview,
+  SkillSourceMergePreviewInput,
+  SkillSourceMergeResult,
   SkillMergeInput,
   SkillMergePreview,
   SkillSourceType,
@@ -164,8 +167,10 @@ interface SkillLibraryPanelProps {
     onProgress?: (progress: GitHubSkillImportProgress) => void
   ): Promise<RepositorySkillImportResult>;
   onLibraryModeChange(mode: "skills" | "sources"): void;
-  onCheckSourceGroup(canonicalLink: string): Promise<void>;
+  onCheckSourceGroup(sourceId: string): Promise<void>;
   onCheckAllSourceGroups(): Promise<void>;
+  onPreviewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
+  onMergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   onCancelRepositoryOperations(): Promise<void>;
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): Promise<boolean>;
@@ -400,6 +405,8 @@ export const SkillLibraryPanel = ({
   onLibraryModeChange,
   onCheckSourceGroup,
   onCheckAllSourceGroups,
+  onPreviewSourceMerge,
+  onMergeSources,
   onCancelRepositoryOperations,
   onManageTargetSkill,
   onConsolidateSkillGroup,
@@ -2026,6 +2033,8 @@ export const SkillLibraryPanel = ({
         loading={sourceGroupsLoading}
         onCheckGroup={onCheckSourceGroup}
         onCheckAll={onCheckAllSourceGroups}
+        onPreviewMerge={onPreviewSourceMerge}
+        onMerge={onMergeSources}
         onAdd={addSourceCandidate}
         onUpdate={onPreviewLibrarySkillUpdate}
         onDelete={(libraryId) => {

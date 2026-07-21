@@ -155,4 +155,88 @@ describe("Repository Skill source", () => {
     await sourceGroup.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
     expect(await sourceGroup.getByRole("button", { name: "Delete", exact: true }).count()).toBe(1);
   }, 90_000);
+
+  it("merges separately imported repository directories through an explicit preview", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-source-merge-e2e-"));
+    const appDataRoot = join(root, "app-data");
+    const homeDir = join(root, "home");
+    const repository = await createGitTestRepository(root, {
+      "skills/engineering/frontend/review/SKILL.md":
+        "---\nname: Frontend Review\ndescription: Review frontend code.\n---\n# Frontend Review\n",
+      "skills/engineering/backend/testing/SKILL.md":
+        "---\nname: Backend Testing\ndescription: Test backend code.\n---\n# Backend Testing\n"
+    });
+    app = await electron.launch({
+      executablePath: electronPath as unknown as string,
+      args: [join(process.cwd(), "out", "main", "main.js")],
+      env: {
+        ...process.env,
+        AGENTENV_AUTOMATION: "1",
+        AGENTENV_DATA_ROOT: appDataRoot,
+        AGENTENV_HOME: homeDir,
+        AGENTENV_FAKE_HOME: join(root, "fake-home"),
+        AGENTENV_CACHE_ROOT: join(root, "cache"),
+        PATH: process.env.PATH ?? `/usr/bin${delimiter}/bin`
+      }
+    });
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 920, height: 620 });
+    await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
+
+    const importDirectory = async (directory: string) => {
+      await page.getByRole("button", { name: "Import skills" }).click();
+      const dialog = page.getByRole("dialog", { name: "Import skills" });
+      await dialog.getByRole("tab", { name: "Repository" }).click();
+      await dialog.getByLabel("Repository address").fill(repository.remoteDir);
+      await dialog.getByText("Advanced", { exact: true }).click();
+      await dialog.getByLabel("Repository directory").fill(directory);
+      await dialog.getByRole("button", { name: "Scan", exact: true }).click();
+      const importButton = dialog.getByRole("button", { name: "Import 1" });
+      await importButton.waitFor({ state: "visible" });
+      await importButton.click();
+      await dialog.getByText("All 1 skills imported", { exact: true }).waitFor({ state: "visible" });
+      await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    };
+
+    await importDirectory("skills/engineering/frontend");
+    await importDirectory("skills/engineering/backend");
+    const reviewPath = join(appDataRoot, "skills-library", "frontend-review", "SKILL.md");
+    const testingPath = join(appDataRoot, "skills-library", "backend-testing", "SKILL.md");
+    const reviewContent = await readFile(reviewPath, "utf8");
+    const testingContent = await readFile(testingPath, "utf8");
+
+    await page.getByRole("tab", { name: "By source" }).click();
+    await expect.poll(() => page.locator(".skill-source-group").count()).toBe(2);
+    await page.getByRole("button", { name: "Merge", exact: true }).click();
+    const mergeDialog = page.getByRole("dialog", { name: "Merge sources" });
+    const sourceChoices = mergeDialog.getByRole("checkbox");
+    await sourceChoices.nth(0).check();
+    await sourceChoices.nth(1).check();
+    await expect.poll(() => mergeDialog.getByLabel("Merged source directory").inputValue())
+      .toBe("skills/engineering");
+    await mergeDialog.getByRole("button", { name: "Preview merge" }).click();
+    await mergeDialog.getByText("New check scope", { exact: true }).waitFor({ state: "visible" });
+    await mergeDialog.getByRole("button", { name: "Merge sources" }).click();
+    await mergeDialog.waitFor({ state: "hidden" });
+    await expect.poll(() => page.locator(".skill-source-group").count()).toBe(1);
+
+    for (const [id, expectedSubpath] of [
+      ["frontend-review", "frontend/review"],
+      ["backend-testing", "backend/testing"]
+    ] as const) {
+      const metadata = JSON.parse(await readFile(
+        join(appDataRoot, "skills-library", id, ".agentenv-skill.json"),
+        "utf8"
+      )) as { sourceCollection?: { sourceId?: string; directory?: string; sourceSubpath?: string } };
+      expect(metadata.sourceCollection).toMatchObject({
+        sourceId: expect.stringMatching(/^source-/),
+        directory: "skills/engineering",
+        sourceSubpath: expectedSubpath
+      });
+    }
+    await expect(readFile(reviewPath, "utf8")).resolves.toBe(reviewContent);
+    await expect(readFile(testingPath, "utf8")).resolves.toBe(testingContent);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+      .toBe(true);
+  }, 90_000);
 });

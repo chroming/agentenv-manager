@@ -18,7 +18,7 @@ export interface SkillSourceService {
   listGroups(skills: SkillLibraryEntry[]): Promise<SkillSourceGroupView[]>;
   recordRepositoryScan(scope: SkillSourceScope, result: RepositorySkillScanResult): Promise<void>;
   recordGitHubScan(scope: SkillSourceScope, result: GitHubSkillScanResult): Promise<void>;
-  checkGroup(canonicalLink: string, skills: SkillLibraryEntry[]): Promise<SkillSourceGroupView>;
+  checkGroup(sourceId: string, skills: SkillLibraryEntry[]): Promise<SkillSourceGroupView>;
   checkAll(skills: SkillLibraryEntry[]): Promise<SkillSourceCheckAllResult>;
 }
 
@@ -103,11 +103,11 @@ export const createSkillSourceService = (
   };
 
   const checkGroup = async (
-    canonicalLink: string,
+    sourceId: string,
     skills: SkillLibraryEntry[]
   ): Promise<SkillSourceGroupView> => {
     const group = (await listGroups(skills)).find((candidate) =>
-      candidate.canonicalLink === canonicalLink
+      candidate.sourceId === sourceId
     );
     if (!group) throw new Error("Skill source group no longer exists");
     try {
@@ -125,10 +125,10 @@ export const createSkillSourceService = (
       }
       await recordRepositoryScan(group, result);
     } catch (error) {
-      errors.set(canonicalLink, error instanceof Error ? error.message : String(error));
+      errors.set(group.canonicalLink, error instanceof Error ? error.message : String(error));
     }
     const refreshed = (await listGroups(skills)).find((candidate) =>
-      candidate.canonicalLink === canonicalLink
+      candidate.sourceId === sourceId
     );
     if (!refreshed) throw new Error("Skill source group no longer exists");
     return refreshed;
@@ -140,7 +140,7 @@ export const createSkillSourceService = (
     const workers = Array.from({ length: Math.min(2, groups.length) }, async () => {
       while (nextIndex < groups.length) {
         const group = groups[nextIndex++];
-        await checkGroup(group.canonicalLink, skills);
+        await checkGroup(group.sourceId, skills);
       }
     });
     await Promise.all(workers);

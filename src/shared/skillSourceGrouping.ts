@@ -82,14 +82,16 @@ export const deriveSkillSourceGroups = (
 ): SkillSourceGroupView[] => {
   const skillsBySource = new Map<string, SkillLibraryEntry[]>();
   for (const skill of skills) {
-    const link = skill.sourceCollection?.canonicalLink;
-    if (!link) continue;
-    skillsBySource.set(link, [...(skillsBySource.get(link) ?? []), skill]);
+    const source = skill.sourceCollection;
+    if (!source) continue;
+    const key = source.sourceId ?? source.canonicalLink;
+    skillsBySource.set(key, [...(skillsBySource.get(key) ?? []), skill]);
   }
 
   return [...skillsBySource.entries()]
-    .map(([canonicalLink, sourceSkills]): SkillSourceGroupView => {
+    .map(([sourceId, sourceSkills]): SkillSourceGroupView => {
       const firstScope = sourceSkills[0]!.sourceCollection!;
+      const canonicalLink = firstScope.canonicalLink;
       const scopeMismatch = sourceSkills.some((skill) => {
         const source = skill.sourceCollection!;
         return source.repository !== firstScope.repository ||
@@ -165,6 +167,7 @@ export const deriveSkillSourceGroups = (
       );
       return {
         formatVersion: 1,
+        sourceId,
         canonicalLink,
         repository: firstScope.repository,
         ref: firstScope.ref,

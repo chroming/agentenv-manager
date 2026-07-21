@@ -33,6 +33,7 @@ import type {
   SkillImportPreviewInput,
   SkillIconInput,
   SkillMergeInput,
+  SkillSourceMergePreviewInput,
   SaveProfileInput,
   UpdateProfileMetadataInput,
   SkillUpdatePolicyInput,
@@ -453,11 +454,23 @@ export const registerIpcHandlers = ({
       skillLibraryStore.importRepositorySkills(Array.isArray(inputs) ? inputs : [])
   );
   ipcMain.handle("skills:list-source-groups", () => skillLibraryStore.listSourceGroups());
-  ipcMain.handle("skills:check-source-group", (_event, canonicalLink: unknown) =>
-    skillLibraryStore.checkSourceGroup(String(canonicalLink))
+  ipcMain.handle("skills:check-source-group", (_event, sourceId: unknown) =>
+    skillLibraryStore.checkSourceGroup(String(sourceId))
   );
   ipcMain.handle("skills:check-all-source-groups", () =>
     skillLibraryStore.checkAllSourceGroups()
+  );
+  handleMutation("skills:preview-source-merge", (_event, input: SkillSourceMergePreviewInput) => {
+    if (!input || !Array.isArray(input.sourceIds)) {
+      throw new Error("Skill source merge requires a source selection");
+    }
+    return skillLibraryStore.previewSourceMerge({
+      sourceIds: input.sourceIds.map((value) => String(value)),
+      directory: typeof input.directory === "string" ? input.directory : undefined
+    });
+  });
+  handleMutation("skills:merge-sources", (_event, previewId: unknown) =>
+    skillLibraryStore.mergeSources(String(previewId))
   );
   ipcMain.handle("skills:cancel-repository", () => {
     cancelRepositoryOperations();

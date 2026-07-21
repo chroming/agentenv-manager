@@ -71,6 +71,9 @@ import type {
   SkillCleanupResult,
   SkillLibraryEntry,
   SkillSourceGroupView,
+  SkillSourceMergePreview,
+  SkillSourceMergePreviewInput,
+  SkillSourceMergeResult,
   SkillMergeInput,
   SkillMergePreview,
   SkillUpdatePolicyInput,
@@ -2851,15 +2854,15 @@ const AppContent = ({
     input: RepositorySkillSourceInput
   ): Promise<RepositorySkillScanResult> => window.agentEnv.scanRepositorySkills(input);
 
-  const checkSkillSourceGroup = async (canonicalLink: string) => {
+  const checkSkillSourceGroup = async (sourceId: string) => {
     setError(undefined);
     setSkillUpdateFeedbackWorkspace("library");
     setSkillUpdateCheckStatus({ state: "checking", message: t("Checking source...") });
     try {
-      const group = await window.agentEnv.checkSkillSourceGroup(canonicalLink);
+      const group = await window.agentEnv.checkSkillSourceGroup(sourceId);
       setSkillSourceGroups((current) => {
-        const next = current.some((candidate) => candidate.canonicalLink === canonicalLink)
-          ? current.map((candidate) => candidate.canonicalLink === canonicalLink ? group : candidate)
+        const next = current.some((candidate) => candidate.sourceId === sourceId)
+          ? current.map((candidate) => candidate.sourceId === sourceId ? group : candidate)
           : [...current, group];
         return next;
       });
@@ -2914,6 +2917,36 @@ const AppContent = ({
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setSkillUpdateCheckStatus({ state: "error", message: t("Source checks failed") });
       setError(message);
+    }
+  };
+
+  const previewSkillSourceMerge = async (
+    input: SkillSourceMergePreviewInput
+  ): Promise<SkillSourceMergePreview> => {
+    setError(undefined);
+    return window.agentEnv.previewSkillSourceMerge(input);
+  };
+
+  const mergeSkillSources = async (previewId: string): Promise<SkillSourceMergeResult> => {
+    setError(undefined);
+    setSkillUpdateFeedbackWorkspace("library");
+    setSkillUpdateCheckStatus({ state: "checking", message: t("Merging sources...") });
+    try {
+      const result = await window.agentEnv.mergeSkillSources(previewId);
+      await refreshSkillSourceGroups();
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: t("Merged {{sources}} sources · {{skills}} Skills", {
+          sources: result.mergedSourceCount,
+          skills: result.affectedSkillCount
+        })
+      });
+      return result;
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setSkillUpdateCheckStatus({ state: "error", message: t("Source merge failed") });
+      setError(message);
+      throw unknownError;
     }
   };
 
@@ -3959,6 +3992,8 @@ const AppContent = ({
                 onLibraryModeChange={setSkillLibraryMode}
                 onCheckSourceGroup={checkSkillSourceGroup}
                 onCheckAllSourceGroups={checkAllSkillSourceGroups}
+                onPreviewSourceMerge={previewSkillSourceMerge}
+                onMergeSources={mergeSkillSources}
                 onCancelRepositoryOperations={() => window.agentEnv.cancelRepositoryOperations()}
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={consolidateSkillGroup}

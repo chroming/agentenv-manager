@@ -44,6 +44,7 @@ import type {
   SkillSourceCheckAllResult,
   SkillSourceCollectionRef,
   SkillSourceGroupView,
+  SkillSourceMergePreview, SkillSourceMergePreviewInput, SkillSourceMergeResult, SkillSourceScope,
   TargetSkillLocationRole,
   TargetSkillLocation,
   TargetPaths,
@@ -77,13 +78,15 @@ import {
   createGitHubSourceScope,
   createSkillSourceGroupStore,
   githubCandidateStatus,
-  legacySkillSourceCollectionFor,
   normalizeRepositorySkillScan,
   resolveSkillSourceCollection,
   validateGitHubImportCollection,
   validateRepositoryImportCollection
 } from "./skillSourceLibrary";
-import type { SkillMetadataFile } from "./skillLibraryMetadata";
+import { readSkillLibraryEntry, type SkillMetadataFile } from "./skillLibraryMetadata";
+import { bindSkillSourceCollection, createSkillSourceRegistry } from "./skillSourceRegistry";
+import { createSingleSkillSourceCollection } from "./skillSourceScope";
+import { createSkillSourceMergeService } from "./skillSourceMergeService";
 
 interface SkillCleanupBackupManifest {
   id: string;
@@ -210,6 +213,8 @@ export interface SkillLibraryStore {
   listSourceGroups(): Promise<SkillSourceGroupView[]>;
   checkSourceGroup(canonicalLink: string): Promise<SkillSourceGroupView>;
   checkAllSourceGroups(): Promise<SkillSourceCheckAllResult>;
+  previewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
+  mergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   deployLibrarySkill(input: DeployLibrarySkillStoreInput): Promise<void>;
@@ -500,6 +505,7 @@ export const createSkillLibraryStore = (
   const runtimeSnapshotProvider = options.runtimeSnapshotProvider ?? ((targetPaths) =>
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
   const pendingUpdates = new Map<string, PendingSkillUpdate>();
+  const skillSourceRegistry = createSkillSourceRegistry(join(paths.appDataRoot, "skill-sources.json"));
   const skillSourceService = createLibrarySkillSourceService(
     paths.skillSourceObservationsDir,
     repositorySource
@@ -797,34 +803,8 @@ export const createSkillLibraryStore = (
     }
   };
 
-  const entryFor = async (id: string, skillDir: string): Promise<SkillLibraryEntry> => {
-    const content = await readFile(join(skillDir, "SKILL.md"), "utf8");
-    const frontmatter = parseSkillFrontmatter(content);
-    const metadata =
-      (await readJsonIfExists<SkillMetadataFile>(join(skillDir, ".agentenv-skill.json"))) ?? {};
-    const contentHash = await computeContentHash(skillDir);
-    const stats = await stat(join(skillDir, "SKILL.md"));
-    return {
-      id,
-      name: frontmatter.name || id,
-      description: frontmatter.description,
-      version: frontmatter.version,
-      versionSource: frontmatter.versionSource,
-      iconKey: metadata.iconKey,
-      path: skillDir,
-      sourceType: metadata.sourceType ?? "local",
-      source: metadata.source,
-      globallyEnabled: metadata.globallyEnabled !== false,
-      updatePolicy: updatePolicyFor(metadata),
-      remoteRef: metadata.remoteRef,
-      remoteRevision: metadata.remoteRevision,
-      contentHash: metadata.contentHash ?? contentHash,
-      updatedAt: metadata.updatedAt ?? stats.mtime.toISOString(),
-      upstream: metadata.upstream,
-      provenance: metadata.provenance,
-      sourceCollection: legacySkillSourceCollectionFor(metadata)
-    };
-  };
+  const entryFor = (id: string, skillDir: string) =>
+    readSkillLibraryEntry(id, skillDir, skillSourceRegistry);
 
   const normalizedSkillName = (name: string) => name.normalize("NFKC").trim().toLowerCase();
 
@@ -1018,6 +998,10 @@ export const createSkillLibraryStore = (
     const current = await readLibraryMetadata(skillDir);
     const sourceType = metadata.sourceType ?? "local";
     const contentHash = await computeContentHash(skillDir);
+    const sourceCollection = await bindSkillSourceCollection(
+      skillSourceRegistry,
+      resolveSkillSourceCollection(metadata.sourceCollection, current.sourceCollection)
+    );
     await writeAtomic(
       join(skillDir, ".agentenv-skill.json"),
       `${JSON.stringify(
@@ -1029,10 +1013,7 @@ export const createSkillLibraryStore = (
           remoteRevision: metadata.remoteRevision,
           upstream: metadata.upstream ?? current.upstream,
           provenance: metadata.provenance ?? current.provenance,
-          sourceCollection: resolveSkillSourceCollection(
-            metadata.sourceCollection,
-            current.sourceCollection
-          ),
+          sourceCollection,
           iconKey: metadata.iconKey === null ? undefined : metadata.iconKey ?? current.iconKey,
           globallyEnabled: metadata.globallyEnabled ?? current.globallyEnabled ?? true,
           updatePolicy:
@@ -2079,6 +2060,14 @@ export const createSkillLibraryStore = (
 
   const { listSourceGroups, checkSourceGroup, checkAllSourceGroups } =
     createSkillSourceGroupStore(skillSourceService, listSkills);
+  const { preview: previewSourceMerge, merge: mergeSources } = createSkillSourceMergeService({
+    appDataRoot: paths.appDataRoot,
+    repositorySource,
+    sourceRegistry: skillSourceRegistry,
+    sourceService: skillSourceService,
+    listSkills,
+    listSourceGroups
+  });
 
   const deployLibrarySkill = async ({
     targetPaths,
@@ -2741,6 +2730,14 @@ export const createSkillLibraryStore = (
     }
     if (sourceType === "github") {
       const githubSource = parseGitHubSkillUrl(source);
+      const sourceCollection = createSingleSkillSourceCollection(
+        { repository: source, ref: githubSource.ref, directory: githubSource.remotePath },
+        {
+          repository: `https://github.com/${githubSource.owner}/${githubSource.repo}.git`,
+          ref: githubSource.ref,
+          directory: githubSource.remotePath
+        }
+      );
       await writeMetadata(targetDir, {
         sourceType: "github",
         source: githubSource.sourceUrl,
@@ -2753,7 +2750,7 @@ export const createSkillLibraryStore = (
           ref: githubSource.ref,
           subpath: githubSource.remotePath
         },
-        sourceCollection: null
+        sourceCollection
       });
       return entryFor(safeId, targetDir);
     }
@@ -2764,6 +2761,10 @@ export const createSkillLibraryStore = (
           { repository: source, ref, directory, transport: "system-git" },
           tempDir
         );
+        const sourceCollection = createSingleSkillSourceCollection(
+          { repository: source, ref, directory, transport: "system-git" },
+          materialized
+        );
         await writeMetadata(targetDir, {
           sourceType: "git",
           source: materialized.repository,
@@ -2772,7 +2773,7 @@ export const createSkillLibraryStore = (
           remoteRevision: materialized.contentRevision,
           updatePolicy: "tracked",
           upstream: materialized.upstream,
-          sourceCollection: null
+          sourceCollection
         });
         return entryFor(safeId, targetDir);
       } finally {
@@ -3221,6 +3222,8 @@ export const createSkillLibraryStore = (
     listSourceGroups,
     checkSourceGroup,
     checkAllSourceGroups,
+    previewSourceMerge,
+    mergeSources,
     removeSkill,
     manageTargetSkill,
     deployLibrarySkill,

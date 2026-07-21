@@ -58,8 +58,10 @@ export interface AgentEnvApi {
   importRepositorySkillToLibrary(input: RepositorySkillImportInput): Promise<SkillLibraryEntry>;
   importRepositorySkills(inputs: RepositorySkillImportInput[]): Promise<RepositorySkillImportResult>;
   listSkillSourceGroups(): Promise<SkillSourceGroupView[]>;
-  checkSkillSourceGroup(canonicalLink: string): Promise<SkillSourceGroupView>;
+  checkSkillSourceGroup(sourceId: string): Promise<SkillSourceGroupView>;
   checkAllSkillSourceGroups(): Promise<SkillSourceCheckAllResult>;
+  previewSkillSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
+  mergeSkillSources(previewId: string): Promise<SkillSourceMergeResult>;
   cancelRepositoryOperations(): Promise<void>;
   removeSkillFromLibrary(id: string): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
@@ -365,7 +367,14 @@ export interface SkillSourceScope {
 }
 
 export interface SkillSourceCollectionRef extends SkillSourceScope {
+  sourceId?: string;
   sourceSubpath: string;
+}
+
+export interface SkillSourceRecord extends SkillSourceScope {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type SkillSourceCandidateState =
@@ -402,11 +411,36 @@ export interface SkillSourceGroupCounts {
 }
 
 export interface SkillSourceGroupView extends SkillSourceScope {
+  sourceId: string;
   checkedAt?: string;
   observationState: "unchecked" | "ready" | "error";
   error?: string;
   counts: SkillSourceGroupCounts;
   candidates: SkillSourceGroupCandidate[];
+}
+
+export interface SkillSourceMergePreviewInput {
+  sourceIds: string[];
+  directory?: string;
+}
+
+export interface SkillSourceMergePreview {
+  id: string;
+  sourceIds: string[];
+  sources: SkillSourceGroupView[];
+  mergedSource: SkillSourceScope;
+  affectedSkillCount: number;
+  discoveredSkillCount: number;
+  mergesIntoExistingSource: boolean;
+  warnings: string[];
+  blockers: string[];
+}
+
+export interface SkillSourceMergeResult {
+  source: SkillSourceGroupView;
+  mergedSourceCount: number;
+  affectedSkillCount: number;
+  backupPath: string;
 }
 
 export interface SkillSourceCheckAllResult {

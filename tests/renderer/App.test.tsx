@@ -408,6 +408,8 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     listSkillSourceGroups: vi.fn().mockResolvedValue([]),
     checkSkillSourceGroup: vi.fn(),
     checkAllSkillSourceGroups: vi.fn().mockResolvedValue({ groups: [], checked: 0, failed: 0 }),
+    previewSkillSourceMerge: vi.fn(),
+    mergeSkillSources: vi.fn(),
     cancelRepositoryOperations: vi.fn().mockResolvedValue(undefined),
     removeSkillFromLibrary: vi.fn().mockResolvedValue({
       backupId: "remove-backup",
