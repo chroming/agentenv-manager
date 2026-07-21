@@ -72,6 +72,13 @@ const sourceRepositoryLabel = (repository: string) => {
 const sourceScopeLabel = (group: SkillSourceGroupView) =>
   `${group.ref} · /${group.directory || "."}`;
 
+const mergeErrorSummary = (message: string) => {
+  if (/repository access failed|authentication failed|permission denied|publickey|host key verification/i.test(message)) {
+    return "Could not access this repository. Check your Git credentials or SSH key.";
+  }
+  return "Could not check the merged source.";
+};
+
 export const SkillSourceView = ({
   active,
   groups,
@@ -135,6 +142,7 @@ export const SkillSourceView = ({
   }, [selectedMergeGroups]);
   const activeMergeDirectory = mergeDirectory ?? computedMergeDirectory;
   const mergePreviewIsCurrent = mergePreview?.mergedSource.directory === activeMergeDirectory;
+  const canMergeSources = groups.length >= 2;
 
   const closeMerge = (force = false, clearSelection = false) => {
     if (mergeBusy && !force) return;
@@ -302,18 +310,20 @@ export const SkillSourceView = ({
           )}
           <span>{t("Check all")}</span>
         </button>
-        <button
-          className="secondary-action"
-          type="button"
-          disabled={mergeSelection.size < 2 || checkingAll || Boolean(operation)}
-          onClick={openMerge}
-        >
-          <GitMerge size={15} strokeWidth={2.2} />
-          <span>{t("Merge selected")}{mergeSelection.size > 0 ? ` (${mergeSelection.size})` : ""}</span>
-        </button>
+        {canMergeSources ? (
+          <button
+            className="secondary-action"
+            type="button"
+            disabled={mergeSelection.size < 2 || checkingAll || Boolean(operation)}
+            onClick={openMerge}
+          >
+            <GitMerge size={15} strokeWidth={2.2} />
+            <span>{t("Merge selected")}{mergeSelection.size > 0 ? ` (${mergeSelection.size})` : ""}</span>
+          </button>
+        ) : null}
       </div>
 
-      <div className="skill-source-list">
+      <div className={`skill-source-list${canMergeSources ? " can-merge" : ""}`}>
         {loading && groups.length === 0 ? (
           <div className="inline-state inline-state--loading skill-source-empty" role="status">
             <span className="inline-state__icon" aria-hidden="true" />
@@ -342,24 +352,26 @@ export const SkillSourceView = ({
               key={group.sourceId}
             >
               <div className="skill-source-group-row">
-                <label className="skill-source-select">
-                  <input
-                    type="checkbox"
-                    aria-label={t("Select source {{name}}", {
-                      name: group.displayName ?? sourceRepositoryLabel(group.repository)
-                    })}
-                    checked={isSelected}
-                    onChange={(event) => {
-                      const checked = event.currentTarget.checked;
-                      setMergeSelection((current) => {
-                        const next = new Set(current);
-                        if (checked) next.add(group.sourceId);
-                        else next.delete(group.sourceId);
-                        return next;
-                      });
-                    }}
-                  />
-                </label>
+                {canMergeSources ? (
+                  <label className="skill-source-select">
+                    <input
+                      type="checkbox"
+                      aria-label={t("Select source {{name}}", {
+                        name: group.displayName ?? sourceRepositoryLabel(group.repository)
+                      })}
+                      checked={isSelected}
+                      onChange={(event) => {
+                        const checked = event.currentTarget.checked;
+                        setMergeSelection((current) => {
+                          const next = new Set(current);
+                          if (checked) next.add(group.sourceId);
+                          else next.delete(group.sourceId);
+                          return next;
+                        });
+                      }}
+                    />
+                  </label>
+                ) : null}
                 <button
                   className="skill-source-disclosure"
                   type="button"
@@ -423,9 +435,9 @@ export const SkillSourceView = ({
                 </div>
                 <div className="skill-source-counts" aria-label={t("Source summary")}>
                   <span className="is-total"><strong>{group.counts.total}</strong>{t("Total")}</span>
-                  <span className="is-update"><strong>{group.counts.updates}</strong>{t("Updates")}</span>
-                  <span className="is-new"><strong>{group.counts.new}</strong>{t("New")}</span>
-                  <span className="is-removed"><strong>{group.counts.removed}</strong>{t("Removed")}</span>
+                  <span className={`is-update${group.counts.updates > 0 ? " has-value" : ""}`}><strong>{group.counts.updates}</strong>{t("Updates")}</span>
+                  <span className={`is-new${group.counts.new > 0 ? " has-value" : ""}`}><strong>{group.counts.new}</strong>{t("New")}</span>
+                  <span className={`is-removed${group.counts.removed > 0 ? " has-value" : ""}`}><strong>{group.counts.removed}</strong>{t("Removed")}</span>
                 </div>
                 {group.error ? (
                   <OverflowTooltip
@@ -543,10 +555,10 @@ export const SkillSourceView = ({
           dismissDisabled={mergeBusy}
           onDismiss={closeMerge}
         >
-          <header className="profile-form-dialog__header">
+          <header className="profile-dialog-header">
             <div>
-              <strong>{t("Confirm source merge")}</strong>
-              <span>{t("Review and adjust the shared source before merging selected groups.")}</span>
+              <div className="section-title">{t("Confirm source merge")}</div>
+              <p className="muted">{t("Review and adjust the shared source before merging selected groups.")}</p>
             </div>
           </header>
           <div className="skill-source-merge-body">
@@ -589,9 +601,20 @@ export const SkillSourceView = ({
             {mergePreviewIsCurrent ? mergePreview.blockers.map((blocker) => (
               <p className="skill-source-merge-notice is-error" key={blocker}>{blocker}</p>
             )) : null}
-            {mergeError ? <p className="skill-source-merge-notice is-error">{mergeError}</p> : null}
+            {mergeError ? (
+              <div className="skill-source-merge-notice is-error" role="alert">
+                <CircleAlert size={15} strokeWidth={2.2} aria-hidden="true" />
+                <OverflowTooltip
+                  ariaLabel={t("Full merge error")}
+                  className="skill-source-merge-error"
+                  displayText={t(mergeErrorSummary(mergeError))}
+                  text={mergeError}
+                  tooltipClassName="library-source-tooltip"
+                />
+              </div>
+            ) : null}
           </div>
-          <footer className="profile-form-dialog__actions">
+          <footer className="preview-actions">
             <Button disabled={mergeBusy} onClick={() => closeMerge()}>{t("Cancel")}</Button>
             <Button
               variant="primary"
@@ -613,11 +636,12 @@ export const SkillSourceView = ({
           dismissDisabled={renameBusy}
           onDismiss={closeRename}
         >
-          <header className="profile-form-dialog__header">
+          <header className="profile-dialog-header">
             <div>
-              <strong>{t("Rename source")}</strong>
+              <div className="section-title">{t("Rename source")}</div>
               <OverflowTooltip
                 className="skill-source-name-location"
+                displayText={`${sourceRepositoryLabel(renameSource.repository)} · ${sourceScopeLabel(renameSource)}`}
                 focusable={false}
                 text={renameSource.canonicalLink}
               />
@@ -641,7 +665,7 @@ export const SkillSourceView = ({
             </label>
             {renameError ? <p className="skill-source-merge-notice is-error">{renameError}</p> : null}
           </div>
-          <footer className="profile-form-dialog__actions">
+          <footer className="preview-actions">
             <Button disabled={renameBusy} onClick={closeRename}>{t("Cancel")}</Button>
             <Button
               variant="primary"

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { execFile as execFileCallback } from "node:child_process";
 import {
   access,
   chmod,
@@ -13,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
 import electronPath from "electron";
 import { _electron as electron } from "playwright-core";
 
@@ -51,6 +53,7 @@ const parseArguments = (argumentsList) => {
 
 const { outputDir, suppliedReference } = parseArguments(process.argv.slice(2));
 const referencePath = join(outputDir, "reference.png");
+const execFile = promisify(execFileCallback);
 
 const writeJson = async (path, value) => {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -86,6 +89,31 @@ const profileFixtures = [
     mcp: ["filesystem", "github", "postgres", "shared-docs"]
   }
 ];
+
+const repositorySource = "https://github.com/agentenv-community/agent-skills.git";
+const repositorySourceScopes = {
+  "react-best-practices": {
+    id: "source-react-best-practices",
+    directory: "skills/react-best-practices"
+  },
+  "git-workflow": {
+    id: "source-git-workflow",
+    directory: "skills/git-workflow"
+  }
+};
+
+const sourceCollectionFor = (skillId) => {
+  const source = repositorySourceScopes[skillId];
+  return {
+    formatVersion: 1,
+    sourceId: source.id,
+    canonicalLink: `https://github.com/agentenv-community/agent-skills/tree/main/${source.directory}`,
+    repository: repositorySource,
+    ref: "main",
+    directory: source.directory,
+    sourceSubpath: ""
+  };
+};
 
 const writeProfile = async (appDataRoot, fixture) => {
   const profileDir = join(appDataRoot, "profiles", fixture.id);
@@ -140,7 +168,20 @@ const writeLibrary = async (appDataRoot) => {
         contentHash: "7ce3f08",
         updateCheckEnabled: true,
         updatePolicy: "tracked",
+        sourceCollection: sourceCollectionFor(id),
         updatedAt: "2026-07-12T00:00:00.000Z"
+      });
+    } else if (id === "git-workflow") {
+      await writeJson(join(skillDir, ".agentenv-skill.json"), {
+        sourceType: "github",
+        source: "https://github.com/agentenv-community/agent-skills/tree/main/skills/git-workflow",
+        remoteRef: "main",
+        remoteRevision: "913619b",
+        contentHash: "913619b",
+        updateCheckEnabled: true,
+        updatePolicy: "tracked",
+        sourceCollection: sourceCollectionFor(id),
+        updatedAt: "2026-07-11T00:00:00.000Z"
       });
     } else if (id === "python-type-hints") {
       await writeJson(join(skillDir, ".agentenv-skill.json"), {
@@ -243,6 +284,19 @@ const prepareFixture = async (root) => {
   });
   await Promise.all(profileFixtures.map((profile) => writeProfile(appDataRoot, profile)));
   await writeLibrary(appDataRoot);
+  await writeJson(join(appDataRoot, "skill-sources.json"), {
+    formatVersion: 1,
+    sources: Object.values(repositorySourceScopes).map((source) => ({
+      formatVersion: 1,
+      id: source.id,
+      canonicalLink: `https://github.com/agentenv-community/agent-skills/tree/main/${source.directory}`,
+      repository: repositorySource,
+      ref: "main",
+      directory: source.directory,
+      createdAt: "2026-07-12T00:00:00.000Z",
+      updatedAt: "2026-07-12T00:00:00.000Z"
+    }))
+  });
   const sharedLibraryDir = join(appDataRoot, "skills-library", sharedSkillName);
   await mkdir(sharedLibraryDir, { recursive: true });
   await copyFile(join(sharedSkillDir, "SKILL.md"), join(sharedLibraryDir, "SKILL.md"));
@@ -260,8 +314,38 @@ const prepareFixture = async (root) => {
     "---\nname: react-best-practices\ndescription: Shared react-best-practices workflow.\n---\n\n# react-best-practices\n",
     "utf8"
   );
+  const gitWorkflowFixtureDir = join(
+    githubFixtureRoot,
+    "agentenv-community",
+    "agent-skills",
+    "main",
+    "skills",
+    "git-workflow"
+  );
+  await mkdir(gitWorkflowFixtureDir, { recursive: true });
+  await writeFile(
+    join(gitWorkflowFixtureDir, "SKILL.md"),
+    "---\nname: git-workflow\ndescription: Shared git workflow.\n---\n\n# git-workflow\n",
+    "utf8"
+  );
 
-  return { appDataRoot, binDir, githubFixtureRoot, homeDir };
+  const gitFixtureRepo = join(root, "git-repository", "agent-skills");
+  for (const skillId of Object.keys(repositorySourceScopes)) {
+    const skillDir = join(gitFixtureRepo, "skills", skillId);
+    await mkdir(skillDir, { recursive: true });
+    await copyFile(
+      join(githubFixtureRoot, "agentenv-community", "agent-skills", "main", "skills", skillId, "SKILL.md"),
+      join(skillDir, "SKILL.md")
+    );
+  }
+  await execFile("git", ["init"], { cwd: gitFixtureRepo });
+  await execFile("git", ["checkout", "-b", "main"], { cwd: gitFixtureRepo });
+  await execFile("git", ["config", "user.name", "AgentEnv Visual Test"], { cwd: gitFixtureRepo });
+  await execFile("git", ["config", "user.email", "visual-test@agentenv.local"], { cwd: gitFixtureRepo });
+  await execFile("git", ["add", "."], { cwd: gitFixtureRepo });
+  await execFile("git", ["commit", "-m", "visual fixture"], { cwd: gitFixtureRepo });
+
+  return { appDataRoot, binDir, gitFixtureRepo, githubFixtureRoot, homeDir };
 };
 
 const capturePage = async (
@@ -427,7 +511,7 @@ if (suppliedReference && suppliedReference !== referencePath) {
 const fixtureRoot = await mkdtemp(join(tmpdir(), "agentenv-profiles-capture-"));
 let app;
 try {
-  const { appDataRoot, binDir, githubFixtureRoot, homeDir } = await prepareFixture(fixtureRoot);
+  const { appDataRoot, binDir, gitFixtureRepo, githubFixtureRoot, homeDir } = await prepareFixture(fixtureRoot);
   app = await electron.launch({
     executablePath: electronPath,
     args: ["--disable-gpu", join(projectRoot, "out", "main", "main.js")],
@@ -438,6 +522,10 @@ try {
       AGENTENV_FAKE_HOME: join(fixtureRoot, "fake-home"),
       AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
       AGENTENV_HOME: homeDir,
+      GIT_ALLOW_PROTOCOL: "file:https:ssh",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: `url.${pathToFileURL(gitFixtureRepo).toString()}.insteadOf`,
+      GIT_CONFIG_VALUE_0: repositorySource,
       PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`
     }
   });
@@ -471,6 +559,28 @@ try {
   await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-920x620.png"));
+  await page.getByRole("tab", { name: "By source" }).click();
+  await page.locator(".skill-source-group").nth(1).waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-sources-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "skills-sources-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await page.getByRole("button", { name: "Expand source" }).first().click();
+  await capturePage(page, join(outputDir, "skills-sources-expanded-920x620.png"));
+  await page.getByRole("button", { name: /Rename source/ }).first().click();
+  await page.getByRole("dialog", { name: "Rename source" }).waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-source-rename-920x620.png"));
+  await page.keyboard.press("Escape");
+  const sourceSelections = page.locator(".skill-source-list").getByRole("checkbox");
+  await sourceSelections.nth(0).check();
+  await sourceSelections.nth(1).check();
+  await page.getByRole("button", { name: "Merge selected (2)", exact: true }).click();
+  const sourceMergeDialog = page.getByRole("dialog", { name: "Confirm source merge" });
+  await sourceMergeDialog.waitFor({ state: "visible" });
+  await sourceMergeDialog.getByText("Checking merged source...").waitFor({ state: "hidden" });
+  await capturePage(page, join(outputDir, "skills-source-merge-920x620.png"));
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: "Skill list" }).click();
   await page.getByRole("tab", { name: /Disabled/ }).click();
   await capturePage(page, join(outputDir, "skills-disabled-920x620.png"));
   await page.getByRole("tab", { name: /All/ }).click();
@@ -562,13 +672,17 @@ try {
   await capturePage(page, join(outputDir, "skills-cleanup-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-cleanup-920x620.png"));
+  await page.getByRole("button", { name: "Expand Managed" }).click();
   const sharedCleanupGroup = page.getByRole("group", {
     name: "Cleanup group shared-compatibility-reviewer"
   });
-  await sharedCleanupGroup
-    .getByRole("button", { name: "Review shared copy shared-compatibility-reviewer" })
-    .click();
-  const sharedTargetReview = page.getByRole("dialog", { name: "Choose shared Skill handling" });
+  await sharedCleanupGroup.getByRole("button", {
+    name: "More cleanup actions for shared-compatibility-reviewer"
+  }).click();
+  await page.getByRole("menuitem", { name: "Details" }).click();
+  const sharedTargetReview = page.getByRole("dialog", {
+    name: "Skill details shared-compatibility-reviewer"
+  });
   await sharedTargetReview.waitFor({ state: "visible", timeout: 5_000 });
   await capturePage(page, join(outputDir, "skills-cleanup-shared-review-920x620.png"));
   await page.keyboard.press("Escape");

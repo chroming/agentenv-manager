@@ -29,6 +29,7 @@ import type {
 import type { DesktopContextMenuItem } from "./desktopContextMenu";
 
 export interface AgentEnvApi {
+  readonly runtimeVersion: number;
   readonly platform: string;
   onWindowCloseRequested(callback: () => void): () => void;
   setWindowCloseGuard(enabled: boolean): void;

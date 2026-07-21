@@ -230,6 +230,9 @@ const sourceName = (skill: SkillLibraryEntry) => {
   if (skill.sourceType === "local" && !skill.source) {
     return "Library copy";
   }
+  if (skill.sourceType === "local") {
+    return "Local folder";
+  }
   const source = sourceLabel(skill);
   if (source.startsWith("https://github.com/")) {
     return source.replace("https://github.com/", "").replace("/tree/", "/");

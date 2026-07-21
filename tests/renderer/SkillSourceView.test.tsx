@@ -84,6 +84,9 @@ describe("SkillSourceView", () => {
     );
 
     expect(screen.getByLabelText("Source summary")).toHaveTextContent("4Total1Updates1New1Removed");
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Merge selected/ })).not.toBeInTheDocument();
+    expect(document.querySelector(".skill-source-counts .is-update")).toHaveClass("has-value");
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
 
     const candidates = document.querySelector<HTMLElement>(".skill-source-candidates");
@@ -199,6 +202,8 @@ describe("SkillSourceView", () => {
     fireEvent.click(checkboxes[1]!);
     fireEvent.click(screen.getByRole("button", { name: "Merge selected (2)" }));
     const dialog = screen.getByRole("dialog", { name: "Confirm source merge" });
+    expect(dialog.querySelector(".profile-dialog-header")).not.toBeNull();
+    expect(dialog.querySelector(".preview-actions")).not.toBeNull();
     expect(screen.getByLabelText("Merged source directory")).toHaveValue("engineering");
     await waitFor(() => expect(onPreviewMerge).toHaveBeenCalledWith({
       sourceIds: [group.sourceId, secondGroup.sourceId],
@@ -232,6 +237,8 @@ describe("SkillSourceView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Rename source acme/skills" }));
     const dialog = screen.getByRole("dialog", { name: "Rename source" });
+    expect(dialog.querySelector(".profile-dialog-header")).not.toBeNull();
+    expect(dialog.querySelector(".preview-actions")).not.toBeNull();
     fireEvent.change(within(dialog).getByLabelText("Source name"), {
       target: { value: "Engineering Skills" }
     });
@@ -241,5 +248,71 @@ describe("SkillSourceView", () => {
       sourceId: group.sourceId,
       name: "Engineering Skills"
     }));
+  });
+
+  it("keeps zero change counts neutral", () => {
+    render(
+      <SkillSourceView
+        active
+        groups={[{ ...group, counts: { total: 1, updates: 0, new: 0, removed: 0 } }]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    expect(document.querySelector(".skill-source-counts .is-update")).not.toHaveClass("has-value");
+    expect(document.querySelector(".skill-source-counts .is-new")).not.toHaveClass("has-value");
+    expect(document.querySelector(".skill-source-counts .is-removed")).not.toHaveClass("has-value");
+  });
+
+  it("summarizes repository merge failures while retaining the full error", async () => {
+    const secondGroup: SkillSourceGroupView = {
+      ...group,
+      sourceId: "source-backend",
+      canonicalLink: "https://github.com/acme/skills/tree/main/engineering/backend",
+      directory: "engineering/backend",
+      candidates: []
+    };
+    const onPreviewMerge = vi.fn().mockRejectedValue(new Error(
+      "Error invoking remote method 'skills:preview-source-merge': Repository access failed over HTTPS and SSH. Host key verification failed"
+    ));
+    render(
+      <SkillSourceView
+        active
+        groups={[group, secondGroup]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={onPreviewMerge}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]!);
+    fireEvent.click(checkboxes[1]!);
+    fireEvent.click(screen.getByRole("button", { name: "Merge selected (2)" }));
+
+    expect(await screen.findByText(
+      "Could not access this repository. Check your Git credentials or SSH key."
+    )).toBeInTheDocument();
+    expect(screen.getByLabelText("Full merge error")).toHaveTextContent(
+      "Could not access this repository"
+    );
   });
 });

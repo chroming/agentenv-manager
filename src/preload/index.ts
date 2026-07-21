@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AgentEnvApi } from "../shared/types";
+import { AGENTENV_RUNTIME_VERSION } from "../shared/runtimeVersion";
 
 const api: AgentEnvApi = {
+  runtimeVersion: AGENTENV_RUNTIME_VERSION,
   platform: process.platform,
   onWindowCloseRequested: (callback) => {
     const listener = () => callback();

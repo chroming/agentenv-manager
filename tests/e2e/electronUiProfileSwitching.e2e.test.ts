@@ -6803,10 +6803,13 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("menuitem", { name: "Update settings" }).click();
     await page.getByLabel("Update source for shared-reviewer").fill(newSourceDir);
     await page.getByRole("button", { name: "Save source" }).click();
-    await page
+    const sourceLabel = page
       .getByRole("group", { name: "Library item shared-reviewer" })
-      .getByText(newSourceDir)
-      .waitFor({ state: "visible" });
+      .getByLabel("Full source for shared-reviewer");
+    await expect.poll(() => sourceLabel.textContent()).toBe("Local folder");
+    await sourceLabel.hover();
+    await page.getByRole("tooltip").filter({ hasText: newSourceDir }).waitFor({ state: "visible" });
+    await page.mouse.move(2, 2);
 
     await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
     await page
