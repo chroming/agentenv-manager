@@ -17,6 +17,7 @@ export type SkillCleanupBucket = "decision" | "ready" | "managed" | "kept";
 
 export type SkillCleanupAutomaticEffect =
   | "import-and-link"
+  | "import-shared"
   | "link-to-library"
   | "archive-and-link"
   | "repair-link"
@@ -200,7 +201,6 @@ export const buildSkillCleanupGroups = (
         state === "broken" &&
         hasBrokenLink &&
         !hasExternal &&
-        !sharedMigration &&
         !missingTarget &&
         activeItems.every((item) =>
           item.runtimeIssues?.some((issue) =>
@@ -208,49 +208,68 @@ export const buildSkillCleanupGroups = (
             issue.message.startsWith("Skill link target is unavailable")
           )
         );
+      const canImportSharedCopies =
+        sharedMigration?.state === "not-imported" &&
+        !hasLibraryCopy &&
+        !hasExternal &&
+        !hasUnreadable &&
+        !missingTarget &&
+        hashes.size <= 1;
       const canNormalizeToLibrary =
         Boolean(hasLibraryCopy) &&
         !hasExternal &&
         !hasUnreadable &&
         !sharedMigration &&
         !missingTarget;
+      const sharedCopyWaiting = sharedMigration?.state === "waiting";
+      const sharedCopyReplaceable = sharedMigration?.state === "ready";
       const resolution: SkillCleanupResolution =
         state === "ignored" || state === "managed" || (state === "external" && !unresolvedExternal)
           ? "resolved"
-          : canRemoveBrokenLinks || canNormalizeToLibrary
-            ? "automatic"
-          : sharedMigration
-            ? "manual"
-          : state === "external" || state === "conflict" || state === "broken" || missingTarget
-            ? "manual"
-            : "automatic";
+          : sharedCopyWaiting
+            ? "resolved"
+            : canRemoveBrokenLinks || canImportSharedCopies || canNormalizeToLibrary
+              ? "automatic"
+              : sharedMigration
+                ? "manual"
+                : state === "external" || state === "conflict" || state === "broken" || missingTarget
+                  ? "manual"
+                  : "automatic";
       const automaticEffect: SkillCleanupAutomaticEffect | undefined =
         resolution !== "automatic"
           ? undefined
           : canRemoveBrokenLinks
             ? "remove-broken-link"
-            : staleManaged
-              ? "repair-link"
-              : hasLibraryCopy
-                ? libraryConflict || hashes.size > 1
-                  ? "archive-and-link"
-                  : "link-to-library"
-                : "import-and-link";
+            : canImportSharedCopies
+              ? "import-shared"
+              : staleManaged
+                ? "repair-link"
+                : hasLibraryCopy
+                  ? libraryConflict || hashes.size > 1
+                    ? "archive-and-link"
+                    : "link-to-library"
+                  : "import-and-link";
       const bucket: SkillCleanupBucket =
-        resolution === "automatic"
+        sharedCopyReplaceable
           ? "ready"
-          : resolution === "manual"
-            ? "decision"
-            : state === "managed"
-              ? "managed"
-              : "kept";
+          : sharedCopyWaiting
+            ? "managed"
+            : resolution === "automatic"
+              ? "ready"
+              : resolution === "manual"
+                ? "decision"
+                : state === "managed"
+                  ? "managed"
+                  : "kept";
       const resolutionReason =
         resolution === "resolved"
-          ? state === "ignored"
-            ? "Intentionally excluded from management."
-            : state === "external"
-              ? "Every externally managed copy has matching content in Library."
-              : "Every detected copy is managed and current."
+          ? sharedCopyWaiting
+            ? "The Library version is ready, and the shared copy remains active for consumer Agents that have not recorded a Profile decision."
+            : state === "ignored"
+              ? "Intentionally excluded from management."
+              : state === "external"
+                ? "Every externally managed copy has matching content in Library."
+                : "Every detected copy is managed and current."
           : resolution === "automatic"
             ? automaticEffect === "remove-broken-link"
               ? "The unavailable symbolic link can be removed without touching its missing target."
@@ -343,9 +362,68 @@ export const buildSkillCleanupGroups = (
 export const automaticSkillCleanupRequest = (
   group: SkillCleanupGroup
 ): SkillCleanupRequest | undefined => {
-  if (group.sharedMigration || group.resolution !== "automatic") {
+  if (group.resolution !== "automatic") {
     return undefined;
   }
+  const isUnavailableLinkCleanup = group.automaticEffect === "remove-broken-link";
+  if (isUnavailableLinkCleanup) {
+    const brokenLocations = group.activeItems.filter(
+      (item) =>
+        item.status !== "ignored" &&
+        item.status !== "external" &&
+        item.runtimeIssues?.some(
+          (issue) =>
+            issue.code === "unreadable-skill" &&
+            issue.message.startsWith("Skill link target is unavailable")
+        )
+    );
+    if (brokenLocations.length === 0 || brokenLocations.some((item) => !item.foundIn[0])) {
+      return undefined;
+    }
+    return {
+      skillKey: group.skillKey,
+      libraryId: group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey,
+      canonicalPath: brokenLocations[0].path,
+      libraryAction: "keep",
+      locations: brokenLocations.map((item) => ({
+        targetId: item.foundIn[0],
+        path: item.path,
+        contentHash: item.contentHash
+      }))
+    };
+  }
+
+  if (group.sharedMigration) {
+    const manageableItems = group.activeItems.filter(
+      (item) => item.status !== "ignored" && item.status !== "external"
+    );
+    const sharedItems = manageableItems.filter((item) => item.sharedLocation);
+    const targetItems = manageableItems.filter((item) => !item.sharedLocation);
+    if (
+      group.sharedMigration.state !== "not-imported" ||
+      sharedItems.length === 0 ||
+      targetItems.some((item) => !item.foundIn[0])
+    ) {
+      return undefined;
+    }
+    return {
+      skillKey: group.skillKey,
+      libraryId: group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey,
+      canonicalPath: manageableItems[0].path,
+      libraryAction: "create",
+      mode: "shared-compatibility",
+      sharedLocations: sharedItems.map((item) => ({
+        path: item.path,
+        contentHash: item.contentHash
+      })),
+      locations: targetItems.map((item) => ({
+        targetId: item.foundIn[0],
+        path: item.path,
+        contentHash: item.contentHash
+      }))
+    };
+  }
+
   const locations = group.activeItems.filter(
     (item) =>
       !item.sharedLocation &&
@@ -363,7 +441,6 @@ export const automaticSkillCleanupRequest = (
       group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey,
     canonicalPath: locations[0].path,
     libraryAction:
-      group.automaticEffect === "remove-broken-link" ||
       group.items.some((item) => Boolean(item.libraryId))
         ? "keep"
         : "create",

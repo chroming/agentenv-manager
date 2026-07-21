@@ -46,6 +46,39 @@ describe("skill cleanup groups", () => {
     });
   });
 
+  it("makes broken shared compatibility links ready for reversible removal", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        path: "/tmp/home/.agents/skills/reviewer",
+        foundIn: ["opencode", "codex"],
+        contentHash: "",
+        locationRole: "compatibility-runtime",
+        sharedLocation: true,
+        runtimeAvailability: "unknown",
+        runtimeIssues: [{
+          code: "unreadable-skill",
+          severity: "warning",
+          message: "Skill link target is unavailable"
+        }]
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "broken",
+      resolution: "automatic",
+      bucket: "ready",
+      automaticEffect: "remove-broken-link"
+    });
+    expect(automaticSkillCleanupRequest(group)).toMatchObject({
+      libraryAction: "keep",
+      locations: [{
+        targetId: "opencode",
+        path: "/tmp/home/.agents/skills/reviewer",
+        contentHash: ""
+      }]
+    });
+  });
+
   it("keeps an unreadable manifest decision-only", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({
@@ -278,6 +311,7 @@ describe("skill cleanup groups", () => {
       state: "shared-copy-in-use",
       action: "open-profiles"
     });
+    expect(waiting).toMatchObject({ resolution: "resolved", bucket: "managed" });
     expect(automaticSkillCleanupRequest(waiting)).toBeUndefined();
 
     const [ready] = buildSkillCleanupGroups([sharedCopy, openCodeCopy, codexCopy], {
@@ -289,6 +323,7 @@ describe("skill cleanup groups", () => {
       state: "shared-copy-replaceable",
       action: "review-replacement"
     });
+    expect(ready).toMatchObject({ resolution: "manual", bucket: "ready" });
   });
 
   it("distinguishes unimported, retained, external, and conflicting shared copies", () => {
@@ -327,7 +362,16 @@ describe("skill cleanup groups", () => {
       .toBe("not-imported");
     expect(
       automaticSkillCleanupRequest(groups.find((group) => group.skillKey === "reviewer")!)
-    ).toBeUndefined();
+    ).toMatchObject({
+      mode: "shared-compatibility",
+      libraryAction: "create",
+      canonicalPath: "/tmp/home/.agents/skills/reviewer",
+      sharedLocations: [{
+        path: "/tmp/home/.agents/skills/reviewer",
+        contentHash: "same-hash"
+      }],
+      locations: []
+    });
     expect(groups.find((group) => group.skillKey === "kept")?.sharedMigration?.state)
       .toBe("kept");
     expect(groups.find((group) => group.skillKey === "external")?.sharedMigration?.state)
@@ -373,9 +417,11 @@ describe("skill cleanup groups", () => {
       state: "multiple-versions",
       action: "add-to-library"
     });
+    expect(group.bucket).toBe("decision");
+    expect(automaticSkillCleanupRequest(group)).toBeUndefined();
   });
 
-  it("never sends shared compatibility groups through generic automatic cleanup", () => {
+  it("auto-imports identical shared and Target copies with the shared cleanup mode", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({
         path: "/tmp/home/.agents/skills/reviewer",
@@ -395,6 +441,24 @@ describe("skill cleanup groups", () => {
       state: "duplicate-copies",
       action: "add-to-library"
     });
-    expect(automaticSkillCleanupRequest(group)).toBeUndefined();
+    expect(group).toMatchObject({
+      resolution: "automatic",
+      bucket: "ready",
+      automaticEffect: "import-shared"
+    });
+    expect(automaticSkillCleanupRequest(group)).toMatchObject({
+      mode: "shared-compatibility",
+      libraryAction: "create",
+      canonicalPath: "/tmp/home/.agents/skills/reviewer",
+      sharedLocations: [{
+        path: "/tmp/home/.agents/skills/reviewer",
+        contentHash: "same-hash"
+      }],
+      locations: [{
+        targetId: "opencode",
+        path: "/tmp/opencode/skills/reviewer",
+        contentHash: "same-hash"
+      }]
+    });
   });
 });

@@ -670,6 +670,8 @@ describe("SkillLibraryPanel", () => {
     fireEvent.focus(localSource);
     expect(screen.getByRole("tooltip")).toHaveTextContent("/tmp/source/shared-reviewer");
     fireEvent.blur(localSource);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
     expect(copiedLocalRow).toHaveTextContent("Needs sync");
     expect(copiedLocalRow).toHaveTextContent("1 out of sync");
@@ -883,7 +885,6 @@ describe("SkillLibraryPanel", () => {
     expect(discoveries).toHaveTextContent("Needs your decision");
     expect(discoveries).toHaveTextContent("Ready to clean up");
     expect(discoveries).toHaveTextContent("Kept outside AgentEnv");
-    expect(discoveries).toHaveTextContent("Conflict");
     expect(discoveries).toHaveTextContent("External");
     expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
     const sharedMigrationGroup = screen.getByRole("group", {
@@ -1036,6 +1037,7 @@ describe("SkillLibraryPanel", () => {
     });
     expect(detailsDialog).toHaveTextContent("Found on disk");
     expect(detailsDialog).toHaveTextContent("/tmp/opencode/skills/target-only-reviewer");
+    expect(within(detailsDialog).getAllByRole("region", { name: /Version / })).toHaveLength(1);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(
       screen.queryByRole("dialog", { name: "Skill details target-only-reviewer" })
@@ -1052,7 +1054,19 @@ describe("SkillLibraryPanel", () => {
     );
 
     const conflictGroup = screen.getByRole("group", { name: "Cleanup group conflict-reviewer" });
-    expect(conflictGroup).toHaveTextContent("Conflict");
+    expect(conflictGroup).toHaveTextContent("2 versions");
+    expect(conflictGroup).toHaveTextContent("2 different content versions · 2 locations");
+    fireEvent.click(
+      within(conflictGroup).getByRole("button", {
+        name: "More cleanup actions for conflict-reviewer"
+      })
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Details" }));
+    const conflictDetails = screen.getByRole("dialog", {
+      name: "Skill details conflict-reviewer"
+    });
+    expect(within(conflictDetails).getAllByRole("region", { name: /Version / })).toHaveLength(2);
+    fireEvent.click(within(conflictDetails).getByRole("button", { name: "Close" }));
     fireEvent.click(
       within(conflictGroup).getByRole("button", {
         name: "More cleanup actions for conflict-reviewer"
@@ -1060,15 +1074,23 @@ describe("SkillLibraryPanel", () => {
     );
     fireEvent.click(screen.getByRole("menuitem", { name: "Ignore" }));
     expect(onIgnoreSkillGroup).toHaveBeenCalledWith("conflict-reviewer");
-    fireEvent.focus(
-      within(conflictGroup).getByLabelText("Full cleanup locations conflict-reviewer")
+    const conflictLocations = within(conflictGroup).getByLabelText(
+      "Full cleanup locations conflict-reviewer"
     );
-    expect(screen.getByRole("tooltip")).toHaveTextContent(
+    const closeCountBeforeTooltipClick = onCloseTool.mock.calls.length;
+    fireEvent.mouseEnter(conflictLocations);
+    const conflictLocationsTooltip = screen.getByRole("tooltip");
+    expect(conflictLocationsTooltip).toHaveTextContent(
       "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer"
     );
-    fireEvent.blur(
-      within(conflictGroup).getByLabelText("Full cleanup locations conflict-reviewer")
-    );
+    fireEvent.mouseEnter(conflictLocationsTooltip);
+    fireEvent.mouseDown(conflictLocationsTooltip);
+    fireEvent.click(conflictLocationsTooltip);
+    expect(onCloseTool).toHaveBeenCalledTimes(closeCountBeforeTooltipClick);
+    expect(screen.getByRole("region", { name: "Environment skills" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Environment skills" })).toBeInTheDocument();
     fireEvent.click(
       within(conflictGroup).getByRole("button", { name: "Add to Library conflict-reviewer" })
     );

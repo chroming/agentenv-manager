@@ -290,8 +290,8 @@ const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
 const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState) => {
   if (state === "duplicate-copies") return "Duplicate";
   if (state === "unavailable") return "Unavailable";
-  if (state === "multiple-versions" || state === "local-changes-found") return "Conflict";
-  if (state === "managed-copy-changed") return "Changed";
+  if (state === "multiple-versions") return "Multiple versions";
+  if (state === "local-changes-found" || state === "managed-copy-changed") return "Changed";
   if (state === "managed-elsewhere") return "External";
   if (state === "shared-copy-in-use") return "Shared";
   if (state === "shared-copy-replaceable") return "Ready";
@@ -345,6 +345,7 @@ const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
 
 const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {
   if (effect === "import-and-link") return "Add to Library and link copies";
+  if (effect === "import-shared") return "Add shared copy to Library and remove duplicates";
   if (effect === "link-to-library") return "Link copies to Library";
   if (effect === "archive-and-link") return "Back up local changes and link to Library";
   if (effect === "repair-link") return "Repair managed links";
@@ -714,7 +715,8 @@ export const SkillLibraryPanel = ({
         !githubOperation &&
         !modalOpen &&
         !target.closest(".library-drawer") &&
-        !target.closest(".row-action-popover")
+        !target.closest(".row-action-popover") &&
+        !target.closest('[data-ui-hover-detail="true"]')
       ) {
         onCloseTool?.();
       }
@@ -938,12 +940,23 @@ export const SkillLibraryPanel = ({
   }, [automaticCleanupRequests, cleanupGroups]);
   const manualCleanupCount = cleanupGroupsByBucket.decision.length;
   const readyCleanupCount = automaticCleanupRequests.length;
+  const sharedReplacementReadyCount = cleanupGroupsByBucket.ready.filter(
+    (group) => group.sharedMigration?.state === "ready"
+  ).length;
   const migrationSummary = [
     manualCleanupCount > 0
       ? t(manualCleanupCount === 1 ? "1 needs your decision" : "{{count}} need your decision", { count: manualCleanupCount })
       : "",
     readyCleanupCount > 0
       ? t(readyCleanupCount === 1 ? "1 ready to clean up" : "{{count}} ready to clean up", { count: readyCleanupCount })
+      : "",
+    sharedReplacementReadyCount > 0
+      ? t(
+          sharedReplacementReadyCount === 1
+            ? "1 shared copy ready to replace"
+            : "{{count}} shared copies ready to replace",
+          { count: sharedReplacementReadyCount }
+        )
       : ""
   ].filter(Boolean).join(" · ");
   const normalizedLocalSkillPath = localSkillPath.trim().replace(/\/+$/, "");
@@ -1010,6 +1023,20 @@ export const SkillLibraryPanel = ({
   const cleanupDetails = cleanupDetailsKey
     ? cleanupGroups.find((group) => group.skillKey === cleanupDetailsKey)
     : undefined;
+  const cleanupDetailVersions = cleanupDetails
+    ? [...cleanupDetails.items.reduce((groups, item) => {
+        const unavailable = !item.contentHash || item.runtimeIssues?.some(
+          (issue) => issue.code === "unreadable-skill"
+        );
+        const key = unavailable ? "unavailable" : item.contentHash;
+        groups.set(key, [...(groups.get(key) ?? []), item]);
+        return groups;
+      }, new Map<string, SkillInventoryEntry[]>()).entries()]
+        .map(([key, items]) => ({ key, items }))
+        .sort((left, right) =>
+          left.key === "unavailable" ? 1 : right.key === "unavailable" ? -1 : left.key.localeCompare(right.key)
+        )
+    : [];
   const sharedTargetReview = sharedTargetReviewKey
     ? cleanupGroups.find((group) => group.skillKey === sharedTargetReviewKey)
     : undefined;
@@ -2839,47 +2866,66 @@ export const SkillLibraryPanel = ({
               </span>
             </header>
             <div className="cleanup-details-list">
-              {cleanupDetails.items.map((item) => (
-                <div className="cleanup-details-location" key={`${item.status}-${item.path}`}>
-                  <div>
-                    <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
-                    <span className={`resource-chip resource-chip--${item.status}`}>
-                      {t(inventoryStatusLabel(item.status))}
-                    </span>
-                  </div>
-                  <PreviewText
-                    ariaLabel={t("Full detail path {{path}}", { path: item.path })}
-                    className="cleanup-option-path"
-                    text={item.path}
-                    tooltipClassName="library-source-tooltip"
-                  />
-                  <small>
-                    {item.libraryId ? `${t("Library")}: ${item.libraryId} · ` : ""}
-                    {t("Content {{hash}}", { hash: item.contentHash ? item.contentHash.slice(0, 7) : t("unavailable") })}
-                  </small>
-                  {item.sharedLocation ? <small>{t("Shared compatibility location")}</small> : null}
-                  {(item.runtimeStates ?? []).map((state) =>
-                    state.availability !== "enabled" || state.issues.length > 0 ? (
-                      <div className="cleanup-runtime-state" key={state.targetId}>
-                        <small>
-                          {t("{{target}} runtime: {{state}}", {
-                            target: targetNameFor(state.targetId, targetNames, "Unknown Agent"),
-                            state: t(state.availability)
-                          })}
-                        </small>
-                        {state.issues.map((issue) => (
-                          <PreviewText
-                            ariaLabel={t("Full runtime issue for {{path}}", { path: item.path })}
-                            className="cleanup-option-path"
-                            key={`${issue.code}:${issue.message}`}
-                            text={issue.message}
-                            tooltipClassName="library-source-tooltip"
-                          />
-                        ))}
-                      </div>
-                    ) : null
+              {cleanupDetailVersions.map((version) => (
+                <section
+                  aria-label={t(
+                    version.key === "unavailable" ? "Unavailable links" : "Version {{hash}}",
+                    { hash: version.key.slice(0, 7) }
                   )}
-                </div>
+                  className="cleanup-details-version"
+                  key={version.key}
+                >
+                  <header>
+                    <strong>
+                      {t(
+                        version.key === "unavailable" ? "Unavailable links" : "Version {{hash}}",
+                        { hash: version.key.slice(0, 7) }
+                      )}
+                    </strong>
+                    <span>{t("{{count}} copies", { count: version.items.length })}</span>
+                  </header>
+                  {version.items.map((item) => (
+                    <div className="cleanup-details-location" key={`${item.status}-${item.path}`}>
+                      <div>
+                        <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
+                        <span className={`resource-chip resource-chip--${item.status}`}>
+                          {t(inventoryStatusLabel(item.status))}
+                        </span>
+                      </div>
+                      <PreviewText
+                        ariaLabel={t("Full detail path {{path}}", { path: item.path })}
+                        className="cleanup-option-path"
+                        text={item.path}
+                        tooltipClassName="library-source-tooltip"
+                      />
+                      <small>
+                        {item.libraryId ? `${t("Library")}: ${item.libraryId}` : t("Not in Library")}
+                      </small>
+                      {item.sharedLocation ? <small>{t("Shared compatibility location")}</small> : null}
+                      {(item.runtimeStates ?? []).map((state) =>
+                        state.availability !== "enabled" || state.issues.length > 0 ? (
+                          <div className="cleanup-runtime-state" key={state.targetId}>
+                            <small>
+                              {t("{{target}} runtime: {{state}}", {
+                                target: targetNameFor(state.targetId, targetNames, "Unknown Agent"),
+                                state: t(state.availability)
+                              })}
+                            </small>
+                            {state.issues.map((issue) => (
+                              <PreviewText
+                                ariaLabel={t("Full runtime issue for {{path}}", { path: item.path })}
+                                className="cleanup-option-path"
+                                key={`${issue.code}:${issue.message}`}
+                                text={issue.message}
+                                tooltipClassName="library-source-tooltip"
+                              />
+                            ))}
+                          </div>
+                        ) : null
+                      )}
+                    </div>
+                  ))}
+                </section>
               ))}
             </div>
             <footer className="preview-actions">
@@ -3240,20 +3286,41 @@ export const SkillLibraryPanel = ({
                 const allIgnored = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
                 const sharedMigration = group.sharedMigration;
+                const linkedLibraryId = group.items.find((item) => item.libraryId)?.libraryId;
+                const contentVersionCount = new Set(
+                  group.activeItems.map((item) => item.contentHash).filter(Boolean)
+                ).size;
+                const defaultCleanupSummary = `${group.primary?.description || group.skillKey} · ${group.items.length} ${group.items.length === 1 ? "location" : "locations"}`;
+                const decisionSummary = group.bucket !== "decision"
+                  ? undefined
+                  : contentVersionCount > 1 && !linkedLibraryId
+                    ? t("{{count}} different content versions · {{locations}} locations", {
+                        count: contentVersionCount,
+                        locations: group.items.length
+                      })
+                    : group.presentation.state === "local-changes-found" && linkedLibraryId
+                      ? t("Shared copy differs from Library")
+                      : group.presentation.state === "unavailable"
+                        ? t("Skill content could not be read safely")
+                        : undefined;
+                const cleanupSummaryText = decisionSummary ?? defaultCleanupSummary;
+                const contentChoiceLabel =
+                  group.bucket === "decision" && contentVersionCount > 1 && !linkedLibraryId
+                    ? t("{{count}} versions", { count: contentVersionCount })
+                    : undefined;
                 const chipLabelKey = group.bucket === "ready"
                   ? "Ready"
                   : cleanupPresentationCompactLabel(group.presentation.state);
                 const chipDetailKey = group.bucket === "ready" && group.automaticEffect
                   ? cleanupEffectLabel(group.automaticEffect)
                   : cleanupPresentationLabel(group.presentation.state);
-                const chipLabel = t(chipLabelKey);
-                const chipDetail = t(chipDetailKey);
+                const chipLabel = contentChoiceLabel ?? t(chipLabelKey);
+                const chipDetail = decisionSummary ?? t(chipDetailKey);
                 const chipClass = group.bucket === "ready"
                   ? "managed"
                   : cleanupPresentationChipClass(group.presentation.state);
                 const actionLabel = t(cleanupActionLabel(group.presentation.action));
                 const actionDisplayLabel = t(cleanupActionDisplayLabel(group.presentation.action));
-                const linkedLibraryId = group.items.find((item) => item.libraryId)?.libraryId;
                 const managedInstallCount = group.activeItems.filter(
                   (item) => item.status === "managed" && !item.sharedLocation
                 ).length;
@@ -3375,8 +3442,8 @@ export const SkillLibraryPanel = ({
                       <PreviewText
                         ariaLabel={t("Full cleanup summary {{id}}", { id: group.skillKey })}
                         className="cleanup-group-summary"
-                        displayText={`${group.primary?.description || group.skillKey} · ${group.items.length} ${group.items.length === 1 ? "location" : "locations"}`}
-                        text={`${group.primary?.description || group.skillKey} · ${group.items.length} ${group.items.length === 1 ? "location" : "locations"}`}
+                        displayText={cleanupSummaryText}
+                        text={cleanupSummaryText}
                       />
                       <PreviewText
                         ariaLabel={t("Full cleanup locations {{id}}", { id: group.skillKey })}
@@ -3398,7 +3465,7 @@ export const SkillLibraryPanel = ({
                       text={chipDetail}
                     />
                     <div className="cleanup-group-actions">
-                      {group.bucket !== "ready" && group.presentation.action !== "none" ? (
+                      {(group.bucket !== "ready" || !group.automaticEffect) && group.presentation.action !== "none" ? (
                         <button
                           className="secondary-action cleanup-current-action"
                           type="button"

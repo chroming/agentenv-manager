@@ -133,15 +133,19 @@ export const HoverDetail = ({
   useEffect(() => {
     if (!isOpen) return undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        close();
+      }
     };
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
     return () => {
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [close, isOpen, updatePosition]);
 
@@ -184,10 +188,14 @@ export const HoverDetail = ({
         ? createPortal(
             <div
               className={`ui-hover-detail ui-hover-detail--${position?.placement ?? "bottom"}${showArrow ? " ui-hover-detail--arrow" : ""}${popoverClassName ? ` ${popoverClassName}` : ""}`}
+              data-ui-hover-detail="true"
               id={popoverId}
               ref={popoverRef}
               role="tooltip"
               style={popoverStyle}
+              onClick={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
               onMouseEnter={cancelClose}
               onMouseLeave={scheduleClose}
             >

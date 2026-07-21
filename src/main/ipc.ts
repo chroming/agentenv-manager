@@ -530,7 +530,6 @@ export const registerIpcHandlers = ({
         return Boolean(
           current &&
           current.status !== "external" &&
-          current.sharedLocation !== true &&
           current.contentHash === "" &&
           current.runtimeIssues?.some(
             (issue) =>
