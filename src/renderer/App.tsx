@@ -71,6 +71,7 @@ import type {
   SkillCleanupResult,
   SkillLibraryEntry,
   SkillSourceGroupView,
+  SkillSourceNameInput,
   SkillSourceMergePreview,
   SkillSourceMergePreviewInput,
   SkillSourceMergeResult,
@@ -2920,6 +2921,22 @@ const AppContent = ({
     }
   };
 
+  const setSkillSourceName = async (input: SkillSourceNameInput) => {
+    setError(undefined);
+    try {
+      const group = await window.agentEnv.setSkillSourceName(input);
+      setSkillSourceGroups((current) => current.map((candidate) =>
+        candidate.sourceId === group.sourceId ? group : candidate
+      ));
+      setSkillUpdateFeedbackWorkspace("library");
+      setSkillUpdateCheckStatus({ state: "success", message: t("Source name updated") });
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      throw unknownError;
+    }
+  };
+
   const previewSkillSourceMerge = async (
     input: SkillSourceMergePreviewInput
   ): Promise<SkillSourceMergePreview> => {
@@ -3992,6 +4009,7 @@ const AppContent = ({
                 onLibraryModeChange={setSkillLibraryMode}
                 onCheckSourceGroup={checkSkillSourceGroup}
                 onCheckAllSourceGroups={checkAllSkillSourceGroups}
+                onSetSourceName={setSkillSourceName}
                 onPreviewSourceMerge={previewSkillSourceMerge}
                 onMergeSources={mergeSkillSources}
                 onCancelRepositoryOperations={() => window.agentEnv.cancelRepositoryOperations()}

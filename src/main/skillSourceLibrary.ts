@@ -5,9 +5,11 @@ import type {
   GitHubSkillCandidateStatus,
   SkillLibraryEntry,
   SkillSourceCollectionRef,
+  SkillSourceGroupView,
   SkillSourceType,
   SkillUpstream
 } from "../shared/types";
+import type { SkillSourceRegistry } from "./skillSourceRegistry";
 import type { SkillSourceService } from "./skillSourceService";
 import type { GitCliSkillSource, MaterializedGitSkillSource } from "./skillSources/contract";
 import { createSkillSourceObservationStore } from "./skillSourceObservationStore";
@@ -142,14 +144,35 @@ export const normalizeRepositorySkillScan = (
 
 export const createSkillSourceGroupStore = (
   service: SkillSourceService,
-  listSkills: () => Promise<SkillLibraryEntry[]>
-) => ({
-  listSourceGroups: async () => service.listGroups(await listSkills()),
-  checkSourceGroup: async (sourceId: string) => {
-    if (!sourceId || sourceId.length > 256) {
-      throw new Error("Skill source selection is invalid");
+  listSkills: () => Promise<SkillLibraryEntry[]>,
+  registry: SkillSourceRegistry
+) => {
+  const decorate = async (groups: SkillSourceGroupView[]) => {
+    const names = new Map((await registry.list()).map((record) => [record.id, record.displayName]));
+    return groups.map((group) => ({ ...group, displayName: names.get(group.sourceId) }));
+  };
+  const listSourceGroups = async () => decorate(await service.listGroups(await listSkills()));
+
+  return {
+    listSourceGroups,
+    checkSourceGroup: async (sourceId: string) => {
+      if (!sourceId || sourceId.length > 256) {
+        throw new Error("Skill source selection is invalid");
+      }
+      return (await decorate([await service.checkGroup(sourceId, await listSkills())]))[0]!;
+    },
+    checkAllSourceGroups: async () => {
+      const result = await service.checkAll(await listSkills());
+      return { ...result, groups: await decorate(result.groups) };
+    },
+    setSourceName: async (input: import("../shared/types").SkillSourceNameInput) => {
+      if (!input || typeof input.sourceId !== "string") {
+        throw new Error("Skill source selection is invalid");
+      }
+      await registry.setDisplayName(input.sourceId, input.name);
+      const group = (await listSourceGroups()).find((candidate) => candidate.sourceId === input.sourceId);
+      if (!group) throw new Error("Skill source no longer exists");
+      return group;
     }
-    return service.checkGroup(sourceId, await listSkills());
-  },
-  checkAllSourceGroups: async () => service.checkAll(await listSkills())
-});
+  };
+};

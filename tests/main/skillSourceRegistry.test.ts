@@ -31,4 +31,22 @@ describe("Skill source registry", () => {
     expect(await registry.list()).toHaveLength(scopes.length);
     expect(new Set(results.flat().map((record) => record.id)).size).toBe(scopes.length);
   });
+
+  it("persists a local display name without changing source identity", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-source-registry-"));
+    const registry = createSkillSourceRegistry(join(root, "skill-sources.json"));
+    const [created] = await registry.ensure([scope("skills/engineering")]);
+
+    const renamed = await registry.setDisplayName(created!.id, "Engineering Skills");
+
+    expect(renamed).toMatchObject({
+      id: created!.id,
+      displayName: "Engineering Skills",
+      canonicalLink: created!.canonicalLink
+    });
+    expect((await registry.list())[0]?.displayName).toBe("Engineering Skills");
+
+    await registry.setDisplayName(created!.id, "   ");
+    expect((await registry.list())[0]?.displayName).toBeUndefined();
+  });
 });

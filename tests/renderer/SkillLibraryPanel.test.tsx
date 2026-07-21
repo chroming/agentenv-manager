@@ -174,6 +174,7 @@ describe("SkillLibraryPanel", () => {
         onCheckAllSourceGroups={vi.fn().mockResolvedValue(undefined)}
         onPreviewSourceMerge={vi.fn()}
         onMergeSources={vi.fn()}
+        onSetSourceName={vi.fn()}
         targetNames={{ opencode: "OpenCode", codex: "Codex" }}
         librarySkills={[
           {
@@ -1280,6 +1281,7 @@ describe("SkillLibraryPanel", () => {
         onCheckAllSourceGroups={vi.fn().mockResolvedValue(undefined)}
         onPreviewSourceMerge={vi.fn()}
         onMergeSources={vi.fn()}
+        onSetSourceName={vi.fn()}
         librarySkills={[]}
         skillUpdates={[]}
         skillInventory={[]}
@@ -1445,6 +1447,7 @@ describe("SkillLibraryPanel", () => {
         onCheckAllSourceGroups={vi.fn().mockResolvedValue(undefined)}
         onPreviewSourceMerge={vi.fn()}
         onMergeSources={vi.fn()}
+        onSetSourceName={vi.fn()}
         librarySkills={preview.entries.map((entry) => ({
           id: entry.id,
           name: entry.name,

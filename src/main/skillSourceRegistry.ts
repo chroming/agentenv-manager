@@ -23,6 +23,7 @@ const isSourceRecord = (value: unknown): value is SkillSourceRecord => {
     typeof source.repository === "string" &&
     typeof source.ref === "string" &&
     typeof source.directory === "string" &&
+    (source.displayName === undefined || typeof source.displayName === "string") &&
     typeof source.createdAt === "string" &&
     typeof source.updatedAt === "string";
 };
@@ -31,6 +32,7 @@ export interface SkillSourceRegistry {
   list(): Promise<SkillSourceRecord[]>;
   ensure(scopes: SkillSourceScope[]): Promise<SkillSourceRecord[]>;
   replace(records: SkillSourceRecord[]): Promise<void>;
+  setDisplayName(sourceId: string, displayName?: string): Promise<SkillSourceRecord>;
 }
 
 export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => {
@@ -65,6 +67,21 @@ export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => 
 
   const replace = (records: SkillSourceRecord[]) => serialize(() => writeRecords(records));
 
+  const setDisplayName = (sourceId: string, displayName?: string) => serialize(async () => {
+    const records = await list();
+    const record = records.find((candidate) => candidate.id === sourceId);
+    if (!record) throw new Error("Skill source no longer exists");
+    const normalized = displayName?.trim() || undefined;
+    if (normalized && (normalized.length > 80 || /[\u0000-\u001f\u007f]/.test(normalized))) {
+      throw new Error("Skill source name must be 80 characters or fewer and contain no control characters");
+    }
+    if (record.displayName === normalized) return record;
+    record.displayName = normalized;
+    record.updatedAt = new Date().toISOString();
+    await writeRecords(records);
+    return record;
+  });
+
   const ensure = (scopes: SkillSourceScope[]) => serialize(async () => {
     const records = await list();
     const byKey = new Map(records.map((record) => [sourceKey(record), record]));
@@ -96,7 +113,7 @@ export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => 
     return resolved;
   });
 
-  return { list, ensure, replace };
+  return { list, ensure, replace, setDisplayName };
 };
 
 export const bindSkillSourceCollection = async (

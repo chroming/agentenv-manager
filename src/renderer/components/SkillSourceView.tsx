@@ -8,6 +8,7 @@ import {
   ExternalLink,
   GitMerge,
   LoaderCircle,
+  Pencil,
   RefreshCw,
   Search,
   Trash2
@@ -15,6 +16,7 @@ import {
 import type {
   SkillSourceGroupCandidate,
   SkillSourceGroupView,
+  SkillSourceNameInput,
   SkillSourceMergePreview,
   SkillSourceMergePreviewInput,
   SkillSourceMergeResult
@@ -31,6 +33,7 @@ interface SkillSourceViewProps {
   loading: boolean;
   onCheckGroup(sourceId: string): Promise<void>;
   onCheckAll(): Promise<void>;
+  onRename(input: SkillSourceNameInput): Promise<void>;
   onPreviewMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   onMerge(previewId: string): Promise<SkillSourceMergeResult>;
   onAdd(group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate): Promise<boolean>;
@@ -75,6 +78,7 @@ export const SkillSourceView = ({
   loading,
   onCheckGroup,
   onCheckAll,
+  onRename,
   onPreviewMerge,
   onMerge,
   onAdd,
@@ -95,11 +99,17 @@ export const SkillSourceView = ({
   const [mergePreview, setMergePreview] = useState<SkillSourceMergePreview>();
   const [mergeBusy, setMergeBusy] = useState(false);
   const [mergeError, setMergeError] = useState<string>();
+  const [renameSource, setRenameSource] = useState<SkillSourceGroupView>();
+  const [renameValue, setRenameValue] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState<string>();
   const mergeDialogRef = useRef<HTMLElement>(null);
+  const renameDialogRef = useRef<HTMLElement>(null);
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const visibleGroups = useMemo(() => {
     if (!normalizedSearch) return groups;
     return groups.filter((group) =>
+      group.displayName?.toLocaleLowerCase().includes(normalizedSearch) ||
       group.canonicalLink.toLocaleLowerCase().includes(normalizedSearch) ||
       group.candidates.some((candidate) =>
         candidate.name.toLocaleLowerCase().includes(normalizedSearch) ||
@@ -142,6 +152,45 @@ export const SkillSourceView = ({
     onDismiss: closeMerge,
     focusKey: mergePreview?.id ?? "merge-source"
   });
+
+  const closeRename = () => {
+    if (renameBusy) return;
+    setRenameSource(undefined);
+    setRenameValue("");
+    setRenameError(undefined);
+  };
+
+  useModalDialog({
+    open: Boolean(renameSource),
+    dialogRef: renameDialogRef,
+    dismissDisabled: renameBusy,
+    onDismiss: closeRename,
+    focusKey: renameSource?.sourceId ?? "rename-source"
+  });
+
+  const openRename = (group: SkillSourceGroupView) => {
+    setRenameSource(group);
+    setRenameValue(group.displayName ?? "");
+    setRenameError(undefined);
+  };
+
+  const confirmRename = async () => {
+    if (!renameSource) return;
+    setRenameBusy(true);
+    setRenameError(undefined);
+    try {
+      await onRename({
+        sourceId: renameSource.sourceId,
+        name: renameValue.trim() || undefined
+      });
+      setRenameSource(undefined);
+      setRenameValue("");
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRenameBusy(false);
+    }
+  };
 
   const runCheck = async (sourceId: string) => {
     setChecking((current) => new Set(current).add(sourceId));
@@ -297,7 +346,7 @@ export const SkillSourceView = ({
                   <input
                     type="checkbox"
                     aria-label={t("Select source {{name}}", {
-                      name: group.directory || t("Repository root")
+                      name: group.displayName ?? sourceRepositoryLabel(group.repository)
                     })}
                     checked={isSelected}
                     onChange={(event) => {
@@ -333,27 +382,39 @@ export const SkillSourceView = ({
                   />
                 </span>
                 <div className="skill-source-identity">
-                  <button
-                    className="skill-source-link"
-                    type="button"
-                    onClick={() => sourceIsOpenable(group.canonicalLink)
-                      ? onOpenSource(group.canonicalLink)
-                      : onCopySource(group.canonicalLink)}
-                  >
-                    <OverflowTooltip
-                      className="skill-source-link-text"
-                      displayText={sourceRepositoryLabel(group.repository)}
-                      focusable={false}
-                      text={group.canonicalLink}
-                    />
-                    {sourceIsOpenable(group.canonicalLink) ? (
-                      <ExternalLink size={12} strokeWidth={2.2} />
-                    ) : (
-                      <Copy size={12} strokeWidth={2.2} />
-                    )}
-                  </button>
+                  <div className="skill-source-title-row">
+                    <button
+                      className="skill-source-link"
+                      type="button"
+                      onClick={() => sourceIsOpenable(group.canonicalLink)
+                        ? onOpenSource(group.canonicalLink)
+                        : onCopySource(group.canonicalLink)}
+                    >
+                      <OverflowTooltip
+                        className="skill-source-link-text"
+                        displayText={group.displayName ?? sourceRepositoryLabel(group.repository)}
+                        focusable={false}
+                        text={group.canonicalLink}
+                      />
+                      {sourceIsOpenable(group.canonicalLink) ? (
+                        <ExternalLink size={12} strokeWidth={2.2} />
+                      ) : (
+                        <Copy size={12} strokeWidth={2.2} />
+                      )}
+                    </button>
+                    <button
+                      className="skill-source-rename"
+                      type="button"
+                      aria-label={t("Rename source {{name}}", {
+                        name: group.displayName ?? sourceRepositoryLabel(group.repository)
+                      })}
+                      onClick={() => openRename(group)}
+                    >
+                      <Pencil size={13} strokeWidth={2.1} />
+                    </button>
+                  </div>
                   <span className="skill-source-checked">
-                    {sourceScopeLabel(group)} · {group.error
+                    {group.displayName ? `${sourceRepositoryLabel(group.repository)} · ` : ""}{sourceScopeLabel(group)} · {group.error
                       ? t("Last check failed")
                       : group.checkedAt
                         ? t("Checked {{date}}", { date: formatDate(group.checkedAt) })
@@ -539,6 +600,56 @@ export const SkillSourceView = ({
               onClick={() => void confirmMerge()}
             >
               {t("Confirm merge")}
+            </Button>
+          </footer>
+        </ModalFrame>
+      ) : null}
+
+      {renameSource ? (
+        <ModalFrame
+          ariaLabel={t("Rename source")}
+          className="skill-source-name-dialog"
+          dialogRef={renameDialogRef}
+          dismissDisabled={renameBusy}
+          onDismiss={closeRename}
+        >
+          <header className="profile-form-dialog__header">
+            <div>
+              <strong>{t("Rename source")}</strong>
+              <OverflowTooltip
+                className="skill-source-name-location"
+                focusable={false}
+                text={renameSource.canonicalLink}
+              />
+            </div>
+          </header>
+          <div className="skill-source-name-body">
+            <label className="skill-source-merge-field">
+              <span>{t("Source name")}</span>
+              <input
+                maxLength={80}
+                placeholder={sourceRepositoryLabel(renameSource.repository)}
+                value={renameValue}
+                onChange={(event) => {
+                  setRenameValue(event.currentTarget.value);
+                  setRenameError(undefined);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void confirmRename();
+                }}
+              />
+            </label>
+            {renameError ? <p className="skill-source-merge-notice is-error">{renameError}</p> : null}
+          </div>
+          <footer className="profile-form-dialog__actions">
+            <Button disabled={renameBusy} onClick={closeRename}>{t("Cancel")}</Button>
+            <Button
+              variant="primary"
+              disabled={renameBusy || renameValue.trim() === (renameSource.displayName ?? "")}
+              icon={renameBusy ? <LoaderCircle className="is-spinning" size={15} /> : undefined}
+              onClick={() => void confirmRename()}
+            >
+              {t("Save")}
             </Button>
           </footer>
         </ModalFrame>

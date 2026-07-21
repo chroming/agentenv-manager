@@ -57,6 +57,7 @@ import type {
   SkillLibraryEntry,
   SkillSourceGroupCandidate,
   SkillSourceGroupView,
+  SkillSourceNameInput,
   SkillSourceMergePreview,
   SkillSourceMergePreviewInput,
   SkillSourceMergeResult,
@@ -169,6 +170,7 @@ interface SkillLibraryPanelProps {
   onLibraryModeChange(mode: "skills" | "sources"): void;
   onCheckSourceGroup(sourceId: string): Promise<void>;
   onCheckAllSourceGroups(): Promise<void>;
+  onSetSourceName(input: SkillSourceNameInput): Promise<void>;
   onPreviewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   onMergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   onCancelRepositoryOperations(): Promise<void>;
@@ -405,6 +407,7 @@ export const SkillLibraryPanel = ({
   onLibraryModeChange,
   onCheckSourceGroup,
   onCheckAllSourceGroups,
+  onSetSourceName,
   onPreviewSourceMerge,
   onMergeSources,
   onCancelRepositoryOperations,
@@ -2033,6 +2036,7 @@ export const SkillLibraryPanel = ({
         loading={sourceGroupsLoading}
         onCheckGroup={onCheckSourceGroup}
         onCheckAll={onCheckAllSourceGroups}
+        onRename={onSetSourceName}
         onPreviewMerge={onPreviewSourceMerge}
         onMerge={onMergeSources}
         onAdd={addSourceCandidate}

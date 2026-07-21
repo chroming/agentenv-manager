@@ -460,6 +460,20 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:check-all-source-groups", () =>
     skillLibraryStore.checkAllSourceGroups()
   );
+  handleMutation("skills:set-source-name", (_event, input: unknown) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Skill source name requires a source selection");
+    }
+    const candidate = input as { sourceId?: unknown; name?: unknown };
+    if (typeof candidate.sourceId !== "string" ||
+      (candidate.name !== undefined && typeof candidate.name !== "string")) {
+      throw new Error("Skill source name is invalid");
+    }
+    return skillLibraryStore.setSourceName({
+      sourceId: candidate.sourceId,
+      name: candidate.name
+    });
+  });
   handleMutation("skills:preview-source-merge", (_event, input: SkillSourceMergePreviewInput) => {
     if (!input || !Array.isArray(input.sourceIds)) {
       throw new Error("Skill source merge requires a source selection");

@@ -213,6 +213,7 @@ export interface SkillLibraryStore {
   listSourceGroups(): Promise<SkillSourceGroupView[]>;
   checkSourceGroup(canonicalLink: string): Promise<SkillSourceGroupView>;
   checkAllSourceGroups(): Promise<SkillSourceCheckAllResult>;
+  setSourceName(input: import("../shared/types").SkillSourceNameInput): Promise<SkillSourceGroupView>;
   previewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   mergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
@@ -2058,8 +2059,8 @@ export const createSkillLibraryStore = (
     return { imported, failed };
   };
 
-  const { listSourceGroups, checkSourceGroup, checkAllSourceGroups } =
-    createSkillSourceGroupStore(skillSourceService, listSkills);
+  const { listSourceGroups, checkSourceGroup, checkAllSourceGroups, setSourceName } =
+    createSkillSourceGroupStore(skillSourceService, listSkills, skillSourceRegistry);
   const { preview: previewSourceMerge, merge: mergeSources } = createSkillSourceMergeService({
     appDataRoot: paths.appDataRoot,
     repositorySource,
@@ -3222,6 +3223,7 @@ export const createSkillLibraryStore = (
     listSourceGroups,
     checkSourceGroup,
     checkAllSourceGroups,
+    setSourceName,
     previewSourceMerge,
     mergeSources,
     removeSkill,

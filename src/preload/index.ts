@@ -41,6 +41,7 @@ const api: AgentEnvApi = {
   checkSkillSourceGroup: (sourceId) =>
     ipcRenderer.invoke("skills:check-source-group", sourceId),
   checkAllSkillSourceGroups: () => ipcRenderer.invoke("skills:check-all-source-groups"),
+  setSkillSourceName: (input) => ipcRenderer.invoke("skills:set-source-name", input),
   previewSkillSourceMerge: (input) => ipcRenderer.invoke("skills:preview-source-merge", input),
   mergeSkillSources: (previewId) => ipcRenderer.invoke("skills:merge-sources", previewId),
   cancelRepositoryOperations: () => ipcRenderer.invoke("skills:cancel-repository"),

@@ -406,6 +406,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     }),
     importRepositorySkills: vi.fn().mockResolvedValue({ imported: [], failed: [] }),
     listSkillSourceGroups: vi.fn().mockResolvedValue([]),
+    setSkillSourceName: vi.fn(),
     checkSkillSourceGroup: vi.fn(),
     checkAllSkillSourceGroups: vi.fn().mockResolvedValue({ groups: [], checked: 0, failed: 0 }),
     previewSkillSourceMerge: vi.fn(),

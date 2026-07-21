@@ -1518,10 +1518,18 @@ Object.assign(zhCN, {
   "Open each failed source for details and retry.": "展开失败的来源可查看详情并重试。",
   "Checked {{sources}} sources · {{changes}} changes": "已检查 {{sources}} 个来源 · {{changes}} 项变化",
   "All sources are current": "全部来源均为最新",
-  "Source checks failed": "来源检查失败"
+  "Source checks failed": "来源检查失败",
+  "Rename source": "重命名来源",
+  "Rename source {{name}}": "重命名来源 {{name}}",
+  "Source name": "来源名称",
+  "Source name updated": "来源名称已更新"
 });
 
 const zhTW: Record<string, string> = {
+  "Rename source": "重新命名來源",
+  "Rename source {{name}}": "重新命名來源 {{name}}",
+  "Source name": "來源名稱",
+  "Source name updated": "來源名稱已更新",
   "Merge": "合併",
   "Merge sources": "合併來源",
   "Merge selected": "合併選取項目",

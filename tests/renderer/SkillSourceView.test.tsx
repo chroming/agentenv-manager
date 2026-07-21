@@ -72,6 +72,7 @@ describe("SkillSourceView", () => {
         loading={false}
         onCheckGroup={onCheckGroup}
         onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
         onAdd={onAdd}
@@ -106,6 +107,7 @@ describe("SkillSourceView", () => {
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
         onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
@@ -127,6 +129,7 @@ describe("SkillSourceView", () => {
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
         onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
         onAdd={vi.fn().mockResolvedValue(true)}
@@ -180,6 +183,7 @@ describe("SkillSourceView", () => {
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
         onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={onPreviewMerge}
         onMerge={onMerge}
         onAdd={vi.fn().mockResolvedValue(true)}
@@ -204,5 +208,38 @@ describe("SkillSourceView", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Confirm merge" }));
     await waitFor(() => expect(onMerge).toHaveBeenCalledWith("merge-preview"));
     expect(screen.queryByRole("dialog", { name: "Confirm source merge" })).not.toBeInTheDocument();
+  });
+
+  it("renames a source without changing its repository link", async () => {
+    const onRename = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SkillSourceView
+        active
+        groups={[group]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={onRename}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Rename source acme/skills" }));
+    const dialog = screen.getByRole("dialog", { name: "Rename source" });
+    fireEvent.change(within(dialog).getByLabelText("Source name"), {
+      target: { value: "Engineering Skills" }
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onRename).toHaveBeenCalledWith({
+      sourceId: group.sourceId,
+      name: "Engineering Skills"
+    }));
   });
 });

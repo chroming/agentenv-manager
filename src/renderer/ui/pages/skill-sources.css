@@ -79,6 +79,28 @@
   width: min(640px, calc(100vw - 48px));
 }
 
+.skill-source-name-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(480px, calc(100vw - 48px));
+}
+
+.skill-source-name-body {
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.skill-source-name-location {
+  color: var(--muted);
+  display: block;
+  font-size: var(--font-size-metadata);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .skill-source-merge-body {
   display: grid;
   gap: 14px;
@@ -289,6 +311,43 @@
   text-align: left;
 }
 
+.skill-source-title-row {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.skill-source-title-row .skill-source-link {
+  min-width: 0;
+}
+
+.skill-source-rename {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 24px;
+  height: 24px;
+  justify-content: center;
+  opacity: 0;
+  padding: 0;
+  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+  width: 24px;
+}
+
+.skill-source-group-row:hover .skill-source-rename,
+.skill-source-rename:focus-visible {
+  opacity: 1;
+}
+
+.skill-source-rename:hover {
+  background: var(--surface-pressed);
+  color: var(--text);
+}
+
 .skill-source-link:hover {
   color: var(--accent);
 }
@@ -306,8 +365,13 @@
 
 .skill-source-checked {
   color: var(--muted);
+  display: block;
   font-size: var(--font-size-metadata);
   line-height: 18px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .skill-source-counts {

@@ -60,6 +60,7 @@ export interface AgentEnvApi {
   listSkillSourceGroups(): Promise<SkillSourceGroupView[]>;
   checkSkillSourceGroup(sourceId: string): Promise<SkillSourceGroupView>;
   checkAllSkillSourceGroups(): Promise<SkillSourceCheckAllResult>;
+  setSkillSourceName(input: SkillSourceNameInput): Promise<SkillSourceGroupView>;
   previewSkillSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   mergeSkillSources(previewId: string): Promise<SkillSourceMergeResult>;
   cancelRepositoryOperations(): Promise<void>;
@@ -373,8 +374,14 @@ export interface SkillSourceCollectionRef extends SkillSourceScope {
 
 export interface SkillSourceRecord extends SkillSourceScope {
   id: string;
+  displayName?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SkillSourceNameInput {
+  sourceId: string;
+  name?: string;
 }
 
 export type SkillSourceCandidateState =
@@ -412,6 +419,7 @@ export interface SkillSourceGroupCounts {
 
 export interface SkillSourceGroupView extends SkillSourceScope {
   sourceId: string;
+  displayName?: string;
   checkedAt?: string;
   observationState: "unchecked" | "ready" | "error";
   error?: string;

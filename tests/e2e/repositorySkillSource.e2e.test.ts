@@ -219,6 +219,24 @@ describe("Repository Skill source", () => {
     await mergeDialog.waitFor({ state: "hidden" });
     await expect.poll(() => page.locator(".skill-source-group").count()).toBe(1);
 
+    await page.locator(".skill-source-rename").click();
+    const renameDialog = page.getByRole("dialog", { name: "Rename source" });
+    await renameDialog.getByLabel("Source name").fill("Engineering Skills");
+    await renameDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await renameDialog.waitFor({ state: "hidden" });
+    await page.getByText("Engineering Skills", { exact: true }).waitFor({ state: "visible" });
+    const registry = JSON.parse(await readFile(join(appDataRoot, "skill-sources.json"), "utf8")) as {
+      sources: Array<{ displayName?: string }>;
+    };
+    expect(registry.sources).toHaveLength(1);
+    expect(registry.sources[0]?.displayName).toBe("Engineering Skills");
+    await page.getByRole("button", { name: "Check", exact: true }).click();
+    await page.getByText("Engineering Skills", { exact: true }).waitFor({ state: "visible" });
+    await page.reload();
+    await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
+    await page.getByRole("tab", { name: "By source" }).click();
+    await page.getByText("Engineering Skills", { exact: true }).waitFor({ state: "visible" });
+
     for (const [id, expectedSubpath] of [
       ["frontend-review", "frontend/review"],
       ["backend-testing", "backend/testing"]
