@@ -28,6 +28,13 @@ const parseSource = async (path) => ts.createSourceFile(
 );
 
 const translations = new Map();
+const requiredDynamicMessages = [
+  "Manage OpenCode instructions, Skills, and MCP activation.",
+  "Manage Claude Code instructions and Skills.",
+  "Manage Codex instructions, Skills, and MCP activation.",
+  "Manage Antigravity instructions and Skills.",
+  "Manage Trae CLI instructions, Skills, and MCP activation."
+];
 const addObjectTranslations = (object, source) => {
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
@@ -105,6 +112,12 @@ for (const [message, locations] of usages) {
   }
   if (placeholderNames(message).join(",") !== placeholderNames(translation).join(",")) {
     failures.push(`Placeholder mismatch: ${JSON.stringify(message)} (${locations[0]})`);
+  }
+}
+for (const message of requiredDynamicMessages) {
+  const translation = translations.get(message);
+  if (translation === undefined || translation === message) {
+    failures.push(`Missing zh_CN translation for runtime message: ${JSON.stringify(message)}`);
   }
 }
 

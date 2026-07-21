@@ -89,7 +89,7 @@ import {
   type SkillCleanupRecommendedAction
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { Button, IconButton, ModalFrame, Switch } from "./ui";
+import { Button, handleActionMenuKeyDown, IconButton, ModalFrame, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -2033,6 +2033,7 @@ export const SkillLibraryPanel = ({
                       type="button"
                       aria-label={t("More actions for {{id}}", { id: skill.id })}
                       aria-expanded={openActionId === skill.id}
+                      aria-haspopup="menu"
                       disabled={availabilityIsChanging}
                       onClick={(event) => toggleActionMenu(skill.id, event.currentTarget)}
                     >
@@ -2047,6 +2048,7 @@ export const SkillLibraryPanel = ({
                           role="menu"
                           aria-label={t("Actions for {{id}}", { id: skill.id })}
                           style={{ left: openAction.left, top: openAction.top }}
+                          onKeyDown={handleActionMenuKeyDown}
                         >
                           {globallyEnabled && hasUpdateSource && isTracked ? (
                             <button
@@ -3594,6 +3596,7 @@ export const SkillLibraryPanel = ({
                         type="button"
                         aria-label={t("More cleanup actions for {{id}}", { id: group.skillKey })}
                         aria-expanded={openActionId === cleanupActionId}
+                        aria-haspopup="menu"
                         disabled={Boolean(automaticCleanupKey) || groupIsWorking}
                         onClick={(event) => toggleActionMenu(cleanupActionId, event.currentTarget)}
                       >
@@ -3607,6 +3610,7 @@ export const SkillLibraryPanel = ({
                               role="menu"
                               aria-label={t("Cleanup actions for {{id}}", { id: group.skillKey })}
                               style={{ left: openAction.left, top: openAction.top }}
+                              onKeyDown={handleActionMenuKeyDown}
                             >
                               <button
                                 className="row-action-item"

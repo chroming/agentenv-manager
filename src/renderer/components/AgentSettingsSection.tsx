@@ -38,6 +38,7 @@ export const AgentSettingsSection = ({
 }: AgentSettingsSectionProps) => {
   const { t } = useI18n();
   const [disableCandidate, setDisableCandidate] = useState<TargetDescriptor>();
+  const [pendingAgentId, setPendingAgentId] = useState<string>();
   const dialogRef = useRef<HTMLElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -54,9 +55,18 @@ export const AgentSettingsSection = ({
     onDismiss: () => setDisableCandidate(undefined)
   });
 
+  const commitChange = async (agentId: string, enabled: boolean) => {
+    setPendingAgentId(agentId);
+    try {
+      await onSetEnabled(agentId, enabled);
+    } finally {
+      setPendingAgentId(undefined);
+    }
+  };
+
   const requestChange = (agent: TargetDescriptor, enabled: boolean) => {
     if (enabled) {
-      void onSetEnabled(agent.id, true);
+      void commitChange(agent.id, true);
       return;
     }
     const state = statesById.get(agent.id);
@@ -99,7 +109,9 @@ export const AgentSettingsSection = ({
                 </span>
                 <div className="agent-settings-state">
                   <span className={`agent-settings-status${recoveryRequired ? " is-warning" : ""}`}>
-                    {recoveryRequired ? (
+                    {pendingAgentId === agent.id ? (
+                      <><LoaderCircle className="is-spinning" size={14} aria-hidden="true" />{t("Saving...")}</>
+                    ) : recoveryRequired ? (
                       <><TriangleAlert size={14} aria-hidden="true" />{t("Recovery required")}</>
                     ) : !enabled ? (
                       t("Off")
@@ -117,7 +129,7 @@ export const AgentSettingsSection = ({
                 </div>
                 <Switch
                   checked={enabled}
-                  disabled={busy || recoveryRequired}
+                  disabled={busy || Boolean(pendingAgentId) || recoveryRequired}
                   label={t(enabled ? "Turn off {{name}}" : "Turn on {{name}}", { name: agent.name })}
                   onClick={() => requestChange(agent, !enabled)}
                 />
@@ -141,7 +153,7 @@ export const AgentSettingsSection = ({
               <div>
                 <div className="section-title">{t("Turn off {{name}}?", { name: disableCandidate.name })}</div>
                 <p className="muted">
-                  {t("Its current files stay unchanged. AgentEnv will stop showing, checking, and applying to this Agent until you turn it on again. This does not stop management.")}
+                  {t("Its current files stay unchanged. AgentEnv will stop showing, checking, and applying to this Agent until you turn it on again. Existing managed files stay in place; turn this Agent on again before changing or recovering them.")}
                 </p>
               </div>
             </header>
@@ -156,7 +168,7 @@ export const AgentSettingsSection = ({
                 onClick={() => {
                   const agentId = disableCandidate.id;
                   setDisableCandidate(undefined);
-                  void onSetEnabled(agentId, false);
+                  void commitChange(agentId, false);
                 }}
               >
                 {t("Turn off {{name}}", { name: disableCandidate.name })}

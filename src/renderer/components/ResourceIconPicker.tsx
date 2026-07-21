@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import type { ResourceIconKey } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { focusInitialActionMenuItem, handleActionMenuKeyDown } from "./ui";
 
 interface IconOption {
   key: ResourceIconKey;
@@ -210,11 +211,10 @@ export const ResourceIconPicker = ({
     };
     document.addEventListener("mousedown", dismiss);
     document.addEventListener("keydown", closeOnEscape);
-    window.setTimeout(() => {
-      menuRef.current
-        ?.querySelector<HTMLButtonElement>(`[data-icon-key="${selectedKey}"]`)
-        ?.focus();
-    });
+    window.setTimeout(() => focusInitialActionMenuItem(
+      menuRef.current,
+      `[data-icon-key="${selectedKey}"]`
+    ));
     return () => {
       document.removeEventListener("mousedown", dismiss);
       document.removeEventListener("keydown", closeOnEscape);
@@ -272,6 +272,7 @@ export const ResourceIconPicker = ({
               role="menu"
               aria-label={t("Icons for {{name}}", { name: label })}
               style={position}
+              onKeyDown={handleActionMenuKeyDown}
             >
               {faviconUrl ? (
                 <div className="resource-icon-group resource-icon-group--source">

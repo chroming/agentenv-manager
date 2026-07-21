@@ -1,6 +1,7 @@
 import type { CSSProperties, Ref } from "react";
 import { Copy, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n";
+import { handleActionMenuKeyDown } from "./ui";
 
 interface ProfileActionsMenuProps {
   className?: string;
@@ -27,6 +28,7 @@ export const ProfileActionsMenu = ({
       role="menu"
       aria-label={t("Profile actions")}
       style={style}
+      onKeyDown={handleActionMenuKeyDown}
     >
       <button disabled={disabled} type="button" role="menuitem" onClick={onDuplicate}>
         <Copy size={15} strokeWidth={2.2} aria-hidden="true" />

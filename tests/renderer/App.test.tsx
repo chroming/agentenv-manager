@@ -1214,17 +1214,10 @@ describe("App", () => {
 
   it("confirms before turning off a managed Agent", async () => {
     let enabledTargetIds = ["opencode"];
-    const updateSettings = vi.fn(async (input: Partial<AgentEnvSettings>) => {
+    const settingsUpdate = deferred<AgentEnvSettings>();
+    const updateSettings = vi.fn((input: Partial<AgentEnvSettings>) => {
       enabledTargetIds = input.enabledTargetIds ?? enabledTargetIds;
-      return {
-        locale: "system" as const,
-        skillSyncMethod: "symlink" as const,
-        skillStorageLocation: "appData" as const,
-        skillAutoCheckEnabled: true,
-        skillAutoCheckIntervalMinutes: 60,
-        backupRetentionDays: null,
-        enabledTargetIds
-      };
+      return settingsUpdate.promise;
     });
     const api = installApi({
       listSupportedTargets: vi.fn().mockResolvedValue([target]),
@@ -1248,10 +1241,22 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("switch", { name: "Turn off OpenCode" }));
 
     const dialog = screen.getByRole("dialog", { name: "Turn off OpenCode?" });
-    expect(dialog).toHaveTextContent("This does not stop management");
+    expect(dialog).toHaveTextContent("Existing managed files stay in place");
+    expect(dialog).toHaveTextContent("turn this Agent on again before changing or recovering them");
     expect(updateSettings).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Turn off OpenCode" }));
     await waitFor(() => expect(updateSettings).toHaveBeenCalledWith({ enabledTargetIds: [] }));
+    expect(screen.getByText("Saving...")).toBeInTheDocument();
+    act(() => settingsUpdate.resolve({
+      locale: "system",
+      skillSyncMethod: "symlink",
+      skillStorageLocation: "appData",
+      skillAutoCheckEnabled: true,
+      skillAutoCheckIntervalMinutes: 60,
+      backupRetentionDays: null,
+      enabledTargetIds
+    }));
+    await waitFor(() => expect(screen.queryByText("Saving...")).not.toBeInTheDocument());
   });
 
   it("keeps an Agent enabled while recovery is required", async () => {
@@ -1690,6 +1695,7 @@ describe("App", () => {
       target: { value: "# Updated Agent\n" }
     });
     expect(row).toHaveTextContent("Unsaved");
+    expect(document.querySelector(".app-feedback")).toBeNull();
   });
 
   it("moves the only New Profile action to the header", async () => {

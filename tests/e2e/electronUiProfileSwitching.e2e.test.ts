@@ -2144,8 +2144,26 @@ describe("Electron UI profile switching e2e", () => {
     const targetMenu = page.getByRole("menu", { name: "Apply Agents" });
     await targetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, targetMenu);
-    await page.mouse.click(240, 120);
+    const selectedTargetMenuItem = targetMenu.locator('[role="menuitemradio"][aria-checked="true"]');
+    await page.waitForFunction(() => document.activeElement?.getAttribute("role") === "menuitemradio");
+    expect(await selectedTargetMenuItem.evaluate((element) => element === document.activeElement)).toBe(true);
+    await page.keyboard.press("ArrowDown");
+    expect(await selectedTargetMenuItem.evaluate((element) => element === document.activeElement)).toBe(false);
+    await page.keyboard.press("Escape");
     await targetMenu.waitFor({ state: "hidden" });
+
+    const profileActionsTrigger = page.getByRole("button", { name: "More profile actions" });
+    await profileActionsTrigger.click();
+    const profileActionsMenu = page.getByRole("menu", { name: "Profile actions" });
+    await profileActionsMenu.waitFor({ state: "visible" });
+    await page.waitForFunction(() => document.activeElement?.textContent?.includes("Duplicate profile"));
+    await page.keyboard.press("End");
+    expect(await profileActionsMenu.getByRole("menuitem", { name: "Delete profile" }).evaluate(
+      (element) => element === document.activeElement
+    )).toBe(true);
+    await page.keyboard.press("Escape");
+    await profileActionsMenu.waitFor({ state: "hidden" });
+    expect(await profileActionsTrigger.evaluate((element) => element === document.activeElement)).toBe(true);
 
     const selectedProfileRow = page.getByRole("group", { name: "Profile UI OpenCode alpha" });
     await selectedProfileRow.click({ button: "right" });
@@ -2156,6 +2174,14 @@ describe("Electron UI profile switching e2e", () => {
       "Duplicate profile",
       "Delete profile"
     ]);
+    await page.keyboard.press("ArrowDown");
+    expect(await profileContextMenu.getByRole("menuitem", { name: "Delete profile" }).evaluate(
+      (element) => element === document.activeElement
+    )).toBe(true);
+    await page.keyboard.press("Home");
+    expect(await profileContextMenu.getByRole("menuitem", { name: "Duplicate profile" }).evaluate(
+      (element) => element === document.activeElement
+    )).toBe(true);
     await page.keyboard.press("Escape");
     await profileContextMenu.waitFor({ state: "hidden" });
 
@@ -2174,7 +2200,17 @@ describe("Electron UI profile switching e2e", () => {
     const skillContextMenu = page.getByRole("menu", { name: "Actions for shared-reviewer" });
     await skillContextMenu.waitFor({ state: "visible" });
     await expectInViewport(page, skillContextMenu);
-    await skillContextMenu.getByRole("menuitem", { name: "Update settings" }).click();
+    const skillMenuLabels = await skillContextMenu.getByRole("menuitem").allTextContents();
+    const updateSettingsIndex = skillMenuLabels.findIndex((label) => label === "Update settings");
+    expect(updateSettingsIndex).toBeGreaterThanOrEqual(0);
+    await page.keyboard.press("Home");
+    for (let index = 0; index < updateSettingsIndex; index += 1) {
+      await page.keyboard.press("ArrowDown");
+    }
+    expect(await skillContextMenu.getByRole("menuitem", { name: "Update settings" }).evaluate(
+      (element) => element === document.activeElement
+    )).toBe(true);
+    await page.keyboard.press("Enter");
     const updateSettings = page.getByRole("dialog", {
       name: "Update settings for shared-reviewer"
     });
@@ -5921,6 +5957,8 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByTestId("locale-select").selectOption("zh_CN");
     await page.getByRole("heading", { name: "设置", exact: true }).waitFor();
     await page.getByRole("status").filter({ hasText: "设置已保存" }).waitFor();
+    await page.getByText("管理 OpenCode 的指令、技能和 MCP 启用状态。", { exact: true }).waitFor();
+    expect(await page.getByText("Manage OpenCode instructions, Skills, and MCP activation.", { exact: true }).count()).toBe(0);
     await expect
       .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
       .toMatchObject({ locale: "zh_CN" });

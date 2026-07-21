@@ -615,10 +615,12 @@ export const SkillSourceView = ({
                           />
                         </div>
                         <div className="skill-source-candidate-meta">
+                          <span className="skill-source-candidate-field-label">{t("Upstream")}</span>
                           <strong>{candidate.version ?? candidate.contentRevision?.slice(0, 7) ?? "—"}</strong>
                           <span>{candidate.upstreamUpdatedAt ? formatDate(candidate.upstreamUpdatedAt) : "—"}</span>
                         </div>
                         <div className="skill-source-candidate-meta">
+                          <span className="skill-source-candidate-field-label">{t("Library")}</span>
                           <strong>{candidate.libraryName ?? t("Not in Library")}</strong>
                           <span>{candidate.libraryVersion ?? candidate.libraryId ?? "—"}</span>
                         </div>

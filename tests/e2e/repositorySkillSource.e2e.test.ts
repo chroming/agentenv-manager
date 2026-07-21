@@ -106,6 +106,11 @@ describe("Repository Skill source", () => {
     const sourceGroup = page.locator(".skill-source-group");
     await expect.poll(() => sourceGroup.count()).toBe(1);
     await sourceGroup.getByRole("button", { name: "Expand source" }).click();
+    const firstCandidate = sourceGroup.locator(".skill-source-candidate").first();
+    expect(await firstCandidate.locator(".skill-source-candidate-field-label").allTextContents())
+      .toEqual(["Upstream", "Library"]);
+    expect(await firstCandidate.getByText("Upstream", { exact: true }).isVisible()).toBe(true);
+    expect(await firstCandidate.getByText("Library", { exact: true }).isVisible()).toBe(true);
     await sourceGroup.getByRole("button", { name: "Add", exact: true }).click();
     const releaseLibrarySkill = join(appDataRoot, "skills-library", "release-check-internal");
     await expect.poll(() => exists(join(releaseLibrarySkill, "SKILL.md"))).toBe(true);

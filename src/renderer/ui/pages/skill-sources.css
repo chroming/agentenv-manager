@@ -516,6 +516,10 @@
   min-width: 0;
 }
 
+.skill-source-candidate-field-label {
+  display: none;
+}
+
 .skill-source-candidate-name strong,
 .skill-source-candidate-meta strong {
   font-size: var(--font-size-body);
@@ -651,6 +655,20 @@
 
   .skill-source-candidate-meta:nth-of-type(3) {
     grid-area: library;
+  }
+
+  .skill-source-candidate-meta {
+    align-items: baseline;
+    column-gap: 5px;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .skill-source-candidate-field-label {
+    color: var(--muted);
+    display: block;
+    font-size: var(--font-size-caption);
+    font-weight: 600;
+    grid-row: 1 / span 2;
   }
 
   .skill-source-state {

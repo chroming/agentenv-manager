@@ -98,6 +98,10 @@ describe("SkillSourceView", () => {
 
     const candidates = document.querySelector<HTMLElement>(".skill-source-candidates");
     expect(candidates).not.toBeNull();
+    expect(
+      [...candidates!.querySelectorAll(".skill-source-candidate-field-label")]
+        .map((label) => label.textContent)
+    ).toEqual(group.candidates.flatMap(() => ["Upstream", "Library"]));
     fireEvent.click(within(candidates!).getByRole("button", { name: "Add" }));
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(group, group.candidates[0]));
     fireEvent.click(within(candidates!).getByRole("button", { name: "Review update review" }));

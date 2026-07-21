@@ -122,7 +122,14 @@ import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
 import { SkillsEditor } from "./components/SkillsEditor";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
-import { Button, ControlGroup, PageHeader, Switch } from "./components/ui";
+import {
+  Button,
+  ControlGroup,
+  focusInitialActionMenuItem,
+  handleActionMenuKeyDown,
+  PageHeader,
+  Switch
+} from "./components/ui";
 import {
   deriveApplyActionLabel,
   deriveProfileReadiness
@@ -595,7 +602,9 @@ const AppContent = ({
   const profileApplyControlRef = useRef<HTMLDivElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const targetMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const targetMenuRef = useRef<HTMLDivElement>(null);
   const profileActionsButtonRef = useRef<HTMLButtonElement>(null);
+  const profileActionsMenuRef = useRef<HTMLDivElement>(null);
   const profileSearchInputRef = useRef<HTMLInputElement>(null);
   const skillSearchInputRef = useRef<HTMLInputElement>(null);
   const dataRefreshRequestRef = useRef(0);
@@ -1241,7 +1250,7 @@ const AppContent = ({
     invalidateProfileFlow();
     setDraftProfile(profile);
     setIsProfileDirty(true);
-    setProfileSaveStatus("Unsaved changes");
+    setProfileSaveStatus("");
     setSkillUpdateCheckStatus(undefined);
     setPreview(undefined);
     setRollbackPreview(undefined);
@@ -1946,6 +1955,19 @@ const AppContent = ({
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [isProfileActionsOpen, isTargetMenuOpen]);
+
+  useEffect(() => {
+    if (!isTargetMenuOpen) return;
+    window.requestAnimationFrame(() => focusInitialActionMenuItem(
+      targetMenuRef.current,
+      '[role="menuitemradio"][aria-checked="true"]'
+    ));
+  }, [isTargetMenuOpen]);
+
+  useEffect(() => {
+    if (!isProfileActionsOpen) return;
+    window.requestAnimationFrame(() => focusInitialActionMenuItem(profileActionsMenuRef.current));
+  }, [isProfileActionsOpen]);
 
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
   const loadingProfileSummary = profileLoadingId
@@ -3901,7 +3923,13 @@ const AppContent = ({
         <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
       </button>
       {isTargetMenuOpen ? (
-        <div className="profile-target-menu ui-action-menu" role="menu" aria-label={t("Apply Agents")}>
+        <div
+          className="profile-target-menu ui-action-menu"
+          ref={targetMenuRef}
+          role="menu"
+          aria-label={t("Apply Agents")}
+          onKeyDown={handleActionMenuKeyDown}
+        >
           {targets.map((target) => {
             const targetIcon = targetIconFor(target);
             return (
@@ -4288,6 +4316,7 @@ const AppContent = ({
                           {isProfileActionsOpen ? (
                             <ProfileActionsMenu
                               disabled={busy}
+                              menuRef={profileActionsMenuRef}
                               onDuplicate={() => duplicateProfile()}
                               onDelete={() => {
                                 setIsProfileActionsOpen(false);
