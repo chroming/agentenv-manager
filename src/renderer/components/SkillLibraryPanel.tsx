@@ -1,4 +1,5 @@
 import {
+  Fragment,
   type RefObject,
   useEffect,
   useLayoutEffect,
@@ -8,6 +9,8 @@ import {
 } from "react";
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Circle,
   CircleSlash2,
   Combine,
@@ -75,6 +78,8 @@ import {
 import {
   automaticSkillCleanupRequest,
   buildSkillCleanupGroups,
+  type SkillCleanupAutomaticEffect,
+  type SkillCleanupBucket,
   type SkillCleanupDisplayState,
   type SkillCleanupRecommendedAction
 } from "../../shared/skillCleanup";
@@ -328,6 +333,21 @@ const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
   return cleanupActionLabel(action);
 };
 
+const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {
+  if (effect === "import-and-link") return "Add to Library and link copies";
+  if (effect === "link-to-library") return "Link copies to Library";
+  if (effect === "archive-and-link") return "Back up local changes and link to Library";
+  if (effect === "repair-link") return "Repair managed links";
+  return "Remove unavailable links";
+};
+
+const cleanupBucketLabel = (bucket: SkillCleanupBucket) => {
+  if (bucket === "decision") return "Needs your decision";
+  if (bucket === "ready") return "Ready to clean up";
+  if (bucket === "managed") return "Managed";
+  return "Kept outside AgentEnv";
+};
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 
@@ -404,6 +424,9 @@ export const SkillLibraryPanel = ({
   const [automaticCleanupKey, setAutomaticCleanupKey] = useState<string>();
   const [cleanupOperationKey, setCleanupOperationKey] = useState<string>();
   const [autoCleanupReviewOpen, setAutoCleanupReviewOpen] = useState(false);
+  const [expandedCleanupBuckets, setExpandedCleanupBuckets] = useState<
+    Record<"managed" | "kept", boolean>
+  >({ managed: false, kept: false });
   const [sharedOperation, setSharedOperation] = useState<{
     skillKey: string;
     action: "keep" | "review" | "retire";
@@ -873,18 +896,38 @@ export const SkillLibraryPanel = ({
         .filter((request): request is SkillCleanupRequest => Boolean(request)),
     [cleanupGroups]
   );
-  const manualCleanupCount = cleanupGroups.filter(
-    (group) => group.presentation.action !== "none"
-  ).length;
-  const sharedWaitingCount = cleanupGroups.filter(
-    (group) => group.presentation.state === "shared-copy-in-use"
-  ).length;
+  const cleanupGroupsByBucket = useMemo(
+    () => ({
+      decision: cleanupGroups.filter((group) => group.bucket === "decision"),
+      ready: cleanupGroups.filter((group) => group.bucket === "ready"),
+      managed: cleanupGroups.filter((group) => group.bucket === "managed"),
+      kept: cleanupGroups.filter((group) => group.bucket === "kept")
+    }),
+    [cleanupGroups]
+  );
+  const cleanupRequestsByEffect = useMemo(() => {
+    const requests = new Map<
+      SkillCleanupAutomaticEffect,
+      Array<{ request: SkillCleanupRequest; name: string }>
+    >();
+    for (const request of automaticCleanupRequests) {
+      const group = cleanupGroups.find((item) => item.skillKey === request.skillKey);
+      if (!group?.automaticEffect) continue;
+      requests.set(group.automaticEffect, [
+        ...(requests.get(group.automaticEffect) ?? []),
+        { request, name: group.primary?.name ?? group.skillKey }
+      ]);
+    }
+    return requests;
+  }, [automaticCleanupRequests, cleanupGroups]);
+  const manualCleanupCount = cleanupGroupsByBucket.decision.length;
+  const readyCleanupCount = automaticCleanupRequests.length;
   const migrationSummary = [
     manualCleanupCount > 0
-      ? t(manualCleanupCount === 1 ? "1 item needs action" : "{{count}} items need action", { count: manualCleanupCount })
+      ? t(manualCleanupCount === 1 ? "1 needs your decision" : "{{count}} need your decision", { count: manualCleanupCount })
       : "",
-    sharedWaitingCount > 0
-      ? t(sharedWaitingCount === 1 ? "1 shared copy needs review" : "{{count}} shared copies need review", { count: sharedWaitingCount })
+    readyCleanupCount > 0
+      ? t(readyCleanupCount === 1 ? "1 ready to clean up" : "{{count}} ready to clean up", { count: readyCleanupCount })
       : ""
   ].filter(Boolean).join(" · ");
   const normalizedLocalSkillPath = localSkillPath.trim().replace(/\/+$/, "");
@@ -2263,23 +2306,27 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
-            aria-label={t("Review ready skills")}
+            aria-label={t("Clean up local Skills")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">{t("Review ready skills")}</div>
+                <div className="section-title">{t("Clean up local Skills")}</div>
                 <p className="muted">
-                  {t("These Skills have one clear canonical version. AgentEnv will add or reuse Library content and normalize the detected Agent copies.")}
+                  {t("AgentEnv will run the safe actions below. Every changed path is backed up before cleanup starts.")}
                 </p>
               </div>
             </header>
             <div className="cleanup-bulk-review-list">
-              {automaticCleanupRequests.map((request) => (
-                <span key={request.skillKey}>
-                  {cleanupGroups.find((group) => group.skillKey === request.skillKey)?.primary?.name ?? request.skillKey}
-                </span>
+              {([...cleanupRequestsByEffect.entries()]).map(([effect, items]) => (
+                <section className="cleanup-bulk-effect" key={effect}>
+                  <div>
+                    <strong>{t(cleanupEffectLabel(effect))}</strong>
+                    <span>{items.length}</span>
+                  </div>
+                  <p>{items.map((item) => item.name).join(", ")}</p>
+                </section>
               ))}
               <small>{t("Each Skill is backed up independently. A failure does not undo completed Skills.")}</small>
             </div>
@@ -3049,30 +3096,28 @@ export const SkillLibraryPanel = ({
                 </div>
                 <small>{migrationSummary || t("No cleanup actions needed")}</small>
               </div>
-              <button
-                className={`${automaticCleanupRequests.length > 0 ? "primary-action" : "secondary-action"} cleanup-auto-action`}
-                type="button"
-                aria-label={
-                  automaticCleanupRequests.length > 0
-                    ? t("Review {{count}} ready Skills", { count: automaticCleanupRequests.length })
-                    : t("No ready Skills to review")
-                }
-                title={
-                  automaticCleanupRequests.length === 0
-                    ? t("No skills can be managed automatically right now.")
-                    : undefined
-                }
-                disabled={Boolean(automaticCleanupKey) || automaticCleanupRequests.length === 0}
-                onClick={() => setAutoCleanupReviewOpen(true)}
-              >
-                <Sparkles
-                  className={automaticCleanupKey === "all" ? "is-spinning" : undefined}
-                  size={15}
-                  strokeWidth={2.2}
-                  aria-hidden="true"
-                />
-                {t(automaticCleanupKey === "all" ? "Managing..." : "Review ready")}
-              </button>
+              {automaticCleanupRequests.length > 0 ? (
+                <button
+                  className="primary-action cleanup-auto-action"
+                  type="button"
+                  aria-label={t("Clean up {{count}} ready Skills", { count: automaticCleanupRequests.length })}
+                  disabled={Boolean(automaticCleanupKey)}
+                  onClick={() => setAutoCleanupReviewOpen(true)}
+                >
+                  <Sparkles
+                    className={automaticCleanupKey === "all" ? "is-spinning" : undefined}
+                    size={15}
+                    strokeWidth={2.2}
+                    aria-hidden="true"
+                  />
+                  {t(
+                    automaticCleanupKey === "all"
+                      ? "Cleaning up..."
+                      : "Clean up {{count}}",
+                    { count: automaticCleanupRequests.length }
+                  )}
+                </button>
+              ) : null}
             </div>
             <div className="resource-list resource-list--unmanaged">
               {cleanupGroups.length === 0 ? (
@@ -3080,14 +3125,31 @@ export const SkillLibraryPanel = ({
                   {t("No Agent Skills detected. Install Skills for an enabled Agent and scan again.")}
                 </p>
               ) : null}
-              {cleanupGroups.map((group) => {
+              {cleanupGroups.map((group, index) => {
+                const sectionStarts = index === 0 || cleanupGroups[index - 1].bucket !== group.bucket;
+                const collapsibleBucket =
+                  group.bucket === "managed" || group.bucket === "kept"
+                    ? group.bucket
+                    : undefined;
+                const sectionCanCollapse = Boolean(collapsibleBucket);
+                const sectionExpanded = collapsibleBucket
+                  ? expandedCleanupBuckets[collapsibleBucket]
+                  : true;
                 const hasIgnored = group.items.some((skill) => skill.status === "ignored");
                 const allIgnored = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
                 const sharedMigration = group.sharedMigration;
-                const chipLabel = t(cleanupPresentationCompactLabel(group.presentation.state));
-                const chipDetail = t(cleanupPresentationLabel(group.presentation.state));
-                const chipClass = cleanupPresentationChipClass(group.presentation.state);
+                const chipLabelKey = group.bucket === "ready"
+                  ? "Ready"
+                  : cleanupPresentationCompactLabel(group.presentation.state);
+                const chipDetailKey = group.bucket === "ready" && group.automaticEffect
+                  ? cleanupEffectLabel(group.automaticEffect)
+                  : cleanupPresentationLabel(group.presentation.state);
+                const chipLabel = t(chipLabelKey);
+                const chipDetail = t(chipDetailKey);
+                const chipClass = group.bucket === "ready"
+                  ? "managed"
+                  : cleanupPresentationChipClass(group.presentation.state);
                 const actionLabel = t(cleanupActionLabel(group.presentation.action));
                 const actionDisplayLabel = t(cleanupActionDisplayLabel(group.presentation.action));
                 const linkedLibraryId = group.items.find((item) => item.libraryId)?.libraryId;
@@ -3146,10 +3208,42 @@ export const SkillLibraryPanel = ({
                 };
 
                 return (
+                  <Fragment key={group.skillKey}>
+                    {sectionStarts ? (
+                      <div className={`cleanup-bucket-heading cleanup-bucket-heading--${group.bucket}`}>
+                        <div>
+                          <strong>{t(cleanupBucketLabel(group.bucket))}</strong>
+                          <span>{cleanupGroupsByBucket[group.bucket].length}</span>
+                        </div>
+                        {sectionCanCollapse ? (
+                          <button
+                            className="icon-action"
+                            type="button"
+                            aria-label={t(sectionExpanded ? "Collapse {{section}}" : "Expand {{section}}", {
+                              section: t(cleanupBucketLabel(group.bucket))
+                            })}
+                            aria-expanded={sectionExpanded}
+                            onClick={() => {
+                              if (!collapsibleBucket) return;
+                              setExpandedCleanupBuckets((current) => ({
+                                ...current,
+                                [collapsibleBucket]: !sectionExpanded
+                              }));
+                            }}
+                          >
+                            {sectionExpanded ? (
+                              <ChevronDown size={15} strokeWidth={2.2} />
+                            ) : (
+                              <ChevronRight size={15} strokeWidth={2.2} />
+                            )}
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {sectionExpanded ? (
                   <div
                     aria-label={t("Cleanup group {{id}}", { id: group.skillKey })}
                     className="resource-row cleanup-group-row"
-                    key={group.skillKey}
                     role="group"
                   >
                     <span className="resource-avatar cleanup-group-icon" aria-hidden="true">
@@ -3203,7 +3297,7 @@ export const SkillLibraryPanel = ({
                       text={chipDetail}
                     />
                     <div className="cleanup-group-actions">
-                      {group.presentation.action !== "none" ? (
+                      {group.bucket !== "ready" && group.presentation.action !== "none" ? (
                         <button
                           className="secondary-action cleanup-current-action"
                           type="button"
@@ -3306,6 +3400,8 @@ export const SkillLibraryPanel = ({
                         : null}
                     </div>
                   </div>
+                    ) : null}
+                  </Fragment>
                 );
               })}
             </div>

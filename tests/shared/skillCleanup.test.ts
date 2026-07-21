@@ -20,7 +20,7 @@ const inventoryItem = (
 });
 
 describe("skill cleanup groups", () => {
-  it("keeps unreadable Skill links review-only", () => {
+  it("makes an unowned broken Skill link ready for reversible removal", () => {
     const [group] = buildSkillCleanupGroups([
       inventoryItem({
         contentHash: "",
@@ -35,8 +35,34 @@ describe("skill cleanup groups", () => {
 
     expect(group).toMatchObject({
       state: "broken",
-      resolution: "manual",
+      resolution: "automatic",
+      bucket: "ready",
+      automaticEffect: "remove-broken-link",
       presentation: { state: "unavailable", action: "review-details" }
+    });
+    expect(automaticSkillCleanupRequest(group)).toMatchObject({
+      libraryAction: "keep",
+      locations: [{ path: "/tmp/opencode/skills/reviewer", contentHash: "" }]
+    });
+  });
+
+  it("keeps an unreadable manifest decision-only", () => {
+    const [group] = buildSkillCleanupGroups([
+      inventoryItem({
+        contentHash: "",
+        runtimeAvailability: "unknown",
+        runtimeIssues: [{
+          code: "unreadable-skill",
+          severity: "warning",
+          message: "Skill manifest is unreadable: /tmp/opencode/skills/reviewer/SKILL.md"
+        }]
+      })
+    ]);
+
+    expect(group).toMatchObject({
+      state: "broken",
+      resolution: "manual",
+      bucket: "decision"
     });
     expect(automaticSkillCleanupRequest(group)).toBeUndefined();
   });
@@ -82,7 +108,7 @@ describe("skill cleanup groups", () => {
     ]);
   });
 
-  it("requires review for differing copies, Library conflicts, and external ownership", () => {
+  it("requires a decision without a canonical version but normalizes Library conflicts", () => {
     const groups = buildSkillCleanupGroups([
       inventoryItem(),
       inventoryItem({ path: "/tmp/codex/skills/reviewer", foundIn: ["codex"], contentHash: "other" }),
@@ -105,7 +131,13 @@ describe("skill cleanup groups", () => {
     expect(groups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ skillKey: "reviewer", state: "conflict", resolution: "manual" }),
-        expect.objectContaining({ skillKey: "library-copy", state: "conflict", resolution: "manual" }),
+        expect.objectContaining({
+          skillKey: "library-copy",
+          state: "conflict",
+          resolution: "automatic",
+          bucket: "ready",
+          automaticEffect: "archive-and-link"
+        }),
         expect.objectContaining({ skillKey: "external", state: "external", resolution: "manual" })
       ])
     );
@@ -121,7 +153,12 @@ describe("skill cleanup groups", () => {
       state: "managed-elsewhere",
       action: "review-ownership"
     });
-    expect(groups.map(automaticSkillCleanupRequest)).toEqual([undefined, undefined, undefined]);
+    expect(automaticSkillCleanupRequest(
+      groups.find((group) => group.skillKey === "library-copy")!
+    )).toMatchObject({
+      libraryId: "library-copy",
+      libraryAction: "keep"
+    });
   });
 
   it("treats an externally managed copy with matching Library content as represented", () => {
@@ -196,7 +233,7 @@ describe("skill cleanup groups", () => {
       })
     ]);
 
-    expect(group).toMatchObject({ state: "managed", resolution: "resolved" });
+    expect(group).toMatchObject({ state: "managed", resolution: "resolved", bucket: "managed" });
     expect(group.presentation).toEqual({ state: "managed", action: "none" });
     expect(automaticSkillCleanupRequest(group)).toBeUndefined();
   });

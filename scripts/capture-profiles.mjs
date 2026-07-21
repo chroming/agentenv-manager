@@ -554,10 +554,9 @@ try {
     name: "Cleanup group cross-agent-review-workflow-with-a-long-name"
   });
   await cleanupGroup.waitFor({ state: "visible", timeout: 5_000 });
-  const unavailableAutoManage = page.getByRole("button", { name: "No ready Skills to review" });
-  await unavailableAutoManage.waitFor({ state: "visible", timeout: 5_000 });
-  if (!(await unavailableAutoManage.isDisabled())) {
-    throw new Error("Review ready must stay visible and disabled when no safe cleanup candidates exist");
+  const cleanupAction = page.getByRole("button", { name: /Clean up \d+ ready Skills/ });
+  if ((await cleanupAction.count()) !== 0) {
+    throw new Error("Cleanup must not offer a bulk action when no safe cleanup candidates exist");
   }
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "skills-cleanup-1180x728.png"));
@@ -740,8 +739,13 @@ try {
   await capturePage(page, join(outputDir, "apply-preview-review-required-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "apply-preview-review-required-920x620.png"));
-  await driftPreviewDialog.getByLabel(/Back up and replace protected resources/).check();
-  await driftPreviewDialog.getByRole("button", { name: "Back up and replace" }).click();
+  const applyWithBackup = driftPreviewDialog.getByRole("button", { name: "Apply with backup" });
+  if ((await applyWithBackup.count()) > 0) {
+    await applyWithBackup.click();
+  } else {
+    await driftPreviewDialog.getByLabel(/Back up and replace protected resources/).check();
+    await driftPreviewDialog.getByRole("button", { name: "Back up and replace" }).click();
+  }
   await driftPreviewDialog.waitFor({ state: "hidden" });
 
   await page.reload();

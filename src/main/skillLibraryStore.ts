@@ -68,6 +68,7 @@ import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { createSkillChanges } from "./skillFileChanges";
 import { hashSkillContent } from "./skillContentHash";
+import { removeUnavailableSkillLinksTransaction } from "./skillUnavailableCleanup";
 
 interface SkillMetadataFile {
   sourceType?: SkillSourceType;
@@ -181,6 +182,11 @@ export interface ConsolidateSharedSkillGroupStoreInput {
   duplicatePaths: string[];
 }
 
+export interface RemoveUnavailableSkillLinksStoreInput {
+  skillKey: string;
+  locations: Array<{ targetPaths: TargetPaths; targetDir: string }>;
+}
+
 export interface SkillLibraryStore {
   listSkills(): Promise<SkillLibraryEntry[]>;
   scanInventory(
@@ -206,6 +212,9 @@ export interface SkillLibraryStore {
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   deployLibrarySkill(input: DeployLibrarySkillStoreInput): Promise<void>;
   consolidateSkillGroup(input: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult>;
+  removeUnavailableSkillLinks(
+    input: RemoveUnavailableSkillLinksStoreInput
+  ): Promise<SkillCleanupResult>;
   consolidateSharedSkillGroup(
     input: ConsolidateSharedSkillGroupStoreInput
   ): Promise<SkillCleanupResult>;
@@ -2492,6 +2501,16 @@ export const createSkillLibraryStore = (
     }
   };
 
+  const removeUnavailableSkillLinks = async ({
+    skillKey,
+    locations
+  }: RemoveUnavailableSkillLinksStoreInput): Promise<SkillCleanupResult> =>
+    removeUnavailableSkillLinksTransaction({
+      skillKey,
+      locations: locations.map((location) => location.targetDir),
+      backupRoot: cleanupBackupRoot()
+    });
+
   const consolidateSharedSkillGroup = async ({
     skillKey,
     libraryId,
@@ -3189,6 +3208,7 @@ export const createSkillLibraryStore = (
     manageTargetSkill,
     deployLibrarySkill,
     consolidateSkillGroup,
+    removeUnavailableSkillLinks,
     consolidateSharedSkillGroup,
     setSharedSkillRetention,
     rollbackSkillCleanup,

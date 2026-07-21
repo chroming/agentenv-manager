@@ -13,6 +13,15 @@ export type SkillCleanupGroupState =
 
 export type SkillCleanupResolution = "automatic" | "manual" | "resolved";
 
+export type SkillCleanupBucket = "decision" | "ready" | "managed" | "kept";
+
+export type SkillCleanupAutomaticEffect =
+  | "import-and-link"
+  | "link-to-library"
+  | "archive-and-link"
+  | "repair-link"
+  | "remove-broken-link";
+
 export type SkillCleanupDisplayState =
   | "not-in-library"
   | "duplicate-copies"
@@ -68,6 +77,8 @@ export interface SkillCleanupGroup {
   state: SkillCleanupGroupState;
   resolution: SkillCleanupResolution;
   resolutionReason: string;
+  bucket: SkillCleanupBucket;
+  automaticEffect?: SkillCleanupAutomaticEffect;
   presentation: SkillCleanupPresentation;
   sharedMigration?: SharedSkillMigration;
 }
@@ -105,6 +116,13 @@ export const buildSkillCleanupGroups = (
       const hasExternal = statuses.has("external");
       const hasUnreadable = activeItems.some((item) =>
         item.runtimeIssues?.some((issue) => issue.code === "unreadable-skill")
+      );
+      const hasBrokenLink = activeItems.some((item) =>
+        item.runtimeIssues?.some(
+          (issue) =>
+            issue.code === "unreadable-skill" &&
+            issue.message.startsWith("Skill link target is unavailable")
+        )
       );
       const unresolvedExternal = activeItems.some(
         (item) =>
@@ -178,12 +196,54 @@ export const buildSkillCleanupGroups = (
                       ? "library"
                       : "managed";
 
+      const canRemoveBrokenLinks =
+        state === "broken" &&
+        hasBrokenLink &&
+        !hasExternal &&
+        !sharedMigration &&
+        !missingTarget &&
+        activeItems.every((item) =>
+          item.runtimeIssues?.some((issue) =>
+            issue.code === "unreadable-skill" &&
+            issue.message.startsWith("Skill link target is unavailable")
+          )
+        );
+      const canNormalizeToLibrary =
+        Boolean(hasLibraryCopy) &&
+        !hasExternal &&
+        !hasUnreadable &&
+        !sharedMigration &&
+        !missingTarget;
       const resolution: SkillCleanupResolution =
         state === "ignored" || state === "managed" || (state === "external" && !unresolvedExternal)
           ? "resolved"
+          : canRemoveBrokenLinks || canNormalizeToLibrary
+            ? "automatic"
+          : sharedMigration
+            ? "manual"
           : state === "external" || state === "conflict" || state === "broken" || missingTarget
             ? "manual"
             : "automatic";
+      const automaticEffect: SkillCleanupAutomaticEffect | undefined =
+        resolution !== "automatic"
+          ? undefined
+          : canRemoveBrokenLinks
+            ? "remove-broken-link"
+            : staleManaged
+              ? "repair-link"
+              : hasLibraryCopy
+                ? libraryConflict || hashes.size > 1
+                  ? "archive-and-link"
+                  : "link-to-library"
+                : "import-and-link";
+      const bucket: SkillCleanupBucket =
+        resolution === "automatic"
+          ? "ready"
+          : resolution === "manual"
+            ? "decision"
+            : state === "managed"
+              ? "managed"
+              : "kept";
       const resolutionReason =
         resolution === "resolved"
           ? state === "ignored"
@@ -192,7 +252,11 @@ export const buildSkillCleanupGroups = (
               ? "Every externally managed copy has matching content in Library."
               : "Every detected copy is managed and current."
           : resolution === "automatic"
-            ? state === "stale"
+            ? automaticEffect === "remove-broken-link"
+              ? "The unavailable symbolic link can be removed without touching its missing target."
+              : automaticEffect === "archive-and-link"
+                ? "Library is canonical. Local differences will be backed up before the copies are linked to it."
+                : state === "stale"
               ? "Managed copies can be refreshed from Library without choosing content."
               : state === "duplicate"
                 ? "All detected copies have identical content."
@@ -256,15 +320,24 @@ export const buildSkillCleanupGroups = (
         state,
         resolution,
         resolutionReason,
+        bucket,
+        automaticEffect,
         presentation,
         sharedMigration
       };
     })
-    .sort((left, right) =>
-      (left.primary?.name ?? left.skillKey).localeCompare(
-        right.primary?.name ?? right.skillKey
-      )
-    );
+    .sort((left, right) => {
+      const bucketOrder: Record<SkillCleanupBucket, number> = {
+        decision: 0,
+        ready: 1,
+        managed: 2,
+        kept: 3
+      };
+      return bucketOrder[left.bucket] - bucketOrder[right.bucket] ||
+        (left.primary?.name ?? left.skillKey).localeCompare(
+          right.primary?.name ?? right.skillKey
+        );
+    });
 };
 
 export const automaticSkillCleanupRequest = (
@@ -289,6 +362,11 @@ export const automaticSkillCleanupRequest = (
     libraryId:
       group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey,
     canonicalPath: locations[0].path,
+    libraryAction:
+      group.automaticEffect === "remove-broken-link" ||
+      group.items.some((item) => Boolean(item.libraryId))
+        ? "keep"
+        : "create",
     locations: locations.map((item) => ({
       targetId: item.foundIn[0],
       path: item.path,

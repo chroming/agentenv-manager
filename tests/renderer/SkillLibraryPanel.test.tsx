@@ -852,7 +852,9 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseDown(document.body);
     expect(onCloseTool).toHaveBeenCalledTimes(2);
     expect(discoveries).toHaveTextContent("Managed");
-    expect(discoveries).toHaveTextContent("Unmanaged");
+    expect(discoveries).toHaveTextContent("Needs your decision");
+    expect(discoveries).toHaveTextContent("Ready to clean up");
+    expect(discoveries).toHaveTextContent("Kept outside AgentEnv");
     expect(discoveries).toHaveTextContent("Conflict");
     expect(discoveries).toHaveTextContent("External");
     expect(discoveries).toHaveTextContent("Shared: OpenCode + Codex");
@@ -892,20 +894,10 @@ describe("SkillLibraryPanel", () => {
       name: "Cleanup group copied-local"
     });
     expect(changedManagedGroup).toHaveTextContent("Library / copied-local · 1 managed installs");
-    fireEvent.click(
-      within(changedManagedGroup).getByRole("button", { name: "Review drift copied-local" })
-    );
-    const differencesDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
-    expect(differencesDialog).toHaveTextContent("Keep Library version");
-    expect(differencesDialog).toHaveTextContent("Use a local version");
-    fireEvent.click(within(differencesDialog).getByRole("radio", { name: /Use a local version/ }));
-    fireEvent.click(within(differencesDialog).getByRole("button", { name: "Apply cleanup" }));
-    expect(onConsolidateSkillGroup).toHaveBeenCalledWith(
-      expect.objectContaining({
-        skillKey: "copied-local",
-        libraryAction: "replace"
-      })
-    );
+    expect(changedManagedGroup).toHaveTextContent("Ready");
+    expect(
+      within(changedManagedGroup).queryByRole("button", { name: "Review drift copied-local" })
+    ).not.toBeInTheDocument();
     let resolveAutoCleanup: (() => void) | undefined;
     onAutoConsolidateSkillGroups.mockImplementationOnce(
       () => new Promise<void>((resolve) => {
@@ -913,11 +905,13 @@ describe("SkillLibraryPanel", () => {
       })
     );
     const takeOverAllButton = within(discoveries).getByRole("button", {
-      name: "Review 3 ready Skills"
+      name: "Clean up 3 ready Skills"
     });
-    expect(takeOverAllButton).toHaveTextContent("Review ready");
+    expect(takeOverAllButton).toHaveTextContent("Clean up 3");
     fireEvent.click(takeOverAllButton);
-    const bulkCleanupDialog = screen.getByRole("dialog", { name: "Review ready skills" });
+    const bulkCleanupDialog = screen.getByRole("dialog", { name: "Clean up local Skills" });
+    expect(bulkCleanupDialog).toHaveTextContent("Repair managed links");
+    expect(bulkCleanupDialog).toHaveTextContent("Add to Library and link copies");
     expect(bulkCleanupDialog).toHaveTextContent("Copied Local");
     expect(bulkCleanupDialog).toHaveTextContent("Legacy Reviewer");
     fireEvent.click(
@@ -930,7 +924,7 @@ describe("SkillLibraryPanel", () => {
         expect.objectContaining({ skillKey: "target-only-reviewer" })
       ])
     );
-    expect(takeOverAllButton).toHaveTextContent("Managing...");
+    expect(takeOverAllButton).toHaveTextContent("Cleaning up...");
     expect(screen.getByRole("button", { name: "Close library tool" })).toBeDisabled();
     resolveAutoCleanup?.();
     const externalGroup = screen.getByRole("group", {
@@ -961,13 +955,17 @@ describe("SkillLibraryPanel", () => {
         expect.objectContaining({ id: "external-reviewer", status: "external" })
       )
     );
+    expect(
+      screen.queryByRole("group", { name: "Cleanup group represented-external" })
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Expand Kept outside AgentEnv" }));
     const representedExternalGroup = screen.getByRole("group", {
       name: "Cleanup group represented-external"
     });
+    expect(representedExternalGroup).toHaveTextContent("External");
     const reviewRepresented = within(representedExternalGroup).getByRole("button", {
       name: "Review ownership represented-external"
     });
-    expect(reviewRepresented).toBeEnabled();
     fireEvent.click(reviewRepresented);
     externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
     expect(externalDialog).toHaveTextContent("Review the matching Library copy");
@@ -994,11 +992,11 @@ describe("SkillLibraryPanel", () => {
       "2 locations"
     );
     const mixedGroup = screen.getByRole("group", { name: "Cleanup group target-only-reviewer" });
-    expect(mixedGroup).toHaveTextContent("Unmanaged");
+    expect(mixedGroup).toHaveTextContent("Ready");
     expect(within(mixedGroup).queryByText("Ignored", { exact: true })).not.toBeInTheDocument();
     expect(
-      within(mixedGroup).getByRole("button", { name: "Add to Library target-only-reviewer" })
-    ).toBeInTheDocument();
+      within(mixedGroup).queryByRole("button", { name: "Add to Library target-only-reviewer" })
+    ).not.toBeInTheDocument();
     fireEvent.click(
       within(mixedGroup).getByRole("button", {
         name: "More cleanup actions for target-only-reviewer"

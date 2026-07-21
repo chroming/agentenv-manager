@@ -515,6 +515,23 @@ export const registerIpcHandlers = ({
     const inventoryByPath = new Map(
       inventory.map((item) => [resolve(item.path), item])
     );
+    const unavailableLinkCleanup =
+      input.libraryAction === "keep" &&
+      input.locations.length > 0 &&
+      input.locations.every((location) => {
+        const current = inventoryByPath.get(resolve(String(location.path)));
+        return Boolean(
+          current &&
+          current.status !== "external" &&
+          current.sharedLocation !== true &&
+          current.contentHash === "" &&
+          current.runtimeIssues?.some(
+            (issue) =>
+              issue.code === "unreadable-skill" &&
+              issue.message.startsWith("Skill link target is unavailable")
+          )
+        );
+      });
     const locations = input.locations.map((location) => {
       const targetId = parseId(location.targetId, "target id");
       const target = targets.find((item) => item.id === targetId);
@@ -577,6 +594,12 @@ export const registerIpcHandlers = ({
         replaceLibrary: input.libraryAction === "replace",
         sharedPaths,
         duplicatePaths: locations.map((item) => item.targetDir)
+      });
+    }
+    if (unavailableLinkCleanup) {
+      return skillLibraryStore.removeUnavailableSkillLinks({
+        skillKey,
+        locations
       });
     }
     return skillLibraryStore.consolidateSkillGroup({

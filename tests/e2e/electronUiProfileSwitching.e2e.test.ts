@@ -1676,7 +1676,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => locationsTooltip.textContent()).toContain("target-only-reviewer");
     await locationsPreview.evaluate((element) => element.blur());
 
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Unmanaged");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Ready");
     await cleanupGroup
       .getByRole("button", { name: "More cleanup actions for target-only-reviewer" })
       .click();
@@ -1690,12 +1690,12 @@ describe("Electron UI profile switching e2e", () => {
     );
     await page.keyboard.press("Escape");
     await detailsDialog.waitFor({ state: "hidden" });
-    await cleanupGroup.getByRole("button", { name: "Add to Library target-only-reviewer" }).click();
-    let addDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
+    await page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).click();
+    let cleanupDialog = page.getByRole("dialog", { name: "Clean up local Skills" });
     const targetOnlyPath = join(opencodeDir, "skills", "target-only-reviewer", "SKILL.md");
     const originalTargetOnlyContent = await readFile(targetOnlyPath, "utf8");
     await writeFile(targetOnlyPath, `${originalTargetOnlyContent}\n# Changed after preview\n`, "utf8");
-    await addDialog.getByRole("button", { name: "Add to Library" }).click();
+    await cleanupDialog.getByRole("button", { name: /Clean up \d+ skills/ }).click();
     await expect
       .poll(() => page.locator(".app-feedback").textContent(), { timeout: 5_000 })
       .toContain("changed after the cleanup preview");
@@ -1704,15 +1704,14 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe(false);
     await writeFile(targetOnlyPath, originalTargetOnlyContent, "utf8");
     await page.getByRole("button", { name: "Refresh local skills" }).click();
-    await cleanupGroup.getByRole("button", { name: "Add to Library target-only-reviewer" }).click();
-    addDialog = page.getByRole("dialog", { name: "Review skill cleanup" });
-    await addDialog.getByRole("button", { name: "Add to Library" }).click();
-    await expect
-      .poll(() => page.locator(".app-feedback").textContent(), { timeout: 5_000 })
-      .toContain("Added target-only-reviewer to Library");
+    await page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).click();
+    cleanupDialog = page.getByRole("dialog", { name: "Clean up local Skills" });
+    await cleanupDialog.getByRole("button", { name: /Clean up \d+ skills/ }).click();
     await page
       .getByRole("group", { name: "Library item target-only-reviewer" })
       .waitFor({ state: "visible", timeout: 5_000 });
+    await page.getByRole("button", { name: "Expand Managed" }).click();
+    await cleanupGroup.waitFor({ state: "visible" });
     await expect.poll(() => cleanupGroup.textContent()).toContain("Managed");
     await expect.poll(() => cleanupGroup.textContent()).not.toContain("Duplicate");
     expect(
@@ -1809,6 +1808,9 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "More cleanup actions for ui-alpha-skill" })
       .click();
     await page.getByRole("menuitem", { name: "Ignore" }).click();
+    await cleanupGroup.waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "Expand Kept outside AgentEnv" }).click();
+    await cleanupGroup.waitFor({ state: "visible" });
     await expect.poll(() => cleanupGroup.textContent()).toContain("Ignored");
 
     await selectProfile(page, "UI OpenCode alpha");
@@ -1819,7 +1821,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
     await expect
       .poll(() => previewDialog.textContent())
-      .toContain("Cannot install ui-alpha-skill because an ignored unmanaged skill already exists");
+      .toMatch(
+        /Cannot install (?:ui-alpha-skill|Ui Alpha Skill) because (?:it is explicitly ignored|an ignored unmanaged skill already exists)/
+      );
     await expect
       .poll(() => previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled())
       .toBe(true);
@@ -1858,13 +1862,7 @@ describe("Electron UI profile switching e2e", () => {
         return childBox.top >= box.top && childBox.bottom <= box.bottom + 1;
       });
     })).toBe(true);
-    await expect
-      .poll(() => previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled())
-      .toBe(true);
-    await previewDialog
-      .getByLabel(/Back up and replace protected resources/)
-      .check();
-    await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
+    await previewDialog.getByRole("button", { name: "Apply with backup" }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain("UI ALPHA");
   }, 30_000);
@@ -1899,10 +1897,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await previewDialog.textContent()).not.toContain(
       "Skill target already exists and is not AgentEnv-owned"
     );
-    await previewDialog
-      .getByLabel(/Back up and replace protected resources/)
-      .check();
-    await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
+    await previewDialog.getByRole("button", { name: "Apply with backup" }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(targetSkillDir, "SKILL.md"), "utf8")).resolves.toContain(
       "alpha skill prompt"
@@ -1971,11 +1966,8 @@ describe("Electron UI profile switching e2e", () => {
     await previewDialog.getByLabel("Full issue detail").hover();
     await expect.poll(() => page.locator(".skill-description-tooltip").textContent())
       .toContain(targetSkill);
-    expect(await previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled()).toBe(true);
-    await previewDialog
-      .getByLabel(/Back up and replace protected resources/)
-      .check();
-    await previewDialog.getByRole("button", { name: "Back up and replace" }).click();
+    expect(await previewDialog.getByRole("button", { name: "Apply with backup" }).isDisabled()).toBe(false);
+    await previewDialog.getByRole("button", { name: "Apply with backup" }).click();
     await previewDialog.waitFor({ state: "hidden" });
 
     await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).resolves.toContain(
@@ -3960,6 +3952,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Close import" }).click();
     await page.getByRole("button", { name: "Scan local" }).click();
+    await page.getByRole("button", { name: "Expand Managed" }).click();
     const cleanupGroup = page.getByRole("group", {
       name: "Cleanup group managed-after-import"
     });
@@ -4116,6 +4109,9 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "More cleanup actions for shared-migration-reviewer" })
       .click();
     await page.getByRole("menuitem", { name: "Keep shared copy" }).click();
+    await cleanupGroup.waitFor({ state: "hidden" });
+    await page.getByRole("button", { name: "Expand Kept outside AgentEnv" }).click();
+    await cleanupGroup.waitFor({ state: "visible" });
     await expect.poll(() => cleanupGroup.textContent()).toContain("Kept");
     await cleanupGroup
       .getByRole("button", { name: "More cleanup actions for shared-migration-reviewer" })
@@ -4271,8 +4267,8 @@ describe("Electron UI profile switching e2e", () => {
       name: "Cleanup group manual-conflict-reviewer"
     });
     await safeGroup.waitFor({ state: "visible" });
-    await expect.poll(() => safeGroup.textContent()).toContain("Unmanaged");
-    await expect.poll(() => duplicateGroup.textContent()).toContain("Duplicate");
+    await expect.poll(() => safeGroup.textContent()).toContain("Ready");
+    await expect.poll(() => duplicateGroup.textContent()).toContain("Ready");
     await expect.poll(() => conflictGroup.textContent()).toContain("Conflict");
     expect(
       await conflictGroup.getByRole("button", { name: "Add to Library manual-conflict-reviewer" }).count()
@@ -4348,44 +4344,19 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     await assertCleanupLayout(false);
 
-    await duplicateGroup
-      .getByRole("button", { name: "Add to Library auto-duplicate-reviewer" })
-      .click();
-    await page
-      .getByRole("dialog", { name: "Review skill cleanup" })
-      .getByRole("button", { name: "Add to Library" })
-      .click();
-    await expect
-      .poll(() => fileExists(`${openCodeDuplicate}.agentenv-owner.json`), { timeout: 10_000 })
-      .toBe(true);
-    await expect
-      .poll(() => fileExists(`${codexDuplicate}.agentenv-owner.json`), { timeout: 10_000 })
-      .toBe(true);
-    await expect.poll(() => duplicateGroup.textContent()).toContain("Managed");
-    await expect
-      .poll(() => duplicateGroup.getByText("Duplicate", { exact: true }).count())
-      .toBe(0);
     expect(
       await duplicateGroup
         .getByRole("button", { name: "Add to Library auto-duplicate-reviewer" })
         .count()
     ).toBe(0);
-    const resolvedAlignment = await Promise.all([duplicateGroup, conflictGroup].map((row) =>
-      row.evaluate((element) => {
-        const state = element.querySelector<HTMLElement>(".cleanup-group-state")!.getBoundingClientRect();
-        const actions = element.querySelector<HTMLElement>(".cleanup-group-actions")!.getBoundingClientRect();
-        return {
-          stateLeft: Math.round(state.left),
-          actionsLeft: Math.round(actions.left),
-          actionsRight: Math.round(actions.right)
-        };
-      })
-    ));
-    expect(resolvedAlignment[0]).toEqual(resolvedAlignment[1]);
 
-    await page.getByRole("button", { name: /Review \d+ ready Skills/ }).click();
-    const bulkCleanupDialog = page.getByRole("dialog", { name: "Review ready skills" });
+    await page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).click();
+    const bulkCleanupDialog = page.getByRole("dialog", { name: "Clean up local Skills" });
     await expect.poll(() => bulkCleanupDialog.textContent()).toContain("Auto Local Reviewer");
+    await expect.poll(() => bulkCleanupDialog.textContent()).toContain("Auto Duplicate Reviewer");
+    await expect.poll(() => bulkCleanupDialog.textContent()).toContain(
+      "Add to Library and link copies"
+    );
     await expectInViewport(page, bulkCleanupDialog);
     expect(
       await bulkCleanupDialog
@@ -4402,14 +4373,101 @@ describe("Electron UI profile switching e2e", () => {
     await expect(
       fileExists(join(appDataRoot, "skills-library", "auto-duplicate-reviewer", "SKILL.md"))
     ).resolves.toBe(true);
+    await expect
+      .poll(() => fileExists(`${openCodeDuplicate}.agentenv-owner.json`), { timeout: 10_000 })
+      .toBe(true);
+    await expect
+      .poll(() => fileExists(`${codexDuplicate}.agentenv-owner.json`), { timeout: 10_000 })
+      .toBe(true);
     await expect(
       fileExists(join(appDataRoot, "skills-library", "manual-conflict-reviewer"))
     ).resolves.toBe(false);
     await expect.poll(() => conflictGroup.textContent()).toContain("Conflict");
     await expect
-      .poll(() => page.getByRole("button", { name: /Review \d+ ready Skills/ }).count())
+      .poll(() => page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).count())
       .toBe(0);
   }, 30_000);
+
+  it("backs up Library drift, removes broken links, and leaves Profile membership unchanged", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
+    const skillId = "cleanup-library-drift";
+    const libraryDir = join(appDataRoot, "skills-library", skillId);
+    const targetDir = join(opencodeDir, "skills", skillId);
+    const brokenDir = join(opencodeDir, "skills", "cleanup-broken-link");
+    await mkdir(libraryDir, { recursive: true });
+    await mkdir(targetDir, { recursive: true });
+    await writeFile(
+      join(libraryDir, "SKILL.md"),
+      `---\nname: ${skillId}\ndescription: Canonical cleanup copy.\n---\n\n# Library canonical\n`,
+      "utf8"
+    );
+    await writeJson(join(libraryDir, ".agentenv-skill.json"), {
+      sourceType: "local",
+      updatePolicy: "untracked"
+    });
+    await writeFile(
+      join(targetDir, "SKILL.md"),
+      `---\nname: ${skillId}\ndescription: Locally changed copy.\n---\n\n# Local drift\n`,
+      "utf8"
+    );
+    await symlink(join(root, "missing-cleanup-source"), brokenDir, "dir");
+
+    const resourcesPath = join(
+      appDataRoot,
+      "profiles",
+      "ui-opencode-alpha",
+      "resources.json"
+    );
+    const resources = await readJson<{
+      skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
+      mcpByTarget: unknown;
+    }>(resourcesPath);
+    resources.skills.push({ libraryId: skillId, targetName: skillId, enabled: true });
+    await writeJson(resourcesPath, resources);
+    const resourcesBefore = await readFile(resourcesPath, "utf8");
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const driftGroup = page.getByRole("group", { name: `Cleanup group ${skillId}` });
+    const brokenGroup = page.getByRole("group", { name: "Cleanup group cleanup-broken-link" });
+    await driftGroup.waitFor({ state: "visible" });
+    await brokenGroup.waitFor({ state: "visible" });
+    await expect.poll(() => driftGroup.textContent()).toContain("Ready");
+    await expect.poll(() => brokenGroup.textContent()).toContain("Ready");
+
+    await page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).click();
+    const dialog = page.getByRole("dialog", { name: "Clean up local Skills" });
+    await expect.poll(() => dialog.textContent()).toContain(
+      "Back up local changes and link to Library"
+    );
+    await expect.poll(() => dialog.textContent()).toContain("Remove unavailable links");
+    await dialog.getByRole("button", { name: /Clean up \d+ skills/ }).click();
+
+    await expect.poll(async () => (await lstat(targetDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(targetDir)).resolves.toBe(libraryDir);
+    await expect(readFile(join(targetDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "# Library canonical"
+    );
+    await expect.poll(async () => {
+      try {
+        await lstat(brokenDir);
+        return true;
+      } catch {
+        return false;
+      }
+    }).toBe(false);
+    await expect(readFile(resourcesPath, "utf8")).resolves.toBe(resourcesBefore);
+
+    const history = page.getByRole("region", { name: "Cleanup history" });
+    const brokenHistory = history
+      .locator(".cleanup-history-row")
+      .filter({ hasText: "cleanup-broken-link" });
+    await brokenHistory.getByRole("button", {
+      name: "Restore cleanup cleanup-broken-link"
+    }).click();
+    await expect.poll(async () => (await lstat(brokenDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(brokenDir)).resolves.toBe(join(root, "missing-cleanup-source"));
+  }, 35_000);
 
   it("refreshes the open local skill cleanup with a new disk scan", async () => {
     const { opencodeDir, page } = await launchApp();
@@ -4579,6 +4637,7 @@ describe("Electron UI profile switching e2e", () => {
       .resolves.toContain("# External");
     expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
     await page.getByRole("button", { name: "Scan local" }).click();
+    await page.getByRole("button", { name: "Expand Kept outside AgentEnv" }).click();
     const representedReview = page.getByRole("button", { name: `Review ownership ${skillId}` });
     await representedReview.waitFor({ state: "visible" });
     await representedReview.click();
@@ -4647,6 +4706,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local" }).click();
+    await page.getByRole("button", { name: "Expand Kept outside AgentEnv" }).click();
     const group = page.getByRole("group", { name: `Cleanup group ${skillId}` });
     await group.waitFor({ state: "visible" });
     await group.getByRole("button", { name: `Review ownership ${skillId}` }).click();

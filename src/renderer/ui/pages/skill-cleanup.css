@@ -1,0 +1,88 @@
+.cleanup-bulk-effect {
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 5px;
+  padding: 10px 0;
+}
+
+.cleanup-bulk-effect:first-child {
+  padding-top: 0;
+}
+
+.cleanup-bulk-effect > div {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.cleanup-bulk-effect > div > strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.cleanup-bulk-effect > div > span {
+  background: var(--surface-muted);
+  border-radius: 999px;
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  min-width: 20px;
+  padding-inline: 6px;
+  text-align: center;
+}
+
+.cleanup-bulk-effect > p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cleanup-bucket-heading {
+  align-items: center;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 6px 10px 6px 52px;
+}
+
+.cleanup-bucket-heading > div {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+}
+
+.cleanup-bucket-heading strong {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.cleanup-bucket-heading span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.cleanup-bucket-heading--decision {
+  background: #fffaf1;
+}
+
+.cleanup-bucket-heading--ready {
+  background: #f3faf7;
+}
+
+.skill-library-panel .cleanup-group-row > .cleanup-group-actions:not(:has(.cleanup-current-action)) {
+  display: flex;
+  justify-content: flex-end;
+}

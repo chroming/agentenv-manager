@@ -332,7 +332,7 @@ description: >
     });
   });
 
-  it("keeps an unclaimed broken Skill link visible and non-automatic", async () => {
+  it("removes an unclaimed broken Skill link with a restorable backup", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const targetSkillsDir = join(paths.homeDir, ".config", "opencode", "skills");
@@ -341,13 +341,14 @@ description: >
     await symlink(join(root, "removed-source"), targetDir, "dir");
     const store = createSkillLibraryStore(paths);
 
-    const inventory = await store.scanInventory([{
+    const targetPaths = {
       targetId: "opencode",
       configDir: dirname(targetSkillsDir),
       instructionsPath: "",
       configPath: "",
       skillsDir: targetSkillsDir
-    }]);
+    };
+    const inventory = await store.scanInventory([targetPaths]);
     const group = buildSkillCleanupGroups(inventory)[0];
 
     expect(inventory[0]).toMatchObject({
@@ -358,9 +359,28 @@ description: >
     });
     expect(group).toMatchObject({
       state: "broken",
-      resolution: "manual",
+      resolution: "automatic",
+      automaticEffect: "remove-broken-link",
       presentation: { state: "unavailable", action: "review-details" }
     });
+
+    const result = await store.removeUnavailableSkillLinks({
+      skillKey: "missing-local",
+      locations: [{ targetPaths, targetDir }]
+    });
+    await expect(lstat(targetDir)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(store.listCleanupBackups()).resolves.toEqual([
+      expect.objectContaining({
+        id: result.backupId,
+        libraryId: "missing-local",
+        locationCount: 1,
+        operation: "cleanup"
+      })
+    ]);
+
+    await store.rollbackSkillCleanup(result.backupId);
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
+    await expect(readlink(targetDir)).resolves.toBe(join(root, "removed-source"));
   });
   it("lists reusable skills from the central library directory", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
