@@ -27,7 +27,7 @@ Do not load code dynamically at runtime. Static registration keeps Electron pack
 
 Before enabling `realWritesEnabled`, cover:
 
-1. CLI present and missing discovery, including sparse GUI `PATH`.
+1. Declared installation evidence present and missing, including sparse GUI `PATH`, supported desktop-only installation, and configuration residue that MUST remain undetected.
 2. Default Profile read/write round trip and legacy file compatibility.
 3. Capture that excludes credentials and unsupported native values.
 4. Preview with no filesystem writes, no-change behavior, drift, and conflicts.

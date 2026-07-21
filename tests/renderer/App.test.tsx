@@ -2516,6 +2516,8 @@ describe("App", () => {
     await screen.findByRole("region", { name: "Library workspace" });
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     fireEvent.click(await screen.findByRole("button", { name: "Show OpenCode diagnostics" }));
+    expect(screen.getByText("Detected via")).toBeInTheDocument();
+    expect(screen.getByText("opencode command")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Stop managing OpenCode" }));
 
     const choiceDialog = screen.getByRole("dialog", { name: "Stop managing Agent" });

@@ -166,10 +166,13 @@ Settings owns the explicit set of enabled Agents.
 - Turning an Agent on MUST run fresh installation and lifecycle discovery before restoring operational controls.
 - An enabled Agent remains visible when its installation is not detected. Configuration directories alone do not make an Agent installed.
 - Installation detection MUST use adapter-declared authoritative evidence. A command, desktop application, or another verified platform installation marker MAY establish installation; stale configuration files MUST NOT.
+- A desktop application is installation evidence for an existing Agent only when it consumes that Agent's declared user-level resource paths. It does not create another Agent, destination choice, or Apply operation.
+- Multiple installation signals for the same Agent MUST produce one Agent row and one deployment plan. AgentEnv applies to the declared file boundary once, regardless of whether a command, desktop application, or both are present.
+- IDE extensions are outside the current installation-discovery scope.
 - Installation probes MUST be platform-aware and testable without reading the developer's real machine. A macOS application probe MUST NOT prevent the same adapter from using command or platform-native evidence on Windows and Linux.
 - Shared Library data and global compatibility locations remain global concerns; disabling one Agent MUST only remove that Agent's identity and dedicated paths from consideration.
 
-Status: explicit persisted scope, discovery filtering, renderer filtering, operation guards, managed-Agent confirmation, and recovery lock are `Implemented`.
+Status: explicit persisted scope, discovery filtering, command and compatible macOS desktop-application evidence, renderer filtering, operation guards, managed-Agent confirmation, and recovery lock are `Implemented`. IDE extension discovery is intentionally out of scope.
 
 ### 4.5 Backup
 

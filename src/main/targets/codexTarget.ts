@@ -12,7 +12,7 @@ import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
 import { setMcpServerEnabled, validateToml } from "../tomlConfig";
-import { createCommandInstallationDriver } from "./installationDiscovery";
+import { createInstallationDriver } from "./installationDiscovery";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
 import { createFilesystemSkillDriver } from "./shared/skillRuntime";
 import type { AgentTargetAdapter } from "./types";
@@ -65,7 +65,10 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       mcpActivation: true
     }
   },
-  detectInstallation: createCommandInstallationDriver("codex").detectInstallation,
+  detectInstallation: createInstallationDriver({
+    commands: ["codex"],
+    macApplications: [{ bundleName: "Codex.app", label: "Codex app" }]
+  }).detectInstallation,
   createTargetPaths: ({ homeDir }) => {
     const codexHome = join(homeDir, ".codex");
     const skillsDir = join(codexHome, "skills");

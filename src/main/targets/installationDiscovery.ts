@@ -5,19 +5,53 @@ import type {
   TargetInstallationResult
 } from "./types";
 
-export const createCommandInstallationDriver = (
-  executableName: string
-): TargetDiscoveryDriver => ({
+interface MacApplicationProbe {
+  bundleName: string;
+  label: string;
+}
+
+interface InstallationDriverOptions {
+  commands: string[];
+  macApplications?: MacApplicationProbe[];
+}
+
+export const createInstallationDriver = ({
+  commands,
+  macApplications = []
+}: InstallationDriverOptions): TargetDiscoveryDriver => ({
   detectInstallation: async (input): Promise<TargetInstallationResult> => {
-    const path = await input.findExecutable(executableName);
-    return {
-      found: Boolean(path),
-      evidence: path
-        ? [{ kind: "command", label: `${executableName} command`, path }]
-        : []
-    };
+    const evidence: TargetInstallationResult["evidence"] = [];
+
+    for (const command of commands) {
+      const path = await input.findExecutable(command);
+      if (path) {
+        evidence.push({ kind: "command", label: `${command} command`, path });
+      }
+    }
+
+    if (input.platform === "darwin") {
+      for (const application of macApplications) {
+        const userPath = join(input.homeDir, "Applications", application.bundleName);
+        if (await input.pathExists(userPath)) {
+          evidence.push({ kind: "desktop-app", label: application.label, path: userPath });
+        }
+
+        if (input.allowSystemApplicationLookup) {
+          const systemPath = join("/Applications", application.bundleName);
+          if (await input.pathExists(systemPath)) {
+            evidence.push({ kind: "desktop-app", label: application.label, path: systemPath });
+          }
+        }
+      }
+    }
+
+    return { found: evidence.length > 0, evidence };
   }
 });
+
+export const createCommandInstallationDriver = (
+  executableName: string
+): TargetDiscoveryDriver => createInstallationDriver({ commands: [executableName] });
 
 export const createAntigravityInstallationDriver = (): TargetDiscoveryDriver => ({
   detectInstallation: async (input: TargetInstallationInput) => {

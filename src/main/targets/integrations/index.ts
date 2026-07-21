@@ -3,7 +3,6 @@ import { createCodexTargetAdapter } from "../codexTarget";
 import { createOpenCodeTargetAdapter } from "../opencodeTarget";
 import type { AgentTargetAdapter } from "../types";
 import { defineTargetIntegration } from "../defineTargetIntegration";
-import { createCommandInstallationDriver } from "../installationDiscovery";
 import { createAntigravityTargetAdapter } from "./antigravity";
 import { createTraeCliTargetAdapter } from "./trae-cli";
 
@@ -11,9 +10,7 @@ const composeBuiltInIntegration = (
   adapter: AgentTargetAdapter
 ): AgentTargetAdapter => defineTargetIntegration({
   descriptor: adapter.descriptor,
-  discovery: createCommandInstallationDriver(
-    adapter.descriptor.executableName ?? adapter.descriptor.id
-  ),
+  discovery: { detectInstallation: adapter.detectInstallation },
   paths: {
     createTargetPaths: adapter.createTargetPaths
   },

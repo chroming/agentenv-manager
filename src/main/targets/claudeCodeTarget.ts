@@ -16,7 +16,7 @@ import { createUnifiedDiff } from "../diff";
 import { readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
 import { captureNativeJsonMcpConnections } from "./capture";
-import { createCommandInstallationDriver } from "./installationDiscovery";
+import { createInstallationDriver } from "./installationDiscovery";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
 import { createFilesystemSkillDriver } from "./shared/skillRuntime";
 import type { AgentTargetAdapter } from "./types";
@@ -92,7 +92,10 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       mcpActivation: false
     }
   },
-  detectInstallation: createCommandInstallationDriver("claude").detectInstallation,
+  detectInstallation: createInstallationDriver({
+    commands: ["claude"],
+    macApplications: [{ bundleName: "Claude.app", label: "Claude app" }]
+  }).detectInstallation,
   createTargetPaths: ({ homeDir }) => {
     const claudeDir = join(homeDir, ".claude");
     const skillsDir = join(claudeDir, "skills");

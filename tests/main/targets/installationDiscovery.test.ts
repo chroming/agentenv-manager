@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAntigravityInstallationDriver } from "../../../src/main/targets/installationDiscovery";
+import {
+  createAntigravityInstallationDriver,
+  createInstallationDriver
+} from "../../../src/main/targets/installationDiscovery";
+import { createBuiltInTargetAdapters } from "../../../src/main/targets/integrations";
 
 const detect = (
   platform: NodeJS.Platform,
@@ -55,5 +59,80 @@ describe("Antigravity installation discovery", () => {
 
   it("does not treat configuration residue as an installation", async () => {
     await expect(detect("linux")).resolves.toEqual({ found: false, evidence: [] });
+  });
+});
+
+describe("desktop-capable installation discovery", () => {
+  const driver = createInstallationDriver({
+    commands: ["example"],
+    macApplications: [{ bundleName: "Example.app", label: "Example app" }]
+  });
+
+  it("collects command and user application evidence without system lookup", async () => {
+    const input = {
+      platform: "darwin" as const,
+      homeDir: "/Users/test",
+      allowSystemApplicationLookup: false,
+      findExecutable: vi.fn().mockResolvedValue("/tooling/example"),
+      pathExists: vi.fn(async (path: string) => path === "/Users/test/Applications/Example.app")
+    };
+
+    await expect(driver.detectInstallation(input)).resolves.toEqual({
+      found: true,
+      evidence: [
+        { kind: "command", label: "example command", path: "/tooling/example" },
+        {
+          kind: "desktop-app",
+          label: "Example app",
+          path: "/Users/test/Applications/Example.app"
+        }
+      ]
+    });
+  });
+
+  it("uses /Applications only when real system application lookup is enabled", async () => {
+    const detectSystemApplication = (allowSystemApplicationLookup: boolean) =>
+      driver.detectInstallation({
+        platform: "darwin",
+        homeDir: "/Users/test",
+        allowSystemApplicationLookup,
+        findExecutable: vi.fn().mockResolvedValue(undefined),
+        pathExists: vi.fn(async (path: string) => path === "/Applications/Example.app")
+      });
+
+    await expect(detectSystemApplication(false)).resolves.toEqual({ found: false, evidence: [] });
+    await expect(detectSystemApplication(true)).resolves.toEqual({
+      found: true,
+      evidence: [{ kind: "desktop-app", label: "Example app", path: "/Applications/Example.app" }]
+    });
+  });
+
+  it("ignores macOS applications on other platforms", async () => {
+    await expect(driver.detectInstallation({
+      platform: "linux",
+      homeDir: "/home/test",
+      allowSystemApplicationLookup: true,
+      findExecutable: vi.fn().mockResolvedValue(undefined),
+      pathExists: vi.fn().mockResolvedValue(true)
+    })).resolves.toEqual({ found: false, evidence: [] });
+  });
+
+  it("preserves each built-in adapter's own installation driver", async () => {
+    const codex = createBuiltInTargetAdapters().find((adapter) => adapter.descriptor.id === "codex");
+
+    await expect(codex?.detectInstallation({
+      platform: "darwin",
+      homeDir: "/Users/test",
+      allowSystemApplicationLookup: false,
+      findExecutable: vi.fn().mockResolvedValue(undefined),
+      pathExists: vi.fn(async (path: string) => path === "/Users/test/Applications/Codex.app")
+    })).resolves.toEqual({
+      found: true,
+      evidence: [{
+        kind: "desktop-app",
+        label: "Codex app",
+        path: "/Users/test/Applications/Codex.app"
+      }]
+    });
   });
 });

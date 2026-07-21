@@ -18,7 +18,7 @@ import { createUnifiedDiff } from "../diff";
 import { readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
 import { captureNativeJsonMcpConnections } from "./capture";
-import { createCommandInstallationDriver } from "./installationDiscovery";
+import { createInstallationDriver } from "./installationDiscovery";
 import { createDirectoryAssetDriver } from "./shared/assetDeployment";
 import { createFilesystemSkillDriver } from "./shared/skillRuntime";
 import type { AgentTargetAdapter } from "./types";
@@ -112,7 +112,10 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       mcpActivation: true
     }
   },
-  detectInstallation: createCommandInstallationDriver("opencode").detectInstallation,
+  detectInstallation: createInstallationDriver({
+    commands: ["opencode"],
+    macApplications: [{ bundleName: "OpenCode.app", label: "OpenCode app" }]
+  }).detectInstallation,
   createTargetPaths: ({ homeDir }) => {
     const configDir = join(homeDir, ".config", "opencode");
     const privateSkillsDir = join(configDir, "skills");

@@ -411,6 +411,7 @@ const launchApp = async (
     malformedProfile?: boolean;
     malformedOpenCodeConfig?: boolean;
     missingProfileSkill?: boolean;
+    openCodeDesktopOnly?: boolean;
   } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
@@ -430,8 +431,12 @@ const launchApp = async (
   await writeJson(join(appDataRoot, "agentenv-data.json"), { formatVersion: 2 });
   const opencodeExecutable = join(binDir, "opencode");
   const codexExecutable = join(binDir, "codex");
-  await writeFile(opencodeExecutable, "#!/bin/sh\necho fake-opencode\n", "utf8");
-  await chmod(opencodeExecutable, 0o755);
+  if (options.openCodeDesktopOnly) {
+    await mkdir(join(homeDir, "Applications", "OpenCode.app"), { recursive: true });
+  } else {
+    await writeFile(opencodeExecutable, "#!/bin/sh\necho fake-opencode\n", "utf8");
+    await chmod(opencodeExecutable, 0o755);
+  }
   await writeFile(codexExecutable, "#!/bin/sh\necho fake-codex\n", "utf8");
   await chmod(codexExecutable, 0o755);
   if (options.includeClaudeTarget) {
@@ -1363,6 +1368,22 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Agents refreshed");
     await page.getByText("Agents refreshed").waitFor({ state: "hidden", timeout: 7000 });
+  }, 30_000);
+
+  it("shows desktop application evidence without creating another Target", async () => {
+    const { page } = await launchApp({ openCodeDesktopOnly: true });
+
+    await page.getByRole("button", { name: "Agents" }).click();
+    const openCodeCards = page.getByRole("article", { name: "Agent OpenCode" });
+    await expect.poll(() => openCodeCards.count()).toBe(1);
+    const openCodeCard = openCodeCards.first();
+    await expect.poll(() => openCodeCard.textContent()).toContain("Ready");
+    await expect.poll(() =>
+      openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).isEnabled()
+    ).toBe(true);
+    await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
+    await expect.poll(() => openCodeCard.textContent()).toContain("Detected via");
+    await expect.poll(() => openCodeCard.textContent()).toContain("OpenCode app");
   }, 30_000);
 
   it("shows a missing Target after its command is no longer detected", async () => {

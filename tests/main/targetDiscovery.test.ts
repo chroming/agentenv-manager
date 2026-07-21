@@ -14,7 +14,7 @@ import { createAntigravityTargetAdapter } from "../../src/main/targets/integrati
 
 let root = "";
 
-const makeService = async () => {
+const makeService = async (options: { platform?: NodeJS.Platform } = {}) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-discovery-"));
   const binDir = join(root, "bin");
   await mkdir(binDir, { recursive: true });
@@ -36,7 +36,8 @@ const makeService = async () => {
     paths,
     targetRegistry,
     targetScope,
-    pathEnv: binDir
+    pathEnv: binDir,
+    platform: options.platform
   });
 
   return { binDir, paths, service, settingsStore, targetScope };
@@ -221,6 +222,36 @@ describe("target discovery", () => {
     expect(codex?.health.status).toBe("ready");
     expect(codex?.health.executableFound).toBe(true);
     expect(codex?.health.canWrite).toBe(true);
+  });
+
+  it("marks desktop-capable Agents ready without a command in PATH", async () => {
+    const { service } = await makeService({ platform: "darwin" });
+    const applications = [
+      ["OpenCode.app", "opencode", "OpenCode app"],
+      ["Claude.app", "claude-code", "Claude app"],
+      ["Codex.app", "codex", "Codex app"]
+    ] as const;
+    for (const [bundleName] of applications) {
+      await mkdir(join(root, "Applications", bundleName), { recursive: true });
+    }
+
+    const targets = await service.listTargets();
+
+    for (const [bundleName, targetId, label] of applications) {
+      const target = targets.find((item) => item.id === targetId);
+      expect(target?.health).toEqual(expect.objectContaining({
+        status: "ready",
+        installationFound: true,
+        executableFound: false,
+        executablePath: undefined,
+        canWrite: true
+      }));
+      expect(target?.health.installationEvidence).toEqual([{
+        kind: "desktop-app",
+        label,
+        path: join(root, "Applications", bundleName)
+      }]);
+    }
   });
 
   it("keeps Antigravity CLI missing when only the desktop application exists", async () => {

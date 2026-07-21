@@ -55,6 +55,13 @@ const targetStatusLabel: Record<TargetInfo["health"]["status"], string> = {
   guarded: "Guarded"
 };
 
+const installationEvidenceName = (
+  evidence: TargetInfo["health"]["installationEvidence"][number],
+  t: ReturnType<typeof useI18n>["t"]
+) => evidence.kind === "command"
+  ? t("{{name}} command", { name: evidence.label.replace(/ command$/, "") })
+  : t("{{name}} app", { name: evidence.label.replace(/ app$/, "") });
+
 const formatLastApplied = (value: string | undefined, locale: string, neverApplied: string) => {
   if (!value) return neverApplied;
   return new Intl.DateTimeFormat(locale, {
@@ -232,6 +239,19 @@ export const TargetWorkspace = ({
               {isExpanded ? (
                 <section className="target-diagnostics" role="region" aria-label={t("{{name}} diagnostics", { name: target.name })}>
                   <div className="target-checks">
+                    <div className="target-check">
+                      <div>
+                        <span>{t("Detected via")}</span>
+                        <code title={target.health.installationEvidence.map((item) => item.path).join("\n")}>
+                          {target.health.installationEvidence.length > 0
+                            ? target.health.installationEvidence
+                                .map((item) => installationEvidenceName(item, t))
+                                .join(" · ")
+                            : t("None")}
+                        </code>
+                      </div>
+                      <strong>{t(target.health.installationFound ? "Detected" : "Not detected")}</strong>
+                    </div>
                     {target.health.checks.map((check) => (
                       <div className="target-check" key={check.id}>
                         <div><span>{check.label}</span><code title={check.path}>{check.path}</code></div>
