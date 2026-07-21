@@ -28,7 +28,13 @@ describe("Skill source merge", () => {
     const sources = [group("frontend", "skills/engineering/frontend"), group("backend", "skills/engineering/backend")];
     expect(validateSkillSourceMerge(sources, "skills").directory).toBe("skills");
     expect(() => validateSkillSourceMerge(sources, "skills/engineering/frontend"))
-      .toThrow("must contain every selected source");
+      .toThrow("does not contain selected source /skills/engineering/backend");
+  });
+
+  it("allows the repository root to contain nested source scopes", () => {
+    const sources = [group("root", ""), group("nested", "skills/algorithmic-art")];
+    expect(commonSkillSourceDirectory(sources.map((source) => source.directory))).toBe("");
+    expect(validateSkillSourceMerge(sources, "").directory).toBe("");
   });
 
   it("rejects sources from different repositories or revisions", () => {

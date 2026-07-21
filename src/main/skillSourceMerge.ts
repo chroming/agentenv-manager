@@ -43,11 +43,16 @@ export const validateSkillSourceMerge = (
   const directory = typeof requestedDirectory === "string"
     ? normalizedDirectory(requestedDirectory)
     : computedDirectory;
-  if (sources.some((source) => {
+  const outsideSource = sources.find((source) => {
     const sourceDirectory = normalizedDirectory(source.directory);
-    return directory !== sourceDirectory && !sourceDirectory.startsWith(`${directory}/`);
-  })) {
-    throw new Error("Merged directory must contain every selected source");
+    return Boolean(directory) &&
+      directory !== sourceDirectory &&
+      !sourceDirectory.startsWith(`${directory}/`);
+  });
+  if (outsideSource) {
+    throw new Error(
+      `Merged directory /${directory || "."} does not contain selected source /${normalizedDirectory(outsideSource.directory) || "."}`
+    );
   }
   return {
     repository: sources[0]!.repository,
