@@ -1,3 +1,6 @@
+import { realpath } from "node:fs/promises";
+import { relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import type {
   RepositorySkillScanResult,
   RepositorySkillSourceInput,
@@ -41,11 +44,52 @@ export const createSkillSourceScope = (
   result: Pick<RepositorySkillScanResult, "repository" | "ref" | "directory">
 ): SkillSourceScope => ({
   formatVersion: 1,
+  kind: "repository",
   canonicalLink: canonicalLinkFor(input, result.ref, result.directory),
   repository: result.repository,
   ref: result.ref,
   directory: result.directory
 });
+
+export const createLocalSkillSourceScope = (rootPath: string): SkillSourceScope => {
+  const root = resolve(rootPath);
+  return {
+    formatVersion: 1,
+    kind: "local",
+    canonicalLink: pathToFileURL(root).href,
+    repository: root,
+    ref: "",
+    directory: ""
+  };
+};
+
+export const createLocalSkillSourceCollection = (
+  rootPath: string,
+  skillPath: string
+): SkillSourceCollectionRef => {
+  const scope = createLocalSkillSourceScope(rootPath);
+  const subpath = relative(scope.repository, resolve(skillPath)).split("\\").join("/");
+  if (subpath === ".." || subpath.startsWith("../")) {
+    throw new Error("Skill is outside the selected local source folder");
+  }
+  return { ...scope, sourceSubpath: subpath === "." ? "" : subpath };
+};
+
+export const validateLocalSkillSourceCollection = async (
+  collection: SkillSourceCollectionRef | undefined,
+  skillPath: string
+): Promise<SkillSourceCollectionRef | undefined> => {
+  if (!collection) return undefined;
+  if (collection.kind !== "local") {
+    throw new Error("Local Skill source collection is invalid");
+  }
+  const canonicalSkillPath = await realpath(skillPath);
+  const expected = createLocalSkillSourceCollection(collection.repository, canonicalSkillPath);
+  if (expected.canonicalLink !== collection.canonicalLink || expected.sourceSubpath !== collection.sourceSubpath) {
+    throw new Error("Local Skill source changed after review");
+  }
+  return expected;
+};
 
 export const createSingleSkillSourceCollection = (
   input: RepositorySkillSourceInput,

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
 import {
@@ -7,6 +8,7 @@ import {
   mkdtemp,
   readFile,
   readlink,
+  realpath,
   readdir,
   rm,
   stat,
@@ -15,6 +17,7 @@ import {
 } from "node:fs/promises";
 import { delimiter, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import electronPath from "electron";
 import {
   _electron as electron,
@@ -235,6 +238,9 @@ const writeLibrarySkill = async (appDataRoot: string) => {
 
 const addOpenCodeAlphaLibrarySkills = async (appDataRoot: string, count: number) => {
   const refs = [];
+  const sourceRoot = join(appDataRoot, "source-skills");
+  const canonicalLink = pathToFileURL(sourceRoot).href;
+  const observationCandidates: Array<Record<string, unknown>> = [];
   for (let index = 0; index < count; index += 1) {
     const id = `layout-skill-${index + 1}`;
     const skillDir = join(appDataRoot, "skills-library", id);
@@ -255,11 +261,49 @@ const addOpenCodeAlphaLibrarySkills = async (appDataRoot: string, count: number)
       sourceType: "local",
       source: sourceDir,
       updateCheckEnabled: true,
+      sourceCollection: {
+        formatVersion: 1,
+        kind: "local",
+        canonicalLink,
+        repository: sourceRoot,
+        ref: "",
+        directory: "",
+        sourceSubpath: id
+      },
       contentHash: "seed",
       updatedAt: "2026-07-02T00:00:00.000Z"
     });
+    observationCandidates.push({
+      sourceSubpath: id,
+      directory: id,
+      name: id,
+      description: `Updated layout fixture ${index + 1}.`,
+      contentRevision: `next-${index + 1}`,
+      validity: "valid"
+    });
     refs.push({ libraryId: id, targetName: id, enabled: true });
   }
+  const observationDirectory = join(
+    dirname(appDataRoot),
+    "cache",
+    "skill-source-observations"
+  );
+  await mkdir(observationDirectory, { recursive: true });
+  await writeJson(
+    join(observationDirectory, `${createHash("sha256").update(canonicalLink).digest("hex")}.json`),
+    {
+      formatVersion: 1,
+      kind: "local",
+      canonicalLink,
+      repository: sourceRoot,
+      ref: "",
+      directory: "",
+      checkedAt: "2026-07-22T00:00:00.000Z",
+      accessTransport: "file",
+      complete: true,
+      candidates: observationCandidates
+    }
+  );
   const staticSkillDir = join(appDataRoot, "skills-library", "static-reference");
   await mkdir(staticSkillDir, { recursive: true });
   await writeFile(
@@ -425,7 +469,7 @@ const launchApp = async (
   const codexDir = join(homeDir, ".codex");
   const claudeDir = join(homeDir, ".claude");
   const traeDir = join(homeDir, ".trae");
-  const projectSkillRoot = options.projectSkillFixture ? opencodeDir : join(root, "project-skills");
+  const projectSkillRoot = join(root, "project-skills");
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
@@ -582,9 +626,6 @@ const launchApp = async (
       "---\nname: Project Release\ndescription: Release checks from a project checkout.\nversion: 2.1.0\n---\n\n# Project Release\n",
       "utf8"
     );
-    await writeJson(join(appDataRoot, "settings.json"), {
-      projectSkillRoots: [projectSkillRoot]
-    });
   }
   if (options.migratedBackupFixtures) {
     await writeMigratedBackupFixtures(appDataRoot);
@@ -599,6 +640,7 @@ const launchApp = async (
       AGENTENV_TEST_CLOSE_GUARD: options.testCloseGuard ? "1" : "0",
       AGENTENV_DATA_ROOT: appDataRoot,
       AGENTENV_AUTOMATION_BACKGROUND_DELAY_MS: String(options.backgroundStartupDelayMs ?? 0),
+      AGENTENV_CACHE_ROOT: join(root, "cache"),
       AGENTENV_GITHUB_FIXTURE_ROOT: githubFixtureRoot,
       AGENTENV_FAKE_HOME: fakeHomeRoot,
       AGENTENV_HOME: homeDir,
@@ -860,16 +902,27 @@ describe("Electron UI profile switching e2e", () => {
     await expectNoHorizontalOverflow(page, [".editor-panel"]);
   }, 30_000);
 
-  it("discovers project Skills read-only and imports through the existing preview flow", async () => {
+  it("discovers multiple Skills from one local source and imports without changing it", async () => {
     const { appDataRoot, page, projectSkillRoot } = await launchApp({ projectSkillFixture: true });
+    await resizeAppWindow(page, 920, 620);
     const sourceDirectory = join(projectSkillRoot, "skills", "project-release");
     const sourcePath = join(sourceDirectory, "SKILL.md");
     const sourceBefore = await readFile(sourcePath, "utf8");
 
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      projectSkillRoot
+    );
+
     await page.getByRole("button", { name: "Import skills" }).click();
     const dialog = page.getByRole("dialog", { name: "Import skills" });
-    await dialog.getByRole("tab", { name: "Projects" }).click();
-    await dialog.getByRole("button", { name: "Scan", exact: true }).click();
+    await dialog.getByRole("button", { name: "Choose local skill folder" }).click();
     const projectSkillRow = dialog.locator(".project-skill-row").filter({ hasText: "Project Release" });
     await projectSkillRow.waitFor({ state: "visible" });
     await projectSkillRow.getByRole("button", { name: "Import", exact: true }).click();
@@ -879,6 +932,56 @@ describe("Electron UI profile switching e2e", () => {
     expect(await readFile(sourcePath, "utf8")).toBe(sourceBefore);
     expect((await lstat(sourceDirectory)).isSymbolicLink()).toBe(false);
     await expectNoHorizontalOverflow(page, [".library-import-dialog"]);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("tab", { name: "By source" }).click();
+    await expectNoHorizontalOverflow(page, [".editor-panel", ".skill-source-view"]);
+    const automaticChecks = page.getByRole("switch", { name: /Automatic checks.*project-skills/i });
+    await automaticChecks.waitFor({ state: "visible" });
+    await expect.poll(() => automaticChecks.getAttribute("aria-checked")).toBe("false");
+    await automaticChecks.click();
+    await expect.poll(() => automaticChecks.getAttribute("aria-checked")).toBe("true");
+    const registry = await readJson<{
+      sources: Array<{ kind?: string; automaticChecks?: boolean }>;
+    }>(join(appDataRoot, "skill-sources.json"));
+    expect(registry.sources).toContainEqual(
+      expect.objectContaining({
+        kind: "local",
+        repository: expect.stringContaining("project-skills"),
+        automaticChecks: true
+      })
+    );
+  }, 30_000);
+
+  it("restores a missing managed OpenCode Skill from one fresh Preview", async () => {
+    const { opencodeDir, page } = await launchApp();
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    const installedPath = join(opencodeDir, "skills", "ui-alpha-skill");
+    await expect(readFile(join(installedPath, "SKILL.md"), "utf8")).resolves.toContain(
+      "alpha skill prompt"
+    );
+    await rm(installedPath, { recursive: true, force: true });
+    await page.reload();
+    await selectProfile(page, "UI OpenCode alpha");
+
+    await applyActionButton(page, "OpenCode").click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await previewDialog.getByText("Review notes", { exact: true }).click();
+    await previewDialog.getByText(
+      "Missing managed skill ui-alpha-skill will be restored",
+      { exact: true }
+    ).waitFor({ state: "visible" });
+    await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+
+    await expect(readFile(join(installedPath, "SKILL.md"), "utf8")).resolves.toContain(
+      "alpha skill prompt"
+    );
+    expect(await page.getByText(
+      "The Agent changed while Preview was open. Preview refreshed.",
+      { exact: true }
+    ).count()).toBe(0);
   }, 30_000);
 
   it("starts when migrated backups contain former-machine paths or malformed siblings", async () => {
@@ -4005,32 +4108,37 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByLabel("Local skill folder path").inputValue(), { timeout: 5_000 })
       .toBe(localSkillDir);
-    await page.getByRole("button", { name: "Import copy", exact: true }).click();
+    const localSkillRow = importDialog.locator(".project-skill-row").filter({ hasText: "Path Reviewer" });
+    await localSkillRow.waitFor({ state: "visible" });
+    await localSkillRow.getByRole("button", { name: "Import", exact: true }).click();
     await expect
       .poll(() => fileExists(join(appDataRoot, "skills-library", "path-reviewer", "SKILL.md")), {
         timeout: 5_000
       })
       .toBe(true);
 
-    await page
-      .getByRole("group", { name: "Library item path-reviewer" })
-      .getByText("Imported from a selected local folder.")
-      .waitFor({ state: "visible" });
     await expect(
       readFile(join(appDataRoot, "skills-library", "path-reviewer", "SKILL.md"), "utf8")
     ).resolves.toContain("Use the selected folder import flow.");
     const importedMetadata = await readJson<{
       source?: string;
       updateCheckEnabled?: boolean;
+      sourceCollection?: { kind?: string; repository?: string; sourceSubpath?: string };
     }>(join(appDataRoot, "skills-library", "path-reviewer", ".agentenv-skill.json"));
     expect(importedMetadata).toMatchObject({
-      source: localSkillDir,
-      updateCheckEnabled: false
+      source: await realpath(localSkillDir),
+      updateCheckEnabled: false,
+      sourceCollection: { kind: "local", sourceSubpath: "" }
     });
+    await importDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await importDialog.waitFor({ state: "hidden" });
+    await page
+      .getByRole("group", { name: "Library item path-reviewer" })
+      .getByText("Imported from a selected local folder.")
+      .waitFor({ state: "visible" });
     await rm(localSkillDir, { recursive: true, force: true });
     const importedRow = page.getByRole("group", { name: "Library item path-reviewer" });
-    await expect.poll(() => importedRow.textContent()).toContain("Checks disabled");
-    await importDialog.waitFor({ state: "hidden" });
+    await expect.poll(() => importedRow.textContent()).toContain("Not tracked");
   }, 30_000);
 
   it("reviews same-name Skill differences before keeping another Library copy", async () => {
@@ -4057,8 +4165,11 @@ describe("Electron UI profile switching e2e", () => {
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Import skills" }).click();
     await page.getByRole("button", { name: "Choose local skill folder" }).click();
-    await page.getByRole("button", { name: "Import copy", exact: true }).click();
-    let conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
+    await page.locator(".project-skill-row")
+      .filter({ hasText: "Shared Reviewer" })
+      .getByRole("button", { name: "Import", exact: true })
+      .click();
+    const conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
     await conflict.waitFor({ state: "visible" });
     const conflictBounds = await conflict.boundingBox();
     expect(conflictBounds).not.toBeNull();
@@ -4075,6 +4186,9 @@ describe("Electron UI profile switching e2e", () => {
       .fill("shared-reviewer-alternative");
     await conflict.getByRole("button", { name: "Save another Skill" }).click();
     await conflict.waitFor({ state: "hidden" });
+    const importDialog = page.getByRole("dialog", { name: "Import skills" });
+    await importDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await importDialog.waitFor({ state: "hidden" });
 
     await page.getByRole("group", { name: "Library item shared-reviewer-alternative" })
       .waitFor({ state: "visible" });
@@ -4089,17 +4203,6 @@ describe("Electron UI profile switching e2e", () => {
     expect(await sameNameRows.count()).toBe(2);
     await expect.poll(() => sameNameRows.nth(0).textContent()).toContain("shared-reviewer");
     await expect.poll(() => sameNameRows.nth(1).textContent()).toContain("shared-reviewer-alternative");
-
-    await page.getByRole("button", { name: "Import skills" }).click();
-    await page.getByRole("button", { name: "Choose local skill folder" }).click();
-    await page.getByRole("button", { name: "Import copy", exact: true }).click();
-    conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
-    await conflict.waitFor({ state: "visible" });
-    await conflict.getByRole("radio", { name: /shared-reviewer-alternative/ }).click();
-    await expect.poll(() => conflict.textContent()).toContain("Identical");
-    await conflict.getByRole("button", { name: "Use existing" }).click();
-    await conflict.waitFor({ state: "hidden" });
-    expect(await page.locator(".library-table-row", { hasText: "Shared Reviewer" }).count()).toBe(2);
 
     const originalRow = page.getByRole("group", { name: "Library item shared-reviewer", exact: true });
     await originalRow.getByRole("button", { name: "More actions for shared-reviewer", exact: true }).click();
@@ -6707,7 +6810,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => updateCheckSwitch.getAttribute("aria-checked")).toBe("true");
     await updateCheckSwitch.click();
     await page.getByRole("button", { name: "Close" }).click();
-    await expect.poll(() => githubRow.textContent()).toContain("Checks disabled");
+    await expect.poll(() => githubRow.textContent()).toContain("Not tracked");
     await expect
       .poll(async () =>
         (await readJson<{ updateCheckEnabled?: boolean }>(

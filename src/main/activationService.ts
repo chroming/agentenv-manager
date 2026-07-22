@@ -1576,8 +1576,9 @@ export const createActivationService = ({
         )
       });
       const replaceablePaths = replaceableApplyPaths(preview.issues);
+      const previewIssueIds = new Set(preview.issues.map((issue) => issue.id));
       const unreviewedDrift = currentDrift.issues.filter(
-        (issue) => issue.path && !replaceablePaths.has(issue.path)
+        (issue) => !previewIssueIds.has(issue.id)
       );
       if (unreviewedDrift.length > 0) {
         return {

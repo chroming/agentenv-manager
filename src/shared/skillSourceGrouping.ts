@@ -176,7 +176,10 @@ export const deriveSkillSourceGroups = (
       );
       return {
         formatVersion: 1,
+        kind: firstScope.kind ?? "repository",
         sourceId,
+        sourceKind: firstScope.kind ?? "repository",
+        automaticChecks: firstScope.kind !== "local",
         canonicalLink,
         repository: firstScope.repository,
         ref: firstScope.ref,

@@ -23,7 +23,9 @@ const isSourceRecord = (value: unknown): value is SkillSourceRecord => {
     typeof source.repository === "string" &&
     typeof source.ref === "string" &&
     typeof source.directory === "string" &&
+    (source.kind === undefined || source.kind === "repository" || source.kind === "local") &&
     (source.displayName === undefined || typeof source.displayName === "string") &&
+    (source.automaticChecks === undefined || typeof source.automaticChecks === "boolean") &&
     typeof source.createdAt === "string" &&
     typeof source.updatedAt === "string";
 };
@@ -33,6 +35,7 @@ export interface SkillSourceRegistry {
   ensure(scopes: SkillSourceScope[]): Promise<SkillSourceRecord[]>;
   replace(records: SkillSourceRecord[]): Promise<void>;
   setDisplayName(sourceId: string, displayName?: string): Promise<SkillSourceRecord>;
+  setAutomaticChecks(sourceId: string, enabled: boolean): Promise<SkillSourceRecord>;
 }
 
 export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => {
@@ -50,7 +53,11 @@ export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => 
         !parsed.sources.every(isSourceRecord)) {
         throw new Error(`Invalid Skill source registry: ${path}`);
       }
-      return parsed.sources;
+      return parsed.sources.map((source) => ({
+        ...source,
+        kind: source.kind ?? "repository",
+        automaticChecks: source.automaticChecks ?? (source.kind !== "local")
+      }));
     } catch (error) {
       if (isMissingFileError(error)) return [];
       throw error;
@@ -82,6 +89,17 @@ export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => 
     return record;
   });
 
+  const setAutomaticChecks = (sourceId: string, enabled: boolean) => serialize(async () => {
+    const records = await list();
+    const record = records.find((candidate) => candidate.id === sourceId);
+    if (!record) throw new Error("Skill source no longer exists");
+    if (record.automaticChecks === enabled) return record;
+    record.automaticChecks = enabled;
+    record.updatedAt = new Date().toISOString();
+    await writeRecords(records);
+    return record;
+  });
+
   const ensure = (scopes: SkillSourceScope[]) => serialize(async () => {
     const records = await list();
     const byKey = new Map(records.map((record) => [sourceKey(record), record]));
@@ -101,6 +119,8 @@ export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => 
       const record: SkillSourceRecord = {
         ...scope,
         id: sourceIdFor(scope),
+        kind: scope.kind ?? "repository",
+        automaticChecks: scope.kind !== "local",
         createdAt: now,
         updatedAt: now
       };
@@ -113,7 +133,7 @@ export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => 
     return resolved;
   });
 
-  return { list, ensure, replace, setDisplayName };
+  return { list, ensure, replace, setDisplayName, setAutomaticChecks };
 };
 
 export const bindSkillSourceCollection = async (

@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, realpath } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
 import type {
   RepositorySkillScanResult,
+  ProjectSkillScanResult,
   SkillLibraryEntry,
   SkillSourceGroupView,
   SkillSourceMergePreview,
@@ -15,14 +16,15 @@ import { sourceSubpathFor } from "../shared/skillSourceGrouping";
 import { writeAtomic } from "./fileUtils";
 import type { SkillMetadataFile } from "./skillLibraryMetadata";
 import type { SkillSourceService } from "./skillSourceService";
-import { createSkillSourceScope } from "./skillSourceScope";
+import { createLocalSkillSourceScope, createSkillSourceScope } from "./skillSourceScope";
 import type { SkillSourceRegistry } from "./skillSourceRegistry";
 import { validateSkillSourceMerge } from "./skillSourceMerge";
 import type { GitCliSkillSource } from "./skillSources/contract";
+import { scanProjectSkillRoots } from "./projectSkillDiscovery";
 
 interface PendingSkillSourceMerge {
   preview: SkillSourceMergePreview;
-  result: RepositorySkillScanResult;
+  result: RepositorySkillScanResult | ProjectSkillScanResult;
   affectedSourceIds: string[];
   affectedSkillIds: string[];
   sourceRegistrySnapshot: SkillSourceRecord[];
@@ -58,23 +60,35 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
       throw new Error("One or more selected Skill sources no longer exist");
     }
     const sources = selected as SkillSourceGroupView[];
-    const mergeScope = validateSkillSourceMerge(sources, input.directory);
-    if (!options.repositorySource) {
-      throw new Error("System Git is unavailable. Install Git and retry the source merge.");
-    }
-    const result = await options.repositorySource.scan({
-      repository: mergeScope.repository,
-      ref: mergeScope.ref,
-      directory: mergeScope.directory,
-      transport: "system-git"
-    });
-    const mergedSource = result.sourceScope ?? createSkillSourceScope(
-      { ...mergeScope, transport: "system-git" },
-      result
-    );
+    const requestedRootPath = input.rootPath && sources.every(
+      (source) => (source.sourceKind ?? source.kind) === "local"
+    )
+      ? await realpath(input.rootPath).catch(() => input.rootPath)
+      : input.rootPath;
+    const mergeScope = validateSkillSourceMerge(sources, input.directory, requestedRootPath);
+    const result = mergeScope.kind === "local"
+      ? await scanProjectSkillRoots([mergeScope.repository], await options.listSkills())
+      : await (async () => {
+          if (!options.repositorySource) {
+            throw new Error("System Git is unavailable. Install Git and retry the source merge.");
+          }
+          return options.repositorySource.scan({
+            repository: mergeScope.repository,
+            ref: mergeScope.ref,
+            directory: mergeScope.directory,
+            transport: "system-git"
+          });
+        })();
+    const mergedSource = mergeScope.kind === "local"
+      ? createLocalSkillSourceScope(mergeScope.repository)
+      : (result as RepositorySkillScanResult).sourceScope ?? createSkillSourceScope(
+          { ...mergeScope, transport: "system-git" },
+          result as RepositorySkillScanResult
+        );
     const existingTarget = groups.find((group) =>
       scopeKey(group) === scopeKey(mergedSource) && !sourceIds.includes(group.sourceId)
     );
+    const automaticCheckSources = [...sources, ...(existingTarget ? [existingTarget] : [])];
     const affectedSourceIds = [...sourceIds, ...(existingTarget ? [existingTarget.sourceId] : [])];
     const affectedSkills = (await options.listSkills()).filter((skill) =>
       skill.sourceCollection && affectedSourceIds.includes(
@@ -83,13 +97,22 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
     );
     const blockers: string[] = [];
     if (result.truncated) blockers.push("The merged source scan was incomplete");
+    if ("issues" in result && result.issues.length > 0) {
+      blockers.push(...result.issues.map((issue) => issue.message));
+    }
     const paths = new Map<string, string[]>();
     for (const skill of affectedSkills) {
       const collection = skill.sourceCollection!;
-      const candidateDirectory = [collection.directory, collection.sourceSubpath]
-        .filter(Boolean).join("/");
+      const candidateDirectory = mergeScope.kind === "local"
+        ? resolve(collection.repository, collection.sourceSubpath)
+        : [collection.directory, collection.sourceSubpath].filter(Boolean).join("/");
       try {
-        const sourceSubpath = sourceSubpathFor(mergedSource.directory, candidateDirectory);
+        const sourceSubpath = mergeScope.kind === "local"
+          ? relative(mergedSource.repository, candidateDirectory).split("\\").join("/")
+          : sourceSubpathFor(mergedSource.directory, candidateDirectory);
+        if (sourceSubpath === ".." || sourceSubpath.startsWith("../")) {
+          throw new Error(`Skill path is outside its source scope: ${candidateDirectory}`);
+        }
         paths.set(sourceSubpath, [...(paths.get(sourceSubpath) ?? []), skill.name]);
       } catch (error) {
         blockers.push(error instanceof Error ? error.message : String(error));
@@ -101,14 +124,23 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
       }
     }
     const warnings = [
-      ...(!mergedSource.directory ? ["The merged source scans the whole repository"] : []),
-      ...(existingTarget ? ["The selected sources will merge into an existing source group"] : [])
+      ...(mergeScope.kind === "repository" && !mergedSource.directory
+        ? ["The merged source scans the whole repository"]
+        : []),
+      ...(existingTarget ? ["The selected sources will merge into an existing source group"] : []),
+      ...(new Set(automaticCheckSources.map((source) => source.automaticChecks !== false)).size > 1
+        ? ["Automatic checks will be turned off because the selected sources use different settings"]
+        : [])
     ];
+    const automaticChecks = automaticCheckSources.every(
+      (source) => source.automaticChecks !== false
+    );
     const mergePreview: SkillSourceMergePreview = {
       id: randomUUID(),
       sourceIds,
       sources,
       mergedSource,
+      automaticChecks,
       affectedSkillCount: affectedSkills.length,
       discoveredSkillCount: result.candidates.length,
       mergesIntoExistingSource: Boolean(existingTarget),
@@ -169,19 +201,27 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
 
     try {
       const [mergedRecord] = await options.sourceRegistry.ensure([pending.preview.mergedSource]);
+      await options.sourceRegistry.setAutomaticChecks(
+        mergedRecord!.id,
+        pending.preview.automaticChecks
+      );
       for (const skill of affectedSkills) {
         const collection = skill.sourceCollection!;
-        const candidateDirectory = [collection.directory, collection.sourceSubpath]
-          .filter(Boolean).join("/");
+        const localSource = pending.preview.mergedSource.kind === "local";
+        const candidateDirectory = localSource
+          ? resolve(collection.repository, collection.sourceSubpath)
+          : [collection.directory, collection.sourceSubpath].filter(Boolean).join("/");
         const metadataPath = join(skill.path, ".agentenv-skill.json");
         const metadata = JSON.parse(snapshots.get(metadataPath)!) as SkillMetadataFile;
         metadata.sourceCollection = {
           ...pending.preview.mergedSource,
           sourceId: mergedRecord!.id,
-          sourceSubpath: sourceSubpathFor(
-            pending.preview.mergedSource.directory,
-            candidateDirectory
-          )
+          sourceSubpath: localSource
+            ? relative(pending.preview.mergedSource.repository, candidateDirectory).split("\\").join("/")
+            : sourceSubpathFor(
+                pending.preview.mergedSource.directory,
+                candidateDirectory
+              )
         };
         metadata.updatedAt = now().toISOString();
         await writeAtomic(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
@@ -190,7 +230,17 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
       await options.sourceRegistry.replace(records.filter((record) =>
         !pending.affectedSourceIds.includes(record.id) || record.id === mergedRecord!.id
       ));
-      await options.sourceService.recordRepositoryScan(pending.preview.mergedSource, pending.result);
+      if (pending.preview.mergedSource.kind === "local") {
+        await options.sourceService.recordLocalScan(
+          pending.preview.mergedSource,
+          pending.result as ProjectSkillScanResult
+        );
+      } else {
+        await options.sourceService.recordRepositoryScan(
+          pending.preview.mergedSource,
+          pending.result as RepositorySkillScanResult
+        );
+      }
       const group = (await options.listSourceGroups()).find((candidate) =>
         candidate.sourceId === mergedRecord!.id
       );

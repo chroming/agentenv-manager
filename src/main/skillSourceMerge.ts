@@ -1,4 +1,4 @@
-import { posix } from "node:path";
+import { isAbsolute, posix, relative, resolve, sep } from "node:path";
 import type { SkillSourceGroupView } from "../shared/types";
 import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
 
@@ -27,9 +27,39 @@ export const commonSkillSourceDirectory = (directories: readonly string[]) => {
 
 export const validateSkillSourceMerge = (
   sources: readonly SkillSourceGroupView[],
-  requestedDirectory?: string
+  requestedDirectory?: string,
+  requestedRootPath?: string
 ) => {
   if (sources.length < 2) throw new Error("Select at least two sources to merge");
+  const sourceKind = sources[0]!.sourceKind ?? sources[0]!.kind ?? "repository";
+  if (sources.some((source) => (source.sourceKind ?? source.kind ?? "repository") !== sourceKind)) {
+    throw new Error("Local folders and repositories cannot be merged into one source");
+  }
+  if (sourceKind === "local") {
+    const roots = sources.map((source) => resolve(source.repository));
+    const commonSegments = roots.map((root) => root.split(sep).filter(Boolean));
+    const common: string[] = [];
+    for (let index = 0; index < Math.min(...commonSegments.map((segments) => segments.length)); index += 1) {
+      const segment = commonSegments[0]![index];
+      if (!commonSegments.every((segments) => segments[index] === segment)) break;
+      common.push(segment!);
+    }
+    const computedRoot = `${sep}${common.join(sep)}`;
+    const rootPath = requestedRootPath?.trim() ? resolve(requestedRootPath.trim()) : computedRoot;
+    if (!isAbsolute(rootPath)) throw new Error("Merged local source must use an absolute folder path");
+    const outside = roots.find((root) => {
+      const path = relative(rootPath, root);
+      return path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path);
+    });
+    if (outside) throw new Error(`Merged folder does not contain selected source: ${outside}`);
+    return {
+      kind: "local" as const,
+      repository: rootPath,
+      ref: "",
+      directory: "",
+      computedDirectory: computedRoot
+    };
+  }
   const firstLocation = parseRepositoryLocation(sources[0]!.repository, { allowLocal: true });
   if (sources.some((source) =>
     parseRepositoryLocation(source.repository, { allowLocal: true }).cacheKeyLocator !==
@@ -55,6 +85,7 @@ export const validateSkillSourceMerge = (
     );
   }
   return {
+    kind: "repository" as const,
     repository: sources[0]!.repository,
     ref: sources[0]!.ref,
     directory: posix.normalize(directory || ".") === "." ? "" : directory,

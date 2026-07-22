@@ -27,7 +27,7 @@ import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
-import { Button, IconButton, ModalFrame } from "./ui";
+import { Button, IconButton, ModalFrame, Switch } from "./ui";
 
 interface SkillSourceViewProps {
   active: boolean;
@@ -37,6 +37,7 @@ interface SkillSourceViewProps {
   onCheckGroup(sourceId: string): Promise<void>;
   onCheckAll(): Promise<void>;
   onRename(input: SkillSourceNameInput): Promise<void>;
+  onSetAutomaticChecks?(sourceId: string, enabled: boolean): Promise<void>;
   onPreviewMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   onMerge(previewId: string): Promise<SkillSourceMergeResult>;
   onAdd(group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate): Promise<boolean>;
@@ -74,7 +75,7 @@ const sourceRepositoryLabel = (repository: string) => {
 };
 
 const sourceScopeLabel = (group: SkillSourceGroupView) =>
-  `${group.ref} · /${group.directory || "."}`;
+  group.sourceKind === "local" ? "Local folder" : `${group.ref} · /${group.directory || "."}`;
 
 const sourceDefaultLabel = (group: SkillSourceGroupView) => {
   const repository = sourceRepositoryLabel(group.repository);
@@ -97,6 +98,7 @@ export const SkillSourceView = ({
   onCheckGroup,
   onCheckAll,
   onRename,
+  onSetAutomaticChecks,
   onPreviewMerge,
   onMerge,
   onAdd,
@@ -112,6 +114,7 @@ export const SkillSourceView = ({
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const [checkingAll, setCheckingAll] = useState(false);
   const [operation, setOperation] = useState<string>();
+  const [automaticChecksOperation, setAutomaticChecksOperation] = useState<string>();
   const [mergeSelectionMode, setMergeSelectionMode] = useState(false);
   const [selectionDragging, setSelectionDragging] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -148,19 +151,26 @@ export const SkillSourceView = ({
     () => groups.filter((group) => mergeSelection.has(group.sourceId)),
     [groups, mergeSelection]
   );
+  const mergeIsLocal = selectedMergeGroups.length > 0 && selectedMergeGroups.every(
+    (group) => group.sourceKind === "local"
+  );
   const computedMergeDirectory = useMemo(() => {
     if (selectedMergeGroups.length < 2) return "";
-    const paths = selectedMergeGroups.map((group) => group.directory.split("/").filter(Boolean));
+    const paths = selectedMergeGroups.map((group) =>
+      (mergeIsLocal ? group.repository : group.directory).split("/").filter(Boolean)
+    );
     const common: string[] = [];
     for (let index = 0; index < Math.min(...paths.map((path) => path.length)); index += 1) {
       const segment = paths[0]![index];
       if (!paths.every((path) => path[index] === segment)) break;
       common.push(segment!);
     }
-    return common.join("/");
-  }, [selectedMergeGroups]);
+    return `${mergeIsLocal ? "/" : ""}${common.join("/")}`;
+  }, [mergeIsLocal, selectedMergeGroups]);
   const activeMergeDirectory = mergeDirectory ?? computedMergeDirectory;
-  const mergePreviewIsCurrent = mergePreview?.mergedSource.directory === activeMergeDirectory;
+  const mergePreviewIsCurrent = mergeIsLocal
+    ? mergePreview?.mergedSource.repository === activeMergeDirectory
+    : mergePreview?.mergedSource.directory === activeMergeDirectory;
   const canMergeSources = groups.length >= 2;
 
   const exitMergeSelection = () => {
@@ -308,15 +318,25 @@ export const SkillSourceView = ({
     }
   };
 
+  const toggleAutomaticChecks = async (group: SkillSourceGroupView) => {
+    if (!onSetAutomaticChecks) return;
+    setAutomaticChecksOperation(group.sourceId);
+    try {
+      await onSetAutomaticChecks(group.sourceId, group.automaticChecks === false);
+    } finally {
+      setAutomaticChecksOperation(undefined);
+    }
+  };
+
   const previewMerge = async (directory: string) => {
     setMergeBusy(true);
     setMergeError(undefined);
     try {
       const preview = await onPreviewMerge({
         sourceIds: [...mergeSelection],
-        directory
+        ...(mergeIsLocal ? { rootPath: directory } : { directory })
       });
-      setMergeDirectory(preview.mergedSource.directory);
+      setMergeDirectory(mergeIsLocal ? preview.mergedSource.repository : preview.mergedSource.directory);
       setMergePreview(preview);
       return preview;
     } catch (error) {
@@ -341,10 +361,18 @@ export const SkillSourceView = ({
     setMergeBusy(true);
     setMergeError(undefined);
     try {
-      const currentPreview = mergePreview?.mergedSource.directory === directory
+      const currentPreview = (mergeIsLocal
+        ? mergePreview?.mergedSource.repository
+        : mergePreview?.mergedSource.directory) === directory
         ? mergePreview
-        : await onPreviewMerge({ sourceIds: [...mergeSelection], directory });
-      setMergeDirectory(currentPreview.mergedSource.directory);
+          : await onPreviewMerge({
+            sourceIds: [...mergeSelection],
+            ...(mergeIsLocal ? { rootPath: directory } : { directory })
+          });
+      if (!currentPreview) throw new Error("Skill source merge preview is unavailable");
+      setMergeDirectory(mergeIsLocal
+        ? currentPreview.mergedSource.repository
+        : currentPreview.mergedSource.directory);
       setMergePreview(currentPreview);
       if (currentPreview.blockers.length > 0) return;
       await onMerge(currentPreview.id);
@@ -473,8 +501,8 @@ export const SkillSourceView = ({
         ) : null}
         {!loading && groups.length === 0 ? (
           <div className="skill-source-empty">
-            <strong>{t("No repository sources yet")}</strong>
-            <span>{t("Import skills from a repository to group and check them here.")}</span>
+            <strong>{t("No sources yet")}</strong>
+            <span>{t("Import skills from a folder or repository to manage their sources here.")}</span>
           </div>
         ) : null}
         {groups.length > 0 && visibleGroups.length === 0 ? (
@@ -551,7 +579,7 @@ export const SkillSourceView = ({
                 </button>
                 <span className="skill-source-artwork" aria-hidden="true">
                   <ResourceIconArtwork
-                    fallbackIconKey="github"
+                    fallbackIconKey={group.sourceKind === "local" ? "folder" : "github"}
                     size={18}
                     sourceUrl={group.canonicalLink}
                   />
@@ -612,6 +640,18 @@ export const SkillSourceView = ({
                   />
                 ) : null}
                 <div className="skill-source-group-actions">
+                  <Switch
+                    checked={group.automaticChecks !== false}
+                    hidden={!onSetAutomaticChecks}
+                    disabled={automaticChecksOperation === group.sourceId || isChecking || activeCheckingAll}
+                    label={t("Automatic checks for {{name}}", { name: groupName })}
+                    onClick={() => void toggleAutomaticChecks(group)}
+                  >
+                    {automaticChecksOperation === group.sourceId ? (
+                      <LoaderCircle className="is-spinning" size={13} />
+                    ) : null}
+                    <span>{t("Auto")}</span>
+                  </Switch>
                   {reviewableUpdateIds.length > 0 ? (
                     <button
                       aria-label={`${t("Review")} ${reviewableUpdateIds.length}`}
@@ -773,10 +813,10 @@ export const SkillSourceView = ({
               <div><span>{t("Discovered")}</span><strong>{mergePreview?.discoveredSkillCount ?? "—"}</strong></div>
             </div>
             <label className="skill-source-merge-field">
-              <span>{t("Merged source directory")}</span>
+              <span>{t(mergeIsLocal ? "Merged source folder" : "Merged source directory")}</span>
               <input
                 value={activeMergeDirectory}
-                placeholder={t("Repository root")}
+                placeholder={t(mergeIsLocal ? "Local folder" : "Repository root")}
                 onChange={(event) => {
                   setMergeDirectory(event.currentTarget.value);
                   setMergeError(undefined);
@@ -788,7 +828,9 @@ export const SkillSourceView = ({
               <OverflowTooltip
                 className="skill-source-merge-path"
                 focusable={false}
-                text={`${sourceRepositoryLabel(selectedMergeGroups[0]!.repository)} · ${selectedMergeGroups[0]!.ref} · /${activeMergeDirectory || "."}`}
+                text={mergeIsLocal
+                  ? activeMergeDirectory
+                  : `${sourceRepositoryLabel(selectedMergeGroups[0]!.repository)} · ${selectedMergeGroups[0]!.ref} · /${activeMergeDirectory || "."}`}
               />
             </div>
             {mergeBusy && !mergePreview ? (
@@ -800,10 +842,10 @@ export const SkillSourceView = ({
             {!mergePreviewIsCurrent && mergePreview ? (
               <p className="skill-source-merge-notice">{t("The edited source will be checked before merging.")}</p>
             ) : null}
-            {mergePreviewIsCurrent ? mergePreview.warnings.map((warning) => (
+            {mergePreviewIsCurrent && mergePreview ? mergePreview.warnings.map((warning) => (
               <p className="skill-source-merge-notice" key={warning}>{t(warning)}</p>
             )) : null}
-            {mergePreviewIsCurrent ? mergePreview.blockers.map((blocker) => (
+            {mergePreviewIsCurrent && mergePreview ? mergePreview.blockers.map((blocker) => (
               <p className="skill-source-merge-notice is-error" key={blocker}>{blocker}</p>
             )) : null}
             {mergeError ? (

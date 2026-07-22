@@ -1,8 +1,39 @@
-import type { SkillLibraryEntry, SkillUpdateInfo } from "../shared/types";
+import type {
+  SkillLibraryEntry,
+  SkillSourceGroupView,
+  SkillUpdateInfo
+} from "../shared/types";
 import type { SkillUpdateCheckStatus } from "./components/SkillLibraryPanel";
 import type { TranslationValues } from "./i18n";
 
 type Translate = (message: string, values?: TranslationValues) => string;
+
+export const updatesFromSourceGroups = (
+  groups: SkillSourceGroupView[],
+  skills: SkillLibraryEntry[]
+): SkillUpdateInfo[] => {
+  const skillsById = new Map(skills.map((skill) => [skill.id, skill]));
+  const updates = new Map<string, SkillUpdateInfo>();
+  for (const candidate of groups.flatMap((group) => group.candidates)) {
+    if (!candidate.libraryId || candidate.state === "unchecked") continue;
+    const skill = skillsById.get(candidate.libraryId);
+    if (!skill || skill.globallyEnabled === false || skill.updatePolicy !== "tracked") continue;
+    const error = ["invalid", "removed", "conflict", "missing"].includes(candidate.state)
+      ? candidate.detail ?? (candidate.state === "removed" ? "Removed upstream" : "Source check failed")
+      : undefined;
+    updates.set(skill.id, {
+      id: skill.id,
+      name: skill.name,
+      sourceType: skill.sourceType,
+      currentRevision: skill.remoteRevision ?? skill.contentHash,
+      latestRevision: candidate.contentRevision,
+      latestUpdatedAt: candidate.upstreamUpdatedAt,
+      updateAvailable: candidate.state === "update",
+      error
+    });
+  }
+  return [...updates.values()];
+};
 
 export const summarizeSkillUpdateChecks = (
   skillUpdateItems: SkillUpdateInfo[],

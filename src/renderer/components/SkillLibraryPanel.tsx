@@ -60,6 +60,7 @@ import type {
   SkillLibraryEntry,
   SkillSourceGroupCandidate,
   SkillSourceGroupView,
+  SkillSourceCollectionRef,
   SkillSourceNameInput,
   SkillSourceMergePreview,
   SkillSourceMergePreviewInput,
@@ -159,12 +160,12 @@ interface SkillLibraryPanelProps {
   onCloseTool?(): void;
   onRefreshInventory(): Promise<void>;
   onSelectLocalSkillFolder(): Promise<string | undefined>;
-  projectSkillRoots?: string[];
-  onSelectProjectSkillRoot?(): Promise<string | undefined>;
-  onRemoveProjectSkillRoot?(path: string): Promise<void>;
-  onScanProjectSkills?(): Promise<ProjectSkillScanResult>;
+  onScanLocalSkillSource?(rootPath: string): Promise<ProjectSkillScanResult>;
   onImportUnmanaged(sourcePath: string): Promise<boolean>;
-  onImportProjectSkill?(sourcePath: string): Promise<boolean>;
+  onImportLocalSourceSkill?(
+    sourcePath: string,
+    sourceCollection: SkillSourceCollectionRef
+  ): Promise<boolean>;
   onImportExternal(skill: SkillInventoryEntry): Promise<boolean>;
   onScanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   onImportGitHubSkills(
@@ -180,6 +181,7 @@ interface SkillLibraryPanelProps {
   onCheckSourceGroup(sourceId: string): Promise<void>;
   onCheckAllSourceGroups(): Promise<void>;
   onSetSourceName(input: SkillSourceNameInput): Promise<void>;
+  onSetSourceAutomaticChecks?(sourceId: string, enabled: boolean): Promise<void>;
   onPreviewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   onMergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   onCancelRepositoryOperations(): Promise<void>;
@@ -411,12 +413,9 @@ export const SkillLibraryPanel = ({
   onCloseTool,
   onRefreshInventory,
   onSelectLocalSkillFolder,
-  projectSkillRoots = [],
-  onSelectProjectSkillRoot,
-  onRemoveProjectSkillRoot,
-  onScanProjectSkills,
+  onScanLocalSkillSource,
   onImportUnmanaged,
-  onImportProjectSkill,
+  onImportLocalSourceSkill,
   onImportExternal,
   onScanGitHubSkills,
   onImportGitHubSkills,
@@ -426,6 +425,7 @@ export const SkillLibraryPanel = ({
   onCheckSourceGroup,
   onCheckAllSourceGroups,
   onSetSourceName,
+  onSetSourceAutomaticChecks,
   onPreviewSourceMerge,
   onMergeSources,
   onCancelRepositoryOperations,
@@ -494,7 +494,7 @@ export const SkillLibraryPanel = ({
   }>();
   const [githubOperationError, setGithubOperationError] = useState("");
   const [localSkillPath, setLocalSkillPath] = useState("");
-  const [importSource, setImportSource] = useState<"local" | "github" | "projects">("local");
+  const [importSource, setImportSource] = useState<"local" | "github">("local");
   const [repositoryRef, setRepositoryRef] = useState("");
   const [repositoryDirectory, setRepositoryDirectory] = useState("");
   const [repositoryConnection, setRepositoryConnection] = useState<"auto" | "system-git">("auto");
@@ -1596,6 +1596,22 @@ export const SkillLibraryPanel = ({
     group: SkillSourceGroupView,
     candidate: SkillSourceGroupCandidate
   ) => {
+    if (group.sourceKind === "local") {
+      if (!onImportLocalSourceSkill) return false;
+      const sourcePath = [group.repository.replace(/\/+$/, ""), candidate.sourceSubpath]
+        .filter(Boolean)
+        .join("/");
+      return onImportLocalSourceSkill(sourcePath, {
+        formatVersion: 1,
+        kind: "local",
+        canonicalLink: group.canonicalLink,
+        repository: group.repository,
+        ref: "",
+        directory: "",
+        sourceId: group.sourceId,
+        sourceSubpath: candidate.sourceSubpath
+      });
+    }
     const result = await onImportRepositorySkills([{
       repository: group.repository,
       ref: group.ref,
@@ -1603,6 +1619,7 @@ export const SkillLibraryPanel = ({
       transport: "system-git",
       sourceCollection: {
         formatVersion: 1,
+        kind: "repository",
         canonicalLink: group.canonicalLink,
         repository: group.repository,
         ref: group.ref,
@@ -2090,7 +2107,7 @@ export const SkillLibraryPanel = ({
                           : isTracked && hasUpdateSource
                             ? "Not checked"
                             : hasUpdateSource
-                              ? "Checks disabled"
+                              ? "Not tracked"
                               : "Ready"
                       )}</span>
                     </strong>
@@ -2206,6 +2223,7 @@ export const SkillLibraryPanel = ({
         onCheckGroup={onCheckSourceGroup}
         onCheckAll={onCheckAllSourceGroups}
         onRename={onSetSourceName}
+        onSetAutomaticChecks={onSetSourceAutomaticChecks}
         onPreviewMerge={onPreviewSourceMerge}
         onMerge={onMergeSources}
         onAdd={addSourceCandidate}
@@ -3945,19 +3963,6 @@ export const SkillLibraryPanel = ({
                     <GitBranch size={15} strokeWidth={2.2} aria-hidden="true" />
                     {t("Repository")}
                   </button>
-                  {onSelectProjectSkillRoot && onRemoveProjectSkillRoot && onScanProjectSkills ? (
-                    <button
-                      className={importSource === "projects" ? "is-active" : ""}
-                      type="button"
-                      role="tab"
-                      aria-selected={importSource === "projects"}
-                      disabled={Boolean(githubOperation) || localImportOperation}
-                      onClick={() => setImportSource("projects")}
-                    >
-                      <SearchCheck size={15} strokeWidth={2.2} aria-hidden="true" />
-                      {t("Projects")}
-                    </button>
-                  ) : null}
                 </div>
 
                 {importSource === "local" ? (
@@ -4001,17 +4006,14 @@ export const SkillLibraryPanel = ({
                           <span>{t(localImportImpact.message, localImportImpact.values)}</span>
                         </div>
                       ) : null}
+                      {localSkillPath && !selectedLocalInventory && onScanLocalSkillSource && onImportLocalSourceSkill ? (
+                        <ProjectSkillDiscoveryPanel
+                          rootPath={localSkillPath}
+                          onScan={onScanLocalSkillSource}
+                          onImport={onImportLocalSourceSkill}
+                        />
+                      ) : null}
                     </section>
-                  </div>
-                ) : importSource === "projects" && onSelectProjectSkillRoot && onRemoveProjectSkillRoot && onScanProjectSkills ? (
-                  <div className="library-import-content">
-                    <ProjectSkillDiscoveryPanel
-                      roots={projectSkillRoots}
-                      onAddRoot={onSelectProjectSkillRoot}
-                      onRemoveRoot={onRemoveProjectSkillRoot}
-                      onScan={onScanProjectSkills}
-                      onImport={onImportProjectSkill ?? onImportUnmanaged}
-                    />
                   </div>
                 ) : !githubScanResult ? (
                   <div className="library-import-content">
@@ -4338,7 +4340,7 @@ export const SkillLibraryPanel = ({
                         : githubImportResult ? "Close" : "Cancel"
                     )}
                   </Button>
-                  {importSource === "local" ? (
+                  {importSource === "local" && selectedLocalInventory ? (
                     <Button
                       variant="primary"
                       aria-busy={localImportOperation}
@@ -4355,7 +4357,7 @@ export const SkillLibraryPanel = ({
                     >
                       {localImportOperation ? t("Importing...") : t(localImportLabel)}
                     </Button>
-                  ) : importSource === "projects" ? null : !githubScanResult ? (
+                  ) : importSource === "local" ? null : !githubScanResult ? (
                     <Button
                       variant="primary"
                       aria-busy={githubOperation === "scanning"}

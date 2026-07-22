@@ -158,9 +158,11 @@ import { buildQuickOpenItems } from "./quickOpenItems";
 import {
   reconcileImportedSkillUpdates,
   summarizeSkillUpdateChecks,
-  summarizeSkillUpdateResult
+  summarizeSkillUpdateResult,
+  updatesFromSourceGroups
 } from "./skillUpdateSummary";
 import { createTargetNameIndex } from "./targetPresentation";
+
 const emptyProfileResources: ProfileResources = {
   skills: [],
   managementByTarget: {},
@@ -786,16 +788,22 @@ const AppContent = ({
       skillItems,
       settings
     } = core;
-    const [skillUpdatesResult, skillInventoryResult, githubStatusResult] =
+    const [sourceChecksResult, skillInventoryResult, githubStatusResult] =
       await Promise.allSettled([
         checkSkillUpdates && (forceSkillUpdateCheck || settings.skillAutoCheckEnabled)
-          ? window.agentEnv.checkSkillLibraryUpdates()
-          : Promise.resolve(skillUpdates),
+          ? forceSkillUpdateCheck
+            ? window.agentEnv.checkAllSkillSourceGroups()
+            : window.agentEnv.checkAutomaticSkillSourceGroups()
+          : Promise.resolve(undefined),
         window.agentEnv.scanSkillInventory(),
         window.agentEnv.readGitHubAuthStatus()
       ]);
-    const skillUpdateItems =
-      skillUpdatesResult.status === "fulfilled" ? skillUpdatesResult.value : skillUpdates;
+    const checkedSources = sourceChecksResult.status === "fulfilled"
+      ? sourceChecksResult.value
+      : undefined;
+    const skillUpdateItems = checkedSources
+      ? updatesFromSourceGroups(checkedSources.groups, skillItems)
+      : skillUpdates;
     const skillInventoryItems =
       skillInventoryResult.status === "fulfilled" ? skillInventoryResult.value : skillInventory;
     const githubStatus =
@@ -839,6 +847,7 @@ const AppContent = ({
       return { skillUpdateItems };
     }
     setSkillUpdates(skillUpdateItems);
+    if (checkedSources) setSkillSourceGroups(checkedSources.groups);
     setSkillInventory(skillInventoryItems);
     setGithubAuthStatus(githubStatus);
     setSkillUsage(usage);
@@ -1076,7 +1085,10 @@ const AppContent = ({
     activityRef: skillUpdateActivityRef,
     enabled: !isLoading && skillSettings.skillAutoCheckEnabled,
     intervalMinutes: skillSettings.skillAutoCheckIntervalMinutes,
-    onResult: setSkillUpdates,
+    onResult: (result) => {
+      setSkillSourceGroups(result.groups);
+      syncSkillUpdatesFromSourceGroups(result.groups);
+    },
     onError: (unknownError) =>
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError))
   });
@@ -2374,14 +2386,15 @@ const AppContent = ({
   const importUnmanagedSkill = async (
     sourcePath: string,
     sourceHandling?: SkillImportInput["sourceHandling"],
-    errorScope: "global" | "caller" = "global"
+    errorScope: "global" | "caller" = "global",
+    sourceCollection?: SkillImportInput["sourceCollection"]
   ) => {
     setBusy(true);
     setError(undefined);
     try {
       const prepared = await prepareSkillImport({
         kind: "local",
-        input: { sourcePath, sourceHandling }
+        input: { sourcePath, sourceHandling, sourceCollection }
       });
       if (!prepared || prepared.kind !== "local") return false;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
@@ -2843,33 +2856,15 @@ const AppContent = ({
   ): Promise<RepositorySkillScanResult> => window.agentEnv.scanRepositorySkills(input);
 
   const syncSkillUpdatesFromSourceGroups = (groups: SkillSourceGroupView[]) => {
-    const skillsById = new Map(librarySkills.map((skill) => [skill.id, skill]));
-    const sourceUpdates = new Map<string, SkillUpdateInfo>();
-    for (const candidate of groups.flatMap((group) => group.candidates)) {
-      if (!candidate.libraryId || candidate.state === "unchecked") continue;
-      const skill = skillsById.get(candidate.libraryId);
-      if (!skill || skill.globallyEnabled === false || skill.updatePolicy !== "tracked") continue;
-      const fallbackError = candidate.state === "removed"
-        ? t("Removed upstream")
-        : t("Source check failed");
-      const error = ["invalid", "removed", "conflict", "missing"].includes(candidate.state)
-        ? candidate.detail ?? fallbackError
-        : undefined;
-      sourceUpdates.set(skill.id, {
-        id: skill.id,
-        name: skill.name,
-        sourceType: skill.sourceType,
-        currentRevision: skill.remoteRevision ?? skill.contentHash,
-        latestRevision: candidate.contentRevision,
-        latestUpdatedAt: candidate.upstreamUpdatedAt,
-        updateAvailable: candidate.state === "update",
-        error
-      });
-    }
-    if (sourceUpdates.size === 0) return;
+    const sourceUpdates = updatesFromSourceGroups(groups, librarySkills);
+    const sourceIds = new Set(
+      groups.flatMap((group) => group.candidates.flatMap((candidate) =>
+        candidate.libraryId ? [candidate.libraryId] : []
+      ))
+    );
     setSkillUpdates((current) => [
-      ...current.filter((update) => !sourceUpdates.has(update.id)),
-      ...sourceUpdates.values()
+      ...current.filter((update) => !sourceIds.has(update.id)),
+      ...sourceUpdates
     ]);
   };
 
@@ -2958,6 +2953,25 @@ const AppContent = ({
       ));
       setSkillUpdateFeedbackWorkspace("library");
       setSkillUpdateCheckStatus({ state: "success", message: t("Source name updated") });
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      throw unknownError;
+    }
+  };
+
+  const setSkillSourceAutomaticChecks = async (sourceId: string, enabled: boolean) => {
+    setError(undefined);
+    try {
+      const group = await window.agentEnv.setSkillSourceAutomaticChecks({ sourceId, enabled });
+      setSkillSourceGroups((current) => current.map((candidate) =>
+        candidate.sourceId === group.sourceId ? group : candidate
+      ));
+      setSkillUpdateFeedbackWorkspace("library");
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: t(enabled ? "Automatic source checks enabled" : "Automatic source checks disabled")
+      });
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);
@@ -3382,20 +3396,6 @@ const AppContent = ({
     } finally {
       setBusy(false);
     }
-  };
-
-  const selectProjectSkillRoot = async () => {
-    const selected = await window.agentEnv.selectProjectSkillRoot();
-    if (!selected) return undefined;
-    const roots = [...new Set([...(skillSettings.projectSkillRoots ?? []), selected])];
-    return await updateSkillSettings({ projectSkillRoots: roots }) ? selected : undefined;
-  };
-
-  const removeProjectSkillRoot = async (path: string) => {
-    const updated = await updateSkillSettings({
-      projectSkillRoots: (skillSettings.projectSkillRoots ?? []).filter((root) => root !== path)
-    });
-    if (!updated) throw new Error("Project folder settings could not be saved");
   };
 
   const setAgentEnabled = async (targetId: string, enabled: boolean) => {
@@ -4097,13 +4097,10 @@ const AppContent = ({
                 onCloseTool={() => setSkillLibraryTool(undefined)}
                 onRefreshInventory={refreshSkillDiscoveries}
                 onSelectLocalSkillFolder={() => window.agentEnv.selectSkillFolder()}
-                projectSkillRoots={skillSettings.projectSkillRoots ?? []}
-                onSelectProjectSkillRoot={selectProjectSkillRoot}
-                onRemoveProjectSkillRoot={removeProjectSkillRoot}
-                onScanProjectSkills={() => window.agentEnv.scanProjectSkills()}
+                onScanLocalSkillSource={(rootPath) => window.agentEnv.scanLocalSkillSource(rootPath)}
                 onImportUnmanaged={importUnmanagedSkill}
-                onImportProjectSkill={(sourcePath) =>
-                  importUnmanagedSkill(sourcePath, "copy-only", "caller")}
+                onImportLocalSourceSkill={(sourcePath, sourceCollection) =>
+                  importUnmanagedSkill(sourcePath, "copy-only", "caller", sourceCollection)}
                 onImportExternal={importExternalSkill}
                 onScanGitHubSkills={scanGitHubSkills}
                 onImportGitHubSkills={importGitHubSkills}
@@ -4113,6 +4110,7 @@ const AppContent = ({
                 onCheckSourceGroup={checkSkillSourceGroup}
                 onCheckAllSourceGroups={checkAllSkillSourceGroups}
                 onSetSourceName={setSkillSourceName}
+                onSetSourceAutomaticChecks={setSkillSourceAutomaticChecks}
                 onPreviewSourceMerge={previewSkillSourceMerge}
                 onMergeSources={mergeSkillSources}
                 onCancelRepositoryOperations={() => window.agentEnv.cancelRepositoryOperations()}
@@ -4913,7 +4911,7 @@ const AppContent = ({
                 <div className="settings-preference-row">
                   <span className="settings-preference-copy">
                     <strong>{t("Auto-check")}</strong>
-                    <small>{t("Checks only skills that have per-skill update checks enabled.")}</small>
+                    <small>{t("Checks enabled sources, then reports tracked Skills.")}</small>
                   </span>
                   <Switch
                     checked={skillSettings.skillAutoCheckEnabled}

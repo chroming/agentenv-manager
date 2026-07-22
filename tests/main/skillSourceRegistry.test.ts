@@ -49,4 +49,24 @@ describe("Skill source registry", () => {
     await registry.setDisplayName(created!.id, "   ");
     expect((await registry.list())[0]?.displayName).toBeUndefined();
   });
+
+  it("defaults repository checks on and local folder checks off", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-source-registry-"));
+    const registry = createSkillSourceRegistry(join(root, "skill-sources.json"));
+    const [repository] = await registry.ensure([scope("skills")]);
+    const [local] = await registry.ensure([{
+      formatVersion: 1,
+      kind: "local",
+      canonicalLink: "file:///tmp/local-skills",
+      repository: "/tmp/local-skills",
+      ref: "",
+      directory: ""
+    }]);
+
+    expect(repository?.automaticChecks).toBe(true);
+    expect(local?.automaticChecks).toBe(false);
+    await registry.setAutomaticChecks(local!.id, true);
+    expect((await registry.list()).find((record) => record.id === local!.id)?.automaticChecks)
+      .toBe(true);
+  });
 });

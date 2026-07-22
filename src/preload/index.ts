@@ -26,7 +26,6 @@ const api: AgentEnvApi = {
   openContextMenu: (items) => ipcRenderer.invoke("menu:open-context", items),
   copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),
-  selectProjectSkillRoot: () => ipcRenderer.invoke("dialog:select-project-skill-root"),
   selectTargetConfigRoot: (targetId) => ipcRenderer.invoke("dialog:select-target-config-root", targetId),
   listSupportedTargets: () => ipcRenderer.invoke("targets:list-supported"),
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
@@ -39,7 +38,7 @@ const api: AgentEnvApi = {
   ignoreSkillGroup: (skillKey) => ipcRenderer.invoke("skills:ignore-group", skillKey),
   unignoreSkillGroup: (skillKey) => ipcRenderer.invoke("skills:unignore-group", skillKey),
   scanUnmanagedSkills: () => ipcRenderer.invoke("skills:scan-unmanaged"),
-  scanProjectSkills: () => ipcRenderer.invoke("skills:scan-projects"),
+  scanLocalSkillSource: (rootPath) => ipcRenderer.invoke("skills:scan-local-source", rootPath),
   previewSkillImport: (input) => ipcRenderer.invoke("skills:preview-import", input),
   previewSkillMerge: (id) => ipcRenderer.invoke("skills:preview-merge", id),
   mergeLibrarySkills: (input) => ipcRenderer.invoke("skills:merge-library", input),
@@ -56,7 +55,10 @@ const api: AgentEnvApi = {
   checkSkillSourceGroup: (sourceId) =>
     ipcRenderer.invoke("skills:check-source-group", sourceId),
   checkAllSkillSourceGroups: () => ipcRenderer.invoke("skills:check-all-source-groups"),
+  checkAutomaticSkillSourceGroups: () => ipcRenderer.invoke("skills:check-automatic-source-groups"),
   setSkillSourceName: (input) => ipcRenderer.invoke("skills:set-source-name", input),
+  setSkillSourceAutomaticChecks: (input) =>
+    ipcRenderer.invoke("skills:set-source-automatic-checks", input),
   previewSkillSourceMerge: (input) => ipcRenderer.invoke("skills:preview-source-merge", input),
   mergeSkillSources: (previewId) => ipcRenderer.invoke("skills:merge-sources", previewId),
   cancelRepositoryOperations: () => ipcRenderer.invoke("skills:cancel-repository"),

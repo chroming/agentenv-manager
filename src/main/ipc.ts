@@ -252,17 +252,6 @@ export const registerIpcHandlers = ({
 
     return result.canceled ? undefined : result.filePaths[0];
   });
-  ipcMain.handle("dialog:select-project-skill-root", async (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    const options = {
-      title: "Select project folder to scan for Skills",
-      properties: ["openDirectory"] as Array<"openDirectory">
-    };
-    const result = window
-      ? await dialog.showOpenDialog(window, options)
-      : await dialog.showOpenDialog(options);
-    return result.canceled ? undefined : result.filePaths[0];
-  });
   ipcMain.handle("dialog:select-target-config-root", async (event, targetId: unknown) => {
     const id = parseId(targetId, "target id");
     const target = targetRegistry.get(id).descriptor;
@@ -498,7 +487,12 @@ export const registerIpcHandlers = ({
     }
     return skillLibraryStore.scanRepositorySkills(input);
   });
-  ipcMain.handle("skills:scan-projects", () => skillLibraryStore.scanProjectSkills());
+  ipcMain.handle("skills:scan-local-source", (_event, rootPath: unknown) => {
+    if (typeof rootPath !== "string" || !rootPath.trim()) {
+      throw new Error("Local Skill source requires a folder");
+    }
+    return skillLibraryStore.scanLocalSkillSource(resolve(rootPath));
+  });
   handleMutation("skills:import-repository", (_event, input: RepositorySkillImportInput) => {
     if (!input || typeof input !== "object" || typeof input.repository !== "string") {
       throw new Error("Repository import requires a repository address");
@@ -517,6 +511,9 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:check-all-source-groups", () =>
     skillLibraryStore.checkAllSourceGroups()
   );
+  ipcMain.handle("skills:check-automatic-source-groups", () =>
+    skillLibraryStore.checkAutomaticSourceGroups()
+  );
   handleMutation("skills:set-source-name", (_event, input: unknown) => {
     if (!input || typeof input !== "object") {
       throw new Error("Skill source name requires a source selection");
@@ -531,13 +528,27 @@ export const registerIpcHandlers = ({
       name: candidate.name
     });
   });
+  handleMutation("skills:set-source-automatic-checks", (_event, input: unknown) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Skill source automatic check setting is invalid");
+    }
+    const candidate = input as { sourceId?: unknown; enabled?: unknown };
+    if (typeof candidate.sourceId !== "string" || typeof candidate.enabled !== "boolean") {
+      throw new Error("Skill source automatic check setting is invalid");
+    }
+    return skillLibraryStore.setSourceAutomaticChecks({
+      sourceId: candidate.sourceId,
+      enabled: candidate.enabled
+    });
+  });
   handleMutation("skills:preview-source-merge", (_event, input: SkillSourceMergePreviewInput) => {
     if (!input || !Array.isArray(input.sourceIds)) {
       throw new Error("Skill source merge requires a source selection");
     }
     return skillLibraryStore.previewSourceMerge({
       sourceIds: input.sourceIds.map((value) => String(value)),
-      directory: typeof input.directory === "string" ? input.directory : undefined
+      directory: typeof input.directory === "string" ? input.directory : undefined,
+      rootPath: typeof input.rootPath === "string" ? input.rootPath : undefined
     });
   });
   handleMutation("skills:merge-sources", (_event, previewId: unknown) =>

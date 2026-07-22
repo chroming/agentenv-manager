@@ -180,6 +180,46 @@ describe("activation service v2", () => {
     });
   });
 
+  it("restores a missing managed Skill without treating the fresh Preview as stale", async () => {
+    const { paths, profile, profileStore, service, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const first = await service.previewProfile("daily-coding", "codex");
+    expect((await service.applyProfile("daily-coding", first.id)).ok).toBe(true);
+    const installedPath = join(paths.codexHome, "skills", "review");
+    await rm(installedPath, { recursive: true, force: true });
+    const dormantSource = join(root, "source", "dormant");
+    await mkdir(dormantSource, { recursive: true });
+    await writeFile(join(dormantSource, "SKILL.md"), "---\nname: dormant\n---\n# Dormant\n");
+    await skillLibraryStore.importSkill({ sourcePath: dormantSource, id: "dormant" });
+    await skillLibraryStore.setAvailability({ id: "dormant", enabled: false });
+    await profileStore.saveProfile({
+      manifest: profile.manifest,
+      instructions: profile.instructions,
+      resources: {
+        ...profile.resources,
+        skills: [
+          ...profile.resources.skills,
+          { libraryId: "dormant", targetName: "dormant", enabled: true }
+        ]
+      }
+    });
+
+    const restore = await service.previewProfile("daily-coding", "codex");
+
+    expect(noticeMessages(restore.issues).join("\n")).toContain(
+      "Missing managed skill review will be restored"
+    );
+    expect(noticeMessages(restore.issues).join("\n")).toContain(
+      "Library Skill dormant is globally disabled and will not be applied"
+    );
+    await expect(service.applyProfile("daily-coding", restore.id)).resolves.toEqual(
+      expect.objectContaining({ ok: true })
+    );
+    await expect(readFile(join(installedPath, "SKILL.md"), "utf8")).resolves.toContain(
+      "# Review"
+    );
+  });
+
   it("accepts a semantically identical AgentEnv state serialization", async () => {
     const { paths, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

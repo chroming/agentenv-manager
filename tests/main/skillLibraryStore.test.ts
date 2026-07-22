@@ -568,6 +568,70 @@ description: >
     ).resolves.toContain('"updatePolicy": "untracked"');
   });
 
+  it("binds local directory imports to one source group without enabling update checks", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceRoot = join(root, "project-skills");
+    const sourceDir = join(sourceRoot, "reviewer");
+    await mkdir(sourceDir, { recursive: true });
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n\n# Reviewer\n", "utf8");
+    const store = createSkillLibraryStore(paths);
+    const scan = await store.scanLocalSkillSource(sourceRoot);
+
+    await store.importSkill({
+      sourcePath: sourceDir,
+      id: "reviewer",
+      sourceCollection: {
+        ...scan.sourceScope!,
+        sourceSubpath: "reviewer"
+      }
+    });
+
+    expect(await store.listSourceGroups()).toMatchObject([{
+      sourceKind: "local",
+      automaticChecks: false,
+      repository: expect.stringContaining("project-skills"),
+      candidates: [expect.objectContaining({ libraryId: "reviewer", state: "unchecked" })]
+    }]);
+    const [group] = await store.listSourceGroups();
+    await store.setSourceAutomaticChecks({ sourceId: group!.sourceId, enabled: true });
+    expect((await store.listSourceGroups())[0]?.automaticChecks).toBe(true);
+
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n\n# Changed\n", "utf8");
+    expect(await store.checkSourceGroup(group!.sourceId)).toMatchObject({
+      candidates: [expect.objectContaining({ libraryId: "reviewer", state: "update" })]
+    });
+  });
+
+  it("keeps Agent runtime folders and the Library out of local source groups", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const runtimeRoot = join(paths.homeDir, ".fixture-agent", "skills");
+    const targetPaths = {
+      targetId: "fixture-agent",
+      configDir: dirname(runtimeRoot),
+      instructionsPath: join(paths.homeDir, ".fixture-agent", "AGENT.md"),
+      configPath: join(paths.homeDir, ".fixture-agent", "fixture.json"),
+      skillsDir: runtimeRoot
+    };
+    await mkdir(join(runtimeRoot, "reviewer"), { recursive: true });
+    await writeFile(join(runtimeRoot, "reviewer", "SKILL.md"), "# Runtime\n", "utf8");
+    await mkdir(paths.skillsLibraryDir, { recursive: true });
+    const store = createSkillLibraryStore(paths, undefined, {
+      targetPathsProvider: () => [targetPaths]
+    });
+
+    await expect(store.scanLocalSkillSource(runtimeRoot)).rejects.toThrow(
+      "outside Agent Skill locations"
+    );
+    await expect(store.scanLocalSkillSource(paths.homeDir)).rejects.toThrow(
+      "outside Agent Skill locations"
+    );
+    await expect(store.scanLocalSkillSource(paths.skillsLibraryDir)).rejects.toThrow(
+      "outside Agent Skill locations"
+    );
+  });
+
   it("does not check a copied local import after the original source folder is removed", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
@@ -806,6 +870,50 @@ description: >
     await expect(readFile(join(updated.path, "prompt.md"), "utf8")).resolves.toBe(
       "Review the new behavior.\n"
     );
+  });
+
+  it("merges local source folders at their common parent without changing content", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-local-source-merge-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const sourceRoot = join(root, "sources");
+    for (const name of ["review", "testing"]) {
+      const skillDir = join(sourceRoot, name);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(join(skillDir, "SKILL.md"), `---\nname: ${name}\n---\n# ${name}\n`);
+    }
+    const store = createSkillLibraryStore(paths);
+    for (const name of ["review", "testing"]) {
+      const skillDir = join(sourceRoot, name);
+      const scan = await store.scanLocalSkillSource(skillDir);
+      await store.importSkill({
+        sourcePath: skillDir,
+        id: name,
+        sourceCollection: { ...scan.sourceScope!, sourceSubpath: "" }
+      });
+    }
+    const groups = await store.listSourceGroups();
+    const preview = await store.previewSourceMerge({
+      sourceIds: groups.map((group) => group.sourceId),
+      rootPath: dirname(groups[0]!.repository)
+    });
+    expect(preview).toMatchObject({
+      mergedSource: { kind: "local", repository: expect.stringContaining("/sources") },
+      affectedSkillCount: 2,
+      discoveredSkillCount: 2,
+      blockers: []
+    });
+
+    const result = await store.mergeSources(preview.id);
+
+    expect(result.source).toMatchObject({
+      sourceKind: "local",
+      candidates: expect.arrayContaining([
+        expect.objectContaining({ libraryId: "review", state: "current" }),
+        expect.objectContaining({ libraryId: "testing", state: "current" })
+      ])
+    });
+    await expect(readFile(join(paths.skillsLibraryDir, "review", "SKILL.md"), "utf8"))
+      .resolves.toContain("# review");
   });
 
   it("merges repository source scopes without changing Library Skill contents", async () => {

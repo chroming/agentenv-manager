@@ -9,6 +9,8 @@ afterEach(cleanup);
 const group: SkillSourceGroupView = {
   formatVersion: 1,
   sourceId: "source-engineering",
+  sourceKind: "repository",
+  automaticChecks: true,
   canonicalLink: "https://github.com/acme/skills/tree/main/engineering",
   repository: "https://github.com/acme/skills.git",
   ref: "main",
@@ -64,6 +66,34 @@ const group: SkillSourceGroupView = {
 };
 
 describe("SkillSourceView", () => {
+  it("changes source-level automatic checks without running a source scan", async () => {
+    const onSetAutomaticChecks = vi.fn().mockResolvedValue(undefined);
+    const onCheckGroup = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SkillSourceView
+        active
+        groups={[group]}
+        loading={false}
+        onCheckGroup={onCheckGroup}
+        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onSetAutomaticChecks={onSetAutomaticChecks}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn()}
+        onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("switch", { name: "Automatic checks for acme/skills · /engineering" }));
+    await waitFor(() => expect(onSetAutomaticChecks).toHaveBeenCalledWith("source-engineering", false));
+    expect(onCheckGroup).not.toHaveBeenCalled();
+  });
+
   it("shows source-level counts and routes each remote state to one explicit action", async () => {
     const onCheckGroup = vi.fn().mockResolvedValue(undefined);
     const onAdd = vi.fn().mockResolvedValue(true);

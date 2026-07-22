@@ -67,7 +67,6 @@ export interface AgentEnvApi {
   openContextMenu(items: DesktopContextMenuItem[]): Promise<string | undefined>;
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
-  selectProjectSkillRoot(): Promise<string | undefined>;
   selectTargetConfigRoot(targetId: string): Promise<string | undefined>;
   listSupportedTargets(): Promise<TargetDescriptor[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
@@ -79,7 +78,7 @@ export interface AgentEnvApi {
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
-  scanProjectSkills(): Promise<ProjectSkillScanResult>;
+  scanLocalSkillSource(rootPath: string): Promise<ProjectSkillScanResult>;
   previewSkillImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
   previewSkillMerge(id: string): Promise<SkillMergePreview>;
   mergeLibrarySkills(input: SkillMergeInput): Promise<SkillMergeResult>;
@@ -93,7 +92,9 @@ export interface AgentEnvApi {
   listSkillSourceGroups(): Promise<SkillSourceGroupView[]>;
   checkSkillSourceGroup(sourceId: string): Promise<SkillSourceGroupView>;
   checkAllSkillSourceGroups(): Promise<SkillSourceCheckAllResult>;
+  checkAutomaticSkillSourceGroups(): Promise<SkillSourceCheckAllResult>;
   setSkillSourceName(input: SkillSourceNameInput): Promise<SkillSourceGroupView>;
+  setSkillSourceAutomaticChecks(input: SkillSourceAutomaticChecksInput): Promise<SkillSourceGroupView>;
   previewSkillSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   mergeSkillSources(previewId: string): Promise<SkillSourceMergeResult>;
   cancelRepositoryOperations(): Promise<void>;
@@ -240,6 +241,7 @@ export interface SkillImportInput {
   upstream?: SkillUpstream;
   expectedContentHash?: string;
   conflictResolution?: SkillImportConflictResolution;
+  sourceCollection?: SkillSourceCollectionRef;
 }
 
 export type SkillImportPreviewInput =
@@ -425,6 +427,7 @@ export interface RepositorySkillScanResult {
 
 export interface SkillSourceScope {
   formatVersion: 1;
+  kind?: "repository" | "local";
   canonicalLink: string;
   repository: string;
   ref: string;
@@ -439,6 +442,7 @@ export interface SkillSourceCollectionRef extends SkillSourceScope {
 export interface SkillSourceRecord extends SkillSourceScope {
   id: string;
   displayName?: string;
+  automaticChecks?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -446,6 +450,11 @@ export interface SkillSourceRecord extends SkillSourceScope {
 export interface SkillSourceNameInput {
   sourceId: string;
   name?: string;
+}
+
+export interface SkillSourceAutomaticChecksInput {
+  sourceId: string;
+  enabled: boolean;
 }
 
 export type SkillSourceCandidateState =
@@ -486,6 +495,8 @@ export interface SkillSourceGroupCounts {
 
 export interface SkillSourceGroupView extends SkillSourceScope {
   sourceId: string;
+  sourceKind?: "repository" | "local";
+  automaticChecks?: boolean;
   displayName?: string;
   checkedAt?: string;
   observationState: "unchecked" | "ready" | "error";
@@ -497,6 +508,7 @@ export interface SkillSourceGroupView extends SkillSourceScope {
 export interface SkillSourceMergePreviewInput {
   sourceIds: string[];
   directory?: string;
+  rootPath?: string;
 }
 
 export interface SkillSourceMergePreview {
@@ -504,6 +516,7 @@ export interface SkillSourceMergePreview {
   sourceIds: string[];
   sources: SkillSourceGroupView[];
   mergedSource: SkillSourceScope;
+  automaticChecks: boolean;
   affectedSkillCount: number;
   discoveredSkillCount: number;
   mergesIntoExistingSource: boolean;
@@ -796,7 +809,6 @@ export interface AgentEnvSettings {
   skillAutoCheckIntervalMinutes: number;
   backupRetentionDays: BackupRetentionDays;
   enabledTargetIds?: string[];
-  projectSkillRoots?: string[];
   targetConfigRoots?: Record<string, string>;
 }
 
@@ -819,6 +831,7 @@ export interface ProjectSkillCandidate {
 
 export interface ProjectSkillScanResult {
   roots: string[];
+  sourceScope?: SkillSourceScope;
   candidates: ProjectSkillCandidate[];
   issues: Array<{ rootPath: string; message: string }>;
   scannedDirectories: number;

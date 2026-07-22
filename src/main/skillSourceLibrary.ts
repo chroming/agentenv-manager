@@ -15,7 +15,11 @@ import type { GitCliSkillSource, MaterializedGitSkillSource } from "./skillSourc
 import { createSkillSourceObservationStore } from "./skillSourceObservationStore";
 import { createSkillSourceService } from "./skillSourceService";
 import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
-import { createSkillSourceScope, validateSkillSourceCollection } from "./skillSourceScope";
+import {
+  createLocalSkillSourceCollection,
+  createSkillSourceScope,
+  validateSkillSourceCollection
+} from "./skillSourceScope";
 
 export const createLibrarySkillSourceService = (
   observationDirectory: string,
@@ -49,6 +53,7 @@ interface LegacySkillSourceMetadata {
   remoteRef?: string;
   remotePath?: string;
   upstream?: SkillUpstream;
+  provenance?: import("../shared/types").SkillProvenance;
   sourceCollection?: SkillSourceCollectionRef;
 }
 
@@ -56,6 +61,13 @@ export const legacySkillSourceCollectionFor = (
   metadata: LegacySkillSourceMetadata
 ): SkillSourceCollectionRef | undefined => {
   if (metadata.sourceCollection) return metadata.sourceCollection;
+  if (
+    metadata.sourceType === "local" &&
+    metadata.source &&
+    metadata.provenance?.importedVia !== "local-scan"
+  ) {
+    return createLocalSkillSourceCollection(metadata.source, metadata.source);
+  }
   if ((metadata.sourceType !== "github" && metadata.sourceType !== "git") || !metadata.source) {
     return undefined;
   }
@@ -142,8 +154,16 @@ export const createSkillSourceGroupStore = (
   registry: SkillSourceRegistry
 ) => {
   const decorate = async (groups: SkillSourceGroupView[]) => {
-    const names = new Map((await registry.list()).map((record) => [record.id, record.displayName]));
-    return groups.map((group) => ({ ...group, displayName: names.get(group.sourceId) }));
+    const records = new Map((await registry.list()).map((record) => [record.id, record]));
+    return groups.map((group) => {
+      const record = records.get(group.sourceId);
+      return {
+        ...group,
+        sourceKind: record?.kind ?? group.sourceKind,
+        automaticChecks: record?.automaticChecks ?? group.sourceKind !== "local",
+        displayName: record?.displayName
+      };
+    });
   };
   const listSourceGroups = async () => decorate(await service.listGroups(await listSkills()));
 
@@ -159,11 +179,45 @@ export const createSkillSourceGroupStore = (
       const result = await service.checkAll(await listSkills());
       return { ...result, groups: await decorate(result.groups) };
     },
+    checkAutomaticSourceGroups: async () => {
+      const skills = await listSkills();
+      const groups = await decorate(await service.listGroups(skills));
+      const selected = groups.filter((group) => group.automaticChecks);
+      let nextIndex = 0;
+      await Promise.all(
+        Array.from({ length: Math.min(2, selected.length) }, async () => {
+          while (nextIndex < selected.length) {
+            const group = selected[nextIndex++];
+            await service.checkGroup(group!.sourceId, skills);
+          }
+        })
+      );
+      const refreshed = await decorate(await service.listGroups(skills));
+      return {
+        groups: refreshed,
+        checked: selected.length,
+        failed: refreshed.filter((group) =>
+          selected.some((selectedGroup) => selectedGroup.sourceId === group.sourceId) &&
+          group.observationState === "error"
+        ).length
+      };
+    },
     setSourceName: async (input: import("../shared/types").SkillSourceNameInput) => {
       if (!input || typeof input.sourceId !== "string") {
         throw new Error("Skill source selection is invalid");
       }
       await registry.setDisplayName(input.sourceId, input.name);
+      const group = (await listSourceGroups()).find((candidate) => candidate.sourceId === input.sourceId);
+      if (!group) throw new Error("Skill source no longer exists");
+      return group;
+    },
+    setSourceAutomaticChecks: async (
+      input: import("../shared/types").SkillSourceAutomaticChecksInput
+    ) => {
+      if (!input || typeof input.sourceId !== "string" || typeof input.enabled !== "boolean") {
+        throw new Error("Skill source automatic check setting is invalid");
+      }
+      await registry.setAutomaticChecks(input.sourceId, input.enabled);
       const group = (await listSourceGroups()).find((candidate) => candidate.sourceId === input.sourceId);
       if (!group) throw new Error("Skill source no longer exists");
       return group;

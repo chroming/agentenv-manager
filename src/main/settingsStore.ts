@@ -14,7 +14,6 @@ export const SettingsSchema = z.object({
   skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
-  projectSkillRoots: z.array(z.string().min(1)).max(20).optional(),
   targetConfigRoots: z.record(z.string().min(1), z.string().min(1)).optional()
 });
 

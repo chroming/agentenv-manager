@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import type { SkillUpdateInfo } from "../shared/types";
+import type { SkillSourceCheckAllResult } from "../shared/types";
 
 export type SkillUpdateActivity =
   | { kind: "check-library" }
@@ -37,7 +37,7 @@ export const useScheduledSkillUpdateChecks = ({
   enabled: boolean;
   intervalMinutes: number;
   onError: (error: unknown) => void;
-  onResult: (updates: SkillUpdateInfo[]) => void;
+  onResult: (result: SkillSourceCheckAllResult) => void;
 }) => {
   const callbacksRef = useRef({ onError, onResult });
   callbacksRef.current = { onError, onResult };
@@ -45,8 +45,8 @@ export const useScheduledSkillUpdateChecks = ({
     if (!enabled) return undefined;
     const timer = window.setInterval(() => {
       if (activityRef.current) return;
-      void window.agentEnv.checkSkillLibraryUpdates()
-        .then((updates) => callbacksRef.current.onResult(updates))
+      void window.agentEnv.checkAutomaticSkillSourceGroups()
+        .then((result) => callbacksRef.current.onResult(result))
         .catch((error) => callbacksRef.current.onError(error));
     }, Math.max(5, intervalMinutes) * 60 * 1000);
     return () => window.clearInterval(timer);

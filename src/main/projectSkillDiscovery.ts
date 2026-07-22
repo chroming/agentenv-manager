@@ -9,6 +9,7 @@ import { normalizeSkillKey } from "../shared/skillIdentity";
 import { pathExists } from "./fileUtils";
 import { hashSkillContent } from "./skillContentHash";
 import { parseSkillFrontmatter } from "./skillFrontmatter";
+import { createLocalSkillSourceScope } from "./skillSourceScope";
 
 const IGNORED_DIRECTORIES = new Set([
   ".git",
@@ -142,6 +143,7 @@ export const scanProjectSkillRoots = async (
 
   return {
     roots,
+    sourceScope: roots.length === 1 ? createLocalSkillSourceScope(roots[0]!) : undefined,
     candidates: candidates.sort((left, right) =>
       left.rootPath.localeCompare(right.rootPath) || left.relativePath.localeCompare(right.relativePath)
     ),

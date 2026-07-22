@@ -1,71 +1,65 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
-  FolderPlus,
   LoaderCircle,
   RefreshCw,
-  TriangleAlert,
-  X
+  TriangleAlert
 } from "lucide-react";
-import type { ProjectSkillScanResult } from "../../shared/types";
+import type { ProjectSkillScanResult, SkillSourceCollectionRef } from "../../shared/types";
 import { useI18n } from "../i18n";
-import { Button, IconButton } from "./ui";
+import { Button } from "./ui";
 import { OverflowTooltip } from "./OverflowTooltip";
 
 interface ProjectSkillDiscoveryPanelProps {
-  roots: string[];
-  onAddRoot(): Promise<string | undefined>;
-  onRemoveRoot(path: string): Promise<void>;
-  onScan(): Promise<ProjectSkillScanResult>;
-  onImport(path: string): Promise<boolean>;
+  rootPath: string;
+  onScan(rootPath: string): Promise<ProjectSkillScanResult>;
+  onImport(path: string, sourceCollection: SkillSourceCollectionRef): Promise<boolean>;
 }
 
 export const ProjectSkillDiscoveryPanel = ({
-  roots,
-  onAddRoot,
-  onRemoveRoot,
+  rootPath,
   onScan,
   onImport
 }: ProjectSkillDiscoveryPanelProps) => {
   const { formatDate, t } = useI18n();
   const [result, setResult] = useState<ProjectSkillScanResult>();
-  const [operation, setOperation] = useState<"adding" | "scanning">();
-  const [removingRoot, setRemovingRoot] = useState<string>();
+  const [operation, setOperation] = useState<"scanning">();
   const [importingPath, setImportingPath] = useState<string>();
   const [importFailure, setImportFailure] = useState<{ path: string; message: string }>();
   const [error, setError] = useState("");
+  const onScanRef = useRef(onScan);
+  const scanRequestRef = useRef(0);
 
-  const scan = async () => {
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
+
+  const scan = useCallback(async () => {
+    const requestId = ++scanRequestRef.current;
     setOperation("scanning");
     setError("");
     setImportFailure(undefined);
     try {
-      setResult(await onScan());
+      const nextResult = await onScanRef.current(rootPath);
+      if (requestId === scanRequestRef.current) setResult(nextResult);
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      if (requestId === scanRequestRef.current) {
+        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      }
     } finally {
-      setOperation(undefined);
+      if (requestId === scanRequestRef.current) setOperation(undefined);
     }
-  };
+  }, [rootPath]);
 
-  const addRoot = async () => {
-    setOperation("adding");
-    setError("");
-    try {
-      const added = await onAddRoot();
-      if (added) setResult(undefined);
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setOperation(undefined);
-    }
-  };
-
-  const importCandidate = async (path: string) => {
+  const importCandidate = async (path: string, relativePath: string) => {
+    if (!result?.sourceScope) return;
     setImportingPath(path);
     setImportFailure(undefined);
     try {
-      const imported = await onImport(path);
+      const imported = await onImport(path, {
+        ...result.sourceScope,
+        sourceSubpath: relativePath === "." ? "" : relativePath
+      });
       if (imported) await scan();
     } catch (unknownError) {
       setImportFailure({
@@ -77,23 +71,25 @@ export const ProjectSkillDiscoveryPanel = ({
     }
   };
 
+  useEffect(() => {
+    setResult(undefined);
+    setError("");
+    void scan();
+    return () => {
+      scanRequestRef.current += 1;
+    };
+  }, [scan]);
+
   return (
     <div className="project-skill-discovery">
       <div className="project-skill-discovery__toolbar">
         <div>
-          <strong>{t("Project folders")}</strong>
-          <small>{t("Read-only discovery. Importing copies a selected Skill into Library after preview.")}</small>
+          <strong>{t("Skills in this folder")}</strong>
+          <small>{t("This folder becomes a source. AgentEnv never changes its contents.")}</small>
         </div>
         <div>
           <Button
             disabled={Boolean(operation) || Boolean(importingPath)}
-            icon={<FolderPlus size={15} strokeWidth={2.2} />}
-            onClick={() => void addRoot()}
-          >
-            {t("Add folder")}
-          </Button>
-          <Button
-            disabled={roots.length === 0 || Boolean(operation) || Boolean(importingPath)}
             icon={operation === "scanning"
               ? <LoaderCircle className="is-spinning" size={15} />
               : <RefreshCw size={15} strokeWidth={2.2} />}
@@ -104,37 +100,7 @@ export const ProjectSkillDiscoveryPanel = ({
         </div>
       </div>
 
-      {roots.length > 0 ? (
-        <div className="project-root-list" aria-label={t("Project folders") }>
-          {roots.map((root) => (
-            <div className="project-root-row" key={root}>
-              <OverflowTooltip className="project-root-path" text={root} />
-              <IconButton
-                label={t("Remove project folder {{path}}", { path: root })}
-                disabled={Boolean(operation) || Boolean(importingPath) || Boolean(removingRoot)}
-                size="compact"
-                variant="ghost"
-                onClick={() => {
-                  setRemovingRoot(root);
-                  setError("");
-                  void onRemoveRoot(root)
-                    .then(() => setResult(undefined))
-                    .catch((unknownError) =>
-                      setError(unknownError instanceof Error ? unknownError.message : String(unknownError))
-                    )
-                    .finally(() => setRemovingRoot(undefined));
-                }}
-              >
-                {removingRoot === root
-                  ? <LoaderCircle className="is-spinning" size={14} />
-                  : <X size={14} strokeWidth={2.2} />}
-              </IconButton>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="project-skill-empty">{t("Add a project folder to discover Skills without changing the project.")}</div>
-      )}
+      <OverflowTooltip className="project-root-path" text={rootPath} />
 
       {error ? (
         <div className="inline-state inline-state--error" role="alert">
@@ -157,7 +123,7 @@ export const ProjectSkillDiscoveryPanel = ({
           {result.truncated ? (
             <div className="inline-state inline-state--warning" role="status">
               <TriangleAlert size={15} aria-hidden="true" />
-              {t("Results are limited. Choose a narrower project folder.")}
+              {t("Results are limited. Choose a narrower source folder.")}
             </div>
           ) : null}
           {result.issues.map((issue) => (
@@ -168,7 +134,7 @@ export const ProjectSkillDiscoveryPanel = ({
           ))}
           <div className="project-skill-list">
             {result.candidates.length === 0 ? (
-              <div className="project-skill-empty">{t("No Skills found in these project folders.")}</div>
+              <div className="project-skill-empty">{t("No Skills found in this folder.")}</div>
             ) : result.candidates.map((candidate) => {
               const importable = candidate.status === "ready" || candidate.status === "changed";
               const importing = importingPath === candidate.path;
@@ -203,7 +169,7 @@ export const ProjectSkillDiscoveryPanel = ({
                       aria-busy={importing}
                       disabled={Boolean(operation) || Boolean(importingPath)}
                       icon={importing ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
-                      onClick={() => void importCandidate(candidate.path)}
+                      onClick={() => void importCandidate(candidate.path, candidate.relativePath)}
                     >
                       {importing
                         ? t("Importing...")

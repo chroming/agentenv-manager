@@ -20,12 +20,6 @@ describe("settings store", () => {
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const store = createSettingsStore(paths);
 
-    await store.updateSettings({ projectSkillRoots: [join(root, "project-a"), join(root, "project-b")] });
-
-    expect((await store.readSettings()).projectSkillRoots).toEqual([
-      join(root, "project-a"),
-      join(root, "project-b")
-    ]);
     expect(resolveSkillsLibraryDir(paths, await store.readSettings())).toBe(
       join(root, "app-data", "skills-library")
     );

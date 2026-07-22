@@ -40,6 +40,11 @@ describe("scanProjectSkillRoots", () => {
       version: "1.2.3",
       status: "ready"
     });
+    expect(result.sourceScope).toMatchObject({
+      kind: "local",
+      repository: result.roots[0],
+      canonicalLink: expect.stringMatching(/^file:/)
+    });
   });
 
   it("does not follow directory symlinks", async () => {

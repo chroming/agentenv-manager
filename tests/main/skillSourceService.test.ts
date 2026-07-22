@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSkillSourceService } from "../../src/main/skillSourceService";
 import type { SkillSourceObservationStore } from "../../src/main/skillSourceObservationStore";
 import type { GitCliSkillSource } from "../../src/main/skillSources/contract";
@@ -60,6 +63,12 @@ const memoryStore = (initial?: SkillSourceObservation) => {
 };
 
 describe("skill source service", () => {
+  let localRoot = "";
+
+  afterEach(async () => {
+    if (localRoot) await rm(localRoot, { recursive: true, force: true });
+    localRoot = "";
+  });
   it("does not replace the last complete observation with an incomplete scan", async () => {
     const { observations, store } = memoryStore(previousObservation);
     const repositorySource = {
@@ -135,5 +144,63 @@ describe("skill source service", () => {
     expect(store.write).toHaveBeenCalledWith(expect.objectContaining({
       candidates: [expect.objectContaining({ compatibleRevisions: ["review-1"] })]
     }));
+  });
+
+  it("checks a local source read-only and reports changed content", async () => {
+    localRoot = await mkdtemp(join(tmpdir(), "agentenv-local-source-"));
+    const skillPath = join(localRoot, "review");
+    await mkdir(skillPath, { recursive: true });
+    await writeFile(join(skillPath, "SKILL.md"), "---\nname: review\ndescription: Review code\n---\n\nChanged\n");
+    const localScope: SkillSourceScope = {
+      formatVersion: 1,
+      kind: "local",
+      canonicalLink: `file://${localRoot}`,
+      repository: localRoot,
+      ref: "",
+      directory: ""
+    };
+    const localSkill: SkillLibraryEntry = {
+      ...librarySkill,
+      sourceType: "local",
+      source: skillPath,
+      remoteRef: undefined,
+      remoteRevision: "old-content",
+      sourceCollection: { ...localScope, sourceSubpath: "review" }
+    };
+    const { store } = memoryStore();
+    const service = createSkillSourceService({ observationStore: store });
+
+    const group = await service.checkGroup(localScope.canonicalLink, [localSkill]);
+
+    expect(group.sourceKind).toBe("local");
+    expect(group.candidates).toMatchObject([{ libraryId: "review", state: "update" }]);
+    expect(await readFile(join(skillPath, "SKILL.md"), "utf8")).toContain("Changed");
+  });
+
+  it("keeps the Library relation when a local source becomes unavailable", async () => {
+    localRoot = await mkdtemp(join(tmpdir(), "agentenv-local-source-"));
+    const localScope: SkillSourceScope = {
+      formatVersion: 1,
+      kind: "local",
+      canonicalLink: `file://${localRoot}`,
+      repository: localRoot,
+      ref: "",
+      directory: ""
+    };
+    const localSkill: SkillLibraryEntry = {
+      ...librarySkill,
+      sourceType: "local",
+      source: join(localRoot, "review"),
+      sourceCollection: { ...localScope, sourceSubpath: "review" }
+    };
+    const { store } = memoryStore();
+    const service = createSkillSourceService({ observationStore: store });
+    await rm(localRoot, { recursive: true, force: true });
+    localRoot = "";
+
+    const group = await service.checkGroup(localScope.canonicalLink, [localSkill]);
+
+    expect(group.observationState).toBe("error");
+    expect(group.candidates).toMatchObject([{ libraryId: "review", state: "unchecked" }]);
   });
 });

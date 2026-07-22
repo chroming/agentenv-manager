@@ -18,6 +18,7 @@ describe("skill source scope", () => {
       }
     )).toEqual({
       formatVersion: 1,
+      kind: "repository",
       canonicalLink: "https://github.com/acme/skills/tree/main/skills/engineering",
       repository: "https://github.com/acme/skills.git",
       ref: "main",

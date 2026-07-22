@@ -46,7 +46,10 @@ import type {
   SkillSourceCheckAllResult,
   SkillSourceCollectionRef,
   SkillSourceGroupView,
-  SkillSourceMergePreview, SkillSourceMergePreviewInput, SkillSourceMergeResult, SkillSourceScope,
+  SkillSourceMergePreview,
+  SkillSourceMergePreviewInput,
+  SkillSourceMergeResult,
+  SkillSourceScope,
   TargetSkillLocationRole,
   TargetSkillLocation,
   TargetPaths,
@@ -88,7 +91,11 @@ import {
 } from "./skillSourceLibrary";
 import { readSkillLibraryEntry, type SkillMetadataFile } from "./skillLibraryMetadata";
 import { bindSkillSourceCollection, createSkillSourceRegistry } from "./skillSourceRegistry";
-import { createSingleSkillSourceCollection } from "./skillSourceScope";
+import {
+  createLocalSkillSourceCollection,
+  createSingleSkillSourceCollection,
+  validateLocalSkillSourceCollection
+} from "./skillSourceScope";
 import { createSkillSourceMergeService } from "./skillSourceMergeService";
 import { githubContentsRevision } from "./skillSources/revisionCompatibility";
 import { scanProjectSkillRoots } from "./projectSkillDiscovery";
@@ -217,7 +224,7 @@ export interface SkillLibraryStore {
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
-  scanProjectSkills(): Promise<ProjectSkillScanResult>;
+  scanLocalSkillSource(rootPath: string): Promise<ProjectSkillScanResult>;
   previewImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
   previewMerge(id: string, targetPaths: TargetPaths[]): Promise<SkillMergePreview>;
   mergeSkills(input: SkillMergeInput, targetPaths: TargetPaths[]): Promise<SkillMergeResult>;
@@ -231,7 +238,9 @@ export interface SkillLibraryStore {
   listSourceGroups(): Promise<SkillSourceGroupView[]>;
   checkSourceGroup(canonicalLink: string): Promise<SkillSourceGroupView>;
   checkAllSourceGroups(): Promise<SkillSourceCheckAllResult>;
+  checkAutomaticSourceGroups(): Promise<SkillSourceCheckAllResult>;
   setSourceName(input: import("../shared/types").SkillSourceNameInput): Promise<SkillSourceGroupView>;
+  setSourceAutomaticChecks(input: import("../shared/types").SkillSourceAutomaticChecksInput): Promise<SkillSourceGroupView>;
   previewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   mergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
@@ -1124,9 +1133,27 @@ export const createSkillLibraryStore = (
       }));
   };
 
-  const scanProjectSkills = async (): Promise<ProjectSkillScanResult> => {
-    const settings = await settingsStore?.readSettings();
-    return scanProjectSkillRoots(settings?.projectSkillRoots ?? [], await listSkills());
+  const scanLocalSkillSource = async (rootPath: string): Promise<ProjectSkillScanResult> => {
+    const canonicalRoot = await realpath(rootPath).catch(() => resolve(rootPath));
+    const targetPaths = await targetPathsProvider();
+    const protectedRoots = [
+      await libraryDir(),
+      ...targetPaths.flatMap((target) => [target.skillsDir, ...(target.skillScanDirs ?? [])])
+    ].filter((path): path is string => Boolean(path));
+    for (const protectedRoot of protectedRoots) {
+      const canonicalProtectedRoot = await realpath(protectedRoot).catch(() => resolve(protectedRoot));
+      const rootToProtected = relative(canonicalRoot, canonicalProtectedRoot);
+      const protectedToRoot = relative(canonicalProtectedRoot, canonicalRoot);
+      const overlaps = [rootToProtected, protectedToRoot].some(
+        (path) => path === "" || (path !== ".." && !path.startsWith("../") && !path.startsWith("..\\"))
+      );
+      if (overlaps) {
+        throw new Error(
+          "Choose a source folder outside Agent Skill locations and the AgentEnv Library"
+        );
+      }
+    }
+    return scanProjectSkillRoots([canonicalRoot], await listSkills());
   };
 
   const resolveImportPlan = (
@@ -1185,15 +1212,20 @@ export const createSkillLibraryStore = (
     provenance,
     upstream,
     expectedContentHash,
-    conflictResolution
+    conflictResolution,
+    sourceCollection
   }: ImportSkillStoreInput): Promise<SkillLibraryEntry> => {
     if (!(await pathExists(join(sourcePath, "SKILL.md")))) {
       throw new Error(`Skill source is missing SKILL.md: ${sourcePath}`);
     }
     await validateSkillFrontmatter(sourcePath);
+    const validatedSourceCollection = await validateLocalSkillSourceCollection(
+      sourceCollection,
+      sourcePath
+    );
     const preview = await previewImport({
       kind: "local",
-      input: { sourcePath, id, provenance, upstream }
+      input: { sourcePath, id, provenance, upstream, sourceCollection: validatedSourceCollection }
     });
     const plan = resolveImportPlan(preview, conflictResolution, expectedContentHash);
     if (plan.reused) {
@@ -1217,12 +1249,17 @@ export const createSkillLibraryStore = (
         source: githubSource?.sourceUrl ?? sourcePath,
         remoteRef: githubSource?.ref,
         remotePath: githubSource?.remotePath,
-        remoteRevision: githubSource ? upstream?.revision : undefined,
+        remoteRevision: githubSource ? upstream?.revision : validatedSourceCollection ? preview.incoming.contentHash : undefined,
         updatePolicy: githubSource ? "tracked" : "untracked",
         iconKey: previousMetadata?.iconKey,
         globallyEnabled: previousMetadata?.globallyEnabled,
-        upstream: upstream ?? { kind: "local", locator: sourcePath },
-        provenance: provenance ?? previousMetadata?.provenance ?? { importedVia: "agentenv" }
+        upstream: upstream ?? {
+          kind: "local",
+          locator: sourcePath,
+          revision: validatedSourceCollection ? preview.incoming.contentHash : undefined
+        },
+        provenance: provenance ?? previousMetadata?.provenance ?? { importedVia: "agentenv" },
+        sourceCollection: validatedSourceCollection
       });
       return entryFor(plan.id, targetDir);
     }
@@ -1239,15 +1276,17 @@ export const createSkillLibraryStore = (
         source: githubSource?.sourceUrl ?? sourcePath,
         remoteRef: githubSource?.ref,
         remotePath: githubSource?.remotePath,
-        remoteRevision: githubSource ? upstream?.revision : undefined,
+        remoteRevision: githubSource ? upstream?.revision : validatedSourceCollection ? preview.incoming.contentHash : undefined,
         updatePolicy: githubSource ? "tracked" : "untracked",
         iconKey: previousMetadata?.iconKey,
         globallyEnabled: previousMetadata?.globallyEnabled,
         upstream: upstream ?? {
           kind: "local",
-          locator: sourcePath
+          locator: sourcePath,
+          revision: validatedSourceCollection ? preview.incoming.contentHash : undefined
         },
-        provenance: provenance ?? { importedVia: "agentenv" }
+        provenance: provenance ?? { importedVia: "agentenv" },
+        sourceCollection: validatedSourceCollection
       });
       return entryFor(plan.id, targetDir);
     } catch (error) {
@@ -1748,7 +1787,14 @@ export const createSkillLibraryStore = (
     return { imported, failed };
   };
 
-  const { listSourceGroups, checkSourceGroup, checkAllSourceGroups, setSourceName } =
+  const {
+    listSourceGroups,
+    checkSourceGroup,
+    checkAllSourceGroups,
+    checkAutomaticSourceGroups,
+    setSourceName,
+    setSourceAutomaticChecks
+  } =
     createSkillSourceGroupStore(skillSourceService, listSkills, skillSourceRegistry);
   const { preview: previewSourceMerge, merge: mergeSources } = createSkillSourceMergeService({
     appDataRoot: paths.appDataRoot,
@@ -2534,12 +2580,14 @@ export const createSkillLibraryStore = (
     if (!(await pathExists(join(source, "SKILL.md")))) {
       throw new Error(`Skill source is missing SKILL.md: ${source}`);
     }
+    const sourceRevision = await computeContentHash(source);
     await writeMetadata(targetDir, {
       sourceType: "local",
       source,
+      remoteRevision: sourceRevision,
       updatePolicy: "tracked",
-      upstream: { kind: "local", locator: source },
-      sourceCollection: null
+      upstream: { kind: "local", locator: source, revision: sourceRevision },
+      sourceCollection: createLocalSkillSourceCollection(source, source)
     });
     return entryFor(safeId, targetDir);
   };
@@ -2878,8 +2926,12 @@ export const createSkillLibraryStore = (
         ...metadata,
         sourceType: "local",
         source: metadata.source,
+        remoteRevision: sourceHashAfterCopy,
         updatePolicy: "tracked",
-        upstream: metadata.upstream ?? { kind: "local", locator: metadata.source }
+        upstream: {
+          ...(metadata.upstream ?? { kind: "local" as const, locator: metadata.source }),
+          revision: sourceHashAfterCopy
+        }
       }, sourceHashAfterCopy);
     } catch (error) {
       if (![...pendingUpdates.values()].some((pending) => pending.candidateDir === candidateDir)) {
@@ -3034,13 +3086,15 @@ export const createSkillLibraryStore = (
     scanGitHubSkills,
     importGitHubSkills,
     scanRepositorySkills,
-    scanProjectSkills,
+    scanLocalSkillSource,
     importRepositorySkill,
     importRepositorySkills,
     listSourceGroups,
     checkSourceGroup,
     checkAllSourceGroups,
+    checkAutomaticSourceGroups,
     setSourceName,
+    setSourceAutomaticChecks,
     previewSourceMerge,
     mergeSources,
     removeSkill,

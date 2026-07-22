@@ -1,6 +1,7 @@
 import type {
   GitHubSkillScanResult,
   RepositorySkillScanResult,
+  ProjectSkillScanResult,
   SkillLibraryEntry,
   SkillSourceCheckAllResult,
   SkillSourceGroupView,
@@ -13,11 +14,13 @@ import {
 } from "../shared/skillSourceGrouping";
 import type { GitCliSkillSource } from "./skillSources/contract";
 import type { SkillSourceObservationStore } from "./skillSourceObservationStore";
+import { scanProjectSkillRoots } from "./projectSkillDiscovery";
 
 export interface SkillSourceService {
   listGroups(skills: SkillLibraryEntry[]): Promise<SkillSourceGroupView[]>;
   recordRepositoryScan(scope: SkillSourceScope, result: RepositorySkillScanResult): Promise<void>;
   recordGitHubScan(scope: SkillSourceScope, result: GitHubSkillScanResult): Promise<void>;
+  recordLocalScan(scope: SkillSourceScope, result: ProjectSkillScanResult): Promise<void>;
   checkGroup(sourceId: string, skills: SkillLibraryEntry[]): Promise<SkillSourceGroupView>;
   checkAll(skills: SkillLibraryEntry[]): Promise<SkillSourceCheckAllResult>;
 }
@@ -104,6 +107,30 @@ export const createSkillSourceService = (
     });
   };
 
+  const recordLocalScan = async (
+    scope: SkillSourceScope,
+    result: ProjectSkillScanResult
+  ) => {
+    if (result.truncated || result.issues.length > 0) return;
+    await writeObservation({
+      ...scope,
+      checkedAt: now().toISOString(),
+      accessTransport: "file",
+      complete: true,
+      candidates: result.candidates.map((candidate) => ({
+        sourceSubpath: candidate.relativePath === "." ? "" : candidate.relativePath,
+        directory: candidate.relativePath === "." ? "" : candidate.relativePath,
+        name: candidate.name,
+        description: candidate.description,
+        version: candidate.version,
+        contentRevision: candidate.contentHash,
+        upstreamUpdatedAt: candidate.modifiedAt,
+        validity: candidate.status === "invalid" ? "invalid" : "valid",
+        error: candidate.error
+      }))
+    });
+  };
+
   const checkGroup = async (
     sourceId: string,
     skills: SkillLibraryEntry[]
@@ -113,19 +140,28 @@ export const createSkillSourceService = (
     );
     if (!group) throw new Error("Skill source group no longer exists");
     try {
-      if (!options.repositorySource) {
-        throw new Error("System Git is unavailable. Install Git and retry the source check.");
+      if (group.sourceKind === "local") {
+        const result = await scanProjectSkillRoots([group.repository], skills);
+        if (result.roots.length === 0 || result.issues.length > 0) {
+          throw new Error(result.issues[0]?.message ?? "Local source folder is unavailable");
+        }
+        if (result.truncated) throw new Error("Local source scan was incomplete and was not applied");
+        await recordLocalScan(group, result);
+      } else {
+        if (!options.repositorySource) {
+          throw new Error("System Git is unavailable. Install Git and retry the source check.");
+        }
+        const result = await options.repositorySource.scan({
+          repository: group.repository,
+          ref: group.ref,
+          directory: group.directory,
+          transport: "system-git"
+        }, undefined, { refresh: true });
+        if (result.truncated) {
+          throw new Error("Source scan was incomplete and was not applied");
+        }
+        await recordRepositoryScan(group, result);
       }
-      const result = await options.repositorySource.scan({
-        repository: group.repository,
-        ref: group.ref,
-        directory: group.directory,
-        transport: "system-git"
-      }, undefined, { refresh: true });
-      if (result.truncated) {
-        throw new Error("Source scan was incomplete and was not applied");
-      }
-      await recordRepositoryScan(group, result);
     } catch (error) {
       errors.set(group.canonicalLink, error instanceof Error ? error.message : String(error));
     }
@@ -154,5 +190,5 @@ export const createSkillSourceService = (
     };
   };
 
-  return { listGroups, recordRepositoryScan, recordGitHubScan, checkGroup, checkAll };
+  return { listGroups, recordRepositoryScan, recordGitHubScan, recordLocalScan, checkGroup, checkAll };
 };
