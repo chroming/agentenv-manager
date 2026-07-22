@@ -125,6 +125,18 @@ describe("activation service v2", () => {
     expect(config).toContain("enabled = true");
     await expect(readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
       .resolves.toContain("# Review");
+    const persistedState = JSON.parse(
+      await readFile(join(paths.targetStatesDir, "codex.json"), "utf8")
+    ) as { managedResources?: Array<{ kind: string; path: string }> };
+    expect(persistedState.managedResources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "skill",
+        path: join(paths.codexHome, "skills", "review")
+      })
+    ]));
+    expect(persistedState.managedResources).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: expect.stringMatching(/\.agentenv-owner\.json$/) })
+    ]));
     expect((await service.listTargetStates())[0]).toMatchObject({
       targetId: "codex",
       activeProfileId: "daily-coding",

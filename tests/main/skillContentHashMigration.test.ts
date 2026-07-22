@@ -85,4 +85,41 @@ describe("Skill content hash migration", () => {
       join(paths.appDataRoot, "content-hash-format.json")
     )).resolves.toEqual({ skillContentHashVersion: 2 });
   });
+
+  it("removes legacy ownership sidecars from managed Skill state without touching the files", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-hash-migration-owner-sidecar-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const targetSkill = join(root, "home", ".claude", "skills", "as-ops");
+    const ownerSidecar = `${targetSkill}.agentenv-owner.json`;
+    await mkdir(paths.targetStatesDir, { recursive: true });
+    await mkdir(join(root, "home", ".claude", "skills"), { recursive: true });
+    await writeFile(ownerSidecar, "{\"owner\":\"agentenv-manager\"}\n", "utf8");
+    await writeFile(join(paths.targetStatesDir, "claude-code.json"), JSON.stringify({
+      formatVersion: 2,
+      managedMcpNames: [],
+      managedResources: [{
+        kind: "skill",
+        id: "as-ops.agentenv-owner.json",
+        path: ownerSidecar,
+        contentHash: "legacy"
+      }],
+      sharedSkillPreparations: []
+    }));
+    const warnings: string[] = [];
+
+    await expect(migrateSkillContentHashes(paths, {
+      onWarning: (message) => {
+        warnings.push(message);
+      }
+    })).resolves.toBe(true);
+
+    await expect(readFile(ownerSidecar, "utf8"))
+      .resolves.toBe("{\"owner\":\"agentenv-manager\"}\n");
+    await expect(readJson<{ managedResources: unknown[] }>(
+      join(paths.targetStatesDir, "claude-code.json")
+    )).resolves.toMatchObject({ managedResources: [] });
+    expect(warnings).toEqual([
+      expect.stringContaining("Removed legacy ownership sidecar")
+    ]);
+  });
 });

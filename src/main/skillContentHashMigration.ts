@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { TargetState } from "../shared/types";
 import { isMissingFileError, pathExists, writeAtomic } from "./fileUtils";
@@ -79,7 +79,32 @@ const rewriteTargetStates = async (
     }
     const managedResources: NonNullable<TargetState["managedResources"]> = [];
     for (const resource of state.managedResources ?? []) {
-      if (resource.kind !== "skill" || !(await pathExists(resource.path))) {
+      if (resource.kind !== "skill") {
+        managedResources.push(resource);
+        continue;
+      }
+      if (resource.path.endsWith(".agentenv-owner.json")) {
+        await warn(
+          `Removed legacy ownership sidecar from managed Skill state without changing the file: ${resource.path}`
+        );
+        continue;
+      }
+      if (!(await pathExists(resource.path))) {
+        managedResources.push(resource);
+        continue;
+      }
+      let resourceStats;
+      try {
+        resourceStats = await stat(resource.path);
+      } catch (error) {
+        if (!isMissingFileError(error)) throw error;
+        managedResources.push(resource);
+        continue;
+      }
+      if (!resourceStats.isDirectory()) {
+        await warn(
+          `Kept a legacy managed Skill record whose path is not a directory: ${resource.path}`
+        );
         managedResources.push(resource);
         continue;
       }
@@ -130,6 +155,19 @@ const rewriteCaptureReceipts = async (
     for (const skill of receipt.skills) {
       for (const copy of skill.copies ?? []) {
         if (copy.path && await pathExists(copy.path)) {
+          let copyStats;
+          try {
+            copyStats = await stat(copy.path);
+          } catch (error) {
+            if (!isMissingFileError(error)) throw error;
+            continue;
+          }
+          if (!copyStats.isDirectory()) {
+            await warn(
+              `Kept a Capture Skill hash whose path is not a directory: ${copy.path}`
+            );
+            continue;
+          }
           try {
             copy.contentHash = await hashSkillContent(copy.path);
             changed = true;

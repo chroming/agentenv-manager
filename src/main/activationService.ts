@@ -672,6 +672,9 @@ export const createActivationService = ({
     if (path === targetPaths.configPath || path === targetPaths.mcpConfigPath) {
       return { kind: "config", id: "config" };
     }
+    if (path.endsWith(".agentenv-owner.json")) {
+      return { kind: "file", id: basename(path) };
+    }
     if (
       [targetPaths.skillsDir, ...(targetPaths.skillLocations ?? []).map((location) => location.path)]
         .filter(Boolean)
@@ -691,6 +694,7 @@ export const createActivationService = ({
   ) => {
     const snapshots: ManagedResourceSnapshot[] = [];
     for (const path of [...new Set(pathsToSnapshot)]) {
+      if (path.endsWith(".agentenv-owner.json")) continue;
       const identity = resourceKindForPath(path, targetPaths);
       if (identity.kind === "config") continue;
       const contentHash = await hashPath(path);

@@ -29,6 +29,8 @@ const fakeHomeRoot = join(root, "fake-home");
 const opencodeDir = join(homeDir, ".config", "opencode");
 const repositoryRemote = join(root, "repository.git");
 const repositoryWork = join(root, "repository-work");
+const legacyOwnerSidecar = join(homeDir, ".claude", "skills", "as-ops.agentenv-owner.json");
+const legacyTargetState = join(appDataRoot, "target-states", "claude-code.json");
 let application;
 
 try {
@@ -49,6 +51,21 @@ try {
   }
   await writeFile(join(opencodeDir, "AGENTS.md"), "# Before packaged takeover\n", "utf8");
   await writeFile(join(opencodeDir, "opencode.jsonc"), "{}\n", "utf8");
+  await mkdir(dirname(legacyOwnerSidecar), { recursive: true });
+  await mkdir(dirname(legacyTargetState), { recursive: true });
+  const legacyOwnerContent = "{\"owner\":\"agentenv-manager\"}\n";
+  await writeFile(legacyOwnerSidecar, legacyOwnerContent, "utf8");
+  await writeFile(legacyTargetState, `${JSON.stringify({
+    formatVersion: 2,
+    managedMcpNames: [],
+    managedResources: [{
+      kind: "skill",
+      id: "as-ops.agentenv-owner.json",
+      path: legacyOwnerSidecar,
+      contentHash: "legacy"
+    }],
+    sharedSkillPreparations: []
+  }, null, 2)}\n`, "utf8");
 
   const runGit = (cwd, args) => execFileAsync("/usr/bin/git", args, {
     cwd,
@@ -86,6 +103,9 @@ try {
   const page = await application.firstWindow();
   await page.setViewportSize({ width: 1180, height: 728 });
   await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });
+  const migratedTargetState = JSON.parse(await readFile(legacyTargetState, "utf8"));
+  assert.deepEqual(migratedTargetState.managedResources, []);
+  assert.equal(await readFile(legacyOwnerSidecar, "utf8"), legacyOwnerContent);
   await page.getByRole("button", { name: "Agents", exact: true }).click();
   for (const agentName of ["OpenCode", "Claude Code", "Codex", "Antigravity CLI", "Trae CLI"]) {
     const agent = page.getByRole("article", { name: `Agent ${agentName}` });
