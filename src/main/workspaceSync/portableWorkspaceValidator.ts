@@ -8,6 +8,7 @@ import {
   PortableWorkspaceManifestSchema,
   type PortableWorkspaceManifest
 } from "./portableSchemas";
+import { toPortableOnlineLocator } from "./portableLocation";
 import { hashJson, hashPortableTree, inspectPortableTree, snapshotHashFor } from "./workspaceSnapshotHasher";
 
 const MAX_WORKSPACE_BYTES = 500 * 1024 * 1024;
@@ -50,16 +51,10 @@ const listRealDirectories = async (root: string): Promise<string[]> => {
   return names.sort();
 };
 
-const assertCredentialFreeUrl = (value: string | undefined) => {
+const assertPortableOnlineLocator = (value: string | undefined) => {
   if (!value) return;
-  try {
-    const url = new URL(value);
-    if (url.password || ((url.protocol === "http:" || url.protocol === "https:") && url.username)) {
-      throw new Error("Portable Workspace repository URLs cannot contain credentials");
-    }
-  } catch (error) {
-    if (error instanceof TypeError) return;
-    throw error;
+  if (!toPortableOnlineLocator(value)) {
+    throw new Error("Portable Workspace cannot contain a machine-local repository locator");
   }
 };
 
@@ -153,10 +148,18 @@ export const validatePortableWorkspace = async (root: string): Promise<Validated
     }
     const metadata = PortableSkillMetadataSchema.parse(await readJson(join(rootPath, "metadata.json")));
     if (metadata.id !== id) throw new Error(`Portable Skill id does not match its directory: ${id}`);
-    assertCredentialFreeUrl(metadata.source);
-    assertCredentialFreeUrl(metadata.upstream?.locator);
-    assertCredentialFreeUrl(metadata.sourceCollection?.repository);
-    assertCredentialFreeUrl(metadata.sourceCollection?.canonicalLink);
+    assertPortableOnlineLocator(metadata.source);
+    assertPortableOnlineLocator(metadata.upstream?.locator);
+    assertPortableOnlineLocator(metadata.sourceCollection?.repository);
+    assertPortableOnlineLocator(metadata.sourceCollection?.canonicalLink);
+    if (metadata.sourceType === "local" && (
+      metadata.updatePolicy !== "untracked" ||
+      metadata.source ||
+      metadata.upstream ||
+      metadata.sourceCollection
+    )) {
+      throw new Error(`Portable local Skill metadata contains update tracking: ${id}`);
+    }
     const contentRoot = join(rootPath, "content");
     const contentEntries = await inspectPortableTree(contentRoot, { maxFiles: 1_000, maxBytes: 20 * 1024 * 1024 });
     if (!contentEntries.some((entry) => entry.path === "SKILL.md")) {
@@ -177,8 +180,8 @@ export const validatePortableWorkspace = async (root: string): Promise<Validated
   for (const source of sourceData.sources) {
     if (sourceIds.has(source.id)) throw new Error(`Duplicate Portable Skill source id: ${source.id}`);
     sourceIds.add(source.id);
-    assertCredentialFreeUrl(source.repository);
-    assertCredentialFreeUrl(source.canonicalLink);
+    assertPortableOnlineLocator(source.repository);
+    assertPortableOnlineLocator(source.canonicalLink);
   }
   if (hashJson(sourceData) !== manifest.sourcesHash) throw new Error("Portable Skill sources hash mismatch");
 

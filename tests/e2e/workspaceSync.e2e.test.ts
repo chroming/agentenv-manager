@@ -52,6 +52,8 @@ describe("Workspace Sync desktop flow", () => {
     const review = page.getByRole("dialog", { name: "Review Workspace changes" });
     await review.waitFor({ state: "visible" });
     await expectInViewport(page, review);
+    expect(await review.locator(".workspace-sync-change").count()).toBe(1);
+    expect(await review.getByRole("button", { name: "Publish" }).getAttribute("class")).toContain("ui-button--primary");
     await review.getByRole("button", { name: "Publish" }).click();
     await expect.poll(() => section.getByText("Up to date").count(), { timeout: 15_000 }).toBe(1);
 

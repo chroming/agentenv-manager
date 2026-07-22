@@ -838,15 +838,6 @@
   width: 100%;
 }
 
-.workspace-sync-connect .primary-action,
-.workspace-sync-actions .primary-action,
-.workspace-sync-actions .secondary-action,
-.workspace-sync-review-actions .primary-action,
-.workspace-sync-review-actions .secondary-action {
-  min-height: 36px;
-  width: auto;
-}
-
 .workspace-sync-connection {
   align-items: center;
   background: #fafbfc;
@@ -867,11 +858,10 @@
   white-space: nowrap;
 }
 
-.workspace-sync-connection code {
-  background: #eef2f7;
-  border-radius: var(--radius-tight);
+.workspace-sync-branch-name {
+  color: var(--muted);
   font-size: 12px;
-  padding: 4px 7px;
+  white-space: nowrap;
 }
 
 .workspace-sync-summary {
@@ -916,31 +906,48 @@
   padding: 4px 20px 12px;
 }
 
+.workspace-sync-review-title {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
 .workspace-sync-change {
   align-items: center;
   border-bottom: 1px solid var(--border);
   display: grid;
   gap: 10px;
-  grid-template-columns: 58px minmax(0, 1fr) 80px minmax(124px, auto);
+  grid-template-columns: 58px minmax(0, 1fr) 80px;
   min-height: 58px;
   padding: 8px 0;
+}
+
+.workspace-sync-change.has-resolution {
+  grid-template-columns: 58px minmax(0, 1fr) 80px minmax(124px, auto);
 }
 
 .workspace-sync-change:last-child {
   border-bottom: 0;
 }
 
-.workspace-sync-change > span:nth-child(2) {
+.workspace-sync-change-identity {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.workspace-sync-change strong,
+.workspace-sync-change-title,
 .workspace-sync-change small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspace-sync-change-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .workspace-sync-change small {
@@ -1010,7 +1017,7 @@
     grid-template-columns: minmax(0, 1fr) 120px;
   }
 
-  .workspace-sync-connect .primary-action {
+  .workspace-sync-connect .ui-button {
     grid-column: 1 / -1;
     justify-self: end;
   }

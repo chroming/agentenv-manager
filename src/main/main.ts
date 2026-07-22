@@ -468,7 +468,7 @@ const createServices = async () => {
     stateStore: createWorkspaceSyncStateStore(paths),
     transaction: workspaceSyncTransaction,
     loadTransport: loadSyncTransport,
-    targetPathsProvider: () => targetRegistry.listAdapters().map((adapter) =>
+    targetPathsProvider: async () => (await targetScope.listEnabledAdapters()).map((adapter) =>
       adapter.createTargetPaths({ homeDir: paths.homeDir, fakeHomeRoot: paths.fakeHomeRoot })
     ),
     findManagedInstallPaths: skillLibraryStore.findManagedInstallPaths
@@ -530,8 +530,8 @@ if (ownsSingleInstance) void app.whenReady().then(() => {
           const now = Date.now();
           if (now - lastWorkspaceCheckAt < 5 * 60 * 1000) return;
           lastWorkspaceCheckAt = now;
-          void services.mutationCoordinator
-            .runExclusive("Check Workspace Sync", () => services.workspaceSyncService.check())
+          void services.workspaceSyncService
+            .check()
             .catch((error) => console.error("Workspace Sync check failed", error));
         };
         app.on("browser-window-focus", runWorkspaceCheck);

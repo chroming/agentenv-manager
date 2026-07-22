@@ -10,33 +10,19 @@ import {
   type PortableSkillMetadata,
   type PortableWorkspaceManifest
 } from "./portableSchemas";
+import { toPortableOnlineLocator } from "./portableLocation";
 import { canonicalJson, hashJson, hashPortableTree, snapshotHashFor } from "./workspaceSnapshotHasher";
 
 export interface PortableWorkspaceCodec {
   exportSnapshot(destination: string, workspaceId: string): Promise<PortableWorkspaceManifest>;
 }
 
-const safeOnlineValue = (value: string | undefined): string | undefined => {
-  if (!value) return undefined;
-  if (value.startsWith("/") || value.startsWith("file:")) return undefined;
-  try {
-    const url = new URL(value);
-    if (url.password || ((url.protocol === "http:" || url.protocol === "https:") && url.username)) {
-      throw new Error("Repository URLs cannot contain credentials");
-    }
-  } catch (error) {
-    if (error instanceof TypeError) return value;
-    throw error;
-  }
-  return value;
-};
-
 const portableMetadataFor = (skill: Awaited<ReturnType<SkillLibraryStore["listSkills"]>>[number]): PortableSkillMetadata => {
-  const source = safeOnlineValue(skill.sourceType === "local" ? undefined : skill.source);
-  const upstreamLocator = safeOnlineValue(skill.upstream?.locator);
+  const source = toPortableOnlineLocator(skill.sourceType === "local" ? undefined : skill.source);
+  const upstreamLocator = toPortableOnlineLocator(skill.upstream?.locator);
   const upstream = skill.upstream;
-  const collectionRepository = safeOnlineValue(skill.sourceCollection?.repository);
-  const collectionLink = safeOnlineValue(skill.sourceCollection?.canonicalLink);
+  const collectionRepository = toPortableOnlineLocator(skill.sourceCollection?.repository);
+  const collectionLink = toPortableOnlineLocator(skill.sourceCollection?.canonicalLink);
   const portableSource = Boolean(source || upstreamLocator || collectionRepository);
   const portableUpstream = upstream && upstream.kind !== "local" && upstreamLocator
     ? {
@@ -112,7 +98,7 @@ export const createPortableWorkspaceCodec = (input: {
     const sourceData = {
       formatVersion: 1 as const,
       sources: (await sourceRegistry.list())
-        .filter((source) => safeOnlineValue(source.repository) && safeOnlineValue(source.canonicalLink))
+        .filter((source) => toPortableOnlineLocator(source.repository) && toPortableOnlineLocator(source.canonicalLink))
         .map(({ createdAt: _createdAt, updatedAt: _updatedAt, ...source }) => source)
     };
     await writeFile(join(destination, "workspace", "skill-sources.json"), canonicalJson(sourceData), { mode: 0o600 });

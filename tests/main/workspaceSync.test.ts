@@ -19,6 +19,7 @@ import {
 import { createWorkspaceSyncTransaction } from "../../src/main/workspaceSync/workspaceSyncTransaction";
 import { createWorkspaceSyncService } from "../../src/main/workspaceSync/workspaceSyncService";
 import { createWorkspaceSyncStateStore, parseWorkspaceSyncConnection } from "../../src/main/workspaceSync/syncStateStore";
+import { toPortableOnlineLocator } from "../../src/main/workspaceSync/portableLocation";
 import { canonicalJson, hashJson, hashPortableTree, snapshotHashFor } from "../../src/main/workspaceSync/workspaceSnapshotHasher";
 
 const execFileAsync = promisify(execFile);
@@ -40,6 +41,14 @@ const writeSnapshot = async (root: string, input: {
   profileName?: string;
   instructions?: string;
   skillContent?: string;
+  sources?: Array<{
+    formatVersion: 1;
+    id: string;
+    canonicalLink: string;
+    repository: string;
+    ref: string;
+    directory: string;
+  }>;
 } = {}): Promise<WorkspaceSnapshotDescriptor> => {
   const profileRoot = join(root, "workspace", "profiles", "daily");
   const skillRoot = join(root, "workspace", "skills", "review", "content");
@@ -60,13 +69,14 @@ const writeSnapshot = async (root: string, input: {
     updatePolicy: "untracked" as const,
     sourceType: "local" as const
   };
+  const sourceData = { formatVersion: 1 as const, sources: input.sources ?? [] };
   await Promise.all([
     writeFile(join(profileRoot, "profile.json"), canonicalJson(profile)),
     writeFile(join(profileRoot, "INSTRUCTIONS.md"), instructions),
     writeFile(join(profileRoot, "resources.json"), canonicalJson(resources)),
     writeFile(join(skillRoot, "SKILL.md"), input.skillContent ?? "---\nname: review\ndescription: Review code\n---\n"),
     writeFile(join(root, "workspace", "skills", "review", "metadata.json"), canonicalJson(metadata)),
-    writeFile(join(root, "workspace", "skill-sources.json"), canonicalJson({ formatVersion: 1, sources: [] }))
+    writeFile(join(root, "workspace", "skill-sources.json"), canonicalJson(sourceData))
   ]);
   const profileSections = {
     manifest: hashJson(profile),
@@ -82,7 +92,7 @@ const writeSnapshot = async (root: string, input: {
     workspaceId: input.workspaceId ?? "11111111-1111-4111-8111-111111111111",
     profileHashes: { daily: { ...profileSections, total: hashJson(profileSections) } },
     skillHashes: { review: { ...skillSections, total: hashJson(skillSections) } },
-    sourcesHash: hashJson({ formatVersion: 1, sources: [] })
+    sourcesHash: hashJson(sourceData)
   };
   const manifest: PortableWorkspaceManifest = { ...unsigned, snapshotHash: snapshotHashFor(unsigned) };
   await writeFile(join(root, "agentenv-sync.json"), canonicalJson(manifest));
@@ -157,6 +167,20 @@ describe("Workspace Sync", () => {
     await expect(validatePortableWorkspace(snapshot.root)).rejects.toThrow("reserved AgentEnv data");
   });
 
+  it("rejects machine-local repository locators in an incoming portable snapshot", async () => {
+    const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-local-locator-"));
+    const metadataPath = join(snapshot.root, "workspace", "skills", "review", "metadata.json");
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+    await writeFile(metadataPath, canonicalJson({
+      ...metadata,
+      sourceType: "git",
+      source: "/Users/other/private-skills",
+      updatePolicy: "tracked"
+    }));
+
+    await expect(validatePortableWorkspace(snapshot.root)).rejects.toThrow("machine-local");
+  });
+
   it("excludes machine-local source paths from a portable Skill", async () => {
     const appDataRoot = await tempRoot("agentenv-sync-codec-");
     const paths = createPaths({ appDataRoot, homeDir: join(appDataRoot, "home") });
@@ -189,6 +213,7 @@ describe("Workspace Sync", () => {
     expect(metadata).toMatchObject({ sourceType: "local", updatePolicy: "untracked" });
     expect(metadata).not.toHaveProperty("source");
     expect(metadata).not.toHaveProperty("upstream");
+    expect(toPortableOnlineLocator("../private-skills")).toBeUndefined();
   });
 
   it("backs up and replaces Profiles, Skills, and sources as one recoverable operation", async () => {
@@ -200,8 +225,29 @@ describe("Workspace Sync", () => {
     ]);
     await writeFile(join(paths.profilesDir, "old", "marker"), "old");
     await writeFile(join(paths.skillsLibraryDir, "old", "SKILL.md"), "old");
-    await writeFile(paths.skillSourcesPath, canonicalJson({ formatVersion: 1, sources: [] }));
-    const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-candidate-"));
+    await writeFile(paths.skillSourcesPath, canonicalJson({
+      formatVersion: 1,
+      sources: [{
+        formatVersion: 1,
+        id: "source-local",
+        canonicalLink: "/Users/me/private-skills#ref=main",
+        repository: "/Users/me/private-skills",
+        ref: "main",
+        directory: "",
+        createdAt: "2026-07-20T00:00:00.000Z",
+        updatedAt: "2026-07-20T00:00:00.000Z"
+      }]
+    }));
+    const snapshot = await writeSnapshot(await tempRoot("agentenv-sync-candidate-"), {
+      sources: [{
+        formatVersion: 1,
+        id: "source-remote",
+        canonicalLink: "https://github.com/example/skills/tree/main/skills",
+        repository: "https://github.com/example/skills.git",
+        ref: "main",
+        directory: "skills"
+      }]
+    });
     const transaction = createWorkspaceSyncTransaction({ paths, backupStore: createBackupStore(paths) });
 
     const result = await transaction.apply(snapshot.root);
@@ -209,7 +255,18 @@ describe("Workspace Sync", () => {
     expect(result.backupId).toBeTruthy();
     await expect(readFile(join(paths.profilesDir, "daily", "INSTRUCTIONS.md"), "utf8")).resolves.toBe("# Agent\n");
     await expect(readFile(join(paths.skillsLibraryDir, "review", "SKILL.md"), "utf8")).resolves.toContain("Review code");
+    const sources = JSON.parse(await readFile(paths.skillSourcesPath, "utf8")).sources;
+    expect(sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "source-local", repository: "/Users/me/private-skills" }),
+      expect.objectContaining({ id: "source-remote", formatVersion: 1 })
+    ]));
     await expect(transaction.isRecoveryRequired()).resolves.toBe(false);
+
+    await transaction.restore(result.backupId);
+    await expect(readFile(join(paths.profilesDir, "old", "marker"), "utf8")).resolves.toBe("old");
+    expect(JSON.parse(await readFile(paths.skillSourcesPath, "utf8")).sources).toEqual([
+      expect.objectContaining({ id: "source-local" })
+    ]);
   });
 
   it.each(["profiles", "skills", "sources", "verify"] as const)(
@@ -350,10 +407,11 @@ describe("Workspace Sync", () => {
           apply: async (snapshotRoot) => {
             instructions = await readFile(join(snapshotRoot, "workspace", "profiles", "daily", "INSTRUCTIONS.md"), "utf8");
             return { backupId: `${name}-backup` };
-          }
+          },
+          restore: async () => undefined
         },
         loadTransport: async () => transport,
-        targetPathsProvider: () => [],
+        targetPathsProvider: async () => [],
         findManagedInstallPaths: async () => []
       });
       return { service, getInstructions: () => instructions, setInstructions: (value: string) => { instructions = value; } };
@@ -380,5 +438,62 @@ describe("Workspace Sync", () => {
     expect(second.getInstructions()).toBe("# Changed on first\n");
     first.service.dispose();
     second.service.dispose();
+  });
+
+  it("restores Workspace content and clears working state when Sync state cannot be committed", async () => {
+    const root = await tempRoot("agentenv-sync-state-failure-");
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const remote = await writeSnapshot(join(root, "remote"), { instructions: "# Remote\n" });
+    const underlyingStore = createWorkspaceSyncStateStore(paths);
+    let failStateWrites = false;
+    let restored = false;
+    const service = createWorkspaceSyncService({
+      paths,
+      codec: {
+        exportSnapshot: async (destination, workspaceId) =>
+          (await writeSnapshot(destination, { workspaceId, instructions: "# Local\n" })).manifest
+      },
+      stateStore: {
+        ...underlyingStore,
+        write: async (state) => {
+          if (failStateWrites) throw new Error("State disk is read-only");
+          await underlyingStore.write(state);
+        }
+      },
+      transaction: {
+        recover: async () => undefined,
+        isRecoveryRequired: async () => false,
+        apply: async () => {
+          failStateWrites = true;
+          return { backupId: "workspace-backup" };
+        },
+        restore: async (backupId) => {
+          expect(backupId).toBe("workspace-backup");
+          restored = true;
+        }
+      },
+      loadTransport: async () => ({
+        fetch: async () => ({ revision: "remote-revision", snapshotRoot: remote.root }),
+        publish: async () => "unused",
+        cancel: () => undefined,
+        dispose: () => undefined
+      }),
+      targetPathsProvider: async () => [],
+      findManagedInstallPaths: async () => []
+    });
+
+    await service.connect({ repository: "/tmp/remote.git", branch: "main" });
+    const review = await service.review();
+    const conflict = review.changes.find((change) => change.direction === "conflict");
+    expect(conflict).toBeDefined();
+
+    await expect(service.update({
+      expectedRemoteRevision: review.remoteRevision,
+      conflictChoices: { [conflict!.key]: "remote" }
+    })).rejects.toThrow("read-only");
+
+    expect(restored).toBe(true);
+    expect((await service.readStatus()).working).toBeUndefined();
+    service.dispose();
   });
 });

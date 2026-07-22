@@ -35,6 +35,7 @@ export const PortableSkillMetadataSchema = z.object({
 });
 
 export const PortableSkillSourceSchema = z.object({
+  formatVersion: z.literal(1),
   id: SafeIdSchema,
   canonicalLink: z.string(),
   repository: z.string(),

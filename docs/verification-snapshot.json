@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-07-21T18:51:30.087Z",
+  "generatedAt": "2026-07-22T02:19:42.845Z",
   "source": {
-    "commit": "62c1e57cd6947b49365ffcb99055a96c794cdc06",
+    "commit": "6740cffc341caaad1d32869f010688b4a00f0a58",
     "dirty": true
   },
   "tests": {
     "passed": true,
-    "files": 89,
-    "assertions": 628,
+    "files": 90,
+    "assertions": 632,
     "e2eFiles": 9,
     "e2eAssertions": 109,
     "electronUiFiles": 1,
@@ -28,5 +28,5 @@
     ],
     "includesProfileLoadingState": true
   },
-  "packagedSmoke": "not-run"
+  "packagedSmoke": "passed"
 }

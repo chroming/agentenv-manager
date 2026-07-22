@@ -1,12 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, GitBranch, LoaderCircle, RefreshCw, TriangleAlert, X } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CheckCircle2,
+  GitBranch,
+  LoaderCircle,
+  RefreshCw,
+  TriangleAlert,
+  X
+} from "lucide-react";
 import type {
+  WorkspaceSyncChange,
   WorkspaceSyncConflictChoice,
   WorkspaceSyncReview,
   WorkspaceSyncStatus
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { OverflowTooltip } from "./OverflowTooltip";
+import { Button, IconButton, ModalFrame } from "./ui";
 
 const emptyStatus: WorkspaceSyncStatus = {
   kind: "not-connected",
@@ -19,6 +31,38 @@ const emptyStatus: WorkspaceSyncStatus = {
 const compactRepository = (value: string | undefined) => {
   if (!value || value.length <= 46) return value;
   return `${value.slice(0, 20)}…${value.slice(-24)}`;
+};
+
+interface WorkspaceSyncReviewRow {
+  key: string;
+  changes: WorkspaceSyncChange[];
+  resourceKind: WorkspaceSyncChange["resourceKind"];
+  title: string;
+  direction: WorkspaceSyncChange["direction"];
+  action: WorkspaceSyncChange["action"];
+}
+
+export const groupWorkspaceSyncChanges = (changes: WorkspaceSyncChange[]): WorkspaceSyncReviewRow[] => {
+  const rows = new Map<string, WorkspaceSyncReviewRow>();
+  for (const change of changes) {
+    const key = change.direction === "conflict"
+      ? change.key
+      : `${change.resourceKind}:${change.resourceId}:${change.direction}:${change.action}`;
+    const row = rows.get(key);
+    if (row) {
+      row.changes.push(change);
+    } else {
+      rows.set(key, {
+        key,
+        changes: [change],
+        resourceKind: change.resourceKind,
+        title: change.title,
+        direction: change.direction,
+        action: change.action
+      });
+    }
+  }
+  return [...rows.values()];
 };
 
 export const WorkspaceSyncSettings = () => {
@@ -37,6 +81,7 @@ export const WorkspaceSyncSettings = () => {
   const connected = Boolean(status.connection);
   const conflicts = review?.changes.filter((change) => change.direction === "conflict") ?? [];
   const choicesComplete = conflicts.every((change) => choices[change.key]);
+  const reviewRows = useMemo(() => groupWorkspaceSyncChanges(review?.changes ?? []), [review]);
 
   const run = async <T,>(name: typeof working, operation: () => Promise<T>) => {
     setWorking(name);
@@ -53,15 +98,23 @@ export const WorkspaceSyncSettings = () => {
 
   useEffect(() => {
     let active = true;
-    void window.agentEnv.readWorkspaceSyncStatus().then((next) => {
-      if (!active) return;
-      setStatus(next);
-      if (next.connection) {
-        setRepository(next.connection.repository);
-        setBranch(next.connection.branch);
-        void window.agentEnv.checkWorkspaceSync().then((checked) => active && setStatus(checked));
+    const load = async () => {
+      try {
+        const next = await window.agentEnv.readWorkspaceSyncStatus();
+        if (!active) return;
+        setStatus(next);
+        if (next.connection) {
+          setRepository(next.connection.repository);
+          setBranch(next.connection.branch);
+          setStatus({ ...next, working: "checking" });
+          const checked = await window.agentEnv.checkWorkspaceSync();
+          if (active) setStatus(checked);
+        }
+      } catch (unknownError) {
+        if (active) setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       }
-    }).catch((unknownError) => active && setError(unknownError instanceof Error ? unknownError.message : String(unknownError)));
+    };
+    void load();
     return () => { active = false; };
   }, []);
 
@@ -75,6 +128,7 @@ export const WorkspaceSyncSettings = () => {
   });
 
   const statusLabel = useMemo(() => {
+    if (status.working === "checking") return t("Checking");
     const labels: Record<WorkspaceSyncStatus["kind"], string> = {
       "not-connected": t("Not connected"),
       "up-to-date": t("Up to date"),
@@ -85,7 +139,16 @@ export const WorkspaceSyncSettings = () => {
       "recovery-required": t("Recovery required")
     };
     return labels[status.kind];
-  }, [status.kind, t]);
+  }, [status.kind, status.working, t]);
+  const statusIcon = status.working === "checking"
+    ? <LoaderCircle className="spin" size={15} />
+    : status.kind === "up-to-date"
+      ? <CheckCircle2 size={15} />
+      : status.kind === "local-changes"
+        ? <ArrowUpFromLine size={15} />
+        : status.kind === "remote-changes"
+          ? <ArrowDownToLine size={15} />
+          : <TriangleAlert size={15} />;
   const resourceLabel = (value: "profile" | "skill" | "source") => ({
     profile: t("Profile"),
     skill: t("Skill"),
@@ -99,6 +162,20 @@ export const WorkspaceSyncSettings = () => {
     metadata: t("Update settings"),
     sources: t("Sources")
   })[value] ?? value;
+  const sectionSummary = (row: WorkspaceSyncReviewRow) => {
+    const order: Record<string, number> = {
+      manifest: 0,
+      instructions: 1,
+      resources: 2,
+      content: 0,
+      metadata: 1,
+      sources: 0
+    };
+    return [...row.changes]
+      .sort((left, right) => (order[left.section] ?? 99) - (order[right.section] ?? 99))
+      .map((change) => sectionLabel(change.section))
+      .join(", ");
+  };
   const actionLabel = (value: string) => ({
     add: t("Add"),
     update: t("Update"),
@@ -167,7 +244,7 @@ export const WorkspaceSyncSettings = () => {
         </div>
         {connected ? (
           <span className={`workspace-sync-status is-${status.kind}`} role="status">
-            {status.kind === "up-to-date" ? <CheckCircle2 size={15} /> : <TriangleAlert size={15} />}
+            {statusIcon}
             {statusLabel}
           </span>
         ) : null}
@@ -182,17 +259,20 @@ export const WorkspaceSyncSettings = () => {
             <span>{t("Branch")}</span>
             <input value={branch} onChange={(event) => setBranch(event.currentTarget.value)} />
           </label>
-          <button className="primary-action" disabled={!repository.trim() || !branch.trim() || Boolean(working)} onClick={() => void connect()} type="button">
-            {working === "connect" ? <LoaderCircle className="spin" size={15} /> : <GitBranch size={15} />}
+          <Button variant="primary" icon={working === "connect" ? <LoaderCircle className="spin" /> : <GitBranch />} disabled={!repository.trim() || !branch.trim() || Boolean(working)} onClick={() => void connect()}>
             {t("Connect repository")}
-          </button>
+          </Button>
         </div>
       ) : (
         <>
           <div className="workspace-sync-connection">
             <GitBranch size={18} aria-hidden="true" />
-            <span className="workspace-sync-repository" title={status.connection?.repository}>{compactRepository(status.connection?.repository)}</span>
-            <code>{status.connection?.branch}</code>
+            <OverflowTooltip
+              className="workspace-sync-repository"
+              displayText={compactRepository(status.connection?.repository)}
+              text={status.connection?.repository ?? ""}
+            />
+            <span className="workspace-sync-branch-name">{status.connection?.branch}</span>
             <span className="workspace-sync-summary">
               {status.localChangeCount ? t("{{count}} local", { count: status.localChangeCount }) : null}
               {status.remoteChangeCount ? t("{{count}} remote", { count: status.remoteChangeCount }) : null}
@@ -201,45 +281,52 @@ export const WorkspaceSyncSettings = () => {
           </div>
           <div className="workspace-sync-actions">
             {status.kind === "recovery-required" ? (
-              <button className="primary-action" disabled={Boolean(working)} onClick={() => void recover()} type="button">
-                {working === "recover" ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}
+              <Button variant="primary" icon={working === "recover" ? <LoaderCircle className="spin" /> : <RefreshCw />} disabled={Boolean(working)} onClick={() => void recover()}>
                 {t("Recover Workspace")}
-              </button>
+              </Button>
             ) : null}
-            {status.kind !== "recovery-required" ? <button className="secondary-action" disabled={Boolean(working)} onClick={() => void check()} type="button">
-              <RefreshCw className={working === "check" ? "spin" : undefined} size={15} />
+            {status.kind !== "recovery-required" ? <Button variant="secondary" icon={<RefreshCw className={working === "check" ? "spin" : undefined} />} disabled={Boolean(working)} onClick={() => void check()}>
               {t("Check")}
-            </button> : null}
+            </Button> : null}
             {status.kind !== "up-to-date" && status.kind !== "error" && status.kind !== "recovery-required" ? (
-              <button ref={reviewButtonRef} className="primary-action" disabled={Boolean(working)} onClick={() => void openReview()} type="button">
-                {working === "review" ? <LoaderCircle className="spin" size={15} /> : null}
+              <Button ref={reviewButtonRef} variant="primary" icon={working === "review" ? <LoaderCircle className="spin" /> : undefined} disabled={Boolean(working)} onClick={() => void openReview()}>
                 {t("Review changes")}
-              </button>
+              </Button>
             ) : null}
-            <button className="text-action" disabled={Boolean(working)} onClick={() => void disconnect()} type="button">{t("Disconnect")}</button>
+            {status.kind !== "recovery-required" ? (
+              <Button variant="ghost" disabled={Boolean(working)} onClick={() => void disconnect()}>{t("Disconnect")}</Button>
+            ) : null}
           </div>
         </>
       )}
       {error || status.message ? <div className="workspace-sync-error" role="alert">{error || status.message}</div> : null}
 
       {review ? (
-        <div className="preview-modal-backdrop" onClick={() => !working && setReview(undefined)}>
-          <section ref={dialogRef} className="profile-form-dialog workspace-sync-review" role="dialog" aria-modal="true" aria-label={t("Review Workspace changes")} onClick={(event) => event.stopPropagation()} tabIndex={-1}>
+        <ModalFrame
+          ariaLabel={t("Review Workspace changes")}
+          className="workspace-sync-review"
+          dialogRef={dialogRef}
+          dismissDisabled={Boolean(working)}
+          onDismiss={() => setReview(undefined)}
+        >
             <header className="profile-dialog-header">
               <div>
-                <div className="section-title">{t("Review Workspace changes")}</div>
+                <div className="workspace-sync-review-title">{t("Review Workspace changes")}</div>
                 <p className="muted">{t("Nothing is applied to an Agent by this step.")}</p>
               </div>
-              <button className="icon-button" aria-label={t("Close")} disabled={Boolean(working)} onClick={() => setReview(undefined)} type="button"><X size={17} /></button>
+              <IconButton variant="ghost" label={t("Close")} disabled={Boolean(working)} onClick={() => setReview(undefined)}><X /></IconButton>
             </header>
             <div className="workspace-sync-review-list">
-              {review.changes.length ? review.changes.map((change) => (
-                <div className="workspace-sync-change" key={change.key}>
-                  <span className={`workspace-sync-change-kind is-${change.resourceKind}`}>{resourceLabel(change.resourceKind)}</span>
-                  <span><strong>{change.title}</strong><small>{sectionLabel(change.section)} · {actionLabel(change.action)}</small></span>
-                  <span className={`workspace-sync-direction is-${change.direction}`}>{directionLabel(change.direction)}</span>
-                  {change.direction === "conflict" ? (
-                    <select aria-label={t("Resolve {{name}}", { name: change.title })} value={choices[change.key] ?? ""} onChange={(event) => setChoices((current) => ({ ...current, [change.key]: event.currentTarget.value as WorkspaceSyncConflictChoice }))}>
+              {reviewRows.length ? reviewRows.map((row) => (
+                <div className={`workspace-sync-change${row.direction === "conflict" ? " has-resolution" : ""}`} key={row.key}>
+                  <span className={`workspace-sync-change-kind is-${row.resourceKind}`}>{resourceLabel(row.resourceKind)}</span>
+                  <span className="workspace-sync-change-identity">
+                    <OverflowTooltip className="workspace-sync-change-title" text={row.title} />
+                    <small>{sectionSummary(row)} · {actionLabel(row.action)}</small>
+                  </span>
+                  <span className={`workspace-sync-direction is-${row.direction}`}>{directionLabel(row.direction)}</span>
+                  {row.direction === "conflict" ? (
+                    <select aria-label={t("Resolve {{name}}", { name: row.title })} value={choices[row.changes[0]!.key] ?? ""} onChange={(event) => setChoices((current) => ({ ...current, [row.changes[0]!.key]: event.currentTarget.value as WorkspaceSyncConflictChoice }))}>
                       <option value="">{t("Choose version")}</option>
                       <option value="local">{t("Keep this Mac")}</option>
                       <option value="remote">{t("Use remote")}</option>
@@ -256,12 +343,11 @@ export const WorkspaceSyncSettings = () => {
             ) : null}
             {error ? <div className="workspace-sync-error" role="alert">{error}</div> : null}
             <footer className="preview-actions workspace-sync-review-actions">
-              <button className="secondary-action" disabled={Boolean(working)} onClick={() => setReview(undefined)} type="button">{t("Cancel")}</button>
-              {review.canPublish ? <button className="secondary-action" disabled={Boolean(working) || review.changes.some((change) => change.direction === "remote" || change.direction === "conflict")} onClick={() => void publish()} type="button">{working === "publish" ? <LoaderCircle className="spin" size={15} /> : null}{t("Publish")}</button> : null}
-              {review.canUpdate ? <button className="primary-action" disabled={Boolean(working) || !choicesComplete || (review.liveSkillIds.length > 0 && !acceptLive)} onClick={() => void update()} type="button">{working === "update" ? <LoaderCircle className="spin" size={15} /> : null}{t("Update this Mac")}</button> : null}
+              <Button variant="secondary" disabled={Boolean(working)} onClick={() => setReview(undefined)}>{t("Cancel")}</Button>
+              {review.canPublish && !review.canUpdate ? <Button variant="primary" icon={working === "publish" ? <LoaderCircle className="spin" /> : undefined} disabled={Boolean(working)} onClick={() => void publish()}>{t("Publish")}</Button> : null}
+              {review.canUpdate ? <Button variant="primary" icon={working === "update" ? <LoaderCircle className="spin" /> : undefined} disabled={Boolean(working) || !choicesComplete || (review.liveSkillIds.length > 0 && !acceptLive)} onClick={() => void update()}>{t("Update this Mac")}</Button> : null}
             </footer>
-          </section>
-        </div>
+        </ModalFrame>
       ) : null}
     </section>
   );

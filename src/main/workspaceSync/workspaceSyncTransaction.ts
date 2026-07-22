@@ -1,16 +1,19 @@
 import { cp, lstat, mkdir, readFile, readlink, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { BackupManifest } from "../../shared/types";
+import type { SkillSourceRecord } from "../../shared/types";
 import type { BackupStore } from "../backupStore";
 import { isMissingFileError, pathEntryExists, replacePathAtomically, writeAtomic } from "../fileUtils";
 import { hashSkillContent } from "../skillContentHash";
 import type { SkillMetadataFile } from "../skillLibraryMetadata";
 import type { AgentEnvPaths } from "../paths";
+import { createSkillSourceRegistry } from "../skillSourceRegistry";
 import {
   PortableSkillMetadataSchema,
   PortableSkillSourcesSchema,
   type PortableSkillSource
 } from "./portableSchemas";
+import { isPortableOnlineLocator } from "./portableLocation";
 import { validatePortableWorkspace } from "./portableWorkspaceValidator";
 
 interface WorkspaceSyncJournal {
@@ -24,6 +27,7 @@ export interface WorkspaceSyncTransaction {
   recover(): Promise<void>;
   isRecoveryRequired(): Promise<boolean>;
   apply(snapshotRoot: string): Promise<{ backupId: string }>;
+  restore(backupId: string): Promise<void>;
 }
 
 const restoreEntry = async (entry: BackupManifest["entries"][number]) => {
@@ -103,6 +107,17 @@ export const createWorkspaceSyncTransaction = (input: {
     await rollback(journal.backupId);
   };
 
+  const restore = async (backupId: string) => {
+    const journal: WorkspaceSyncJournal = {
+      formatVersion: 1,
+      backupId,
+      createdAt: new Date().toISOString(),
+      phase: "rollback-required"
+    };
+    await writeAtomic(input.paths.workspaceSyncJournalPath, `${JSON.stringify(journal, null, 2)}\n`);
+    await rollback(backupId);
+  };
+
   const apply = async (snapshotRoot: string) => {
     await validatePortableWorkspace(snapshotRoot);
     const backup = await input.backupStore.createBackup(
@@ -136,21 +151,24 @@ export const createWorkspaceSyncTransaction = (input: {
       }
 
       let previousSources = new Map<string, { createdAt: string; updatedAt: string }>();
-      try {
-        const current = JSON.parse(await readFile(input.paths.skillSourcesPath, "utf8")) as {
-          sources?: Array<{ id: string; createdAt: string; updatedAt: string }>;
-        };
-        previousSources = new Map((current.sources ?? []).map((source) => [source.id, source]));
-      } catch (error) {
-        if (!isMissingFileError(error)) throw error;
-      }
+      let localOnlySources: SkillSourceRecord[] = [];
+      const currentSources = await createSkillSourceRegistry(input.paths.skillSourcesPath).list();
+      previousSources = new Map(currentSources.map((source) => [source.id, source]));
+      localOnlySources = currentSources.filter((source) =>
+        !isPortableOnlineLocator(source.repository) || !isPortableOnlineLocator(source.canonicalLink)
+      );
       const portableSources = PortableSkillSourcesSchema.parse(
         JSON.parse(await readFile(join(snapshotRoot, "workspace", "skill-sources.json"), "utf8"))
       );
       const stagedSources = join(stagingRoot, "skill-sources.json");
+      const mergedSources = new Map<string, SkillSourceRecord>();
+      for (const source of localOnlySources) mergedSources.set(source.id, source);
+      for (const source of portableSources.sources) {
+        mergedSources.set(source.id, sourceRecordForLocalStore(source, previousSources));
+      }
       await writeAtomic(stagedSources, `${JSON.stringify({
         formatVersion: 1,
-        sources: portableSources.sources.map((source) => sourceRecordForLocalStore(source, previousSources))
+        sources: [...mergedSources.values()].sort((left, right) => left.id.localeCompare(right.id))
       }, null, 2)}\n`);
 
       await replacePathAtomically(input.paths.profilesDir, (path) => cp(stagedProfiles, path, { recursive: true }));
@@ -185,6 +203,7 @@ export const createWorkspaceSyncTransaction = (input: {
   return {
     recover,
     isRecoveryRequired: () => pathEntryExists(input.paths.workspaceSyncJournalPath),
-    apply
+    apply,
+    restore
   };
 };

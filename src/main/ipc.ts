@@ -122,6 +122,23 @@ export const registerIpcHandlers = ({
       })
     );
   };
+  const handleWorkspaceSyncMutation = (
+    channel: string,
+    handler: (event: any, ...args: any[]) => any
+  ) => {
+    ipcMain.handle(channel, (event, ...args) => {
+      workspaceSyncService.cancel();
+      return mutationCoordinator.runExclusive(channel, async () => {
+        if (
+          channel !== "workspace-sync:recover" &&
+          await pathEntryExists(paths.workspaceSyncJournalPath)
+        ) {
+          throw new Error("Workspace recovery is required before changing Profiles, Library resources, or Agents");
+        }
+        return handler(event, ...args);
+      });
+    });
+  };
   const sharedSkillTargetPaths: TargetPaths = {
     targetId: "shared-compatibility",
     configDir: dirname(paths.userSkillsDir),
@@ -772,17 +789,17 @@ export const registerIpcHandlers = ({
     settingsStore.updateSettings(input && typeof input === "object" ? input : {})
   );
   ipcMain.handle("workspace-sync:status", () => workspaceSyncService.readStatus());
-  handleMutation("workspace-sync:connect", (_event, input: unknown) =>
+  handleWorkspaceSyncMutation("workspace-sync:connect", (_event, input: unknown) =>
     workspaceSyncService.connect(input as import("../shared/workspaceSync").WorkspaceSyncConnectInput)
   );
-  handleMutation("workspace-sync:check", () => workspaceSyncService.check());
-  handleMutation("workspace-sync:review", () => workspaceSyncService.review());
-  handleMutation("workspace-sync:update", (_event, input: unknown) =>
+  ipcMain.handle("workspace-sync:check", () => workspaceSyncService.check());
+  ipcMain.handle("workspace-sync:review", () => workspaceSyncService.review());
+  handleWorkspaceSyncMutation("workspace-sync:update", (_event, input: unknown) =>
     workspaceSyncService.update(input as import("../shared/workspaceSync").WorkspaceSyncUpdateInput)
   );
-  handleMutation("workspace-sync:publish", () => workspaceSyncService.publish());
-  handleMutation("workspace-sync:recover", () => workspaceSyncService.recover());
-  handleMutation("workspace-sync:disconnect", () => workspaceSyncService.disconnect());
+  handleWorkspaceSyncMutation("workspace-sync:publish", () => workspaceSyncService.publish());
+  handleWorkspaceSyncMutation("workspace-sync:recover", () => workspaceSyncService.recover());
+  handleWorkspaceSyncMutation("workspace-sync:disconnect", () => workspaceSyncService.disconnect());
   handleMutation("github:status", () => githubAuthService.readStatus());
   ipcMain.handle("github:start-device-login", () => githubAuthService.startDeviceLogin());
   handleMutation("github:poll-device-login", (_event, id: unknown) =>

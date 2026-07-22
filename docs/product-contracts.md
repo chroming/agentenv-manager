@@ -102,16 +102,20 @@ Workspace Sync reuses portable environment intent across the user's Macs through
 
 - The portable snapshot includes complete Profile v2 data, canonical Skill content and executable bits, portable Skill update metadata, global Skill availability, and the Skill source registry.
 - Target states, credentials, GitHub tokens, settings, backups, trash, history, observations, caches, absolute local paths, and external-manager lock paths MUST NOT enter a snapshot.
+- Device-local Skill source records excluded from the portable snapshot remain untouched when this Mac receives remote source-registry changes. Exclusion from Sync MUST NOT delete local-only source intent.
 - Snapshot output MUST be deterministic. A workspace with unchanged portable content produces the same content hash and no Git commit.
 - The application MAY check the remote repository in the background, but MUST NOT automatically update this Mac, publish, merge, or Apply.
+- Background Check MUST use Sync-local serialization and MUST NOT hold the application-wide mutation lock while waiting on Git or the network. Update, Publish, recovery, connection changes, and disconnection remain globally serialized mutations.
 - Update and Publish require a fresh remote revision. Non-fast-forward changes and rewritten history MUST stop the operation; AgentEnv MUST NOT force-push.
 - Comparison is three-way against the last accepted base. Changes to different Profile or Skill sections MAY combine automatically. Concurrent changes to the same section, and delete-versus-modify, require an explicit local or remote choice.
 - Updating this Mac validates the complete candidate, creates one Workspace recovery backup, writes Profile, Library, and source registry data under the global mutation lock, verifies the result, and automatically restores all three on failure.
+- If portable content is written but the accepted base or Sync state cannot be committed, AgentEnv MUST restore the Workspace recovery backup before reporting failure. A failed restore remains `Recovery required`.
 - An interrupted or failed restore enters `Recovery required`. The referenced recovery backup MUST NOT be removed by retention or manual backup cleanup.
 - Remote symlinks, path traversal, duplicate ids, broken references, unsupported future formats, embedded URL credentials, private keys, high-confidence tokens, and resource or total size-limit violations MUST be rejected before local mutation.
 - System Git authentication belongs to the operating system SSH Agent or credential helper. AgentEnv MUST NOT store repository passwords, tokens, or private keys, modify global Git configuration, run repository hooks, sign commits, or prompt through a hidden terminal.
 - Ordinary non-AgentEnv files in the repository remain untouched. Only `agentenv-sync.json` and `workspace/` are managed.
 - A remote Skill content change that affects a currently linked deployment has immediate runtime impact. Review MUST identify that impact and require separate confirmation. Copy deployments and Profile-only changes remain pending until ordinary Profile Apply.
+- Immediate linked-Skill impact is calculated only for Agents currently enabled in Settings.
 
 Workspace Sync states are `Not connected`, `Up to date`, `Changes to publish`, `Changes to receive`, `Review required`, `Could not check`, and `Recovery required`. `Checking`, `Publishing`, and `Updating` are temporary activity states, not persisted outcomes.
 

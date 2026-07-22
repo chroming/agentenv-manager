@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { cp, lstat, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type {
@@ -16,6 +17,7 @@ import { materializeMergedWorkspace, planWorkspaceSync, type WorkspaceSnapshotDe
 import type { WorkspaceSyncState, WorkspaceSyncStateStore } from "./syncStateStore";
 import { parseWorkspaceSyncConnection } from "./syncStateStore";
 import type { WorkspaceSyncTransaction } from "./workspaceSyncTransaction";
+import { replacePathAtomically } from "../fileUtils";
 
 export interface WorkspaceSyncService {
   readStatus(): Promise<WorkspaceSyncStatus>;
@@ -38,6 +40,7 @@ interface CheckedWorkspace {
   remoteRevision?: string;
   plan: ReturnType<typeof planWorkspaceSync>;
   status: WorkspaceSyncStatus;
+  operationRoot: string;
 }
 
 const emptyStatus = (): WorkspaceSyncStatus => ({
@@ -102,20 +105,23 @@ export const createWorkspaceSyncService = (input: {
   stateStore: WorkspaceSyncStateStore;
   transaction: WorkspaceSyncTransaction;
   loadTransport(): Promise<GitSyncTransport>;
-  targetPathsProvider(): TargetPaths[];
+  targetPathsProvider(): Promise<TargetPaths[]>;
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
 }): WorkspaceSyncService => {
   let lastStatus = emptyStatus();
   let transport: GitSyncTransport | undefined;
+  let operationQueue = Promise.resolve();
+  const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
+    const result = operationQueue.then(operation, operation);
+    operationQueue = result.then(() => undefined, () => undefined);
+    return result;
+  };
   const loadTransport = async () => transport ??= await input.loadTransport();
-  const localRoot = join(input.paths.workspaceSyncCacheDir, "local");
-  const remoteRoot = join(input.paths.workspaceSyncCacheDir, "remote");
   const baseRoot = join(input.paths.workspaceSyncCacheDir, "base");
-  const mergedRoot = join(input.paths.workspaceSyncCacheDir, "merged");
 
-  const exportLocal = async (state: WorkspaceSyncState) => {
-    const manifest = await input.codec.exportSnapshot(localRoot, state.workspaceId);
-    return { root: localRoot, manifest };
+  const exportLocal = async (state: WorkspaceSyncState, destination: string) => {
+    const manifest = await input.codec.exportSnapshot(destination, state.workspaceId);
+    return { root: destination, manifest };
   };
 
   const loadBase = async (state: WorkspaceSyncState) => {
@@ -133,7 +139,7 @@ export const createWorkspaceSyncService = (input: {
       .filter((change) => change.resourceKind === "skill" && change.section === "content" &&
         (change.direction === "remote" || change.direction === "conflict"))
       .map((change) => change.resourceId))];
-    const targetPaths = input.targetPathsProvider();
+    const targetPaths = await input.targetPathsProvider();
     const live: string[] = [];
     const agents: string[] = [];
     for (const id of candidateIds) {
@@ -156,67 +162,77 @@ export const createWorkspaceSyncService = (input: {
   };
 
   const performCheck = async (): Promise<CheckedWorkspace> => {
+    const operationRoot = join(input.paths.workspaceSyncCacheDir, "operations", randomUUID());
+    const localRoot = join(operationRoot, "local");
+    const remoteRoot = join(operationRoot, "remote");
     let state = await input.stateStore.read();
     if (!state) throw new Error("Workspace Sync is not connected");
-    await mkdir(input.paths.workspaceSyncCacheDir, { recursive: true, mode: 0o700 });
-    let local = await exportLocal(state);
-    const remoteResult = await (await loadTransport()).fetch(
-      { repository: state.repository, branch: state.branch },
-      remoteRoot,
-      state.baseRevision
-    );
-    const remote = remoteResult.snapshotRoot ? await descriptorAt(remoteResult.snapshotRoot) : undefined;
-    if (remote && remote.manifest.workspaceId !== state.workspaceId) {
-      if (state.baseRevision) {
-        throw new Error("The remote repository belongs to a different AgentEnv Workspace");
+    try {
+      await mkdir(operationRoot, { recursive: true, mode: 0o700 });
+      let local = await exportLocal(state, localRoot);
+      const remoteResult = await (await loadTransport()).fetch(
+        { repository: state.repository, branch: state.branch },
+        remoteRoot,
+        state.baseRevision
+      );
+      const remote = remoteResult.snapshotRoot ? await descriptorAt(remoteResult.snapshotRoot) : undefined;
+      if (remote && remote.manifest.workspaceId !== state.workspaceId) {
+        if (state.baseRevision) {
+          throw new Error("The remote repository belongs to a different AgentEnv Workspace");
+        }
+        state = { ...state, workspaceId: remote.manifest.workspaceId };
+        await input.stateStore.write(state);
+        local = await exportLocal(state, localRoot);
       }
-      state = { ...state, workspaceId: remote.manifest.workspaceId };
-      await input.stateStore.write(state);
-      local = await exportLocal(state);
-    }
-    let base = await loadBase(state);
-    if (!base && remote && local.manifest.snapshotHash === remote.manifest.snapshotHash) {
-      await rm(baseRoot, { recursive: true, force: true });
-      await cp(remote.root, baseRoot, { recursive: true });
-      base = remote;
-      state = {
+      let base = await loadBase(state);
+      if (remote && local.manifest.snapshotHash === remote.manifest.snapshotHash &&
+        (base?.manifest.snapshotHash !== remote.manifest.snapshotHash || state.baseRevision !== remoteResult.revision)) {
+        await replacePathAtomically(baseRoot, (path) => cp(remote.root, path, { recursive: true }));
+        base = { root: baseRoot, manifest: remote.manifest };
+        state = {
+          ...state,
+          baseRevision: remoteResult.revision,
+          baseSnapshotHash: remote.manifest.snapshotHash
+        };
+      }
+      let plan = planWorkspaceSync({ base, local, remote, baseRevision: state.baseRevision, remoteRevision: remoteResult.revision });
+      const liveImpact = await liveImpactFor(plan);
+      plan = planWorkspaceSync({
+        base,
+        local,
+        remote,
+        baseRevision: state.baseRevision,
+        remoteRevision: remoteResult.revision,
+        ...liveImpact
+      });
+      const nextState = {
         ...state,
-        baseRevision: remoteResult.revision,
-        baseSnapshotHash: remote.manifest.snapshotHash
+        lastCheckedRevision: remoteResult.revision,
+        lastCheckedAt: new Date().toISOString()
       };
+      await input.stateStore.write(nextState);
+      const partial = { state: nextState, local, remote, base, remoteRevision: remoteResult.revision, plan, operationRoot };
+      const status = statusFor(partial);
+      lastStatus = status;
+      return { ...partial, status };
+    } catch (error) {
+      await rm(operationRoot, { recursive: true, force: true });
+      throw error;
     }
-    let plan = planWorkspaceSync({ base, local, remote, baseRevision: state.baseRevision, remoteRevision: remoteResult.revision });
-    const liveImpact = await liveImpactFor(plan);
-    plan = planWorkspaceSync({
-      base,
-      local,
-      remote,
-      baseRevision: state.baseRevision,
-      remoteRevision: remoteResult.revision,
-      ...liveImpact
-    });
-    const nextState = {
-      ...state,
-      lastCheckedRevision: remoteResult.revision,
-      lastCheckedAt: new Date().toISOString()
-    };
-    await input.stateStore.write(nextState);
-    const partial = { state: nextState, local, remote, base, remoteRevision: remoteResult.revision, plan };
-    const status = statusFor(partial);
-    lastStatus = status;
-    return { ...partial, status };
   };
 
-  const check = async () => {
+  const checkInternal = async () => {
     if (await input.transaction.isRecoveryRequired()) {
-      lastStatus = { ...lastStatus, kind: "recovery-required", message: "A Workspace update needs recovery before Sync can continue." };
+      lastStatus = { ...lastStatus, kind: "recovery-required", working: undefined, message: "A Workspace update needs recovery before Sync can continue." };
       return lastStatus;
     }
     const state = await input.stateStore.read();
     if (!state) return lastStatus = emptyStatus();
     lastStatus = { ...lastStatus, connection: { repository: state.repository, branch: state.branch }, working: "checking" };
+    let checked: CheckedWorkspace | undefined;
     try {
-      return (await performCheck()).status;
+      checked = await performCheck();
+      return checked.status;
     } catch (error) {
       return lastStatus = {
         ...lastStatus,
@@ -224,30 +240,29 @@ export const createWorkspaceSyncService = (input: {
         working: undefined,
         message: error instanceof Error ? error.message : String(error)
       };
+    } finally {
+      if (checked) await rm(checked.operationRoot, { recursive: true, force: true });
     }
   };
 
-  return {
-    readStatus: async () => {
-      if (await input.transaction.isRecoveryRequired()) {
-        return { ...lastStatus, kind: "recovery-required", message: "A Workspace update needs recovery before Sync can continue." };
-      }
-      const state = await input.stateStore.read();
-      if (!state) return emptyStatus();
-      return { ...lastStatus, connection: { repository: state.repository, branch: state.branch } };
-    },
-    connect: async (connection) => {
-      const parsed = parseWorkspaceSyncConnection(connection);
-      await input.stateStore.disconnect();
-      await input.stateStore.connect(parsed);
-      return check();
-    },
-    check,
-    review: async () => (await performCheck()).plan.review,
-    update: async (updateInput) => {
-      updateInput = parseUpdateInput(updateInput);
-      lastStatus = { ...lastStatus, working: "updating" };
-      const checked = await performCheck();
+  const reviewInternal = async () => {
+    if (await input.transaction.isRecoveryRequired()) {
+      throw new Error("Recover the interrupted Workspace update before reviewing Sync changes.");
+    }
+    const checked = await performCheck();
+    try {
+      return checked.plan.review;
+    } finally {
+      await rm(checked.operationRoot, { recursive: true, force: true });
+    }
+  };
+
+  const updateInternal = async (rawUpdateInput: WorkspaceSyncUpdateInput) => {
+    const updateInput = parseUpdateInput(rawUpdateInput);
+    lastStatus = { ...lastStatus, working: "updating" };
+    let checked: CheckedWorkspace | undefined;
+    try {
+      checked = await performCheck();
       if (!checked.remote) throw new Error("The remote Workspace is empty. Publish this Mac first.");
       if (updateInput.expectedRemoteRevision !== undefined && updateInput.expectedRemoteRevision !== checked.remoteRevision) {
         throw new Error("The remote Workspace changed. Review it again before updating this Mac.");
@@ -255,6 +270,7 @@ export const createWorkspaceSyncService = (input: {
       if (checked.plan.review.liveSkillIds.length && !updateInput.acceptLiveSkillUpdates) {
         throw new Error("This update changes linked Skills immediately. Confirm the live Agent impact first.");
       }
+      const mergedRoot = join(checked.operationRoot, "merged");
       const merged = await materializeMergedWorkspace({
         plan: checked.plan,
         local: checked.local,
@@ -264,8 +280,8 @@ export const createWorkspaceSyncService = (input: {
       });
       await validatePortableWorkspace(merged.root);
       const result = await input.transaction.apply(merged.root);
-      await rm(baseRoot, { recursive: true, force: true });
-      await cp(checked.remote.root, baseRoot, { recursive: true });
+      const previousBaseRoot = join(checked.operationRoot, "previous-base");
+      if (checked.base) await cp(checked.base.root, previousBaseRoot, { recursive: true });
       const state = {
         ...checked.state,
         baseRevision: checked.remoteRevision,
@@ -273,24 +289,51 @@ export const createWorkspaceSyncService = (input: {
         lastCheckedRevision: checked.remoteRevision,
         lastCheckedAt: new Date().toISOString()
       };
-      await input.stateStore.write(state);
+      try {
+        await replacePathAtomically(baseRoot, (path) => cp(checked!.remote!.root, path, { recursive: true }));
+        await input.stateStore.write(state);
+      } catch (stateError) {
+        try {
+          await input.transaction.restore(result.backupId);
+        } catch (restoreError) {
+          throw new Error(
+            `Workspace content changed but Sync state could not be saved, and recovery is required: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`,
+            { cause: stateError }
+          );
+        }
+        if (checked.base) {
+          await replacePathAtomically(baseRoot, (path) => cp(previousBaseRoot, path, { recursive: true })).catch(() => undefined);
+        } else {
+          await rm(baseRoot, { recursive: true, force: true }).catch(() => undefined);
+        }
+        await input.stateStore.write(checked.state).catch(() => undefined);
+        throw stateError;
+      }
       const postUpdatePlan = planWorkspaceSync({ base: checked.remote, local: merged, remote: checked.remote });
       lastStatus = { ...statusFor({ ...checked, state, local: merged, base: checked.remote, plan: postUpdatePlan }), working: undefined };
       return { status: lastStatus, backupId: result.backupId, revision: checked.remoteRevision };
-    },
-    publish: async () => {
-      lastStatus = { ...lastStatus, working: "publishing" };
-      const checked = await performCheck();
+    } catch (error) {
+      lastStatus = { ...lastStatus, working: undefined };
+      throw error;
+    } finally {
+      if (checked) await rm(checked.operationRoot, { recursive: true, force: true });
+    }
+  };
+
+  const publishInternal = async () => {
+    lastStatus = { ...lastStatus, working: "publishing" };
+    let checked: CheckedWorkspace | undefined;
+    try {
+      checked = await performCheck();
       const blockers = checked.plan.review.changes.filter((change) => change.direction === "remote" || change.direction === "conflict");
       if (blockers.length) throw new Error("Review and update this Mac before publishing over remote changes.");
       const revision = await (await loadTransport()).publish({
         connection: { repository: checked.state.repository, branch: checked.state.branch },
         snapshotRoot: checked.local.root,
         expectedRevision: checked.remoteRevision,
-        workDir: join(input.paths.workspaceSyncCacheDir, "publish")
+        workDir: join(checked.operationRoot, "publish")
       });
-      await rm(baseRoot, { recursive: true, force: true });
-      await cp(checked.local.root, baseRoot, { recursive: true });
+      await replacePathAtomically(baseRoot, (path) => cp(checked!.local.root, path, { recursive: true }));
       const state = {
         ...checked.state,
         baseRevision: revision,
@@ -309,16 +352,46 @@ export const createWorkspaceSyncService = (input: {
         immediateAgentCount: 0
       };
       return { status: lastStatus, revision };
+    } catch (error) {
+      lastStatus = { ...lastStatus, working: undefined };
+      throw error;
+    } finally {
+      if (checked) await rm(checked.operationRoot, { recursive: true, force: true });
+    }
+  };
+
+  return {
+    readStatus: async () => {
+      if (await input.transaction.isRecoveryRequired()) {
+        return { ...lastStatus, kind: "recovery-required", working: undefined, message: "A Workspace update needs recovery before Sync can continue." };
+      }
+      const state = await input.stateStore.read();
+      if (!state) return emptyStatus();
+      return {
+        ...lastStatus,
+        connection: { repository: state.repository, branch: state.branch },
+        working: lastStatus.connection ? lastStatus.working : "checking"
+      };
     },
-    recover: async () => {
+    connect: (connection) => serialize(async () => {
+      const parsed = parseWorkspaceSyncConnection(connection);
+      await input.stateStore.disconnect();
+      await input.stateStore.connect(parsed);
+      return checkInternal();
+    }),
+    check: () => serialize(checkInternal),
+    review: () => serialize(reviewInternal),
+    update: (updateInput) => serialize(() => updateInternal(updateInput)),
+    publish: () => serialize(publishInternal),
+    recover: () => serialize(async () => {
       await input.transaction.recover();
-      return check();
-    },
-    disconnect: async () => {
+      return checkInternal();
+    }),
+    disconnect: () => serialize(async () => {
       transport?.cancel();
       await input.stateStore.disconnect();
       return lastStatus = emptyStatus();
-    },
+    }),
     cancel: () => transport?.cancel(),
     dispose: () => transport?.dispose()
   };
