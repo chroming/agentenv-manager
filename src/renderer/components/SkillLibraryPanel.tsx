@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { useRepositoryImportDraft } from "../hooks/useRepositoryImportDraft";
 import type {
   GitHubSkillImportInput,
   GitHubSkillImportResult,
@@ -449,8 +450,15 @@ export const SkillLibraryPanel = ({
   const { formatDate, localeTag, t } = useI18n();
   const [githubUrl, setGithubUrl] = useState("");
   const [githubScanResult, setGithubScanResult] = useState<GitHubSkillScanResult>();
-  const [githubSelectedSources, setGithubSelectedSources] = useState<string[]>([]);
-  const [githubCandidateIds, setGithubCandidateIds] = useState<Record<string, string>>({});
+  const {
+    selectedSources: githubSelectedSources,
+    candidateIds: githubCandidateIds,
+    reconcileCandidates: reconcileRepositoryCandidates,
+    selectAll: selectAllRepositoryCandidates,
+    selectSource: selectRepositoryCandidate,
+    setCandidateId: setRepositoryCandidateId,
+    reset: resetRepositoryImportDraft
+  } = useRepositoryImportDraft();
   const [githubImportResult, setGithubImportResult] = useState<GitHubSkillImportResult>();
   const [githubImportProgress, setGithubImportProgress] = useState<
     Record<string, GitHubSkillImportProgress>
@@ -768,8 +776,7 @@ export const SkillLibraryPanel = ({
     }
     setImportSource("local");
     setGithubScanResult(undefined);
-    setGithubSelectedSources([]);
-    setGithubCandidateIds({});
+    resetRepositoryImportDraft();
     setGithubImportResult(undefined);
     setGithubImportProgress({});
     setGithubOperationError("");
@@ -1208,12 +1215,7 @@ export const SkillLibraryPanel = ({
         result = await scanWithSystemGit();
       }
       setGithubScanResult(result);
-      setGithubSelectedSources(
-        result.candidates.filter((candidate) => candidate.status === "ready").map((candidate) => candidate.sourceUrl)
-      );
-      setGithubCandidateIds(
-        Object.fromEntries(result.candidates.map((candidate) => [candidate.sourceUrl, candidate.id]))
-      );
+      reconcileRepositoryCandidates(result.candidates);
     } catch (error) {
       setGithubOperationError(error instanceof Error ? error.message : String(error));
       setGithubApiRetryAvailable(
@@ -4002,6 +4004,7 @@ export const SkillLibraryPanel = ({
                           setRepositoryScanKind(undefined);
                           setRepositoryScanSummary("");
                           setRepositoryCandidateInputs({});
+                          resetRepositoryImportDraft();
                         }}
                       >
                         {t("Change source")}
@@ -4029,11 +4032,7 @@ export const SkillLibraryPanel = ({
                               checkbox.indeterminate = githubSomeReadySelected;
                             }
                           }}
-                          onChange={(event) =>
-                            setGithubSelectedSources(
-                              event.currentTarget.checked ? githubReadyCandidateSources : []
-                            )
-                          }
+                          onChange={(event) => selectAllRepositoryCandidates(event.currentTarget.checked)}
                         />
                         <span>{t("Select all")}</span>
                       </label>
@@ -4128,11 +4127,7 @@ export const SkillLibraryPanel = ({
                                 checked={checked}
                                 onChange={(event) => {
                                   const checked = event.currentTarget.checked;
-                                  setGithubSelectedSources((current) =>
-                                    checked
-                                      ? [...current, candidate.sourceUrl]
-                                      : current.filter((sourceUrl) => sourceUrl !== candidate.sourceUrl)
-                                  );
+                                  selectRepositoryCandidate(candidate.sourceUrl, checked);
                                 }}
                               />
                             )}
@@ -4181,10 +4176,7 @@ export const SkillLibraryPanel = ({
                                 value={githubCandidateIds[candidate.sourceUrl] ?? candidate.id}
                                 onChange={(event) => {
                                   const value = event.currentTarget.value;
-                                  setGithubCandidateIds((current) => ({
-                                    ...current,
-                                    [candidate.sourceUrl]: value
-                                  }));
+                                  setRepositoryCandidateId(candidate.sourceUrl, value);
                                 }}
                               />
                             ) : (
