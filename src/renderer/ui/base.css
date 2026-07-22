@@ -14,6 +14,13 @@ body {
 
 strong,
 b {
+  font-weight: inherit;
+}
+
+h1,
+h2,
+h3,
+h4 {
   font-weight: var(--font-weight-semibold);
 }
 
@@ -61,7 +68,7 @@ body,
   color: var(--warning-strong);
   display: inline-flex;
   font-size: 18px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   height: 36px;
   justify-content: center;
   width: 36px;
@@ -126,7 +133,7 @@ button {
   cursor: pointer;
   display: inline-flex;
   font-size: 13px;
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
   justify-content: center;
   line-height: 1.2;
   min-height: var(--control-height-default);

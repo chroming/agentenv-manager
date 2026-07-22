@@ -99,7 +99,7 @@
   color: var(--text);
   display: inline-flex;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   gap: 7px;
   min-height: 36px;
   max-width: 190px;
@@ -154,7 +154,7 @@
   color: #875a08;
   display: inline-flex;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   gap: 7px;
   white-space: nowrap;
 }
@@ -450,7 +450,7 @@
   align-items: center;
   display: flex;
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   gap: 6px;
   line-height: 17px;
   min-width: 0;
@@ -467,7 +467,7 @@
 
 .profile-row__title strong {
   font-size: 9px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 16px;
   padding: 0 5px;
 }
@@ -529,7 +529,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 9px;
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
   gap: 3px;
   height: 18px;
   min-width: 0;
@@ -642,7 +642,7 @@
   border: 0;
   border-radius: 0;
   color: var(--muted);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
   padding-inline: 0;
 }
 
@@ -701,7 +701,7 @@
   color: #64748b;
   display: inline-flex;
   font-size: 10px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   gap: 5px;
   justify-content: flex-end;
   line-height: 16px;
@@ -812,7 +812,7 @@
 
 .profile-composer-section__title {
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   line-height: 18px;
 }
 
@@ -825,7 +825,7 @@
   background: transparent;
   color: var(--muted);
   display: inline-flex;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   font-variant-numeric: tabular-nums;
   justify-content: center;
   line-height: 22px;
@@ -903,7 +903,7 @@
 
 .preview-header .section-title {
   font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 20px;
   text-transform: none;
 }
@@ -963,7 +963,7 @@
   color: var(--text);
   display: grid;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   gap: 2px;
   line-height: 18px;
   margin: 3px 0 0;
@@ -975,7 +975,7 @@
 .preview-summary-card .preview-shared-skill-change small {
   color: var(--muted);
   font-family: inherit;
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
   margin: 0;
 }
 
@@ -1024,7 +1024,7 @@
 .preview-resource-plan__title > span {
   color: var(--muted);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .preview-resource-plan > header strong,
@@ -1066,7 +1066,7 @@
   display: flex;
   flex: 0 0 28px;
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   gap: 5px;
   justify-content: center;
   min-height: 28px;
@@ -1110,7 +1110,7 @@
   cursor: pointer;
   display: flex;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   justify-content: space-between;
   min-height: 38px;
   padding: 8px 11px;
@@ -1148,7 +1148,7 @@
 .preview-preserve-details .warning > span:first-child {
   color: var(--text);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .preview-dialog--modal .diff-list {
@@ -1387,6 +1387,7 @@
 .profile-skill-summary strong {
   color: var(--text);
   font-size: 13px;
+  font-weight: var(--font-weight-medium);
 }
 
 .profile-skill-summary span {
@@ -1476,7 +1477,7 @@
   color: var(--text);
   display: block;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1521,13 +1522,13 @@
 
 .profile-skill-state strong {
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .profile-skill-state small {
   color: var(--muted);
   font-size: 10px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .profile-skill-state.is-neutral {

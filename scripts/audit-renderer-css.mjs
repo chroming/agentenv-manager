@@ -24,6 +24,7 @@ const files = (await listCssFiles(rendererRoot))
 const rendererIndex = await readFile(resolve(rendererRoot, "ui/index.css"), "utf8");
 const baseStyles = await readFile(resolve(rendererRoot, "ui/base.css"), "utf8");
 const baseButtonBlock = baseStyles.match(/(?:^|\n)button\s*\{([\s\S]*?)\}/)?.[1] ?? "";
+const baseStrongBlock = baseStyles.match(/(?:^|\n)strong,\s*\nb\s*\{([\s\S]*?)\}/)?.[1] ?? "";
 const primitiveRootSelectors = new Set([
   ".ui-action-menu",
   ".ui-badge",
@@ -70,6 +71,7 @@ for (const file of files) {
     importantDeclarations: (content.match(/!important\b/g) ?? []).length,
     rawNumericLayers: [...content.matchAll(/z-index:\s*([0-9]+)/g)].map((match) => Number(match[1])),
     hardcodedRadii,
+    semiboldDeclarations: (content.match(/font-weight:\s*var\(--font-weight-semibold\)/g) ?? []).length,
     heavyNumericFontWeights: [...content.matchAll(/font-weight:\s*([0-9]+)/g)]
       .map((match) => Number(match[1]))
       .filter((value) => value > 650),
@@ -114,6 +116,10 @@ const result = {
     rawNumericLayers: reports.flatMap((report) => report.rawNumericLayers),
     hardcodedRadii: reports.flatMap((report) =>
       report.hardcodedRadii.map((value) => ({ file: report.file, value }))
+    ),
+    semiboldDeclarations: reports.reduce(
+      (total, report) => total + report.semiboldDeclarations,
+      0
     ),
     heavyNumericFontWeights: reports.flatMap((report) =>
       report.heavyNumericFontWeights.map((value) => ({ file: report.file, value }))
@@ -173,6 +179,12 @@ if (shouldCheck) {
       ? `Interface font weights above 650 are not allowed: ${result.totals.heavyNumericFontWeights
           .map(({ file, value }) => `${file} (${value})`)
           .join(", ")}`
+      : undefined,
+    result.totals.semiboldDeclarations > 8
+      ? "Semibold emphasis exceeds the product-wide typography budget"
+      : undefined,
+    !/font-weight:\s*inherit/.test(baseStrongBlock)
+      ? "Strong elements must inherit by default; components own visual emphasis"
       : undefined,
     importantOutsideAccessibility.length > 0
       ? `!important is only allowed in accessibility.css: ${importantOutsideAccessibility

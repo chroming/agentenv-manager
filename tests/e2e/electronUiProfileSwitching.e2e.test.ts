@@ -3450,10 +3450,10 @@ describe("Electron UI profile switching e2e", () => {
         profileButtonsMatch: true,
         profileLanesAligned: true,
         typography: {
-          action: "500",
+          action: "400",
           health: "400",
-          lifecycle: "500",
-          name: "600",
+          lifecycle: "400",
+          name: "500",
           pageTitle: "650"
         }
       });

@@ -31,7 +31,7 @@ html[data-platform="darwin"] {
 
 .page-header.ui-page-header .ui-button {
   font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
 }
 
 .global-sidebar {
@@ -151,7 +151,7 @@ html[data-platform="darwin"] {
 .agent-overflow-popover__copy strong {
   color: var(--text);
   font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 
 .agent-overflow-popover__copy small {
@@ -211,7 +211,7 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 }
 
 .nav-section-label {
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
   letter-spacing: 0;
   line-height: 13px;
 }
@@ -219,7 +219,7 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 .workspace-button > span:not(.workspace-button__icon) {
   align-self: center;
   font-size: 13px;
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
   line-height: 16px;
 }
 
@@ -234,7 +234,7 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 }
 
 .workspace-button.is-active > span:not(.workspace-button__icon) {
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 
 .workspace-button:hover:not(:disabled) {
@@ -370,7 +370,7 @@ html[data-platform="darwin"] .window-drag-strip {
   color: var(--accent);
   display: inline-flex;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   margin-top: 6px;
   min-height: 24px;
   padding: 0;

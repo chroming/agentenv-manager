@@ -133,7 +133,7 @@ h2 {
 .target-picker span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   text-transform: uppercase;
 }
 
@@ -197,7 +197,7 @@ h2 {
 
 .workspace-button span {
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .workspace-button small {
@@ -280,7 +280,7 @@ h2 {
 .target-check span {
   color: var(--muted);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   text-transform: uppercase;
 }
 
@@ -333,7 +333,7 @@ h2 {
 
 .profile-row__title {
   color: var(--text);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -370,7 +370,7 @@ h2 {
   border-radius: var(--radius-pill);
   color: #536176;
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   max-width: 100%;
   overflow: hidden;
   padding: 4px 7px;
@@ -452,7 +452,7 @@ h2 {
 .profile-stat span {
   color: var(--muted);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   text-transform: uppercase;
 }
 
@@ -522,7 +522,7 @@ h2 {
 .field-block > span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -794,7 +794,7 @@ h2 {
 .profile-form-grid label span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .profile-form-grid .field-error {
@@ -856,7 +856,7 @@ h2 {
 .capture-dialog__eyebrow {
   color: var(--accent);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .capture-dialog__header h2 {
@@ -893,7 +893,7 @@ h2 {
 .capture-field > span {
   color: var(--text-secondary);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .capture-target-row,
@@ -922,7 +922,7 @@ h2 {
 .capture-review__target small {
   color: var(--muted);
   font-size: 10px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   text-transform: uppercase;
 }
 
@@ -1101,7 +1101,7 @@ h2 {
   color: var(--accent);
   font-size: 10px;
   font-style: normal;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   white-space: nowrap;
 }
 
@@ -1189,7 +1189,7 @@ h2 {
   border: 0;
   color: var(--danger);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   min-height: 28px;
   padding: 0 4px;
   white-space: nowrap;
@@ -1437,7 +1437,7 @@ textarea[aria-label="opencode.jsonc"] {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     monospace;
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1532,7 +1532,7 @@ summary {
   color: var(--text);
   cursor: pointer;
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .diff-viewer {
@@ -1561,7 +1561,7 @@ summary {
   border-radius: var(--radius-pill);
   flex: 0 0 auto;
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 1;
   padding: 5px 8px;
 }
@@ -1649,7 +1649,7 @@ summary {
 }
 
 .diff-marker {
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   text-align: center;
 }
 
@@ -1768,7 +1768,7 @@ summary {
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   min-height: 28px;
   padding: 0 10px;
 }
@@ -1924,7 +1924,7 @@ summary {
 .update-change-list summary {
   cursor: pointer;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   padding: 8px 10px;
 }
 
@@ -2002,7 +2002,7 @@ summary {
   color: var(--subtle);
   display: grid;
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   padding: 0 10px;
@@ -2012,7 +2012,7 @@ summary {
 .resource-heading {
   color: var(--text);
   font-size: 14px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 1.3;
 }
 
@@ -2033,7 +2033,7 @@ summary {
 
 .resource-row__main span {
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 1.3;
 }
 
@@ -2080,7 +2080,7 @@ summary {
 .resource-status {
   border-radius: var(--radius-pill);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 1;
   padding: 6px 8px;
   white-space: nowrap;
@@ -2240,7 +2240,7 @@ summary {
 .resource-legend {
   color: var(--muted);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   padding: 0 4px;
   text-transform: uppercase;
 }
@@ -2264,7 +2264,7 @@ summary {
 .history-row span,
 .owned-skill span {
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .history-actions {
@@ -2388,7 +2388,7 @@ summary {
 .system-target-row span,
 .sidebar-user strong {
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .user-avatar {
@@ -2398,7 +2398,7 @@ summary {
   color: #fff;
   display: inline-flex;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   height: 32px;
   justify-content: center;
   width: 32px;
@@ -2502,7 +2502,7 @@ summary {
 .library-search span {
   color: var(--muted);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   text-transform: uppercase;
 }
 
@@ -2523,7 +2523,7 @@ summary {
   border-bottom: 1px solid var(--border);
   color: #475569;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   padding: 11px 16px;
 }
 
@@ -2563,7 +2563,7 @@ summary {
   border-radius: var(--radius-surface);
   color: #fff;
   display: inline-flex;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   height: 34px;
   justify-content: center;
   width: 34px;
@@ -2665,7 +2665,7 @@ summary {
 
 .brand-lockup h1 {
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .brand-lockup .muted {
@@ -2681,7 +2681,7 @@ summary {
 .nav-section-label {
   color: #98a2b3;
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   letter-spacing: 0.04em;
   margin: 16px 8px 6px;
   text-transform: uppercase;
@@ -2701,7 +2701,7 @@ summary {
 
 .workspace-button span:not(.workspace-button__icon) {
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .workspace-button__icon {
@@ -2711,7 +2711,7 @@ summary {
   color: #64748b;
   display: inline-flex;
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   height: 24px;
   justify-content: center;
   width: 24px;
@@ -2769,7 +2769,7 @@ summary {
   color: #334155;
   display: inline-flex;
   font-size: 10px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   height: 28px;
   justify-content: center;
   line-height: 1;
@@ -2825,7 +2825,7 @@ summary {
 
 .breadcrumb-separator {
   color: #94a3b8;
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
 }
 
 .page-header .muted {
@@ -2896,7 +2896,7 @@ summary {
   border-radius: var(--radius-dialog);
   display: inline-flex;
   font-size: 14px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   height: 38px;
   justify-content: center;
   width: 38px;
@@ -2940,7 +2940,7 @@ summary {
 .metric-tile small {
   color: #64748b;
   display: block;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3108,7 +3108,7 @@ summary {
   color: #0f172a;
   display: block;
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   letter-spacing: 0;
   line-height: 1.24;
   overflow: hidden;
@@ -3192,7 +3192,7 @@ summary {
   color: #fff;
   display: inline-flex;
   font-size: 10px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   height: 18px;
   justify-content: center;
   width: 18px;
@@ -3330,7 +3330,7 @@ summary {
 .profile-target-filter span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   text-transform: uppercase;
 }
 
@@ -3679,7 +3679,7 @@ summary {
   background: #eafaf1;
   border-radius: var(--radius-pill);
   color: #168455;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   padding: 5px 8px;
 }
 
@@ -3705,7 +3705,7 @@ summary {
 .profile-section-heading {
   color: var(--text);
   font-size: 14px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .target-management-card {
@@ -3754,7 +3754,7 @@ summary {
 .target-management-card__meta {
   color: var(--subtle);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .resource-overview-grid {
@@ -3811,7 +3811,7 @@ summary {
 
 .resource-overview-card span {
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .resource-overview-card small {
@@ -4016,7 +4016,7 @@ summary {
 }
 
 .target-management-strip__meta {
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   grid-column: 2;
   justify-self: start;
   white-space: nowrap;
@@ -4293,7 +4293,7 @@ button svg,
   display: inline-flex;
   gap: 7px;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   list-style: none;
 }
 
@@ -4360,7 +4360,7 @@ button svg,
 .mcp-server-form select,
 .profile-form-grid select {
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .library-toolbar select {
@@ -4449,7 +4449,7 @@ button svg,
   color: #94a3b8;
   content: "Version";
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .library-version-cell strong,
@@ -4681,7 +4681,7 @@ button svg,
   color: #64748b;
   display: flex;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   gap: 8px;
   min-height: 44px;
   padding: 10px 12px;
@@ -4781,7 +4781,7 @@ button svg,
 .row-action-item small {
   color: #64748b;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   white-space: normal;
 }
 
@@ -4805,7 +4805,7 @@ button svg,
   background: transparent;
   color: #334155;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   min-height: 24px;
   padding: 0;
 }
@@ -4969,7 +4969,7 @@ button svg,
 .profile-apply-label {
   color: #475569;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   white-space: nowrap;
 }
 
@@ -5251,7 +5251,7 @@ button svg,
 .profile-composer-section__management .ui-switch__label {
   color: var(--muted-strong);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .profile-composer-section__disclosure {
@@ -5296,7 +5296,7 @@ button svg,
 .profile-composer-section__title {
   color: var(--text);
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .profile-composer-section__description {
@@ -5313,7 +5313,7 @@ button svg,
   border-radius: var(--radius-pill);
   color: var(--accent);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 22px;
   min-width: 22px;
   padding: 0 6px;
@@ -5546,7 +5546,7 @@ button svg,
   color: #94a3b8;
   content: "Version";
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .library-version-cell strong {
@@ -5623,7 +5623,7 @@ button svg,
 
 .library-row-inline-action span {
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 1;
 }
 

@@ -22,7 +22,7 @@
 .profile-mcp-toolbar > span:first-child {
   color: var(--muted);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .profile-mcp-toolbar__actions .secondary-action {
@@ -75,7 +75,7 @@
 .profile-mcp-row__identity strong {
   color: var(--text);
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
 }
 
 .profile-mcp-row__identity small,
@@ -113,7 +113,7 @@
 .profile-mcp-mode.is-profile-override {
   border-color: #b9cff3;
   color: var(--text);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .profile-mcp-readonly,

@@ -203,13 +203,13 @@
 
 .backup-status.is-eligible {
   color: var(--warning);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .backup-status.is-required,
 .backup-required-lock {
   color: var(--text-secondary);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .backup-row-delete {
@@ -422,6 +422,7 @@
 .agent-settings-copy strong {
   color: var(--text);
   font-size: 13px;
+  font-weight: var(--font-weight-medium);
   line-height: 18px;
 }
 
@@ -512,6 +513,7 @@
 .settings-preference-copy strong {
   color: var(--text);
   font-size: 13px;
+  font-weight: var(--font-weight-medium);
   line-height: 18px;
 }
 
@@ -547,7 +549,7 @@
   color: var(--muted);
   cursor: pointer;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .agent-path-list {
@@ -565,7 +567,7 @@
   color: var(--muted);
   cursor: pointer;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .agent-path-settings[open] > summary {
@@ -862,7 +864,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   gap: 6px;
   min-height: 28px;
   padding: 0 10px;
@@ -898,7 +900,7 @@
 .workspace-sync-connect label > span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .workspace-sync-connect input {
@@ -920,7 +922,7 @@
 
 .workspace-sync-repository {
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -977,7 +979,7 @@
 .workspace-sync-review-title {
   color: var(--text);
   font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   line-height: 1.25;
 }
 
@@ -1015,7 +1017,7 @@
 .workspace-sync-change-title {
   color: var(--text);
   font-size: 13px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .workspace-sync-change small {
@@ -1027,7 +1029,7 @@
 .workspace-sync-direction {
   color: var(--muted);
   font-size: 11px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   text-transform: capitalize;
 }
 

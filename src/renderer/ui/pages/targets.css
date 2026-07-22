@@ -26,7 +26,7 @@
   color: #526176;
   display: inline-flex;
   font-size: 10px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
   height: 18px;
   justify-content: center;
   min-width: 18px;
@@ -143,12 +143,12 @@
 .target-health-status--needs-setup,
 .target-health-status--guarded {
   color: var(--warning);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .target-health-status--missing {
   color: var(--danger);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-regular);
 }
 
 .target-workflow-icon {
@@ -182,7 +182,7 @@
 
 .target-workflow-name-line > strong {
   font-size: 15px;
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -220,7 +220,7 @@
 
 .target-workflow-summary > strong {
   color: var(--text);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-regular);
 }
 
 .target-workflow-summary > span {
