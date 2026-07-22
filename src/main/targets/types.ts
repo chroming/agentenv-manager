@@ -13,6 +13,7 @@ import type {
 export interface TargetPathInput {
   homeDir: string;
   fakeHomeRoot?: string;
+  rootDirOverride?: string;
 }
 
 export interface TargetAssetInput {

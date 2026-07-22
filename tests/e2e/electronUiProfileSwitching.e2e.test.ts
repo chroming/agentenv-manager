@@ -608,6 +608,13 @@ const launchApp = async (
   const page = await app.firstWindow();
   await page.setViewportSize({ width: 1440, height: 960 });
   await page.waitForLoadState("domcontentloaded");
+  await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus()), {
+    timeout: 15_000
+  }).toEqual({ state: "ready" });
+  await page.getByRole("complementary", { name: "Global navigation" }).waitFor({
+    state: "visible",
+    timeout: 15_000
+  });
 
   return {
     app,
@@ -1265,7 +1272,7 @@ describe("Electron UI profile switching e2e", () => {
       for (let run = 0; run < 4; run += 1) {
         const startedAt = await page.evaluate(() => performance.now());
         await updatesTab.click();
-        await expect.poll(() => allRows.count()).toBe(testCase.count + 1);
+        await expect.poll(() => allRows.count()).toBe(testCase.count);
         const duration = (await page.evaluate(() => performance.now())) - startedAt;
         if (run > 0) filterRuns.push(duration);
         await allTab.click();
@@ -5147,6 +5154,8 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Settings" }).click();
     await page.getByLabel("Global skill sync method").selectOption("copy");
     const autoCheck = page.getByRole("switch", { name: "Skill auto update check" });
+    await autoCheck.waitFor({ state: "visible" });
+    await expect.poll(() => autoCheck.isEnabled()).toBe(true);
     if ((await autoCheck.getAttribute("aria-checked")) === "true") {
       await autoCheck.click();
     }

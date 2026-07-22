@@ -18,6 +18,9 @@ interface AgentSettingsSectionProps {
   busy: boolean;
   onSetEnabled(agentId: string, enabled: boolean): Promise<void>;
   onOpenRecovery(): void;
+  configRoots: Record<string, string>;
+  onChooseConfigRoot(agentId: string): Promise<void>;
+  onResetConfigRoot(agentId: string): Promise<void>;
 }
 
 const healthLabel: Record<TargetInfo["health"]["status"], string> = {
@@ -34,7 +37,10 @@ export const AgentSettingsSection = ({
   agentStates,
   busy,
   onSetEnabled,
-  onOpenRecovery
+  onOpenRecovery,
+  configRoots,
+  onChooseConfigRoot,
+  onResetConfigRoot
 }: AgentSettingsSectionProps) => {
   const { t } = useI18n();
   const [disableCandidate, setDisableCandidate] = useState<TargetDescriptor>();
@@ -137,6 +143,36 @@ export const AgentSettingsSection = ({
             );
           })}
         </div>
+        <details className="agent-path-settings">
+          <summary>{t("Advanced paths")}</summary>
+          <p className="settings-muted">
+            {t("Override one Agent configuration root. AgentEnv will rescan it before any operation.")}
+          </p>
+          <div className="agent-path-list">
+            {supportedAgents.map((agent) => {
+              const customRoot = configRoots[agent.id];
+              const defaultRoot = agentsById.get(agent.id)?.paths.configDir;
+              return (
+                <div className="agent-path-row" key={agent.id}>
+                  <span className="agent-path-copy">
+                    <strong>{agent.name}</strong>
+                    <code title={customRoot ?? defaultRoot}>
+                      {customRoot
+                        ? `${t("Custom")} · ${customRoot.split(/[\\/]/).filter(Boolean).slice(-2).join("/")}`
+                        : t("Default location")}
+                    </code>
+                  </span>
+                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void onChooseConfigRoot(agent.id)}>
+                    {t("Choose")}
+                  </button>
+                  <button className="text-action" type="button" disabled={busy || !customRoot} onClick={() => void onResetConfigRoot(agent.id)}>
+                    {t("Reset")}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </details>
       </section>
 
       {disableCandidate ? (

@@ -263,6 +263,19 @@ export const registerIpcHandlers = ({
       : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
+  ipcMain.handle("dialog:select-target-config-root", async (event, targetId: unknown) => {
+    const id = parseId(targetId, "target id");
+    const target = targetRegistry.get(id).descriptor;
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: `Select ${target.name} configuration folder`,
+      properties: ["openDirectory", "createDirectory"] as Array<"openDirectory" | "createDirectory">
+    };
+    const result = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+    return result.canceled ? undefined : result.filePaths[0];
+  });
   ipcMain.handle("targets:list", (_event, forceRefresh: unknown) =>
     targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true })
   );
@@ -788,6 +801,10 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:preview-update", (_event, id: unknown) =>
     skillLibraryStore.previewUpdate(parseId(id, "skill id"))
   );
+  ipcMain.handle("skills:preview-updates", (_event, ids: unknown) => {
+    if (!Array.isArray(ids)) throw new Error("Skill update preview requires a list of Skill ids");
+    return skillLibraryStore.previewUpdates(ids.map((id) => parseId(id, "skill id")));
+  });
   handleMutation("skills:update-library", (_event, input: SkillUpdateConfirmation) => {
     if (!input || typeof input !== "object" || typeof input.previewId !== "string") {
       throw new Error("Skill update confirmation requires a preview");
@@ -798,9 +815,31 @@ export const registerIpcHandlers = ({
     });
   });
   handleMutation("settings:read", () => settingsStore.readSettings());
-  handleMutation("settings:update", (_event, input: unknown) =>
-    settingsStore.updateSettings(input && typeof input === "object" ? input : {})
-  );
+  handleMutation("settings:update", async (_event, input: unknown) => {
+    const nextInput = input && typeof input === "object"
+      ? input as Partial<import("../shared/types").AgentEnvSettings>
+      : {};
+    if (nextInput.targetConfigRoots) {
+      const current = await settingsStore.readSettings();
+      const changedTargetIds = new Set([
+        ...Object.keys(current.targetConfigRoots ?? {}),
+        ...Object.keys(nextInput.targetConfigRoots)
+      ].filter((targetId) =>
+        current.targetConfigRoots?.[targetId] !== nextInput.targetConfigRoots?.[targetId]
+      ));
+      if (changedTargetIds.size > 0) {
+        const managed = (await activationService.listTargetStates()).find(
+          (state) => changedTargetIds.has(state.targetId) && state.lifecycleStatus !== "unmanaged"
+        );
+        if (managed) {
+          throw new Error(
+            `Stop managing ${targetRegistry.get(managed.targetId).descriptor.name} before changing its configuration folder`
+          );
+        }
+      }
+    }
+    return settingsStore.updateSettings(nextInput);
+  });
   ipcMain.handle("workspace-sync:status", () => workspaceSyncService.readStatus());
   handleWorkspaceSyncMutation("workspace-sync:connect", (_event, input: unknown) =>
     workspaceSyncService.connect(input as import("../shared/workspaceSync").WorkspaceSyncConnectInput)

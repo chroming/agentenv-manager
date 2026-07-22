@@ -1,5 +1,5 @@
 import { cp, mkdir, readdir, readFile, rename } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
 import type { AgentEnvSettings } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
@@ -14,7 +14,8 @@ export const SettingsSchema = z.object({
   skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
-  projectSkillRoots: z.array(z.string().min(1)).max(20).optional()
+  projectSkillRoots: z.array(z.string().min(1)).max(20).optional(),
+  targetConfigRoots: z.record(z.string().min(1), z.string().min(1)).optional()
 });
 
 export const parseSettingsData = (value: unknown): AgentEnvSettings =>
@@ -117,7 +118,21 @@ export const createSettingsStore = (
     const enabledTargetIds =
       settings.enabledTargetIds ??
       (options.supportedTargetIds ? [...new Set(options.supportedTargetIds)] : undefined);
-    return enabledTargetIds ? { ...settings, enabledTargetIds } : settings;
+    const targetConfigRoots = Object.fromEntries(
+      Object.entries(settings.targetConfigRoots ?? {})
+        .filter(([targetId, path]) =>
+          (!options.supportedTargetIds || options.supportedTargetIds.includes(targetId)) &&
+          isAbsolute(path)
+        )
+        .map(([targetId, path]) => [targetId, resolve(path)])
+    );
+    const normalized: AgentEnvSettings = {
+      ...settings,
+      ...(enabledTargetIds ? { enabledTargetIds } : {})
+    };
+    if (Object.keys(targetConfigRoots).length > 0) normalized.targetConfigRoots = targetConfigRoots;
+    else delete normalized.targetConfigRoots;
+    return normalized;
   };
 
   const readSettings = async (): Promise<AgentEnvSettings> => {
@@ -153,6 +168,9 @@ export const createSettingsStore = (
     const current = await readSettings();
     if (input.skillStorageLocation === "agents") {
       throw new Error("~/.agents/skills is reserved for shared runtime installs");
+    }
+    for (const path of Object.values(input.targetConfigRoots ?? {})) {
+      if (!isAbsolute(path)) throw new Error("Agent configuration roots must use absolute paths");
     }
     const next = normalizeEnabledTargets(
       SettingsSchema.parse({ ...current, ...input, skillStorageLocation: "appData" })

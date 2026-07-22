@@ -93,6 +93,18 @@ describe("settings store", () => {
     );
   });
 
+  it("normalizes per-Agent configuration roots and rejects relative paths", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-settings-roots-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const store = createSettingsStore(paths, { supportedTargetIds: ["codex"] });
+    const customRoot = join(root, "custom", "..", "codex-home");
+
+    await expect(store.updateSettings({ targetConfigRoots: { codex: customRoot } }))
+      .resolves.toMatchObject({ targetConfigRoots: { codex: join(root, "codex-home") } });
+    await expect(store.updateSettings({ targetConfigRoots: { codex: "relative/path" } }))
+      .rejects.toThrow("absolute paths");
+  });
+
   it("migrates legacy Library originals out of the shared runtime without deleting it", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-settings-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

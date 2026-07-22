@@ -1,7 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { AGENTENV_RUNTIME_VERSION, isAgentEnvRuntimeCompatible } from "../shared/runtimeVersion";
-import { App } from "./App";
+import { StartupGate } from "./StartupGate";
 import "./ui/index.css";
 
 const runtimeApi = window.agentEnv as Partial<typeof window.agentEnv> | undefined;
@@ -40,6 +40,6 @@ const runtimeMismatch = (
 
 createRoot(root).render(
   <React.StrictMode>
-    {isAgentEnvRuntimeCompatible(runtimeApi?.runtimeVersion) ? <App /> : runtimeMismatch}
+    {isAgentEnvRuntimeCompatible(runtimeApi?.runtimeVersion) ? <StartupGate /> : runtimeMismatch}
   </React.StrictMode>
 );

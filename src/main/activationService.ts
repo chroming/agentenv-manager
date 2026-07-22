@@ -75,6 +75,7 @@ import {
 import { redactSensitiveValues } from "./secretWarnings";
 import { defaultTargetState, parseTargetState } from "./targetState";
 import { createCaptureReceiptStore } from "./captureReceiptStore";
+import { targetPathInputFor } from "./targets/pathInput";
 import {
   buildSkillDeploymentPlan,
   fingerprintSkillInventory,
@@ -458,12 +459,12 @@ export const createActivationService = ({
   settingsStore = createSettingsStore(paths),
   targetScope = createTargetScope(targetRegistry, settingsStore),
   skillLibraryStore = createSkillLibraryStore(paths, settingsStore, {
-    targetPathsProvider: () => targetRegistry.listAdapters().map((adapter) =>
-      adapter.createTargetPaths({
-        homeDir: paths.homeDir,
-        fakeHomeRoot: paths.fakeHomeRoot
-      })
-    ),
+    targetPathsProvider: async () => {
+      const settings = await settingsStore.readSettings();
+      return targetRegistry.listAdapters().map((adapter) =>
+        adapter.createTargetPaths(targetPathInputFor(paths, settings, adapter.descriptor.id))
+      );
+    },
     runtimeSnapshotProvider: (targetPaths) =>
       targetRegistry.get(targetPaths.targetId).skills.inspectRuntime(targetPaths)
   })
@@ -474,6 +475,11 @@ export const createActivationService = ({
   const stopManagingPreviews = new Map<string, StopManagingPreview>();
   const rollbackPreviewFingerprints = new Map<string, Record<string, string | undefined>>();
   const activeTargetOperations = new Set<string>();
+  const targetPathsFor = async (targetId: string) => {
+    const adapter = targetRegistry.get(targetId);
+    const settings = await settingsStore.readSettings();
+    return adapter.createTargetPaths(targetPathInputFor(paths, settings, targetId));
+  };
 
   const statePathFor = (targetId: string) =>
     join(paths.targetStatesDir, `${targetId}.json`);
@@ -485,10 +491,7 @@ export const createActivationService = ({
       (id): id is string => Boolean(id)
     );
     for (const targetId of targetIds) {
-      const targetPaths = targetRegistry.get(targetId).createTargetPaths({
-        homeDir: paths.homeDir,
-        fakeHomeRoot: paths.fakeHomeRoot
-      });
+      const targetPaths = await targetPathsFor(targetId);
       exactPaths.add(resolve(targetPaths.instructionsPath));
       exactPaths.add(resolve(targetPaths.configPath));
       exactPaths.add(resolve(statePathFor(targetId)));
@@ -1029,10 +1032,7 @@ export const createActivationService = ({
       targetId,
       adapter.descriptor.capabilities.mcpActivation === true
     );
-    const targetPaths = adapter.createTargetPaths({
-      homeDir: paths.homeDir,
-      fakeHomeRoot: paths.fakeHomeRoot
-    });
+    const targetPaths = await targetPathsFor(targetId);
     const skillRootInspection = managesSkills
       ? await inspectSkillRoot(targetPaths.skillsDir)
       : undefined;
@@ -1423,10 +1423,7 @@ export const createActivationService = ({
           errors: ["Library Skill availability changed after preview; review the latest version"]
         };
       }
-      const targetPaths = adapter.createTargetPaths({
-        homeDir: paths.homeDir,
-        fakeHomeRoot: paths.fakeHomeRoot
-      });
+      const targetPaths = await targetPathsFor(preview.targetId);
       const currentStateFile = await readTargetStateFile(preview.targetId);
       if (fingerprintTargetState(currentStateFile.state) !== preview.targetStateFingerprint) {
         return {
@@ -1796,10 +1793,7 @@ export const createActivationService = ({
 
       for (const targetId of targetIds) {
         const adapter = targetRegistry.get(targetId);
-        const targetPaths = adapter.createTargetPaths({
-          homeDir: paths.homeDir,
-          fakeHomeRoot: paths.fakeHomeRoot
-        });
+        const targetPaths = await targetPathsFor(targetId);
         if (!targetPaths.skillsDir) {
           throw new Error(`${adapter.descriptor.name} does not expose a skills directory.`);
         }
@@ -2336,10 +2330,7 @@ export const createActivationService = ({
     activeTargetOperations.add(targetId);
     try {
       const adapter = targetRegistry.get(targetId);
-      const targetPaths = adapter.createTargetPaths({
-        homeDir: paths.homeDir,
-        fakeHomeRoot: paths.fakeHomeRoot
-      });
+      const targetPaths = await targetPathsFor(targetId);
       const captured = await adapter.captureProfile(targetPaths);
       const adopted: AdoptTargetChangesResult["adopted"] = [];
       const skipped = [...captured.excluded];

@@ -903,6 +903,11 @@ const AppContent = ({
     setLibrarySkills((current) =>
       current.map((skill) => updatesById.get(skill.id) ?? skill)
     );
+    setSkillInventory((current) => current.map((item) =>
+      item.installMethod === "copied" && item.libraryId && updatesById.has(item.libraryId)
+        ? { ...item, contentMatchesLibrary: false }
+        : item
+    ));
     setSkillUpdates((current) => [
       ...current.filter((item) => !updatesById.has(item.id)),
       ...updatedSkills
@@ -2621,11 +2626,17 @@ const AppContent = ({
     setError(undefined);
     setSkillUpdateCheckStatus({ state: "checking", message: "Preparing update review..." });
     try {
-      const plans = await Promise.all(
-        ids.map((id) => window.agentEnv.previewLibrarySkillUpdate(id))
-      );
-      setBulkSkillUpdatePlans(plans);
-      setSkillUpdateCheckStatus(undefined);
+      const result = await window.agentEnv.previewLibrarySkillUpdates(ids);
+      if (result.plans.length > 0) setBulkSkillUpdatePlans(result.plans);
+      if (result.failed.length > 0) {
+        setError(result.failed.map((failure) => `${failure.id}: ${failure.error}`).join("\n"));
+        setSkillUpdateCheckStatus({
+          state: "error",
+          message: `${plural(result.failed.length, "preview")} failed`
+        });
+      } else {
+        setSkillUpdateCheckStatus(undefined);
+      }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setSkillUpdateCheckStatus(undefined);
@@ -3337,7 +3348,7 @@ const AppContent = ({
       setSkillSettings(nextSettings);
       onLocalePreferenceChange(nextSettings.locale);
       if ("backupRetentionDays" in input) await refreshManagedBackups();
-      if ("enabledTargetIds" in input) {
+      if ("enabledTargetIds" in input || "targetConfigRoots" in input) {
         setPreview(undefined);
         setRollbackPreview(undefined);
         await refreshProfiles({
@@ -3378,6 +3389,20 @@ const AppContent = ({
       ? [...new Set([...currentIds, targetId])]
       : currentIds.filter((id) => id !== targetId);
     await updateSkillSettings({ enabledTargetIds: nextIds });
+  };
+
+  const chooseTargetConfigRoot = async (targetId: string) => {
+    const selected = await window.agentEnv.selectTargetConfigRoot(targetId);
+    if (!selected) return;
+    await updateSkillSettings({
+      targetConfigRoots: { ...(skillSettings.targetConfigRoots ?? {}), [targetId]: selected }
+    });
+  };
+
+  const resetTargetConfigRoot = async (targetId: string) => {
+    const nextRoots = { ...(skillSettings.targetConfigRoots ?? {}) };
+    delete nextRoots[targetId];
+    await updateSkillSettings({ targetConfigRoots: nextRoots });
   };
 
   const openBackupManager = () => {
@@ -4828,6 +4853,9 @@ const AppContent = ({
               busy={busy}
               onSetEnabled={setAgentEnabled}
               onOpenRecovery={() => setActiveWorkspace("targets")}
+              configRoots={skillSettings.targetConfigRoots ?? {}}
+              onChooseConfigRoot={chooseTargetConfigRoot}
+              onResetConfigRoot={resetTargetConfigRoot}
             />
             <section className="resource-section settings-section" aria-labelledby="library-defaults-heading">
               <div className="settings-section-title">

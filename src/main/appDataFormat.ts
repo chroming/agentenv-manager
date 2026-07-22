@@ -7,16 +7,42 @@ import { isMissingFileError, writeAtomic } from "./fileUtils";
 export const APP_DATA_FORMAT_VERSION = 2 as const;
 export const APP_DATA_MANIFEST_NAME = "agentenv-data.json";
 
-const AppDataManifestSchema = z.object({
-  formatVersion: z.literal(APP_DATA_FORMAT_VERSION)
-});
+const AppDataManifestSchema = z.object({ formatVersion: z.number().int().positive() });
+
+export class AppDataFormatError extends Error {
+  constructor(
+    public readonly kind: "newer" | "older" | "invalid" | "missing",
+    message: string
+  ) {
+    super(message);
+    this.name = "AppDataFormatError";
+  }
+}
 
 export interface AppDataManifest {
   formatVersion: typeof APP_DATA_FORMAT_VERSION;
 }
 
 export const parseAppDataManifest = (value: unknown): AppDataManifest =>
-  AppDataManifestSchema.parse(value);
+  {
+    const parsed = AppDataManifestSchema.safeParse(value);
+    if (!parsed.success) {
+      throw new AppDataFormatError("invalid", `Invalid AgentEnv data manifest: ${parsed.error.message}`);
+    }
+    if (parsed.data.formatVersion > APP_DATA_FORMAT_VERSION) {
+      throw new AppDataFormatError(
+        "newer",
+        `AgentEnv data format ${parsed.data.formatVersion} is newer than supported format ${APP_DATA_FORMAT_VERSION}`
+      );
+    }
+    if (parsed.data.formatVersion < APP_DATA_FORMAT_VERSION) {
+      throw new AppDataFormatError(
+        "older",
+        `AgentEnv data format ${parsed.data.formatVersion} requires migration to ${APP_DATA_FORMAT_VERSION}`
+      );
+    }
+    return { formatVersion: APP_DATA_FORMAT_VERSION };
+  };
 
 export const readAppDataManifest = async (
   appDataRoot: string
@@ -27,10 +53,10 @@ export const readAppDataManifest = async (
     );
   } catch (error) {
     if (isMissingFileError(error)) return undefined;
-    throw new Error(
-      `AgentEnv data format is unsupported or invalid: ${
-        error instanceof Error ? error.message : String(error)
-      }`
+    if (error instanceof AppDataFormatError) throw error;
+    throw new AppDataFormatError(
+      "invalid",
+      `AgentEnv data manifest cannot be read: ${error instanceof Error ? error.message : String(error)}`
     );
   }
 };
@@ -46,7 +72,7 @@ export const ensureAppDataFormat = async (
     throw error;
   });
   if (existingEntries.length > 0) {
-    throw new Error("AgentEnv data format is missing; run startup migration first");
+    throw new AppDataFormatError("missing", "AgentEnv data format is missing; run startup migration first");
   }
 
   const manifest: AppDataManifest = { formatVersion: APP_DATA_FORMAT_VERSION };

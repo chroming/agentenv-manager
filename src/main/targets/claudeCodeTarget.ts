@@ -211,8 +211,8 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     commands: ["claude"],
     macApplications: [{ bundleName: "Claude.app", label: "Claude app" }]
   }).detectInstallation,
-  createTargetPaths: ({ homeDir }) => {
-    const claudeDir = join(homeDir, ".claude");
+  createTargetPaths: ({ homeDir, rootDirOverride }) => {
+    const claudeDir = rootDirOverride ?? join(homeDir, ".claude");
     const skillsDir = join(claudeDir, "skills");
     return {
       targetId: "claude-code",

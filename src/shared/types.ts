@@ -54,6 +54,12 @@ export type {
 export interface AgentEnvApi {
   readonly runtimeVersion: number;
   readonly platform: string;
+  readStartupStatus(): Promise<StartupStatus>;
+  onStartupStatusChanged(callback: (status: StartupStatus) => void): () => void;
+  retryStartup(): Promise<void>;
+  openStartupDataFolder(): Promise<void>;
+  exportStartupDiagnostics(): Promise<string | undefined>;
+  quitApp(): void;
   onWindowCloseRequested(callback: () => void): () => void;
   setWindowCloseGuard(enabled: boolean): void;
   confirmWindowClose(): void;
@@ -62,6 +68,7 @@ export interface AgentEnvApi {
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
   selectProjectSkillRoot(): Promise<string | undefined>;
+  selectTargetConfigRoot(targetId: string): Promise<string | undefined>;
   listSupportedTargets(): Promise<TargetDescriptor[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
@@ -102,6 +109,7 @@ export interface AgentEnvApi {
   setSkillAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
   setSkillIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
+  previewLibrarySkillUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
   updateLibrarySkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
   readSettings(): Promise<AgentEnvSettings>;
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
@@ -147,6 +155,25 @@ export interface AgentEnvApi {
   restoreDataBackup(path: string): Promise<{ safetyBackupPath: string }>;
   adoptTargetChanges(profileId: string, targetId: string): Promise<AdoptTargetChangesResult>;
 }
+
+export type StartupFailureKind =
+  | "newer-data-format"
+  | "invalid-data"
+  | "permission"
+  | "recovery"
+  | "unknown";
+
+export type StartupStatus =
+  | { state: "initializing" }
+  | { state: "ready" }
+  | {
+      state: "failed";
+      kind: StartupFailureKind;
+      title: string;
+      message: string;
+      dataRoot?: string;
+      canRetry: boolean;
+    };
 
 export type AdoptedTargetResource = "instructions" | "mcp";
 
@@ -563,6 +590,11 @@ export interface SkillUpdatePlan {
   impact: SkillUpdateImpact;
 }
 
+export interface SkillUpdatePreviewBatchResult {
+  plans: SkillUpdatePlan[];
+  failed: Array<{ id: string; error: string }>;
+}
+
 export interface SkillUpdateImpact {
   profileNames: string[];
   linkedInstallCount: number;
@@ -764,6 +796,7 @@ export interface AgentEnvSettings {
   backupRetentionDays: BackupRetentionDays;
   enabledTargetIds?: string[];
   projectSkillRoots?: string[];
+  targetConfigRoots?: Record<string, string>;
 }
 
 export type ProjectSkillCandidateStatus = "ready" | "in-library" | "changed" | "invalid";

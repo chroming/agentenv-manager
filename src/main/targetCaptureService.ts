@@ -15,6 +15,8 @@ import type { SkillLibraryStore } from "./skillLibraryStore";
 import type { TargetDiscoveryService } from "./targetDiscovery";
 import type { TargetRegistry } from "./targets/registry";
 import type { TargetScope } from "./targets/targetScope";
+import { createSettingsStore, type SettingsStore } from "./settingsStore";
+import { targetPathInputFor } from "./targets/pathInput";
 import type { CapturedTargetProfile } from "./targets/types";
 import { isTargetInstalled } from "../shared/targetHealth";
 import {
@@ -52,6 +54,7 @@ interface TargetCaptureServiceOptions {
   skillLibraryStore: SkillLibraryStore;
   targetDiscoveryService: TargetDiscoveryService;
   targetScope?: TargetScope;
+  settingsStore?: SettingsStore;
 }
 
 const safeName = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -89,7 +92,8 @@ export const createTargetCaptureService = ({
   profileStore,
   skillLibraryStore,
   targetDiscoveryService,
-  targetScope
+  targetScope,
+  settingsStore = createSettingsStore(paths)
 }: TargetCaptureServiceOptions): TargetCaptureService => {
   const previews = new Map<string, InternalCapture>();
   const captureReceiptStore = createCaptureReceiptStore(paths);
@@ -102,10 +106,8 @@ export const createTargetCaptureService = ({
       throw new Error("Agent installation is not detected");
     }
     const adapter = targetRegistry.get(targetId);
-    const targetPaths = adapter.createTargetPaths({
-      homeDir: paths.homeDir,
-      fakeHomeRoot: paths.fakeHomeRoot
-    });
+    const settings = await settingsStore.readSettings();
+    const targetPaths = adapter.createTargetPaths(targetPathInputFor(paths, settings, targetId));
     const captured = await adapter.captureProfile(targetPaths);
     const librarySkills = await skillLibraryStore.listSkills();
     const inventory = await skillLibraryStore.scanInventory(

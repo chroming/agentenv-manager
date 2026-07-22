@@ -28,6 +28,7 @@ export interface SkillMetadataFile {
   globallyEnabled?: boolean;
   iconKey?: ResourceIconKey;
   contentHash?: string;
+  contentHashVersion?: number;
   updatedAt?: string;
   upstream?: SkillUpstream;
   provenance?: SkillProvenance;
@@ -70,7 +71,7 @@ export const readSkillLibraryEntry = async (
         : metadata.sourceType === "github" || metadata.sourceType === "git" ? "tracked" : "untracked"),
     remoteRef: metadata.remoteRef,
     remoteRevision: metadata.remoteRevision,
-    contentHash: metadata.contentHash ?? contentHash,
+    contentHash,
     updatedAt: metadata.updatedAt ?? stats.mtime.toISOString(),
     upstream: metadata.upstream,
     provenance: metadata.provenance,

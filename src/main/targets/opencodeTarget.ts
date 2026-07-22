@@ -116,8 +116,8 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     commands: ["opencode"],
     macApplications: [{ bundleName: "OpenCode.app", label: "OpenCode app" }]
   }).detectInstallation,
-  createTargetPaths: ({ homeDir }) => {
-    const configDir = join(homeDir, ".config", "opencode");
+  createTargetPaths: ({ homeDir, rootDirOverride }) => {
+    const configDir = rootDirOverride ?? join(homeDir, ".config", "opencode");
     const privateSkillsDir = join(configDir, "skills");
     const sharedSkillsDir = join(homeDir, ".agents", "skills");
     return {

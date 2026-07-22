@@ -380,8 +380,8 @@ export const traeCliIntegration: AgentTargetIntegration = {
     }
   },
   paths: {
-    createTargetPaths: ({ homeDir }) => {
-      const configDir = join(homeDir, ".trae");
+    createTargetPaths: ({ homeDir, rootDirOverride }) => {
+      const configDir = rootDirOverride ?? join(homeDir, ".trae");
       const primarySkillsDir = join(configDir, "skills");
       const cocoSkillsDir = join(homeDir, ".coco", "skills");
       const cnSkillsDir = join(homeDir, ".trae-cn", "skills");

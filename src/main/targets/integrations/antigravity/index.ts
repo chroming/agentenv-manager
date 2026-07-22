@@ -81,8 +81,8 @@ export const antigravityIntegration: AgentTargetIntegration = {
   },
   discovery: createAntigravityInstallationDriver(),
   paths: {
-    createTargetPaths: ({ homeDir }) => {
-      const geminiDir = join(homeDir, ".gemini");
+    createTargetPaths: ({ homeDir, rootDirOverride }) => {
+      const geminiDir = rootDirOverride ?? join(homeDir, ".gemini");
       const configDir = join(geminiDir, "config");
       const cliSkillsDir = join(geminiDir, "antigravity-cli", "skills");
       const sharedSkillsDir = join(geminiDir, "skills");

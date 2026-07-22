@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  AppDataFormatError,
   APP_DATA_MANIFEST_NAME,
   ensureAppDataFormat,
   readAppDataManifest
@@ -43,8 +44,9 @@ describe("AgentEnv data format", () => {
       '{"formatVersion":3}\n'
     );
 
-    await expect(readAppDataManifest(root)).rejects.toThrow(
-      "unsupported or invalid"
-    );
+    const error = await readAppDataManifest(root).catch((caught) => caught);
+    expect(error).toBeInstanceOf(AppDataFormatError);
+    expect(error).toMatchObject({ kind: "newer" });
+    expect((error as Error).message).toContain("newer than supported");
   });
 });

@@ -2813,4 +2813,23 @@ description: >
       })
     ]);
   });
+
+  it("returns successful bulk update previews even when another Skill fails", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-bulk-preview-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const skillDir = join(paths.skillsLibraryDir, "reviewer");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(skillDir, "SKILL.md"), "---\nname: reviewer\n---\n# Reviewer\n", "utf8");
+    await writeFile(
+      join(skillDir, ".agentenv-skill.json"),
+      JSON.stringify({ sourceType: "local", updatePolicy: "untracked" }),
+      "utf8"
+    );
+    const store = createSkillLibraryStore(paths);
+
+    await expect(store.previewUpdates(["reviewer", "missing", "reviewer"])).resolves.toMatchObject({
+      plans: [{ id: "reviewer", updateAvailable: false }],
+      failed: [{ id: "missing", error: expect.stringContaining("does not exist") }]
+    });
+  });
 });

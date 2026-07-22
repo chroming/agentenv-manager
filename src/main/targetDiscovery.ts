@@ -6,7 +6,8 @@ import { isMissingFileError, pathExists } from "./fileUtils";
 import { findExecutable } from "./executableDiscovery";
 import type { TargetRegistry } from "./targets/registry";
 import { createTargetScope, type TargetScope } from "./targets/targetScope";
-import { createSettingsStore } from "./settingsStore";
+import { createSettingsStore, type SettingsStore } from "./settingsStore";
+import { targetPathInputFor } from "./targets/pathInput";
 import type {
   TargetHealth,
   TargetHealthStatus,
@@ -24,6 +25,7 @@ export interface TargetDiscoveryOptions {
   shellPathLookup?: boolean;
   platform?: NodeJS.Platform;
   allowSystemApplicationLookup?: boolean;
+  settingsStore?: SettingsStore;
 }
 
 export interface TargetDiscoveryService {
@@ -143,6 +145,7 @@ export const createTargetDiscoveryService = (
     platform = process.platform,
     allowSystemApplicationLookup = options.pathEnv === undefined
   } = options;
+  const settingsStore = options.settingsStore ?? createSettingsStore(paths);
   const executableCache = new Map<
     string,
     { path?: string; checkedAt: number }
@@ -168,12 +171,12 @@ export const createTargetDiscoveryService = (
     listOptions: { forceRefresh?: boolean } = {}
   ): Promise<TargetInfo[]> => {
     const enabledAdapters = await targetScope.listEnabledAdapters();
+    const settings = await settingsStore.readSettings();
     return Promise.all(
       enabledAdapters.map(async (adapter) => {
-        const targetPaths = adapter.createTargetPaths({
-          homeDir: paths.homeDir,
-          fakeHomeRoot: paths.fakeHomeRoot
-        });
+        const targetPaths = adapter.createTargetPaths(
+          targetPathInputFor(paths, settings, adapter.descriptor.id)
+        );
         const executableName = adapter.descriptor.executableName;
         const installation = await adapter.detectInstallation({
           platform,

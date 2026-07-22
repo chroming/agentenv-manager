@@ -278,8 +278,14 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
-    runtimeVersion: 3,
+    runtimeVersion: 4,
     platform: "darwin",
+    readStartupStatus: vi.fn().mockResolvedValue({ state: "ready" }),
+    onStartupStatusChanged: vi.fn().mockReturnValue(() => undefined),
+    retryStartup: vi.fn().mockResolvedValue(undefined),
+    openStartupDataFolder: vi.fn().mockResolvedValue(undefined),
+    exportStartupDiagnostics: vi.fn().mockResolvedValue(undefined),
+    quitApp: vi.fn(),
     onWindowCloseRequested: vi.fn().mockReturnValue(() => undefined),
     setWindowCloseGuard: vi.fn(),
     confirmWindowClose: vi.fn(),
@@ -288,6 +294,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     copyText: vi.fn().mockResolvedValue(undefined),
     selectSkillFolder: vi.fn().mockResolvedValue(undefined),
     selectProjectSkillRoot: vi.fn().mockResolvedValue(undefined),
+    selectTargetConfigRoot: vi.fn().mockResolvedValue(undefined),
     listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
     listTargets: vi.fn().mockResolvedValue([target]),
     listTargetStates: vi.fn().mockResolvedValue([]),
@@ -497,6 +504,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       changes: [],
       errors: []
     }),
+    previewLibrarySkillUpdates: vi.fn().mockResolvedValue({ plans: [], failed: [] }),
     updateLibrarySkill: vi.fn().mockResolvedValue({
       id: "skill",
       name: "skill",

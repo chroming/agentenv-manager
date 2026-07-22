@@ -14,6 +14,11 @@ export type TranslationValues = Record<string, string | number>;
 
 const zhCN: Record<string, string> = {
   ...generatedZhCN,
+  "Advanced paths": "高级路径",
+  "Override one Agent configuration root. AgentEnv will rescan it before any operation.": "为单个 Agent 覆盖配置根目录。AgentEnv 会在执行任何操作前重新扫描。",
+  "Custom": "自定义",
+  "Default location": "默认位置",
+  "Choose": "选择",
   "Workspace Sync": "工作区同步",
   "Reuse Profiles and Library Skills across your Macs through a private Git repository.": "通过私有 Git 仓库在多台 Mac 间复用配置方案与技能资源库。",
   "Not connected": "未连接",
@@ -1613,6 +1618,11 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "Advanced paths": "進階路徑",
+  "Override one Agent configuration root. AgentEnv will rescan it before any operation.": "為單一 Agent 覆寫設定根目錄。AgentEnv 會在執行任何操作前重新掃描。",
+  "Custom": "自訂",
+  "Default location": "預設位置",
+  "Choose": "選擇",
   "Workspace Sync": "工作區同步",
   "Reuse Profiles and Library Skills across your Macs through a private Git repository.": "透過私有 Git 儲存庫在多台 Mac 間重用設定檔與技能資源庫。",
   "Not connected": "未連線",

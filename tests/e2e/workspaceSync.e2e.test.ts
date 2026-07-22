@@ -40,6 +40,9 @@ describe("Workspace Sync desktop flow", () => {
     });
     const page = await app.firstWindow();
     await page.setViewportSize({ width: 920, height: 620 });
+    await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus()), {
+      timeout: 15_000
+    }).toEqual({ state: "ready" });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     const section = page.getByRole("region", { name: "Workspace Sync" });
     await section.waitFor({ state: "visible" });

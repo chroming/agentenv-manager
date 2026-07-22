@@ -16,6 +16,7 @@ import {
   writeAtomic
 } from "./fileUtils";
 import { hashComparableResource } from "./resourceHash";
+import { APP_DATA_FORMAT_VERSION, AppDataFormatError } from "./appDataFormat";
 import { parseTargetState } from "./targetState";
 import { createTargetRegistry, type TargetRegistry } from "./targets/registry";
 import {
@@ -426,7 +427,11 @@ export const migrateAppDataToV2 = async (
     return { migrated: false, profileCount: 0, retainedProfileCount: 0 };
   }
   if (rawManifest && rawManifest.formatVersion !== 1) {
-    throw new Error(`Unsupported AgentEnv data format: ${String(rawManifest.formatVersion)}`);
+    const version = rawManifest.formatVersion;
+    throw new AppDataFormatError(
+      typeof version === "number" && version > APP_DATA_FORMAT_VERSION ? "newer" : "invalid",
+      `Unsupported AgentEnv data format: ${String(version)}`
+    );
   }
   if (!rawManifest) {
     const existingEntries = await readdir(paths.appDataRoot).catch((error) => {

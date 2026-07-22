@@ -5,6 +5,16 @@ import { AGENTENV_RUNTIME_VERSION } from "../shared/runtimeVersion";
 const api: AgentEnvApi = {
   runtimeVersion: AGENTENV_RUNTIME_VERSION,
   platform: process.platform,
+  readStartupStatus: () => ipcRenderer.invoke("startup:status"),
+  onStartupStatusChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: Parameters<typeof callback>[0]) => callback(status);
+    ipcRenderer.on("startup:status-changed", listener);
+    return () => ipcRenderer.off("startup:status-changed", listener);
+  },
+  retryStartup: () => ipcRenderer.invoke("startup:retry"),
+  openStartupDataFolder: () => ipcRenderer.invoke("startup:open-data-folder"),
+  exportStartupDiagnostics: () => ipcRenderer.invoke("startup:export-diagnostics"),
+  quitApp: () => ipcRenderer.send("startup:quit"),
   onWindowCloseRequested: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("window:close-requested", listener);
@@ -17,6 +27,7 @@ const api: AgentEnvApi = {
   copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),
   selectProjectSkillRoot: () => ipcRenderer.invoke("dialog:select-project-skill-root"),
+  selectTargetConfigRoot: (targetId) => ipcRenderer.invoke("dialog:select-target-config-root", targetId),
   listSupportedTargets: () => ipcRenderer.invoke("targets:list-supported"),
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
@@ -61,6 +72,7 @@ const api: AgentEnvApi = {
   setSkillAvailability: (input) => ipcRenderer.invoke("skills:set-availability", input),
   setSkillIcon: (input) => ipcRenderer.invoke("skills:set-icon", input),
   previewLibrarySkillUpdate: (id) => ipcRenderer.invoke("skills:preview-update", id),
+  previewLibrarySkillUpdates: (ids) => ipcRenderer.invoke("skills:preview-updates", ids),
   updateLibrarySkill: (input) => ipcRenderer.invoke("skills:update-library", input),
   readSettings: () => ipcRenderer.invoke("settings:read"),
   updateSettings: (input) => ipcRenderer.invoke("settings:update", input),

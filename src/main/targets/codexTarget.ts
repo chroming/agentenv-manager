@@ -69,8 +69,8 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     commands: ["codex"],
     macApplications: [{ bundleName: "Codex.app", label: "Codex app" }]
   }).detectInstallation,
-  createTargetPaths: ({ homeDir }) => {
-    const codexHome = join(homeDir, ".codex");
+  createTargetPaths: ({ homeDir, rootDirOverride }) => {
+    const codexHome = rootDirOverride ?? join(homeDir, ".codex");
     const skillsDir = join(codexHome, "skills");
     const sharedSkillsDir = join(homeDir, ".agents", "skills");
     return {

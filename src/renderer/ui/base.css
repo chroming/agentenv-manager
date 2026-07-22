@@ -155,3 +155,60 @@ button:disabled {
   color: #99a3b3;
   cursor: not-allowed;
 }
+.startup-screen {
+  align-items: center;
+  background: var(--page);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100vh;
+  justify-content: center;
+  padding: 32px;
+}
+
+.startup-screen > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.startup-failure-panel {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  max-width: 640px;
+  width: 100%;
+}
+
+.startup-failure-icon {
+  align-items: center;
+  background: var(--warning-bg);
+  border-radius: var(--radius-control);
+  color: var(--warning);
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.startup-failure-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.startup-failure-copy p,
+.startup-failure-copy code {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.startup-failure-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 2;
+}

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -36,11 +36,15 @@ import { pathEntryExists, recoverPendingReplacementsInDirectory } from "./fileUt
 import { createMutationCoordinator } from "./mutationCoordinator";
 import { ensureAppDataFormat } from "./appDataFormat";
 import { migrateAppDataToV2 } from "./appDataMigration";
+import { migrateSkillContentHashes } from "./skillContentHashMigration";
 import { createPortableWorkspaceCodec } from "./workspaceSync/portableWorkspaceCodec";
 import { createWorkspaceSyncStateStore } from "./workspaceSync/syncStateStore";
 import { createWorkspaceSyncTransaction } from "./workspaceSync/workspaceSyncTransaction";
 import { createGitSyncTransport, type GitSyncTransport } from "./workspaceSync/gitSyncTransport";
 import { createWorkspaceSyncService } from "./workspaceSync/workspaceSyncService";
+import type { StartupStatus } from "../shared/types";
+import { classifyStartupFailure, createStartupDiagnostics } from "./startupDiagnostics";
+import { targetPathInputFor } from "./targets/pathInput";
 
 const createGitHubFixtureFetch = (fixtureRoot: string) => {
   const fixtureTrees = new Map<string, string>();
@@ -198,6 +202,36 @@ const guardedWindowCloses = new WeakSet<BrowserWindow>();
 let appQuitRequested = false;
 let servicesInitialized = false;
 let disposeServices: (() => void) | undefined;
+let startupStatus: StartupStatus = { state: "initializing" };
+let startupAttempt: Promise<void> | undefined;
+let startupDataRoot: string | undefined;
+let startupDiagnostics: ReturnType<typeof createStartupDiagnostics> | undefined;
+
+const broadcastStartupStatus = () => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.webContents.isDestroyed()) {
+      window.webContents.send("startup:status-changed", startupStatus);
+    }
+  }
+};
+
+ipcMain.handle("startup:status", () => startupStatus);
+ipcMain.handle("startup:open-data-folder", async () => {
+  if (startupDataRoot) await shell.openPath(startupDataRoot);
+});
+ipcMain.handle("startup:export-diagnostics", async () => {
+  if (!startupDiagnostics) return undefined;
+  await startupDiagnostics.record("diagnostics-exported");
+  const result = await dialog.showSaveDialog({
+    title: "Export AgentEnv diagnostics",
+    defaultPath: `agentenv-diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
+    filters: [{ name: "Log", extensions: ["log"] }]
+  });
+  if (result.canceled || !result.filePath) return undefined;
+  await startupDiagnostics.exportTo(result.filePath);
+  return result.filePath;
+});
+ipcMain.on("startup:quit", () => app.quit());
 
 ipcMain.on("window:set-close-guard", (event, enabled: unknown) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -265,6 +299,7 @@ const createWindow = () => {
   });
   win.webContents.on("render-process-gone", () => {
     guardedWindowCloses.delete(win);
+    void startupDiagnostics?.record("renderer-process-gone");
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event) => {
@@ -276,6 +311,12 @@ const createWindow = () => {
   } else {
     void win.loadFile(join(__dirname, "../renderer/index.html"));
   }
+  return win;
+};
+
+const resolveStartupDataRoot = () => {
+  const homeDir = process.env.AGENTENV_HOME ?? app.getPath("home");
+  return resolveAppDataRoot({ homeDir, userDataDir: app.getPath("userData") });
 };
 
 const createServices = async () => {
@@ -286,10 +327,7 @@ const createServices = async () => {
       : process.platform === "win32"
         ? process.env.LOCALAPPDATA ?? app.getPath("sessionData")
         : process.env.XDG_CACHE_HOME ?? join(homeDir, ".cache");
-  const appDataRoot = resolveAppDataRoot({
-    homeDir,
-    userDataDir: app.getPath("userData")
-  });
+  const appDataRoot = startupDataRoot ?? resolveStartupDataRoot();
   const mutationCoordinator = createMutationCoordinator(appDataRoot);
   await mutationCoordinator.runExclusive("Initialize AgentEnv data", async () => {
     await recoverPendingReplacementsInDirectory(join(appDataRoot, ".."));
@@ -320,6 +358,15 @@ const createServices = async () => {
     await migrateAppDataToV2(paths, targetRegistry);
     await ensureAppDataFormat(paths);
   });
+  const settingsStore = createSettingsStore(paths, {
+    supportedTargetIds: targetRegistry.list().map((target) => target.id)
+  });
+  const settings = await mutationCoordinator.runExclusive("Initialize Settings", () =>
+    settingsStore.readSettings()
+  );
+  await mutationCoordinator.runExclusive("Upgrade Skill content hashes", () =>
+    migrateSkillContentHashes(paths)
+  );
   let gitRunner: GitCommandRunner | undefined;
   let repositorySourcePromise: Promise<GitCliSkillSource> | undefined;
   let repositoryServicesDisposed = false;
@@ -355,10 +402,9 @@ const createServices = async () => {
   };
   const replacementRoots = new Set([paths.profilesDir, paths.skillsLibraryDir]);
   for (const adapter of targetRegistry.listAdapters()) {
-    const targetPaths = adapter.createTargetPaths({
-      homeDir: paths.homeDir,
-      fakeHomeRoot: paths.fakeHomeRoot
-    });
+    const targetPaths = adapter.createTargetPaths(
+      targetPathInputFor(paths, settings, adapter.descriptor.id)
+    );
     if (targetPaths.skillsDir) replacementRoots.add(targetPaths.skillsDir);
     if (targetPaths.agentsDir) replacementRoots.add(targetPaths.agentsDir);
     for (const scanDir of targetPaths.skillScanDirs ?? []) replacementRoots.add(scanDir);
@@ -369,12 +415,6 @@ const createServices = async () => {
       await recoverPendingReplacementsInDirectory(root);
     }
   });
-  const settingsStore = createSettingsStore(paths, {
-    supportedTargetIds: targetRegistry.list().map((target) => target.id)
-  });
-  await mutationCoordinator.runExclusive("Initialize Settings", () =>
-    settingsStore.readSettings()
-  );
   const targetScope = createTargetScope(targetRegistry, settingsStore);
   const githubAuthService = createGitHubAuthService({
     tokenStore: createFileGitHubTokenStore(paths, {
@@ -402,12 +442,14 @@ const createServices = async () => {
     {
       profileStore,
       authTokenProvider: githubAuthService.readAccessToken,
-      targetPathsProvider: () => targetRegistry.listAdapters().map((adapter) =>
-        adapter.createTargetPaths({
-          homeDir: paths.homeDir,
-          fakeHomeRoot: paths.fakeHomeRoot
-        })
-      ),
+      targetPathsProvider: async () => {
+        const currentSettings = await settingsStore.readSettings();
+        return targetRegistry.listAdapters().map((adapter) =>
+          adapter.createTargetPaths(
+            targetPathInputFor(paths, currentSettings, adapter.descriptor.id)
+          )
+        );
+      },
       runtimeSnapshotProvider: (targetPaths) => {
         const adapter = targetRegistry.listAdapters().find(
           (candidate) => candidate.descriptor.id === targetPaths.targetId
@@ -440,7 +482,8 @@ const createServices = async () => {
   const targetDiscoveryService = createTargetDiscoveryService({
     paths,
     targetRegistry,
-    targetScope
+    targetScope,
+    settingsStore
   });
   const targetCaptureService = createTargetCaptureService({
     paths,
@@ -448,7 +491,8 @@ const createServices = async () => {
     profileStore,
     skillLibraryStore,
     targetDiscoveryService,
-    targetScope
+    targetScope,
+    settingsStore
   });
   let syncTransport: GitSyncTransport | undefined;
   let syncTransportDisposed = false;
@@ -468,9 +512,14 @@ const createServices = async () => {
     stateStore: createWorkspaceSyncStateStore(paths),
     transaction: workspaceSyncTransaction,
     loadTransport: loadSyncTransport,
-    targetPathsProvider: async () => (await targetScope.listEnabledAdapters()).map((adapter) =>
-      adapter.createTargetPaths({ homeDir: paths.homeDir, fakeHomeRoot: paths.fakeHomeRoot })
-    ),
+    targetPathsProvider: async () => {
+      const currentSettings = await settingsStore.readSettings();
+      return (await targetScope.listEnabledAdapters()).map((adapter) =>
+        adapter.createTargetPaths(
+          targetPathInputFor(paths, currentSettings, adapter.descriptor.id)
+        )
+      );
+    },
     findManagedInstallPaths: skillLibraryStore.findManagedInstallPaths
   });
 
@@ -504,24 +553,15 @@ const createServices = async () => {
   };
 };
 
-const ownsSingleInstance =
-  process.env.AGENTENV_AUTOMATION === "1" || app.requestSingleInstanceLock();
-
-if (!ownsSingleInstance) {
-  app.quit();
-} else {
-  app.on("second-instance", () => {
-    const window = BrowserWindow.getAllWindows()[0];
-    if (!window) return;
-    if (window.isMinimized()) window.restore();
-    window.show();
-    window.focus();
-  });
-}
-
-if (ownsSingleInstance) void app.whenReady().then(() => {
-  void createServices()
-    .then((services) => {
+const initializeServices = () => {
+  if (servicesInitialized) return Promise.resolve();
+  if (startupAttempt) return startupAttempt;
+  startupStatus = { state: "initializing" };
+  broadcastStartupStatus();
+  startupAttempt = (async () => {
+    await startupDiagnostics?.record("startup-begin", { dataRoot: startupDataRoot });
+    try {
+      const services = await createServices();
       let removeWorkspaceSyncFocusListener: () => void = () => undefined;
       registerIpcHandlers(services);
       if (process.env.AGENTENV_AUTOMATION !== "1") {
@@ -545,13 +585,9 @@ if (ownsSingleInstance) void app.whenReady().then(() => {
             }
           });
         };
-        void runBackupCleanup().catch((error) => {
-          console.error("Automatic backup cleanup failed", error);
-        });
+        void runBackupCleanup().catch((error) => console.error("Automatic backup cleanup failed", error));
         const timer = setInterval(() => {
-          void runBackupCleanup().catch((error) => {
-            console.error("Automatic backup cleanup failed", error);
-          });
+          void runBackupCleanup().catch((error) => console.error("Automatic backup cleanup failed", error));
         }, 24 * 60 * 60 * 1000);
         timer.unref();
       }
@@ -560,19 +596,49 @@ if (ownsSingleInstance) void app.whenReady().then(() => {
         services.dispose();
       };
       servicesInitialized = true;
-      if (BrowserWindow.getAllWindows().length === 0) createWindow();
-    })
-    .catch((error) => {
-      dialog.showErrorBox(
-        "AgentEnv Manager could not start",
-        error instanceof Error ? error.message : String(error)
-      );
-      app.quit();
-    });
+      startupStatus = { state: "ready" };
+      await startupDiagnostics?.record("startup-ready");
+      broadcastStartupStatus();
+    } catch (error) {
+      startupStatus = classifyStartupFailure(error, startupDataRoot);
+      await startupDiagnostics?.record("startup-failed", error);
+      broadcastStartupStatus();
+    } finally {
+      startupAttempt = undefined;
+    }
+  })();
+  return startupAttempt;
+};
+
+ipcMain.handle("startup:retry", () => initializeServices());
+
+const ownsSingleInstance =
+  process.env.AGENTENV_AUTOMATION === "1" || app.requestSingleInstanceLock();
+
+if (!ownsSingleInstance) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (!window) return;
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  });
+}
+
+if (ownsSingleInstance) void app.whenReady().then(() => {
+  startupDataRoot = resolveStartupDataRoot();
+  startupDiagnostics = createStartupDiagnostics({
+    directory: join(app.getPath("logs"), "diagnostics"),
+    homeDir: app.getPath("home")
+  });
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  void initializeServices();
 });
 
 app.on("activate", () => {
-  if (servicesInitialized && BrowserWindow.getAllWindows().length === 0) {
+  if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
