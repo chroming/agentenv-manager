@@ -79,4 +79,73 @@ describe("Claude Code Profile v2 adapter", () => {
     expect(captured.excluded).toContain("settings.json.permissions");
     expect(captured.excluded).toContain(".claude.json.mcpServers");
   });
+
+  it("observes enabled Claude plugin Skills from the effective user install", async () => {
+    const { adapter, paths } = await setup();
+    const olderPlugin = join(root, "plugins", "older");
+    const currentPlugin = join(root, "plugins", "current");
+    const disabledPlugin = join(root, "plugins", "disabled");
+    for (const [pluginRoot, skillName] of [
+      [olderPlugin, "older-review"],
+      [currentPlugin, "current-review"],
+      [disabledPlugin, "disabled-review"]
+    ]) {
+      await mkdir(join(pluginRoot, "skills", skillName), { recursive: true });
+      await mkdir(join(pluginRoot, ".claude-plugin"), { recursive: true });
+      await writeFile(join(pluginRoot, ".claude-plugin", "plugin.json"), "{}\n", "utf8");
+      await writeFile(
+        join(pluginRoot, "skills", skillName, "SKILL.md"),
+        `---\nname: ${skillName}\ndescription: Plugin Skill\n---\n# Plugin\n`,
+        "utf8"
+      );
+    }
+    await writeFile(paths.configPath, JSON.stringify({
+      enabledPlugins: {
+        "review@marketplace": true,
+        "disabled@marketplace": false
+      }
+    }));
+    await mkdir(join(paths.configDir, "plugins"), { recursive: true });
+    await writeFile(
+      join(paths.configDir, "plugins", "installed_plugins.json"),
+      JSON.stringify({
+        plugins: {
+          "review@marketplace": [
+            {
+              scope: "project",
+              installPath: olderPlugin,
+              lastUpdated: "2026-01-01T00:00:00Z"
+            },
+            {
+              scope: "user",
+              installPath: currentPlugin,
+              lastUpdated: "2026-02-01T00:00:00Z"
+            }
+          ],
+          "disabled@marketplace": [{
+            scope: "user",
+            installPath: disabledPlugin,
+            lastUpdated: "2026-03-01T00:00:00Z"
+          }]
+        }
+      })
+    );
+
+    const snapshot = await adapter.skills.inspectRuntime(paths);
+
+    expect(snapshot.observations).toHaveLength(1);
+    expect(snapshot.observations[0]).toMatchObject({
+      path: join(currentPlugin, "skills", "current-review"),
+      runtimeName: "current-review",
+      scope: "user",
+      owner: "external",
+      availability: "unknown",
+      locationRole: "discovery-only",
+      externalOwnership: {
+        manager: "claude-plugin",
+        displayName: "Claude Code plugin",
+        importable: false
+      }
+    });
+  });
 });

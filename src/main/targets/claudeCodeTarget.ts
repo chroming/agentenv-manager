@@ -8,12 +8,14 @@ import {
 import type {
   PlannedFileChange,
   TargetActivationPreview,
+  TargetPaths,
+  TargetSkillLocation,
   TargetState
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
 import { createUnifiedDiff } from "../diff";
-import { readTextIfExists } from "../fileUtils";
+import { pathExists, readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
 import { captureNativeJsonMcpConnections } from "./capture";
 import { createInstallationDriver } from "./installationDiscovery";
@@ -67,8 +69,88 @@ const addChange = (
   });
 };
 
+interface ClaudePluginInstall {
+  scope?: string;
+  installPath?: string;
+  installedAt?: string;
+  lastUpdated?: string;
+}
+
+const selectedClaudePluginInstall = (
+  installs: ClaudePluginInstall[]
+): ClaudePluginInstall | undefined => {
+  const candidates = installs.some((install) => install.scope === "user")
+    ? installs.filter((install) => install.scope === "user")
+    : installs;
+  return [...candidates].sort((left, right) => {
+    const leftUpdated = left.lastUpdated ?? left.installedAt ?? "";
+    const rightUpdated = right.lastUpdated ?? right.installedAt ?? "";
+    return rightUpdated.localeCompare(leftUpdated) ||
+      (right.installPath ?? "").localeCompare(left.installPath ?? "");
+  })[0];
+};
+
+const discoverClaudePluginSkillLocations = async (
+  targetPaths: TargetPaths
+): Promise<TargetSkillLocation[]> => {
+  const settings = parseJsoncObject(
+    await readTextIfExists(targetPaths.configPath),
+    "Invalid live settings.json"
+  );
+  if (!settings.ok || !isRecord(settings.value.enabledPlugins)) return [];
+
+  const installed = parseJsoncObject(
+    await readTextIfExists(join(targetPaths.configDir, "plugins", "installed_plugins.json")),
+    "Invalid Claude Code installed_plugins.json"
+  );
+  if (!installed.ok || !isRecord(installed.value.plugins)) return [];
+
+  const roots = new Map<string, TargetSkillLocation>();
+  const enabledPluginIds = Object.entries(settings.value.enabledPlugins)
+    .filter(([, enabled]) => enabled === true)
+    .map(([pluginId]) => pluginId)
+    .sort();
+  for (const pluginId of enabledPluginIds) {
+    const rawInstalls = installed.value.plugins[pluginId];
+    if (!Array.isArray(rawInstalls)) continue;
+    const install = selectedClaudePluginInstall(
+      rawInstalls.filter(isRecord).map((item) => ({
+        scope: typeof item.scope === "string" ? item.scope : undefined,
+        installPath: typeof item.installPath === "string" ? item.installPath : undefined,
+        installedAt: typeof item.installedAt === "string" ? item.installedAt : undefined,
+        lastUpdated: typeof item.lastUpdated === "string" ? item.lastUpdated : undefined
+      }))
+    );
+    if (!install?.installPath) continue;
+    for (const path of [
+      join(install.installPath, "skills"),
+      join(install.installPath, ".claude", "skills")
+    ]) {
+      if (!(await pathExists(path))) continue;
+      roots.set(path, {
+        path,
+        role: "discovery-only",
+        shared: false,
+        scope: "user",
+        scanDepth: "recursive",
+        management: "observed",
+        externalContainerMarkers: [{
+          relativePath: ".claude-plugin/plugin.json",
+          manager: "claude-plugin",
+          displayName: "Claude Code plugin",
+          importable: false
+        }]
+      });
+    }
+  }
+  return [...roots.values()];
+};
+
 const assets = createDirectoryAssetDriver({ targetName: "Claude Code" });
-const skills = createFilesystemSkillDriver({ targetId: "claude-code" });
+const skills = createFilesystemSkillDriver({
+  targetId: "claude-code",
+  discoverLocations: discoverClaudePluginSkillLocations
+});
 
 export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
   descriptor: {

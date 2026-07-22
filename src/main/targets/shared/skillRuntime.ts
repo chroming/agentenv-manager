@@ -25,6 +25,7 @@ export interface DiscoveredSkillDirectory {
 
 interface FilesystemSkillDriverOptions {
   targetId: string;
+  discoverLocations?: (targetPaths: TargetPaths) => Promise<TargetSkillLocation[]>;
   readNativeState?: (targetPaths: TargetPaths) => Promise<{
     disabledRuntimeNames: ReadonlySet<string> | readonly string[];
     issues?: SkillRuntimeIssue[];
@@ -41,12 +42,21 @@ const locationForRoot = (targetPaths: TargetPaths, root: string): TargetSkillLoc
     management: "managed"
   };
 
-const targetSkillLocations = (targetPaths: TargetPaths): TargetSkillLocation[] => {
-  if (targetPaths.skillLocations?.length) {
-    return targetPaths.skillLocations;
+const targetSkillLocations = async (
+  targetPaths: TargetPaths,
+  discoverLocations?: FilesystemSkillDriverOptions["discoverLocations"]
+): Promise<TargetSkillLocation[]> => {
+  const configured = targetPaths.skillLocations?.length
+    ? targetPaths.skillLocations
+    : [...new Set([targetPaths.skillsDir, ...(targetPaths.skillScanDirs ?? [])].filter(Boolean))]
+        .map((path) => locationForRoot(targetPaths, path as string));
+  const discovered = discoverLocations ? await discoverLocations(targetPaths) : [];
+  const byPath = new Map<string, TargetSkillLocation>();
+  for (const location of [...configured, ...discovered]) {
+    const key = resolve(location.path);
+    if (!byPath.has(key)) byPath.set(key, location);
   }
-  return [...new Set([targetPaths.skillsDir, ...(targetPaths.skillScanDirs ?? [])].filter(Boolean))]
-    .map((path) => locationForRoot(targetPaths, path as string));
+  return [...byPath.values()];
 };
 
 export const discoverSkillDirectories = async (
@@ -157,7 +167,10 @@ export const createFilesystemSkillDriver = (
     const observations: SkillRuntimeObservation[] = [];
     const snapshotIssues: SkillRuntimeIssue[] = [...nativeIssues];
 
-    for (const location of targetSkillLocations(targetPaths)) {
+    for (const location of await targetSkillLocations(
+      targetPaths,
+      options.discoverLocations
+    )) {
       const candidates = await discoverSkillDirectories(
         location.path,
         location.scanDepth ?? "direct"
