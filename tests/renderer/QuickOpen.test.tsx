@@ -31,7 +31,7 @@ describe("QuickOpen", () => {
     const onDismiss = vi.fn();
     render(<QuickOpen items={items(onSelect)} open onDismiss={onDismiss} />);
 
-    const search = screen.getByRole("textbox", {
+    const search = screen.getByRole("combobox", {
       name: "Search Profiles, Skills, Agents, and actions"
     });
     fireEvent.change(search, { target: { value: "default development" } });
@@ -48,11 +48,26 @@ describe("QuickOpen", () => {
     const entries = items(first);
     render(<QuickOpen items={entries} open onDismiss={vi.fn()} />);
 
-    const search = screen.getByRole("textbox");
+    const search = screen.getByRole("combobox");
     fireEvent.keyDown(search, { key: "ArrowDown" });
     fireEvent.keyDown(search, { key: "Enter" });
 
     expect(first).not.toHaveBeenCalled();
     expect(entries[1].onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes listbox state and supports first and last keyboard navigation", () => {
+    const first = vi.fn();
+    const entries = items(first);
+    render(<QuickOpen items={entries} open onDismiss={vi.fn()} />);
+
+    const search = screen.getByRole("combobox");
+    expect(search).toHaveAttribute("aria-controls", "quick-open-results");
+    expect(search).toHaveAttribute("aria-activedescendant", "quick-open-option-0");
+
+    fireEvent.keyDown(search, { key: "End" });
+    expect(search).toHaveAttribute("aria-activedescendant", "quick-open-option-1");
+    fireEvent.keyDown(search, { key: "Home" });
+    expect(search).toHaveAttribute("aria-activedescendant", "quick-open-option-0");
   });
 });

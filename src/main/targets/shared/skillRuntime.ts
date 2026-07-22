@@ -25,7 +25,10 @@ export interface DiscoveredSkillDirectory {
 
 interface FilesystemSkillDriverOptions {
   targetId: string;
-  discoverLocations?: (targetPaths: TargetPaths) => Promise<TargetSkillLocation[]>;
+  discoverLocations?: (targetPaths: TargetPaths) => Promise<{
+    locations: TargetSkillLocation[];
+    issues?: SkillRuntimeIssue[];
+  }>;
   readNativeState?: (targetPaths: TargetPaths) => Promise<{
     disabledRuntimeNames: ReadonlySet<string> | readonly string[];
     issues?: SkillRuntimeIssue[];
@@ -45,18 +48,20 @@ const locationForRoot = (targetPaths: TargetPaths, root: string): TargetSkillLoc
 const targetSkillLocations = async (
   targetPaths: TargetPaths,
   discoverLocations?: FilesystemSkillDriverOptions["discoverLocations"]
-): Promise<TargetSkillLocation[]> => {
+): Promise<{ locations: TargetSkillLocation[]; issues: SkillRuntimeIssue[] }> => {
   const configured = targetPaths.skillLocations?.length
     ? targetPaths.skillLocations
     : [...new Set([targetPaths.skillsDir, ...(targetPaths.skillScanDirs ?? [])].filter(Boolean))]
         .map((path) => locationForRoot(targetPaths, path as string));
-  const discovered = discoverLocations ? await discoverLocations(targetPaths) : [];
+  const discovered = discoverLocations
+    ? await discoverLocations(targetPaths)
+    : { locations: [], issues: [] };
   const byPath = new Map<string, TargetSkillLocation>();
-  for (const location of [...configured, ...discovered]) {
+  for (const location of [...configured, ...discovered.locations]) {
     const key = resolve(location.path);
     if (!byPath.has(key)) byPath.set(key, location);
   }
-  return [...byPath.values()];
+  return { locations: [...byPath.values()], issues: discovered.issues ?? [] };
 };
 
 export const discoverSkillDirectories = async (
@@ -167,10 +172,12 @@ export const createFilesystemSkillDriver = (
     const observations: SkillRuntimeObservation[] = [];
     const snapshotIssues: SkillRuntimeIssue[] = [...nativeIssues];
 
-    for (const location of await targetSkillLocations(
+    const discoveredLocations = await targetSkillLocations(
       targetPaths,
       options.discoverLocations
-    )) {
+    );
+    snapshotIssues.push(...discoveredLocations.issues);
+    for (const location of discoveredLocations.locations) {
       const candidates = await discoverSkillDirectories(
         location.path,
         location.scanDepth ?? "direct"

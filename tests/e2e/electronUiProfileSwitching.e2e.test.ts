@@ -820,7 +820,23 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Meta+k");
     const quickOpen = page.getByRole("dialog", { name: "Quick open" });
     await quickOpen.waitFor({ state: "visible", timeout: 5_000 });
-    await quickOpen.getByRole("textbox").fill("UI OpenCode alpha");
+    const quickSearch = quickOpen.getByRole("combobox");
+    await page.keyboard.press("End");
+    const activeOptionId = await quickSearch.getAttribute("aria-activedescendant");
+    expect(activeOptionId).toBeTruthy();
+    const quickOpenGeometry = await quickOpen.evaluate((dialog, optionId) => {
+      const results = dialog.querySelector<HTMLElement>(".quick-open-results");
+      const option = optionId ? document.getElementById(optionId) : null;
+      if (!results || !option) return null;
+      const resultsBox = results.getBoundingClientRect();
+      const optionBox = option.getBoundingClientRect();
+      return {
+        topVisible: optionBox.top >= resultsBox.top,
+        bottomVisible: optionBox.bottom <= resultsBox.bottom
+      };
+    }, activeOptionId);
+    expect(quickOpenGeometry).toEqual({ topVisible: true, bottomVisible: true });
+    await quickSearch.fill("UI OpenCode alpha");
     await quickOpen.getByRole("option", { name: /UI OpenCode alpha/ }).waitFor({
       state: "visible",
       timeout: 5_000
@@ -830,7 +846,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.keyboard.press("Meta+k");
     await quickOpen.waitFor({ state: "visible", timeout: 5_000 });
-    await quickOpen.getByRole("textbox").fill("Shared Reviewer");
+    await quickOpen.getByRole("combobox").fill("Shared Reviewer");
     await page.keyboard.press("Enter");
     await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible", timeout: 5_000 });
     await page.getByRole("group", { name: "Library item shared-reviewer" }).waitFor({ state: "visible", timeout: 5_000 });

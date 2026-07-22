@@ -68,4 +68,25 @@ describe("ProjectSkillDiscoveryPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove project folder /tmp/project" }));
     await waitFor(() => expect(onRemoveRoot).toHaveBeenCalledWith("/tmp/project"));
   });
+
+  it("keeps an import failure beside the affected Skill and offers retry", async () => {
+    const onScan = vi.fn().mockResolvedValue(scanResult);
+    const onImport = vi.fn().mockRejectedValue(new Error("The Library directory is read-only"));
+    render(
+      <ProjectSkillDiscoveryPanel
+        roots={["/tmp/project"]}
+        onAddRoot={vi.fn().mockResolvedValue(undefined)}
+        onRemoveRoot={vi.fn().mockResolvedValue(undefined)}
+        onScan={onScan}
+        onImport={onImport}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Scan" }));
+    await screen.findByText("Review");
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(await screen.findByText("Import failed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
 });

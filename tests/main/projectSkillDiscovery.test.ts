@@ -54,6 +54,28 @@ describe("scanProjectSkillRoots", () => {
     expect(result.candidates).toEqual([]);
   });
 
+  it("deduplicates Skills discovered through overlapping project roots", async () => {
+    const projectRoot = path("project");
+    const skillsRoot = join(projectRoot, "skills");
+    await writeSkill(join(skillsRoot, "review"), "Review");
+
+    const result = await scanProjectSkillRoots([projectRoot, skillsRoot], []);
+
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0].name).toBe("Review");
+  });
+
+  it("does not fabricate a modification date when a Skill cannot be read", async () => {
+    const projectRoot = path("project");
+    const skillPath = join(projectRoot, "skills", "broken");
+    await mkdir(join(skillPath, "SKILL.md"), { recursive: true });
+
+    const result = await scanProjectSkillRoots([projectRoot], []);
+
+    expect(result.candidates[0]).toMatchObject({ name: "broken", status: "invalid" });
+    expect(result.candidates[0]).not.toHaveProperty("modifiedAt");
+  });
+
   it("recognizes content already represented in Library", async () => {
     const projectRoot = path("project");
     const skillPath = join(projectRoot, "skills", "review");

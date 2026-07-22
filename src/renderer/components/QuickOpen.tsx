@@ -20,6 +20,9 @@ interface QuickOpenProps {
   onDismiss(): void;
 }
 
+const QUICK_OPEN_LISTBOX_ID = "quick-open-results";
+const quickOpenOptionId = (index: number) => `quick-open-option-${index}`;
+
 const searchableText = (item: QuickOpenItem) =>
   [item.label, item.description, item.group, ...(item.keywords ?? [])]
     .filter(Boolean)
@@ -69,6 +72,13 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
     setActiveIndex((current) => Math.min(current, Math.max(0, results.length - 1)));
   }, [results.length]);
 
+  useEffect(() => {
+    if (!open || results.length === 0) return;
+    document.getElementById(quickOpenOptionId(activeIndex))?.scrollIntoView?.({
+      block: "nearest"
+    });
+  }, [activeIndex, open, results.length]);
+
   useModalDialog({
     open,
     dialogRef,
@@ -96,7 +106,12 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
         <input
           ref={inputRef}
           aria-label={t("Search Profiles, Skills, Agents, and actions")}
+          aria-activedescendant={results.length > 0 ? quickOpenOptionId(activeIndex) : undefined}
+          aria-autocomplete="list"
+          aria-controls={QUICK_OPEN_LISTBOX_ID}
+          aria-expanded="true"
           placeholder={t("Search Profiles, Skills, Agents, and actions...")}
+          role="combobox"
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
           onKeyDown={(event) => {
@@ -106,6 +121,12 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
             } else if (event.key === "ArrowUp") {
               event.preventDefault();
               setActiveIndex((current) => Math.max(0, current - 1));
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              setActiveIndex(0);
+            } else if (event.key === "End") {
+              event.preventDefault();
+              setActiveIndex(Math.max(0, results.length - 1));
             } else if (event.key === "Enter") {
               event.preventDefault();
               const currentResults = findQuickOpenResults(items, event.currentTarget.value);
@@ -115,7 +136,12 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
         />
         <kbd>esc</kbd>
       </div>
-      <div className="quick-open-results" role="listbox" aria-label={t("Quick open results")}>
+      <div
+        className="quick-open-results"
+        id={QUICK_OPEN_LISTBOX_ID}
+        role="listbox"
+        aria-label={t("Quick open results")}
+      >
         {results.length > 0 ? (
           results.map((item, index) => {
             const previousGroup = results[index - 1]?.group;
@@ -126,6 +152,7 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
                 ) : null}
                 <button
                   className={`quick-open-result${index === activeIndex ? " is-active" : ""}`}
+                  id={quickOpenOptionId(index)}
                   type="button"
                   role="option"
                   aria-selected={index === activeIndex}

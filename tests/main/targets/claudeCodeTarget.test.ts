@@ -148,4 +148,37 @@ describe("Claude Code Profile v2 adapter", () => {
       }
     });
   });
+
+  it("keeps direct Skills available when Claude plugin state is malformed", async () => {
+    const { adapter, paths } = await setup();
+    const directSkill = join(paths.skillsDir!, "direct-review");
+    await mkdir(directSkill, { recursive: true });
+    await writeFile(
+      join(directSkill, "SKILL.md"),
+      "---\nname: direct-review\ndescription: Direct Skill\n---\n# Review\n",
+      "utf8"
+    );
+    await writeFile(paths.configPath, JSON.stringify({
+      enabledPlugins: { "review@marketplace": true }
+    }));
+    await mkdir(join(paths.configDir, "plugins"), { recursive: true });
+    await writeFile(
+      join(paths.configDir, "plugins", "installed_plugins.json"),
+      "{ invalid plugin inventory",
+      "utf8"
+    );
+
+    const snapshot = await adapter.skills.inspectRuntime(paths);
+
+    expect(snapshot.observations).toEqual([
+      expect.objectContaining({ runtimeName: "direct-review", owner: "user" })
+    ]);
+    expect(snapshot.issues).toEqual([
+      expect.objectContaining({
+        code: "unreadable-native-state",
+        severity: "warning",
+        message: expect.stringContaining("installed_plugins.json")
+      })
+    ]);
+  });
 });

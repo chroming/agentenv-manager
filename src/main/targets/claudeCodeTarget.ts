@@ -7,6 +7,7 @@ import {
 } from "jsonc-parser";
 import type {
   PlannedFileChange,
+  SkillRuntimeIssue,
   TargetActivationPreview,
   TargetPaths,
   TargetSkillLocation,
@@ -92,18 +93,43 @@ const selectedClaudePluginInstall = (
 
 const discoverClaudePluginSkillLocations = async (
   targetPaths: TargetPaths
-): Promise<TargetSkillLocation[]> => {
-  const settings = parseJsoncObject(
-    await readTextIfExists(targetPaths.configPath),
-    "Invalid live settings.json"
-  );
-  if (!settings.ok || !isRecord(settings.value.enabledPlugins)) return [];
+): Promise<{ locations: TargetSkillLocation[]; issues: SkillRuntimeIssue[] }> => {
+  const issues: SkillRuntimeIssue[] = [];
+  const issue = (message: string): SkillRuntimeIssue => ({
+    code: "unreadable-native-state",
+    severity: "warning",
+    message
+  });
+  let settingsText: string;
+  try {
+    settingsText = await readTextIfExists(targetPaths.configPath);
+  } catch (error) {
+    return {
+      locations: [],
+      issues: [issue(
+        `Claude Code plugin discovery could not read settings.json: ${error instanceof Error ? error.message : String(error)}`
+      )]
+    };
+  }
+  const settings = parseJsoncObject(settingsText, "Invalid live settings.json");
+  if (!settings.ok) return { locations: [], issues: [issue(settings.message)] };
+  if (!isRecord(settings.value.enabledPlugins)) return { locations: [], issues };
 
-  const installed = parseJsoncObject(
-    await readTextIfExists(join(targetPaths.configDir, "plugins", "installed_plugins.json")),
-    "Invalid Claude Code installed_plugins.json"
-  );
-  if (!installed.ok || !isRecord(installed.value.plugins)) return [];
+  const installedPath = join(targetPaths.configDir, "plugins", "installed_plugins.json");
+  let installedText: string;
+  try {
+    installedText = await readTextIfExists(installedPath);
+  } catch (error) {
+    return {
+      locations: [],
+      issues: [issue(
+        `Claude Code plugin discovery could not read installed_plugins.json: ${error instanceof Error ? error.message : String(error)}`
+      )]
+    };
+  }
+  const installed = parseJsoncObject(installedText, "Invalid Claude Code installed_plugins.json");
+  if (!installed.ok) return { locations: [], issues: [issue(installed.message)] };
+  if (!isRecord(installed.value.plugins)) return { locations: [], issues };
 
   const roots = new Map<string, TargetSkillLocation>();
   const enabledPluginIds = Object.entries(settings.value.enabledPlugins)
@@ -126,7 +152,14 @@ const discoverClaudePluginSkillLocations = async (
       join(install.installPath, "skills"),
       join(install.installPath, ".claude", "skills")
     ]) {
-      if (!(await pathExists(path))) continue;
+      try {
+        if (!(await pathExists(path))) continue;
+      } catch (error) {
+        issues.push(issue(
+          `Claude Code plugin Skill location is unreadable: ${path}: ${error instanceof Error ? error.message : String(error)}`
+        ));
+        continue;
+      }
       roots.set(path, {
         path,
         role: "discovery-only",
@@ -143,7 +176,7 @@ const discoverClaudePluginSkillLocations = async (
       });
     }
   }
-  return [...roots.values()];
+  return { locations: [...roots.values()], issues };
 };
 
 const assets = createDirectoryAssetDriver({ targetName: "Claude Code" });

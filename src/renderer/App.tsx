@@ -2362,7 +2362,8 @@ const AppContent = ({
 
   const importUnmanagedSkill = async (
     sourcePath: string,
-    sourceHandling?: SkillImportInput["sourceHandling"]
+    sourceHandling?: SkillImportInput["sourceHandling"],
+    errorScope: "global" | "caller" = "global"
   ) => {
     setBusy(true);
     setError(undefined);
@@ -2390,7 +2391,9 @@ const AppContent = ({
       return true;
     } catch (unknownError) {
       setPendingSkillImport(undefined);
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      if (errorScope === "caller") throw new Error(message);
+      setError(message);
       return false;
     } finally {
       setBusy(false);
@@ -4057,7 +4060,8 @@ const AppContent = ({
                 onRemoveProjectSkillRoot={removeProjectSkillRoot}
                 onScanProjectSkills={() => window.agentEnv.scanProjectSkills()}
                 onImportUnmanaged={importUnmanagedSkill}
-                onImportProjectSkill={(sourcePath) => importUnmanagedSkill(sourcePath, "copy-only")}
+                onImportProjectSkill={(sourcePath) =>
+                  importUnmanagedSkill(sourcePath, "copy-only", "caller")}
                 onImportExternal={importExternalSkill}
                 onScanGitHubSkills={scanGitHubSkills}
                 onImportGitHubSkills={importGitHubSkills}

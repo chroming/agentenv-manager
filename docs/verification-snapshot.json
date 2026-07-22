@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-07-22T03:54:54.205Z",
+  "generatedAt": "2026-07-22T05:18:01.424Z",
   "source": {
-    "commit": "80c8c15d9488e883b515fe970d89e68164704f27",
+    "commit": "a8d47ac4fbaac22789ebaabd5673c40055808855",
     "dirty": true
   },
   "tests": {
     "passed": true,
-    "files": 92,
-    "assertions": 643,
+    "files": 96,
+    "assertions": 665,
     "e2eFiles": 9,
-    "e2eAssertions": 109,
+    "e2eAssertions": 111,
     "electronUiFiles": 1,
-    "electronUiAssertions": 98
+    "electronUiAssertions": 100
   },
   "audits": {
     "styles": "passed",
@@ -21,7 +21,7 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "files": 66,
+    "files": 69,
     "viewports": [
       "1180x728",
       "920x620"

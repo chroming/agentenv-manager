@@ -126,6 +126,15 @@ Workspace Sync states are `Not connected`, `Up to date`, `Changes to publish`, `
 - Every asynchronous command MUST acknowledge work on the initiating control immediately. Loading icons use the shared motion primitive rather than page-local animation rules.
 - Whenever AgentEnv can read a trustworthy upstream commit time, Library metadata update time, or local `SKILL.md` modification time, version-choice and conflict-review surfaces MUST present it alongside version and content hash. Missing or unreadable timestamps remain omitted or explicitly unknown; timestamps never replace content comparison.
 
+### 4.2.2 Global Quick Open
+
+Quick Open is a navigation accelerator, not a second command model.
+
+- `Cmd/Ctrl+K` opens one global search across Profiles, Library Skills, Agents, workspaces, and safe navigation actions.
+- Results inherit the same visibility and availability rules as their owning workspace. Quick Open MUST NOT bypass dirty-Profile confirmation, destructive confirmation, disabled-resource rules, or Target ownership checks.
+- Search, active selection, and result list use the standard combobox/listbox accessibility model. Arrow keys move one result, Home and End move to the first and last result, Enter opens the active result, and Escape restores focus to the invoking surface.
+- The active result MUST remain visible while keyboard navigation moves through a longer result list. Opening an item closes Quick Open before navigation so focus and feedback belong to the destination workspace.
+
 ### 4.3 Profile
 
 A Profile is a saved environment recipe. It owns:
@@ -555,7 +564,10 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 ### 16.1 Import
 
 - Import from a local folder copies canonical content into the Library.
-- Import presents `Local folder` and `Repository` as mutually exclusive source modes. Only the active mode is rendered, and the footer exposes one primary action for that mode; a second import workflow MUST NOT compete inside the same dialog body.
+- Import presents `Local folder`, `Repository`, and `Projects` as mutually exclusive source modes. Only the active mode is rendered, and the footer exposes one primary action for that mode; a second import workflow MUST NOT compete inside the same dialog body.
+- Projects stores device-local project roots and scans them read-only for nested Skill directories. Adding a root uses the system folder picker; scanning and importing MUST NOT modify the project checkout. Import copies only the selected Skill through the same Preview, duplicate-review, validation, Backup, and atomic Library-write contract as other local imports.
+- Overlapping or equivalent project roots MUST produce one candidate per canonical Skill path. Generated dependency/build directories and directory symlinks are excluded, and bounded scans disclose truncation instead of silently appearing complete. An unreadable root or candidate remains a local warning while healthy roots and candidates remain usable.
+- Project candidates show a trustworthy local `SKILL.md` modification time when available. Invalid or unreadable candidates display an unknown time rather than a fabricated epoch value. A failed candidate import retains the scanned row, shows the complete selectable failure locally, and offers Retry without rescanning unrelated roots.
 - When the selected local folder is an adapter-declared Target Skill location, Import MUST back it up and replace it with a managed link or copy in the same transaction. A successfully managed source MUST NOT remain in Needs attention as a duplicate.
 - Local folders outside supported Target locations remain independent provenance sources and are not modified.
 - Normal use MUST continue if the original folder is later deleted.
@@ -705,6 +717,7 @@ External ownership contract:
 
 - Skills tracked by a supported Skills CLI lock are classified as `External`, not `Unmanaged`.
 - Adapter-declared native containers, including Claude Code plugins, are also classified as `External`. The UI names the actual owner and MUST NOT present an import or takeover command when that source is not independently importable.
+- Missing, unreadable, or malformed native plugin inventory produces a warning and skips only plugin-container discovery. It MUST NOT suppress ordinary user Skill roots or block unrelated Capture, Save, or Apply operations.
 - Directory symlinks and broken tracked symlinks remain visible in Scan results.
 - `Import copy` copies a selected healthy external installation into Library, preserves verified upstream metadata, and leaves the external files and lock unchanged.
 - `Import copy` is idempotent. Matching Library content is reused; an occupied ID with different content requires the shared duplicate-import decision instead of failing or silently suffixing. After rescan, an external installation with matching Library content remains labelled `External`, shows its Library relationship, and retains a `Review` entry. Review offers `Update source` when online provenance can improve tracking, otherwise it confirms reuse; it MUST NOT create a duplicate Library copy.
@@ -738,7 +751,7 @@ External ownership contract:
 - Unmanaged copies are never deleted.
 - Deletion with managed installs creates an undoable Backup.
 
-Status: local, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter runtime identity; direct and recursive Agent scanning; read-only Skills CLI and Claude plugin ownership detection; external copy import where safe; scan; cleanup; ignore; icon metadata; duplicate runtime-name blocking; reference blocking; managed-install removal; and undo are `Implemented`.
+Status: local, read-only Project, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter runtime identity; direct and recursive Agent scanning; read-only Skills CLI and Claude plugin ownership detection with malformed-inventory isolation; external copy import where safe; scan; cleanup; ignore; icon metadata; duplicate runtime-name blocking; reference blocking; managed-install removal; and undo are `Implemented`.
 
 ## 17. Native MCP Contract
 
@@ -1086,12 +1099,14 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 ### Library
 
 - Local import survives deletion of original folder.
+- Project discovery scans configured roots read-only, deduplicates overlapping roots, isolates invalid candidates, preserves source files, and routes selected imports through the ordinary Library Preview flow.
 - GitHub direct-Skill, containing-directory, and repository scan; candidate selection; partial import; rate limit; sign-in remediation; update check; Preview; and update.
 - GitHub Device Flow pending, focus return, `slow_down`, expiry, denial, and successful account-state refresh without overlapping network polls.
 - System Git repository, directory, and direct-Skill scan; HTTPS/SSH/local transport; ref selection; partial import; cancellation; subtree update detection; Preview; backup; cache rebuild; credential redaction; and packaged-app Git discovery.
 - Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
 - Library global disable persistence, update-check exclusion, Add Skill picker filtering, existing-reference visibility, and Apply-time managed-copy removal.
 - In-place toolbar and `Cmd/Ctrl+R` Refresh preserve current Skill view state and do not contact update sources.
+- Global Quick Open searches and opens Profiles, Skills, Agents, workspaces, and safe navigation actions; Arrow/Home/End selection remains visible and respects ordinary dirty-state and confirmation boundaries.
 - Skill source-default and custom icons persist across refresh and content update; Profile icon changes auto-save independently without clearing or committing a dirty environment draft.
 - Skills CLI v3 lock detection, corrupt and unsupported lock fallback, directory and broken symlink discovery, independent external import, lock preservation, and external Apply conflicts.
 - Update marks affected deployments pending without deploying.

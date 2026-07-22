@@ -777,7 +777,7 @@ export interface ProjectSkillCandidate {
   path: string;
   relativePath: string;
   contentHash: string;
-  modifiedAt: string;
+  modifiedAt?: string;
   status: ProjectSkillCandidateStatus;
   existingLibraryId?: string;
   error?: string;

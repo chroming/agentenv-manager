@@ -32,11 +32,13 @@ export const ProjectSkillDiscoveryPanel = ({
   const [operation, setOperation] = useState<"adding" | "scanning">();
   const [removingRoot, setRemovingRoot] = useState<string>();
   const [importingPath, setImportingPath] = useState<string>();
+  const [importFailure, setImportFailure] = useState<{ path: string; message: string }>();
   const [error, setError] = useState("");
 
   const scan = async () => {
     setOperation("scanning");
     setError("");
+    setImportFailure(undefined);
     try {
       setResult(await onScan());
     } catch (unknownError) {
@@ -56,6 +58,22 @@ export const ProjectSkillDiscoveryPanel = ({
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
       setOperation(undefined);
+    }
+  };
+
+  const importCandidate = async (path: string) => {
+    setImportingPath(path);
+    setImportFailure(undefined);
+    try {
+      const imported = await onImport(path);
+      if (imported) await scan();
+    } catch (unknownError) {
+      setImportFailure({
+        path,
+        message: unknownError instanceof Error ? unknownError.message : String(unknownError)
+      });
+    } finally {
+      setImportingPath(undefined);
     }
   };
 
@@ -128,7 +146,12 @@ export const ProjectSkillDiscoveryPanel = ({
       {result ? (
         <div className="project-skill-results">
           <div className="project-skill-results__summary">
-            <strong>{t("{{count}} Skills found", { count: result.candidates.length })}</strong>
+            <strong>
+              {t(
+                result.candidates.length === 1 ? "1 Skill found" : "{{count}} Skills found",
+                { count: result.candidates.length }
+              )}
+            </strong>
             <span>{t("{{count}} folders checked", { count: result.scannedDirectories })}</span>
           </div>
           {result.truncated ? (
@@ -149,38 +172,43 @@ export const ProjectSkillDiscoveryPanel = ({
             ) : result.candidates.map((candidate) => {
               const importable = candidate.status === "ready" || candidate.status === "changed";
               const importing = importingPath === candidate.path;
+              const failed = importFailure?.path === candidate.path;
               return (
-                <div className="project-skill-row" key={candidate.path}>
-                  <span className={`project-skill-row__state is-${candidate.status}`} aria-hidden="true">
-                    {candidate.status === "invalid"
+                <div className={`project-skill-row${failed ? " has-error" : ""}`} key={candidate.path}>
+                  <span className={`project-skill-row__state is-${failed ? "invalid" : candidate.status}`} aria-hidden="true">
+                    {candidate.status === "invalid" || failed
                       ? <TriangleAlert size={15} strokeWidth={2.2} />
                       : <CheckCircle2 size={15} strokeWidth={2.2} />}
                   </span>
                   <span className="project-skill-row__main">
                     <strong>{candidate.name}</strong>
                     <OverflowTooltip className="project-skill-row__path" text={candidate.path} displayText={candidate.relativePath} />
-                    {candidate.description ? (
+                    {failed ? (
+                      <OverflowTooltip
+                        className="project-skill-row__error"
+                        displayText={t("Import failed")}
+                        text={importFailure.message}
+                      />
+                    ) : candidate.description ? (
                       <OverflowTooltip className="project-skill-row__description" text={candidate.description} />
                     ) : null}
                   </span>
                   <span className="project-skill-row__meta">
                     <span>{candidate.version ? `v${candidate.version}` : t("No version")}</span>
-                    <span>{formatDate(candidate.modifiedAt)}</span>
+                    <span>{candidate.modifiedAt ? formatDate(candidate.modifiedAt) : "—"}</span>
                   </span>
                   {importable ? (
                     <Button
                       size="compact"
+                      aria-busy={importing}
                       disabled={Boolean(operation) || Boolean(importingPath)}
                       icon={importing ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
-                      onClick={() => {
-                        setImportingPath(candidate.path);
-                        void onImport(candidate.path)
-                          .then((imported) => imported ? scan() : undefined)
-                          .finally(() => setImportingPath(undefined));
-                      }}
+                      onClick={() => void importCandidate(candidate.path)}
                     >
                       {importing
                         ? t("Importing...")
+                        : failed
+                          ? t("Retry")
                         : candidate.status === "changed"
                           ? t("Review changes")
                           : t("Import")}

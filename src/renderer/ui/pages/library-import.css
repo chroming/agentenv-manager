@@ -195,10 +195,14 @@
   border-top: 1px solid var(--border-subtle);
 }
 
-.project-root-row .overflow-tooltip {
+.project-root-path {
   color: var(--text-secondary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: var(--font-size-caption);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-skill-results {
@@ -243,6 +247,10 @@
   border-top: 1px solid var(--border-subtle);
 }
 
+.project-skill-row.has-error {
+  background: var(--danger-bg);
+}
+
 .project-skill-row__state {
   align-items: center;
   color: var(--success);
@@ -277,6 +285,12 @@
 .project-skill-row__meta {
   color: var(--muted);
   font-size: var(--font-size-caption);
+}
+
+.project-skill-row__error {
+  color: var(--danger);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
 }
 
 .project-skill-row__description,

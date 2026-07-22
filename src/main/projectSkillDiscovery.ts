@@ -38,6 +38,7 @@ export const scanProjectSkillRoots = async (
   const roots: string[] = [];
   const issues: ProjectSkillScanResult["issues"] = [];
   const candidates: ProjectSkillCandidate[] = [];
+  const seenCandidatePaths = new Set<string>();
   const libraryByHash = new Map(librarySkills.map((skill) => [skill.contentHash, skill]));
   const libraryBySource = new Map(
     librarySkills
@@ -72,6 +73,9 @@ export const scanProjectSkillRoots = async (
       scannedDirectories += 1;
       const skillFile = join(current.path, "SKILL.md");
       if (await pathExists(skillFile)) {
+        const candidatePath = resolve(current.path);
+        if (seenCandidatePaths.has(candidatePath)) continue;
+        seenCandidatePaths.add(candidatePath);
         try {
           const markdown = await readFile(skillFile, "utf8");
           const frontmatter = parseSkillFrontmatter(markdown);
@@ -87,7 +91,7 @@ export const scanProjectSkillRoots = async (
             description: frontmatter.description,
             version: frontmatter.version,
             rootPath: root,
-            path: current.path,
+            path: candidatePath,
             relativePath: relative(root, current.path) || ".",
             contentHash,
             modifiedAt: skillStats.mtime.toISOString(),
@@ -108,10 +112,9 @@ export const scanProjectSkillRoots = async (
             name: basename(current.path),
             description: "",
             rootPath: root,
-            path: current.path,
+            path: candidatePath,
             relativePath: relative(root, current.path) || ".",
             contentHash: "",
-            modifiedAt: new Date(0).toISOString(),
             status: "invalid",
             error: errorMessage(error)
           });

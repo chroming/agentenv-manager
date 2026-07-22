@@ -198,6 +198,7 @@ const prepareFixture = async (root) => {
   const homeDir = join(root, "home");
   const binDir = join(root, "bin");
   const githubFixtureRoot = join(root, "github-fixtures");
+  const projectSkillRoot = join(root, "project-workspace");
   const opencodeDir = join(homeDir, ".config", "opencode");
   const codexDir = join(homeDir, ".codex");
   await mkdir(appDataRoot, { recursive: true });
@@ -280,8 +281,16 @@ const prepareFixture = async (root) => {
     skillSyncMethod: "copy",
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: false,
-    skillAutoCheckIntervalMinutes: 60
+    skillAutoCheckIntervalMinutes: 60,
+    projectSkillRoots: [projectSkillRoot]
   });
+  const projectSkillDir = join(projectSkillRoot, "automation", "release-safety-review");
+  await mkdir(projectSkillDir, { recursive: true });
+  await writeFile(
+    join(projectSkillDir, "SKILL.md"),
+    "---\nname: Release Safety Review\ndescription: Review release readiness from this project without modifying its checkout.\nversion: 2.4.0\n---\n\n# Release Safety Review\n",
+    "utf8"
+  );
   await Promise.all(profileFixtures.map((profile) => writeProfile(appDataRoot, profile)));
   await writeLibrary(appDataRoot);
   await writeJson(join(appDataRoot, "skill-sources.json"), {
@@ -559,6 +568,12 @@ try {
   await page.keyboard.press("Escape");
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-920x620.png"));
+  await page.keyboard.press("Meta+k");
+  const quickOpen = page.getByRole("dialog", { name: "Quick open" });
+  await quickOpen.waitFor({ state: "visible" });
+  await quickOpen.getByRole("combobox").fill("review");
+  await capturePage(page, join(outputDir, "quick-open-920x620.png"), { preserveFocus: true });
+  await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: "By source" }).click();
   await page.locator(".skill-source-group").nth(1).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-sources-920x620.png"));
@@ -634,6 +649,13 @@ try {
   await capturePage(page, join(outputDir, "skills-import-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-import-920x620.png"));
+  await importDialog.getByRole("tab", { name: "Projects" }).click();
+  await importDialog.getByRole("button", { name: "Scan", exact: true }).click();
+  await importDialog.locator(".project-skill-row").first().waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-import-projects-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "skills-import-projects-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
   await importDialog.getByRole("tab", { name: "Repository" }).click();
   await capturePage(page, join(outputDir, "skills-import-github-920x620.png"));
   await importDialog.getByText("Advanced", { exact: true }).click();
