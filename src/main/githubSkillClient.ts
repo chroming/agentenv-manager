@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { SafeIdSchema } from "../shared/schemas";
 import { writeAtomic } from "./fileUtils";
+import { githubContentsRevision } from "./skillSources/revisionCompatibility";
 
 export type GitHubFetch = (url: string, init?: RequestInit) => Promise<{
   ok: boolean;
@@ -63,7 +64,8 @@ interface GitHubContentDir extends GitHubContentBase {
 }
 
 type GitHubContentItem = GitHubContentFile | GitHubContentDir;
-type GitHubRequestOptions = { refresh?: boolean };
+
+type GitHubRequestOptions = { refresh?: boolean; refreshFiles?: boolean };
 
 const RESPONSE_CACHE_TTL_MS = 2 * 60 * 1_000;
 const RESPONSE_CACHE_MAX_ENTRIES = 1_024;
@@ -340,35 +342,101 @@ export const createGitHubSkillClient = ({
     writeRoot?: string,
     options: GitHubRequestOptions = {}
   ) => {
-    const revisionHash = createHash("sha1");
-    let hasSkillMd = false;
-    const walk = async (remotePath: string) => {
-      const encodedPath = encodeGitHubPath(remotePath);
-      const contentsPath = encodedPath ? `/contents/${encodedPath}` : "/contents";
-      const url = `https://api.github.com/repos/${source.owner}/${source.repo}${contentsPath}?ref=${encodeURIComponent(source.ref)}`;
-      const items = assertGitHubContentItems(await fetchJson(url, options), url).sort((a, b) =>
-        a.path.localeCompare(b.path)
+    const readManifest = async () => {
+      const commitUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/commits/${encodeURIComponent(source.ref)}`;
+      const commit = await fetchJson(commitUrl, options) as GitHubCommitResponse;
+      const treeSha = commit.commit?.tree?.sha;
+      if (!treeSha) throw new Error(`GitHub commit could not be resolved: ${source.ref}`);
+
+      const treeUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`;
+      const tree = await fetchJson(treeUrl, options) as GitHubTreeResponse;
+      if (tree.truncated) throw new Error("GitHub repository tree is truncated");
+      const root = source.remotePath.replace(/^\/+|\/+$/g, "");
+      const prefix = root ? `${root}/` : "";
+      const scopedEntries = (tree.tree ?? []).filter((entry) =>
+        typeof entry.path === "string" &&
+        entry.path !== root &&
+        (!prefix || entry.path.startsWith(prefix))
       );
-      for (const item of items) {
-        revisionHash.update(`${item.type}:${item.path}:${item.sha}\n`);
-        if (item.type === "dir") {
-          await walk(item.path);
-          continue;
-        }
-        if (item.type !== "file") continue;
-        const relativePath = relativeGitHubPath(source.remotePath, item.path);
-        if (relativePath === "SKILL.md") hasSkillMd = true;
-        if (!writeRoot) continue;
-        if (!item.download_url) {
-          throw new Error(`GitHub file is missing a download URL: ${item.path}`);
-        }
-        const filePath = join(writeRoot, ...relativePath.split("/"));
-        await mkdir(dirname(filePath), { recursive: true });
-        await writeAtomic(filePath, await fetchText(item.download_url, options));
+      const unsupportedEntry = scopedEntries.find(
+        (entry) => entry.mode === "120000" || entry.mode === "160000" || entry.type === "commit"
+      );
+      if (unsupportedEntry?.path) {
+        throw new Error(
+          unsupportedEntry.mode === "120000"
+            ? `GitHub Skill contains a symbolic link: ${unsupportedEntry.path}`
+            : `GitHub Skill contains a submodule: ${unsupportedEntry.path}`
+        );
       }
+      const entries = scopedEntries.filter((entry): entry is {
+        path: string;
+        type: "blob" | "tree";
+        sha: string;
+        mode?: string;
+      } =>
+        (entry.type === "blob" || entry.type === "tree") &&
+        typeof entry.path === "string" &&
+        typeof entry.sha === "string"
+      );
+      const files = entries.filter((entry) => entry.type === "blob");
+      const hasSkillMd = files.some(
+        (entry) => relativeGitHubPath(root, entry.path) === "SKILL.md"
+      );
+
+      if (writeRoot) {
+        await mapWithConcurrency(files, 8, async (item) => {
+          const relativePath = relativeGitHubPath(root, item.path);
+          const rawUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(source.ref)}/${encodeGitHubPath(item.path)}`;
+          const filePath = join(writeRoot, ...relativePath.split("/"));
+          await mkdir(dirname(filePath), { recursive: true });
+          await writeAtomic(filePath, await fetchText(rawUrl, {
+            refresh: options.refreshFiles ?? options.refresh
+          }));
+        });
+      }
+      return { hasSkillMd, revision: githubContentsRevision(root, entries) };
     };
-    await walk(source.remotePath);
-    return { hasSkillMd, revision: revisionHash.digest("hex") };
+
+    const readContents = async () => {
+      const revisionHash = createHash("sha1");
+      let hasSkillMd = false;
+      const walk = async (remotePath: string): Promise<void> => {
+        const encodedPath = encodeGitHubPath(remotePath);
+        const contentsPath = encodedPath ? `/contents/${encodedPath}` : "/contents";
+        const url = `https://api.github.com/repos/${source.owner}/${source.repo}${contentsPath}?ref=${encodeURIComponent(source.ref)}`;
+        const items = assertGitHubContentItems(await fetchJson(url, options), url).sort((a, b) =>
+          a.path.localeCompare(b.path)
+        );
+        for (const item of items) {
+          revisionHash.update(`${item.type}:${item.path}:${item.sha}\n`);
+          if (item.type === "dir") {
+            await walk(item.path);
+            continue;
+          }
+          const relativePath = relativeGitHubPath(source.remotePath, item.path);
+          if (relativePath === "SKILL.md") hasSkillMd = true;
+          if (!writeRoot) continue;
+          if (!item.download_url) {
+            throw new Error(`GitHub file is missing a download URL: ${item.path}`);
+          }
+          const filePath = join(writeRoot, ...relativePath.split("/"));
+          await mkdir(dirname(filePath), { recursive: true });
+          await writeAtomic(filePath, await fetchText(item.download_url, {
+            refresh: options.refreshFiles ?? options.refresh
+          }));
+        }
+      };
+      await walk(source.remotePath);
+      return { hasSkillMd, revision: revisionHash.digest("hex") };
+    };
+
+    try {
+      return await readManifest();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (/rate limit|\(401\b|\(403\b|symbolic link|submodule/i.test(detail)) throw error;
+      return readContents();
+    }
   };
 
   const readSkillUpdatedAt = async (

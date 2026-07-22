@@ -2407,7 +2407,7 @@ description: >
     ]);
   });
 
-  it("reuses a GitHub preview response during the immediately following import", async () => {
+  it("reuses a GitHub preview manifest but refetches files for the following import", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const fetchImpl = vi.fn(async (url: string) => {
@@ -2435,7 +2435,7 @@ description: >
     await store.importGitHubSkill(input);
 
     expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes("/contents/"))).toHaveLength(1);
-    expect(fetchImpl.mock.calls.filter(([url]) => String(url).startsWith("https://raw.example/"))).toHaveLength(1);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).startsWith("https://raw.example/"))).toHaveLength(2);
     expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes("/commits?"))).toHaveLength(1);
   });
 

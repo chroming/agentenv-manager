@@ -100,6 +100,7 @@ import {
 } from "../shared/profileResources";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
+import { DataRootPath } from "./components/DataRootPath";
 import { DiffViewer } from "./components/DiffViewer";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
@@ -126,6 +127,7 @@ import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
 import { WorkspaceSyncSettings } from "./components/WorkspaceSyncSettings";
 import { runSkillImportQueue } from "./skillImportQueue";
+import { useScheduledSkillUpdateChecks, useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
 import {
   Button,
   ControlGroup,
@@ -556,6 +558,9 @@ const AppContent = ({
   const appModalDialogRef = useRef<HTMLElement>(null);
   const appModalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const appModalFallbackFocusRef = useRef<HTMLElement>(null);
+  const { activity: skillUpdateActivity, activityRef: skillUpdateActivityRef,
+    begin: beginSkillUpdateActivity, finish: finishSkillUpdateActivity
+  } = useSkillUpdateActivity(() => setSkillRefreshStatus(undefined));
   const activeLibraryView =
     activeWorkspace === "library" && skillLibraryMode === "skills" ? "skills" : undefined;
   const refreshSkillSourceGroups = useCallback(async () => {
@@ -1067,21 +1072,14 @@ const AppContent = ({
     };
   }, []);
 
-  useEffect(() => {
-    if (isLoading || !skillSettings.skillAutoCheckEnabled) {
-      return undefined;
-    }
-
-    const intervalMs =
-      Math.max(5, skillSettings.skillAutoCheckIntervalMinutes) * 60 * 1000;
-    const timer = window.setInterval(() => {
-      refreshProfiles({ checkSkillUpdates: true }).catch((unknownError) => {
-        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      });
-    }, intervalMs);
-
-    return () => window.clearInterval(timer);
-  }, [isLoading, skillSettings.skillAutoCheckEnabled, skillSettings.skillAutoCheckIntervalMinutes]);
+  useScheduledSkillUpdateChecks({
+    activityRef: skillUpdateActivityRef,
+    enabled: !isLoading && skillSettings.skillAutoCheckEnabled,
+    intervalMinutes: skillSettings.skillAutoCheckIntervalMinutes,
+    onResult: setSkillUpdates,
+    onError: (unknownError) =>
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError))
+  });
 
   const selectProfileNow = async (
     profileId: string,
@@ -2242,6 +2240,10 @@ const AppContent = ({
           );
         })
         .catch(() => undefined);
+      void window.agentEnv
+        .scanSkillInventory()
+        .then(setSkillInventory)
+        .catch(() => undefined);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2627,7 +2629,8 @@ const AppContent = ({
     if (ids.length === 0) {
       return;
     }
-    setBusy(true);
+    const activity: SkillUpdateActivity = { kind: "preview-skills", skillIds: ids };
+    if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
     setSkillUpdateCheckStatus({ state: "checking", message: "Preparing update review..." });
     try {
@@ -2641,7 +2644,7 @@ const AppContent = ({
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setSkillUpdateCheckStatus(undefined);
     } finally {
-      setBusy(false);
+      finishSkillUpdateActivity(activity);
     }
   };
 
@@ -2668,12 +2671,15 @@ const AppContent = ({
   };
 
   const checkSkillUpdates = async () => {
-    setBusy(true);
+    const activity: SkillUpdateActivity = { kind: "check-library" };
+    if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
     setProfileSaveStatus("");
+    setSkillUpdateFeedbackWorkspace("library");
     setSkillUpdateCheckStatus({ state: "checking", message: "Checking library updates..." });
     try {
-      const { skillUpdateItems } = await refreshProfiles({ forceSkillUpdateCheck: true });
+      const skillUpdateItems = await window.agentEnv.checkSkillLibraryUpdates();
+      setSkillUpdates(skillUpdateItems);
       setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(skillUpdateItems, t));
       const checkError = skillUpdateItems.find((item) => item.error)?.error;
       if (checkError) {
@@ -2684,7 +2690,7 @@ const AppContent = ({
       setError(message);
       setSkillUpdateCheckStatus({ state: "error", message: "Update check failed" });
     } finally {
-      setBusy(false);
+      finishSkillUpdateActivity(activity);
     }
   };
 
@@ -2868,6 +2874,8 @@ const AppContent = ({
   };
 
   const checkSkillSourceGroup = async (sourceId: string) => {
+    const activity: SkillUpdateActivity = { kind: "check-source", sourceId };
+    if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
     setSkillUpdateFeedbackWorkspace("library");
     setSkillUpdateCheckStatus({ state: "checking", message: t("Checking source...") });
@@ -2896,10 +2904,14 @@ const AppContent = ({
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setSkillUpdateCheckStatus({ state: "error", message: t("Source check failed") });
       setError(message);
+    } finally {
+      finishSkillUpdateActivity(activity);
     }
   };
 
   const checkAllSkillSourceGroups = async () => {
+    const activity: SkillUpdateActivity = { kind: "check-sources" };
+    if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
     setSkillUpdateFeedbackWorkspace("library");
     setSkillUpdateCheckStatus({ state: "checking", message: t("Checking all sources...") });
@@ -2932,6 +2944,8 @@ const AppContent = ({
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setSkillUpdateCheckStatus({ state: "error", message: t("Source checks failed") });
       setError(message);
+    } finally {
+      finishSkillUpdateActivity(activity);
     }
   };
 
@@ -3287,10 +3301,12 @@ const AppContent = ({
   };
 
   const previewLibrarySkillUpdate = async (id: string) => {
-    setBusy(true);
+    const activity: SkillUpdateActivity = { kind: "preview-skill", skillId: id };
+    if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
     setProfileSaveStatus("");
     setSelectedSkillUpdatePlan(undefined);
+    setSkillUpdateFeedbackWorkspace("library");
     setSkillUpdateCheckStatus({ state: "checking", message: `Checking ${id}...` });
     try {
       const updatePlan = await window.agentEnv.previewLibrarySkillUpdate(id);
@@ -3335,7 +3351,7 @@ const AppContent = ({
       setError(message);
       setSkillUpdateCheckStatus({ state: "error", message: t("{{id}} check failed", { id }) });
     } finally {
-      setBusy(false);
+      finishSkillUpdateActivity(activity);
     }
   };
 
@@ -4145,7 +4161,7 @@ const AppContent = ({
                 onOpenProfiles={openProfilesForSharedSkill}
                 importConflictOpen={Boolean(pendingSkillImport)}
                 onRestoreCleanup={(backupId) => void undoSkillCleanup(backupId)}
-                updateCheckStatus={skillUpdateCheckStatus}
+                updateActivity={skillUpdateActivity}
                 viewState={skillLibraryViewState}
                 onViewStateChange={(next) => {
                   libraryScroll.resetScrollNow();
@@ -4896,15 +4912,6 @@ const AppContent = ({
                 </label>
                 <div className="settings-preference-row">
                   <span className="settings-preference-copy">
-                    <strong>{t("Storage")}</strong>
-                    <small>~/.config/agentenv-manager</small>
-                  </span>
-                  <div className="settings-readonly-value" aria-label={t("Global skill storage location")}>
-                    {t("AgentEnv data")}
-                  </div>
-                </div>
-                <div className="settings-preference-row">
-                  <span className="settings-preference-copy">
                     <strong>{t("Auto-check")}</strong>
                     <small>{t("Checks only skills that have per-skill update checks enabled.")}</small>
                   </span>
@@ -4957,7 +4964,7 @@ const AppContent = ({
                   </button>
                 </div>
               </div>
-              <code className="settings-data-path">~/.config/agentenv-manager</code>
+              <DataRootPath />
               <div className="backup-settings-list">
                 <div className="backup-settings-row">
                   <span className="backup-settings-icon" aria-hidden="true">

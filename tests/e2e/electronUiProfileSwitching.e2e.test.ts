@@ -2148,7 +2148,7 @@ describe("Electron UI profile switching e2e", () => {
     const popover = page.getByRole("menu", { name: "Actions for shared-reviewer" });
     await popover.waitFor({ state: "visible" });
     const checkUpdateItem = popover.getByRole("menuitem", {
-      name: /Check update|Preview update/
+      name: /Check update|Review update/
     });
     await checkUpdateItem.waitFor({ state: "visible" });
 
@@ -2175,6 +2175,50 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => page.getByRole("status").textContent())
       .toMatch(/up to date|update.*available|failed/i);
+  }, 30_000);
+
+  it("keeps Skill update progress scoped to its command across workspace navigation", async () => {
+    const { app: electronApp, librarySkill, page } = await launchApp({
+      backgroundStartupDelayMs: 1_500
+    });
+    await expect.poll(() =>
+      electronApp.evaluate(() => {
+        const state = globalThis as typeof globalThis & {
+          __agentEnvBackgroundOperations?: number;
+        };
+        return state.__agentEnvBackgroundOperations ?? 0;
+      }), { timeout: 5_000 }
+    ).toBe(0);
+    await writeFile(
+      join(librarySkill.sourceDir, "SKILL.md"),
+      "---\nname: Shared Reviewer\ndescription: Scoped progress update.\n---\n\n# Shared Reviewer\n\nScoped progress.\n",
+      "utf8"
+    );
+
+    const checkAll = page.getByRole("button", { name: "Check updates" });
+    await checkAll.click();
+    await expect.poll(() => checkAll.getAttribute("aria-busy")).toBe("true");
+    await expect.poll(() => checkAll.locator("svg").getAttribute("class")).toContain("is-spinning");
+
+    const review = page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByRole("button", { name: "Review update shared-reviewer" });
+    await review.waitFor({ state: "visible" });
+    await review.click();
+    await expect.poll(() => review.getAttribute("aria-busy")).toBe("true");
+    await expect.poll(() => checkAll.getAttribute("aria-busy")).toBe("false");
+    expect(await checkAll.locator("svg").getAttribute("class")).toContain("lucide-search-check");
+
+    const navigation = page.getByRole("complementary", { name: "Global navigation" });
+    await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
+    await navigation.getByRole("button", { name: "Skills", exact: true }).click();
+    const restoredReview = page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByRole("button", { name: "Review update shared-reviewer" });
+    await expect.poll(() => restoredReview.getAttribute("aria-busy")).toBe("true");
+    await page
+      .getByRole("dialog", { name: "Update preview for shared-reviewer" })
+      .waitFor({ state: "visible" });
   }, 30_000);
 
   it("removes a skill from the shared library through the rendered app", async () => {
@@ -5424,6 +5468,10 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
     await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Refresh skills" }).click();
+    await page
+      .getByRole("group", { name: "Library item batch-helper" })
+      .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
@@ -5434,7 +5482,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "Review update batch-helper" })
       .waitFor({ state: "visible" });
 
-    await page.getByRole("button", { name: "Update all skills" }).click();
+    await page.getByRole("button", { name: "Review all updates" }).click();
     const bulkUpdateDialog = page.getByRole("dialog", { name: "Review all skill updates" });
     await bulkUpdateDialog.waitFor({ state: "visible" });
     await bulkUpdateDialog.getByRole("button", { name: "Apply 2 updates" }).click();
@@ -5470,8 +5518,12 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
     await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Refresh skills" }).click();
+    await page
+      .getByRole("group", { name: "Library item missing-source-helper" })
+      .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Check updates" }).click();
-    await page.getByRole("button", { name: "Update all skills" }).click();
+    await page.getByRole("button", { name: "Review all updates" }).click();
     const bulkUpdateDialog = page.getByRole("dialog", { name: "Review all skill updates" });
     await bulkUpdateDialog.waitFor({ state: "visible" });
 
@@ -5637,8 +5689,9 @@ describe("Electron UI profile switching e2e", () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
 
     await page.getByRole("button", { name: "Settings" }).click();
-    await expect.poll(() => page.getByLabel("Global skill storage location").textContent())
-      .toBe("AgentEnv data");
+    await expect.poll(() => page.locator(".settings-data-path").textContent())
+      .toBe(appDataRoot);
+    expect(await page.getByLabel("Global skill storage location").count()).toBe(0);
     const canonicalSkillMd = join(appDataRoot, "skills-library", "shared-reviewer", "SKILL.md");
     const runtimeSkillMd = join(opencodeDir, "skills", "shared-reviewer", "SKILL.md");
     await expect(fileExists(canonicalSkillMd)).resolves.toBe(true);
@@ -6963,7 +7016,7 @@ describe("Electron UI profile switching e2e", () => {
       .click();
     await page
       .getByRole("menu", { name: "Actions for shared-reviewer" })
-      .getByRole("menuitem", { name: /Check update|Preview update/ })
+      .getByRole("menuitem", { name: /Check update|Review update/ })
       .click();
     await page
       .getByRole("dialog", { name: "Update preview for shared-reviewer" })
@@ -7415,7 +7468,7 @@ describe("Electron UI profile switching e2e", () => {
         };
       })
     );
-    expect(preferenceGeometry.length).toBeGreaterThanOrEqual(5);
+    expect(preferenceGeometry.length).toBeGreaterThanOrEqual(4);
     expect(preferenceGeometry.every((row) => row.contained && !row.overlaps)).toBe(true);
     expect(preferenceGeometry.every((row) => Math.abs(row.height - 34) <= 1)).toBe(true);
     const settingsActionHeights = await page

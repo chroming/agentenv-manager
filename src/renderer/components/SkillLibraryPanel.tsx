@@ -99,6 +99,7 @@ import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
 import { SkillSourceView } from "./SkillSourceView";
 import { ProjectSkillDiscoveryPanel } from "./ProjectSkillDiscoveryPanel";
+import type { SkillUpdateActivity } from "../skillUpdateActivity";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -209,7 +210,7 @@ interface SkillLibraryPanelProps {
   onRetireSharedSkill(input: RetireSharedSkillInput): Promise<boolean>;
   onOpenProfiles(): void;
   onRestoreCleanup(backupId: string): void;
-  updateCheckStatus?: SkillUpdateCheckStatus;
+  updateActivity?: SkillUpdateActivity;
   viewState: SkillLibraryViewState;
   onViewStateChange(next: SkillLibraryViewState): void;
   searchInputRef?: RefObject<HTMLInputElement | null>;
@@ -455,7 +456,7 @@ export const SkillLibraryPanel = ({
   onRetireSharedSkill,
   onOpenProfiles,
   onRestoreCleanup,
-  updateCheckStatus,
+  updateActivity,
   viewState,
   onViewStateChange,
   searchInputRef,
@@ -522,7 +523,7 @@ export const SkillLibraryPanel = ({
   const [mergeCompareId, setMergeCompareId] = useState("");
   const [mergeOperation, setMergeOperation] = useState<"loading" | "merging">();
   const [availabilityOperation, setAvailabilityOperation] = useState<SkillAvailabilityInput>();
-  const [previewingSkillId, setPreviewingSkillId] = useState<string>();
+  const [localPreviewingSkillId, setLocalPreviewingSkillId] = useState<string>();
   const [cleanupDetailsKey, setCleanupDetailsKey] = useState<string>();
   const [sharedTargetReviewKey, setSharedTargetReviewKey] = useState<string>();
   const [sharedRetireKey, setSharedRetireKey] = useState<string>();
@@ -537,6 +538,13 @@ export const SkillLibraryPanel = ({
     skillKey: string;
     sourcePath: string;
   }>();
+  const previewingSkillId =
+    updateActivity?.kind === "preview-skill"
+      ? updateActivity.skillId
+      : localPreviewingSkillId;
+  const checkingAllUpdates = updateActivity?.kind === "check-library";
+  const previewingAllUpdates = updateActivity?.kind === "preview-skills";
+  const updateActivityBusy = Boolean(updateActivity);
   useEffect(() => {
     if (importConflictOpen) {
       setExternalImport(undefined);
@@ -743,7 +751,7 @@ export const SkillLibraryPanel = ({
       sharedOperation ||
       cleanupOperationKey ||
       mergeOperation ||
-      (bulkUpdatePlans && isBusy)
+      (bulkUpdatePlans && (isBusy || previewingAllUpdates))
     ),
     onDismiss: dismissModal
   });
@@ -899,11 +907,11 @@ export const SkillLibraryPanel = ({
   };
   const runSkillUpdatePreview = async (id: string) => {
     if (previewingSkillId) return;
-    setPreviewingSkillId(id);
+    setLocalPreviewingSkillId(id);
     try {
       await onPreviewLibrarySkillUpdate(id);
     } finally {
-      setPreviewingSkillId(undefined);
+      setLocalPreviewingSkillId(undefined);
     }
   };
   const runSkillMenuAction = (
@@ -1696,26 +1704,33 @@ export const SkillLibraryPanel = ({
             type="button"
             aria-label={t("Check updates")}
             title={t("Check skill updates")}
-            disabled={updateCheckStatus?.state === "checking"}
+            aria-busy={checkingAllUpdates}
+            disabled={updateActivityBusy}
             onClick={onCheckUpdates}
           >
-            {updateCheckStatus?.state === "checking" ? (
+            {checkingAllUpdates ? (
               <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
             ) : (
               <SearchCheck size={15} strokeWidth={2.2} />
             )}
-            <span>{t(updateCheckStatus?.state === "checking" ? "Checking..." : "Check updates")}</span>
+            <span>{t(checkingAllUpdates ? "Checking..." : "Check updates")}</span>
           </button>
           {updateableSkillIds.length > 0 ? (
             <button
               className="secondary-action library-toolbar-action"
               type="button"
-              aria-label={t("Update all skills")}
-              title={t("Update all skills")}
+              aria-label={t("Review all updates")}
+              title={t("Review all updates")}
+              aria-busy={previewingAllUpdates}
+              disabled={updateActivityBusy}
               onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
             >
-              <Sparkles size={15} strokeWidth={2.2} />
-              <span>{t("Update all")}</span>
+              {previewingAllUpdates ? (
+                <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
+              ) : (
+                <Sparkles size={15} strokeWidth={2.2} />
+              )}
+              <span>{t("Review updates")}</span>
             </button>
           ) : null}
           {filtersOpen ? (
@@ -2011,7 +2026,7 @@ export const SkillLibraryPanel = ({
                       className="library-status-action is-update"
                       type="button"
                       aria-label={t("Review update {{id}}", { id: skill.id })}
-                      disabled={updateCheckStatus?.state === "checking" || Boolean(previewingSkillId)}
+                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
                       onClick={(event) => {
                         modalFallbackFocusRef.current = event.currentTarget;
                         void runSkillUpdatePreview(skill.id);
@@ -2030,7 +2045,7 @@ export const SkillLibraryPanel = ({
                       className="library-status-action is-error"
                       type="button"
                       aria-label={t("Retry update check {{id}}", { id: skill.id })}
-                      disabled={updateCheckStatus?.state === "checking" || Boolean(previewingSkillId)}
+                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
                       onClick={(event) => {
                         modalFallbackFocusRef.current = event.currentTarget;
                         void runSkillUpdatePreview(skill.id);
@@ -2117,7 +2132,7 @@ export const SkillLibraryPanel = ({
                               className="row-action-item"
                               type="button"
                               role="menuitem"
-                              disabled={Boolean(previewingSkillId)}
+                              disabled={updateActivityBusy || Boolean(previewingSkillId)}
                               onClick={() => runSkillMenuAction(skill, "update")}
                             >
                               {previewingSkillId === skill.id ? (
@@ -2125,7 +2140,7 @@ export const SkillLibraryPanel = ({
                               ) : (
                                 <RefreshCw size={14} strokeWidth={2.2} />
                               )}
-                              <span>{t(hasUpdate ? "Preview update" : "Check update")}</span>
+                              <span>{t(hasUpdate ? "Review update" : "Check update")}</span>
                             </button>
                           ) : null}
                           <button
@@ -2185,6 +2200,7 @@ export const SkillLibraryPanel = ({
 
       <SkillSourceView
         active={libraryMode === "sources"}
+        updateActivity={updateActivity}
         groups={sourceGroups}
         loading={sourceGroupsLoading}
         onCheckGroup={onCheckSourceGroup}
@@ -2887,7 +2903,7 @@ export const SkillLibraryPanel = ({
       {bulkUpdatePlans ? (
         <div
           className="preview-modal-backdrop"
-          onClick={isBusy ? undefined : onCloseBulkUpdatePreview}
+          onClick={isBusy || previewingAllUpdates ? undefined : onCloseBulkUpdatePreview}
         >
           <section
             ref={modalDialogRef}
@@ -2951,20 +2967,20 @@ export const SkillLibraryPanel = ({
                 <button
                   className="secondary-action"
                   type="button"
-                  disabled={isBusy}
+                  disabled={isBusy || previewingAllUpdates}
                   onClick={() => void onPreviewAllLibrarySkillUpdates([
                     ...bulkUpdatePlans.map((plan) => plan.id),
                     ...bulkUpdateFailures.map((failure) => failure.id)
                   ])}
                 >
-                  {isBusy ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" /> : null}
+                  {previewingAllUpdates ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" /> : null}
                   {t(isBusy ? "Preparing..." : "Retry failed previews")}
                 </button>
               ) : null}
               <button
                 className="primary-action"
                 type="button"
-                disabled={isBusy || bulkUpdatePlans.every((plan) => plan.errors.length > 0 || plan.changes.length === 0)}
+                disabled={isBusy || updateActivityBusy || bulkUpdatePlans.every((plan) => plan.errors.length > 0 || plan.changes.length === 0)}
                 onClick={() => onUpdateAllLibrarySkills(bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0))}
               >
                 {t("Apply {{count}} updates", { count: bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).length })}

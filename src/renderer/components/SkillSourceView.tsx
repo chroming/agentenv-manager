@@ -23,6 +23,7 @@ import type {
   SkillSourceMergeResult
 } from "../../shared/types";
 import { useI18n } from "../i18n";
+import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
@@ -30,6 +31,7 @@ import { Button, IconButton, ModalFrame } from "./ui";
 
 interface SkillSourceViewProps {
   active: boolean;
+  updateActivity?: SkillUpdateActivity;
   groups: SkillSourceGroupView[];
   loading: boolean;
   onCheckGroup(sourceId: string): Promise<void>;
@@ -89,6 +91,7 @@ const mergeErrorSummary = (message: string) => {
 
 export const SkillSourceView = ({
   active,
+  updateActivity,
   groups,
   loading,
   onCheckGroup,
@@ -126,6 +129,9 @@ export const SkillSourceView = ({
   const selectionDragRef = useRef<{ selected: boolean; visited: Set<string> } | undefined>(undefined);
   const suppressSelectionClickRef = useRef(false);
   const normalizedSearch = search.trim().toLocaleLowerCase();
+  const activeCheckingAll = checkingAll || updateActivity?.kind === "check-sources";
+  const activeCheckingSourceId =
+    updateActivity?.kind === "check-source" ? updateActivity.sourceId : undefined;
   const visibleGroups = useMemo(() => {
     if (!normalizedSearch) return groups;
     return groups.filter((group) =>
@@ -416,13 +422,13 @@ export const SkillSourceView = ({
           />
         </label>
         <button
-          aria-busy={checkingAll}
+          aria-busy={activeCheckingAll}
           className="secondary-action"
           type="button"
-          disabled={checkingAll || checking.size > 0 || Boolean(operation) || groups.length === 0}
+          disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || groups.length === 0}
           onClick={() => void runCheckAll()}
         >
-          {checkingAll ? (
+          {activeCheckingAll ? (
             <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
           ) : (
             <RefreshCw size={15} strokeWidth={2.2} />
@@ -433,7 +439,7 @@ export const SkillSourceView = ({
           <button
             className="secondary-action"
             type="button"
-            disabled={(mergeSelectionMode && mergeSelection.size < 2) || checkingAll || Boolean(operation)}
+            disabled={(mergeSelectionMode && mergeSelection.size < 2) || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
             onClick={() => mergeSelectionMode ? openMerge() : setMergeSelectionMode(true)}
           >
             <GitMerge size={15} strokeWidth={2.2} />
@@ -478,7 +484,7 @@ export const SkillSourceView = ({
         ) : null}
         {visibleGroups.map((group) => {
           const isExpanded = expanded.has(group.sourceId);
-          const isChecking = checking.has(group.sourceId);
+          const isChecking = checking.has(group.sourceId) || activeCheckingSourceId === group.sourceId;
           const isSelected = mergeSelection.has(group.sourceId);
           const hasAttention = group.counts.updates + group.counts.new + group.counts.removed > 0;
           const groupName = group.displayName ?? sourceDefaultLabel(group);
@@ -490,6 +496,10 @@ export const SkillSourceView = ({
               ? [candidate.libraryId]
               : []
           );
+          const reviewingGroup =
+            operation === `review\0${reviewableUpdateIds.join("\0")}` ||
+            (updateActivity?.kind === "preview-skills" &&
+              reviewableUpdateIds.some((id) => updateActivity.skillIds.includes(id)));
           return (
             <article
               className={`skill-source-group${isExpanded ? " is-expanded" : ""}${isSelected ? " is-selected" : ""}${hasAttention ? " has-attention" : ""}`}
@@ -605,13 +615,13 @@ export const SkillSourceView = ({
                   {reviewableUpdateIds.length > 0 ? (
                     <button
                       aria-label={`${t("Review")} ${reviewableUpdateIds.length}`}
-                      aria-busy={operation === `review\0${reviewableUpdateIds.join("\0")}`}
+                      aria-busy={reviewingGroup}
                       className="secondary-action skill-source-review"
                       type="button"
-                      disabled={isChecking || checkingAll || Boolean(operation)}
+                      disabled={isChecking || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
                       onClick={() => void runReviewUpdates(reviewableUpdateIds)}
                     >
-                      {operation === `review\0${reviewableUpdateIds.join("\0")}` ? (
+                      {reviewingGroup ? (
                         <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
                       ) : (
                         <RefreshCw size={14} strokeWidth={2.2} />
@@ -623,7 +633,7 @@ export const SkillSourceView = ({
                     aria-busy={isChecking}
                     className="secondary-action skill-source-check"
                     type="button"
-                    disabled={isChecking || checkingAll || Boolean(operation)}
+                    disabled={isChecking || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
                     onClick={() => void runCheck(group.sourceId)}
                   >
                     {isChecking ? (
@@ -649,7 +659,10 @@ export const SkillSourceView = ({
                     const addKey = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
                     const updateKey = candidate.libraryId ? `update\0${candidate.libraryId}` : "";
                     const isAdding = operation === addKey;
-                    const isUpdating = operation === updateKey;
+                    const isUpdating =
+                      operation === updateKey ||
+                      (updateActivity?.kind === "preview-skill" &&
+                        updateActivity.skillId === candidate.libraryId);
                     return (
                       <div
                         className={`skill-source-candidate is-${candidate.state}${candidate.globallyEnabled === false ? " is-disabled" : ""}`}
@@ -696,7 +709,7 @@ export const SkillSourceView = ({
                               aria-busy={isAdding}
                               className="text-action"
                               type="button"
-                              disabled={Boolean(operation) || checkingAll || checking.size > 0}
+                              disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
                               onClick={() => void runAdd(group, candidate)}
                             >
                               {isAdding ? <LoaderCircle className="is-spinning" size={13} /> : null}
@@ -711,7 +724,7 @@ export const SkillSourceView = ({
                               className="text-action"
                               type="button"
                               aria-label={t("Review update {{id}}", { id: candidate.libraryId })}
-                              disabled={Boolean(operation) || checkingAll || checking.size > 0}
+                              disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
                               onClick={() => void runUpdate(candidate.libraryId!)}
                             >
                               {isUpdating ? <LoaderCircle className="is-spinning" size={13} /> : null}
@@ -721,7 +734,7 @@ export const SkillSourceView = ({
                             <button
                               className="text-action text-action--danger"
                               type="button"
-                              disabled={Boolean(operation) || checkingAll || checking.size > 0}
+                              disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
                               onClick={() => onDelete(candidate.libraryId!)}
                             >
                               <Trash2 size={13} strokeWidth={2.2} />

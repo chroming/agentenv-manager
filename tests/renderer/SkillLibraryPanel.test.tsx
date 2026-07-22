@@ -539,7 +539,6 @@ describe("SkillLibraryPanel", () => {
         onRetireSharedSkill={onRetireSharedSkill}
         onOpenProfiles={onOpenProfiles}
         onRestoreCleanup={onRestoreCleanup}
-        updateCheckStatus={{ state: "success", message: "2 updates available" }}
         viewState={{ ...defaultSkillLibraryViewState, scrollTop: 180 }}
         onViewStateChange={onViewStateChange}
       />
@@ -680,7 +679,7 @@ describe("SkillLibraryPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Update all skills" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review all updates" }));
     expect(onPreviewAllLibrarySkillUpdates).toHaveBeenCalledWith([
       "github-reviewer",
       "shared-reviewer"
@@ -724,7 +723,7 @@ describe("SkillLibraryPanel", () => {
       expect(screen.getByRole("button", { name: "Review update shared-reviewer" })).toBeEnabled()
     );
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /Preview update/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Review update/ }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledTimes(2);
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Disable globally/ }));

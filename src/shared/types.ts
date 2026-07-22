@@ -150,6 +150,7 @@ export interface AgentEnvApi {
   previewStopManaging(targetId: string, mode: StopManagingMode): Promise<StopManagingPreview>;
   stopManaging(previewId: string): Promise<StopManagingResult>;
   createDataBackup(): Promise<DataBackupResult | undefined>;
+  readDataRoot(): Promise<string>;
   openDataFolder(): Promise<void>;
   selectDataRestore(): Promise<DataRestorePreview | undefined>;
   restoreDataBackup(path: string): Promise<{ safetyBackupPath: string }>;

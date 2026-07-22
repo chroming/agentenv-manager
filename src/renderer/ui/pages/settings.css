@@ -351,7 +351,12 @@
   color: var(--muted);
   display: block;
   margin-top: 12px;
+  max-width: 100%;
+  overflow: hidden;
   padding: 0;
+  text-overflow: ellipsis;
+  user-select: text;
+  white-space: nowrap;
 }
 
 .settings-page > .resource-section {
@@ -523,8 +528,7 @@
   line-height: 17px;
 }
 
-.settings-preference-row > select,
-.settings-preference-row > .settings-readonly-value {
+.settings-preference-row > select {
   height: var(--control-height-default);
   min-height: var(--control-height-default);
   justify-self: end;

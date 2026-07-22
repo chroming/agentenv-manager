@@ -798,11 +798,13 @@ export const registerIpcHandlers = ({
           : ResourceIconKeySchema.parse(input.iconKey)
     })
   );
-  ipcMain.handle("skills:preview-update", (_event, id: unknown) =>
-    skillLibraryStore.previewUpdate(parseId(id, "skill id"))
-  );
-  ipcMain.handle("skills:preview-updates", (_event, ids: unknown) => {
+  ipcMain.handle("skills:preview-update", async (_event, id: unknown) => {
+    await waitForAutomationBackgroundDelay();
+    return skillLibraryStore.previewUpdate(parseId(id, "skill id"));
+  });
+  ipcMain.handle("skills:preview-updates", async (_event, ids: unknown) => {
     if (!Array.isArray(ids)) throw new Error("Skill update preview requires a list of Skill ids");
+    await waitForAutomationBackgroundDelay();
     return skillLibraryStore.previewUpdates(ids.map((id) => parseId(id, "skill id")));
   });
   handleMutation("skills:update-library", (_event, input: SkillUpdateConfirmation) => {
@@ -961,6 +963,7 @@ export const registerIpcHandlers = ({
           createDataBackup(paths, destination)
         );
   });
+  ipcMain.handle("data:root", () => paths.appDataRoot);
   ipcMain.handle("data:open-folder", () => shell.openPath(paths.appDataRoot));
   ipcMain.handle("data:select-restore", async () => {
     const owner = BrowserWindow.getFocusedWindow();

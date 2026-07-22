@@ -499,6 +499,8 @@ Object.assign(zhCN, {
   "Checking...": "正在检查...",
   "Update all skills": "更新全部技能",
   "Update all": "全部更新",
+  "Review all updates": "查看全部更新",
+  "Review updates": "查看更新",
   "Library skills": "资源库技能",
   "Skill": "技能",
   "Source": "来源",
@@ -1638,6 +1640,8 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "Review all updates": "查看全部更新",
+  "Review updates": "查看更新",
   "Custom folders": "自訂目錄",
   "Choose where AgentEnv reads and manages each Agent's global files. Existing files are not moved.": "選擇 AgentEnv 讀取和管理各 Agent 全域檔案的位置。現有檔案不會被移動。",
   "Custom": "自訂",

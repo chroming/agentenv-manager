@@ -115,6 +115,7 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("targets:preview-stop-managing", targetId, mode),
   stopManaging: (previewId) => ipcRenderer.invoke("targets:stop-managing", previewId),
   createDataBackup: () => ipcRenderer.invoke("data:create-backup"),
+  readDataRoot: () => ipcRenderer.invoke("data:root"),
   openDataFolder: () => ipcRenderer.invoke("data:open-folder"),
   selectDataRestore: () => ipcRenderer.invoke("data:select-restore"),
   restoreDataBackup: (path) => ipcRenderer.invoke("data:restore", path),

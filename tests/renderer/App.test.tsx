@@ -655,6 +655,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     }),
     stopManaging: vi.fn().mockResolvedValue({ ok: true, backupId: "backup-1" }),
     createDataBackup: vi.fn().mockResolvedValue(undefined),
+    readDataRoot: vi.fn().mockResolvedValue("/tmp/agentenv-data"),
     openDataFolder: vi.fn().mockResolvedValue(undefined),
     selectDataRestore: vi.fn().mockResolvedValue(undefined),
     restoreDataBackup: vi.fn().mockResolvedValue({ safetyBackupPath: "/tmp/safety" }),
@@ -899,7 +900,7 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh skills" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Skills refreshed"));
-    expect(listSkillLibrary).toHaveBeenCalledTimes(3);
+    expect(listSkillLibrary).toHaveBeenCalledTimes(2);
     expect(checkSkillLibraryUpdates).toHaveBeenCalledTimes(2);
   });
 

@@ -279,6 +279,7 @@ interface PendingSkillUpdate {
 }
 
 const SKILL_UPDATE_PREVIEW_TTL_MS = 30 * 60 * 1000;
+const RECENT_UPDATE_CHECK_TTL_MS = 2 * 60 * 1000;
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
@@ -366,6 +367,7 @@ export const createSkillLibraryStore = (
   const runtimeSnapshotProvider = options.runtimeSnapshotProvider ?? ((targetPaths) =>
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
   const pendingUpdates = new Map<string, PendingSkillUpdate>();
+  const recentUpdateChecks = new Map<string, { checkedAt: number; metadataHash: string }>();
   const {
     fetchJson: fetchGitHubJson,
     fetchText: fetchGitHubText,
@@ -641,7 +643,7 @@ export const createSkillLibraryStore = (
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-preview-"));
     try {
       const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
-        readGitHubTree(parsedSource, tempDir),
+        readGitHubTree(parsedSource, tempDir, { refreshFiles: true }),
         readGitHubSkillUpdatedAt(parsedSource)
       ]);
       if (!hasSkillMd) {
@@ -1508,7 +1510,7 @@ export const createSkillLibraryStore = (
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-"));
     try {
       const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
-        readGitHubTree(source, tempDir),
+        readGitHubTree(source, tempDir, { refreshFiles: true }),
         readGitHubSkillUpdatedAt(source)
       ]);
       if (!hasSkillMd) {
@@ -2335,6 +2337,7 @@ export const createSkillLibraryStore = (
       type: "blob" | "tree";
       sha: string;
     }> | undefined>>();
+    const checkedMetadataHashes = new Map<string, string>();
     const githubManifestFor = (source: ParsedGitHubSkillSource) => {
       const key = `${source.owner}/${source.repo}\0${source.ref}`;
       const existing = githubManifests.get(key);
@@ -2367,8 +2370,9 @@ export const createSkillLibraryStore = (
       githubManifests.set(key, request);
       return request;
     };
-    return Promise.all(selectedSkills.map(async (skill): Promise<SkillUpdateInfo> => {
+    const results = await Promise.all(selectedSkills.map(async (skill): Promise<SkillUpdateInfo> => {
       const metadata = await readLibraryMetadata(skill.path);
+      checkedMetadataHashes.set(skill.id, metadataHash(metadata));
       if (!metadata.source) {
         return {
           id: skill.id,
@@ -2447,6 +2451,17 @@ export const createSkillLibraryStore = (
         };
       }
     }));
+    const checkedAt = Date.now();
+    for (const result of results) {
+      const checkedMetadataHash = checkedMetadataHashes.get(result.id);
+      if (!result.error && checkedMetadataHash) {
+        recentUpdateChecks.set(result.id, {
+          checkedAt,
+          metadataHash: checkedMetadataHash
+        });
+      }
+    }
+    return results;
   };
 
   const setUpdateSource = async ({
@@ -2643,7 +2658,7 @@ export const createSkillLibraryStore = (
 
   const previewUpdate = async (
     id: string,
-    refreshSource = true
+    refreshSource?: boolean
   ): Promise<SkillUpdatePlan> => {
     await discardExpiredPendingUpdates();
     const safeId = SafeIdSchema.parse(id);
@@ -2653,6 +2668,12 @@ export const createSkillLibraryStore = (
     }
     const skill = await entryFor(safeId, targetDir);
     const metadata = await readLibraryMetadata(targetDir);
+    const recentCheck = recentUpdateChecks.get(safeId);
+    const shouldRefreshSource = refreshSource ?? !(
+      recentCheck &&
+      recentCheck.metadataHash === metadataHash(metadata) &&
+      Date.now() - recentCheck.checkedAt <= RECENT_UPDATE_CHECK_TTL_MS
+    );
     const impact = await skillUpdateImpact(safeId);
     if (skill.updatePolicy !== "tracked") {
       return {
@@ -2759,8 +2780,11 @@ export const createSkillLibraryStore = (
       const candidateDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-update-"));
       try {
         const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
-          readGitHubTree(source, candidateDir, { refresh: refreshSource }),
-          readGitHubSkillUpdatedAt(source, { refresh: refreshSource })
+          readGitHubTree(source, candidateDir, {
+            refresh: shouldRefreshSource,
+            refreshFiles: true
+          }),
+          readGitHubSkillUpdatedAt(source, { refresh: shouldRefreshSource })
         ]);
         if (!hasSkillMd) {
           throw new Error(`GitHub skill source is missing SKILL.md: ${metadata.source}`);
@@ -2802,7 +2826,7 @@ export const createSkillLibraryStore = (
           },
           candidateDir,
           undefined,
-          { refresh: refreshSource }
+          { refresh: shouldRefreshSource }
         );
         return await finalizeCandidate(candidateDir, {
           ...metadata,
@@ -2894,7 +2918,10 @@ export const createSkillLibraryStore = (
       > = [];
       for (const [index, id] of group.entries()) {
         try {
-          results.push({ ok: true, plan: await previewUpdate(id, index === 0) });
+          results.push({
+            ok: true,
+            plan: await previewUpdate(id, index === 0 ? undefined : false)
+          });
         } catch (error) {
           results.push({ ok: false, id, error: error instanceof Error ? error.message : String(error) });
         }

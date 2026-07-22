@@ -12,7 +12,7 @@ export const githubContentsRevision = (
   directory: string,
   entries: readonly RevisionTreeEntry[]
 ) => {
-  // Match readGitHubTree's Contents API traversal so Git and API scans share identity.
+  // Keep Git and GitHub tree scans on the same subtree identity.
   const root = normalizeDirectory(directory);
   const prefix = root ? `${root}/` : "";
   const manifest = entries

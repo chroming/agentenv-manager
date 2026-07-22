@@ -748,17 +748,6 @@ h2 {
   width: min(520px, calc(100vw - 80px));
 }
 
-.settings-readonly-value {
-  display: flex;
-  min-height: var(--control-height-default);
-  align-items: center;
-  padding: 0 11px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  color: var(--text-secondary);
-  background: var(--surface-muted);
-}
-
 .profile-form-dialog--compact {
   max-width: 420px;
 }

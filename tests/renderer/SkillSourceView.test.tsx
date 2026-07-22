@@ -339,6 +339,38 @@ describe("SkillSourceView", () => {
     await waitFor(() => expect(review.querySelector(".is-spinning")).toBeNull());
   });
 
+  it("keeps source-check progress on the command that owns it", () => {
+    const props = {
+      active: true,
+      groups: [group],
+      loading: false,
+      onCheckGroup: vi.fn().mockResolvedValue(undefined),
+      onCheckAll: vi.fn().mockResolvedValue(undefined),
+      onRename: vi.fn().mockResolvedValue(undefined),
+      onPreviewMerge: vi.fn(),
+      onMerge: vi.fn(),
+      onAdd: vi.fn().mockResolvedValue(true),
+      onUpdate: vi.fn(),
+      onReviewUpdates: vi.fn(),
+      onDelete: vi.fn(),
+      onOpenSource: vi.fn(),
+      onCopySource: vi.fn()
+    };
+    const { rerender } = render(
+      <SkillSourceView
+        {...props}
+        updateActivity={{ kind: "check-source", sourceId: group.sourceId }}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Check" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Check all" })).toHaveAttribute("aria-busy", "false");
+
+    rerender(<SkillSourceView {...props} updateActivity={{ kind: "check-sources" }} />);
+    expect(screen.getByRole("button", { name: "Check" })).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("button", { name: "Check all" })).toHaveAttribute("aria-busy", "true");
+  });
+
   it("requires an explicit preview before merging selected source scopes", async () => {
     const secondGroup: SkillSourceGroupView = {
       ...group,
