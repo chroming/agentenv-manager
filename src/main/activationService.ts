@@ -68,6 +68,11 @@ import {
 } from "./ownershipMarkers";
 import { removeSkillDeployment } from "./skillDeployment";
 import {
+  expectedManagedSkillHashes,
+  hashManagedResourcePath,
+  hashPath
+} from "./managedResourceHashes";
+import {
   inspectSkillRoot,
   isolateSkillRoot,
   type SkillRootTransition
@@ -234,35 +239,6 @@ const fingerprintTargetState = (state: TargetState): string => {
     recoveryRequired: state.recoveryRequired ?? null
   };
   return hashText(JSON.stringify(comparable));
-};
-
-const hashPath = async (path: string): Promise<string | undefined> => {
-  if (!(await pathExists(path))) {
-    return undefined;
-  }
-
-  const hash = createHash("sha256");
-  const walk = async (currentPath: string) => {
-    const stats = await lstat(currentPath);
-    hash.update(relative(dirname(path), currentPath));
-    if (stats.isSymbolicLink()) {
-      hash.update(`symlink:${await readlink(currentPath)}`);
-      return;
-    }
-    if (stats.isDirectory()) {
-      const entries = await readdir(currentPath, { withFileTypes: true });
-      for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-        await walk(join(currentPath, entry.name));
-      }
-      return;
-    }
-    if (stats.isFile()) {
-      hash.update(await readFile(currentPath));
-    }
-  };
-
-  await walk(path);
-  return hash.digest("hex");
 };
 
 const hashComparablePath = async (path: string): Promise<string | undefined> => {
@@ -575,11 +551,25 @@ export const createActivationService = ({
             const activeManagedResources = (state.managedResources ?? []).filter(
               (resource) => !resource.paused
             );
+            const activeProfile = state.activeProfileId
+              ? await profileStore.readProfile(state.activeProfileId).catch(() => undefined)
+              : undefined;
+            const activeTargetPaths = activeProfile ? await targetPathsFor(targetId) : undefined;
+            const activeExpectedSkillHashes =
+              activeProfile && activeTargetPaths
+                ? expectedManagedSkillHashes(activeProfile, activeTargetPaths, skillLibrary)
+                : new Map<string, string>();
             const driftChecks = await Promise.all(
               activeManagedResources
                 .filter((resource) => resource.kind !== "config")
                 .map(async (resource) => {
-                  const currentHash = await hashPath(resource.path);
+                  const currentHash = await hashManagedResourcePath(resource.path, resource.kind);
+                  if (
+                    resource.kind === "skill" &&
+                    activeExpectedSkillHashes.get(resolve(resource.path)) === currentHash
+                  ) {
+                    return false;
+                  }
                   return currentHash !== resource.contentHash;
                 })
             );
@@ -594,14 +584,13 @@ export const createActivationService = ({
               lifecycleStatus = "drifted";
               lifecycleReason = `${driftCount} managed ${driftCount === 1 ? "resource differs" : "resources differ"} from the applied snapshot`;
             } else if (state.activeProfileId) {
-              try {
-                const profile = await profileStore.readProfile(state.activeProfileId);
-                activeProfileName = profile.manifest.name;
+              if (activeProfile) {
+                activeProfileName = activeProfile.manifest.name;
                 const expectedHash =
-                  profile.targetContentHashes?.[targetId] ??
-                  createProfileContentHash(profile, targetId);
+                  activeProfile.targetContentHashes?.[targetId] ??
+                  createProfileContentHash(activeProfile, targetId);
                 const currentVersions = collectLibraryResourceVersions(
-                  profile,
+                  activeProfile,
                   skillLibrary,
                   targetId
                 );
@@ -613,7 +602,7 @@ export const createActivationService = ({
                 if (!isCurrent) {
                   lifecycleReason = "Saved Profile or Library resources changed after the last Apply";
                 }
-              } catch {
+              } else {
                 lifecycleStatus = "pending";
                 lifecycleReason = "The active Profile is unavailable";
               }
@@ -697,7 +686,7 @@ export const createActivationService = ({
       if (path.endsWith(".agentenv-owner.json")) continue;
       const identity = resourceKindForPath(path, targetPaths);
       if (identity.kind === "config") continue;
-      const contentHash = await hashPath(path);
+      const contentHash = await hashManagedResourcePath(path, identity.kind);
       if (!contentHash) {
         continue;
       }
@@ -1198,9 +1187,14 @@ export const createActivationService = ({
       state: stateFile.state,
       profile: materializedProfile,
       targetPaths,
-      hashPath,
+      hashPath: hashManagedResourcePath,
       affectedPaths: affectedManagedPaths,
-      automaticallyAdoptablePaths: new Set(approvedUnmanagedSkillHashes.keys())
+      automaticallyAdoptablePaths: new Set(approvedUnmanagedSkillHashes.keys()),
+      expectedManagedSkillHashes: expectedManagedSkillHashes(
+        materializedProfile,
+        targetPaths,
+        skillLibrary
+      )
     });
     const unmanagedIssues = managesSkills
       ? preservedUnmanagedSkillIssues(materializedProfile, inventory)
@@ -1572,9 +1566,14 @@ export const createActivationService = ({
         state: currentStateFile.state,
         profile: materializedProfile,
         targetPaths,
-        hashPath,
+        hashPath: hashManagedResourcePath,
         affectedPaths: affectedManagedPaths,
-        automaticallyAdoptablePaths: new Set(approvedUnmanagedSkillHashes.keys())
+        automaticallyAdoptablePaths: new Set(approvedUnmanagedSkillHashes.keys()),
+        expectedManagedSkillHashes: expectedManagedSkillHashes(
+          materializedProfile,
+          targetPaths,
+          skillLibrary
+        )
       });
       const replaceablePaths = replaceableApplyPaths(preview.issues);
       const unreviewedDrift = currentDrift.issues.filter(
@@ -1693,7 +1692,7 @@ export const createActivationService = ({
           )
           .sort((left, right) => left.path.localeCompare(right.path));
         for (const resource of refreshedManagedResources) {
-          if ((await hashPath(resource.path)) !== resource.contentHash) {
+          if ((await hashManagedResourcePath(resource.path, resource.kind)) !== resource.contentHash) {
             throw new Error(`Post-apply verification failed for ${resource.path}`);
           }
         }

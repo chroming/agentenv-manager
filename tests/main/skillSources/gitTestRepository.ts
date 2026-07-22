@@ -5,10 +5,10 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const runGit = async (cwd: string, args: string[]) => {
+export const runGit = async (cwd: string, args: string[], env: NodeJS.ProcessEnv = {}) => {
   const { stdout } = await execFileAsync("git", args, {
     cwd,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
+    env: { ...process.env, ...env, GIT_TERMINAL_PROMPT: "0" }
   });
   return stdout.trim();
 };
@@ -16,7 +16,7 @@ export const runGit = async (cwd: string, args: string[]) => {
 export interface GitTestRepository {
   remoteDir: string;
   workDir: string;
-  commit(message: string): Promise<string>;
+  commit(message: string, committedAt?: string): Promise<string>;
   write(relativePath: string, content: string): Promise<void>;
 }
 
@@ -43,9 +43,15 @@ export const createGitTestRepository = async (
     await write(path, content);
   }
 
-  const commit = async (message: string) => {
+  const commit = async (message: string, committedAt?: string) => {
     await runGit(workDir, ["add", "--all"]);
-    await runGit(workDir, ["commit", "-m", message]);
+    await runGit(
+      workDir,
+      ["commit", "-m", message],
+      committedAt
+        ? { GIT_AUTHOR_DATE: committedAt, GIT_COMMITTER_DATE: committedAt }
+        : {}
+    );
     const branch = await runGit(workDir, ["branch", "--show-current"]);
     await runGit(workDir, ["push", "--force", "origin", `HEAD:refs/heads/${branch}`]);
     return runGit(workDir, ["rev-parse", "HEAD"]);

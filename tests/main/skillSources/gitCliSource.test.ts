@@ -120,6 +120,29 @@ describe("git CLI skill source", () => {
     expect(changed.contentRevision).not.toBe(initial.contentRevision);
   });
 
+  it("reports each Skill subtree's verified last commit time instead of the repository HEAD time", async () => {
+    const { repository, source } = await setup();
+    await repository.write(
+      "skills/engineering/debug/SKILL.md",
+      "---\nname: debugging\ndescription: Diagnose failures quickly.\n---\n# Debug\n"
+    );
+    await repository.commit("update debug skill", "2030-01-02T03:04:05Z");
+    await repository.write(
+      "skills/engineering/review/prompt.md",
+      "Review carefully and explain the result.\n"
+    );
+    await repository.commit("update review skill", "2031-02-03T04:05:06Z");
+
+    const result = await source.scan({
+      repository: repository.remoteDir,
+      directory: "skills/engineering"
+    });
+    const byName = new Map(result.candidates.map((candidate) => [candidate.name, candidate]));
+
+    expect(byName.get("debugging")?.upstreamUpdatedAt).toBe("2030-01-02T03:04:05.000Z");
+    expect(byName.get("code-review")?.upstreamUpdatedAt).toBe("2031-02-03T04:05:06.000Z");
+  });
+
   it("blocks LFS pointers, submodules, and escaping symlinks", async () => {
     const { repository, source } = await setup();
     const input = {

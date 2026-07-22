@@ -316,6 +316,58 @@ describe("activation service v2", () => {
     expect((await lstat(targetSkill)).isSymbolicLink()).toBe(true);
   });
 
+  it("does not report managed drift when a live link matches the current Library Skill", async () => {
+    const { paths, service, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const first = await service.previewProfile("daily-coding", "codex");
+    expect((await service.applyProfile("daily-coding", first.id)).ok).toBe(true);
+
+    const incoming = join(root, "source", "review-update");
+    await mkdir(incoming, { recursive: true });
+    await writeFile(
+      join(incoming, "SKILL.md"),
+      "---\nname: review\ndescription: Review changes.\n---\n\n# Updated review\n"
+    );
+    const importPreview = await skillLibraryStore.previewImport({
+      kind: "local",
+      input: { sourcePath: incoming, id: "review" }
+    });
+    await skillLibraryStore.importSkill({
+      sourcePath: incoming,
+      id: "review",
+      expectedContentHash: importPreview.incoming.contentHash,
+      conflictResolution: { action: "replace", existingId: "review" }
+    });
+
+    const updated = await service.previewProfile("daily-coding", "codex");
+    const [targetState] = await service.listTargetStates();
+
+    expect(updated.issues.filter((issue) => issue.code === "managed-resource-drift")).toEqual([]);
+    expect(targetState).toMatchObject({ lifecycleStatus: "pending", errorCount: 0 });
+    expect(await readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
+      .toContain("# Updated review");
+  });
+
+  it("names a genuinely changed managed Skill in the protected-change issue", async () => {
+    const { paths, service, settingsStore } = await makeEnv();
+    await settingsStore.updateSettings({ skillSyncMethod: "copy" });
+    await writeCodexLiveFiles(paths);
+    const first = await service.previewProfile("daily-coding", "codex");
+    expect((await service.applyProfile("daily-coding", first.id)).ok).toBe(true);
+    const targetSkill = join(paths.codexHome, "skills", "review");
+    await writeFile(join(targetSkill, "SKILL.md"), "---\nname: review\n---\n# External change\n");
+
+    const preview = await service.previewProfile("daily-coding", "codex");
+    const drift = preview.issues.find((issue) => issue.code === "managed-resource-drift");
+
+    expect(drift).toMatchObject({
+      disposition: "review",
+      resourceKind: "skill",
+      resourceId: "review",
+      path: targetSkill
+    });
+  });
+
   it("backs up and replaces a broken Target Skills root link without touching its destination", async () => {
     const { paths, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

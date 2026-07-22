@@ -2411,14 +2411,14 @@ describe("App", () => {
 
     cleanup();
     const driftIssue: ApplyIssue = {
-      id: "managed-resource-drift:instructions",
+      id: "managed-resource-drift:review",
       code: "managed-resource-drift",
       disposition: "review",
       resolution: "backup-replace",
-      resourceKind: "instructions",
-      resourceId: "instructions",
-      path: "/tmp/home/.config/opencode/AGENTS.md",
-      message: "AgentEnv-managed Instructions changed outside AgentEnv"
+      resourceKind: "skill",
+      resourceId: "review",
+      path: "/tmp/home/.config/opencode/skills/review",
+      message: "AgentEnv-managed skill review changed outside AgentEnv"
     };
     const driftApi = installApi({
       listTargetStates: vi.fn().mockResolvedValue([
@@ -2436,6 +2436,8 @@ describe("App", () => {
     expect(readiness).toHaveTextContent("Review protected changes on OpenCode");
     expect(screen.queryByRole("button", { name: "Review preview" })).not.toBeInTheDocument();
     dialog = screen.getByRole("dialog", { name: "Preview" });
+    expect(dialog).toHaveTextContent("Skill review changed outside AgentEnv");
+    expect(dialog).not.toHaveTextContent("OpenCode skill changed outside AgentEnv");
     const replaceButton = within(dialog).getByRole("button", { name: "Apply with backup" });
     expect(replaceButton).toBeEnabled();
     expect(within(dialog).getByRole("button", { name: "Open recovery history" })).toBeInTheDocument();

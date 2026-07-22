@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, open, readdir, rm } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, rm } from "node:fs/promises";
 import { basename, dirname, join, posix } from "node:path";
 import type {
   RepositorySkillCandidate,
   RepositorySkillScanResult,
   RepositorySkillSourceInput
 } from "../../shared/types";
-import { pathEntryExists } from "../fileUtils";
+import { isMissingFileError, pathEntryExists } from "../fileUtils";
 import { parseSkillFrontmatter } from "../skillFrontmatter";
 import type {
   GitSourceReadOptions,
@@ -25,6 +25,9 @@ export interface GitCliSkillSourceOptions {
   runner: GitCommandRunner;
   maxCandidates?: number;
 }
+
+const SOURCE_HISTORY_DEPTH = 128;
+const CANDIDATE_READ_CONCURRENCY = 8;
 
 const normalizeDirectory = (value: string | undefined): string => {
   const directory = value?.trim().replace(/^\/+|\/+$/g, "") ?? "";
@@ -68,27 +71,49 @@ const readTreeOid = async (
   }
 };
 
+const readShallowBoundary = async (repository: ResolvedGitRepository) => {
+  let content = "";
+  try {
+    content = await readFile(join(repository.cachePath, "shallow"), "utf8");
+  } catch (error) {
+    if (!isMissingFileError(error)) throw error;
+  }
+  return new Set(
+    content
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  );
+};
+
 const resolvedSkill = async (
   runner: GitCommandRunner,
   repository: ResolvedGitRepository,
   directory: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  known?: { contentRevision?: string; shallowBoundary?: ReadonlySet<string> }
 ): Promise<ResolvedGitSkillSource> => {
-  const contentRevision = await readTreeOid(runner, repository, directory, signal);
+  const contentRevision =
+    known?.contentRevision ?? await readTreeOid(runner, repository, directory, signal);
   const updated = await runner.run(
     [
       "--git-dir",
       repository.cachePath,
       "log",
       "-1",
-      "--format=%cI",
+      "--format=%H%x00%cI",
       repository.resolvedCommit,
       "--",
       ...(directory ? [directory] : [])
     ],
     { signal, timeoutMs: 30_000 }
   );
-  const updatedAt = updated.stdout.trim();
+  const [updatedCommit = "", updatedAt = ""] = updated.stdout.trim().split("\0");
+  const shallowBoundary = known?.shallowBoundary ?? await readShallowBoundary(repository);
+  const hasVerifiedUpdatedAt =
+    updatedAt &&
+    !Number.isNaN(Date.parse(updatedAt)) &&
+    !shallowBoundary.has(updatedCommit);
   return {
     ...repository,
     directory,
@@ -99,7 +124,7 @@ const resolvedSkill = async (
       ref: repository.ref,
       subpath: directory || undefined,
       revision: repository.resolvedCommit,
-      ...(updatedAt && !Number.isNaN(Date.parse(updatedAt))
+      ...(hasVerifiedUpdatedAt
         ? { updatedAt: new Date(updatedAt).toISOString() }
         : {})
     }
@@ -191,7 +216,8 @@ export const createGitCliSkillSource = (
     readOptions?: GitSourceReadOptions
   ): Promise<ResolvedGitSkillSource> => {
     const repository = await options.cache.fetch(input, signal, {
-      refresh: readOptions?.refresh ?? true
+      refresh: readOptions?.refresh ?? true,
+      historyDepth: SOURCE_HISTORY_DEPTH
     });
     const directory = normalizeDirectory(input.directory ?? repository.location.inferredDirectory);
     return resolvedSkill(options.runner, repository, directory, signal);
@@ -203,7 +229,8 @@ export const createGitCliSkillSource = (
     readOptions?: GitSourceReadOptions
   ): Promise<RepositorySkillScanResult> => {
     const repository = await options.cache.fetch(input, signal, {
-      refresh: readOptions?.refresh ?? true
+      refresh: readOptions?.refresh ?? true,
+      historyDepth: SOURCE_HISTORY_DEPTH
     });
     const directory = normalizeDirectory(input.directory ?? repository.location.inferredDirectory);
     if (directory) await readTreeOid(options.runner, repository, directory, signal);
@@ -233,8 +260,13 @@ export const createGitCliSkillSource = (
       );
     const maxCandidates = options.maxCandidates ?? 500;
     const selectedRoots = roots.slice(0, maxCandidates);
-    const candidates: RepositorySkillCandidate[] = [];
-    for (const root of selectedRoots) {
+    const treeOidByPath = new Map(
+      treeEntries
+        .filter((entry) => entry.type === "tree")
+        .map((entry) => [entry.path, entry.sha] as const)
+    );
+    const shallowBoundary = await readShallowBoundary(repository);
+    const readCandidate = async (root: string): Promise<RepositorySkillCandidate> => {
       const skillPath = root ? `${root}/SKILL.md` : "SKILL.md";
       const markdown = await options.runner.run(
         ["--git-dir", repository.cachePath, "show", `${repository.resolvedCommit}:${skillPath}`],
@@ -244,7 +276,10 @@ export const createGitCliSkillSource = (
       const fallbackName = root ? basename(root) : "skill";
       const name = frontmatter.name || fallbackName;
       const id = normalizeSkillId(name) || normalizeSkillId(fallbackName);
-      const source = await resolvedSkill(options.runner, repository, root, signal);
+      const source = await resolvedSkill(options.runner, repository, root, signal, {
+        contentRevision: root ? treeOidByPath.get(root) : undefined,
+        shallowBoundary
+      });
       const compatibleRevision = githubContentsRevision(
         root,
         treeEntries
@@ -256,7 +291,7 @@ export const createGitCliSkillSource = (
             sha: entry.sha
           }))
       );
-      candidates.push({
+      return {
         id,
         name,
         description: frontmatter.description,
@@ -270,8 +305,22 @@ export const createGitCliSkillSource = (
         upstreamUpdatedAt: source.upstream.updatedAt,
         status: frontmatter.errors.length > 0 ? "invalid" : "ready",
         error: frontmatter.errors.length > 0 ? frontmatter.errors.join("; ") : undefined
-      });
-    }
+      };
+    };
+    const candidates = new Array<RepositorySkillCandidate>(selectedRoots.length);
+    let nextCandidateIndex = 0;
+    await Promise.all(
+      Array.from(
+        { length: Math.min(CANDIDATE_READ_CONCURRENCY, selectedRoots.length) },
+        async () => {
+          while (nextCandidateIndex < selectedRoots.length) {
+            const index = nextCandidateIndex;
+            nextCandidateIndex += 1;
+            candidates[index] = await readCandidate(selectedRoots[index]);
+          }
+        }
+      )
+    );
     const result = {
       repository: repository.repository,
       ref: repository.ref,

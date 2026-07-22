@@ -23,7 +23,7 @@ export interface GitRepositoryCache {
   fetch(
     input: RepositorySkillSourceInput,
     signal?: AbortSignal,
-    options?: { refresh?: boolean }
+    options?: { refresh?: boolean; historyDepth?: number }
   ): Promise<ResolvedGitRepository>;
 }
 
@@ -184,11 +184,12 @@ export const createGitRepositoryCache = (
   const fetch = (
     input: RepositorySkillSourceInput,
     signal?: AbortSignal,
-    fetchOptions: { refresh?: boolean } = {}
+    fetchOptions: { refresh?: boolean; historyDepth?: number } = {}
   ): Promise<ResolvedGitRepository> => {
     const location = parseRepositoryLocation(input.repository, { allowLocal: true });
     const requestedRef = safeRef(input.ref ?? location.inferredRef);
-    const requestKey = `${location.cacheKeyLocator}\0${requestedRef ?? "<default>"}`;
+    const historyDepth = Math.max(1, Math.floor(fetchOptions.historyDepth ?? 1));
+    const requestKey = `${location.cacheKeyLocator}\0${requestedRef ?? "<default>"}\0${historyDepth}`;
     const existing = inflight.get(requestKey);
     if (existing) return existing;
     const cached = recent.get(requestKey);
@@ -231,7 +232,7 @@ export const createGitRepositoryCache = (
               "--git-dir",
               cachePath,
               "fetch",
-              "--depth=1",
+              `--depth=${historyDepth}`,
               "--no-tags",
               "origin",
               ref

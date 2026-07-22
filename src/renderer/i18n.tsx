@@ -1335,6 +1335,7 @@ Object.assign(zhCN, {
   "External change recovery": "外部变更恢复",
   "External changes are protected": "外部变更已受保护",
   "{{target}} {{kind}} changed outside AgentEnv": "{{target}} 的{{kind}}已在 AgentEnv 外部发生变更",
+  "{{kind}}{{identity}} changed outside AgentEnv": "{{kind}}{{identity}} 已在 AgentEnv 外部被修改",
   "I understand; back up and replace these changes": "我已了解；备份并替换这些变更",
   "Cancel keeps the target unchanged. Continuing creates a backup, then replaces the managed resources shown above.": "取消将保持目标不变。继续操作会先创建备份，再替换上方列出的托管资源。",
   "Adopt compatible changes": "采用兼容变更",
@@ -1640,6 +1641,7 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "{{kind}}{{identity}} changed outside AgentEnv": "{{kind}}{{identity}} 已在 AgentEnv 外部被修改",
   "Review all updates": "查看全部更新",
   "Review updates": "查看更新",
   "Custom folders": "自訂目錄",

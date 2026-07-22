@@ -775,15 +775,23 @@
 }
 
 .profile-composer-section__management {
+  box-sizing: border-box;
   display: grid;
   gap: 6px;
-  grid-template-columns: 34px 58px;
+  grid-template-columns: 34px minmax(0, 96px);
   justify-content: start;
-  min-width: 98px;
-  width: 98px;
+  min-width: 136px;
+  padding-inline: 0;
+  width: 136px;
+}
+
+.profile-composer-section__management .ui-switch__label {
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .profile-composer-section__management .ui-switch__track {
+  box-sizing: border-box;
   height: 20px;
   width: 34px;
 }
@@ -1302,7 +1310,7 @@
   }
 
   .profile-composer-section__management {
-    min-width: 98px;
+    min-width: 136px;
   }
 
   .profile-composer-section__icon {

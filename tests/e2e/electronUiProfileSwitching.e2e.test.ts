@@ -1959,7 +1959,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
     await expect
       .poll(() => previewDialog.textContent())
-      .toContain("OpenCode instructions changed outside AgentEnv");
+      .toContain("Instructions changed outside AgentEnv");
     const reviewIssues = previewDialog.locator(".apply-preview-issues--review");
     await expect.poll(() => reviewIssues.evaluate((element) => {
       const box = element.getBoundingClientRect();
@@ -1998,8 +1998,9 @@ describe("Electron UI profile switching e2e", () => {
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
     await expect.poll(() => previewDialog.textContent()).toContain(
-      "OpenCode skill changed outside AgentEnv"
+      "Skill ui-alpha-skill changed outside AgentEnv"
     );
+    expect(await previewDialog.locator('[aria-label="Full issue detail"]').count()).toBe(1);
     expect(await previewDialog.textContent()).not.toContain(
       "Skill target already exists and is not AgentEnv-owned"
     );
@@ -5180,6 +5181,19 @@ describe("Electron UI profile switching e2e", () => {
     });
     expect(await managementSwitch.isDisabled()).toBe(true);
     expect(await managementSwitch.textContent()).toContain("Agent controlled");
+    const managementGeometry = await managementSwitch.evaluate((element) => {
+      const label = element.querySelector<HTMLElement>(".ui-switch__label");
+      const control = element.getBoundingClientRect();
+      const labelRect = label?.getBoundingClientRect();
+      return {
+        controlRight: control.right,
+        labelRight: labelRect?.right ?? control.right,
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth
+      };
+    });
+    expect(managementGeometry.scrollWidth).toBeLessThanOrEqual(managementGeometry.clientWidth);
+    expect(managementGeometry.labelRight).toBeLessThanOrEqual(managementGeometry.controlRight + 0.5);
     expect(await editor.locator("select").count()).toBe(0);
 
     await previewAndApply(page, "Claude Code");

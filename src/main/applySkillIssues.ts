@@ -3,6 +3,7 @@ import { normalizeSkillKey } from "../shared/skillIdentity";
 import { profileManagesResource } from "../shared/profileResources";
 import type {
   ApplyIssue,
+  ManagedResourceKind,
   ProfileDetail,
   SkillInventoryEntry,
   SkillLibraryEntry,
@@ -161,14 +162,16 @@ export const findManagedDrift = async ({
   targetPaths,
   hashPath,
   affectedPaths,
-  automaticallyAdoptablePaths = new Set()
+  automaticallyAdoptablePaths = new Set(),
+  expectedManagedSkillHashes = new Map()
 }: {
   state: TargetState;
   profile: ProfileDetail;
   targetPaths: TargetPaths;
-  hashPath(path: string): Promise<string | undefined>;
+  hashPath(path: string, kind?: ManagedResourceKind): Promise<string | undefined>;
   affectedPaths?: ReadonlySet<string>;
   automaticallyAdoptablePaths?: ReadonlySet<string>;
+  expectedManagedSkillHashes?: ReadonlyMap<string, string>;
 }) => {
   const issues: ApplyIssue[] = [];
   const paths = new Set<string>();
@@ -180,7 +183,7 @@ export const findManagedDrift = async ({
     if (resource.kind === "config") continue;
     if (affectedPaths && !affectedPaths.has(resource.path)) continue;
 
-    const currentHash = await hashPath(resource.path);
+    const currentHash = await hashPath(resource.path, resource.kind);
     if (!currentHash) {
       if (desired.has(resource.path)) {
         issues.push(
@@ -199,6 +202,12 @@ export const findManagedDrift = async ({
     }
 
     if (currentHash === resource.contentHash) continue;
+    if (
+      resource.kind === "skill" &&
+      expectedManagedSkillHashes.get(resolve(resource.path)) === currentHash
+    ) {
+      continue;
+    }
     if (
       resource.kind === "skill" &&
       automaticallyAdoptablePaths.has(resolve(resource.path))

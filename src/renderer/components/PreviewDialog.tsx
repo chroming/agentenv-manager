@@ -55,9 +55,11 @@ const presentIssue = (
   t: (message: string, values?: TranslationValues) => string
 ) => {
   if (issue.code === "managed-resource-drift") {
-    const kind = issue.resourceKind === "instructions" ? "instructions" : issue.resourceKind;
+    const kind = issue.resourceKind === "instructions" ? t("Instructions") : t("Skill");
+    const identity =
+      issue.resourceKind !== "instructions" && issue.resourceId ? ` ${issue.resourceId}` : "";
     return {
-      title: t("{{target}} {{kind}} changed outside AgentEnv", { target: targetName, kind }),
+      title: t("{{kind}}{{identity}} changed outside AgentEnv", { kind, identity }),
       detail: issue.detail ?? issue.path
     };
   }
