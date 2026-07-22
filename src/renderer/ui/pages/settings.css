@@ -580,7 +580,7 @@
   align-items: center;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto 48px;
+  grid-template-columns: minmax(0, 1fr) 82px 84px;
   min-height: 52px;
   padding: 7px 2px;
 }
@@ -596,15 +596,25 @@
 }
 
 .agent-path-copy strong,
-.agent-path-copy code {
+.agent-path-value {
   font-size: 12px;
   line-height: 17px;
 }
 
-.agent-path-copy code {
+.agent-path-value {
   color: var(--muted);
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-path-reset {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  justify-self: start;
   white-space: nowrap;
 }
 

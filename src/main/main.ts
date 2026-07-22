@@ -217,7 +217,9 @@ const broadcastStartupStatus = () => {
 
 ipcMain.handle("startup:status", () => startupStatus);
 ipcMain.handle("startup:open-data-folder", async () => {
-  if (startupDataRoot) await shell.openPath(startupDataRoot);
+  if (!startupDataRoot) return;
+  const error = await shell.openPath(startupDataRoot);
+  if (error) throw new Error(error);
 });
 ipcMain.handle("startup:export-diagnostics", async () => {
   if (!startupDiagnostics) return undefined;
@@ -365,7 +367,9 @@ const createServices = async () => {
     settingsStore.readSettings()
   );
   await mutationCoordinator.runExclusive("Upgrade Skill content hashes", () =>
-    migrateSkillContentHashes(paths)
+    migrateSkillContentHashes(paths, {
+      onWarning: (message) => startupDiagnostics?.record("skill-content-hash-upgrade-warning", message)
+    })
   );
   let gitRunner: GitCommandRunner | undefined;
   let repositorySourcePromise: Promise<GitCliSkillSource> | undefined;

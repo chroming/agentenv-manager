@@ -7,8 +7,9 @@ import type {
 } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
+import { OverflowTooltip } from "./OverflowTooltip";
 import { targetIconFor } from "./ProfileSidebar";
-import { Switch } from "./ui";
+import { Button, Switch } from "./ui";
 
 interface AgentSettingsSectionProps {
   supportedAgents: TargetDescriptor[];
@@ -45,6 +46,10 @@ export const AgentSettingsSection = ({
   const { t } = useI18n();
   const [disableCandidate, setDisableCandidate] = useState<TargetDescriptor>();
   const [pendingAgentId, setPendingAgentId] = useState<string>();
+  const [pendingPathAction, setPendingPathAction] = useState<{
+    agentId: string;
+    action: "choose" | "reset";
+  }>();
   const dialogRef = useRef<HTMLElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -84,6 +89,19 @@ export const AgentSettingsSection = ({
       return;
     }
     void onSetEnabled(agent.id, false);
+  };
+
+  const commitPathChange = async (
+    agentId: string,
+    action: "choose" | "reset"
+  ) => {
+    setPendingPathAction({ agentId, action });
+    try {
+      if (action === "choose") await onChooseConfigRoot(agentId);
+      else await onResetConfigRoot(agentId);
+    } finally {
+      setPendingPathAction(undefined);
+    }
   };
 
   return (
@@ -144,30 +162,55 @@ export const AgentSettingsSection = ({
           })}
         </div>
         <details className="agent-path-settings">
-          <summary>{t("Advanced paths")}</summary>
+          <summary>{t("Custom folders")}</summary>
           <p className="settings-muted">
-            {t("Override one Agent configuration root. AgentEnv will rescan it before any operation.")}
+            {t("Choose where AgentEnv reads and manages each Agent's global files. Existing files are not moved.")}
           </p>
           <div className="agent-path-list">
             {supportedAgents.map((agent) => {
               const customRoot = configRoots[agent.id];
               const defaultRoot = agentsById.get(agent.id)?.paths.configDir;
+              const pendingAction = pendingPathAction?.agentId === agent.id
+                ? pendingPathAction.action
+                : undefined;
+              const fullPath = customRoot ?? defaultRoot ?? t("Default location");
               return (
-                <div className="agent-path-row" key={agent.id}>
+                <div className="agent-path-row" key={agent.id} aria-busy={Boolean(pendingAction)}>
                   <span className="agent-path-copy">
                     <strong>{agent.name}</strong>
-                    <code title={customRoot ?? defaultRoot}>
-                      {customRoot
+                    <OverflowTooltip
+                      className="agent-path-value"
+                      displayText={customRoot
                         ? `${t("Custom")} · ${customRoot.split(/[\\/]/).filter(Boolean).slice(-2).join("/")}`
                         : t("Default location")}
-                    </code>
+                      text={fullPath}
+                    />
                   </span>
-                  <button className="secondary-action" type="button" disabled={busy} onClick={() => void onChooseConfigRoot(agent.id)}>
-                    {t("Choose")}
-                  </button>
-                  <button className="text-action" type="button" disabled={busy || !customRoot} onClick={() => void onResetConfigRoot(agent.id)}>
-                    {t("Reset")}
-                  </button>
+                  <Button
+                    size="compact"
+                    disabled={busy || Boolean(pendingPathAction)}
+                    icon={pendingAction === "choose" ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
+                    onClick={() => void commitPathChange(agent.id, "choose")}
+                  >
+                    {pendingAction === "choose"
+                      ? t("Choosing...")
+                      : customRoot
+                        ? t("Change")
+                        : t("Choose")}
+                  </Button>
+                  {customRoot ? (
+                    <button
+                      className="text-action agent-path-reset"
+                      type="button"
+                      disabled={busy || Boolean(pendingPathAction)}
+                      onClick={() => void commitPathChange(agent.id, "reset")}
+                    >
+                      {pendingAction === "reset" ? (
+                        <LoaderCircle className="is-spinning" size={14} aria-hidden="true" />
+                      ) : null}
+                      {pendingAction === "reset" ? t("Saving...") : t("Use default")}
+                    </button>
+                  ) : <span aria-hidden="true" />}
                 </div>
               );
             })}

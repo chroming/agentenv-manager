@@ -70,6 +70,7 @@ import type {
   SkillUpdatePolicyInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
+  SkillUpdatePreviewBatchResult,
   SkillUpdateSourceInput
 } from "../../shared/types";
 import { InfoTip } from "./InfoTip";
@@ -147,6 +148,7 @@ interface SkillLibraryPanelProps {
   cleanupBackups: SkillCleanupBackupSummary[];
   selectedUpdatePlan?: SkillUpdatePlan;
   bulkUpdatePlans?: SkillUpdatePlan[];
+  bulkUpdateFailures?: SkillUpdatePreviewBatchResult["failed"];
   skillUsage: Record<string, string[]>;
   installedTargetIds?: string[];
   targetNames?: TargetNameIndex;
@@ -398,6 +400,7 @@ export const SkillLibraryPanel = ({
   cleanupBackups,
   selectedUpdatePlan,
   bulkUpdatePlans,
+  bulkUpdateFailures = [],
   skillUsage,
   installedTargetIds = [],
   targetNames = {},
@@ -736,7 +739,11 @@ export const SkillLibraryPanel = ({
     initialFocusRef: modalInitialFocusRef,
     fallbackFocusRef: modalFallbackFocusRef,
     dismissDisabled: Boolean(
-      availabilityOperation || sharedOperation || cleanupOperationKey || mergeOperation
+      availabilityOperation ||
+      sharedOperation ||
+      cleanupOperationKey ||
+      mergeOperation ||
+      (bulkUpdatePlans && isBusy)
     ),
     onDismiss: dismissModal
   });
@@ -2878,7 +2885,10 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {bulkUpdatePlans ? (
-        <div className="preview-modal-backdrop" onClick={onCloseBulkUpdatePreview}>
+        <div
+          className="preview-modal-backdrop"
+          onClick={isBusy ? undefined : onCloseBulkUpdatePreview}
+        >
           <section
             ref={modalDialogRef}
             className="profile-form-dialog bulk-update-dialog"
@@ -2894,6 +2904,27 @@ export const SkillLibraryPanel = ({
               </div>
             </header>
             <div className="bulk-update-list">
+              {bulkUpdateFailures.length > 0 ? (
+                <section className="bulk-update-failures" aria-label={t("Preview failures")}>
+                  <div className="bulk-update-failures__heading">
+                    <TriangleAlert size={15} aria-hidden="true" />
+                    <strong>
+                      {t("{{count}} update previews could not be prepared", {
+                        count: bulkUpdateFailures.length
+                      })}
+                    </strong>
+                  </div>
+                  {bulkUpdateFailures.map((failure) => (
+                    <div className="bulk-update-failure" key={failure.id}>
+                      <strong>{failure.id}</strong>
+                      <PreviewText
+                        className="bulk-update-failure__error"
+                        text={failure.error}
+                      />
+                    </div>
+                  ))}
+                </section>
+              ) : null}
               {bulkUpdatePlans.map((plan) => (
                 <details key={plan.id} open={plan.errors.length > 0}>
                   <summary>
@@ -2915,11 +2946,25 @@ export const SkillLibraryPanel = ({
               ))}
             </div>
             <footer className="preview-actions">
-              <button ref={modalInitialFocusRef} className="secondary-action" type="button" onClick={onCloseBulkUpdatePreview}>{t("Cancel")}</button>
+              <button ref={modalInitialFocusRef} className="secondary-action" type="button" disabled={isBusy} onClick={onCloseBulkUpdatePreview}>{t("Cancel")}</button>
+              {bulkUpdateFailures.length > 0 ? (
+                <button
+                  className="secondary-action"
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => void onPreviewAllLibrarySkillUpdates([
+                    ...bulkUpdatePlans.map((plan) => plan.id),
+                    ...bulkUpdateFailures.map((failure) => failure.id)
+                  ])}
+                >
+                  {isBusy ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" /> : null}
+                  {t(isBusy ? "Preparing..." : "Retry failed previews")}
+                </button>
+              ) : null}
               <button
                 className="primary-action"
                 type="button"
-                disabled={bulkUpdatePlans.every((plan) => plan.errors.length > 0 || plan.changes.length === 0)}
+                disabled={isBusy || bulkUpdatePlans.every((plan) => plan.errors.length > 0 || plan.changes.length === 0)}
                 onClick={() => onUpdateAllLibrarySkills(bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0))}
               >
                 {t("Apply {{count}} updates", { count: bulkUpdatePlans.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).length })}

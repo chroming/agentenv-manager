@@ -80,6 +80,7 @@ import type {
   SkillUpdatePolicyInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
+  SkillUpdatePreviewBatchResult,
   SkillUpdateSourceInput,
   TargetDescriptor,
   TargetInfo,
@@ -443,6 +444,9 @@ const AppContent = ({
   const [skillImportDecision, setSkillImportDecision] = useState<"replace" | "keep-both">("replace");
   const [selectedSkillUpdatePlan, setSelectedSkillUpdatePlan] = useState<SkillUpdatePlan>();
   const [bulkSkillUpdatePlans, setBulkSkillUpdatePlans] = useState<SkillUpdatePlan[]>();
+  const [bulkSkillUpdateFailures, setBulkSkillUpdateFailures] = useState<
+    SkillUpdatePreviewBatchResult["failed"]
+  >([]);
   const [profileResourceCounts, setProfileResourceCounts] = useState<
     Record<string, ProfileResourceSummary>
   >({});
@@ -2560,6 +2564,7 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     setBulkSkillUpdatePlans(undefined);
+    setBulkSkillUpdateFailures([]);
     try {
       const results: PromiseSettledResult<SkillLibraryEntry>[] = [];
       for (const plan of applicablePlans) {
@@ -2627,17 +2632,12 @@ const AppContent = ({
     setSkillUpdateCheckStatus({ state: "checking", message: "Preparing update review..." });
     try {
       const result = await window.agentEnv.previewLibrarySkillUpdates(ids);
-      if (result.plans.length > 0) setBulkSkillUpdatePlans(result.plans);
-      if (result.failed.length > 0) {
-        setError(result.failed.map((failure) => `${failure.id}: ${failure.error}`).join("\n"));
-        setSkillUpdateCheckStatus({
-          state: "error",
-          message: `${plural(result.failed.length, "preview")} failed`
-        });
-      } else {
-        setSkillUpdateCheckStatus(undefined);
-      }
+      setBulkSkillUpdatePlans(result.plans);
+      setBulkSkillUpdateFailures(result.failed);
+      setSkillUpdateCheckStatus(undefined);
     } catch (unknownError) {
+      setBulkSkillUpdatePlans(undefined);
+      setBulkSkillUpdateFailures([]);
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       setSkillUpdateCheckStatus(undefined);
     } finally {
@@ -4069,6 +4069,7 @@ const AppContent = ({
                 cleanupBackups={skillCleanupBackups}
                 selectedUpdatePlan={selectedSkillUpdatePlan}
                 bulkUpdatePlans={bulkSkillUpdatePlans}
+                bulkUpdateFailures={bulkSkillUpdateFailures}
                 skillUsage={skillUsage}
                 installedTargetIds={targets
                   .filter((target) => isTargetInstalled(target.health))
@@ -4111,7 +4112,10 @@ const AppContent = ({
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onUpdateAllLibrarySkills={updateAllLibrarySkills}
                 onPreviewAllLibrarySkillUpdates={previewAllLibrarySkillUpdates}
-                onCloseBulkUpdatePreview={() => setBulkSkillUpdatePlans(undefined)}
+                onCloseBulkUpdatePreview={() => {
+                  setBulkSkillUpdatePlans(undefined);
+                  setBulkSkillUpdateFailures([]);
+                }}
                 onSyncSkillInstalls={(id) => void syncSkillInstalls(id)}
                 onRemoveLibrarySkill={removeLibrarySkill}
                 onPreviewSkillMerge={previewSkillMerge}

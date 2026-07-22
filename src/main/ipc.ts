@@ -828,7 +828,7 @@ export const registerIpcHandlers = ({
         current.targetConfigRoots?.[targetId] !== nextInput.targetConfigRoots?.[targetId]
       ));
       if (changedTargetIds.size > 0) {
-        const managed = (await activationService.listTargetStates()).find(
+        const managed = (await activationService.listTargetStates({ includeDisabled: true })).find(
           (state) => changedTargetIds.has(state.targetId) && state.lifecycleStatus !== "unmanaged"
         );
         if (managed) {

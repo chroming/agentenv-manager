@@ -205,6 +205,10 @@ button:disabled {
   user-select: text;
 }
 
+.startup-failure-copy .startup-action-error {
+  color: var(--danger);
+}
+
 .startup-failure-actions {
   align-items: center;
   display: flex;

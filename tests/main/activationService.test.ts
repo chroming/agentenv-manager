@@ -133,6 +133,23 @@ describe("activation service v2", () => {
     await expect(createBackupStore(paths).listBackups()).resolves.toHaveLength(1);
   });
 
+  it("retains managed state visibility for configuration-root safety when an Agent is turned off", async () => {
+    const { paths, service, settingsStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+    await settingsStore.updateSettings({ enabledTargetIds: ["opencode"] });
+
+    await expect(service.listTargetStates()).resolves.toEqual([]);
+    await expect(service.listTargetStates({ includeDisabled: true })).resolves.toEqual([
+      expect.objectContaining({
+        targetId: "codex",
+        lifecycleStatus: "applied",
+        activeProfileId: "daily-coding"
+      })
+    ]);
+  });
+
   it("is a true no-op after the same Profile is applied", async () => {
     const { paths, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

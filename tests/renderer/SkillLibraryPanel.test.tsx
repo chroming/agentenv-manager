@@ -159,7 +159,8 @@ describe("SkillLibraryPanel", () => {
           copiedTargetIds: string[];
         };
       }>,
-      showSelectedUpdatePlan = false
+      showSelectedUpdatePlan = false,
+      bulkUpdateFailures: Array<{ id: string; error: string }> = []
     ) => (
       <SkillLibraryPanel
         sourceGroups={[]}
@@ -490,6 +491,7 @@ describe("SkillLibraryPanel", () => {
           }
         } : undefined}
         bulkUpdatePlans={bulkUpdatePlans}
+        bulkUpdateFailures={bulkUpdateFailures}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         installedTargetIds={["opencode", "codex"]}
         preparedTargetsBySkill={{
@@ -1225,9 +1227,18 @@ describe("SkillLibraryPanel", () => {
             copiedTargetIds: []
           }
         }
-      ])
+      ], false, [{ id: "missing-reviewer", error: "Source directory is unavailable" }])
     );
     const bulkDialog = screen.getByRole("dialog", { name: "Review all skill updates" });
+    expect(bulkDialog).toHaveTextContent("1 update previews could not be prepared");
+    expect(bulkDialog).toHaveTextContent("missing-reviewer");
+    expect(bulkDialog).toHaveTextContent("Source directory is unavailable");
+    fireEvent.click(within(bulkDialog).getByRole("button", { name: "Retry failed previews" }));
+    expect(onPreviewAllLibrarySkillUpdates).toHaveBeenCalledWith([
+      "shared-reviewer",
+      "broken-reviewer",
+      "missing-reviewer"
+    ]);
     const partialApply = within(bulkDialog).getByRole("button", { name: "Apply 1 updates" });
     expect(partialApply).toBeEnabled();
     fireEvent.click(partialApply);

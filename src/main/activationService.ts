@@ -106,7 +106,7 @@ export interface ActivationServiceOptions {
 }
 
 export interface ActivationService {
-  listTargetStates(): Promise<TargetManagementState[]>;
+  listTargetStates(options?: { includeDisabled?: boolean }): Promise<TargetManagementState[]>;
   previewProfile(profileId: string, targetId?: string): Promise<ActivationPreview>;
   applyProfile(
     profileId: string,
@@ -542,12 +542,15 @@ export const createActivationService = ({
     }
   };
 
-  const listTargetStates = async (): Promise<TargetManagementState[]> => {
+  const listTargetStates = async (
+    options: { includeDisabled?: boolean } = {}
+  ): Promise<TargetManagementState[]> => {
     if (!(await pathExists(paths.targetStatesDir))) {
       return [];
     }
     const entries = await readdir(paths.targetStatesDir, { withFileTypes: true });
     const enabledTargetIds = new Set(await targetScope.listEnabledIds());
+    const supportedTargetIds = new Set(targetRegistry.list().map((target) => target.id));
     const skillLibrary = await skillLibraryStore.listSkills();
     const states = await Promise.all(
       entries
@@ -555,7 +558,8 @@ export const createActivationService = ({
           (entry) =>
             entry.isFile() &&
             entry.name.endsWith(".json") &&
-            enabledTargetIds.has(entry.name.replace(/\.json$/, ""))
+            supportedTargetIds.has(entry.name.replace(/\.json$/, "")) &&
+            (options.includeDisabled || enabledTargetIds.has(entry.name.replace(/\.json$/, "")))
         )
         .map(async (entry): Promise<TargetManagementState | undefined> => {
           const targetId = entry.name.replace(/\.json$/, "");

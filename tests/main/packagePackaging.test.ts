@@ -118,13 +118,13 @@ describe("package metadata", () => {
       "swift scripts/generate-mac-icon.swift"
     );
     expect(packageJson.scripts?.pack).toBe(
-      "npm run icons:mac && npm run build && electron-builder --dir"
+      "npm run icons:mac && npm run build && electron-builder --dir --config.electronDist=node_modules/electron/dist"
     );
     expect(packageJson.scripts?.dist).toBe(
-      "npm run icons:mac && npm run build && electron-builder"
+      "npm run icons:mac && npm run build && electron-builder --config.electronDist=node_modules/electron/dist"
     );
     expect(packageJson.scripts?.["dist:mac"]).toBe(
-      "npm run icons:mac && npm run build && electron-builder --mac"
+      "npm run icons:mac && npm run build && electron-builder --mac --config.electronDist=node_modules/electron/dist"
     );
     expect(packageJson.scripts?.["dist:mac:signed"]).toBe(
       "node scripts/build-signed-mac.mjs"

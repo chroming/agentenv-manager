@@ -54,4 +54,35 @@ describe("Skill content hash migration", () => {
     await expect(readJson<{ skills: Array<{ copies: Array<{ contentHash: string }> }> }>(join(paths.captureReceiptsDir, "daily--codex.json")))
       .resolves.toMatchObject({ skills: [{ copies: [{ contentHash: deployedHash }] }] });
   });
+
+  it("retains malformed Target state and optional Capture receipts while upgrading healthy data", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-hash-migration-invalid-neighbor-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const healthySkill = join(paths.skillsLibraryDir, "healthy");
+    await mkdir(healthySkill, { recursive: true });
+    await mkdir(paths.targetStatesDir, { recursive: true });
+    await mkdir(paths.captureReceiptsDir, { recursive: true });
+    await writeFile(join(healthySkill, "SKILL.md"), "# Healthy\n");
+    const invalidStatePath = join(paths.targetStatesDir, "codex.json");
+    const invalidReceiptPath = join(paths.captureReceiptsDir, "daily--codex.json");
+    await writeFile(invalidStatePath, "{ invalid state", "utf8");
+    await writeFile(invalidReceiptPath, "{ invalid receipt", "utf8");
+    const warnings: string[] = [];
+
+    await expect(migrateSkillContentHashes(paths, {
+      onWarning: (message) => {
+        warnings.push(message);
+      }
+    })).resolves.toBe(true);
+
+    await expect(readFile(invalidStatePath, "utf8")).resolves.toBe("{ invalid state");
+    await expect(readFile(invalidReceiptPath, "utf8")).resolves.toBe("{ invalid receipt");
+    expect(warnings).toEqual([
+      expect.stringContaining("Skipped invalid Target state"),
+      expect.stringContaining("Skipped invalid optional Capture receipt")
+    ]);
+    await expect(readJson<{ skillContentHashVersion: number }>(
+      join(paths.appDataRoot, "content-hash-format.json")
+    )).resolves.toEqual({ skillContentHashVersion: 2 });
+  });
 });
