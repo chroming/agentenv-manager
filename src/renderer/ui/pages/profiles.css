@@ -903,7 +903,7 @@
 
 .preview-header .section-title {
   font-size: 15px;
-  font-weight: var(--font-weight-regular);
+  font-weight: var(--font-weight-semibold);
   line-height: 20px;
   text-transform: none;
 }
@@ -1477,7 +1477,7 @@
   color: var(--text);
   display: block;
   font-size: 12px;
-  font-weight: var(--font-weight-regular);
+  font-weight: var(--font-weight-medium);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -7345,9 +7345,33 @@ describe("Electron UI profile switching e2e", () => {
       right: "1px",
       top: "1px"
     });
+    const skillTypography = await page.locator(".library-table-row").first().evaluate((row) => ({
+      description: getComputedStyle(row.querySelector<HTMLElement>(".skill-description")!).fontWeight,
+      name: getComputedStyle(row.querySelector<HTMLElement>(".skill-title")!).fontWeight,
+      source: getComputedStyle(row.querySelector<HTMLElement>(".library-source-primary")!).fontWeight
+    }));
+    expect(skillTypography).toEqual({ description: "400", name: "500", source: "400" });
 
     await sidebar.getByRole("button", { name: "Profiles", exact: true }).click();
     await page.locator(".profile-hero").waitFor({ state: "visible" });
+    const profileTypography = await page.evaluate(() => ({
+      composerDescription: getComputedStyle(
+        document.querySelector<HTMLElement>(".profile-composer-section__description")!
+      ).fontWeight,
+      composerTitle: getComputedStyle(
+        document.querySelector<HTMLElement>(".profile-composer-section__title")!
+      ).fontWeight,
+      description: getComputedStyle(document.querySelector<HTMLElement>(".profile-row__description")!).fontWeight,
+      name: getComputedStyle(document.querySelector<HTMLElement>(".profile-row__name")!).fontWeight,
+      selectedName: getComputedStyle(document.querySelector<HTMLElement>(".profile-hero__title h2")!).fontWeight
+    }));
+    expect(profileTypography).toEqual({
+      composerDescription: "400",
+      composerTitle: "500",
+      description: "400",
+      name: "500",
+      selectedName: "600"
+    });
     const profileSearchGeometry = await page.locator(".profile-search").evaluate((field) => {
       const fieldBox = field.getBoundingClientRect();
       const inputBox = field.querySelector("input")!.getBoundingClientRect();
@@ -7404,6 +7428,12 @@ describe("Electron UI profile switching e2e", () => {
       radius: "0px",
       rowContained: true
     });
+    const profileSkillTypography = await page.locator(".profile-skill-row").first().evaluate((row) => ({
+      detail: getComputedStyle(row.querySelector<HTMLElement>(".profile-skill-detail")!).fontWeight,
+      name: getComputedStyle(row.querySelector<HTMLElement>(".profile-skill-name")!).fontWeight,
+      state: getComputedStyle(row.querySelector<HTMLElement>(".profile-skill-state strong")!).fontWeight
+    }));
+    expect(profileSkillTypography).toEqual({ detail: "400", name: "500", state: "400" });
 
     await sidebar.getByRole("button", { name: "Agents", exact: true }).click();
     const targetListGeometry = await page.locator(".target-list").evaluate((list) => {
@@ -7444,6 +7474,12 @@ describe("Electron UI profile switching e2e", () => {
       healthBackgroundsAreNeutral: true,
       summaryLanesAligned: true
     });
+    const targetTypography = await page.locator(".target-card--workflow").first().evaluate((row) => ({
+      description: getComputedStyle(row.querySelector<HTMLElement>(".target-workflow-description")!).fontWeight,
+      name: getComputedStyle(row.querySelector<HTMLElement>(".target-workflow-name-line strong")!).fontWeight,
+      status: getComputedStyle(row.querySelector<HTMLElement>(".target-health-status")!).fontWeight
+    }));
+    expect(targetTypography).toEqual({ description: "400", name: "500", status: "400" });
 
     await sidebar.getByRole("button", { name: "Settings", exact: true }).click();
     const preferenceGeometry = await page.locator(".settings-preference-row").evaluateAll((rows) =>
@@ -7471,6 +7507,11 @@ describe("Electron UI profile switching e2e", () => {
     expect(preferenceGeometry.length).toBeGreaterThanOrEqual(4);
     expect(preferenceGeometry.every((row) => row.contained && !row.overlaps)).toBe(true);
     expect(preferenceGeometry.every((row) => Math.abs(row.height - 34) <= 1)).toBe(true);
+    const preferenceTypography = await page.locator(".settings-preference-copy").first().evaluate((copy) => ({
+      description: getComputedStyle(copy.querySelector<HTMLElement>("small")!).fontWeight,
+      label: getComputedStyle(copy.querySelector<HTMLElement>("strong")!).fontWeight
+    }));
+    expect(preferenceTypography).toEqual({ description: "400", label: "500" });
     const settingsActionHeights = await page
       .locator(
         ".settings-data-actions button, .backup-settings-row > button, .backup-settings-row > select, .github-settings-actions button, .github-device-actions button"
@@ -7483,6 +7524,9 @@ describe("Electron UI profile switching e2e", () => {
 
     await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
     await page.getByRole("button", { name: "Scan local" }).click();
+    expect(
+      await page.locator(".library-drawer__header strong").evaluate((title) => getComputedStyle(title).fontWeight)
+    ).toBe("500");
     const cleanupRow = page.locator(".cleanup-group-row").first();
     await cleanupRow.waitFor({ state: "visible" });
     const cleanupGeometry = await cleanupRow.evaluate((row) => {

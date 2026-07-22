@@ -97,6 +97,7 @@
 .backup-settings-copy strong {
   color: var(--text);
   font-size: 13px;
+  font-weight: var(--font-weight-medium);
   line-height: 18px;
 }
 
@@ -181,6 +182,7 @@
 .backup-row-copy strong {
   color: var(--text);
   font-size: 13px;
+  font-weight: var(--font-weight-medium);
   line-height: 18px;
 }
 
@@ -983,7 +985,7 @@
 .workspace-sync-review-title {
   color: var(--text);
   font-size: 15px;
-  font-weight: var(--font-weight-regular);
+  font-weight: var(--font-weight-medium);
   line-height: 1.25;
 }
 
@@ -1021,7 +1023,7 @@
 .workspace-sync-change-title {
   color: var(--text);
   font-size: 13px;
-  font-weight: var(--font-weight-regular);
+  font-weight: var(--font-weight-medium);
 }
 
 .workspace-sync-change small {

@@ -20,7 +20,7 @@
 .skill-availability-dialog__header strong {
   color: var(--text);
   font-size: 16px;
-  font-weight: var(--font-weight-regular);
+  font-weight: var(--font-weight-semibold);
   line-height: 21px;
 }
 
