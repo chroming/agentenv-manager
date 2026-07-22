@@ -604,6 +604,7 @@ h2 {
   z-index: var(--z-modal);
 }
 
+
 .preview-dialog--modal {
   max-height: min(760px, calc(100vh - 80px));
   max-width: 920px;

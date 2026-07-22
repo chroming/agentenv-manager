@@ -35,6 +35,7 @@ describe("useDesktopShortcuts", () => {
           activeWorkspace: "profiles",
           isProfileSaving,
           onSaveProfile,
+          onOpenQuickSearch: vi.fn(),
           onRefreshSkills: vi.fn(),
           profileSearchRef: createSearchRef("daily"),
           skillSearchRef: createSearchRef("skill"),
@@ -64,6 +65,7 @@ describe("useDesktopShortcuts", () => {
         activeWorkspace: "profiles",
         isProfileSaving: false,
         onSaveProfile,
+        onOpenQuickSearch: vi.fn(),
         onRefreshSkills: vi.fn(),
         profileSearchRef: createSearchRef("daily"),
         skillSearchRef: createSearchRef("skill"),
@@ -89,6 +91,7 @@ describe("useDesktopShortcuts", () => {
         activeWorkspace,
         isProfileSaving: false,
         onSaveProfile: vi.fn(),
+        onOpenQuickSearch: vi.fn(),
         onRefreshSkills: vi.fn(),
         profileSearchRef: refs.profile,
         skillSearchRef: refs.skill,
@@ -111,6 +114,7 @@ describe("useDesktopShortcuts", () => {
         activeWorkspace,
         isProfileSaving: false,
         onSaveProfile: vi.fn(),
+        onOpenQuickSearch: vi.fn(),
         onRefreshSkills: vi.fn(),
         profileSearchRef,
         skillSearchRef: createSearchRef("skill"),
@@ -130,6 +134,7 @@ describe("useDesktopShortcuts", () => {
         activeWorkspace: "library",
         isProfileSaving: false,
         onSaveProfile: vi.fn(),
+        onOpenQuickSearch: vi.fn(),
         onRefreshSkills,
         profileSearchRef: createSearchRef("daily"),
         skillSearchRef: createSearchRef("skill"),
@@ -154,6 +159,7 @@ describe("useDesktopShortcuts", () => {
         activeWorkspace: "profiles",
         isProfileSaving: false,
         onSaveProfile,
+        onOpenQuickSearch: vi.fn(),
         onRefreshSkills: vi.fn(),
         profileSearchRef,
         skillSearchRef: createSearchRef("skill"),
@@ -168,5 +174,26 @@ describe("useDesktopShortcuts", () => {
     expect(findEvent.defaultPrevented).toBe(true);
     expect(onSaveProfile).not.toHaveBeenCalled();
     expect(document.activeElement).not.toBe(profileSearchRef.current);
+  });
+
+  it("opens global search with Command-K", () => {
+    const onOpenQuickSearch = vi.fn();
+    renderHook(() =>
+      useDesktopShortcuts({
+        activeWorkspace: "settings",
+        isProfileSaving: false,
+        onSaveProfile: vi.fn(),
+        onOpenQuickSearch,
+        onRefreshSkills: vi.fn(),
+        profileSearchRef: createSearchRef("daily"),
+        skillSearchRef: createSearchRef("skill"),
+        platform: "MacIntel"
+      })
+    );
+
+    const event = dispatchCommand("k", { metaKey: true });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onOpenQuickSearch).toHaveBeenCalledTimes(1);
   });
 });

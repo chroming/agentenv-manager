@@ -6,6 +6,7 @@ interface DesktopShortcutOptions {
   isProfileSaving: boolean;
   onSaveProfile(): void | Promise<void>;
   onRefreshSkills(): void | Promise<void>;
+  onOpenQuickSearch(): void;
   profileSearchRef: RefObject<HTMLInputElement | null>;
   skillSearchRef: RefObject<HTMLInputElement | null>;
   platform?: string;
@@ -27,6 +28,7 @@ export const useDesktopShortcuts = ({
   isProfileSaving,
   onSaveProfile,
   onRefreshSkills,
+  onOpenQuickSearch,
   profileSearchRef,
   skillSearchRef,
   platform = navigator.platform
@@ -43,20 +45,26 @@ export const useDesktopShortcuts = ({
       }
 
       const key = event.key.toLowerCase();
-      if (key !== "s" && key !== "f" && key !== "r") {
+      if (key !== "s" && key !== "f" && key !== "r" && key !== "k") {
         return;
       }
+      const isQuickSearchContext = key === "k";
       const isSaveContext = key === "s" && activeWorkspace === "profiles";
       const isFindContext =
         key === "f" &&
         (activeWorkspace === "profiles" || activeWorkspace === "library");
       const isRefreshContext = key === "r" && activeWorkspace === "library";
-      if (!isSaveContext && !isFindContext && !isRefreshContext) {
+      if (!isSaveContext && !isFindContext && !isRefreshContext && !isQuickSearchContext) {
         return;
       }
 
       event.preventDefault();
       if (hasVisibleBlockingModal()) {
+        return;
+      }
+
+      if (isQuickSearchContext) {
+        onOpenQuickSearch();
         return;
       }
 
@@ -87,6 +95,7 @@ export const useDesktopShortcuts = ({
     isProfileSaving,
     onSaveProfile,
     onRefreshSkills,
+    onOpenQuickSearch,
     platform,
     profileSearchRef,
     skillSearchRef

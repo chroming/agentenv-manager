@@ -5,6 +5,7 @@ import {
   Boxes,
   Monitor,
   Network,
+  Search,
   Settings,
   type LucideIcon
 } from "lucide-react";
@@ -32,6 +33,7 @@ interface ProfileSidebarProps {
   activeWorkspace: AppWorkspace;
   isLoading: boolean;
   onWorkspaceSelect(workspace: AppWorkspace): void;
+  onQuickOpen(): void;
 }
 
 type TargetIconFlavor =
@@ -231,7 +233,8 @@ export const ProfileSidebar = ({
   profiles,
   activeWorkspace,
   isLoading,
-  onWorkspaceSelect
+  onWorkspaceSelect,
+  onQuickOpen
 }: ProfileSidebarProps) => {
   const { t } = useI18n();
   const readyTargets = targets.filter((target) => target.health.status === "ready").length;
@@ -275,6 +278,11 @@ export const ProfileSidebar = ({
         </div>
       </div>
       <nav className="workspace-nav" aria-label={t("Workspace")}>
+        <button className="workspace-search-button" type="button" onClick={onQuickOpen}>
+          <Search size={15} strokeWidth={2.2} aria-hidden="true" />
+          <span>{t("Quick open")}</span>
+          <kbd>⌘K</kbd>
+        </button>
         <div className="nav-section-label">{t("Library")}</div>
         <button
           aria-label={t("Skills")}

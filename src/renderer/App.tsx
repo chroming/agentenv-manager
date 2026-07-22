@@ -102,6 +102,7 @@ import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { DiffViewer } from "./components/DiffViewer";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
+import { QuickOpen, type QuickOpenItem } from "./components/QuickOpen";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
@@ -136,7 +137,11 @@ import {
   deriveApplyActionLabel,
   deriveProfileReadiness
 } from "./profileReadiness";
-import { defaultSkillLibraryViewState, updateLibraryScroll } from "./libraryViewState";
+import {
+  defaultSkillLibraryViewState,
+  updateLibraryScroll,
+  updateSkillLibraryControls
+} from "./libraryViewState";
 import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration";
 import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
@@ -574,6 +579,7 @@ const AppContent = ({
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
+  const [quickOpen, setQuickOpen] = useState(false);
   const [skillLibraryViewState, setSkillLibraryViewState] = useState(
     defaultSkillLibraryViewState
   );
@@ -1517,6 +1523,7 @@ const AppContent = ({
     isProfileSaving,
     onSaveProfile: saveSelectedProfile,
     onRefreshSkills: refreshSkills,
+    onOpenQuickSearch: () => setQuickOpen(true),
     profileSearchRef: profileSearchInputRef,
     skillSearchRef: skillSearchInputRef
   });
@@ -3980,6 +3987,93 @@ const AppContent = ({
     !pendingSkillImport?.preview.conflicts.some(
       (conflict) => conflict.existing.id === skillImportAlternateId
     );
+  const quickOpenItems: QuickOpenItem[] = [
+    {
+      id: "workspace:skills",
+      group: t("Pages"),
+      label: t("Skills"),
+      description: t("Skill library"),
+      icon: <BookOpenText size={16} strokeWidth={2.2} />,
+      onSelect: () => {
+        setSkillLibraryMode("skills");
+        selectWorkspace("library");
+      }
+    },
+    {
+      id: "workspace:profiles",
+      group: t("Pages"),
+      label: t("Profiles"),
+      description: t("Compose environments"),
+      icon: <FolderKanban size={16} strokeWidth={2.2} />,
+      onSelect: () => selectWorkspace("profiles")
+    },
+    ...(targets.length > 0 ? [{
+      id: "workspace:targets",
+      group: t("Pages"),
+      label: t("Agents"),
+      description: t("Local agent tools"),
+      icon: <Monitor size={16} strokeWidth={2.2} />,
+      onSelect: () => selectWorkspace("targets")
+    }] : []),
+    {
+      id: "workspace:settings",
+      group: t("Pages"),
+      label: t("Settings"),
+      description: t("Storage and safety"),
+      icon: <Settings2 size={16} strokeWidth={2.2} />,
+      onSelect: () => selectWorkspace("settings")
+    },
+    ...profiles.map((profile) => ({
+      id: `profile:${profile.id}`,
+      group: t("Profiles"),
+      label: profile.name,
+      description: profile.description || t("Profile"),
+      keywords: [profile.id],
+      icon: <FolderKanban size={16} strokeWidth={2.2} />,
+      onSelect: () => selectProfile(profile.id)
+    })),
+    ...librarySkills.map((skill) => ({
+      id: `skill:${skill.id}`,
+      group: t("Skills"),
+      label: skill.name,
+      description: skill.description || skill.id,
+      keywords: [skill.id, skill.source ?? ""],
+      icon: <BookOpenText size={16} strokeWidth={2.2} />,
+      onSelect: () => {
+        setSkillLibraryMode("skills");
+        setSkillLibraryViewState((current) =>
+          updateSkillLibraryControls(current, { search: skill.name })
+        );
+        selectWorkspace("library");
+      }
+    })),
+    ...targets.map((target) => ({
+      id: `target:${target.id}`,
+      group: t("Agents"),
+      label: target.name,
+      description: target.health.summary,
+      keywords: [target.id],
+      icon: <Monitor size={16} strokeWidth={2.2} />,
+      onSelect: () => {
+        setSelectedTargetId(target.id);
+        selectWorkspace("targets");
+      }
+    })),
+    {
+      id: "action:refresh-skills",
+      group: t("Actions"),
+      label: t("Refresh skills"),
+      icon: <RefreshCw size={16} strokeWidth={2.2} />,
+      onSelect: refreshSkills
+    },
+    ...(targets.length > 0 ? [{
+      id: "action:refresh-targets",
+      group: t("Actions"),
+      label: t("Refresh Agents"),
+      icon: <RefreshCw size={16} strokeWidth={2.2} />,
+      onSelect: refreshTargets
+    }] : [])
+  ];
 
   return (
     <main
@@ -3993,6 +4087,13 @@ const AppContent = ({
         isLoading={isLoading}
         activeWorkspace={activeWorkspace}
         onWorkspaceSelect={selectWorkspace}
+        onQuickOpen={() => setQuickOpen(true)}
+      />
+
+      <QuickOpen
+        items={quickOpenItems}
+        open={quickOpen}
+        onDismiss={() => setQuickOpen(false)}
       />
 
       <section
