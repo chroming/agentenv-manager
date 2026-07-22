@@ -8,6 +8,15 @@
   text-rendering: optimizeLegibility;
 }
 
+body {
+  font-weight: var(--font-weight-regular);
+}
+
+strong,
+b {
+  font-weight: var(--font-weight-semibold);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -52,7 +61,7 @@ body,
   color: var(--warning-strong);
   display: inline-flex;
   font-size: 18px;
-  font-weight: 750;
+  font-weight: var(--font-weight-semibold);
   height: 36px;
   justify-content: center;
   width: 36px;
@@ -117,7 +126,7 @@ button {
   cursor: pointer;
   display: inline-flex;
   font-size: 13px;
-  font-weight: 550;
+  font-weight: var(--font-weight-medium);
   justify-content: center;
   line-height: 1.2;
   min-height: var(--control-height-default);

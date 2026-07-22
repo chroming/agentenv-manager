@@ -203,13 +203,13 @@
 
 .backup-status.is-eligible {
   color: var(--warning);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .backup-status.is-required,
 .backup-required-lock {
   color: var(--text-secondary);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .backup-row-delete {
@@ -547,7 +547,7 @@
   color: var(--muted);
   cursor: pointer;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .agent-path-list {
@@ -565,7 +565,7 @@
   color: var(--muted);
   cursor: pointer;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .agent-path-settings[open] > summary {
@@ -862,7 +862,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   gap: 6px;
   min-height: 28px;
   padding: 0 10px;
@@ -898,7 +898,7 @@
 .workspace-sync-connect label > span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .workspace-sync-connect input {
@@ -920,7 +920,7 @@
 
 .workspace-sync-repository {
   font-size: 13px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -977,7 +977,7 @@
 .workspace-sync-review-title {
   color: var(--text);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   line-height: 1.25;
 }
 
@@ -1015,7 +1015,7 @@
 .workspace-sync-change-title {
   color: var(--text);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .workspace-sync-change small {
@@ -1027,7 +1027,7 @@
 .workspace-sync-direction {
   color: var(--muted);
   font-size: 11px;
-  font-weight: 750;
+  font-weight: var(--font-weight-semibold);
   text-transform: capitalize;
 }
 

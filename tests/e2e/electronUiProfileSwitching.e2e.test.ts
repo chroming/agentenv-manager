@@ -3412,6 +3412,55 @@ describe("Electron UI profile switching e2e", () => {
     await page.setViewportSize({ width: 1180, height: 728 });
     await page.getByRole("button", { name: "Agents", exact: true }).click();
 
+    const expectAgentRowGeometry = async () => {
+      const geometry = await page.locator(".target-list").evaluate((list) => {
+        const rows = Array.from(list.querySelectorAll<HTMLElement>(".target-card--workflow"));
+        const laneLefts = (selector: string) => rows.map((row) =>
+          row.querySelector<HTMLElement>(selector)!.getBoundingClientRect().left
+        );
+        const sizes = (selector: string) => rows.map((row) => {
+          const box = row.querySelector<HTMLElement>(selector)!.getBoundingClientRect();
+          return { height: Math.round(box.height), width: Math.round(box.width) };
+        });
+        const hasStableValues = (values: number[]) => Math.max(...values) - Math.min(...values) <= 1;
+        const hasStableSizes = (values: Array<{ height: number; width: number }>) =>
+          new Set(values.map(({ height, width }) => `${width}x${height}`)).size === 1;
+        const first = rows[0];
+        return {
+          actionLanesAligned: hasStableValues(laneLefts(".target-workflow-actions")),
+          captureButtonsMatch: hasStableSizes(sizes(".target-capture-action")),
+          healthLanesAligned: hasStableValues(laneLefts(".target-health-status")),
+          lifecycleLanesAligned: hasStableValues(laneLefts(".target-workflow-lifecycle")),
+          profileButtonsMatch: hasStableSizes(sizes(".target-profile-action")),
+          profileLanesAligned: hasStableValues(laneLefts(".target-workflow-profile")),
+          typography: {
+            action: getComputedStyle(first.querySelector<HTMLElement>(".target-profile-action")!).fontWeight,
+            health: getComputedStyle(first.querySelector<HTMLElement>(".target-health-status")!).fontWeight,
+            lifecycle: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-lifecycle")!).fontWeight,
+            name: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-name-line strong")!).fontWeight,
+            pageTitle: getComputedStyle(document.querySelector<HTMLElement>(".ui-page-header h2")!).fontWeight
+          }
+        };
+      });
+      expect(geometry).toEqual({
+        actionLanesAligned: true,
+        captureButtonsMatch: true,
+        healthLanesAligned: true,
+        lifecycleLanesAligned: true,
+        profileButtonsMatch: true,
+        profileLanesAligned: true,
+        typography: {
+          action: "500",
+          health: "400",
+          lifecycle: "500",
+          name: "600",
+          pageTitle: "650"
+        }
+      });
+    };
+
+    await expectAgentRowGeometry();
+
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     const claudeCard = page.getByRole("article", { name: "Agent Claude Code" });
     const codexCard = page.getByRole("article", { name: "Agent Codex" });
@@ -3452,6 +3501,7 @@ describe("Electron UI profile switching e2e", () => {
     ).toBeLessThanOrEqual(13);
 
     await resizeAppWindow(page, 920, 620);
+    await expectAgentRowGeometry();
     const [compactOpenCodeBox, compactClaudeBox] = await Promise.all([
       openCodeCard.boundingBox(),
       claudeCard.boundingBox()
@@ -3465,10 +3515,10 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible" });
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
-      .toContain("secondary-action");
+      .toContain("ui-button--ghost");
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).getAttribute("class"))
-      .toContain("secondary-action");
+      .toContain("ui-button--secondary");
     expect(
       await claudeCard.getByRole("button", { name: "Show Claude Code diagnostics" }).getAttribute("aria-expanded")
     ).toBe("false");
@@ -3522,10 +3572,10 @@ describe("Electron UI profile switching e2e", () => {
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).getAttribute("class"))
-      .toContain("secondary-action");
+      .toContain("ui-button--secondary");
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
-      .toContain("secondary-action");
+      .toContain("ui-button--ghost");
     await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
     await openCodeCard.getByRole("button", { name: "Stop managing OpenCode" }).click();
 

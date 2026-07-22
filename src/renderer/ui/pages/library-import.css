@@ -27,7 +27,7 @@
 .library-import-header .section-title {
   color: var(--text);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   text-transform: none;
 }
 
@@ -45,7 +45,7 @@
   border-color: transparent;
   color: var(--muted);
   font-size: var(--font-size-body);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   gap: 7px;
   min-height: var(--control-height-compact);
   padding-inline: 10px;
@@ -97,7 +97,7 @@
 .repository-advanced-grid label > span {
   color: var(--muted-strong);
   font-size: var(--font-size-metadata);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .library-import-field-label {
@@ -290,7 +290,7 @@
 .project-skill-row__error {
   color: var(--danger);
   font-size: var(--font-size-caption);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .project-skill-row__description,
@@ -342,7 +342,7 @@
   color: var(--muted);
   display: flex;
   font-size: var(--font-size-metadata);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   gap: 7px;
   min-height: 30px;
   padding: 0;
@@ -431,7 +431,7 @@
   color: var(--text);
   display: inline-flex;
   font-size: var(--font-size-metadata);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   gap: 8px;
   min-height: 30px;
   white-space: nowrap;
@@ -448,7 +448,7 @@
 .github-selection-id-heading {
   color: var(--muted);
   font-size: var(--font-size-caption);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   white-space: nowrap;
 }
 
@@ -522,7 +522,7 @@
 
 .github-candidate-main > strong {
   font-size: var(--font-size-body);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .github-candidate-main > span,
@@ -595,7 +595,7 @@
   color: currentColor;
   flex: 0 0 auto;
   font-size: var(--font-size-metadata);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   margin-left: auto;
   min-height: 24px;
   padding: 0 2px;

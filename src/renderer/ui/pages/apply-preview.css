@@ -38,7 +38,7 @@
 .apply-preview-dialog .preview-header .section-title {
   color: var(--text);
   font-size: 16px;
-  font-weight: 720;
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0;
   line-height: 22px;
   max-width: 720px;
@@ -82,7 +82,7 @@
   color: var(--muted-strong);
   display: flex;
   font-size: 10px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   gap: 4px;
   justify-content: center;
   line-height: 26px;
@@ -179,7 +179,7 @@
 .apply-preview-section-heading span {
   color: var(--muted);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .apply-preview-payload {
@@ -273,7 +273,7 @@
   color: var(--muted-strong);
   display: inline-flex;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   height: 20px;
   justify-content: center;
   min-width: 20px;
@@ -313,7 +313,7 @@
 
 .apply-preview-change-row__identity > strong {
   font-size: 12px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   line-height: 17px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -439,7 +439,7 @@
 
 .apply-preview-issues article > strong {
   font-size: 12px;
-  font-weight: 620;
+  font-weight: var(--font-weight-semibold);
   line-height: 18px;
 }
 
@@ -538,7 +538,7 @@
   cursor: pointer;
   display: flex;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   justify-content: space-between;
   min-height: 38px;
   padding: 6px 2px;

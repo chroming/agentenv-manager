@@ -70,6 +70,9 @@ for (const file of files) {
     importantDeclarations: (content.match(/!important\b/g) ?? []).length,
     rawNumericLayers: [...content.matchAll(/z-index:\s*([0-9]+)/g)].map((match) => Number(match[1])),
     hardcodedRadii,
+    heavyNumericFontWeights: [...content.matchAll(/font-weight:\s*([0-9]+)/g)]
+      .map((match) => Number(match[1]))
+      .filter((value) => value > 650),
     selectors
   });
 }
@@ -111,6 +114,9 @@ const result = {
     rawNumericLayers: reports.flatMap((report) => report.rawNumericLayers),
     hardcodedRadii: reports.flatMap((report) =>
       report.hardcodedRadii.map((value) => ({ file: report.file, value }))
+    ),
+    heavyNumericFontWeights: reports.flatMap((report) =>
+      report.heavyNumericFontWeights.map((value) => ({ file: report.file, value }))
     )
   },
   architecture: {
@@ -160,6 +166,11 @@ if (shouldCheck) {
       : undefined,
     result.totals.hardcodedRadii.length > 0
       ? `Use radius tokens instead of numeric radii: ${result.totals.hardcodedRadii
+          .map(({ file, value }) => `${file} (${value})`)
+          .join(", ")}`
+      : undefined,
+    result.totals.heavyNumericFontWeights.length > 0
+      ? `Interface font weights above 650 are not allowed: ${result.totals.heavyNumericFontWeights
           .map(({ file, value }) => `${file} (${value})`)
           .join(", ")}`
       : undefined,

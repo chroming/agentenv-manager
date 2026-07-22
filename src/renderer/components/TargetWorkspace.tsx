@@ -25,7 +25,7 @@ import { PreviewDialog } from "./PreviewDialog";
 import { targetIconFor } from "./ProfileSidebar";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, ControlGroup, PageHeader } from "./ui";
+import { Button, ControlGroup, IconButton, PageHeader } from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
 
 interface TargetWorkspaceProps {
@@ -185,9 +185,6 @@ export const TargetWorkspace = ({
                 <span className="target-workflow-title">
                   <span className="target-workflow-name-line">
                     <strong>{target.name}</strong>
-                    <span className={`target-health-status target-health-status--${target.health.status}`}>
-                      {t(targetStatusLabel[target.health.status])}
-                    </span>
                   </span>
                   <OverflowTooltip
                     className="target-workflow-description"
@@ -195,46 +192,50 @@ export const TargetWorkspace = ({
                     text={t(target.description)}
                   />
                 </span>
+                <span className={`target-health-status target-health-status--${target.health.status}`}>
+                  {t(targetStatusLabel[target.health.status])}
+                </span>
                 <span className="target-workflow-summary">
-                  <strong>{t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}</strong>
-                  <span>{state?.activeProfileName ?? t("None")}</span>
+                  <strong className="target-workflow-lifecycle">{t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}</strong>
+                  <span className="target-workflow-profile">{state?.activeProfileName ?? t("None")}</span>
                   <span className="target-workflow-last-applied">
                     <Clock3 size={12} />
                     {formatLastApplied(state?.lastAppliedAt, localeTag, t("Never applied"))}
                   </span>
                 </span>
-                <span className="target-workflow-actions">
-                  <button
-                    className="secondary-action"
-                    type="button"
+                <ControlGroup className="target-workflow-actions" aria-label={t("Agent actions")}>
+                  <Button
+                    className="target-capture-action"
+                    size="compact"
+                    variant="ghost"
                     aria-label={t("Create profile from {{name}}", { name: target.name })}
                     disabled={busy || !isTargetInstalled(target.health)}
                     title={isTargetInstalled(target.health) ? t("Capture") : t("{{name}} is not detected", { name: target.name })}
+                    icon={<Plus size={14} strokeWidth={2.2} />}
                     onClick={() => onCreateProfileFromTarget(target.id)}
                   >
-                    <Plus size={14} strokeWidth={2.2} />
-                    <span>{t("Capture")}</span>
-                  </button>
-                  <button
-                    className="secondary-action"
-                    type="button"
+                    {t("Capture")}
+                  </Button>
+                  <Button
+                    className="target-profile-action"
+                    size="compact"
                     aria-label={t("Open {{name}} in Profiles", { name: target.name })}
                     onClick={() => onManageTarget(target.id)}
                   >
                     <span>{t(isManaged ? "Open Profile" : "Choose Profile")}</span>
                     <ArrowRight size={14} strokeWidth={2.2} />
-                  </button>
-                  <button
-                    className="icon-action target-diagnostics-toggle"
-                    type="button"
+                  </Button>
+                  <IconButton
+                    className="target-diagnostics-toggle"
+                    size="compact"
                     aria-expanded={isExpanded}
-                    aria-label={t(isExpanded ? "Hide {{name}} diagnostics" : "Show {{name}} diagnostics", { name: target.name })}
+                    label={t(isExpanded ? "Hide {{name}} diagnostics" : "Show {{name}} diagnostics", { name: target.name })}
                     title={t("Diagnostics")}
                     onClick={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
                   >
                     <Activity size={15} strokeWidth={2.2} />
-                  </button>
-                </span>
+                  </IconButton>
+                </ControlGroup>
               </header>
               {isExpanded ? (
                 <section className="target-diagnostics" role="region" aria-label={t("{{name}} diagnostics", { name: target.name })}>

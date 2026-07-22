@@ -29,6 +29,10 @@
   --font-size-body: 13px;
   --font-size-metadata: 12px;
   --font-size-caption: 11px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-heading: 650;
   --line-height-tight: 1.2;
   --line-height-body: 1.45;
 

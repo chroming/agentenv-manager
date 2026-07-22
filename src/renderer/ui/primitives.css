@@ -107,7 +107,7 @@
   color: var(--muted);
   display: inline-flex;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: var(--font-weight-medium);
   line-height: 20px;
   max-width: 100%;
   min-height: 20px;
@@ -190,7 +190,7 @@
 .ui-switch__label {
   color: var(--text);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: var(--font-weight-medium);
   white-space: nowrap;
 }
 
@@ -291,7 +291,7 @@
   color: var(--text);
   display: flex;
   font-size: var(--font-size-page-title);
-  font-weight: 650;
+  font-weight: var(--font-weight-heading);
   gap: 7px;
   line-height: var(--line-height-tight);
   margin: 0;
@@ -382,7 +382,7 @@
 .ui-resource-row__identity > strong {
   color: var(--text);
   font-size: var(--font-size-body);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   line-height: 18px;
 }
 

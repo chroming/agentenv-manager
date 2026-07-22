@@ -45,7 +45,7 @@
   cursor: text;
   font-family: inherit;
   font-size: var(--font-size-metadata);
-  font-weight: 400;
+  font-weight: var(--font-weight-regular);
   line-height: 1.5;
   max-height: min(240px, calc(100vh - 24px));
   overflow: auto;
@@ -252,7 +252,7 @@
   color: var(--muted);
   display: block;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   line-height: 14px;
   margin: 0 2px 3px;
 }
@@ -298,7 +298,7 @@
 
 .resource-icon-option--source strong {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 /* Menus and dialogs share hit targets and edge treatment regardless of owner page. */
@@ -320,7 +320,7 @@
   border-radius: var(--radius-control);
   display: flex;
   font-size: var(--font-size-metadata);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   min-height: var(--control-height-default);
   padding: 7px 9px;
 }
@@ -423,7 +423,7 @@
 .quick-open-group {
   color: var(--text-tertiary);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   padding: 8px 9px 4px;
   text-transform: uppercase;
 }

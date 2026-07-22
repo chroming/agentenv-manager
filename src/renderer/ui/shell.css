@@ -31,7 +31,7 @@ html[data-platform="darwin"] {
 
 .page-header.ui-page-header .ui-button {
   font-size: var(--font-size-body);
-  font-weight: 650;
+  font-weight: var(--font-weight-medium);
 }
 
 .global-sidebar {
@@ -151,7 +151,7 @@ html[data-platform="darwin"] {
 .agent-overflow-popover__copy strong {
   color: var(--text);
   font-size: var(--font-size-body);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .agent-overflow-popover__copy small {
@@ -183,7 +183,7 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 
 .brand-lockup h1 {
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
   line-height: 1.15;
   white-space: nowrap;
 }
@@ -211,6 +211,7 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 }
 
 .nav-section-label {
+  font-weight: var(--font-weight-medium);
   letter-spacing: 0;
   line-height: 13px;
 }
@@ -218,6 +219,7 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 .workspace-button > span:not(.workspace-button__icon) {
   align-self: center;
   font-size: 13px;
+  font-weight: var(--font-weight-medium);
   line-height: 16px;
 }
 
@@ -229,6 +231,10 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
   background: rgba(60, 60, 67, 0.09);
   box-shadow: none;
   color: var(--text);
+}
+
+.workspace-button.is-active > span:not(.workspace-button__icon) {
+  font-weight: var(--font-weight-semibold);
 }
 
 .workspace-button:hover:not(:disabled) {
@@ -271,7 +277,7 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 .profile-page-header h2 {
   color: var(--text);
   font-size: var(--font-size-page-title);
-  font-weight: 650;
+  font-weight: var(--font-weight-heading);
   line-height: 1.15;
 }
 
@@ -364,7 +370,7 @@ html[data-platform="darwin"] .window-drag-strip {
   color: var(--accent);
   display: inline-flex;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: var(--font-weight-semibold);
   margin-top: 6px;
   min-height: 24px;
   padding: 0;
