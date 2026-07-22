@@ -61,6 +61,7 @@ export interface AgentEnvApi {
   openContextMenu(items: DesktopContextMenuItem[]): Promise<string | undefined>;
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
+  selectProjectSkillRoot(): Promise<string | undefined>;
   listSupportedTargets(): Promise<TargetDescriptor[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
@@ -71,6 +72,7 @@ export interface AgentEnvApi {
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
+  scanProjectSkills(): Promise<ProjectSkillScanResult>;
   previewSkillImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
   previewSkillMerge(id: string): Promise<SkillMergePreview>;
   mergeLibrarySkills(input: SkillMergeInput): Promise<SkillMergeResult>;
@@ -205,6 +207,7 @@ export interface SkillExternalOwnership {
 export interface SkillImportInput {
   sourcePath: string;
   id?: string;
+  sourceHandling?: "copy-only";
   provenance?: SkillProvenance;
   upstream?: SkillUpstream;
   expectedContentHash?: string;
@@ -760,6 +763,32 @@ export interface AgentEnvSettings {
   skillAutoCheckIntervalMinutes: number;
   backupRetentionDays: BackupRetentionDays;
   enabledTargetIds?: string[];
+  projectSkillRoots?: string[];
+}
+
+export type ProjectSkillCandidateStatus = "ready" | "in-library" | "changed" | "invalid";
+
+export interface ProjectSkillCandidate {
+  id: string;
+  name: string;
+  description: string;
+  version?: string;
+  rootPath: string;
+  path: string;
+  relativePath: string;
+  contentHash: string;
+  modifiedAt: string;
+  status: ProjectSkillCandidateStatus;
+  existingLibraryId?: string;
+  error?: string;
+}
+
+export interface ProjectSkillScanResult {
+  roots: string[];
+  candidates: ProjectSkillCandidate[];
+  issues: Array<{ rootPath: string; message: string }>;
+  scannedDirectories: number;
+  truncated: boolean;
 }
 
 export type BackupRetentionDays = 7 | 30 | 90 | null;

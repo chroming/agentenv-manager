@@ -13,7 +13,8 @@ export const SettingsSchema = z.object({
   skillAutoCheckEnabled: z.boolean().default(true),
   skillAutoCheckIntervalMinutes: z.number().int().min(5).max(1440).default(60),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(null),
-  enabledTargetIds: z.array(z.string().min(1)).optional()
+  enabledTargetIds: z.array(z.string().min(1)).optional(),
+  projectSkillRoots: z.array(z.string().min(1)).max(20).optional()
 });
 
 export const parseSettingsData = (value: unknown): AgentEnvSettings =>
@@ -112,12 +113,12 @@ export const createSettingsStore = (
   paths: AgentEnvPaths,
   options: SettingsStoreOptions = {}
 ): SettingsStore => {
-  const normalizeEnabledTargets = (settings: AgentEnvSettings): AgentEnvSettings => ({
-    ...settings,
-    enabledTargetIds:
+  const normalizeEnabledTargets = (settings: AgentEnvSettings): AgentEnvSettings => {
+    const enabledTargetIds =
       settings.enabledTargetIds ??
-      (options.supportedTargetIds ? [...new Set(options.supportedTargetIds)] : undefined)
-  });
+      (options.supportedTargetIds ? [...new Set(options.supportedTargetIds)] : undefined);
+    return enabledTargetIds ? { ...settings, enabledTargetIds } : settings;
+  };
 
   const readSettings = async (): Promise<AgentEnvSettings> => {
     try {

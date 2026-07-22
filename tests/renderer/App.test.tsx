@@ -9,7 +9,8 @@ import {
   act
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { App, AppFeedback, reconcileImportedSkillUpdates } from "../../src/renderer/App";
+import { App, AppFeedback } from "../../src/renderer/App";
+import { reconcileImportedSkillUpdates } from "../../src/renderer/skillUpdateSummary";
 import type {
   ActivationPreview,
   AgentEnvApi,
@@ -277,7 +278,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
-    runtimeVersion: 2,
+    runtimeVersion: 3,
     platform: "darwin",
     onWindowCloseRequested: vi.fn().mockReturnValue(() => undefined),
     setWindowCloseGuard: vi.fn(),
@@ -286,6 +287,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     openContextMenu: vi.fn().mockResolvedValue(undefined),
     copyText: vi.fn().mockResolvedValue(undefined),
     selectSkillFolder: vi.fn().mockResolvedValue(undefined),
+    selectProjectSkillRoot: vi.fn().mockResolvedValue(undefined),
     listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
     listTargets: vi.fn().mockResolvedValue([target]),
     listTargetStates: vi.fn().mockResolvedValue([]),
@@ -302,6 +304,13 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     }),
     unignoreSkillGroup: vi.fn().mockResolvedValue(undefined),
     scanUnmanagedSkills: vi.fn().mockResolvedValue([]),
+    scanProjectSkills: vi.fn().mockResolvedValue({
+      roots: [],
+      candidates: [],
+      issues: [],
+      scannedDirectories: 0,
+      truncated: false
+    }),
     previewSkillImport: vi.fn().mockImplementation(async (source) => ({
       source,
       incoming: {

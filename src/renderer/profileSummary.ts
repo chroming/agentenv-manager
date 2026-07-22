@@ -6,6 +6,33 @@ import type {
   TargetInfo,
   TargetManagementState
 } from "../shared/types";
+
+export const reconcileProfileUsage = (
+  current: Record<string, string[]>,
+  previousReferencedIds: readonly string[],
+  nextReferencedIds: readonly string[],
+  previousName: string,
+  nextName: string
+) => {
+  const next = Object.fromEntries(
+    Object.entries(current).map(([id, names]) => [id, [...names]])
+  );
+  const previousIds = previousReferencedIds.length > 0
+    ? previousReferencedIds
+    : Object.entries(current)
+        .filter(([, names]) => names.includes(previousName))
+        .map(([id]) => id);
+  for (const id of new Set(previousIds)) {
+    const names = next[id] ?? [];
+    const previousIndex = names.indexOf(previousName);
+    if (previousIndex >= 0) names.splice(previousIndex, 1);
+    if (names.length === 0) delete next[id];
+  }
+  for (const id of new Set(nextReferencedIds)) {
+    next[id] = [...(next[id] ?? []), nextName];
+  }
+  return next;
+};
 import { isTargetInstalled } from "../shared/targetHealth";
 import { profileManagesResource } from "../shared/profileResources";
 

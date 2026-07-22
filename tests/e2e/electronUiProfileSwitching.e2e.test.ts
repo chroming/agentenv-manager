@@ -412,6 +412,7 @@ const launchApp = async (
     malformedOpenCodeConfig?: boolean;
     missingProfileSkill?: boolean;
     openCodeDesktopOnly?: boolean;
+    projectSkillFixture?: boolean;
   } = {}
 ) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-electron-ui-"));
@@ -424,6 +425,7 @@ const launchApp = async (
   const codexDir = join(homeDir, ".codex");
   const claudeDir = join(homeDir, ".claude");
   const traeDir = join(homeDir, ".trae");
+  const projectSkillRoot = options.projectSkillFixture ? opencodeDir : join(root, "project-skills");
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
@@ -572,6 +574,18 @@ const launchApp = async (
   }
   await writeGitHubFixtureSkill(githubFixtureRoot, "v1");
   await writeUnmanagedTargetSkill(opencodeDir);
+  if (options.projectSkillFixture) {
+    const projectSkillDir = join(projectSkillRoot, "skills", "project-release");
+    await mkdir(projectSkillDir, { recursive: true });
+    await writeFile(
+      join(projectSkillDir, "SKILL.md"),
+      "---\nname: Project Release\ndescription: Release checks from a project checkout.\nversion: 2.1.0\n---\n\n# Project Release\n",
+      "utf8"
+    );
+    await writeJson(join(appDataRoot, "settings.json"), {
+      projectSkillRoots: [projectSkillRoot]
+    });
+  }
   if (options.migratedBackupFixtures) {
     await writeMigratedBackupFixtures(appDataRoot);
   }
@@ -605,6 +619,7 @@ const launchApp = async (
     traeDir,
     librarySkill,
     githubFixtureRoot,
+    projectSkillRoot,
     page
   };
 };
@@ -799,6 +814,50 @@ afterEach(async () => {
 });
 
 describe("Electron UI profile switching e2e", () => {
+  it("opens Profiles and Skills from the global quick search", async () => {
+    const { page } = await launchApp();
+
+    await page.keyboard.press("Meta+k");
+    const quickOpen = page.getByRole("dialog", { name: "Quick open" });
+    await quickOpen.waitFor({ state: "visible", timeout: 5_000 });
+    await quickOpen.getByRole("textbox").fill("UI OpenCode alpha");
+    await quickOpen.getByRole("option", { name: /UI OpenCode alpha/ }).waitFor({
+      state: "visible",
+      timeout: 5_000
+    });
+    await page.keyboard.press("Enter");
+    await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor({ state: "visible", timeout: 5_000 });
+
+    await page.keyboard.press("Meta+k");
+    await quickOpen.waitFor({ state: "visible", timeout: 5_000 });
+    await quickOpen.getByRole("textbox").fill("Shared Reviewer");
+    await page.keyboard.press("Enter");
+    await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible", timeout: 5_000 });
+    await page.getByRole("group", { name: "Library item shared-reviewer" }).waitFor({ state: "visible", timeout: 5_000 });
+    await expectNoHorizontalOverflow(page, [".editor-panel"]);
+  }, 30_000);
+
+  it("discovers project Skills read-only and imports through the existing preview flow", async () => {
+    const { appDataRoot, page, projectSkillRoot } = await launchApp({ projectSkillFixture: true });
+    const sourceDirectory = join(projectSkillRoot, "skills", "project-release");
+    const sourcePath = join(sourceDirectory, "SKILL.md");
+    const sourceBefore = await readFile(sourcePath, "utf8");
+
+    await page.getByRole("button", { name: "Import skills" }).click();
+    const dialog = page.getByRole("dialog", { name: "Import skills" });
+    await dialog.getByRole("tab", { name: "Projects" }).click();
+    await dialog.getByRole("button", { name: "Scan", exact: true }).click();
+    const projectSkillRow = dialog.locator(".project-skill-row").filter({ hasText: "Project Release" });
+    await projectSkillRow.waitFor({ state: "visible" });
+    await projectSkillRow.getByRole("button", { name: "Import", exact: true }).click();
+
+    await expect.poll(() => fileExists(join(appDataRoot, "skills-library", "project-release", "SKILL.md"))).toBe(true);
+    await expect.poll(() => dialog.getByText("In Library", { exact: true }).count()).toBe(1);
+    expect(await readFile(sourcePath, "utf8")).toBe(sourceBefore);
+    expect((await lstat(sourceDirectory)).isSymbolicLink()).toBe(false);
+    await expectNoHorizontalOverflow(page, [".library-import-dialog"]);
+  }, 30_000);
+
   it("starts when migrated backups contain former-machine paths or malformed siblings", async () => {
     const { page } = await launchApp({ migratedBackupFixtures: true });
 

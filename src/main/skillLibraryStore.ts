@@ -13,6 +13,7 @@ import type {
   RepositorySkillImportResult,
   RepositorySkillScanResult,
   RepositorySkillSourceInput,
+  ProjectSkillScanResult,
   SkillCleanupIgnoreRule,
   SkillCleanupBackupSummary,
   SkillCleanupResult,
@@ -88,6 +89,7 @@ import { bindSkillSourceCollection, createSkillSourceRegistry } from "./skillSou
 import { createSingleSkillSourceCollection } from "./skillSourceScope";
 import { createSkillSourceMergeService } from "./skillSourceMergeService";
 import { githubContentsRevision } from "./skillSources/revisionCompatibility";
+import { scanProjectSkillRoots } from "./projectSkillDiscovery";
 import {
   createGitHubSkillClient,
   encodeGitHubPath,
@@ -213,6 +215,7 @@ export interface SkillLibraryStore {
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
   unignoreSkillGroup(skillKey: string): Promise<void>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
+  scanProjectSkills(): Promise<ProjectSkillScanResult>;
   previewImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
   previewMerge(id: string, targetPaths: TargetPaths[]): Promise<SkillMergePreview>;
   mergeSkills(input: SkillMergeInput, targetPaths: TargetPaths[]): Promise<SkillMergeResult>;
@@ -1114,6 +1117,11 @@ export const createSkillLibraryStore = (
         foundIn,
         modifiedAt
       }));
+  };
+
+  const scanProjectSkills = async (): Promise<ProjectSkillScanResult> => {
+    const settings = await settingsStore?.readSettings();
+    return scanProjectSkillRoots(settings?.projectSkillRoots ?? [], await listSkills());
   };
 
   const resolveImportPlan = (
@@ -2950,6 +2958,7 @@ export const createSkillLibraryStore = (
     scanGitHubSkills,
     importGitHubSkills,
     scanRepositorySkills,
+    scanProjectSkills,
     importRepositorySkill,
     importRepositorySkills,
     listSourceGroups,

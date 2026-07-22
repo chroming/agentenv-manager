@@ -102,7 +102,7 @@ import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { DiffViewer } from "./components/DiffViewer";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
-import { QuickOpen, type QuickOpenItem } from "./components/QuickOpen";
+import { QuickOpen } from "./components/QuickOpen";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
@@ -147,9 +147,16 @@ import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
 import {
   preferredTargetForProfile,
+  reconcileProfileUsage,
   summarizeProfile,
   type ProfileResourceSummary
 } from "./profileSummary";
+import { buildQuickOpenItems } from "./quickOpenItems";
+import {
+  reconcileImportedSkillUpdates,
+  summarizeSkillUpdateChecks,
+  summarizeSkillUpdateResult
+} from "./skillUpdateSummary";
 import { createTargetNameIndex } from "./targetPresentation";
 const emptyProfileResources: ProfileResources = {
   skills: [],
@@ -157,32 +164,6 @@ const emptyProfileResources: ProfileResources = {
   mcpByTarget: {}
 };
 
-const reconcileProfileUsage = (
-  current: Record<string, string[]>,
-  previousReferencedIds: readonly string[],
-  nextReferencedIds: readonly string[],
-  previousName: string,
-  nextName: string
-) => {
-  const next = Object.fromEntries(
-    Object.entries(current).map(([id, names]) => [id, [...names]])
-  );
-  const previousIds = previousReferencedIds.length > 0
-    ? previousReferencedIds
-    : Object.entries(current)
-        .filter(([, names]) => names.includes(previousName))
-        .map(([id]) => id);
-  for (const id of new Set(previousIds)) {
-    const names = next[id] ?? [];
-    const previousIndex = names.indexOf(previousName);
-    if (previousIndex >= 0) names.splice(previousIndex, 1);
-    if (names.length === 0) delete next[id];
-  }
-  for (const id of new Set(nextReferencedIds)) {
-    next[id] = [...(next[id] ?? []), nextName];
-  }
-  return next;
-};
 
 type ComposerSection = "instructions" | "skills" | "mcp";
 type ProfileDialogMode = "create" | "edit";
@@ -243,84 +224,6 @@ const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate): string
 };
 
 type Translate = (message: string, values?: TranslationValues) => string;
-
-const summarizeSkillUpdateChecks = (
-  skillUpdateItems: SkillUpdateInfo[],
-  t: Translate
-): SkillUpdateCheckStatus => {
-  const failedChecks = skillUpdateItems.filter((update) => update.error).length;
-  const availableUpdates = skillUpdateItems.filter(
-    (update) => update.updateAvailable && !update.error
-  ).length;
-
-  if (failedChecks > 0) {
-    return {
-      state: "error",
-      message: t(failedChecks === 1 ? "{{count}} check failed" : "{{count}} checks failed", {
-        count: failedChecks
-      })
-    };
-  }
-
-  if (skillUpdateItems.length === 0) {
-    return {
-      state: "info",
-      message: t("No skills have update checks enabled")
-    };
-  }
-
-  return {
-    state: "success",
-    message:
-      availableUpdates > 0
-        ? t(availableUpdates === 1 ? "{{count}} update available" : "{{count}} updates available", {
-            count: availableUpdates
-          })
-        : t("All tracked skills are up to date")
-  };
-};
-
-const summarizeSkillUpdateResult = (
-  skillId: string,
-  skillUpdateItems: SkillUpdateInfo[],
-  t: Translate
-): SkillUpdateCheckStatus => {
-  const remainingUpdates = skillUpdateItems.filter(
-    (update) => update.updateAvailable && !update.error
-  ).length;
-
-  return {
-    state: "success",
-    message:
-      remainingUpdates > 0
-        ? t("Updated {{id}} · {{count}} updates remain", {
-            id: skillId,
-            count: remainingUpdates
-          })
-        : t("Updated {{id}} · All tracked skills are up to date", { id: skillId })
-  };
-};
-
-export const reconcileImportedSkillUpdates = (
-  current: SkillUpdateInfo[],
-  imported: SkillLibraryEntry[]
-): SkillUpdateInfo[] => {
-  const importedIds = new Set(imported.map((skill) => skill.id));
-  return [
-    ...current.filter((update) => !importedIds.has(update.id)),
-    ...imported
-      .filter((skill) => skill.updatePolicy === "tracked" && Boolean(skill.remoteRevision))
-      .map((skill): SkillUpdateInfo => ({
-        id: skill.id,
-        name: skill.name,
-        sourceType: skill.sourceType,
-        currentRevision: skill.remoteRevision,
-        latestRevision: skill.remoteRevision,
-        latestUpdatedAt: skill.upstream?.updatedAt,
-        updateAvailable: false
-      }))
-  ];
-};
 
 const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   manifest: profile.manifest,
@@ -2457,11 +2360,17 @@ const AppContent = ({
     }
   };
 
-  const importUnmanagedSkill = async (sourcePath: string) => {
+  const importUnmanagedSkill = async (
+    sourcePath: string,
+    sourceHandling?: SkillImportInput["sourceHandling"]
+  ) => {
     setBusy(true);
     setError(undefined);
     try {
-      const prepared = await prepareSkillImport({ kind: "local", input: { sourcePath } });
+      const prepared = await prepareSkillImport({
+        kind: "local",
+        input: { sourcePath, sourceHandling }
+      });
       if (!prepared || prepared.kind !== "local") return false;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
       setPendingSkillImport(undefined);
@@ -3435,12 +3344,28 @@ const AppContent = ({
         });
       }
       setSettingsSaveStatus("Settings saved");
+      return nextSettings;
     } catch (unknownError) {
       setSettingsSaveStatus("");
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return undefined;
     } finally {
       setBusy(false);
     }
+  };
+
+  const selectProjectSkillRoot = async () => {
+    const selected = await window.agentEnv.selectProjectSkillRoot();
+    if (!selected) return undefined;
+    const roots = [...new Set([...(skillSettings.projectSkillRoots ?? []), selected])];
+    return await updateSkillSettings({ projectSkillRoots: roots }) ? selected : undefined;
+  };
+
+  const removeProjectSkillRoot = async (path: string) => {
+    const updated = await updateSkillSettings({
+      projectSkillRoots: (skillSettings.projectSkillRoots ?? []).filter((root) => root !== path)
+    });
+    if (!updated) throw new Error("Project folder settings could not be saved");
   };
 
   const setAgentEnabled = async (targetId: string, enabled: boolean) => {
@@ -3987,93 +3912,30 @@ const AppContent = ({
     !pendingSkillImport?.preview.conflicts.some(
       (conflict) => conflict.existing.id === skillImportAlternateId
     );
-  const quickOpenItems: QuickOpenItem[] = [
-    {
-      id: "workspace:skills",
-      group: t("Pages"),
-      label: t("Skills"),
-      description: t("Skill library"),
-      icon: <BookOpenText size={16} strokeWidth={2.2} />,
-      onSelect: () => {
-        setSkillLibraryMode("skills");
-        selectWorkspace("library");
-      }
+  const quickOpenItems = buildQuickOpenItems({
+    profiles,
+    skills: librarySkills,
+    targets,
+    t,
+    onOpenWorkspace: (workspace) => {
+      if (workspace === "library") setSkillLibraryMode("skills");
+      selectWorkspace(workspace);
     },
-    {
-      id: "workspace:profiles",
-      group: t("Pages"),
-      label: t("Profiles"),
-      description: t("Compose environments"),
-      icon: <FolderKanban size={16} strokeWidth={2.2} />,
-      onSelect: () => selectWorkspace("profiles")
+    onOpenProfile: selectProfile,
+    onOpenSkill: (skill) => {
+      setSkillLibraryMode("skills");
+      setSkillLibraryViewState((current) =>
+        updateSkillLibraryControls(current, { search: skill.name })
+      );
+      selectWorkspace("library");
     },
-    ...(targets.length > 0 ? [{
-      id: "workspace:targets",
-      group: t("Pages"),
-      label: t("Agents"),
-      description: t("Local agent tools"),
-      icon: <Monitor size={16} strokeWidth={2.2} />,
-      onSelect: () => selectWorkspace("targets")
-    }] : []),
-    {
-      id: "workspace:settings",
-      group: t("Pages"),
-      label: t("Settings"),
-      description: t("Storage and safety"),
-      icon: <Settings2 size={16} strokeWidth={2.2} />,
-      onSelect: () => selectWorkspace("settings")
+    onOpenTarget: (targetId) => {
+      setSelectedTargetId(targetId);
+      selectWorkspace("targets");
     },
-    ...profiles.map((profile) => ({
-      id: `profile:${profile.id}`,
-      group: t("Profiles"),
-      label: profile.name,
-      description: profile.description || t("Profile"),
-      keywords: [profile.id],
-      icon: <FolderKanban size={16} strokeWidth={2.2} />,
-      onSelect: () => selectProfile(profile.id)
-    })),
-    ...librarySkills.map((skill) => ({
-      id: `skill:${skill.id}`,
-      group: t("Skills"),
-      label: skill.name,
-      description: skill.description || skill.id,
-      keywords: [skill.id, skill.source ?? ""],
-      icon: <BookOpenText size={16} strokeWidth={2.2} />,
-      onSelect: () => {
-        setSkillLibraryMode("skills");
-        setSkillLibraryViewState((current) =>
-          updateSkillLibraryControls(current, { search: skill.name })
-        );
-        selectWorkspace("library");
-      }
-    })),
-    ...targets.map((target) => ({
-      id: `target:${target.id}`,
-      group: t("Agents"),
-      label: target.name,
-      description: target.health.summary,
-      keywords: [target.id],
-      icon: <Monitor size={16} strokeWidth={2.2} />,
-      onSelect: () => {
-        setSelectedTargetId(target.id);
-        selectWorkspace("targets");
-      }
-    })),
-    {
-      id: "action:refresh-skills",
-      group: t("Actions"),
-      label: t("Refresh skills"),
-      icon: <RefreshCw size={16} strokeWidth={2.2} />,
-      onSelect: refreshSkills
-    },
-    ...(targets.length > 0 ? [{
-      id: "action:refresh-targets",
-      group: t("Actions"),
-      label: t("Refresh Agents"),
-      icon: <RefreshCw size={16} strokeWidth={2.2} />,
-      onSelect: refreshTargets
-    }] : [])
-  ];
+    onRefreshSkills: refreshSkills,
+    onRefreshTargets: refreshTargets
+  });
 
   return (
     <main
@@ -4190,7 +4052,12 @@ const AppContent = ({
                 onCloseTool={() => setSkillLibraryTool(undefined)}
                 onRefreshInventory={refreshSkillDiscoveries}
                 onSelectLocalSkillFolder={() => window.agentEnv.selectSkillFolder()}
+                projectSkillRoots={skillSettings.projectSkillRoots ?? []}
+                onSelectProjectSkillRoot={selectProjectSkillRoot}
+                onRemoveProjectSkillRoot={removeProjectSkillRoot}
+                onScanProjectSkills={() => window.agentEnv.scanProjectSkills()}
                 onImportUnmanaged={importUnmanagedSkill}
+                onImportProjectSkill={(sourcePath) => importUnmanagedSkill(sourcePath, "copy-only")}
                 onImportExternal={importExternalSkill}
                 onScanGitHubSkills={scanGitHubSkills}
                 onImportGitHubSkills={importGitHubSkills}

@@ -252,6 +252,17 @@ export const registerIpcHandlers = ({
 
     return result.canceled ? undefined : result.filePaths[0];
   });
+  ipcMain.handle("dialog:select-project-skill-root", async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Select project folder to scan for Skills",
+      properties: ["openDirectory"] as Array<"openDirectory">
+    };
+    const result = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+    return result.canceled ? undefined : result.filePaths[0];
+  });
   ipcMain.handle("targets:list", (_event, forceRefresh: unknown) =>
     targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true })
   );
@@ -376,6 +387,7 @@ export const registerIpcHandlers = ({
     }
 
     const canTakeOwnership =
+      input.sourceHandling !== "copy-only" &&
       localInstall &&
       !localInstall.sharedLocation &&
       localInstall.status !== "external" &&
@@ -473,6 +485,7 @@ export const registerIpcHandlers = ({
     }
     return skillLibraryStore.scanRepositorySkills(input);
   });
+  ipcMain.handle("skills:scan-projects", () => skillLibraryStore.scanProjectSkills());
   handleMutation("skills:import-repository", (_event, input: RepositorySkillImportInput) => {
     if (!input || typeof input !== "object" || typeof input.repository !== "string") {
       throw new Error("Repository import requires a repository address");

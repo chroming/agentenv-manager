@@ -44,6 +44,7 @@ import type {
   GitHubSkillImportInput,
   GitHubSkillImportResult,
   GitHubSkillScanResult,
+  ProjectSkillScanResult,
   RepositorySkillImportInput,
   RepositorySkillImportResult,
   RepositorySkillScanResult,
@@ -96,6 +97,7 @@ import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
 import { SkillSourceView } from "./SkillSourceView";
+import { ProjectSkillDiscoveryPanel } from "./ProjectSkillDiscoveryPanel";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -154,7 +156,12 @@ interface SkillLibraryPanelProps {
   onCloseTool?(): void;
   onRefreshInventory(): Promise<void>;
   onSelectLocalSkillFolder(): Promise<string | undefined>;
+  projectSkillRoots?: string[];
+  onSelectProjectSkillRoot?(): Promise<string | undefined>;
+  onRemoveProjectSkillRoot?(path: string): Promise<void>;
+  onScanProjectSkills?(): Promise<ProjectSkillScanResult>;
   onImportUnmanaged(sourcePath: string): Promise<boolean>;
+  onImportProjectSkill?(sourcePath: string): Promise<boolean>;
   onImportExternal(skill: SkillInventoryEntry): Promise<boolean>;
   onScanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   onImportGitHubSkills(
@@ -400,7 +407,12 @@ export const SkillLibraryPanel = ({
   onCloseTool,
   onRefreshInventory,
   onSelectLocalSkillFolder,
+  projectSkillRoots = [],
+  onSelectProjectSkillRoot,
+  onRemoveProjectSkillRoot,
+  onScanProjectSkills,
   onImportUnmanaged,
+  onImportProjectSkill,
   onImportExternal,
   onScanGitHubSkills,
   onImportGitHubSkills,
@@ -478,7 +490,7 @@ export const SkillLibraryPanel = ({
   }>();
   const [githubOperationError, setGithubOperationError] = useState("");
   const [localSkillPath, setLocalSkillPath] = useState("");
-  const [importSource, setImportSource] = useState<"local" | "github">("local");
+  const [importSource, setImportSource] = useState<"local" | "github" | "projects">("local");
   const [repositoryRef, setRepositoryRef] = useState("");
   const [repositoryDirectory, setRepositoryDirectory] = useState("");
   const [repositoryConnection, setRepositoryConnection] = useState<"auto" | "system-git">("auto");
@@ -3872,6 +3884,19 @@ export const SkillLibraryPanel = ({
                     <GitBranch size={15} strokeWidth={2.2} aria-hidden="true" />
                     {t("Repository")}
                   </button>
+                  {onSelectProjectSkillRoot && onRemoveProjectSkillRoot && onScanProjectSkills ? (
+                    <button
+                      className={importSource === "projects" ? "is-active" : ""}
+                      type="button"
+                      role="tab"
+                      aria-selected={importSource === "projects"}
+                      disabled={Boolean(githubOperation) || localImportOperation}
+                      onClick={() => setImportSource("projects")}
+                    >
+                      <SearchCheck size={15} strokeWidth={2.2} aria-hidden="true" />
+                      {t("Projects")}
+                    </button>
+                  ) : null}
                 </div>
 
                 {importSource === "local" ? (
@@ -3916,6 +3941,16 @@ export const SkillLibraryPanel = ({
                         </div>
                       ) : null}
                     </section>
+                  </div>
+                ) : importSource === "projects" && onSelectProjectSkillRoot && onRemoveProjectSkillRoot && onScanProjectSkills ? (
+                  <div className="library-import-content">
+                    <ProjectSkillDiscoveryPanel
+                      roots={projectSkillRoots}
+                      onAddRoot={onSelectProjectSkillRoot}
+                      onRemoveRoot={onRemoveProjectSkillRoot}
+                      onScan={onScanProjectSkills}
+                      onImport={onImportProjectSkill ?? onImportUnmanaged}
+                    />
                   </div>
                 ) : !githubScanResult ? (
                   <div className="library-import-content">
@@ -4259,7 +4294,7 @@ export const SkillLibraryPanel = ({
                     >
                       {localImportOperation ? t("Importing...") : t(localImportLabel)}
                     </Button>
-                  ) : !githubScanResult ? (
+                  ) : importSource === "projects" ? null : !githubScanResult ? (
                     <Button
                       variant="primary"
                       aria-busy={githubOperation === "scanning"}

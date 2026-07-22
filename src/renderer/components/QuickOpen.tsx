@@ -35,24 +35,29 @@ const resultScore = (item: QuickOpenItem, query: string) => {
   return 3;
 };
 
+export const findQuickOpenResults = (
+  items: QuickOpenItem[],
+  query: string
+): QuickOpenItem[] => {
+  const normalizedQuery = query.normalize("NFKC").trim().toLocaleLowerCase();
+  if (!normalizedQuery) return items.slice(0, 24);
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+  return items
+    .filter((item) => {
+      const text = searchableText(item);
+      return tokens.every((token) => text.includes(token));
+    })
+    .sort((left, right) => resultScore(left, normalizedQuery) - resultScore(right, normalizedQuery))
+    .slice(0, 40);
+};
+
 export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
   const { t } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
-  const results = useMemo(() => {
-    const normalizedQuery = query.normalize("NFKC").trim().toLocaleLowerCase();
-    if (!normalizedQuery) return items.slice(0, 24);
-    const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
-    return items
-      .filter((item) => {
-        const text = searchableText(item);
-        return tokens.every((token) => text.includes(token));
-      })
-      .sort((left, right) => resultScore(left, normalizedQuery) - resultScore(right, normalizedQuery))
-      .slice(0, 40);
-  }, [items, query]);
+  const results = useMemo(() => findQuickOpenResults(items, query), [items, query]);
 
   useEffect(() => {
     if (!open) return;
@@ -103,7 +108,8 @@ export const QuickOpen = ({ items, open, onDismiss }: QuickOpenProps) => {
               setActiveIndex((current) => Math.max(0, current - 1));
             } else if (event.key === "Enter") {
               event.preventDefault();
-              choose(results[activeIndex]);
+              const currentResults = findQuickOpenResults(items, event.currentTarget.value);
+              choose(currentResults[Math.min(activeIndex, currentResults.length - 1)]);
             }
           }}
         />
