@@ -72,6 +72,14 @@
   padding: 10px 12px;
 }
 
+.skill-source-toolbar.is-merge-selection {
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
+}
+
+.skill-source-exit-selection {
+  justify-self: end;
+}
+
 .skill-source-merge-dialog {
   display: grid;
   gap: 0;
@@ -252,6 +260,7 @@
 
 .skill-source-group-row {
   align-items: center;
+  cursor: pointer;
   display: grid;
   gap: 6px 10px;
   grid-template-areas:
@@ -260,6 +269,11 @@
   grid-template-columns: 24px 28px minmax(0, 1fr) auto;
   min-height: 70px;
   padding: 9px 12px;
+  transition: background-color 120ms ease;
+}
+
+.skill-source-group-row:hover {
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
 }
 
 .skill-source-list.can-merge .skill-source-group-row {

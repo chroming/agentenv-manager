@@ -249,6 +249,8 @@ describe("Repository Skill source", () => {
 
     await page.getByRole("tab", { name: "By source" }).click();
     await expect.poll(() => page.locator(".skill-source-group").count()).toBe(2);
+    expect(await page.locator(".skill-source-list").getByRole("checkbox").count()).toBe(0);
+    await page.getByRole("button", { name: "Merge", exact: true }).click();
     const sourceChoices = page.locator(".skill-source-list").getByRole("checkbox");
     const selectionRails = page.locator(".skill-source-select");
     const firstChoice = await selectionRails.nth(0).boundingBox();

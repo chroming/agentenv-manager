@@ -9,6 +9,7 @@ import type {
 import { pathEntryExists } from "../fileUtils";
 import { parseSkillFrontmatter } from "../skillFrontmatter";
 import type {
+  GitSourceReadOptions,
   GitCliSkillSource,
   MaterializedGitSkillSource,
   ResolvedGitRepository,
@@ -186,18 +187,24 @@ export const createGitCliSkillSource = (
 ): GitCliSkillSource => {
   const resolve = async (
     input: RepositorySkillSourceInput,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    readOptions?: GitSourceReadOptions
   ): Promise<ResolvedGitSkillSource> => {
-    const repository = await options.cache.fetch(input, signal);
+    const repository = await options.cache.fetch(input, signal, {
+      refresh: readOptions?.refresh ?? true
+    });
     const directory = normalizeDirectory(input.directory ?? repository.location.inferredDirectory);
     return resolvedSkill(options.runner, repository, directory, signal);
   };
 
   const scan = async (
     input: RepositorySkillSourceInput,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    readOptions?: GitSourceReadOptions
   ): Promise<RepositorySkillScanResult> => {
-    const repository = await options.cache.fetch(input, signal);
+    const repository = await options.cache.fetch(input, signal, {
+      refresh: readOptions?.refresh ?? true
+    });
     const directory = normalizeDirectory(input.directory ?? repository.location.inferredDirectory);
     if (directory) await readTreeOid(options.runner, repository, directory, signal);
     const args = [
@@ -242,7 +249,7 @@ export const createGitCliSkillSource = (
         root,
         treeEntries
           .filter((entry): entry is TreeEntry & { type: "blob" | "tree" } =>
-            entry.type === "blob" || entry.type === "tree")
+            (entry.type === "blob" || entry.type === "tree") && entry.mode !== "120000")
           .map((entry) => ({
             path: entry.path,
             type: entry.type,
@@ -280,13 +287,14 @@ export const createGitCliSkillSource = (
   const materialize = async (
     input: RepositorySkillSourceInput,
     destination: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    readOptions?: GitSourceReadOptions
   ): Promise<MaterializedGitSkillSource> => {
     if (await pathEntryExists(destination)) {
       const entries = await readdir(destination);
       if (entries.length > 0) throw new Error("Skill materialization destination must be empty");
     }
-    const source = await resolve(input, signal);
+    const source = await resolve(input, signal, readOptions);
     await assertSafeTree(options.runner, source, signal);
     const indexPath = join(dirname(destination), `.agentenv-git-index-${randomUUID()}`);
     const treeish = treeishFor(source, source.directory);

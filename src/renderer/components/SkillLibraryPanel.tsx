@@ -15,6 +15,7 @@ import {
   CircleSlash2,
   Combine,
   Copy,
+  Download,
   ExternalLink,
   Folder,
   GitBranch,
@@ -114,6 +115,11 @@ export interface GitHubSkillImportProgress {
   error?: string;
 }
 
+export interface SkillImportQueueOptions {
+  onProgress?: (progress: GitHubSkillImportProgress) => void;
+  shouldStop?: () => boolean;
+}
+
 export const repositoryImportProgressKey = (
   input: Pick<RepositorySkillImportInput, "repository" | "ref" | "directory">
 ) => `${input.repository}\0${input.ref ?? ""}\0${input.directory ?? ""}`;
@@ -152,12 +158,12 @@ interface SkillLibraryPanelProps {
   onScanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   onImportGitHubSkills(
     inputs: GitHubSkillImportInput[],
-    onProgress?: (progress: GitHubSkillImportProgress) => void
+    options?: SkillImportQueueOptions
   ): Promise<GitHubSkillImportResult>;
   onScanRepositorySkills(input: RepositorySkillSourceInput): Promise<RepositorySkillScanResult>;
   onImportRepositorySkills(
     inputs: RepositorySkillImportInput[],
-    onProgress?: (progress: GitHubSkillImportProgress) => void
+    options?: SkillImportQueueOptions
   ): Promise<RepositorySkillImportResult>;
   onLibraryModeChange(mode: "skills" | "sources"): void;
   onCheckSourceGroup(sourceId: string): Promise<void>;
@@ -470,6 +476,8 @@ export const SkillLibraryPanel = ({
   const [repositoryConnection, setRepositoryConnection] = useState<"auto" | "system-git">("auto");
   const [repositoryScanKind, setRepositoryScanKind] = useState<"github-api" | "system-git">();
   const [repositoryOperationCancelable, setRepositoryOperationCancelable] = useState(false);
+  const [importStopRequested, setImportStopRequested] = useState(false);
+  const importStopRequestedRef = useRef(false);
   const [repositoryScanSummary, setRepositoryScanSummary] = useState("");
   const [repositoryCandidateInputs, setRepositoryCandidateInputs] = useState<
     Record<string, RepositorySkillImportInput>
@@ -599,7 +607,19 @@ export const SkillLibraryPanel = ({
       autoCleanupReviewOpen ||
       cleanupDraft
   );
+  const requestImportStop = async () => {
+    if (githubOperation !== "importing" || importStopRequestedRef.current) return;
+    importStopRequestedRef.current = true;
+    setImportStopRequested(true);
+    if (repositoryScanKind === "system-git") {
+      await onCancelRepositoryOperations();
+    }
+  };
   const closeImportTool = async () => {
+    if (githubOperation === "importing") {
+      await requestImportStop();
+      return;
+    }
     if (githubOperation && repositoryOperationCancelable) {
       await onCancelRepositoryOperations();
     }
@@ -754,6 +774,8 @@ export const SkillLibraryPanel = ({
     setGithubImportProgress({});
     setGithubOperationError("");
     setGithubOperation(undefined);
+    importStopRequestedRef.current = false;
+    setImportStopRequested(false);
     setRepositoryRef("");
     setRepositoryDirectory("");
     setRepositoryConnection("auto");
@@ -1053,6 +1075,9 @@ export const SkillLibraryPanel = ({
     cleanupCandidate?.items.some((item) => item.status === "library" || item.status === "managed") ||
       (cleanupDraft && librarySkills.some((skill) => skill.id === cleanupDraft.libraryId))
   );
+  const cleanupLibrarySkill = cleanupDraft
+    ? librarySkills.find((skill) => skill.id === cleanupDraft.libraryId)
+    : undefined;
 
   const openCleanupReview = (group: (typeof cleanupGroups)[number]) => {
     const libraryId = group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey;
@@ -1197,6 +1222,8 @@ export const SkillLibraryPanel = ({
     } finally {
       setGithubOperation(undefined);
       setRepositoryOperationCancelable(false);
+      importStopRequestedRef.current = false;
+      setImportStopRequested(false);
     }
   };
 
@@ -1208,7 +1235,9 @@ export const SkillLibraryPanel = ({
       (candidate) => candidate.status === "ready" && githubSelectedSources.includes(candidate.sourceUrl)
     );
     setGithubOperation("importing");
-    setRepositoryOperationCancelable(repositoryScanKind === "system-git");
+    setRepositoryOperationCancelable(true);
+    importStopRequestedRef.current = false;
+    setImportStopRequested(false);
     setGithubOperationError("");
     setGithubImportResult(undefined);
     setGithubImportProgress(
@@ -1238,7 +1267,10 @@ export const SkillLibraryPanel = ({
           ...repositoryCandidateInputs[candidate.sourceUrl],
           id: githubCandidateIds[candidate.sourceUrl] || candidate.id
         }));
-        const result = await onImportRepositorySkills(inputs, onProgress);
+        const result = await onImportRepositorySkills(inputs, {
+          onProgress,
+          shouldStop: () => importStopRequestedRef.current
+        });
         setGithubImportResult({
           imported: result.imported,
           failed: result.failed.map((failure) => ({
@@ -1262,7 +1294,10 @@ export const SkillLibraryPanel = ({
               )
             }
           })),
-          onProgress
+          {
+            onProgress,
+            shouldStop: () => importStopRequestedRef.current
+          }
         );
         setGithubImportResult(result);
       }
@@ -1292,6 +1327,8 @@ export const SkillLibraryPanel = ({
     } finally {
       setGithubOperation(undefined);
       setRepositoryOperationCancelable(false);
+      importStopRequestedRef.current = false;
+      setImportStopRequested(false);
     }
   };
 
@@ -1305,7 +1342,9 @@ export const SkillLibraryPanel = ({
     const requestedId = githubCandidateIds[sourceUrl] || candidate.id;
     setGithubOperation("importing");
     setGithubRetrySourceUrl(sourceUrl);
-    setRepositoryOperationCancelable(repositoryScanKind === "system-git");
+    setRepositoryOperationCancelable(true);
+    importStopRequestedRef.current = false;
+    setImportStopRequested(false);
     setGithubOperationError("");
     setGithubImportProgress((current) => ({
       ...current,
@@ -1334,7 +1373,7 @@ export const SkillLibraryPanel = ({
           ...repositoryInput,
           id: requestedId
         };
-        const result = await onImportRepositorySkills([input], onProgress);
+        const result = await onImportRepositorySkills([input], { onProgress });
         retryResult = {
           imported: result.imported,
           failed: result.failed.map((failure) => ({
@@ -1356,7 +1395,7 @@ export const SkillLibraryPanel = ({
               candidate.remotePath
             )
           }
-        }], onProgress);
+        }], { onProgress });
       }
       setGithubImportResult((current) => ({
         imported: [
@@ -1387,6 +1426,8 @@ export const SkillLibraryPanel = ({
       setGithubRetrySourceUrl(undefined);
       setGithubOperation(undefined);
       setRepositoryOperationCancelable(false);
+      importStopRequestedRef.current = false;
+      setImportStopRequested(false);
     }
   };
 
@@ -2190,7 +2231,14 @@ export const SkillLibraryPanel = ({
                       />
                       <span>
                         <strong>{entry.id}</strong>
-                        <small>{entry.version ?? t("Not declared")} · {entry.contentHash.slice(0, 8)}</small>
+                        <small>
+                          {[entry.version ?? t("Not declared"), entry.contentHash.slice(0, 8),
+                            (entry.upstream?.updatedAt ?? entry.modifiedAt)
+                              ? `${t("Modified")} ${formatDate((entry.upstream?.updatedAt ?? entry.modifiedAt)!)}`
+                              : undefined]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
                         <small>{t("{{profiles}} profiles · {{installs}} installs", {
                           profiles: entry.profileNames.length,
                           installs: entry.installCount
@@ -2216,6 +2264,9 @@ export const SkillLibraryPanel = ({
                       <span>
                         <strong>{entry.sourceType === "github" ? "GitHub" : t("Local")} · {entry.id}</strong>
                         <small title={entry.source}>{entry.source}</small>
+                        {entry.upstream?.updatedAt || entry.modifiedAt ? (
+                          <small>{t("Modified")} · {formatDate(entry.upstream?.updatedAt ?? entry.modifiedAt!)}</small>
+                        ) : null}
                       </span>
                       <em>{t(entry.updatePolicy === "tracked" ? "Tracked" : "Not tracked")}</em>
                     </label>
@@ -2728,6 +2779,9 @@ export const SkillLibraryPanel = ({
                 disabled={Boolean(sharedOperation)}
                 onClick={() => void retireSharedCopy()}
               >
+                  {sharedOperation?.action === "retire" ? (
+                    <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
+                  ) : null}
                   {t(sharedOperation?.action === "retire" ? "Replacing..." : "Replace shared copy")}
               </button>
             </footer>
@@ -2911,6 +2965,9 @@ export const SkillLibraryPanel = ({
                       text={item.path}
                       tooltipClassName="library-source-tooltip"
                     />
+                    {item.modifiedAt ? (
+                      <small>{t("Modified")} · {formatDate(item.modifiedAt)}</small>
+                    ) : null}
                   </span>
                   <em>
                     {item.externalOwnership?.state === "broken-link"
@@ -2933,6 +2990,7 @@ export const SkillLibraryPanel = ({
               <button
                 className="primary-action"
                 type="button"
+                aria-busy={localImportOperation}
                 disabled={localImportOperation || !externalImportItems.some(
                   (item) =>
                     item.path === externalImport.sourcePath &&
@@ -2940,6 +2998,9 @@ export const SkillLibraryPanel = ({
                 )}
                 onClick={() => void importSelectedExternalSkill()}
               >
+                {localImportOperation ? (
+                  <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
+                ) : null}
                 {t(
                   localImportOperation
                     ? "Reviewing..."
@@ -3013,6 +3074,9 @@ export const SkillLibraryPanel = ({
                         text={item.path}
                         tooltipClassName="library-source-tooltip"
                       />
+                      {item.modifiedAt ? (
+                        <small>{t("Modified")} · {formatDate(item.modifiedAt)}</small>
+                      ) : null}
                       <small>
                         {item.libraryId ? `${t("Library")}: ${item.libraryId}` : t("Not in Library")}
                       </small>
@@ -3105,6 +3169,9 @@ export const SkillLibraryPanel = ({
                     <span>
                       <strong>{t("Keep Library version")}</strong>
                       <small>{t("Replace local copies with the current canonical content.")}</small>
+                      {cleanupLibrarySkill?.updatedAt ? (
+                        <small>{t("Modified")} · {formatDate(cleanupLibrarySkill.updatedAt)}</small>
+                      ) : null}
                     </span>
                   </label>
                   <label className="cleanup-review-option">
@@ -3143,6 +3210,9 @@ export const SkillLibraryPanel = ({
                             text={item.path}
                             tooltipClassName="library-source-tooltip"
                           />
+                          {item.modifiedAt ? (
+                            <small>{t("Modified")} · {formatDate(item.modifiedAt)}</small>
+                          ) : null}
                         </span>
                         <code>{t("Content {{hash}}", { hash: item.contentHash.slice(0, 7) })}</code>
                       </label>
@@ -3187,6 +3257,9 @@ export const SkillLibraryPanel = ({
                               text={item.description}
                             />
                           ) : null}
+                          {item.modifiedAt ? (
+                            <small>{t("Modified")} · {formatDate(item.modifiedAt)}</small>
+                          ) : null}
                         </span>
                         <code>{t("Content {{hash}}", { hash: item.contentHash.slice(0, 7) })}</code>
                       </label>
@@ -3228,6 +3301,9 @@ export const SkillLibraryPanel = ({
                         text={item.path}
                         tooltipClassName="library-source-tooltip"
                       />
+                      {item.modifiedAt ? (
+                        <small>{t("Modified")} · {formatDate(item.modifiedAt)}</small>
+                      ) : null}
                     </span>
                     <em>
                       {item.status === "managed"
@@ -3418,7 +3494,15 @@ export const SkillLibraryPanel = ({
                       : group.presentation.state === "unavailable"
                         ? t("Skill content could not be read safely")
                         : undefined;
+                const latestModifiedAt = group.activeItems
+                  .map((item) => item.modifiedAt)
+                  .filter((value): value is string => Boolean(value))
+                  .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
                 const cleanupSummaryText = decisionSummary ?? defaultCleanupSummary;
+                const cleanupLocationsDisplay = [
+                  latestModifiedAt ? `${t("Modified")} ${formatDate(latestModifiedAt)}` : undefined,
+                  group.items.map((skill) => cleanupLocationLabel(skill, targetNames)).join(" + ")
+                ].filter(Boolean).join(" · ");
                 const contentChoiceLabel =
                   group.bucket === "decision" && contentVersionCount > 1 && !linkedLibraryId
                     ? t("{{count}} versions", { count: contentVersionCount })
@@ -3563,9 +3647,7 @@ export const SkillLibraryPanel = ({
                       <PreviewText
                         ariaLabel={t("Full cleanup locations {{id}}", { id: group.skillKey })}
                         className="cleanup-group-locations"
-                        displayText={group.items
-                          .map((skill) => `${cleanupLocationLabel(skill, targetNames)} · ${skill.path}`)
-                          .join(" | ")}
+                        displayText={cleanupLocationsDisplay}
                         text={group.items
                           .map((skill) => `${cleanupLocationLabel(skill, targetNames)} · ${skill.path}`)
                           .join("\n")}
@@ -4072,19 +4154,24 @@ export const SkillLibraryPanel = ({
                                 <small className="github-import-state-label">{t(progress.status)}</small>
                               ) : null}
                             </span>
-                            {selectable && (progressStatus === "failed" || retrying) ? (
+                            {selectable && (progressStatus === "failed" || progressStatus === "skipped" || retrying) ? (
                               <Button
                                 className="github-candidate-retry"
                                 size="compact"
                                 variant="secondary"
-                                aria-label={t("Retry {{name}}", { name: candidate.name })}
+                                aria-label={t(
+                                  progressStatus === "skipped" ? "Import {{name}}" : "Retry {{name}}",
+                                  { name: candidate.name }
+                                )}
                                 disabled={Boolean(githubOperation)}
                                 icon={retrying
                                   ? <LoaderCircle className="is-spinning" size={15} />
-                                  : <RotateCcw size={15} strokeWidth={2.2} />}
+                                  : progressStatus === "skipped"
+                                    ? <Download size={15} strokeWidth={2.2} />
+                                    : <RotateCcw size={15} strokeWidth={2.2} />}
                                 onClick={() => void retryGitHubSkill(candidate)}
                               >
-                                {t("Retry")}
+                                {t(progressStatus === "skipped" ? "Import" : "Retry")}
                               </Button>
                             ) : selectable ? (
                               <input
@@ -4149,11 +4236,19 @@ export const SkillLibraryPanel = ({
                     variant={githubImportResult ? "primary" : "secondary"}
                     disabled={
                       localImportOperation ||
-                      (Boolean(githubOperation) && !repositoryOperationCancelable)
+                      (Boolean(githubOperation) && !repositoryOperationCancelable) ||
+                      importStopRequested
                     }
                     onClick={() => void closeImportTool()}
+                    icon={importStopRequested
+                      ? <LoaderCircle className="is-spinning" size={15} />
+                      : undefined}
                   >
-                    {t(githubImportResult ? "Close" : "Cancel")}
+                    {t(
+                      githubOperation === "importing"
+                        ? importStopRequested ? "Stopping..." : "Stop import"
+                        : githubImportResult ? "Close" : "Cancel"
+                    )}
                   </Button>
                   {importSource === "local" ? (
                     <Button

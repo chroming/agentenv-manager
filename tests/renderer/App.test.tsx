@@ -9,13 +9,15 @@ import {
   act
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { App, AppFeedback } from "../../src/renderer/App";
+import { App, AppFeedback, reconcileImportedSkillUpdates } from "../../src/renderer/App";
 import type {
   ActivationPreview,
   AgentEnvApi,
   AgentEnvSettings,
   ApplyIssue,
   ProfileDetail,
+  SkillLibraryEntry,
+  SkillUpdateInfo,
   TargetInfo,
   TargetManagementState
 } from "../../src/shared/types";
@@ -662,6 +664,37 @@ afterEach(() => {
 });
 
 describe("App", () => {
+  it("replaces stale same-id update results with the revision that was just imported", () => {
+    const stale: SkillUpdateInfo = {
+      id: "yao-meta-skill",
+      name: "Yao Meta Skill",
+      sourceType: "git",
+      currentRevision: "old-tree",
+      latestRevision: "6c738f8c4fbbca60601299b9295ecf8e931e7afa",
+      updateAvailable: true
+    };
+    const imported = {
+      id: "yao-meta-skill",
+      name: "Yao Meta Skill",
+      description: "Meta skill",
+      path: "/tmp/library/yao-meta-skill",
+      sourceType: "git",
+      source: "https://github.com/yaojingang/yao-meta-skill.git",
+      remoteRevision: "6c738f8c4fbbca60601299b9295ecf8e931e7afa",
+      updatePolicy: "tracked",
+      contentHash: "content",
+      updatedAt: "2026-07-22T00:00:00.000Z"
+    } satisfies SkillLibraryEntry;
+
+    expect(reconcileImportedSkillUpdates([stale], [imported])).toEqual([
+      expect.objectContaining({
+        id: "yao-meta-skill",
+        currentRevision: imported.remoteRevision,
+        latestRevision: imported.remoteRevision,
+        updateAvailable: false
+      })
+    ]);
+  });
   it("auto-dismisses successful feedback after five seconds but keeps errors visible", () => {
     vi.useFakeTimers();
     const onDismiss = vi.fn();

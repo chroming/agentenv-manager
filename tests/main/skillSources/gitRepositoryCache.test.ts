@@ -174,6 +174,31 @@ describe("git repository cache", () => {
     expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(1);
   });
 
+  it("reuses a recent repository snapshot for import steps but refreshes on explicit checks", async () => {
+    const { repository, runner, cacheRoot } = await setup();
+    const run = vi.fn(runner.run.bind(runner));
+    const cache = createGitRepositoryCache({
+      cacheRoot,
+      runner: {
+        run,
+        cancelActive: runner.cancelActive.bind(runner),
+        dispose: runner.dispose.bind(runner)
+      }
+    });
+    const input = { repository: repository.remoteDir, ref: "main" };
+
+    const scanned = await cache.fetch(input, undefined, { refresh: true });
+    const reused = await cache.fetch(input);
+    expect(reused.resolvedCommit).toBe(scanned.resolvedCommit);
+    expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(1);
+
+    await repository.write("skills/review/SKILL.md", "---\nname: review\n---\n# Updated\n");
+    const nextCommit = await repository.commit("update cached repository");
+    const refreshed = await cache.fetch(input, undefined, { refresh: true });
+    expect(refreshed.resolvedCommit).toBe(nextCommit);
+    expect(run.mock.calls.filter(([args]) => args.includes("fetch"))).toHaveLength(2);
+  });
+
   it("rebuilds a corrupt disposable cache without touching the source repository", async () => {
     const { repository, runner, cacheRoot } = await setup();
     const cache = createGitRepositoryCache({ cacheRoot, runner });
@@ -182,7 +207,11 @@ describe("git repository cache", () => {
     await mkdir(initial.cachePath, { recursive: true });
     await writeFile(join(initial.cachePath, "corrupt"), "not a git repository\n", "utf8");
 
-    const rebuilt = await cache.fetch({ repository: repository.remoteDir, ref: "main" });
+    const rebuilt = await cache.fetch(
+      { repository: repository.remoteDir, ref: "main" },
+      undefined,
+      { refresh: true }
+    );
 
     expect(rebuilt.resolvedCommit).toBe(initial.resolvedCommit);
     await expect(runGit(repository.workDir, ["status", "--porcelain"])).resolves.toBe("");

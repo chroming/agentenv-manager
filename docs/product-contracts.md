@@ -119,6 +119,13 @@ Workspace Sync reuses portable environment intent across the user's Macs through
 
 Workspace Sync states are `Not connected`, `Up to date`, `Changes to publish`, `Changes to receive`, `Review required`, `Could not check`, and `Recovery required`. `Checking`, `Publishing`, and `Updating` are temporary activity states, not persisted outcomes.
 
+### Skill evidence and asynchronous feedback
+
+- Repository source groups expand from the non-interactive area of the complete row. Links, rename, selection, and row actions retain their own effects and MUST NOT also toggle disclosure.
+- Source-group multi-selection is a temporary Merge prerequisite, not persistent list chrome. Checkboxes appear only after `Merge`; `Escape` or the exit control clears the temporary selection.
+- Every asynchronous command MUST acknowledge work on the initiating control immediately. Loading icons use the shared motion primitive rather than page-local animation rules.
+- Whenever AgentEnv can read a trustworthy upstream commit time, Library metadata update time, or local `SKILL.md` modification time, version-choice and conflict-review surfaces MUST present it alongside version and content hash. Missing or unreadable timestamps remain omitted or explicitly unknown; timestamps never replace content comparison.
+
 ### 4.3 Profile
 
 A Profile is a saved environment recipe. It owns:
@@ -562,7 +569,10 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - Scan results MUST appear in a confirmation dialog, select all importable candidates by default, allow individual candidates to be excluded, and identify already-imported or duplicate candidates without selecting them. The bulk-selection control MUST expose all, mixed, and none states while keeping its label and selected count aligned without overlap at the minimum supported viewport.
 - A batch import MUST process selected candidates sequentially in the same dialog. Each candidate advances through distinct queued, reviewing, writing, completed, failed, or skipped states; only the current candidate may open the conditional duplicate review.
 - A candidate becomes completed only after its canonical Library write has returned successfully. Completed candidates remain visible and preserved when a later candidate fails or is skipped.
+- While a batch is active, `Stop import`, Escape, or the dialog close control requests a cooperative stop and keeps the result dialog visible. A write that already completed remains completed; a cancelled review or write and every candidate not yet started become `Skipped`, not failed. Each skipped row exposes an independent `Import` action.
 - After the final candidate, the dialog MUST show one aggregate success or partial-failure result and remain open until the user explicitly closes it. A batch import MUST report each failure against its source. Failed rows use a compact failure state and expose the complete selectable error in a hover/focus detail layer.
+- Scan, Preview, and the immediately following Import MAY reuse the same successful Repository snapshot or GitHub response. Explicit Scan, Check updates, and Update Preview MUST bypass completed response caches while still coalescing identical requests that are concurrently in flight.
+- A multi-Skill GitHub check groups Skills by repository and ref, reads one complete commit tree per group, and derives each Skill-subtree revision from that shared immutable tree. Per-Skill commit-time requests run only for changed candidates. A just-imported tracked Skill immediately replaces any stale same-ID check result with its persisted revision and MUST NOT display `Update available` until a later fresh check proves a difference.
 - Every Skill has an independent `Tracked` or `Untracked` update policy. `Untracked` excludes that Skill from manual, startup, and scheduled checks without reading its local source, Repository Cache, or remote.
 - A Skill row overflow is a compact command menu. Update source and tracking fields live in a focused `Update settings` dialog and MUST NOT turn the row menu into a scrolling form.
 - The UI status for this durable policy is `Not tracked`; temporary wording such as `Checks off` and source-type wording such as `Fixed copy` MUST NOT substitute for the policy.

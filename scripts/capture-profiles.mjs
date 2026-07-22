@@ -571,9 +571,11 @@ try {
   await page.getByRole("dialog", { name: "Rename source" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-source-rename-920x620.png"));
   await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Merge", exact: true }).click();
   const sourceSelections = page.locator(".skill-source-list").getByRole("checkbox");
   await sourceSelections.nth(0).check();
   await sourceSelections.nth(1).check();
+  await capturePage(page, join(outputDir, "skills-sources-selection-920x620.png"));
   await page.getByRole("button", { name: "Merge selected (2)", exact: true }).click();
   const sourceMergeDialog = page.getByRole("dialog", { name: "Confirm source merge" });
   await sourceMergeDialog.waitFor({ state: "visible" });

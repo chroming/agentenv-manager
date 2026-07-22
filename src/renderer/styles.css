@@ -4718,6 +4718,11 @@ button svg,
   }
 }
 
+/* Async controls use this shared state across every page and dialog. */
+.is-spinning {
+  animation: spin 0.9s linear infinite;
+}
+
 .row-action-popover {
   background: rgba(255, 255, 255, 0.98);
   border: 1px solid rgba(203, 213, 225, 0.9);

@@ -11,7 +11,8 @@ import {
   Pencil,
   RefreshCw,
   Search,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
 import type {
   SkillSourceGroupCandidate,
@@ -25,7 +26,7 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
-import { Button, ModalFrame } from "./ui";
+import { Button, IconButton, ModalFrame } from "./ui";
 
 interface SkillSourceViewProps {
   active: boolean;
@@ -108,6 +109,7 @@ export const SkillSourceView = ({
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const [checkingAll, setCheckingAll] = useState(false);
   const [operation, setOperation] = useState<string>();
+  const [mergeSelectionMode, setMergeSelectionMode] = useState(false);
   const [selectionDragging, setSelectionDragging] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeSelection, setMergeSelection] = useState<Set<string>>(new Set());
@@ -155,6 +157,13 @@ export const SkillSourceView = ({
   const mergePreviewIsCurrent = mergePreview?.mergedSource.directory === activeMergeDirectory;
   const canMergeSources = groups.length >= 2;
 
+  const exitMergeSelection = () => {
+    setMergeSelectionMode(false);
+    setMergeSelection(new Set());
+    setSelectionDragging(false);
+    selectionDragRef.current = undefined;
+  };
+
   useEffect(() => {
     if (!selectionDragging) return;
     const finishSelectionDrag = () => {
@@ -171,6 +180,21 @@ export const SkillSourceView = ({
       window.removeEventListener("pointercancel", finishSelectionDrag);
     };
   }, [selectionDragging]);
+
+  useEffect(() => {
+    if (!mergeSelectionMode || mergeOpen || renameSource) return;
+    const exitOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      exitMergeSelection();
+    };
+    document.addEventListener("keydown", exitOnEscape);
+    return () => document.removeEventListener("keydown", exitOnEscape);
+  }, [mergeOpen, mergeSelectionMode, renameSource]);
+
+  useEffect(() => {
+    if (!canMergeSources && mergeSelectionMode) exitMergeSelection();
+  }, [canMergeSources, mergeSelectionMode]);
 
   const setSourceSelected = (sourceId: string, selected: boolean) => {
     setMergeSelection((current) => {
@@ -212,7 +236,7 @@ export const SkillSourceView = ({
   const closeMerge = (force = false, clearSelection = false) => {
     if (mergeBusy && !force) return;
     setMergeOpen(false);
-    if (clearSelection) setMergeSelection(new Set());
+    if (clearSelection) exitMergeSelection();
     setMergeDirectory(undefined);
     setMergePreview(undefined);
     setMergeError(undefined);
@@ -365,13 +389,22 @@ export const SkillSourceView = ({
     }
   };
 
+  const toggleExpanded = (sourceId: string) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(sourceId)) next.delete(sourceId);
+      else next.add(sourceId);
+      return next;
+    });
+  };
+
   return (
     <section
       className={`skill-source-view${active ? "" : " is-inactive"}`}
       aria-label={t("Skills by source")}
       aria-hidden={!active}
     >
-      <div className="skill-source-toolbar">
+      <div className={`skill-source-toolbar${mergeSelectionMode ? " is-merge-selection" : ""}`}>
         <label className="library-search">
           <span>{t("Search")}</span>
           <Search size={16} strokeWidth={2.1} aria-hidden="true" />
@@ -400,17 +433,30 @@ export const SkillSourceView = ({
           <button
             className="secondary-action"
             type="button"
-            disabled={mergeSelection.size < 2 || checkingAll || Boolean(operation)}
-            onClick={openMerge}
+            disabled={(mergeSelectionMode && mergeSelection.size < 2) || checkingAll || Boolean(operation)}
+            onClick={() => mergeSelectionMode ? openMerge() : setMergeSelectionMode(true)}
           >
             <GitMerge size={15} strokeWidth={2.2} />
-            <span>{t("Merge selected")}{mergeSelection.size > 0 ? ` (${mergeSelection.size})` : ""}</span>
+            <span>{mergeSelectionMode
+              ? `${t("Merge selected")} (${mergeSelection.size})`
+              : t("Merge")}</span>
           </button>
+        ) : null}
+        {mergeSelectionMode ? (
+          <IconButton
+            className="skill-source-exit-selection"
+            label={t("Exit merge selection")}
+            onClick={exitMergeSelection}
+            size="default"
+            variant="ghost"
+          >
+            <X />
+          </IconButton>
         ) : null}
       </div>
 
       <div
-        className={`skill-source-list${canMergeSources ? " can-merge" : ""}${selectionDragging ? " is-selecting" : ""}`}
+        className={`skill-source-list${mergeSelectionMode ? " can-merge" : ""}${selectionDragging ? " is-selecting" : ""}`}
         onPointerMove={scrollSelectionList}
       >
         {loading && groups.length === 0 ? (
@@ -450,8 +496,15 @@ export const SkillSourceView = ({
               key={group.sourceId}
               onPointerEnter={() => extendSelectionDrag(group.sourceId)}
             >
-              <div className="skill-source-group-row">
-                {canMergeSources ? (
+              <div
+                className="skill-source-group-row"
+                onClick={(event) => {
+                  const target = event.target as HTMLElement;
+                  if (target.closest("button, input, label, a, select, [role='menuitem']")) return;
+                  toggleExpanded(group.sourceId);
+                }}
+              >
+                {mergeSelectionMode ? (
                   <label
                     className="skill-source-select"
                     onPointerDown={(event) => beginSelectionDrag(
@@ -482,12 +535,7 @@ export const SkillSourceView = ({
                   type="button"
                   aria-label={t(isExpanded ? "Collapse source" : "Expand source")}
                   aria-expanded={isExpanded}
-                  onClick={() => setExpanded((current) => {
-                    const next = new Set(current);
-                    if (next.has(group.sourceId)) next.delete(group.sourceId);
-                    else next.add(group.sourceId);
-                    return next;
-                  })}
+                  onClick={() => toggleExpanded(group.sourceId)}
                 >
                   {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </button>
@@ -622,7 +670,13 @@ export const SkillSourceView = ({
                         <div className="skill-source-candidate-meta">
                           <span className="skill-source-candidate-field-label">{t("Library")}</span>
                           <strong>{candidate.libraryName ?? t("Not in Library")}</strong>
-                          <span>{candidate.libraryVersion ?? candidate.libraryId ?? "—"}</span>
+                          <span>
+                            {[candidate.libraryVersion ?? candidate.libraryId, candidate.libraryUpdatedAt
+                              ? formatDate(candidate.libraryUpdatedAt)
+                              : undefined]
+                              .filter(Boolean)
+                              .join(" · ") || "—"}
+                          </span>
                         </div>
                         <div className={`skill-source-state is-${candidate.state}`}>
                           {candidate.state === "current" ? (

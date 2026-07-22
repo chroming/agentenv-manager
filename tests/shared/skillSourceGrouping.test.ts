@@ -73,6 +73,8 @@ describe("skill source grouping", () => {
       { name: "testing", state: "new" },
       { name: "docs", state: "removed" }
     ]);
+    expect(group.candidates.find((candidate) => candidate.libraryId === "review")?.libraryUpdatedAt)
+      .toBe("2026-07-20T00:00:00.000Z");
   });
 
   it("keeps the last complete observation visible when a later check fails", () => {

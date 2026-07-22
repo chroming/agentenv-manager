@@ -20,8 +20,15 @@ export interface GitRepositoryCacheOptions {
 }
 
 export interface GitRepositoryCache {
-  fetch(input: RepositorySkillSourceInput, signal?: AbortSignal): Promise<ResolvedGitRepository>;
+  fetch(
+    input: RepositorySkillSourceInput,
+    signal?: AbortSignal,
+    options?: { refresh?: boolean }
+  ): Promise<ResolvedGitRepository>;
 }
+
+const RECENT_REPOSITORY_TTL_MS = 2 * 60 * 1_000;
+const RECENT_REPOSITORY_MAX_ENTRIES = 64;
 
 const safeRef = (value: string | undefined): string | undefined => {
   const ref = value?.trim();
@@ -81,6 +88,7 @@ export const createGitRepositoryCache = (
   options: GitRepositoryCacheOptions
 ): GitRepositoryCache => {
   const inflight = new Map<string, Promise<ResolvedGitRepository>>();
+  const recent = new Map<string, { resolved: ResolvedGitRepository; fetchedAt: number }>();
   const repositoryQueues = new Map<string, Promise<void>>();
   const waiters: Array<() => void> = [];
   const maxConcurrentFetches = Math.max(1, options.maxConcurrentFetches ?? 2);
@@ -175,13 +183,18 @@ export const createGitRepositoryCache = (
 
   const fetch = (
     input: RepositorySkillSourceInput,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    fetchOptions: { refresh?: boolean } = {}
   ): Promise<ResolvedGitRepository> => {
     const location = parseRepositoryLocation(input.repository, { allowLocal: true });
     const requestedRef = safeRef(input.ref ?? location.inferredRef);
     const requestKey = `${location.cacheKeyLocator}\0${requestedRef ?? "<default>"}`;
     const existing = inflight.get(requestKey);
     if (existing) return existing;
+    const cached = recent.get(requestKey);
+    if (!fetchOptions.refresh && cached && Date.now() - cached.fetchedAt <= RECENT_REPOSITORY_TTL_MS) {
+      return Promise.resolve(cached.resolved);
+    }
 
     const operation = serializeRepository(location.cacheKeyLocator, async () => {
       await acquire();
@@ -279,16 +292,31 @@ export const createGitRepositoryCache = (
         release();
       }
     });
-    inflight.set(requestKey, operation);
-    void operation.then(
+    const trackedOperation = operation.then((resolved) => {
+      const fetchedAt = Date.now();
+      for (const [cachedKey, cached] of recent) {
+        if (fetchedAt - cached.fetchedAt > RECENT_REPOSITORY_TTL_MS) {
+          recent.delete(cachedKey);
+        }
+      }
+      recent.set(requestKey, { resolved, fetchedAt });
+      while (recent.size > RECENT_REPOSITORY_MAX_ENTRIES) {
+        const oldestKey = recent.keys().next().value as string | undefined;
+        if (!oldestKey) break;
+        recent.delete(oldestKey);
+      }
+      return resolved;
+    });
+    inflight.set(requestKey, trackedOperation);
+    void trackedOperation.then(
       () => {
-        if (inflight.get(requestKey) === operation) inflight.delete(requestKey);
+        if (inflight.get(requestKey) === trackedOperation) inflight.delete(requestKey);
       },
       () => {
-        if (inflight.get(requestKey) === operation) inflight.delete(requestKey);
+        if (inflight.get(requestKey) === trackedOperation) inflight.delete(requestKey);
       }
     );
-    return operation;
+    return trackedOperation;
   };
 
   return { fetch };

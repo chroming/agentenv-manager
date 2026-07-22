@@ -31,9 +31,11 @@ const group: SkillSourceGroupView = {
       name: "review",
       description: "Review code",
       contentRevision: "review-2",
+      upstreamUpdatedAt: "2026-07-22T00:00:00.000Z",
       libraryId: "review",
       libraryName: "review",
       libraryVersion: "1.0.0",
+      libraryUpdatedAt: "2026-07-20T00:00:00.000Z",
       globallyEnabled: true,
       updatePolicy: "tracked",
       state: "update"
@@ -102,6 +104,7 @@ describe("SkillSourceView", () => {
       [...candidates!.querySelectorAll(".skill-source-candidate-field-label")]
         .map((label) => label.textContent)
     ).toEqual(group.candidates.flatMap(() => ["Upstream", "Library"]));
+    expect(candidates).toHaveTextContent("2026");
     fireEvent.click(within(candidates!).getByRole("button", { name: "Add" }));
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(group, group.candidates[0]));
     fireEvent.click(within(candidates!).getByRole("button", { name: "Review update review" }));
@@ -193,6 +196,8 @@ describe("SkillSourceView", () => {
       />
     );
 
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
     const checkboxes = screen.getAllByRole("checkbox");
     const rows = document.querySelectorAll<HTMLElement>(".skill-source-group");
     fireEvent.pointerDown(checkboxes[0]!.closest("label")!, { button: 0 });
@@ -203,6 +208,102 @@ describe("SkillSourceView", () => {
     expect(checkboxes[1]).toBeChecked();
     expect(checkboxes[2]).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Merge selected (2)" })).toBeEnabled();
+  });
+
+  it("uses an explicit merge selection mode and exits it with Escape", () => {
+    const secondGroup = {
+      ...group,
+      sourceId: "source-backend",
+      canonicalLink: "https://github.com/acme/skills/tree/main/backend",
+      directory: "backend"
+    };
+    render(
+      <SkillSourceView
+        active
+        groups={[group, secondGroup]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Merge selected (0)" })).toBeDisabled();
+    fireEvent.click(screen.getAllByRole("checkbox")[0]!);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Merge" })).toBeEnabled();
+  });
+
+  it("expands from the source row without stealing nested actions", () => {
+    const onOpenSource = vi.fn();
+    render(
+      <SkillSourceView
+        active
+        groups={[group]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={onOpenSource}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    const row = document.querySelector<HTMLElement>(".skill-source-group-row")!;
+    fireEvent.click(row);
+    expect(screen.getByRole("button", { name: "Collapse source" })).toBeInTheDocument();
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".skill-source-link")!);
+    expect(onOpenSource).toHaveBeenCalledWith(group.canonicalLink);
+    expect(screen.getByRole("button", { name: "Collapse source" })).toBeInTheDocument();
+  });
+
+  it("shows local progress while checking all sources", async () => {
+    let finishCheck!: () => void;
+    const onCheckAll = vi.fn(() => new Promise<void>((resolve) => {
+      finishCheck = resolve;
+    }));
+    render(
+      <SkillSourceView
+        active
+        groups={[group]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckAll={onCheckAll}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    const checkAll = screen.getByRole("button", { name: "Check all" });
+    fireEvent.click(checkAll);
+    expect(checkAll).toHaveAttribute("aria-busy", "true");
+    expect(checkAll.querySelector(".is-spinning")).not.toBeNull();
+    finishCheck();
+    await waitFor(() => expect(checkAll).toHaveAttribute("aria-busy", "false"));
   });
 
   it("animates the action that is waiting for an update preview", async () => {
@@ -288,6 +389,7 @@ describe("SkillSourceView", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
     const checkboxes = screen.getAllByRole("checkbox");
     fireEvent.click(checkboxes[0]!);
     fireEvent.click(checkboxes[1]!);
@@ -397,6 +499,7 @@ describe("SkillSourceView", () => {
       />
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
     const checkboxes = screen.getAllByRole("checkbox");
     fireEvent.click(checkboxes[0]!);
     fireEvent.click(checkboxes[1]!);

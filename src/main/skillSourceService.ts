@@ -121,7 +121,7 @@ export const createSkillSourceService = (
         ref: group.ref,
         directory: group.directory,
         transport: "system-git"
-      });
+      }, undefined, { refresh: true });
       if (result.truncated) {
         throw new Error("Source scan was incomplete and was not applied");
       }

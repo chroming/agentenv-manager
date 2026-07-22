@@ -88,6 +88,18 @@ import { bindSkillSourceCollection, createSkillSourceRegistry } from "./skillSou
 import { createSingleSkillSourceCollection } from "./skillSourceScope";
 import { createSkillSourceMergeService } from "./skillSourceMergeService";
 import { githubContentsRevision } from "./skillSources/revisionCompatibility";
+import {
+  createGitHubSkillClient,
+  encodeGitHubPath,
+  githubSkillSourceUrl,
+  mapWithConcurrency,
+  parseGitHubSkillUrl,
+  skillIdFrom,
+  type GitHubCommitResponse,
+  type GitHubFetch,
+  type GitHubTreeResponse,
+  type ParsedGitHubSkillSource
+} from "./githubSkillClient";
 
 interface SkillCleanupBackupManifest {
   id: string;
@@ -239,18 +251,9 @@ export interface SkillLibraryStore {
   updateSkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
 }
 
-type FetchLike = (url: string, init?: RequestInit) => Promise<{
-  ok: boolean;
-  status: number;
-  statusText: string;
-  headers?: Pick<Headers, "get">;
-  json(): Promise<unknown>;
-  text(): Promise<string>;
-}>;
-
 interface SkillLibraryStoreOptions {
   authTokenProvider?: () => Promise<string | undefined>;
-  fetch?: FetchLike;
+  fetch?: GitHubFetch;
   skillsCliLockPaths?: string[];
   profileStore?: Pick<ProfileStore, "listProfiles" | "readProfile" | "saveProfile">;
   targetPathsProvider?: () => TargetPaths[];
@@ -270,57 +273,6 @@ interface PendingSkillUpdate {
 }
 
 const SKILL_UPDATE_PREVIEW_TTL_MS = 30 * 60 * 1000;
-
-interface ParsedGitHubSkillSource {
-  owner: string;
-  repo: string;
-  ref: string;
-  remotePath: string;
-  sourceUrl: string;
-  defaultId: string;
-}
-
-interface ParsedGitHubLocation {
-  owner: string;
-  repo: string;
-  kind: "repository" | "tree" | "blob";
-  pathSegments: string[];
-}
-
-interface GitHubRepositoryResponse {
-  default_branch?: string;
-}
-
-interface GitHubCommitResponse {
-  commit?: {
-    tree?: { sha?: string };
-    author?: { date?: string };
-    committer?: { date?: string };
-  };
-}
-
-interface GitHubTreeResponse {
-  truncated?: boolean;
-  tree?: Array<{ path?: string; type?: string; sha?: string }>;
-}
-
-interface GitHubContentBase {
-  type: string;
-  name: string;
-  path: string;
-  sha: string;
-}
-
-interface GitHubContentFile extends GitHubContentBase {
-  type: "file";
-  download_url: string | null;
-}
-
-interface GitHubContentDir extends GitHubContentBase {
-  type: "dir";
-}
-
-type GitHubContentItem = GitHubContentFile | GitHubContentDir;
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
@@ -381,104 +333,6 @@ const removeAndCopy = async (source: string, destination: string) => {
   });
 };
 
-const parseGitHubLocation = (rawUrl: string): ParsedGitHubLocation => {
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    throw new Error("GitHub skill URL is invalid");
-  }
-
-  if (url.hostname !== "github.com") {
-    throw new Error("GitHub skill URL must use github.com");
-  }
-
-  const segments = url.pathname.split("/").filter(Boolean);
-  const [owner, rawRepo, rawKind, ...pathSegments] = segments;
-  const repo = rawRepo?.replace(/\.git$/, "");
-  if (!owner || !repo) {
-    throw new Error("GitHub URL must point to a repository");
-  }
-
-  const kind = rawKind === "tree" || rawKind === "blob" ? rawKind : "repository";
-  if (rawKind && kind === "repository") {
-    throw new Error("GitHub URL must point to a repository, directory, or SKILL.md");
-  }
-  return { owner, repo, kind, pathSegments };
-};
-
-const githubSkillSourceUrl = (owner: string, repo: string, ref: string, remotePath: string) =>
-  `https://github.com/${owner}/${repo}/tree/${ref}${remotePath ? `/${remotePath}` : ""}`;
-
-const skillIdFrom = (value: string) => {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return SafeIdSchema.safeParse(normalized).success ? normalized : "skill";
-};
-
-const parseGitHubSkillUrl = (
-  rawUrl: string,
-  resolved?: { ref?: string; remotePath?: string }
-): ParsedGitHubSkillSource => {
-  const location = parseGitHubLocation(rawUrl);
-  const [urlRef, ...rest] = location.pathSegments;
-  const ref = resolved?.ref ?? urlRef;
-  if (!ref) {
-    throw new Error("GitHub skill URL must include a branch or resolved ref");
-  }
-
-  const pathSegments =
-    location.kind === "blob" && rest.at(-1) === "SKILL.md" ? rest.slice(0, -1) : rest;
-  const remotePath = resolved?.remotePath ?? pathSegments.join("/");
-  const defaultId = pathSegments.at(-1) ?? location.repo;
-  return {
-    owner: location.owner,
-    repo: location.repo,
-    ref,
-    remotePath,
-    sourceUrl: githubSkillSourceUrl(location.owner, location.repo, ref, remotePath),
-    defaultId: skillIdFrom(resolved?.remotePath?.split("/").at(-1) ?? defaultId)
-  };
-};
-
-const encodeGitHubPath = (path: string) =>
-  path
-    .split("/")
-    .filter(Boolean)
-    .map((segment) => encodeURIComponent(segment))
-    .join("/");
-
-const relativeGitHubPath = (rootPath: string, childPath: string) => {
-  if (!rootPath) {
-    return childPath;
-  }
-  if (childPath === rootPath) {
-    return "";
-  }
-  return childPath.startsWith(`${rootPath}/`) ? childPath.slice(rootPath.length + 1) : childPath;
-};
-
-const assertGitHubContentItems = (value: unknown, url: string): GitHubContentItem[] => {
-  if (!Array.isArray(value)) {
-    throw new Error(`GitHub source is not a directory: ${url}`);
-  }
-  return value.filter((item): item is GitHubContentItem => {
-    if (!item || typeof item !== "object") {
-      return false;
-    }
-    const record = item as Record<string, unknown>;
-    return (
-      (record.type === "file" || record.type === "dir") &&
-      typeof record.name === "string" &&
-      typeof record.path === "string" &&
-      typeof record.sha === "string"
-    );
-  });
-};
-
 export const createSkillLibraryStore = (
   paths: AgentEnvPaths,
   settingsStore?: Pick<SettingsStore, "readSettings">,
@@ -507,6 +361,13 @@ export const createSkillLibraryStore = (
   const runtimeSnapshotProvider = options.runtimeSnapshotProvider ?? ((targetPaths) =>
     createFilesystemSkillDriver({ targetId: targetPaths.targetId }).inspectRuntime(targetPaths));
   const pendingUpdates = new Map<string, PendingSkillUpdate>();
+  const {
+    fetchJson: fetchGitHubJson,
+    fetchText: fetchGitHubText,
+    resolveLocation: resolveGitHubLocation,
+    readTree: readGitHubTree,
+    readSkillUpdatedAt: readGitHubSkillUpdatedAt
+  } = createGitHubSkillClient({ fetchImpl, authTokenProvider });
   const skillSourceRegistry = createSkillSourceRegistry(paths.skillSourcesPath);
   const skillSourceService = createLibrarySkillSourceService(
     paths.skillSourceObservationsDir,
@@ -636,175 +497,6 @@ export const createSkillLibraryStore = (
     await writeIgnoreRules(nextRules);
   };
 
-  const githubRequestInit = async (): Promise<RequestInit | undefined> => {
-    const token = await authTokenProvider?.();
-    if (!token) {
-      return undefined;
-    }
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28"
-      }
-    };
-  };
-
-  const githubRequestError = async (
-    response: Awaited<ReturnType<FetchLike>>,
-    url: string
-  ) => {
-    const detail = await response.text().catch(() => "");
-    const rateLimited =
-      response.status === 429 ||
-      response.headers?.get("x-ratelimit-remaining") === "0" ||
-      /rate limit/i.test(detail);
-    if (rateLimited) {
-      return new Error(`GitHub API rate limit reached (${response.status} ${response.statusText})`);
-    }
-    return new Error(`GitHub request failed (${response.status} ${response.statusText}): ${url}`);
-  };
-
-  const fetchGitHubJson = async (url: string) => {
-    const response = await fetchImpl(url, await githubRequestInit());
-    if (!response.ok) {
-      throw await githubRequestError(response, url);
-    }
-    return response.json();
-  };
-
-  const fetchGitHubText = async (url: string) => {
-    const response = await fetchImpl(url, await githubRequestInit());
-    if (!response.ok) {
-      throw await githubRequestError(response, url);
-    }
-    return response.text();
-  };
-
-  const tryFetchGitHubJson = async <T>(url: string): Promise<T | undefined> => {
-    const response = await fetchImpl(url, await githubRequestInit());
-    if (response.status === 404 || response.status === 422) {
-      return undefined;
-    }
-    if (!response.ok) {
-      throw await githubRequestError(response, url);
-    }
-    return (await response.json()) as T;
-  };
-
-  const resolveGitHubLocation = async (rawUrl: string) => {
-    const location = parseGitHubLocation(rawUrl);
-    let ref: string;
-    let rootPath: string;
-    let commit: GitHubCommitResponse | undefined;
-
-    if (location.kind === "repository") {
-      const repository = await fetchGitHubJson(
-        `https://api.github.com/repos/${location.owner}/${location.repo}`
-      ) as GitHubRepositoryResponse;
-      if (!repository.default_branch) {
-        throw new Error("GitHub repository response is missing a default branch");
-      }
-      ref = repository.default_branch;
-      rootPath = "";
-      commit = await tryFetchGitHubJson<GitHubCommitResponse>(
-        `https://api.github.com/repos/${location.owner}/${location.repo}/commits/${encodeURIComponent(ref)}`
-      );
-    } else {
-      const segments =
-        location.kind === "blob" && location.pathSegments.at(-1) === "SKILL.md"
-          ? location.pathSegments.slice(0, -1)
-          : location.pathSegments;
-      let resolvedLength = 0;
-      for (let length = 1; length <= segments.length; length += 1) {
-        const candidateRef = segments.slice(0, length).join("/");
-        const candidateCommit = await tryFetchGitHubJson<GitHubCommitResponse>(
-          `https://api.github.com/repos/${location.owner}/${location.repo}/commits/${encodeURIComponent(candidateRef)}`
-        );
-        if (candidateCommit?.commit?.tree?.sha) {
-          ref = candidateRef;
-          commit = candidateCommit;
-          resolvedLength = length;
-        }
-      }
-      if (!commit || !resolvedLength) {
-        throw new Error("GitHub branch or commit could not be resolved");
-      }
-      ref = segments.slice(0, resolvedLength).join("/");
-      rootPath = segments.slice(resolvedLength).join("/");
-    }
-
-    const treeSha = commit?.commit?.tree?.sha;
-    if (!treeSha) {
-      throw new Error(`GitHub commit could not be resolved: ${ref}`);
-    }
-    return { ...location, ref, rootPath, treeSha };
-  };
-
-  const githubContentsUrl = (source: ParsedGitHubSkillSource, remotePath = source.remotePath) => {
-    const encodedPath = encodeGitHubPath(remotePath);
-    const contentsPath = encodedPath ? `/contents/${encodedPath}` : "/contents";
-    return `https://api.github.com/repos/${source.owner}/${source.repo}${contentsPath}?ref=${encodeURIComponent(source.ref)}`;
-  };
-
-  const readGitHubTree = async (source: ParsedGitHubSkillSource, writeRoot?: string) => {
-    const revisionHash = createHash("sha1");
-    let hasSkillMd = false;
-
-    const walk = async (remotePath: string) => {
-      const url = githubContentsUrl(source, remotePath);
-      const items = assertGitHubContentItems(await fetchGitHubJson(url), url).sort((a, b) =>
-        a.path.localeCompare(b.path)
-      );
-      for (const item of items) {
-        revisionHash.update(`${item.type}:${item.path}:${item.sha}\n`);
-        if (item.type === "dir") {
-          await walk(item.path);
-          continue;
-        }
-        if (item.type !== "file") {
-          continue;
-        }
-        const relativePath = relativeGitHubPath(source.remotePath, item.path);
-        if (relativePath === "SKILL.md") {
-          hasSkillMd = true;
-        }
-        if (!writeRoot) {
-          continue;
-        }
-        if (!item.download_url) {
-          throw new Error(`GitHub file is missing a download URL: ${item.path}`);
-        }
-        const filePath = join(writeRoot, ...relativePath.split("/"));
-        await mkdir(dirname(filePath), { recursive: true });
-        await writeAtomic(filePath, await fetchGitHubText(item.download_url));
-      }
-    };
-
-    await walk(source.remotePath);
-    return {
-      hasSkillMd,
-      revision: revisionHash.digest("hex")
-    };
-  };
-
-  const readGitHubSkillUpdatedAt = async (
-    source: ParsedGitHubSkillSource
-  ): Promise<string | undefined> => {
-    const query = new URLSearchParams({ sha: source.ref, per_page: "1" });
-    if (source.remotePath) query.set("path", source.remotePath);
-    try {
-      const commits = await fetchGitHubJson(
-        `https://api.github.com/repos/${source.owner}/${source.repo}/commits?${query.toString()}`
-      ) as GitHubCommitResponse[];
-      const value = commits[0]?.commit?.committer?.date ?? commits[0]?.commit?.author?.date;
-      return value && !Number.isNaN(Date.parse(value))
-        ? new Date(value).toISOString()
-        : undefined;
-    } catch {
-      return undefined;
-    }
-  };
-
   const entryFor = (id: string, skillDir: string) =>
     readSkillLibraryEntry(id, skillDir, skillSourceRegistry);
 
@@ -919,7 +611,9 @@ export const createSkillLibraryStore = (
       try {
         const materialized = await requireRepositorySource().materialize(
           source.input,
-          tempDir
+          tempDir,
+          undefined,
+          { refresh: false }
         );
         const frontmatter = await validateSkillFrontmatter(tempDir);
         const requestedId =
@@ -1078,12 +772,12 @@ export const createSkillLibraryStore = (
   };
 
   const scanGitHubSkills = async (rawUrl: string): Promise<GitHubSkillScanResult> => {
-    const source = await resolveGitHubLocation(rawUrl);
+    const source = await resolveGitHubLocation(rawUrl, { refresh: true });
     const sourceScope = createGitHubSourceScope(rawUrl, source);
     const treeUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${encodeURIComponent(source.treeSha)}?recursive=1`;
-    const treeResponse = await fetchGitHubJson(treeUrl) as GitHubTreeResponse;
+    const treeResponse = await fetchGitHubJson(treeUrl, { refresh: true }) as GitHubTreeResponse;
     const treeItems = (treeResponse.tree ?? []).filter(
-      (item): item is { path: string; type: string; sha: string } =>
+      (item): item is { path: string; type: string; sha: string; mode?: string } =>
         typeof item.path === "string" &&
         typeof item.type === "string" &&
         typeof item.sha === "string"
@@ -1109,9 +803,13 @@ export const createSkillLibraryStore = (
           });
         });
     const existingSkills = await listSkills();
-    const candidates: GitHubSkillCandidate[] = [];
-
-    for (const skillFile of boundedSkillFiles.slice(0, 500)) {
+    const revisionEntries = treeItems
+      .filter((item): item is { path: string; type: "blob" | "tree"; sha: string; mode?: string } =>
+        (item.type === "blob" || item.type === "tree") && item.mode !== "120000");
+    const candidates = await mapWithConcurrency(
+      boundedSkillFiles.slice(0, 500),
+      8,
+      async (skillFile): Promise<GitHubSkillCandidate> => {
       const remotePath = dirname(skillFile.path) === "." ? "" : dirname(skillFile.path);
       const sourceUrl = githubSkillSourceUrl(
         source.owner,
@@ -1120,10 +818,7 @@ export const createSkillLibraryStore = (
         remotePath
       );
       const rawSkillUrl = `https://raw.githubusercontent.com/${source.owner}/${source.repo}/${encodeURIComponent(source.ref)}/${encodeGitHubPath(skillFile.path)}`;
-      const content = await fetchGitHubText(rawSkillUrl);
-      const revisionEntries = treeItems
-        .filter((item): item is { path: string; type: "blob" | "tree"; sha: string } =>
-          item.type === "blob" || item.type === "tree");
+      const content = await fetchGitHubText(rawSkillUrl, { refresh: true });
       const revision = githubContentsRevision(remotePath, revisionEntries);
       const treeRevision = remotePath
         ? revisionEntries.find((item) => item.type === "tree" && item.path === remotePath)?.sha
@@ -1138,7 +833,7 @@ export const createSkillLibraryStore = (
       const baseId = skillIdFrom(pathName);
       const id = existingSource?.id ?? duplicate?.id ?? baseId;
       const frontmatter = parseSkillFrontmatter(content);
-      candidates.push({
+      return {
         id,
         name: frontmatter.name || pathName,
         description: frontmatter.description,
@@ -1156,8 +851,8 @@ export const createSkillLibraryStore = (
         ),
         existingLibraryId: existingSource?.id ?? duplicate?.id,
         error: frontmatter.errors.length > 0 ? frontmatter.errors.join("; ") : undefined
-      });
-    }
+      };
+    });
 
     const result: GitHubSkillScanResult = {
       owner: source.owner,
@@ -1325,7 +1020,8 @@ export const createSkillLibraryStore = (
           continue;
         }
         const skillDirStats = await lstat(skillDir);
-        const skillFileStats = await lstat(join(skillDir, "SKILL.md"));
+        const skillFileLinkStats = await lstat(join(skillDir, "SKILL.md"));
+        const skillFileStats = await stat(join(skillDir, "SKILL.md"));
         byKey.set(key, {
           id: deploymentName,
           name: observation.runtimeName,
@@ -1354,10 +1050,11 @@ export const createSkillLibraryStore = (
             issues: observation.issues
           }],
           contentHash,
+          modifiedAt: skillFileStats.mtime.toISOString(),
           ignoreRuleId: ignoreRule?.id,
           ignoreReason: ignoreRule?.reason,
           installMethod: managedByAgentEnv
-            ? skillDirStats.isSymbolicLink() || skillFileStats.isSymbolicLink()
+            ? skillDirStats.isSymbolicLink() || skillFileLinkStats.isSymbolicLink()
               ? "linked"
               : "copied"
             : undefined,
@@ -1409,12 +1106,13 @@ export const createSkillLibraryStore = (
     const inventory = await scanInventory(targetPaths);
     return inventory
       .filter((skill) => skill.status === "unmanaged")
-      .map(({ id, name, description, path, foundIn }) => ({
+      .map(({ id, name, description, path, foundIn, modifiedAt }) => ({
         id,
         name,
         description,
         path,
-        foundIn
+        foundIn,
+        modifiedAt
       }));
   };
 
@@ -1916,7 +1614,7 @@ export const createSkillLibraryStore = (
   const scanRepositorySkills = async (
     input: RepositorySkillSourceInput
   ): Promise<RepositorySkillScanResult> => {
-    const result = await requireRepositorySource().scan(input);
+    const result = await requireRepositorySource().scan(input, undefined, { refresh: true });
     const existingSkills = await listSkills();
     const normalizedResult = normalizeRepositorySkillScan(result, existingSkills);
     await skillSourceService.recordRepositoryScan(result.sourceScope, normalizedResult);
@@ -1928,7 +1626,12 @@ export const createSkillLibraryStore = (
   ): Promise<SkillLibraryEntry> => {
     const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-skill-"));
     try {
-      const materialized = await requireRepositorySource().materialize(input, tempDir);
+      const materialized = await requireRepositorySource().materialize(
+        input,
+        tempDir,
+        undefined,
+        { refresh: false }
+      );
       const validatedSourceCollection = validateRepositoryImportCollection(input, materialized);
       const frontmatter = await validateSkillFrontmatter(tempDir);
       const requestedId =
@@ -2568,8 +2271,12 @@ export const createSkillLibraryStore = (
           provenance: { importedVia: "local-scan" }
         });
       }
+      const libraryContentHash = await computeContentHash(targetLibraryDir);
       for (const sharedPath of uniqueSharedPaths) {
-        await removeAndCopy(targetLibraryDir, sharedPath);
+        const sharedContentHash = await computeContentHash(sharedPath);
+        if (sharedContentHash !== libraryContentHash) {
+          await removeAndCopy(targetLibraryDir, sharedPath);
+        }
         await rm(join(sharedPath, ".agentenv-skill.json"), { force: true });
         await rm(join(sharedPath, ".agentenv-owner.json"), { force: true });
         await rm(markerPathForFile(sharedPath), { force: true });
@@ -2612,6 +2319,43 @@ export const createSkillLibraryStore = (
         item.globallyEnabled &&
         Boolean(item.source)
     );
+    const githubManifests = new Map<string, Promise<Array<{
+      path: string;
+      type: "blob" | "tree";
+      sha: string;
+    }> | undefined>>();
+    const githubManifestFor = (source: ParsedGitHubSkillSource) => {
+      const key = `${source.owner}/${source.repo}\0${source.ref}`;
+      const existing = githubManifests.get(key);
+      if (existing) return existing;
+      const request = (async () => {
+        try {
+          const commitUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/commits/${encodeURIComponent(source.ref)}`;
+          const commit = await fetchGitHubJson(commitUrl, { refresh: true }) as GitHubCommitResponse;
+          const treeSha = commit.commit?.tree?.sha;
+          if (!treeSha) return undefined;
+          const tree = await fetchGitHubJson(
+            `https://api.github.com/repos/${source.owner}/${source.repo}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`,
+            { refresh: true }
+          ) as GitHubTreeResponse;
+          if (tree.truncated) return undefined;
+          return (tree.tree ?? []).filter((entry): entry is {
+            path: string;
+            type: "blob" | "tree";
+            sha: string;
+          } =>
+            (entry.type === "blob" || entry.type === "tree") &&
+            entry.mode !== "120000" &&
+            typeof entry.path === "string" &&
+            typeof entry.sha === "string"
+          );
+        } catch {
+          return undefined;
+        }
+      })();
+      githubManifests.set(key, request);
+      return request;
+    };
     return Promise.all(selectedSkills.map(async (skill): Promise<SkillUpdateInfo> => {
       const metadata = await readLibraryMetadata(skill.path);
       if (!metadata.source) {
@@ -2646,7 +2390,7 @@ export const createSkillLibraryStore = (
             ref: metadata.remoteRef,
             directory: metadata.remotePath,
             transport: "system-git"
-          });
+          }, undefined, { refresh: true });
           return {
             id: skill.id,
             name: skill.name,
@@ -2664,18 +2408,22 @@ export const createSkillLibraryStore = (
           ref: metadata.remoteRef,
           remotePath: metadata.remotePath
         });
-        const [latest, latestUpdatedAt] = await Promise.all([
-          readGitHubTree(source),
-          readGitHubSkillUpdatedAt(source)
-        ]);
+        const manifest = await githubManifestFor(source);
+        const latestRevision = manifest
+          ? githubContentsRevision(source.remotePath, manifest)
+          : (await readGitHubTree(source, undefined, { refresh: true })).revision;
+        const updateAvailable = latestRevision !== metadata.remoteRevision;
+        const latestUpdatedAt = updateAvailable
+          ? await readGitHubSkillUpdatedAt(source, { refresh: true })
+          : metadata.upstream?.updatedAt;
         return {
           id: skill.id,
           name: skill.name,
           sourceType: "github",
           currentRevision: metadata.remoteRevision,
-          latestRevision: latest.revision,
+          latestRevision,
           latestUpdatedAt,
-          updateAvailable: latest.revision !== metadata.remoteRevision
+          updateAvailable
         };
       } catch (error) {
         return {
@@ -2997,8 +2745,8 @@ export const createSkillLibraryStore = (
       const candidateDir = await mkdtemp(join(tmpdir(), "agentenv-github-skill-update-"));
       try {
         const [{ hasSkillMd, revision }, sourceUpdatedAt] = await Promise.all([
-          readGitHubTree(source, candidateDir),
-          readGitHubSkillUpdatedAt(source)
+          readGitHubTree(source, candidateDir, { refresh: true }),
+          readGitHubSkillUpdatedAt(source, { refresh: true })
         ]);
         if (!hasSkillMd) {
           throw new Error(`GitHub skill source is missing SKILL.md: ${metadata.source}`);
@@ -3038,7 +2786,9 @@ export const createSkillLibraryStore = (
             directory: metadata.remotePath,
             transport: "system-git"
           },
-          candidateDir
+          candidateDir,
+          undefined,
+          { refresh: true }
         );
         return await finalizeCandidate(candidateDir, {
           ...metadata,

@@ -550,6 +550,12 @@
   min-width: 0;
 }
 
+.cleanup-review-option > span > small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .cleanup-review-option strong,
 .cleanup-option-path,
 .cleanup-option-description {

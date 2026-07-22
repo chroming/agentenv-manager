@@ -25,18 +25,25 @@ export interface MaterializedGitSkillSource extends ResolvedGitSkillSource {
   destination: string;
 }
 
+export interface GitSourceReadOptions {
+  refresh?: boolean;
+}
+
 export interface GitCliSkillSource {
   resolve(
     input: RepositorySkillSourceInput,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: GitSourceReadOptions
   ): Promise<ResolvedGitSkillSource>;
   scan(
     input: RepositorySkillSourceInput,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: GitSourceReadOptions
   ): Promise<RepositorySkillScanResult>;
   materialize(
     input: RepositorySkillSourceInput,
     destination: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: GitSourceReadOptions
   ): Promise<MaterializedGitSkillSource>;
 }

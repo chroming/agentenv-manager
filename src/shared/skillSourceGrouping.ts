@@ -71,6 +71,7 @@ const localCandidate = (
   libraryId: skill.id,
   libraryName: skill.name,
   libraryVersion: skill.version,
+  libraryUpdatedAt: skill.updatedAt,
   globallyEnabled: skill.globallyEnabled !== false,
   updatePolicy: skill.updatePolicy,
   state,
@@ -147,6 +148,7 @@ export const deriveSkillSourceGroups = (
             libraryId: skill.id,
             libraryName: skill.name,
             libraryVersion: skill.version,
+            libraryUpdatedAt: skill.updatedAt,
             globallyEnabled: skill.globallyEnabled !== false,
             updatePolicy: skill.updatePolicy,
             state: matchedRevision ? "current" : "update"

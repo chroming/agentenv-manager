@@ -244,6 +244,7 @@ description: >
       id: "reviewer",
       name: "Reviewer",
       description: "Review code from a shared Skills CLI installation.",
+      modifiedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       status: "external",
       externalOwnership: {
         manager: "skills-cli",
@@ -1099,7 +1100,8 @@ description: >
         name: "unmanaged",
         description: "Import me.",
         path: unmanagedDir,
-        foundIn: ["opencode"]
+        foundIn: ["opencode"],
+        modifiedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
       }
     ]);
   });
@@ -2405,6 +2407,38 @@ description: >
     ]);
   });
 
+  it("reuses a GitHub preview response during the immediately following import", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/commits?")) return new Response("[]");
+      if (url.endsWith("/contents/skills/reviewer?ref=main")) {
+        return new Response(JSON.stringify([{
+          type: "file",
+          name: "SKILL.md",
+          path: "skills/reviewer/SKILL.md",
+          download_url: "https://raw.example/reviewer/SKILL.md",
+          sha: "reviewer-sha"
+        }]));
+      }
+      if (url === "https://raw.example/reviewer/SKILL.md") {
+        return new Response("---\nname: reviewer\n---\n# Reviewer\n");
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+    const input = {
+      url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
+    };
+
+    await store.previewImport({ kind: "github", input });
+    await store.importGitHubSkill(input);
+
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes("/contents/"))).toHaveLength(1);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).startsWith("https://raw.example/"))).toHaveLength(1);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).includes("/commits?"))).toHaveLength(1);
+  });
+
   it("detects and updates GitHub-backed skills when the source directory changes", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
@@ -2454,6 +2488,60 @@ description: >
     await expect(readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")).resolves.toContain(
       "# v2"
     );
+  });
+
+  it("checks multiple skills from one GitHub repository with one commit and tree request", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const files = {
+      reviewer: { sha: "reviewer-sha", content: "---\nname: reviewer\n---\n# Reviewer\n" },
+      release: { sha: "release-sha", content: "---\nname: release\n---\n# Release\n" }
+    };
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/commits?")) return new Response("[]");
+      if (url.endsWith("/commits/main")) {
+        return new Response(JSON.stringify({ commit: { tree: { sha: "repository-tree" } } }));
+      }
+      if (url.endsWith("/git/trees/repository-tree?recursive=1")) {
+        return new Response(JSON.stringify({
+          tree: [
+            { type: "blob", mode: "100644", path: "skills/reviewer/SKILL.md", sha: files.reviewer.sha },
+            { type: "blob", mode: "100644", path: "skills/release/SKILL.md", sha: files.release.sha }
+          ]
+        }));
+      }
+      const match = url.match(/\/contents\/skills\/(reviewer|release)\?ref=main$/);
+      if (match) {
+        const id = match[1] as keyof typeof files;
+        return new Response(JSON.stringify([{
+          type: "file",
+          name: "SKILL.md",
+          path: `skills/${id}/SKILL.md`,
+          download_url: `https://raw.example/${id}/SKILL.md`,
+          sha: files[id].sha
+        }]));
+      }
+      const raw = url.match(/^https:\/\/raw\.example\/(reviewer|release)\/SKILL\.md$/);
+      if (raw) return new Response(files[raw[1] as keyof typeof files].content);
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    const store = createSkillLibraryStore(paths, undefined, { fetch: fetchImpl });
+    await store.importGitHubSkill({
+      url: "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
+    });
+    await store.importGitHubSkill({
+      url: "https://github.com/acme/agent-skills/tree/main/skills/release"
+    });
+    fetchImpl.mockClear();
+
+    const updates = await store.checkUpdates();
+
+    expect(updates).toHaveLength(2);
+    expect(updates.every((update) => update.updateAvailable === false)).toBe(true);
+    expect(fetchImpl.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://api.github.com/repos/acme/agent-skills/commits/main",
+      "https://api.github.com/repos/acme/agent-skills/git/trees/repository-tree?recursive=1"
+    ]);
   });
 
   it("previews GitHub-backed skill updates before applying them", async () => {

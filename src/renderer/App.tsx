@@ -112,10 +112,10 @@ import {
   type AppWorkspace
 } from "./components/ProfileSidebar";
 import {
-  type GitHubSkillImportProgress,
   repositoryImportProgressKey,
   SkillLibraryPanel,
   type PreparedSkillTarget,
+  type SkillImportQueueOptions,
   type SkillUpdateCheckStatus
 } from "./components/SkillLibraryPanel";
 import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
@@ -123,6 +123,7 @@ import { SkillsEditor } from "./components/SkillsEditor";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
 import { WorkspaceSyncSettings } from "./components/WorkspaceSyncSettings";
+import { runSkillImportQueue } from "./skillImportQueue";
 import {
   Button,
   ControlGroup,
@@ -293,6 +294,27 @@ const summarizeSkillUpdateResult = (
           })
         : t("Updated {{id}} · All tracked skills are up to date", { id: skillId })
   };
+};
+
+export const reconcileImportedSkillUpdates = (
+  current: SkillUpdateInfo[],
+  imported: SkillLibraryEntry[]
+): SkillUpdateInfo[] => {
+  const importedIds = new Set(imported.map((skill) => skill.id));
+  return [
+    ...current.filter((update) => !importedIds.has(update.id)),
+    ...imported
+      .filter((skill) => skill.updatePolicy === "tracked" && Boolean(skill.remoteRevision))
+      .map((skill): SkillUpdateInfo => ({
+        id: skill.id,
+        name: skill.name,
+        sourceType: skill.sourceType,
+        currentRevision: skill.remoteRevision,
+        latestRevision: skill.remoteRevision,
+        latestUpdatedAt: skill.upstream?.updatedAt,
+        updateAvailable: false
+      }))
+  ];
 };
 
 const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
@@ -3031,46 +3053,39 @@ const AppContent = ({
 
   const importGitHubSkills = async (
     inputs: GitHubSkillImportInput[],
-    onProgress?: (progress: GitHubSkillImportProgress) => void
+    options?: SkillImportQueueOptions
   ): Promise<GitHubSkillImportResult> => {
     setBusy(true);
     setError(undefined);
     try {
-      const result: GitHubSkillImportResult = { imported: [], failed: [] };
-      let updatedSourceCount = 0;
-      for (const input of inputs) {
-        try {
-          onProgress?.({ sourceUrl: input.url, status: "reviewing" });
+      const queueResult = await runSkillImportQueue(inputs, options, {
+        progressKey: (input) => input.url,
+        prepare: async (input) => {
           const prepared = await prepareSkillImport({ kind: "github", input });
-          if (!prepared || prepared.kind !== "github") {
-            onProgress?.({ sourceUrl: input.url, status: "skipped" });
-            continue;
-          }
-          if (prepared.input.conflictResolution?.action === "update-source") {
-            updatedSourceCount += 1;
-          }
-          onProgress?.({ sourceUrl: input.url, status: "importing" });
-          const imported = await window.agentEnv.importGitHubSkillToLibrary(prepared.input);
-          result.imported.push(imported);
-          onProgress?.({ sourceUrl: input.url, status: "imported" });
-          setPendingSkillImport(undefined);
-        } catch (importError) {
-          setPendingSkillImport(undefined);
-          const message = importError instanceof Error ? importError.message : String(importError);
-          result.failed.push({
-            id: input.id ?? "skill",
-            sourceUrl: input.url,
-            error: message
-          });
-          onProgress?.({ sourceUrl: input.url, status: "failed", error: message });
-        }
-      }
+          return prepared?.kind === "github" ? prepared.input : undefined;
+        },
+        importPrepared: (input) => window.agentEnv.importGitHubSkillToLibrary(input),
+        updatesSource: (input) => input.conflictResolution?.action === "update-source",
+        failure: (input, error) => ({
+          id: input.id ?? "skill",
+          sourceUrl: input.url,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      });
+      setPendingSkillImport(undefined);
+      const result: GitHubSkillImportResult = {
+        imported: queueResult.imported,
+        failed: queueResult.failed
+      };
+      const updatedSourceCount = queueResult.updatedSourceCount;
       setSelectedSkillUpdatePlan(undefined);
       try {
         await refreshProfiles({ checkSkillUpdates: false });
         await refreshSkillSourceGroups();
       } catch (refreshError) {
         setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
+      } finally {
+        setSkillUpdates((current) => reconcileImportedSkillUpdates(current, result.imported));
       }
       if (result.imported.length > 0) {
         setSkillUpdateCheckStatus({
@@ -3093,49 +3108,41 @@ const AppContent = ({
 
   const importRepositorySkills = async (
     inputs: RepositorySkillImportInput[],
-    onProgress?: (progress: GitHubSkillImportProgress) => void
+    options?: SkillImportQueueOptions
   ): Promise<RepositorySkillImportResult> => {
     setBusy(true);
     setError(undefined);
     try {
-      const result: RepositorySkillImportResult = { imported: [], failed: [] };
-      let updatedSourceCount = 0;
-      for (const input of inputs) {
-        const sourceUrl = repositoryImportProgressKey(input);
-        try {
-          onProgress?.({ sourceUrl, status: "reviewing" });
+      const queueResult = await runSkillImportQueue(inputs, options, {
+        progressKey: (input: RepositorySkillImportInput) => repositoryImportProgressKey(input),
+        prepare: async (input) => {
           const prepared = await prepareSkillImport({ kind: "repository", input });
-          if (!prepared || prepared.kind !== "repository") {
-            onProgress?.({ sourceUrl, status: "skipped" });
-            continue;
-          }
-          if (prepared.input.conflictResolution?.action === "update-source") {
-            updatedSourceCount += 1;
-          }
-          onProgress?.({ sourceUrl, status: "importing" });
-          const imported = await window.agentEnv.importRepositorySkillToLibrary(prepared.input);
-          result.imported.push(imported);
-          onProgress?.({ sourceUrl, status: "imported" });
-          setPendingSkillImport(undefined);
-        } catch (importError) {
-          setPendingSkillImport(undefined);
-          const message = importError instanceof Error ? importError.message : String(importError);
-          result.failed.push({
-            id: input.id ?? "skill",
-            repository: input.repository,
-            ref: input.ref,
-            directory: input.directory,
-            error: message
-          });
-          onProgress?.({ sourceUrl, status: "failed", error: message });
-        }
-      }
+          return prepared?.kind === "repository" ? prepared.input : undefined;
+        },
+        importPrepared: (input) => window.agentEnv.importRepositorySkillToLibrary(input),
+        updatesSource: (input) => input.conflictResolution?.action === "update-source",
+        failure: (input, error) => ({
+          id: input.id ?? "skill",
+          repository: input.repository,
+          ref: input.ref,
+          directory: input.directory,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      });
+      setPendingSkillImport(undefined);
+      const result: RepositorySkillImportResult = {
+        imported: queueResult.imported,
+        failed: queueResult.failed
+      };
+      const updatedSourceCount = queueResult.updatedSourceCount;
       setSelectedSkillUpdatePlan(undefined);
       try {
         await refreshProfiles({ checkSkillUpdates: false });
         await refreshSkillSourceGroups();
       } catch (refreshError) {
         setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
+      } finally {
+        setSkillUpdates((current) => reconcileImportedSkillUpdates(current, result.imported));
       }
       if (result.imported.length > 0) {
         setSkillUpdateCheckStatus({

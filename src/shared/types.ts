@@ -439,6 +439,7 @@ export interface SkillSourceGroupCandidate {
   libraryId?: string;
   libraryName?: string;
   libraryVersion?: string;
+  libraryUpdatedAt?: string;
   globallyEnabled?: boolean;
   updatePolicy?: SkillUpdatePolicy;
   state: SkillSourceCandidateState;
@@ -705,6 +706,7 @@ export interface UnmanagedSkillEntry {
   description: string;
   path: string;
   foundIn: string[];
+  modifiedAt?: string;
 }
 
 export type SkillSourceType = "local" | "github" | "git" | "zip";

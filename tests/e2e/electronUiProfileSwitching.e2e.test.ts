@@ -4030,6 +4030,7 @@ describe("Electron UI profile switching e2e", () => {
       "---\nname: Shared Migration Reviewer\ndescription: Shared by installed compatibility consumers.\n---\n\n# Shared Migration Reviewer\n";
     await mkdir(sharedSkillDir, { recursive: true });
     await writeFile(join(sharedSkillDir, "SKILL.md"), sharedContent, "utf8");
+    const sharedSkillStatsBefore = await stat(join(sharedSkillDir, "SKILL.md"));
 
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local" }).click();
@@ -4078,6 +4079,7 @@ describe("Electron UI profile switching e2e", () => {
       )
       .toBe(true);
     await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(sharedContent);
+    expect((await stat(join(sharedSkillDir, "SKILL.md"))).ino).toBe(sharedSkillStatsBefore.ino);
     await expect(fileExists(join(sharedSkillDir, ".agentenv-owner.json"))).resolves.toBe(false);
     await page.getByRole("button", { name: "Expand Managed" }).click();
     await cleanupGroup.waitFor({ state: "visible" });

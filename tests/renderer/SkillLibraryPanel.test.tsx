@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SkillLibraryPanel,
-  type GitHubSkillImportProgress
+  type SkillImportQueueOptions
 } from "../../src/renderer/components/SkillLibraryPanel";
 import { defaultSkillLibraryViewState } from "../../src/renderer/libraryViewState";
 import type {
@@ -65,18 +65,18 @@ describe("SkillLibraryPanel", () => {
     const secondWrite = new Promise<void>((resolve) => (continueSecondWrite = resolve));
     const onImportGitHubSkills = vi.fn().mockImplementation(async (
       inputs: GitHubSkillImportInput[],
-      onProgress?: (progress: GitHubSkillImportProgress) => void
+      options?: SkillImportQueueOptions
     ) => {
       const gates = [
         { review: firstReview, write: firstWrite },
         { review: secondReview, write: secondWrite }
       ];
       for (const [index, input] of inputs.entries()) {
-        onProgress?.({ sourceUrl: input.url, status: "reviewing" });
+        options?.onProgress?.({ sourceUrl: input.url, status: "reviewing" });
         await gates[index]?.review;
-        onProgress?.({ sourceUrl: input.url, status: "importing" });
+        options?.onProgress?.({ sourceUrl: input.url, status: "importing" });
         await gates[index]?.write;
-        onProgress?.({
+        options?.onProgress?.({
           sourceUrl: input.url,
           status: index === 0 ? "imported" : "failed",
           error: index === 0 ? undefined : "GitHub request failed"
@@ -355,7 +355,8 @@ describe("SkillLibraryPanel", () => {
             foundIn: ["opencode"],
             status: "unmanaged",
             skillKey: "conflict-reviewer",
-            contentHash: "opencode-conflict-hash"
+            contentHash: "opencode-conflict-hash",
+            modifiedAt: "2026-07-18T08:00:00.000Z"
           },
           {
             id: "conflict-reviewer",
@@ -365,7 +366,8 @@ describe("SkillLibraryPanel", () => {
             foundIn: ["codex"],
             status: "unmanaged",
             skillKey: "conflict-reviewer",
-            contentHash: "codex-conflict-hash"
+            contentHash: "codex-conflict-hash",
+            modifiedAt: "2026-07-20T09:30:00.000Z"
           },
           {
             id: "external-reviewer",
@@ -848,9 +850,13 @@ describe("SkillLibraryPanel", () => {
             }
           }
         ],
-        expect.any(Function)
+        expect.objectContaining({
+          onProgress: expect.any(Function),
+          shouldStop: expect.any(Function)
+        })
       )
     );
+    expect(screen.getByRole("button", { name: "Stop import" })).toBeInTheDocument();
     expect(screen.getByRole("status", { name: "GitHub Reviewer: reviewing" })).toBeInTheDocument();
     expect(screen.getByRole("status", { name: "Release Check: waiting" })).toBeInTheDocument();
     continueFirstReview?.();
@@ -870,11 +876,17 @@ describe("SkillLibraryPanel", () => {
     fireEvent.mouseEnter(importFailure);
     expect(await screen.findByRole("tooltip")).toHaveTextContent("GitHub request failed");
     expect(screen.getByText("1 imported · 1 failed")).toBeInTheDocument();
-    onImportGitHubSkills.mockImplementationOnce(async (inputs, onProgress) => {
+    const firstQueueOptions = onImportGitHubSkills.mock.calls[0]?.[1] as SkillImportQueueOptions;
+    act(() => firstQueueOptions.onProgress?.({
+      sourceUrl: "https://github.com/acme/agent-skills/tree/main/skills/release-check",
+      status: "skipped"
+    }));
+    expect(screen.getByRole("button", { name: "Import Release Check" })).toBeInTheDocument();
+    onImportGitHubSkills.mockImplementationOnce(async (inputs, options) => {
       const input = inputs[0]!;
-      onProgress?.({ sourceUrl: input.url, status: "reviewing" });
-      onProgress?.({ sourceUrl: input.url, status: "importing" });
-      onProgress?.({ sourceUrl: input.url, status: "imported" });
+      options?.onProgress?.({ sourceUrl: input.url, status: "reviewing" });
+      options?.onProgress?.({ sourceUrl: input.url, status: "importing" });
+      options?.onProgress?.({ sourceUrl: input.url, status: "imported" });
       return {
         imported: [{
           id: input.id!,
@@ -890,11 +902,11 @@ describe("SkillLibraryPanel", () => {
         failed: []
       };
     });
-    fireEvent.click(screen.getByRole("button", { name: "Retry Release Check" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import Release Check" }));
     await screen.findByRole("status", { name: "Release Check: imported" });
     expect(onImportGitHubSkills).toHaveBeenCalledTimes(2);
     expect(screen.getByText("All 2 skills imported")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Retry Release Check" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Import Release Check" })).not.toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "Import skills" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onCloseTool).toHaveBeenCalledTimes(2);
@@ -1080,6 +1092,7 @@ describe("SkillLibraryPanel", () => {
     const conflictGroup = screen.getByRole("group", { name: "Cleanup group conflict-reviewer" });
     expect(conflictGroup).toHaveTextContent("2 versions");
     expect(conflictGroup).toHaveTextContent("2 different content versions · 2 locations");
+    expect(conflictGroup).toHaveTextContent("Modified");
     fireEvent.click(
       within(conflictGroup).getByRole("button", {
         name: "More cleanup actions for conflict-reviewer"
@@ -1090,6 +1103,7 @@ describe("SkillLibraryPanel", () => {
       name: "Skill details conflict-reviewer"
     });
     expect(within(conflictDetails).getAllByRole("region", { name: /Version / })).toHaveLength(2);
+    expect(conflictDetails).toHaveTextContent("Modified");
     fireEvent.click(within(conflictDetails).getByRole("button", { name: "Close" }));
     fireEvent.click(
       within(conflictGroup).getByRole("button", {
@@ -1128,6 +1142,7 @@ describe("SkillLibraryPanel", () => {
       within(conflictGroup).getByRole("button", { name: "Add to Library conflict-reviewer" })
     );
     conflictDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
+    expect(conflictDialog).toHaveTextContent("Modified");
     const codexVersion = within(conflictDialog).getByRole("radio", { name: /Codex/ });
     fireEvent.click(codexVersion);
     const codexLocation = within(conflictDialog).getByRole("checkbox", { name: /Codex/ });
@@ -1269,13 +1284,13 @@ describe("SkillLibraryPanel", () => {
     let completeRepositoryImport: (() => void) | undefined;
     const onImportRepositorySkills = vi.fn().mockImplementation((
       inputs: RepositorySkillImportInput[],
-      onProgress?: (progress: GitHubSkillImportProgress) => void
+      options?: SkillImportQueueOptions
     ) => {
       const sourceUrl = `${inputs[0].repository}\0${inputs[0].ref}\0${inputs[0].directory}`;
-      onProgress?.({ sourceUrl, status: "importing" });
+      options?.onProgress?.({ sourceUrl, status: "importing" });
       return new Promise((resolve) => {
         completeRepositoryImport = () => {
-          onProgress?.({ sourceUrl, status: "imported" });
+          options?.onProgress?.({ sourceUrl, status: "imported" });
           resolve({
             imported: [{
               id: "review-internal",
@@ -1402,7 +1417,10 @@ describe("SkillLibraryPanel", () => {
           sourceSubpath: "review"
         }
       }
-    ], expect.any(Function)));
+    ], expect.objectContaining({
+      onProgress: expect.any(Function),
+      shouldStop: expect.any(Function)
+    })));
     await act(async () => completeRepositoryImport?.());
     expect(await screen.findByText("All 1 skills imported")).toBeInTheDocument();
   });
@@ -1419,6 +1437,7 @@ describe("SkillLibraryPanel", () => {
           contentHash: "alpha-hash",
           sourceType: "local" as const,
           source: "/tmp/alpha",
+          modifiedAt: "2026-07-18T08:00:00.000Z",
           skillMarkdown: "# Alpha\n",
           globallyEnabled: true,
           updatePolicy: "untracked" as const,
@@ -1433,6 +1452,7 @@ describe("SkillLibraryPanel", () => {
           contentHash: "beta-hash",
           sourceType: "github" as const,
           source: "https://github.com/acme/reviewer",
+          modifiedAt: "2026-07-20T09:30:00.000Z",
           skillMarkdown: "# Beta\n",
           globallyEnabled: true,
           updatePolicy: "tracked" as const,
@@ -1533,6 +1553,8 @@ describe("SkillLibraryPanel", () => {
     const row = screen.getByRole("group", { name: "Library item reviewer-alpha" });
     fireEvent.click(within(row).getByRole("button", { name: "More actions for reviewer-alpha" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Merge duplicates" }));
+    expect(await screen.findByRole("dialog", { name: "Merge same-name Skills" }))
+      .toHaveTextContent("Modified");
 
     const dialog = await screen.findByRole("dialog", { name: "Merge same-name Skills" });
     expect(within(dialog).getByText("SKILL.md")).toBeInTheDocument();
