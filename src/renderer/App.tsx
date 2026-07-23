@@ -5038,11 +5038,12 @@ const AppContent = ({
                   <div>
                     <div className="resource-heading">GitHub</div>
                     <p className="settings-muted">
-                      {githubAuthStatus.state === "signed-in" && githubAuthStatus.user
-                        ? t("Connected as {{login}}", { login: githubAuthStatus.user.login })
-                        : githubDeviceLogin
-                          ? t("Authorize AgentEnv Manager in your browser")
-                          : t("Connect for reliable GitHub imports and update checks")}
+                      {githubAuthStatus.state === "signed-in"
+                        ? githubAuthStatus.user
+                          ? t("Connected as {{login}}", { login: githubAuthStatus.user.login })
+                          : t("Connected; GitHub status is temporarily unavailable")
+                        : githubDeviceLogin ? t("Authorize AgentEnv Manager in your browser")
+                        : t("Connect for reliable GitHub imports and update checks")}
                     </p>
                   </div>
                 </div>
@@ -5116,7 +5117,8 @@ const AppContent = ({
                 <div className="github-login-result" role="status">{githubLoginMessage}</div>
               ) : null}
               {githubAuthStatus.error ? (
-                <div className="github-login-result github-login-result--error" role="alert">
+                <div className={`github-login-result${githubAuthStatus.verification === "unavailable" ? "" : " github-login-result--error"}`}
+                  role={githubAuthStatus.verification === "unavailable" ? "status" : "alert"}>
                   {githubAuthStatus.error}
                 </div>
               ) : null}

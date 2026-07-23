@@ -17,7 +17,7 @@ import { materializeMergedWorkspace, planWorkspaceSync, type WorkspaceSnapshotDe
 import type { WorkspaceSyncState, WorkspaceSyncStateStore } from "./syncStateStore";
 import { parseWorkspaceSyncConnection } from "./syncStateStore";
 import type { WorkspaceSyncTransaction } from "./workspaceSyncTransaction";
-import { replacePathAtomically } from "../fileUtils";
+import { pathEntryExists, replacePathAtomically } from "../fileUtils";
 
 export interface WorkspaceSyncService {
   readStatus(): Promise<WorkspaceSyncStatus>;
@@ -161,11 +161,16 @@ export const createWorkspaceSyncService = (input: {
     return { liveSkillIds: [...new Set(live)], liveAgentIds: [...new Set(agents)] };
   };
 
-  const performCheck = async (): Promise<CheckedWorkspace> => {
+  const performCheck = async (options: {
+    state?: WorkspaceSyncState;
+    persist?: boolean;
+    useBase?: boolean;
+  } = {}): Promise<CheckedWorkspace> => {
     const operationRoot = join(input.paths.workspaceSyncCacheDir, "operations", randomUUID());
     const localRoot = join(operationRoot, "local");
     const remoteRoot = join(operationRoot, "remote");
-    let state = await input.stateStore.read();
+    const persist = options.persist !== false;
+    let state = options.state ?? await input.stateStore.read();
     if (!state) throw new Error("Workspace Sync is not connected");
     try {
       await mkdir(operationRoot, { recursive: true, mode: 0o700 });
@@ -181,13 +186,15 @@ export const createWorkspaceSyncService = (input: {
           throw new Error("The remote repository belongs to a different AgentEnv Workspace");
         }
         state = { ...state, workspaceId: remote.manifest.workspaceId };
-        await input.stateStore.write(state);
+        if (persist) await input.stateStore.write(state);
         local = await exportLocal(state, localRoot);
       }
-      let base = await loadBase(state);
+      let base = options.useBase === false ? undefined : await loadBase(state);
       if (remote && local.manifest.snapshotHash === remote.manifest.snapshotHash &&
         (base?.manifest.snapshotHash !== remote.manifest.snapshotHash || state.baseRevision !== remoteResult.revision)) {
-        await replacePathAtomically(baseRoot, (path) => cp(remote.root, path, { recursive: true }));
+        if (persist) {
+          await replacePathAtomically(baseRoot, (path) => cp(remote.root, path, { recursive: true }));
+        }
         base = { root: baseRoot, manifest: remote.manifest };
         state = {
           ...state,
@@ -210,10 +217,10 @@ export const createWorkspaceSyncService = (input: {
         lastCheckedRevision: remoteResult.revision,
         lastCheckedAt: new Date().toISOString()
       };
-      await input.stateStore.write(nextState);
+      if (persist) await input.stateStore.write(nextState);
       const partial = { state: nextState, local, remote, base, remoteRevision: remoteResult.revision, plan, operationRoot };
       const status = statusFor(partial);
-      lastStatus = status;
+      if (persist) lastStatus = status;
       return { ...partial, status };
     } catch (error) {
       await rm(operationRoot, { recursive: true, force: true });
@@ -375,9 +382,68 @@ export const createWorkspaceSyncService = (input: {
     },
     connect: (connection) => serialize(async () => {
       const parsed = parseWorkspaceSyncConnection(connection);
-      await input.stateStore.disconnect();
-      await input.stateStore.connect(parsed);
-      return checkInternal();
+      const previousState = await input.stateStore.read();
+      if (
+        previousState?.repository === parsed.repository &&
+        previousState.branch === parsed.branch
+      ) {
+        return checkInternal();
+      }
+
+      const candidateState: WorkspaceSyncState = {
+        formatVersion: 1,
+        ...parsed,
+        workspaceId: randomUUID()
+      };
+      const checked = await performCheck({
+        state: candidateState,
+        persist: false,
+        useBase: false
+      });
+      const previousBaseRoot = join(checked.operationRoot, "previous-base");
+      let hadPreviousBase = false;
+      try {
+        if (await pathEntryExists(baseRoot)) {
+          await cp(baseRoot, previousBaseRoot, { recursive: true });
+          hadPreviousBase = true;
+        }
+
+        const hasAcceptedBase =
+          checked.remote &&
+          checked.local.manifest.snapshotHash === checked.remote.manifest.snapshotHash;
+        const connectionState = hasAcceptedBase
+          ? {
+              ...checked.state,
+              baseRevision: undefined,
+              baseSnapshotHash: undefined
+            }
+          : checked.state;
+        await input.stateStore.write(connectionState);
+        if (hasAcceptedBase) {
+          await replacePathAtomically(baseRoot, (path) => cp(checked.remote!.root, path, { recursive: true }));
+          await input.stateStore.write(checked.state);
+        } else {
+          await rm(baseRoot, { recursive: true, force: true });
+        }
+        lastStatus = checked.status;
+        return lastStatus;
+      } catch (error) {
+        if (previousState) {
+          await input.stateStore.write(previousState).catch(() => undefined);
+        } else {
+          await input.stateStore.disconnect().catch(() => undefined);
+        }
+        if (hadPreviousBase) {
+          await replacePathAtomically(baseRoot, (path) =>
+            cp(previousBaseRoot, path, { recursive: true })
+          ).catch(() => undefined);
+        } else {
+          await rm(baseRoot, { recursive: true, force: true }).catch(() => undefined);
+        }
+        throw error;
+      } finally {
+        await rm(checked.operationRoot, { recursive: true, force: true });
+      }
     }),
     check: () => serialize(checkInternal),
     review: () => serialize(reviewInternal),

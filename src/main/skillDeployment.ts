@@ -17,20 +17,32 @@ const copySkillEntries = async (sourceDir: string, targetDir: string) => {
   }
 };
 
+export const isUnsupportedSkillLinkError = (error: unknown) =>
+  Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error.code === "EPERM" ||
+        error.code === "ENOTSUP" ||
+        error.code === "EOPNOTSUPP" ||
+        error.code === "EINVAL")
+  );
+
 export const deploySkillDirectory = async (input: {
   sourceDir: string;
   targetDir: string;
   syncMethod: AgentEnvSettings["skillSyncMethod"];
   markerContent: string;
+  createSymlink?: typeof symlink;
 }) => {
   let deployedAs: "copy" | "symlink" = input.syncMethod === "copy" ? "copy" : "symlink";
   await replacePathAtomically(input.targetDir, async (stagingPath) => {
     if (input.syncMethod !== "copy") {
       try {
-        await symlink(input.sourceDir, stagingPath, "dir");
+        await (input.createSymlink ?? symlink)(input.sourceDir, stagingPath, "dir");
         return;
       } catch (error) {
-        if (input.syncMethod === "symlink") {
+        if (input.syncMethod === "symlink" || !isUnsupportedSkillLinkError(error)) {
           throw error;
         }
         deployedAs = "copy";

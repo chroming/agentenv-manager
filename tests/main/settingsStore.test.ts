@@ -118,6 +118,9 @@ describe("settings store", () => {
       "# Reviewer\n"
     );
     await expect(readFile(join(paths.userSkillsDir, "reviewer", "SKILL.md"), "utf8")).resolves.toBe("# Reviewer\n");
+    await expect(
+      readFile(join(paths.appDataRoot, "legacy-skill-storage-migration.json"), "utf8")
+    ).resolves.toContain('"sourcePreserved": true');
   });
 
   it("preserves a conflicting app-data copy during legacy shared Library migration", async () => {
@@ -139,5 +142,8 @@ describe("settings store", () => {
     await expect(
       readFile(join(paths.skillsLibraryDir, "reviewer-pre-shared-migration", "SKILL.md"), "utf8")
     ).resolves.toBe("# Existing app data\n");
+    await expect(
+      readFile(join(paths.appDataRoot, "legacy-skill-storage-migration.json"), "utf8")
+    ).resolves.toContain('"preservedAs": "reviewer-pre-shared-migration"');
   });
 });

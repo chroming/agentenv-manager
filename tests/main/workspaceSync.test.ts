@@ -440,6 +440,61 @@ describe("Workspace Sync", () => {
     second.service.dispose();
   }, 15_000);
 
+  it("keeps the existing connection when a replacement repository cannot be checked", async () => {
+    const root = await tempRoot("agentenv-sync-reconnect-");
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const remote = await writeSnapshot(join(root, "remote"));
+    const stateStore = createWorkspaceSyncStateStore(paths);
+    const service = createWorkspaceSyncService({
+      paths,
+      codec: {
+        exportSnapshot: async (destination, workspaceId) =>
+          (await writeSnapshot(destination, { workspaceId })).manifest
+      },
+      stateStore,
+      transaction: {
+        recover: async () => undefined,
+        isRecoveryRequired: async () => false,
+        apply: async () => ({ backupId: "unused" }),
+        restore: async () => undefined
+      },
+      loadTransport: async () => ({
+        fetch: async (connection) => {
+          if (connection.repository.includes("unavailable")) {
+            throw new Error("Repository is unavailable");
+          }
+          return { revision: "remote-revision", snapshotRoot: remote.root };
+        },
+        publish: async () => "unused",
+        cancel: () => undefined,
+        dispose: () => undefined
+      }),
+      targetPathsProvider: async () => [],
+      findManagedInstallPaths: async () => []
+    });
+
+    await expect(service.connect({
+      repository: "/tmp/working.git",
+      branch: "main"
+    })).resolves.toMatchObject({
+      kind: "up-to-date",
+      connection: { repository: "/tmp/working.git", branch: "main" }
+    });
+
+    await expect(service.connect({
+      repository: "/tmp/unavailable.git",
+      branch: "main"
+    })).rejects.toThrow("Repository is unavailable");
+    await expect(stateStore.read()).resolves.toMatchObject({
+      repository: "/tmp/working.git",
+      branch: "main"
+    });
+    await expect(service.readStatus()).resolves.toMatchObject({
+      connection: { repository: "/tmp/working.git", branch: "main" }
+    });
+    service.dispose();
+  });
+
   it("restores Workspace content and clears working state when Sync state cannot be committed", async () => {
     const root = await tempRoot("agentenv-sync-state-failure-");
     const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });

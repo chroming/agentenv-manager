@@ -758,7 +758,7 @@ export interface UnmanagedSkillEntry {
   modifiedAt?: string;
 }
 
-export type SkillSourceType = "local" | "github" | "git" | "zip";
+export type SkillSourceType = "local" | "github" | "git";
 export type SkillUpdatePolicy = "tracked" | "untracked";
 export type SkillSyncMethod = "symlink" | "copy" | "auto";
 export type SkillStorageLocation = "appData" | "agents";
@@ -902,6 +902,7 @@ export interface GitHubRateLimit {
 
 export interface GitHubAuthStatus {
   state: "signed-out" | "configured" | "signed-in";
+  verification?: "verified" | "unavailable";
   clientId?: string;
   user?: GitHubAuthUser;
   rateLimit?: GitHubRateLimit;

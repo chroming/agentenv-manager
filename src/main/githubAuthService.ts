@@ -98,14 +98,25 @@ const jsonHeaders = {
   "Content-Type": "application/x-www-form-urlencoded"
 };
 
+class GitHubRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "GitHubRequestError";
+  }
+}
+
 const readJsonResponse = async <T>(response: Response): Promise<T> => {
   const value = (await response.json()) as T;
   if (!response.ok) {
     const error = value as { error?: string; error_description?: string };
-    throw new Error(
+    throw new GitHubRequestError(
       error.error_description ??
         error.error ??
-        `GitHub auth request failed (${response.status} ${response.statusText})`
+        `GitHub auth request failed (${response.status} ${response.statusText})`,
+      response.status
     );
   }
   return value;
@@ -194,11 +205,22 @@ export const createGitHubAuthService = ({
   };
 
   const readStatus = async (): Promise<GitHubAuthStatus> => {
+    let token: string | undefined;
     try {
-      const token = await tokenStore.readToken();
-      if (!token) {
-        return { state: "configured", clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID };
-      }
+      token = await tokenStore.readToken();
+    } catch {
+      await tokenStore.clearToken().catch(() => undefined);
+      return {
+        state: "configured",
+        clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
+        error: "Saved GitHub sign-in was invalid and has been cleared. Sign in again to reconnect."
+      };
+    }
+    if (!token) {
+      return { state: "configured", clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID };
+    }
+
+    try {
       const [user, rateLimit] = await Promise.all([
         fetchGitHubJson<GitHubUserResponse>("https://api.github.com/user", token).then(toUser),
         fetchGitHubJson<GitHubRateLimitResponse>("https://api.github.com/rate_limit", token).then(
@@ -207,16 +229,27 @@ export const createGitHubAuthService = ({
       ]);
       return {
         state: "signed-in",
+        verification: "verified",
         clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
         user,
         rateLimit
       };
     } catch (error) {
-      await tokenStore.clearToken().catch(() => undefined);
+      if (error instanceof GitHubRequestError && error.status === 401) {
+        await tokenStore.clearToken().catch(() => undefined);
+        return {
+          state: "configured",
+          clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
+          error: "Saved GitHub sign-in was invalid and has been cleared. Sign in again to reconnect."
+        };
+      }
       return {
-        state: "configured",
+        state: "signed-in",
+        verification: "unavailable",
         clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
-        error: "Saved GitHub sign-in was invalid and has been cleared. Sign in again to reconnect."
+        error: `GitHub sign-in is saved, but its status could not be verified: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       };
     }
   };

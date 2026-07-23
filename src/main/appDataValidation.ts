@@ -15,7 +15,7 @@ import { parseWorkspaceSyncStateData } from "./workspaceSync/syncStateStore";
 
 const GitHubTokenFileSchema = z.object({ token: z.string().min(1) });
 const SkillMetadataFileSchema = z.object({
-  sourceType: z.enum(["local", "github", "git", "zip"]).optional(),
+  sourceType: z.enum(["local", "github", "git"]).optional(),
   source: z.string().optional(),
   remoteRef: z.string().optional(),
   remotePath: z.string().optional(),

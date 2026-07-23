@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   APPLY_ISSUE_POLICY,
@@ -74,5 +75,19 @@ describe("Apply issues", () => {
       disposition: "block",
       resolution: "open-recovery"
     });
+  });
+
+  it("keeps every issue disposition and recovery mode aligned with the product contract", async () => {
+    const contract = await readFile("docs/product-contracts.md", "utf8");
+    const contractPolicy = Object.fromEntries(
+      [...contract.matchAll(
+        /^\| `([^`]+)` \| `(notice|review|block)` \| `(automatic|backup-replace|edit-profile|external-action|open-recovery|preserve)` \|/gm
+      )].map((match) => [
+        match[1],
+        { disposition: match[2], resolution: match[3] }
+      ])
+    );
+
+    expect(contractPolicy).toEqual(APPLY_ISSUE_POLICY);
   });
 });

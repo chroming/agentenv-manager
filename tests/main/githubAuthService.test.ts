@@ -82,6 +82,48 @@ describe("GitHub auth service", () => {
     });
   });
 
+  it("keeps a saved token when GitHub is temporarily unavailable", async () => {
+    const clearToken = vi.fn(async () => undefined);
+    const service = createGitHubAuthService({
+      fetch: vi.fn(async () => {
+        throw new Error("network offline");
+      }),
+      tokenStore: {
+        clearToken,
+        readToken: vi.fn(async () => "token-xyz"),
+        writeToken: vi.fn()
+      }
+    });
+
+    await expect(service.readStatus()).resolves.toMatchObject({
+      state: "signed-in",
+      verification: "unavailable",
+      error: expect.stringContaining("network offline")
+    });
+    expect(clearToken).not.toHaveBeenCalled();
+  });
+
+  it("clears a saved token only when GitHub rejects its credentials", async () => {
+    const clearToken = vi.fn(async () => undefined);
+    const service = createGitHubAuthService({
+      fetch: vi.fn(async () => jsonResponse(
+        { message: "Bad credentials" },
+        { status: 401, statusText: "Unauthorized" }
+      )),
+      tokenStore: {
+        clearToken,
+        readToken: vi.fn(async () => "revoked-token"),
+        writeToken: vi.fn()
+      }
+    });
+
+    await expect(service.readStatus()).resolves.toMatchObject({
+      state: "configured",
+      error: expect.stringContaining("invalid")
+    });
+    expect(clearToken).toHaveBeenCalledTimes(1);
+  });
+
   it("runs the OAuth device flow and stores the access token securely", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-github-auth-"));
     const paths = createPaths({ appDataRoot: root });

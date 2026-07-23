@@ -1,6 +1,6 @@
 # AgentEnv Manager Product Contract
 
-Date: 2026-07-12  
+Date: 2026-07-23
 Status: Authoritative product contract  
 Audience: Product, design, engineering, QA, and target-adapter contributors
 
@@ -73,6 +73,7 @@ The Library is global to AgentEnv Manager and contains canonical reusable Skills
 - A Profile stores references to Library Skills, not private copies of them.
 - In Copy mode, updating the Library MUST NOT silently deploy changes to a Target.
 - Live link is the default deployment policy: Library updates immediately affect linked Target Skills and therefore do not provide an Apply-gated snapshot. Copy remains available when Apply-gated snapshots are preferred.
+- Auto deployment plans a Live link and MAY fall back to Copy only when the destination filesystem explicitly reports that directory links are unsupported. Permission failures, invalid paths, missing sources, storage failures, and unknown I/O errors MUST fail without fallback. The concrete result is verified after Apply. Changing the default deployment mode does not rewrite existing installs; it becomes an Apply precondition and takes effect only through a fresh Preview and Apply.
 
 Source of truth: `~/.config/agentenv-manager` or the configured AgentEnv data root.
 
@@ -97,6 +98,7 @@ The active data root is a startup-owned location, not an ordinary live preferenc
 - Importing an externally managed Skill creates an independent Library copy and MUST NOT imply that AgentEnv has taken ownership of the external installation.
 - A Target-specific Skills root MAY itself be a symbolic link to a shared or external directory. Capture MAY read that linked content, but Apply MUST treat the root link as one filesystem boundary: Preview names the link and resolved destination, Apply backs up and atomically replaces only the root link with a real Target-owned directory before installing child resources, and the linked destination remains untouched.
 - A broken or cyclic Target Skills root link is still a recoverable filesystem boundary: Preview MUST identify it as a reviewed root replacement, Backup MUST preserve the link itself without traversing it, and Apply MAY replace only that link with a Target-owned directory. A non-link file occupying the Skills root remains blocking. Rollback after root isolation MUST restore the exact original link and remove only the Target-owned directory created by AgentEnv.
+- A legacy installation that stored Library originals in `~/.agents/skills` is migrated once during startup. AgentEnv builds the complete destination in staging and atomically replaces the canonical Library directory; the shared source remains byte-for-byte untouched. Exact destination matches are reused, differing destination entries are retained under a deterministic `-pre-shared-migration` identifier, and a machine-readable report records every copied and preserved entry. Failure leaves the old Settings value in place so retry remains idempotent; interrupted replacement uses the normal replacement journal recovery.
 
 ### 4.2.1 Workspace Sync
 
@@ -118,6 +120,8 @@ Workspace Sync reuses portable environment intent across the user's Macs through
 - Ordinary non-AgentEnv files in the repository remain untouched. Only `agentenv-sync.json` and `workspace/` are managed.
 - A remote Skill content change that affects a currently linked deployment has immediate runtime impact. Review MUST identify that impact and require separate confirmation. Copy deployments and Profile-only changes remain pending until ordinary Profile Apply.
 - Immediate linked-Skill impact is calculated only for Agents currently enabled in Settings.
+- Connect treats a new repository and branch as a candidate. It MUST validate access, remote format, workspace identity, and the initial comparison before replacing an existing connection. Candidate failure preserves the previous connection, accepted base, status, Profiles, and Library. Reconnecting the same repository and branch is an ordinary Check.
+- A successful connection change starts a new three-way base unless local and remote portable snapshots are identical. Disconnect removes only device-local Sync state and cache; it MUST NOT change Profile, Library, Target, remote repository, or operating-system Git credentials.
 
 Workspace Sync states are `Not connected`, `Up to date`, `Changes to publish`, `Changes to receive`, `Review required`, `Could not check`, and `Recovery required`. `Checking`, `Publishing`, and `Updating` are temporary activity states, not persisted outcomes.
 
@@ -284,8 +288,25 @@ It MUST include enough information to distinguish:
 | Stop managing | End AgentEnv ownership through an explicit keep-current or restore-pre-takeover path. |
 | Remove from Profile | Remove a reference from the Profile draft. It does not delete Library content. |
 | Remove from Library | Delete canonical Library content only after references are resolved; managed installs are included explicitly. |
+| Enable or disable Library Skill | Change global Library availability. It preserves content and Profile references and does not write Targets; affected Targets change only through their next Apply. |
+| Merge Skills | Resolve duplicate Library identity after content, version, source, and reference review. It preserves the selected canonical entry, updates references transactionally, and retains recovery data. |
+| Merge sources | Replace selected source records with one reviewed common scope. It changes update grouping and provenance only; it does not import, update, or delete Skill content. |
 | Ignore | Leave a discovered unmanaged Skill outside Library management. It remains visible and can still conflict with Apply. |
 | Roll back | Restore one Backup and its associated deployment state after preview. |
+| Adopt Target changes | Copy compatible managed Instructions and MCP activation intent into the saved Profile after preview and Backup. It does not adopt native settings, credentials, or externally owned Skills. |
+| Change deployment mode | Persist a new default for future Skill Apply operations. It does not convert existing installs immediately and invalidates an open Preview. |
+| Change Agent root | Persist one absolute adapter root after validation. It does not move files; subsequent discovery and Preview use the new root. |
+| Workspace Connect | Preflight a candidate Git repository and branch, then atomically replace device-local Sync connection state. Failure preserves the previous connection. |
+| Workspace Check | Fetch and compare remote, local, and accepted-base snapshots. It writes only device-local check metadata and cache. |
+| Workspace Update | Apply one reviewed portable snapshot transactionally to Profile, Library, and source registry. It never applies a Profile to an Agent. |
+| Workspace Publish | Publish the deterministic portable snapshot only when remote HEAD still matches Check. It never force-pushes. |
+| Workspace Disconnect | Remove device-local Sync connection state and cache only. |
+| Workspace Recover | Restore the protected Workspace recovery backup and re-check before further Sync mutations. |
+| GitHub Sign in | Store the granted token through operating-system secure storage and verify account status. It does not alter Skill sources. |
+| GitHub Sign out | Remove only the saved GitHub token and pending login session. Skill content, sources, update metadata, and Git credentials remain unchanged. |
+| Export data | Create an independent validated data export without changing active data. |
+| Restore data | Validate the selected export, create recovery data, atomically replace app-owned data, and restart against the restored root. It never writes Targets. |
+| Delete or clean Backups | Remove only eligible app-owned recovery points after protected and failed entries are excluded. |
 | Delete Profile | Delete only the saved recipe. It MUST NOT silently alter deployed Targets. |
 
 ## 7. Profile Lifecycle
@@ -419,6 +440,49 @@ Preview hierarchy MUST name the Profile and Target, then show one of `Ready to a
 - `block`: AgentEnv cannot produce a deterministic complete plan without changing Profile intent, taking ownership from another manager, resolving ambiguity, or recovering damaged state.
 
 Issue disposition and recovery are owned by one Agent-neutral policy keyed by stable issue code. Target adapters and resource scanners report capabilities and concrete facts; they MUST NOT independently promote the same fact to a stronger disposition. Expected product conditions MUST use a specific issue code. Generic blocking issues are forbidden.
+
+The complete issue policy is normative:
+
+| Issue code | Disposition | Resolution | Product fact |
+| --- | --- | --- | --- |
+| `target-unavailable` | `block` | `external-action` | The selected Agent executable or required destination is unavailable. |
+| `profile-validation` | `block` | `edit-profile` | Saved Profile intent is incomplete or invalid. |
+| `secret-warning` | `notice` | `automatic` | Sensitive native content is excluded or redacted. |
+| `native-setting-preserved` | `notice` | `preserve` | Agent-owned native configuration remains unchanged. |
+| `instruction-alias` | `notice` | `preserve` | Another supported instruction alias remains Agent-owned. |
+| `invalid-native-config` | `block` | `external-action` | Native configuration cannot be parsed safely. |
+| `missing-native-mcp` | `block` | `edit-profile` | Profile requests an MCP connection absent from the Agent. |
+| `unsupported-mcp-management` | `block` | `edit-profile` | Profile requests MCP control the adapter cannot provide safely. |
+| `target-instruction-limit` | `block` | `edit-profile` | Profile Instructions exceed an Agent capability. |
+| `duplicate-native-mcp` | `block` | `external-action` | One MCP identity is defined ambiguously in multiple native locations. |
+| `agent-owned-native-mcp` | `block` | `external-action` | Requested MCP activation is owned by an unsupported Agent surface. |
+| `unsafe-native-mcp-update` | `block` | `external-action` | The native MCP activation field cannot be changed without touching unrelated settings. |
+| `globally-disabled-skill` | `notice` | `automatic` | A Profile reference is omitted because its Library Skill is globally disabled. |
+| `missing-library-skill` | `block` | `edit-profile` | A Profile references missing canonical Library content. |
+| `unmanaged-skill-replacement` | `review` | `backup-replace` | Exact unmanaged Skill content must be replaced to satisfy Profile intent. |
+| `unmanaged-skill-removal` | `review` | `backup-replace` | Exact unmanaged Skill content must be removed to satisfy complete replacement intent. |
+| `managed-resource-drift` | `review` | `backup-replace` | An AgentEnv-owned resource changed outside AgentEnv. |
+| `managed-resource-missing` | `notice` | `automatic` | A missing AgentEnv-owned resource will be restored from canonical intent. |
+| `ignored-skill-conflict` | `block` | `edit-profile` | An intentionally ignored Skill conflicts with an enabled Profile Skill. |
+| `external-skill-conflict` | `block` | `external-action` | Another manager owns a conflicting Skill destination. |
+| `external-skill-preserved` | `notice` | `preserve` | An externally owned non-conflicting Skill remains unchanged. |
+| `unmanaged-skill-preserved` | `notice` | `preserve` | An unmanaged non-conflicting Skill remains unchanged. |
+| `ignored-skill-preserved` | `notice` | `preserve` | An ignored non-conflicting Skill remains unchanged. |
+| `duplicate-runtime-skill` | `block` | `edit-profile` | More than one enabled Profile resource resolves to the same runtime identity. |
+| `native-disabled-skill` | `block` | `external-action` | The Agent's native settings disable a Skill required by the Profile. |
+| `runtime-observation` | `notice` | `preserve` | Read-only runtime evidence is disclosed without mutation. |
+| `runtime-state-unavailable` | `block` | `external-action` | Required runtime state cannot be inspected reliably. |
+| `runtime-skill-conflict` | `block` | `external-action` | Runtime discovery reports ambiguous or conflicting Skill identity. |
+| `unsupported-skill-management` | `block` | `edit-profile` | Profile requests Skill management unsupported by the adapter. |
+| `shared-skill-conflict` | `block` | `external-action` | Shared compatibility content conflicts with canonical intent. |
+| `shared-skill-deferred` | `notice` | `preserve` | Shared compatibility content remains until all consumers have explicit intent. |
+| `skill-root-isolation` | `review` | `backup-replace` | A linked Agent Skill root will be isolated without modifying its destination. |
+| `invalid-skill-root` | `block` | `external-action` | The Agent Skill root is an unsafe non-directory boundary. |
+| `recovery-required` | `block` | `open-recovery` | An interrupted mutation must be recovered first. |
+| `operation-precondition` | `block` | `external-action` | A named non-editable precondition prevents a deterministic plan. |
+| `operation-notice` | `notice` | `preserve` | A named operation fact requires disclosure but no action. |
+
+Every issue row MUST include a concrete resource identity when one exists. Every `review` issue MUST include its exact affected path. A policy change requires a product-contract change and automated contract-policy verification in the same commit.
 
 True blockers appear before the change plan. Replaceable Agent drift, an ordinary unmanaged destination, and a Target Skills root link are review requirements rather than duplicate blockers. `After Apply` describes the final effective Instructions, Skills, and MCP payload; `Changes this Apply` contains only actual mutations grouped by semantic resource type. Concrete identities and actions precede secondary filesystem detail. Full paths remain selectable through hover/focus detail, file diffs expand on their owning rows, and preserved unmanaged items and non-blocking notes remain collapsed after the change plan. Header and footer stay fixed while one dialog body owns vertical scrolling; only large diff content may own nested code scrolling. Preview does not display generation timestamps because freshness is enforced by the stale-preview contract rather than user inspection.
 
@@ -584,6 +648,7 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - The original local path is retained as provenance, but local imports default to the `Untracked` update policy.
 - A user MAY explicitly track a stable local folder as an update source.
 - Repository import MUST store the sanitized repository locator, explicit ref, directory, resolved commit, and Skill-subtree revision. GitHub API imports remain `sourceType: github`; System Git imports use `sourceType: git`.
+- Supported source types are `local`, `github`, and `git`. Archive or Zip provenance is not a hidden read-only source type and MUST be rejected by app-data and portable-snapshot validation until a complete import, refresh, update, and recovery contract exists.
 - Repository imports default to the `Tracked` update policy. The canonical HTTPS source locator is durable metadata. For a System Git import on any host, an HTTPS authentication, authorization, or repository-access failure MAY retry the equivalent `git@host:path.git` locator through the user's existing SSH setup. Timeout, DNS, malformed URL, parse, cancellation, and ordinary network failures MUST NOT trigger a transport fallback. The scan summary discloses `SSH fallback`, while persisted provenance keeps the canonical HTTPS source and records the access transport separately.
 - A GitHub Web URL MAY identify a Skill directory, a containing directory, or a repository. Other Git Web URLs MAY infer Ref and Directory only from the explicit and structurally unambiguous `/tree/<ref>/...` or `/-/tree/<ref>/...` forms; all other provider-specific layouts use separate Ref and Directory fields instead of guesswork. A supplied subdirectory is a hard scan boundary: no candidate outside it may appear. When that directory directly contains `SKILL.md`, it is the sole candidate; otherwise only valid top-level Skill roots below that directory are listed. Containing-directory and repository imports MUST scan recursively for valid top-level Skill roots before any Library write.
 - `github.com` Web URLs use the GitHub API by default. SSH, SCP-like, non-`github.com`, and explicitly selected System Git locators use the packaged application's discovered system `git` executable and the user's existing SSH Agent or Git credential helper. AgentEnv MUST NOT store Git passwords, access tokens, private keys, or credential-helper output.
@@ -950,6 +1015,7 @@ Status: supported viewport containment, topmost overlays, modal focus trapping, 
 - All data remains local unless the user explicitly accesses GitHub or opens an external URL.
 - Renderer-requested external links MUST be validated by the main process and limited to `http` and `https` URLs.
 - GitHub OAuth tokens are stored using the operating system's secure credential facility when available.
+- A saved GitHub token has separate credential and verification state. Local decryption failure or an explicit GitHub `401` invalid-credential response clears it. Offline state, timeout, rate limiting, malformed non-auth responses, and GitHub service failure retain the token and report `Signed in, verification unavailable`. Sign out removes only the token and pending Device Flow state; it MUST NOT alter Library content, source metadata, repository cache, or system Git credentials.
 - Secrets MUST NOT appear in renderer logs, main-process logs, Preview diff, screenshots, or global feedback.
 - Profile Save MUST reject literal credentials detected in Instructions and direct the user to environment references. Legacy native content is excluded during v2 migration, and every Preview is redacted before crossing the preload boundary.
 - Preview redaction MUST replace sensitive before/after values and regenerate the rendered diff from those redacted values while the main process retains the original internal plan only for the guarded Apply operation.
@@ -982,7 +1048,7 @@ Registration MUST occur in the Target registry. Renderer components MUST NOT req
 
 Target Skill drivers report facts only. They MUST NOT import Library content, mutate Profile state, deploy files, remove legacy paths, or create backups. The core owns Save, Preview, Backup, atomic Apply, post-write verification, and Rollback through one Agent-neutral operation model. Agent-specific behavior belongs behind the adapter; Agent-specific buttons and Target ID branches do not belong in the renderer.
 
-Runtime snapshots are the single source for Skill discovery, runtime identity, availability, location role, and runtime issues. Library inventory MAY enrich those observations with Library relationships, ignore rules, content hashes, and external-manager evidence, but MUST NOT independently reinterpret Agent runtime behavior. Broken links and unreadable Skill manifests remain visible as unavailable, review-only inventory and MUST NOT enter automatic import, cleanup, replacement, or deletion flows.
+Runtime snapshots are the single source for Skill discovery, runtime identity, availability, location role, and runtime issues. Library inventory MAY enrich those observations with Library relationships, ignore rules, content hashes, and external-manager evidence, but MUST NOT independently reinterpret Agent runtime behavior. Drivers only report broken links and unreadable manifests and never mutate them. Core Cleanup MAY classify an exact unowned broken symbolic link as `Ready to clean up` only after path, ownership, and link-boundary verification; execution still requires the reviewed bulk confirmation and removes only the backed-up link itself. Unreadable real directories or manifests, healthy external links, ambiguous paths, and externally owned links remain review-only and MUST NOT enter automatic import, cleanup, replacement, or deletion plans.
 
 Legacy migration eligibility is both path- and Target-owned. A shared copy carrying another Target's AgentEnv ownership marker is observable but MUST NOT be removed, replaced, or claimed by the current Target.
 
@@ -1091,6 +1157,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Profile-scoped update Check excludes disabled and untracked references while a Library update discloses cross-Profile and Copy versus Live link impact.
 - Missing executable and missing directory are distinguished.
 - Copy mode keeps Library updates pending; Live link mode visibly propagates them immediately.
+- Auto mode uses a Live link when supported, falls back to Copy only for an explicit unsupported-link error, and exposes permission, path, source, and storage failures without fallback. Changing mode does not mutate an existing install before fresh Preview and Apply.
 - Create from Target captures portable resources, reuses exact Library matches, and leaves Target files and deployment state unchanged.
 - Create from Target MUST retain AgentEnv-owned legacy Skills as migration inputs so the first Apply cannot remove a legacy copy without installing the captured Skill into its current runtime location.
 - Ignored resources and unsupported native data remain Target-owned after Create from Target.
@@ -1127,6 +1194,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Project discovery scans configured roots read-only, deduplicates overlapping roots, isolates invalid candidates, preserves source files, and routes selected imports through the ordinary Library Preview flow.
 - GitHub direct-Skill, containing-directory, and repository scan; candidate selection; partial import; rate limit; sign-in remediation; update check; Preview; and update.
 - GitHub Device Flow pending, focus return, `slow_down`, expiry, denial, and successful account-state refresh without overlapping network polls.
+- GitHub status clears a stored token after decryption failure or `401`, retains it through offline, timeout, rate-limit, and service failures, and keeps Sign out independent from Library and source state.
 - System Git repository, directory, and direct-Skill scan; HTTPS/SSH/local transport; ref selection; partial import; cancellation; subtree update detection; Preview; backup; cache rebuild; credential redaction; and packaged-app Git discovery.
 - Local and GitHub per-Skill update policies, legacy defaults, disabled-source isolation, and persistence.
 - Library global disable persistence, update-check exclusion, Add Skill picker filtering, existing-reference visibility, and Apply-time managed-copy removal.
@@ -1139,6 +1207,8 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Referenced resource deletion is blocked.
 - Managed-install deletion is undoable; unmanaged copies remain.
 - Workspace Sync deterministic publish, remote receive, no-op, non-conflicting combination, same-section conflict, stale remote rejection, malicious snapshot rejection, linked-Skill impact confirmation, transaction rollback, and startup recovery.
+- Workspace Sync candidate connection failure preserves the previous connection and accepted base; same-connection reconnect performs Check; Disconnect leaves Profile, Library, Targets, remote content, and Git credentials unchanged.
+- Legacy shared-Library migration preserves the source, atomically replaces the destination, retains conflicting destination content under a deterministic alternate ID, writes a report, and converges on retry after interruption.
 
 ### Failure and recovery
 
@@ -1164,6 +1234,25 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Profile switching at the minimum viewport preserves editor geometry through loading and never exposes a false empty state.
 
 E2E assertions MUST verify persisted files and state, not only successful clicks.
+
+### 24.1 Contract Coverage Matrix
+
+This matrix is the release-facing index. A capability may be `Implemented` only when its persisted effect and failure path have automated evidence; detailed clauses above remain authoritative.
+
+| Capability | Status | Persisted effect and recovery evidence | Required automated layer |
+| --- | --- | --- | --- |
+| Whole-Profile Save and dirty navigation | `Implemented` | Atomic Profile replacement; draft never writes an Agent | Domain, renderer, Electron E2E |
+| Preview, Apply, no-op, stale, drift, rollback | `Implemented` | Bound plan, Backup, verification, compensating restore | Domain, cross-adapter integration, Electron E2E |
+| Apply issue policy | `Implemented` | Stable code maps to one disposition and recovery; contract table is test-verified | Contract-policy and domain tests |
+| Skill import, duplicate review, update, disable, delete | `Implemented` | Canonical Library transaction and History/Backup where destructive | Domain, renderer, Electron E2E |
+| Local Skill Cleanup and shared migration | `Implemented` | Reviewed filesystem normalization; source/external ownership preserved | Domain, fake-home E2E |
+| Native MCP sparse activation | `Implemented` | Managed activation fields only; definitions and credentials preserved | Adapter matrix and fake-home E2E |
+| Workspace Sync | `Implemented` | Candidate Connect, three-way plan, transactional Update, guarded Publish, recovery | Domain, two-device Git integration, Electron E2E |
+| GitHub account state | `Implemented` | Secure token; invalid credentials clear; transient verification failure preserves | Service and renderer tests |
+| Legacy shared-Library storage migration | `Partial` | Atomic destination replacement, source preservation, conflict retention, report | Unit complete; production-shaped packaged startup required |
+| Data Export and Restore | `Implemented` | Validated export, recovery copy, atomic app-data replacement | Domain and packaged restart smoke |
+| Desktop geometry and interaction | `Implemented` | No persisted effect; native window, focus, overlay, scroll, and viewport contracts | Renderer geometry and Electron screenshots |
+| Signed and notarized macOS release | `Required` | Distribution trust only; no product-data mutation | Clean-Mac packaged smoke after credentials exist |
 
 ## 25. Production Release Gate
 
@@ -1220,6 +1309,6 @@ The current machine-readable totals, source commit, dirty state, viewport list, 
 
 ## 26. Current Priority Gaps
 
-1. Validate the one-time v1-to-v2 migration against an anonymized production-shaped data export and a packaged startup.
+1. Validate both the one-time v1-to-v2 migration and legacy shared-Library storage migration against an anonymized production-shaped data export and a packaged startup.
 2. Extend the conditional duplicate review with more uncommon intentionally distinct same-name Skill fixtures.
 3. Sign and notarize macOS distribution, then repeat packaged primary-workflow verification on a clean Mac.

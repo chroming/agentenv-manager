@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-07-23T04:56:49.613Z",
+  "generatedAt": "2026-07-23T06:04:16.582Z",
   "source": {
-    "commit": "82de927ee5338cb5fb8770ddc107fd55cd3681f4",
+    "commit": "6a60df918c3d188edad726a0211dce94d1ce6734",
     "dirty": true
   },
   "tests": {
     "passed": true,
-    "files": 103,
-    "assertions": 702,
+    "files": 104,
+    "assertions": 709,
     "e2eFiles": 10,
     "e2eAssertions": 114,
     "electronUiFiles": 1,

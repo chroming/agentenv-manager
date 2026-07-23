@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { AgentEnvSettings } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
 import { hashComparableResource } from "./resourceHash";
-import { writeAtomic } from "./fileUtils";
+import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils";
 
 export const SettingsSchema = z.object({
   locale: z.enum(["system", "en", "zh_CN", "zh_TW"]).default("system"),
@@ -53,18 +53,6 @@ export const resolveSkillsLibraryDir = (
   settings: Pick<AgentEnvSettings, "skillStorageLocation">
 ) => settings.skillStorageLocation === "agents" ? paths.userSkillsDir : paths.skillsLibraryDir;
 
-const pathExists = async (path: string) => {
-  try {
-    await readFile(path);
-    return true;
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return false;
-    }
-    return true;
-  }
-};
-
 const migrateSkillStorage = async (
   paths: AgentEnvPaths,
   current: AgentEnvSettings,
@@ -88,24 +76,53 @@ const migrateSkillStorage = async (
     throw error;
   }
 
-  await mkdir(newDir, { recursive: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) {
-      continue;
+  const copiedIds: string[] = [];
+  const preservedConflicts: Array<{ id: string; preservedAs: string }> = [];
+  await replacePathAtomically(newDir, async (stagingDir) => {
+    if (await pathEntryExists(newDir)) {
+      await cp(newDir, stagingDir, { recursive: true, dereference: false });
+    } else {
+      await mkdir(stagingDir, { recursive: true });
     }
-    const source = join(oldDir, entry.name);
-    const target = join(newDir, entry.name);
-    if (await pathExists(target)) {
-      if (await hashComparableResource(source) === await hashComparableResource(target)) {
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
         continue;
       }
-      let conflictPath = join(newDir, `${entry.name}-pre-shared-migration`);
-      for (let index = 2; await pathExists(conflictPath); index += 1) {
-        conflictPath = join(newDir, `${entry.name}-pre-shared-migration-${index}`);
+      const source = join(oldDir, entry.name);
+      const target = join(stagingDir, entry.name);
+      if (await pathEntryExists(target)) {
+        if (await hashComparableResource(source) === await hashComparableResource(target)) {
+          continue;
+        }
+        let preservedAs = `${entry.name}-pre-shared-migration`;
+        for (
+          let index = 2;
+          await pathEntryExists(join(stagingDir, preservedAs));
+          index += 1
+        ) {
+          preservedAs = `${entry.name}-pre-shared-migration-${index}`;
+        }
+        await rename(target, join(stagingDir, preservedAs));
+        preservedConflicts.push({ id: entry.name, preservedAs });
       }
-      await rename(target, conflictPath);
+      await cp(source, target, { recursive: true, dereference: true });
+      copiedIds.push(entry.name);
     }
-    await cp(source, target, { recursive: true, dereference: true });
+  });
+  const reportPath = join(paths.appDataRoot, "legacy-skill-storage-migration.json");
+  if (copiedIds.length > 0 || preservedConflicts.length > 0 || !(await pathEntryExists(reportPath))) {
+    await writeAtomic(
+      reportPath,
+      `${JSON.stringify({
+        formatVersion: 1,
+        migratedAt: new Date().toISOString(),
+        source: oldDir,
+        destination: newDir,
+        sourcePreserved: true,
+        copiedIds,
+        preservedConflicts
+      }, null, 2)}\n`
+    );
   }
 };
 
