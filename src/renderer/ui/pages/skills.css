@@ -216,6 +216,36 @@
   min-width: 0;
 }
 
+.library-skill-name-button {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-tight);
+  cursor: pointer;
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  padding: 1px 2px;
+  text-align: left;
+}
+
+.library-skill-name-button:hover:not(:disabled),
+.library-skill-name-button:active:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+}
+
+.library-skill-name-button:hover .skill-title {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.library-skill-name-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .skill-library-panel .library-resource-cell,
 .skill-library-panel .library-source-cell,
 .skill-library-panel .library-usage-cell,

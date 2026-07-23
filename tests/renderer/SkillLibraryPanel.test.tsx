@@ -630,6 +630,10 @@ describe("SkillLibraryPanel", () => {
         .toHaveTextContent("Shared Reviewer")
     );
     fireEvent.click(within(filesDialog).getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByText("Review code"));
+    expect(screen.queryByRole("dialog", { name: "Files in Shared Reviewer" }))
+      .not.toBeInTheDocument();
+    expect(onListSkillFiles).toHaveBeenCalledTimes(1);
     const sharedUsage = within(sharedRow).getByLabelText("Usage details for shared-reviewer");
     fireEvent.focus(sharedUsage);
     expect(screen.getByRole("tooltip")).toHaveTextContent("Daily Coding");

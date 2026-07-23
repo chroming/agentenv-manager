@@ -2033,27 +2033,6 @@ export const SkillLibraryPanel = ({
                     );
                   }
                 }}
-                onClick={(event) => {
-                  if (
-                    event.target instanceof Element &&
-                    event.target.closest("button, a, input, select, textarea")
-                  ) {
-                    return;
-                  }
-                  modalFallbackFocusRef.current = event.currentTarget;
-                  setBrowsingSkill(skill);
-                }}
-                onKeyDown={(event) => {
-                  if (
-                    (event.key === "Enter" || event.key === " ") &&
-                    event.target === event.currentTarget
-                  ) {
-                    event.preventDefault();
-                    modalFallbackFocusRef.current = event.currentTarget;
-                    setBrowsingSkill(skill);
-                  }
-                }}
-                tabIndex={0}
               >
                 <div className="library-resource-cell">
                   <ResourceIconPicker
@@ -2066,7 +2045,16 @@ export const SkillLibraryPanel = ({
                   />
                   <div className="skill-title-stack">
                     <span className="skill-title-line">
-                      <strong className="skill-title">{skill.name}</strong>
+                      <button
+                        className="library-skill-name-button"
+                        type="button"
+                        onClick={(event) => {
+                          modalFallbackFocusRef.current = event.currentTarget;
+                          setBrowsingSkill(skill);
+                        }}
+                      >
+                        <strong className="skill-title">{skill.name}</strong>
+                      </button>
                       {(skillNameCounts.get(skill.name.normalize("NFKC").trim().toLowerCase()) ?? 0) > 1 ? (
                         <span className="library-duplicate-id">{skill.id}</span>
                       ) : null}

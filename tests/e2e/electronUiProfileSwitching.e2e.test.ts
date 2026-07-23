@@ -1018,7 +1018,14 @@ describe("Electron UI profile switching e2e", () => {
 
     const row = page.getByRole("group", { name: "Library item zip-review" });
     await row.waitFor({ state: "visible" });
-    await row.locator(".skill-title-stack").click();
+    const skillNameButton = row.locator(".library-skill-name-button");
+    await expect(skillNameButton.evaluate((element) => getComputedStyle(element).cursor))
+      .resolves.toBe("pointer");
+    await expect(row.evaluate((element) => element.tabIndex)).resolves.toBe(-1);
+    await row.locator(".skill-description").click();
+    await expect(page.getByRole("dialog", { name: "Files in ZIP Review" }).count())
+      .resolves.toBe(0);
+    await skillNameButton.click();
     const filesDialog = page.getByRole("dialog", { name: "Files in ZIP Review" });
     await filesDialog.waitFor({ state: "visible" });
     await filesDialog.getByRole("button", { name: "SKILL.md" }).waitFor({ state: "visible" });
