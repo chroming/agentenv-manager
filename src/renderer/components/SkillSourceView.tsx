@@ -949,18 +949,18 @@ export const SkillSourceView = ({
       {mergeOpen ? (
         <ModalFrame
           ariaLabel={t("Confirm source merge")}
-          className="skill-source-merge-dialog"
+          className="skill-source-merge-dialog ui-dialog-shell"
           dialogRef={mergeDialogRef}
           dismissDisabled={mergeBusy}
           onDismiss={closeMerge}
         >
-          <header className="profile-dialog-header">
-            <div>
-              <div className="section-title">{t("Confirm source merge")}</div>
-              <p className="muted">{t("Review and adjust the shared source before merging selected groups.")}</p>
+          <header className="profile-dialog-header ui-dialog-header">
+            <div className="ui-dialog-header__copy">
+              <div className="section-title ui-dialog-title">{t("Confirm source merge")}</div>
+              <p className="muted ui-dialog-description">{t("Review and adjust the shared source before merging selected groups.")}</p>
             </div>
           </header>
-          <div className="skill-source-merge-body">
+          <div className="skill-source-merge-body ui-dialog-body">
             <div className="skill-source-merge-summary">
               <div><span>{t("Selected sources")}</span><strong>{mergeSelection.size}</strong></div>
               <div><span>{t("Library Skills")}</span><strong>{mergePreview?.affectedSkillCount ?? "—"}</strong></div>
@@ -1015,7 +1015,7 @@ export const SkillSourceView = ({
               </div>
             ) : null}
           </div>
-          <footer className="preview-actions">
+          <footer className="preview-actions ui-dialog-footer">
             <Button disabled={mergeBusy} onClick={() => closeMerge()}>{t("Cancel")}</Button>
             <Button
               variant="primary"
@@ -1032,14 +1032,14 @@ export const SkillSourceView = ({
       {renameSource ? (
         <ModalFrame
           ariaLabel={t("Rename source")}
-          className="skill-source-name-dialog"
+          className="skill-source-name-dialog ui-dialog-shell"
           dialogRef={renameDialogRef}
           dismissDisabled={renameBusy}
           onDismiss={closeRename}
         >
-          <header className="profile-dialog-header">
-            <div>
-              <div className="section-title">{t("Rename source")}</div>
+          <header className="profile-dialog-header ui-dialog-header">
+            <div className="ui-dialog-header__copy">
+              <div className="section-title ui-dialog-title">{t("Rename source")}</div>
               <OverflowTooltip
                 className="skill-source-name-location"
                 displayText={`${sourceRepositoryLabel(renameSource.repository)} · ${sourceScopeLabel(renameSource)}`}
@@ -1048,7 +1048,7 @@ export const SkillSourceView = ({
               />
             </div>
           </header>
-          <div className="skill-source-name-body">
+          <div className="skill-source-name-body ui-dialog-body">
             <label className="skill-source-merge-field">
               <span>{t("Source name")}</span>
               <input
@@ -1066,7 +1066,7 @@ export const SkillSourceView = ({
             </label>
             {renameError ? <p className="skill-source-merge-notice is-error">{renameError}</p> : null}
           </div>
-          <footer className="preview-actions">
+          <footer className="preview-actions ui-dialog-footer">
             <Button disabled={renameBusy} onClick={closeRename}>{t("Cancel")}</Button>
             <Button
               variant="primary"

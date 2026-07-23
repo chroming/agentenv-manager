@@ -335,20 +335,20 @@ export const TargetWorkspace = ({
         <div className="preview-modal-backdrop" onClick={busy ? undefined : () => setIsRecoveryOpen(false)}>
           <section
             ref={recoveryDialogRef}
-            className="profile-form-dialog target-recovery-dialog"
+            className="profile-form-dialog target-recovery-dialog ui-dialog-shell"
             role="dialog"
             aria-modal="true"
             aria-label={t("Recovery")}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header target-recovery-dialog__header ui-dialog-header">
-              <div>
-                <div className="section-title">{t("Recovery")}</div>
-                <p className="muted">{t("Backups created before managed applies.")}</p>
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Recovery")}</div>
+                <p className="muted ui-dialog-description">{t("Backups created before managed applies.")}</p>
               </div>
               <span>{t(backups.length === 1 ? "{{count}} backup" : "{{count}} backups", { count: backups.length })}</span>
             </header>
-            <div className="target-recovery-dialog__body">
+            <div className="target-recovery-dialog__body ui-dialog-body">
               <HistoryView
                 backups={backups}
                 busy={busy}
@@ -388,14 +388,14 @@ export const TargetWorkspace = ({
       ) : null}
       {stopManagingTargetId ? (
         <div className="preview-modal-backdrop" onClick={() => setStopManagingTargetId(undefined)}>
-          <section ref={stopManagingDialogRef} className="profile-form-dialog stop-managing-dialog" role="dialog" aria-modal="true" aria-label={t("Stop managing Agent")} onClick={(event) => event.stopPropagation()}>
+          <section ref={stopManagingDialogRef} className="profile-form-dialog stop-managing-dialog ui-dialog-shell" role="dialog" aria-modal="true" aria-label={t("Stop managing Agent")} onClick={(event) => event.stopPropagation()}>
             <header className="profile-dialog-header ui-dialog-header">
-              <div>
-                <div className="section-title">{t("Stop managing {{name}}", { name: targets.find((target) => target.id === stopManagingTargetId)?.name ?? "" })}</div>
-                <p className="muted">{t("Choose what should happen to the current Agent environment.")}</p>
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Stop managing {{name}}", { name: targets.find((target) => target.id === stopManagingTargetId)?.name ?? "" })}</div>
+                <p className="muted ui-dialog-description">{t("Choose what should happen to the current Agent environment.")}</p>
               </div>
             </header>
-            <div className="stop-managing-options" role="radiogroup" aria-label={t("Stop managing behavior")}>
+            <div className="stop-managing-options ui-dialog-body" role="radiogroup" aria-label={t("Stop managing behavior")}>
               <label>
                 <input type="radio" name="stop-managing-mode" checked={stopManagingMode === "keep-current"} onChange={() => setStopManagingMode("keep-current")} />
                 <span><strong>{t("Keep current environment")}</strong><small>{t("Detach AgentEnv ownership and turn linked Skills into independent files.")}</small></span>

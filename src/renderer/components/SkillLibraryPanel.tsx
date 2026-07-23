@@ -2364,20 +2364,20 @@ export const SkillLibraryPanel = ({
         />
       ) : null}
 
-      {mergePreview && mergeKeepEntry && mergeSourceEntry ? (
+      {mergePreview && mergeKeepEntry && mergeSourceEntry ? createPortal(
         <div className="preview-modal-backdrop" onClick={() => !mergeOperation && setMergePreview(undefined)}>
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog skill-merge-dialog"
+            className="profile-form-dialog skill-merge-dialog ui-dialog-shell"
             role="dialog"
             aria-modal="true"
             aria-label={t("Merge same-name Skills")}
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">{t("Merge same-name Skills")}</div>
-                <p className="muted">
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Merge same-name Skills")}</div>
+                <p className="muted ui-dialog-description">
                   {t("Choose the Library entry to keep and the update source to retain.")}
                 </p>
               </div>
@@ -2386,7 +2386,7 @@ export const SkillLibraryPanel = ({
               </span>
             </header>
 
-            <div className="skill-merge-body">
+            <div className="skill-merge-body ui-dialog-body">
               <fieldset className="skill-merge-choice-group">
                 <legend>{t("Keep Skill")}</legend>
                 <p>{t("This entry keeps its Library ID, content, icon, and availability.")}</p>
@@ -2498,7 +2498,7 @@ export const SkillLibraryPanel = ({
               </div>
             </div>
 
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button
                 ref={modalInitialFocusRef}
                 className="secondary-action"
@@ -2524,26 +2524,27 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {sourceCandidate && sourceCandidateDraft ? (
+      {sourceCandidate && sourceCandidateDraft ? createPortal(
         <div className="preview-modal-backdrop" onClick={() => setSourceCandidate(undefined)}>
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog skill-update-settings-dialog"
+            className="profile-form-dialog skill-update-settings-dialog ui-dialog-shell"
             role="dialog"
             aria-label={t("Update settings for {{id}}", { id: sourceCandidate.id })}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">{t("Update settings")}</div>
-                <p className="muted">{sourceCandidate.name}</p>
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Update settings")}</div>
+                <p className="muted ui-dialog-description">{sourceCandidate.name}</p>
               </div>
             </header>
-            <div className="skill-update-settings-dialog__body">
+            <div className="skill-update-settings-dialog__body ui-dialog-body">
               <div className="skill-update-settings-policy">
                 <span>
                   <strong>{t("Track updates")}</strong>
@@ -2658,7 +2659,7 @@ export const SkillLibraryPanel = ({
                 {t("Source changes are saved independently from update tracking.")}
               </p>
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button
                 ref={modalInitialFocusRef}
                 className="secondary-action"
@@ -2690,10 +2691,11 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {deleteCandidate ? (
+      {deleteCandidate ? createPortal(
         <div className="preview-modal-backdrop" onClick={() => setDeleteCandidate(undefined)}>
           <section
             ref={modalDialogRef}
@@ -2704,9 +2706,9 @@ export const SkillLibraryPanel = ({
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">{t("Remove from library")}</div>
-                <p className="muted">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Remove from library")}</div>
+                <p className="muted ui-dialog-description">
                   {(skillUsage[deleteCandidate.id] ?? []).length > 0
                     ? t("{{name}} is used by {{profiles}}. Remove it from those profiles first.", {
                         name: deleteCandidate.name,
@@ -2764,28 +2766,29 @@ export const SkillLibraryPanel = ({
               )}
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {autoCleanupReviewOpen ? (
+      {autoCleanupReviewOpen ? createPortal(
         <div className="preview-modal-backdrop" onClick={() => setAutoCleanupReviewOpen(false)}>
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact"
+            className="profile-form-dialog profile-form-dialog--compact cleanup-bulk-dialog ui-dialog-shell"
             role="dialog"
             aria-label={t("Clean up local Skills")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">{t("Clean up local Skills")}</div>
-                <p className="muted">
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Clean up local Skills")}</div>
+                <p className="muted ui-dialog-description">
                   {t("AgentEnv will run the safe actions below. Every changed path is backed up before cleanup starts.")}
                 </p>
               </div>
             </header>
-            <div className="cleanup-bulk-review-list">
+            <div className="cleanup-bulk-review-list ui-dialog-body">
               {([...cleanupRequestsByEffect.entries()]).map(([effect, items]) => (
                 <section className="cleanup-bulk-effect" key={effect}>
                   <div>
@@ -2817,7 +2820,7 @@ export const SkillLibraryPanel = ({
               ) : null}
               <small>{t("Each Skill is backed up independently. A failure does not undo completed Skills.")}</small>
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button
                 ref={modalInitialFocusRef}
                 className="secondary-action"
@@ -2835,23 +2838,24 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {sharedTargetReview?.sharedMigration?.state === "waiting" ? (
+      {sharedTargetReview?.sharedMigration?.state === "waiting" ? createPortal(
         <div className="preview-modal-backdrop" onClick={() => setSharedTargetReviewKey(undefined)}>
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact shared-target-review-dialog"
+            className="profile-form-dialog profile-form-dialog--compact shared-target-review-dialog ui-dialog-shell"
             role="dialog"
             aria-modal="true"
             aria-label={t("Choose shared Skill handling")}
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">{t("Choose how Agents use this Skill")}</div>
-                <p className="muted">
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Choose how Agents use this Skill")}</div>
+                <p className="muted ui-dialog-description">
                   {t("{{name}} is still loaded by {{count}} Agents from one shared folder.", {
                     name: sharedTargetReview.primary?.name ?? sharedTargetReview.skillKey,
                     count: sharedTargetReview.sharedMigration.pendingConsumers.length
@@ -2859,7 +2863,7 @@ export const SkillLibraryPanel = ({
                 </p>
               </div>
             </header>
-            <div className="cleanup-bulk-review-list">
+            <div className="cleanup-bulk-review-list ui-dialog-body">
               {sharedTargetReview.sharedMigration.pendingConsumers.map((targetId) => (
                 <span key={targetId}>{t(targetNameFor(targetId, targetNames, targetId))}</span>
               ))}
@@ -2868,7 +2872,7 @@ export const SkillLibraryPanel = ({
               </p>
               <small>{t("Profiles without this Skill will remove it from that Agent when the shared copy is replaced.")}</small>
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button
                 ref={modalInitialFocusRef}
                 className="secondary-action"
@@ -2899,33 +2903,34 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {sharedRetireCandidate?.sharedMigration ? (
+      {sharedRetireCandidate?.sharedMigration ? createPortal(
         <div
           className="preview-modal-backdrop"
           onClick={sharedOperation ? undefined : () => setSharedRetireKey(undefined)}
         >
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact"
+            className="profile-form-dialog profile-form-dialog--compact shared-retire-dialog ui-dialog-shell"
             role="dialog"
             aria-label={t("Replace shared Skill copy")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">{t("Replace shared copy")}</div>
-                <p className="muted">
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Replace shared copy")}</div>
+                <p className="muted ui-dialog-description">
                   {t("Each Agent will use its saved Profile instead of the shared {{name}} copy.", {
                     name: sharedRetireCandidate.primary?.name ?? sharedRetireCandidate.skillKey
                   })}
                 </p>
               </div>
             </header>
-            <div className="cleanup-retire-summary">
+            <div className="cleanup-retire-summary ui-dialog-body">
               <div>
                 <strong>{t("After replacement")}</strong>
                 {sharedRetireTargets.length > 0 ? (
@@ -2957,7 +2962,7 @@ export const SkillLibraryPanel = ({
               ))}
               <small>{t("The Library copy is kept. One backup covers the shared copy, Agent copies, and saved Agent decisions; any failed step restores all of them.")}</small>
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button
                 ref={modalInitialFocusRef}
                 className="secondary-action"
@@ -2981,10 +2986,11 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {disableCandidate ? (
+      {disableCandidate ? createPortal(
         <div
           className="preview-modal-backdrop"
           onClick={availabilityOperation ? undefined : () => setDisableCandidate(undefined)}
@@ -3055,29 +3061,30 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {bulkUpdatePlans ? (
+      {bulkUpdatePlans ? createPortal(
         <div
           className="preview-modal-backdrop"
           onClick={isBusy || previewingAllUpdates ? undefined : onCloseBulkUpdatePreview}
         >
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog bulk-update-dialog"
+            className="profile-form-dialog bulk-update-dialog ui-dialog-shell"
             role="dialog"
             aria-label={t("Review all skill updates")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">{t("Review all skill updates")}</div>
-                <p className="muted">{t("Review every tracked change before updating the shared library.")}</p>
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Review all skill updates")}</div>
+                <p className="muted ui-dialog-description">{t("Review every tracked change before updating the shared library.")}</p>
               </div>
             </header>
-            <div className="bulk-update-list">
+            <div className="bulk-update-list ui-dialog-body">
               {bulkUpdateFailures.length > 0 ? (
                 <section className="bulk-update-failures" aria-label={t("Preview failures")}>
                   <div className="bulk-update-failures__heading">
@@ -3119,7 +3126,7 @@ export const SkillLibraryPanel = ({
                 </details>
               ))}
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button ref={modalInitialFocusRef} className="secondary-action" type="button" disabled={isBusy} onClick={onCloseBulkUpdatePreview}>{t("Cancel")}</button>
               {bulkUpdateFailures.length > 0 ? (
                 <button
@@ -3145,25 +3152,26 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {externalImport && externalImportGroup ? (
+      {externalImport && externalImportGroup ? createPortal(
         <div className="preview-modal-backdrop" onClick={() => setExternalImport(undefined)}>
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact external-skill-dialog"
+            className="profile-form-dialog profile-form-dialog--compact external-skill-dialog ui-dialog-shell"
             role="dialog"
             aria-modal="true"
             aria-label={t("Import external skill")}
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">
                   {t("Import {{name}}", { name: externalImportGroup.primary?.name ?? externalImport.skillKey })}
                 </div>
-                <p className="muted">
+                <p className="muted ui-dialog-description">
                   {selectedExternalImport?.contentMatchesLibrary
                     ? t("Review the matching Library copy and any source changes. External files and lock data stay unchanged.")
                     : selectedExternalImport?.externalOwnership?.manager === "skills-cli"
@@ -3174,7 +3182,7 @@ export const SkillLibraryPanel = ({
                 </p>
               </div>
             </header>
-            <fieldset className="cleanup-review-group external-source-group">
+            <fieldset className="cleanup-review-group external-source-group ui-dialog-body">
               <legend>{t("Source copy")}</legend>
               {externalImportItems.map((item) => (
                 <label className="cleanup-review-option" key={`external-${item.path}`}>
@@ -3210,7 +3218,7 @@ export const SkillLibraryPanel = ({
                 </label>
               ))}
             </fieldset>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button
                 ref={modalInitialFocusRef}
                 className="secondary-action"
@@ -3244,25 +3252,26 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {cleanupDetails ? (
+      {cleanupDetails ? createPortal(
         <div className="preview-modal-backdrop" onClick={() => setCleanupDetailsKey(undefined)}>
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact cleanup-details-dialog"
+            className="profile-form-dialog profile-form-dialog--compact cleanup-details-dialog ui-dialog-shell"
             role="dialog"
             aria-label={t("Skill details {{id}}", { id: cleanupDetails.skillKey })}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">
                   {cleanupDetails.primary?.name ?? cleanupDetails.skillKey}
                 </div>
-                <p className="muted">
+                <p className="muted ui-dialog-description">
                   {cleanupDetails.primary?.description || t("Local Skill details and detected locations.")}
                 </p>
               </div>
@@ -3272,7 +3281,7 @@ export const SkillLibraryPanel = ({
                 {t(cleanupPresentationLabel(cleanupDetails.presentation.state))}
               </span>
             </header>
-            <div className="cleanup-details-list">
+            <div className="cleanup-details-list ui-dialog-body">
               {cleanupDetailVersions.map((version) => (
                 <section
                   aria-label={t(
@@ -3340,7 +3349,7 @@ export const SkillLibraryPanel = ({
                 </section>
               ))}
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button
                 ref={modalInitialFocusRef}
                 className="secondary-action"
@@ -3351,10 +3360,11 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
-      {cleanupDraft && cleanupCandidate ? (
+      {cleanupDraft && cleanupCandidate ? createPortal(
         <div
           className="preview-modal-backdrop"
           onClick={() => {
@@ -3363,20 +3373,20 @@ export const SkillLibraryPanel = ({
         >
           <section
             ref={modalDialogRef}
-            className="profile-form-dialog cleanup-review-dialog"
+            className="profile-form-dialog cleanup-review-dialog ui-dialog-shell"
             role="dialog"
             aria-label={t("Review skill cleanup")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">
                   {t(cleanupCandidate.presentation.action === "add-to-library" ? "Add {{name}} to Library" : "Review {{name}}", {
                     name: cleanupCandidate.primary?.name ?? cleanupDraft.skillKey
                   })}
                 </div>
-                <p className="muted">
+                <p className="muted ui-dialog-description">
                   {cleanupUsesExistingLibrary
                     ? t("Review the differences, choose the canonical Library version, then confirm which local copies to normalize.")
                     : cleanupCandidate.sharedMigration
@@ -3385,7 +3395,7 @@ export const SkillLibraryPanel = ({
                 </p>
               </div>
             </header>
-            <div className="cleanup-review-content">
+            <div className="cleanup-review-content ui-dialog-body">
               {cleanupUsesExistingLibrary ? (
                 <fieldset className="cleanup-review-group">
                   <legend>
@@ -3559,7 +3569,7 @@ export const SkillLibraryPanel = ({
                 {" "}{t("All selected copies can be restored from History.")}
               </p>
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button
                 ref={modalInitialFocusRef}
                 className="secondary-action"
@@ -3620,7 +3630,8 @@ export const SkillLibraryPanel = ({
               </button>
             </footer>
           </section>
-        </div>
+        </div>,
+        document.body
       ) : null}
 
       {activeTool === "discoveries" ? (
@@ -4054,7 +4065,7 @@ export const SkillLibraryPanel = ({
       ) : null}
 
       {activeTool === "import"
-        ? createPortal(
+        ? (
             <ModalFrame
               ariaLabel={t("Import skills")}
               backdropClassName="library-import-backdrop"
@@ -4064,8 +4075,8 @@ export const SkillLibraryPanel = ({
               onDismiss={() => void closeImportTool()}
               suspended={importConflictOpen}
             >
-                <header className="profile-dialog-header library-import-header">
-                  <div className="section-title">{t("Import skills")}</div>
+                <header className="profile-dialog-header library-import-header ui-dialog-header">
+                  <div className="section-title ui-dialog-title">{t("Import skills")}</div>
                   <IconButton
                     label={t("Close import")}
                     disabled={
@@ -4463,7 +4474,7 @@ export const SkillLibraryPanel = ({
                     ) : null}
                   </div>
                 ) : null}
-                <footer className="preview-actions import-dialog-actions">
+                <footer className="preview-actions import-dialog-actions ui-dialog-footer">
                   <Button
                     variant={githubImportResult ? "primary" : "secondary"}
                     disabled={
@@ -4529,8 +4540,7 @@ export const SkillLibraryPanel = ({
                     </Button>
                   )}
                 </footer>
-            </ModalFrame>,
-            document.body
+            </ModalFrame>
           )
         : null}
     </section>

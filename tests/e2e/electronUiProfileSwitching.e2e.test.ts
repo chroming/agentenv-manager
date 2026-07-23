@@ -29,6 +29,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   expectInViewport,
   expectNoHorizontalOverflow,
+  expectStructuredDialog,
   expectTextFits,
   expectTopmost,
   findVisibleTextLayoutDefects
@@ -1016,6 +1017,8 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() =>
       fileExists(join(appDataRoot, "skills-library", "zip-review", "SKILL.md"))
     ).toBe(true);
+    await expect.poll(() => importDialog.getByText("In Library", { exact: true }).count())
+      .toBe(1);
     const metadata = await readJson<{
       source?: string;
       updateCheckEnabled?: boolean;
@@ -2417,9 +2420,14 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByRole("button", { name: "Review update shared-reviewer" });
     await expect.poll(() => restoredReview.getAttribute("aria-busy")).toBe("true");
-    await page
-      .getByRole("dialog", { name: "Update preview for shared-reviewer" })
-      .waitFor({ state: "visible" });
+    const updateDialog = page.getByRole("dialog", {
+      name: "Update preview for shared-reviewer"
+    });
+    await updateDialog.waitFor({ state: "visible" });
+    await expectStructuredDialog(updateDialog);
+    await expectTopmost(updateDialog.getByRole("button", {
+      name: "Apply update shared-reviewer"
+    }));
   }, 30_000);
 
   it("removes a skill from the shared library through the rendered app", async () => {
@@ -2538,6 +2546,7 @@ describe("Electron UI profile switching e2e", () => {
     const skillPicker = page.getByRole("dialog", { name: "Add library skills" });
     await skillPicker.waitFor({ state: "visible" });
     await expectInViewport(page, skillPicker);
+    await expectStructuredDialog(skillPicker);
     await page.keyboard.press("Escape");
     await skillPicker.waitFor({ state: "hidden" });
 
@@ -2565,6 +2574,7 @@ describe("Electron UI profile switching e2e", () => {
     await updateSettings.waitFor({ state: "visible" });
     await expectInViewport(page, updateSettings);
     await expectTopmost(updateSettings);
+    await expectStructuredDialog(updateSettings);
     await updateSettings.locator(".info-tip").hover();
     const rowTip = page.getByRole("tooltip");
     await rowTip.waitFor({ state: "visible" });
@@ -3488,7 +3498,7 @@ describe("Electron UI profile switching e2e", () => {
     const body = previewDialog.locator(".apply-preview-body");
     await previewDialog.locator(".apply-preview-scroll-cue").waitFor({ state: "visible" });
     const status = previewDialog.getByRole("region", { name: "Ready to apply" });
-    const changes = previewDialog.getByRole("region", { name: "Changes this Apply" });
+    const changes = previewDialog.getByRole("region", { name: "Planned changes" });
     const [statusBox, changesBox] = await Promise.all([
       status.boundingBox(),
       changes.boundingBox()
@@ -3804,6 +3814,7 @@ describe("Electron UI profile switching e2e", () => {
     const recoveryDialog = page.getByRole("dialog", { name: "Recovery" });
     await recoveryDialog.waitFor({ state: "visible" });
     await expectInViewport(page, recoveryDialog);
+    await expectStructuredDialog(recoveryDialog);
     await page.keyboard.press("Escape");
     await recoveryDialog.waitFor({ state: "hidden" });
     expect(await recoveryTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
@@ -6824,7 +6835,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
-    const resourceChanges = previewDialog.getByRole("region", { name: "Changes this Apply" });
+    const resourceChanges = previewDialog.getByRole("region", { name: "Planned changes" });
     await expect.poll(() => resourceChanges.textContent()).toContain("layout-skill-1");
     await expect.poll(() => resourceChanges.textContent()).toContain("Remove");
     await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();

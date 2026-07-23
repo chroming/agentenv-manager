@@ -229,19 +229,19 @@ export const AgentSettingsSection = ({
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">{t("Turn off {{name}}?", { name: disableCandidate.name })}</div>
-                <p className="muted">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">{t("Turn off {{name}}?", { name: disableCandidate.name })}</div>
+                <p className="muted ui-dialog-description">
                   {t("Its current files stay unchanged. AgentEnv will stop showing, checking, and applying to this Agent until you turn it on again. Existing managed files stay in place; turn this Agent on again before changing or recovering them.")}
                 </p>
               </div>
             </header>
-            <footer className="profile-dialog-actions">
+            <footer className="preview-actions">
               <button ref={cancelRef} type="button" disabled={busy} onClick={() => setDisableCandidate(undefined)}>
                 {t("Cancel")}
               </button>
               <button
-                className="primary-button"
+                className="primary-action"
                 type="button"
                 disabled={busy}
                 onClick={() => {

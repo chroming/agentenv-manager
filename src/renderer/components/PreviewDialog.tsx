@@ -368,9 +368,9 @@ export const PreviewDialog = ({
           ) : null}
 
           {payload ? (
-            <section className="apply-preview-payload" aria-label={t("After Apply")}>
+            <section className="apply-preview-payload" aria-label={t("After applying")}>
               <header className="apply-preview-section-heading">
-                <strong>{t("After Apply")}</strong>
+                <strong>{t("After applying")}</strong>
               </header>
               <div>
                 <article>

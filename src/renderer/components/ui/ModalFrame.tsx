@@ -1,4 +1,5 @@
 import type { MouseEvent, ReactNode, RefObject } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalFrameProps {
   ariaLabel: string;
@@ -23,7 +24,7 @@ export const ModalFrame = ({
 }: ModalFrameProps) => {
   const stopPropagation = (event: MouseEvent<HTMLElement>) => event.stopPropagation();
 
-  return (
+  return createPortal(
     <div
       className={`preview-modal-backdrop ui-modal-backdrop${suspended ? " is-suspended" : ""} ${backdropClassName}`.trim()}
       onClick={dismissDisabled || suspended ? undefined : onDismiss}
@@ -40,6 +41,7 @@ export const ModalFrame = ({
       >
         {children}
       </section>
-    </div>
+    </div>,
+    document.body
   );
 };

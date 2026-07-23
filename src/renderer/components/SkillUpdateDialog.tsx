@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { LoaderCircle } from "lucide-react";
 import type { SkillUpdatePlan } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffViewer } from "./DiffViewer";
@@ -67,15 +68,15 @@ export const SkillUpdateDialog = ({
   return (
     <ModalFrame
       ariaLabel={t("Update preview for {{id}}", { id: plan.id })}
-      className="skill-update-dialog"
+      className="skill-update-dialog ui-dialog-shell"
       dialogRef={dialogRef}
       dismissDisabled={busy}
       onDismiss={onClose}
     >
-        <header className="profile-dialog-header">
-          <div>
-            <div className="section-title">{t("Update {{name}}", { name: plan.name })}</div>
-            <p className="muted">
+        <header className="profile-dialog-header ui-dialog-header">
+          <div className="ui-dialog-header__copy">
+            <div className="section-title ui-dialog-title">{t("Update {{name}}", { name: plan.name })}</div>
+            <p className="muted ui-dialog-description">
               {t("{{count}} file changes", { count: plan.changes.length })}
               {plan.latestRevision
                 ? ` · ${(plan.currentRevision ?? "current").slice(0, 7)} → ${plan.latestRevision.slice(0, 7)}`
@@ -84,7 +85,7 @@ export const SkillUpdateDialog = ({
             <p className="skill-update-impact">{impactSummary}</p>
           </div>
         </header>
-        <div className="update-change-list">
+        <div className="update-change-list ui-dialog-body">
           {plan.changes.map((change) => (
             <details key={change.path} open>
               <summary>{change.path}</summary>
@@ -92,7 +93,7 @@ export const SkillUpdateDialog = ({
             </details>
           ))}
         </div>
-        <footer className="preview-actions">
+        <footer className="preview-actions ui-dialog-footer">
           <Button
             ref={initialFocusRef}
             disabled={busy}
@@ -103,7 +104,9 @@ export const SkillUpdateDialog = ({
           </Button>
           <Button
             aria-label={t("Apply update {{id}}", { id: plan.id })}
+            aria-busy={busy}
             disabled={busy}
+            icon={busy ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" /> : undefined}
             size="prominent"
             variant="primary"
             onClick={() => onConfirm(plan)}

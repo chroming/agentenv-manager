@@ -185,10 +185,10 @@ export const SkillFileBrowserDialog = ({
       dialogRef={dialogRef}
       onDismiss={onClose}
     >
-      <header className="profile-dialog-header skill-file-browser__header">
-        <div>
-          <div className="section-title">{skill.name}</div>
-          <p className="muted">{t("Read-only Library files")}</p>
+      <header className="profile-dialog-header skill-file-browser__header ui-dialog-header">
+        <div className="ui-dialog-header__copy">
+          <div className="section-title ui-dialog-title">{skill.name}</div>
+          <p className="muted ui-dialog-description">{t("Read-only Library files")}</p>
         </div>
         <IconButton ref={initialFocusRef} label={t("Close")} onClick={onClose} variant="ghost">
           <X size={16} strokeWidth={2.2} />

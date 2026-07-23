@@ -80,7 +80,7 @@ describe("PreviewDialog", () => {
       />
     );
 
-    const plan = screen.getByRole("region", { name: "Changes this Apply" });
+    const plan = screen.getByRole("region", { name: "Planned changes" });
     expect(plan).toHaveTextContent("new-skill");
     expect(plan).toHaveTextContent("shared");
     expect(plan).toHaveTextContent("old.md");
@@ -137,7 +137,7 @@ describe("PreviewDialog", () => {
       />
     );
 
-    const payload = screen.getByRole("region", { name: "After Apply" });
+    const payload = screen.getByRole("region", { name: "After applying" });
     expect(payload).toHaveTextContent("1Instruction files");
     expect(payload).toHaveTextContent("0Skills");
     expect(payload).toHaveTextContent("0MCP overrides");
@@ -205,7 +205,7 @@ describe("PreviewDialog", () => {
 
     const dialog = screen.getByRole("dialog", { name: "Preview" });
     const blocker = within(dialog).getByText("Blocking issues").closest("section")!;
-    const changes = within(dialog).getByRole("region", { name: "Changes this Apply" });
+    const changes = within(dialog).getByRole("region", { name: "Planned changes" });
     expect(screen.getByText("Cannot apply")).toBeInTheDocument();
     expect(blocker.compareDocumentPosition(changes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

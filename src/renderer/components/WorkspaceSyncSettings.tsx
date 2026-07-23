@@ -324,45 +324,47 @@ export const WorkspaceSyncSettings = () => {
       {review ? (
         <ModalFrame
           ariaLabel={t("Review Workspace changes")}
-          className="workspace-sync-review"
+          className="workspace-sync-review ui-dialog-shell"
           dialogRef={dialogRef}
           dismissDisabled={Boolean(working)}
           onDismiss={() => setReview(undefined)}
         >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="workspace-sync-review-title">{t("Review Workspace changes")}</div>
-                <p className="muted">{t("Nothing is applied to an Agent by this step.")}</p>
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="workspace-sync-review-title ui-dialog-title">{t("Review Workspace changes")}</div>
+                <p className="muted ui-dialog-description">{t("Nothing is applied to an Agent by this step.")}</p>
               </div>
               <IconButton variant="ghost" label={t("Close")} disabled={Boolean(working)} onClick={() => setReview(undefined)}><X /></IconButton>
             </header>
-            <div className="workspace-sync-review-list">
-              {reviewRows.length ? reviewRows.map((row) => (
-                <div className={`workspace-sync-change${row.direction === "conflict" ? " has-resolution" : ""}`} key={row.key}>
-                  <span className={`workspace-sync-change-kind is-${row.resourceKind}`}>{resourceLabel(row.resourceKind)}</span>
-                  <span className="workspace-sync-change-identity">
-                    <OverflowTooltip className="workspace-sync-change-title" text={row.title} />
-                    <small>{sectionSummary(row)} · {actionLabel(row.action)}</small>
-                  </span>
-                  <span className={`workspace-sync-direction is-${row.direction}`}>{directionLabel(row.direction)}</span>
-                  {row.direction === "conflict" ? (
-                    <select aria-label={t("Resolve {{name}}", { name: row.title })} value={choices[row.changes[0]!.key] ?? ""} onChange={(event) => setChoices((current) => ({ ...current, [row.changes[0]!.key]: event.currentTarget.value as WorkspaceSyncConflictChoice }))}>
-                      <option value="">{t("Choose version")}</option>
-                      <option value="local">{t("Keep this Mac")}</option>
-                      <option value="remote">{t("Use remote")}</option>
-                    </select>
-                  ) : null}
-                </div>
-              )) : <div className="workspace-sync-empty">{t("Workspace is up to date.")}</div>}
+            <div className="workspace-sync-review-body ui-dialog-body">
+              <div className="workspace-sync-review-list">
+                {reviewRows.length ? reviewRows.map((row) => (
+                  <div className={`workspace-sync-change${row.direction === "conflict" ? " has-resolution" : ""}`} key={row.key}>
+                    <span className={`workspace-sync-change-kind is-${row.resourceKind}`}>{resourceLabel(row.resourceKind)}</span>
+                    <span className="workspace-sync-change-identity">
+                      <OverflowTooltip className="workspace-sync-change-title" text={row.title} />
+                      <small>{sectionSummary(row)} · {actionLabel(row.action)}</small>
+                    </span>
+                    <span className={`workspace-sync-direction is-${row.direction}`}>{directionLabel(row.direction)}</span>
+                    {row.direction === "conflict" ? (
+                      <select aria-label={t("Resolve {{name}}", { name: row.title })} value={choices[row.changes[0]!.key] ?? ""} onChange={(event) => setChoices((current) => ({ ...current, [row.changes[0]!.key]: event.currentTarget.value as WorkspaceSyncConflictChoice }))}>
+                        <option value="">{t("Choose version")}</option>
+                        <option value="local">{t("Keep this Mac")}</option>
+                        <option value="remote">{t("Use remote")}</option>
+                      </select>
+                    ) : null}
+                  </div>
+                )) : <div className="workspace-sync-empty">{t("Workspace is up to date.")}</div>}
+              </div>
+              {review.liveSkillIds.length ? (
+                <label className="workspace-sync-live-warning">
+                  <input type="checkbox" checked={acceptLive} onChange={(event) => setAcceptLive(event.currentTarget.checked)} />
+                  <span><strong>{t("Linked Skills change immediately")}</strong><small>{t("{{skills}} linked Skills may immediately affect {{agents}} Agents.", { skills: review.liveSkillIds.length, agents: review.liveAgentIds.length })}</small></span>
+                </label>
+              ) : null}
+              {error ? <div className="workspace-sync-error" role="alert">{error}</div> : null}
             </div>
-            {review.liveSkillIds.length ? (
-              <label className="workspace-sync-live-warning">
-                <input type="checkbox" checked={acceptLive} onChange={(event) => setAcceptLive(event.currentTarget.checked)} />
-                <span><strong>{t("Linked Skills change immediately")}</strong><small>{t("{{skills}} linked Skills may immediately affect {{agents}} Agents.", { skills: review.liveSkillIds.length, agents: review.liveAgentIds.length })}</small></span>
-              </label>
-            ) : null}
-            {error ? <div className="workspace-sync-error" role="alert">{error}</div> : null}
-            <footer className="preview-actions workspace-sync-review-actions">
+            <footer className="preview-actions workspace-sync-review-actions ui-dialog-footer">
               <Button variant="secondary" disabled={Boolean(working)} onClick={() => setReview(undefined)}>{t("Cancel")}</Button>
               {review.canPublish && !review.canUpdate ? <Button variant="primary" icon={working === "publish" ? <LoaderCircle className="spin" /> : undefined} disabled={Boolean(working)} onClick={() => void publish()}>{t("Publish")}</Button> : null}
               {review.canUpdate ? <Button variant="primary" icon={working === "update" ? <LoaderCircle className="spin" /> : undefined} disabled={Boolean(working) || !choicesComplete || (review.liveSkillIds.length > 0 && !acceptLive)} onClick={() => void update()}>{t("Update this Mac")}</Button> : null}

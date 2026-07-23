@@ -24,13 +24,6 @@
   padding: 10px 18px;
 }
 
-.library-import-header .section-title {
-  color: var(--text);
-  font-size: 15px;
-  font-weight: var(--font-weight-semibold);
-  text-transform: none;
-}
-
 .library-import-source-tabs {
   align-items: center;
   background: var(--surface);
@@ -187,6 +180,7 @@
   height: min(680px, calc(100vh - 64px));
   max-width: 960px;
   overflow: hidden;
+  padding: 0;
   width: min(960px, calc(100vw - 64px));
 }
 

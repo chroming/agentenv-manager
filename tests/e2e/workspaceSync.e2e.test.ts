@@ -6,7 +6,13 @@ import { promisify } from "node:util";
 import electronPath from "electron";
 import { _electron as electron, type ElectronApplication } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { expectInViewport, expectNoHorizontalOverflow, findVisibleTextLayoutDefects } from "./layoutAssertions";
+import {
+  expectInViewport,
+  expectNoHorizontalOverflow,
+  expectStructuredDialog,
+  expectTopmost,
+  findVisibleTextLayoutDefects
+} from "./layoutAssertions";
 
 const execFileAsync = promisify(execFile);
 let root = "";
@@ -57,6 +63,8 @@ describe("Workspace Sync desktop flow", () => {
     const review = page.getByRole("dialog", { name: "Review Workspace changes" });
     await review.waitFor({ state: "visible" });
     await expectInViewport(page, review);
+    await expectStructuredDialog(review);
+    await expectTopmost(review);
     expect(await review.locator(".workspace-sync-change").count()).toBe(1);
     expect(await review.getByRole("button", { name: "Publish" }).getAttribute("class")).toContain("ui-button--primary");
     await review.getByRole("button", { name: "Publish" }).click();

@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import type {
   ProfileResources,
@@ -10,7 +9,7 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
-import { Switch } from "./ui";
+import { ModalFrame, Switch } from "./ui";
 
 interface SkillsEditorProps {
   value: ProfileResources;
@@ -283,63 +282,62 @@ export const SkillsEditor = ({
         ) : null}
       </div>
 
-      {pickerOpen ? createPortal(
-        <div className="preview-modal-backdrop" onClick={closePicker}>
-          <section
-            ref={pickerDialogRef}
-            className="profile-form-dialog resource-picker-dialog resource-picker-dialog--skills"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t(replacingIndex === undefined ? "Add library skills" : "Relink missing skill")}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="profile-dialog-header">
-              <div>
-                <div className="section-title">
+      {pickerOpen ? (
+        <ModalFrame
+          ariaLabel={t(replacingIndex === undefined ? "Add library skills" : "Relink missing skill")}
+          className="resource-picker-dialog resource-picker-dialog--skills ui-dialog-shell"
+          dialogRef={pickerDialogRef}
+          onDismiss={closePicker}
+        >
+            <header className="profile-dialog-header ui-dialog-header">
+              <div className="ui-dialog-header__copy">
+                <div className="section-title ui-dialog-title">
                   {t(replacingIndex === undefined ? "Add library skills" : "Relink missing skill")}
                 </div>
-                <p>{t("Choose reusable skills from Library.")}</p>
+                <p className="ui-dialog-description">{t("Choose reusable skills from Library.")}</p>
               </div>
             </header>
-            <label className="resource-picker-search">
-              <Search size={15} strokeWidth={2.2} aria-hidden="true" />
-              <input
-                aria-label={t("Search library skills")}
-                placeholder={t("Search skills...")}
-                value={pickerQuery}
-                onChange={(event) => setPickerQuery(event.currentTarget.value)}
-              />
-            </label>
-            <div className="resource-picker-list">
-              {availableSkills.length === 0 ? (
-                <div className="inline-state">{t("No library skills available")}</div>
-              ) : null}
-              {availableSkills.map((skill) => (
-                <label className="resource-picker-option" key={skill.id}>
-                  <input
-                    aria-label={skill.name}
-                    checked={selectedIds.includes(skill.id)}
-                    type="checkbox"
-                    onChange={() => setSelectedIds((current) =>
-                      replacingIndex !== undefined
-                        ? current.includes(skill.id) ? [] : [skill.id]
-                        : current.includes(skill.id)
-                          ? current.filter((id) => id !== skill.id)
-                          : [...current, skill.id]
-                    )}
-                  />
-                  <span className="resource-picker-option__main">
-                    <strong>{skill.name}</strong>
-                    <OverflowTooltip className="resource-picker-option__description" text={skill.description || skill.id} />
-                    <OverflowTooltip
-                      className="resource-picker-option__metadata"
-                      text={`${skill.version ? `v${skill.version}` : skill.contentHash.slice(0, 7)} · ${skill.path}`}
+            <div className="resource-picker-dialog__body ui-dialog-body">
+              <label className="resource-picker-search">
+                <Search size={15} strokeWidth={2.2} aria-hidden="true" />
+                <input
+                  aria-label={t("Search library skills")}
+                  placeholder={t("Search skills...")}
+                  value={pickerQuery}
+                  onChange={(event) => setPickerQuery(event.currentTarget.value)}
+                />
+              </label>
+              <div className="resource-picker-list">
+                {availableSkills.length === 0 ? (
+                  <div className="inline-state">{t("No library skills available")}</div>
+                ) : null}
+                {availableSkills.map((skill) => (
+                  <label className="resource-picker-option" key={skill.id}>
+                    <input
+                      aria-label={skill.name}
+                      checked={selectedIds.includes(skill.id)}
+                      type="checkbox"
+                      onChange={() => setSelectedIds((current) =>
+                        replacingIndex !== undefined
+                          ? current.includes(skill.id) ? [] : [skill.id]
+                          : current.includes(skill.id)
+                            ? current.filter((id) => id !== skill.id)
+                            : [...current, skill.id]
+                      )}
                     />
-                  </span>
-                </label>
-              ))}
+                    <span className="resource-picker-option__main">
+                      <strong>{skill.name}</strong>
+                      <OverflowTooltip className="resource-picker-option__description" text={skill.description || skill.id} />
+                      <OverflowTooltip
+                        className="resource-picker-option__metadata"
+                        text={`${skill.version ? `v${skill.version}` : skill.contentHash.slice(0, 7)} · ${skill.path}`}
+                      />
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
-            <footer className="preview-actions">
+            <footer className="preview-actions ui-dialog-footer">
               <button ref={pickerCancelRef} className="secondary-action" type="button" onClick={closePicker}>
                 {t("Cancel")}
               </button>
@@ -349,9 +347,7 @@ export const SkillsEditor = ({
                   : t("Add {{count}}", { count: selectedIds.length })}
               </button>
             </footer>
-          </section>
-        </div>,
-        document.body
+        </ModalFrame>
       ) : null}
     </section>
   );

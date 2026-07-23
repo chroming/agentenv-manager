@@ -350,6 +350,28 @@
   padding: 14px 18px;
 }
 
+.profile-dialog-header {
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.profile-dialog-header > div:first-child {
+  min-width: 0;
+}
+
+.profile-dialog-header .section-title {
+  color: var(--text);
+  font-size: 16px;
+  line-height: 21px;
+  text-transform: none;
+}
+
+.profile-dialog-header .muted {
+  font-size: var(--font-size-metadata);
+  line-height: 17px;
+  margin-top: 2px;
+}
+
 .preview-actions,
 .capture-dialog__footer,
 .library-drawer__footer {
@@ -364,6 +386,27 @@
 .library-drawer__footer button {
   height: 40px;
   min-height: 40px;
+}
+
+.profile-form-dialog > .preview-actions button,
+.profile-form-dialog > .profile-dialog-actions button {
+  height: 40px;
+  min-height: 40px;
+  width: auto;
+}
+
+.resource-picker-dialog__body {
+  display: block;
+  overflow: auto;
+}
+
+.resource-picker-dialog__body .resource-picker-search {
+  margin-top: 0;
+}
+
+.resource-picker-dialog__body .resource-picker-list {
+  max-height: none;
+  overflow: visible;
 }
 /* Global quick search stays a read-only navigation and safe-action overlay. */
 .quick-open-dialog {

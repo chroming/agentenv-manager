@@ -122,11 +122,15 @@ export const PreviewChangeList = ({
   };
 
   return (
-    <section className="apply-preview-changes" aria-label={t("Changes this Apply")}>
+    <section className="apply-preview-changes" aria-label={t("Planned changes")}>
       <header className="apply-preview-section-heading">
         <div>
-          <strong>{activation ? t("Changes this Apply") : t("Planned changes")}</strong>
-          <span>{t("{{count}} changes", { count: totalChanges })}</span>
+          <strong>{t("Planned changes")}</strong>
+          <span>
+            {totalChanges === 1
+              ? t("1 change")
+              : t("{{count}} changes", { count: totalChanges })}
+          </span>
         </div>
       </header>
       <div className="apply-preview-change-groups">

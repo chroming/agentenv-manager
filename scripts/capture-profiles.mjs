@@ -588,6 +588,17 @@ try {
   await quickOpen.getByRole("combobox").fill("review");
   await capturePage(page, join(outputDir, "quick-open-920x620.png"), { preserveFocus: true });
   await page.keyboard.press("Escape");
+  await page
+    .getByRole("group", { name: "Library item react-best-practices" })
+    .getByRole("button", { name: "react-best-practices", exact: true })
+    .click();
+  const fileBrowserDialog = page.getByRole("dialog", {
+    name: "Files in react-best-practices"
+  });
+  await fileBrowserDialog.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-file-browser-920x620.png"));
+  await fileBrowserDialog.getByRole("button", { name: "Close" }).click();
+  await fileBrowserDialog.waitFor({ state: "hidden" });
   await page.getByRole("tab", { name: "By source" }).click();
   await page.locator(".skill-source-group").nth(1).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-sources-920x620.png"));
@@ -655,6 +666,17 @@ try {
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "skills-update-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
+  await page
+    .getByRole("group", { name: "Library item react-best-practices" })
+    .getByRole("button", { name: "Review update react-best-practices" })
+    .click();
+  const skillUpdateDialog = page.getByRole("dialog", {
+    name: "Update preview for react-best-practices"
+  });
+  await skillUpdateDialog.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "skills-update-review-920x620.png"));
+  await skillUpdateDialog.getByRole("button", { name: "Cancel" }).click();
+  await skillUpdateDialog.waitFor({ state: "hidden" });
 
   await page.getByRole("button", { name: "Import skills" }).click();
   const importDialog = page.getByRole("dialog", { name: "Import skills" });
@@ -805,6 +827,7 @@ try {
   await page.getByRole("button", { name: "New Profile" }).click();
   const sparseProfileDialog = page.getByRole("dialog", { name: "New profile" });
   await sparseProfileDialog.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "profile-create-920x620.png"));
   await sparseProfileDialog.getByLabel("Profile name").fill("Sparse Capture");
   await sparseProfileDialog
     .getByLabel("Description")

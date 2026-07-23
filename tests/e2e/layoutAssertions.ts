@@ -158,3 +158,44 @@ export const expectTopmost = async (locator: Locator) => {
 
   expect(isTopmost).toBe(true);
 };
+
+export const expectStructuredDialog = async (dialog: Locator) => {
+  const geometry = await dialog.evaluate((element) => {
+    const header = element.querySelector<HTMLElement>(":scope > .ui-dialog-header");
+    const body = element.querySelector<HTMLElement>(":scope > .ui-dialog-body");
+    const footer = element.querySelector<HTMLElement>(":scope > .ui-dialog-footer");
+    const title = header?.querySelector<HTMLElement>(".ui-dialog-title");
+    const box = element.getBoundingClientRect();
+    const headerBox = header?.getBoundingClientRect();
+    const bodyBox = body?.getBoundingClientRect();
+    const footerBox = footer?.getBoundingClientRect();
+    return {
+      bodyBottom: bodyBox?.bottom ?? 0,
+      bodyOverflowY: body ? getComputedStyle(body).overflowY : "",
+      bodyTop: bodyBox?.top ?? 0,
+      buttonHeights: footer
+        ? [...footer.querySelectorAll<HTMLElement>("button")].map((button) =>
+            Math.round(button.getBoundingClientRect().height)
+          )
+        : [],
+      dialogBottom: box.bottom,
+      dialogOverflowY: getComputedStyle(element).overflowY,
+      footerBottom: footerBox?.bottom ?? 0,
+      footerTop: footerBox?.top ?? 0,
+      headerBottom: headerBox?.bottom ?? 0,
+      headerTop: headerBox?.top ?? 0,
+      titleTransform: title ? getComputedStyle(title).textTransform : "",
+      titleWeight: title ? Number.parseInt(getComputedStyle(title).fontWeight, 10) : 0
+    };
+  });
+  expect(geometry.headerTop).toBeGreaterThan(0);
+  expect(geometry.headerBottom).toBeLessThanOrEqual(geometry.bodyTop + 1);
+  expect(geometry.bodyBottom).toBeLessThanOrEqual(geometry.footerTop + 1);
+  expect(Math.abs(geometry.dialogBottom - geometry.footerBottom)).toBeLessThanOrEqual(1);
+  expect(geometry.dialogOverflowY).toBe("hidden");
+  expect(["auto", "scroll"]).toContain(geometry.bodyOverflowY);
+  expect(new Set(geometry.buttonHeights).size).toBeLessThanOrEqual(1);
+  expect(geometry.buttonHeights.every((height) => height === 40)).toBe(true);
+  expect(geometry.titleTransform).toBe("none");
+  expect(geometry.titleWeight).toBeGreaterThanOrEqual(600);
+};

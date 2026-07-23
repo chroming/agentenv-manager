@@ -4604,9 +4604,9 @@ const AppContent = ({
                     onClick={(event) => event.stopPropagation()}
                   >
                     <header className="profile-dialog-header">
-                      <div>
-                        <div className="section-title">{t("Save profile changes?")}</div>
-                        <p className="muted">
+                      <div className="ui-dialog-header__copy">
+                        <div className="section-title ui-dialog-title">{t("Save profile changes?")}</div>
+                        <p className="muted ui-dialog-description">
                           {t("Save before you {{action}}, or discard the current draft.", { action: t(pendingProfileAction.label) })}
                         </p>
                       </div>
@@ -4629,25 +4629,25 @@ const AppContent = ({
                 <div className="preview-modal-backdrop" onClick={busy ? undefined : closeProfileDialog}>
                   <section
                     ref={appModalDialogRef}
-                    className="profile-form-dialog"
+                    className="profile-form-dialog profile-editor-dialog ui-dialog-shell"
                     role="dialog"
                     aria-label={t(profileDialogMode === "create" ? "New profile" : "Edit profile")}
                     aria-modal="true"
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <header className="profile-dialog-header">
-                      <div>
-                        <div className="section-title">
+                    <header className="profile-dialog-header ui-dialog-header">
+                      <div className="ui-dialog-header__copy">
+                        <div className="section-title ui-dialog-title">
                           {t(profileDialogMode === "create" ? "New profile" : "Edit profile")}
                         </div>
-                        <p className="muted">
+                        <p className="muted ui-dialog-description">
                           {profileDialogMode === "create"
                             ? t("Start blank or capture an existing local agent environment.")
                             : t("Update the profile name and description.")}
                         </p>
                       </div>
                     </header>
-                    <div className="profile-form-grid">
+                    <div className="profile-form-grid ui-dialog-body">
                       {profileDialogMode === "create" ? (
                         <>
                           {!targetCapturePreview ? (
@@ -4739,7 +4739,7 @@ const AppContent = ({
                         </label>
                       ) : null}
                     </div>
-                    <footer className="preview-actions">
+                    <footer className="preview-actions ui-dialog-footer">
                       <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
                         {t("Cancel")}
                       </button>
@@ -4769,9 +4769,9 @@ const AppContent = ({
                     onClick={(event) => event.stopPropagation()}
                   >
                     <header className="profile-dialog-header">
-                      <div>
-                        <div className="section-title">{t("Delete profile")}</div>
-                        <p className="muted">
+                      <div className="ui-dialog-header__copy">
+                        <div className="section-title ui-dialog-title">{t("Delete profile")}</div>
+                        <p className="muted ui-dialog-description">
                           {isDeleteProfileCandidateActive
                             ? t("{{name}} is active on {{targets}}. Apply another profile or stop managing each Agent before removing it.", { name: deleteProfileCandidateName, targets: deleteProfileCandidateActiveTargets.join(", ") })
                             : t("Remove {{name}}? Applied Agent files and backups are not removed.", { name: deleteProfileCandidateName })}
@@ -5136,9 +5136,9 @@ const AppContent = ({
                   {backupDeleteCandidate ? (
                     <>
                       <header className="profile-dialog-header">
-                        <div>
-                          <div className="section-title">{t("Delete backup?")}</div>
-                          <p className="muted">{managedBackupTitle(backupDeleteCandidate, t)}</p>
+                        <div className="ui-dialog-header__copy">
+                          <div className="section-title ui-dialog-title">{t("Delete backup?")}</div>
+                          <p className="muted ui-dialog-description">{managedBackupTitle(backupDeleteCandidate, t)}</p>
                         </div>
                       </header>
                       <div className="backup-confirm-summary">
@@ -5157,9 +5157,9 @@ const AppContent = ({
                   ) : backupCleanupConfirm ? (
                     <>
                       <header className="profile-dialog-header">
-                        <div>
-                          <div className="section-title">{t("Clean up backups?")}</div>
-                          <p className="muted">
+                        <div className="ui-dialog-header__copy">
+                          <div className="section-title ui-dialog-title">{t("Clean up backups?")}</div>
+                          <p className="muted ui-dialog-description">
                             {t((managedBackups?.eligibleCount ?? 0) === 1 ? "Delete 1 backup and free approximately {{size}}." : "Delete {{count}} backups and free approximately {{size}}.", {
                               count: managedBackups?.eligibleCount ?? 0,
                               size: formatBytes(managedBackups?.eligibleBytes ?? 0)
@@ -5182,9 +5182,9 @@ const AppContent = ({
                   ) : (
                     <>
                       <header className="profile-dialog-header backup-manager-header">
-                        <div>
-                          <div className="section-title">{t("Manage Backups")}</div>
-                          <p className="muted">
+                        <div className="ui-dialog-header__copy">
+                          <div className="section-title ui-dialog-title">{t("Manage Backups")}</div>
+                          <p className="muted ui-dialog-description">
                             {t((managedBackups?.items.length ?? 0) === 1 ? "{{count}} backup · {{size}}" : "{{count}} backups · {{size}}", {
                               count: managedBackups?.items.length ?? 0,
                               size: formatBytes(managedBackups?.totalBytes ?? 0)
@@ -5269,21 +5269,21 @@ const AppContent = ({
               <div className="preview-modal-backdrop" onClick={() => {
                 if (!busy) setDataRestorePreview(undefined);
               }}>
-                <section ref={appModalDialogRef} className="profile-form-dialog profile-form-dialog--compact" role="dialog" aria-modal="true" aria-label={t("Restore AgentEnv data")} onClick={(event) => event.stopPropagation()}>
-                  <header className="profile-dialog-header">
-                    <div>
-                      <div className="section-title">{t("Restore AgentEnv data")}</div>
-                      <p className="muted">{t("Replace current Profiles, Library resources, settings, deployment state, and recovery history.")}</p>
+                <section ref={appModalDialogRef} className="profile-form-dialog profile-form-dialog--compact data-restore-dialog ui-dialog-shell" role="dialog" aria-modal="true" aria-label={t("Restore AgentEnv data")} onClick={(event) => event.stopPropagation()}>
+                  <header className="profile-dialog-header ui-dialog-header">
+                    <div className="ui-dialog-header__copy">
+                      <div className="section-title ui-dialog-title">{t("Restore AgentEnv data")}</div>
+                      <p className="muted ui-dialog-description">{t("Replace current Profiles, Library resources, settings, deployment state, and recovery history.")}</p>
                     </div>
                   </header>
-                  <div className="data-restore-summary">
+                  <div className="data-restore-summary ui-dialog-body">
                     <span><strong>{t("Created")}</strong>{formatDate(dataRestorePreview.createdAt)}</span>
                     <span><strong>{t("Format")}</strong>{t("Version {{version}}", { version: dataRestorePreview.formatVersion })}</span>
                     <span><strong>{t("Contents")}</strong>{t("{{count}} top-level items", { count: dataRestorePreview.topLevelItemCount })}</span>
                     <code title={dataRestorePreview.path}>{dataRestorePreview.path}</code>
                     <p>{t("A safety backup of the current data will be created before replacement.")}</p>
                   </div>
-                  <footer className="preview-actions">
+                  <footer className="preview-actions ui-dialog-footer">
                     <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={() => setDataRestorePreview(undefined)}>{t("Cancel")}</button>
                     <button className="danger-action" type="button" disabled={busy} onClick={() => void restoreAgentEnvData()}>{t("Restore data")}</button>
                   </footer>
@@ -5314,15 +5314,15 @@ const AppContent = ({
               onClick={(event) => event.stopPropagation()}
             >
               <header className="profile-dialog-header">
-                <div>
-                  <div className="section-title">
+                <div className="ui-dialog-header__copy">
+                  <div className="section-title ui-dialog-title">
                     {t(
                       selectedSkillImportConflict.match === "id"
                         ? "A Skill with this Library ID already exists"
                         : "A Skill with this name already exists"
                     )}
                   </div>
-                  <p className="muted">
+                  <p className="muted ui-dialog-description">
                     {selectedSkillImportConflict.sourceUpdateAvailable
                       ? t("The content matches, and the incoming Skill adds a tracked online source.")
                       : selectedSkillImportConflict.identical
