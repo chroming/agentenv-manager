@@ -87,4 +87,48 @@ describe("ProjectSkillDiscoveryPanel", () => {
     expect(await screen.findByText("Import failed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
+
+  it("imports every ready Skill and preserves the ZIP as one-time provenance", async () => {
+    const result = {
+      ...scanResult,
+      candidates: [
+        scanResult.candidates[0],
+        {
+          ...scanResult.candidates[0],
+          id: "docs",
+          name: "Docs",
+          path: "/tmp/archive/docs",
+          relativePath: "docs"
+        }
+      ]
+    };
+    const onScan = vi.fn().mockResolvedValue(result);
+    const onImport = vi.fn().mockResolvedValue(true);
+    render(
+      <ProjectSkillDiscoveryPanel
+        rootPath="/tmp/extracted"
+        sourceKind="archive"
+        sourcePath="/tmp/skills.zip"
+        onScan={onScan}
+        onImport={onImport}
+      />
+    );
+
+    await screen.findByText("Skills in this ZIP");
+    fireEvent.click(screen.getByRole("button", { name: "Import all" }));
+
+    await waitFor(() => expect(onImport).toHaveBeenCalledTimes(2));
+    expect(onImport).toHaveBeenNthCalledWith(
+      1,
+      "/tmp/project/.agents/skills/review",
+      undefined,
+      { kind: "local", locator: "/tmp/skills.zip", subpath: ".agents/skills/review" }
+    );
+    expect(onImport).toHaveBeenNthCalledWith(
+      2,
+      "/tmp/archive/docs",
+      undefined,
+      { kind: "local", locator: "/tmp/skills.zip", subpath: "docs" }
+    );
+  });
 });

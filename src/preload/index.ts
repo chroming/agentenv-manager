@@ -26,6 +26,8 @@ const api: AgentEnvApi = {
   openContextMenu: (items) => ipcRenderer.invoke("menu:open-context", items),
   copyText: (text) => ipcRenderer.invoke("clipboard:write-text", text),
   selectSkillFolder: () => ipcRenderer.invoke("dialog:select-skill-folder"),
+  selectLocalSkillSource: () => ipcRenderer.invoke("dialog:select-local-skill-source"),
+  releaseSkillArchive: (token) => ipcRenderer.invoke("skills:release-archive", token),
   selectTargetConfigRoot: (targetId) => ipcRenderer.invoke("dialog:select-target-config-root", targetId),
   listSupportedTargets: () => ipcRenderer.invoke("targets:list-supported"),
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
@@ -33,6 +35,8 @@ const api: AgentEnvApi = {
   listNativeMcpConnections: () =>
     ipcRenderer.invoke("targets:list-native-mcps"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),
+  listSkillFiles: (id) => ipcRenderer.invoke("skills:list-files", id),
+  readSkillFile: (input) => ipcRenderer.invoke("skills:read-file", input),
   scanSkillInventory: () => ipcRenderer.invoke("skills:scan-inventory"),
   listSkillCleanupBackups: () => ipcRenderer.invoke("skills:list-cleanup-backups"),
   ignoreSkillGroup: (skillKey) => ipcRenderer.invoke("skills:ignore-group", skillKey),

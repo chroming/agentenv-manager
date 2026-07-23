@@ -5,27 +5,39 @@ import {
   RefreshCw,
   TriangleAlert
 } from "lucide-react";
-import type { ProjectSkillScanResult, SkillSourceCollectionRef } from "../../shared/types";
+import type {
+  ProjectSkillScanResult,
+  SkillSourceCollectionRef,
+  SkillUpstream
+} from "../../shared/types";
 import { useI18n } from "../i18n";
 import { Button } from "./ui";
 import { OverflowTooltip } from "./OverflowTooltip";
 
 interface ProjectSkillDiscoveryPanelProps {
   rootPath: string;
+  sourceKind?: "folder" | "archive";
+  sourcePath?: string;
   onScan(rootPath: string): Promise<ProjectSkillScanResult>;
-  onImport(path: string, sourceCollection: SkillSourceCollectionRef): Promise<boolean>;
+  onImport(
+    path: string,
+    sourceCollection?: SkillSourceCollectionRef,
+    upstream?: SkillUpstream
+  ): Promise<boolean>;
 }
 
 export const ProjectSkillDiscoveryPanel = ({
   rootPath,
+  sourceKind = "folder",
+  sourcePath = rootPath,
   onScan,
   onImport
 }: ProjectSkillDiscoveryPanelProps) => {
   const { formatDate, t } = useI18n();
   const [result, setResult] = useState<ProjectSkillScanResult>();
-  const [operation, setOperation] = useState<"scanning">();
+  const [operation, setOperation] = useState<"scanning" | "importing-all">();
   const [importingPath, setImportingPath] = useState<string>();
-  const [importFailure, setImportFailure] = useState<{ path: string; message: string }>();
+  const [importFailures, setImportFailures] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const onScanRef = useRef(onScan);
   const scanRequestRef = useRef(0);
@@ -38,7 +50,6 @@ export const ProjectSkillDiscoveryPanel = ({
     const requestId = ++scanRequestRef.current;
     setOperation("scanning");
     setError("");
-    setImportFailure(undefined);
     try {
       const nextResult = await onScanRef.current(rootPath);
       if (requestId === scanRequestRef.current) setResult(nextResult);
@@ -51,22 +62,60 @@ export const ProjectSkillDiscoveryPanel = ({
     }
   }, [rootPath]);
 
-  const importCandidate = async (path: string, relativePath: string) => {
-    if (!result?.sourceScope) return;
+  const importCandidate = async (
+    path: string,
+    relativePath: string,
+    refreshAfter = true
+  ) => {
+    if (!result) return false;
     setImportingPath(path);
-    setImportFailure(undefined);
+    setImportFailures((current) => {
+      const next = { ...current };
+      delete next[path];
+      return next;
+    });
     try {
-      const imported = await onImport(path, {
-        ...result.sourceScope,
-        sourceSubpath: relativePath === "." ? "" : relativePath
-      });
-      if (imported) await scan();
+      const sourceSubpath = relativePath === "." ? "" : relativePath;
+      const imported = sourceKind === "archive"
+        ? await onImport(path, undefined, {
+            kind: "local",
+            locator: sourcePath,
+            subpath: sourceSubpath
+          })
+        : result.sourceScope
+          ? await onImport(path, {
+              ...result.sourceScope,
+              sourceSubpath
+            })
+          : false;
+      if (imported && refreshAfter) await scan();
+      return imported;
     } catch (unknownError) {
-      setImportFailure({
-        path,
-        message: unknownError instanceof Error ? unknownError.message : String(unknownError)
-      });
+      setImportFailures((current) => ({
+        ...current,
+        [path]: unknownError instanceof Error ? unknownError.message : String(unknownError)
+      }));
+      return false;
     } finally {
+      setImportingPath(undefined);
+    }
+  };
+
+  const importAll = async () => {
+    if (!result || operation || importingPath) return;
+    const candidates = result.candidates.filter(
+      (candidate) => candidate.status === "ready" || candidate.status === "changed"
+    );
+    if (candidates.length === 0) return;
+    setOperation("importing-all");
+    setImportFailures({});
+    try {
+      for (const candidate of candidates) {
+        await importCandidate(candidate.path, candidate.relativePath, false);
+      }
+      await scan();
+    } finally {
+      setOperation(undefined);
       setImportingPath(undefined);
     }
   };
@@ -74,20 +123,43 @@ export const ProjectSkillDiscoveryPanel = ({
   useEffect(() => {
     setResult(undefined);
     setError("");
+    setImportFailures({});
     void scan();
     return () => {
       scanRequestRef.current += 1;
     };
   }, [scan]);
 
+  const importableCount = result?.candidates.filter(
+    (candidate) => candidate.status === "ready" || candidate.status === "changed"
+  ).length ?? 0;
+
   return (
     <div className="project-skill-discovery">
       <div className="project-skill-discovery__toolbar">
         <div>
-          <strong>{t("Skills in this folder")}</strong>
-          <small>{t("This folder becomes a source. AgentEnv never changes its contents.")}</small>
+          <strong>{t(sourceKind === "archive" ? "Skills in this ZIP" : "Skills in this folder")}</strong>
+          <small>
+            {t(
+              sourceKind === "archive"
+                ? "ZIP contents are copied into Library. The archive is never changed."
+                : "This folder becomes a source. AgentEnv never changes its contents."
+            )}
+          </small>
         </div>
         <div>
+          {importableCount > 0 ? (
+            <Button
+              disabled={Boolean(operation) || Boolean(importingPath)}
+              icon={operation === "importing-all"
+                ? <LoaderCircle className="is-spinning" size={15} />
+                : undefined}
+              onClick={() => void importAll()}
+              variant="primary"
+            >
+              {t(operation === "importing-all" ? "Importing..." : "Import all")}
+            </Button>
+          ) : null}
           <Button
             disabled={Boolean(operation) || Boolean(importingPath)}
             icon={operation === "scanning"
@@ -100,7 +172,7 @@ export const ProjectSkillDiscoveryPanel = ({
         </div>
       </div>
 
-      <OverflowTooltip className="project-root-path" text={rootPath} />
+      <OverflowTooltip className="project-root-path" text={sourcePath} />
 
       {error ? (
         <div className="inline-state inline-state--error" role="alert">
@@ -138,7 +210,8 @@ export const ProjectSkillDiscoveryPanel = ({
             ) : result.candidates.map((candidate) => {
               const importable = candidate.status === "ready" || candidate.status === "changed";
               const importing = importingPath === candidate.path;
-              const failed = importFailure?.path === candidate.path;
+              const failure = importFailures[candidate.path];
+              const failed = Boolean(failure);
               return (
                 <div className={`project-skill-row${failed ? " has-error" : ""}`} key={candidate.path}>
                   <span className={`project-skill-row__state is-${failed ? "invalid" : candidate.status}`} aria-hidden="true">
@@ -153,7 +226,7 @@ export const ProjectSkillDiscoveryPanel = ({
                       <OverflowTooltip
                         className="project-skill-row__error"
                         displayText={t("Import failed")}
-                        text={importFailure.message}
+                        text={failure}
                       />
                     ) : candidate.description ? (
                       <OverflowTooltip className="project-skill-row__description" text={candidate.description} />
@@ -175,9 +248,9 @@ export const ProjectSkillDiscoveryPanel = ({
                         ? t("Importing...")
                         : failed
                           ? t("Retry")
-                        : candidate.status === "changed"
-                          ? t("Review changes")
-                          : t("Import")}
+                          : candidate.status === "changed"
+                            ? t("Review changes")
+                            : t("Import")}
                     </Button>
                   ) : (
                     <OverflowTooltip

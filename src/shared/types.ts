@@ -67,12 +67,16 @@ export interface AgentEnvApi {
   openContextMenu(items: DesktopContextMenuItem[]): Promise<string | undefined>;
   copyText(text: string): Promise<void>;
   selectSkillFolder(): Promise<string | undefined>;
+  selectLocalSkillSource(): Promise<LocalSkillSourceSelection | undefined>;
+  releaseSkillArchive(token: string): Promise<void>;
   selectTargetConfigRoot(targetId: string): Promise<string | undefined>;
   listSupportedTargets(): Promise<TargetDescriptor[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
   listNativeMcpConnections(): Promise<NativeMcpInspection>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
+  listSkillFiles(id: string): Promise<SkillFileNode[]>;
+  readSkillFile(input: SkillFileReadInput): Promise<SkillFileContent>;
   scanSkillInventory(): Promise<SkillInventoryEntry[]>;
   listSkillCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
   ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
@@ -155,6 +159,33 @@ export interface AgentEnvApi {
   selectDataRestore(): Promise<DataRestorePreview | undefined>;
   restoreDataBackup(path: string): Promise<{ safetyBackupPath: string }>;
   adoptTargetChanges(profileId: string, targetId: string): Promise<AdoptTargetChangesResult>;
+}
+
+export interface LocalSkillSourceSelection {
+  kind: "folder" | "archive";
+  path: string;
+  rootPath: string;
+  archiveToken?: string;
+}
+
+export interface SkillFileNode {
+  kind: "directory" | "file";
+  name: string;
+  path: string;
+  sizeBytes?: number;
+  children?: SkillFileNode[];
+}
+
+export interface SkillFileReadInput {
+  id: string;
+  path: string;
+}
+
+export interface SkillFileContent {
+  path: string;
+  kind: "text" | "binary" | "too-large";
+  sizeBytes: number;
+  content?: string;
 }
 
 export type StartupFailureKind =

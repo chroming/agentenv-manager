@@ -298,7 +298,7 @@ export const createTargetCaptureService = ({
       id: randomUUID(),
       targetId,
       targetName: adapter.descriptor.name,
-      suggestedName: `${adapter.descriptor.name} Current`,
+      suggestedName: adapter.descriptor.name,
       createdAt: new Date().toISOString(),
       resources,
       warnings,

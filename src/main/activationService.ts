@@ -870,10 +870,22 @@ export const createActivationService = ({
     inventory: SkillInventoryEntry[],
     skillLibrary: SkillLibraryEntry[],
     targetPaths: TargetPaths,
-    deferredSharedPaths: ReadonlySet<string>
+    deferredSharedPaths: ReadonlySet<string>,
+    globallyDisabledSkillIds: ReadonlySet<string>
   ) => {
     const references = profile.resources.skills.filter((reference) => reference.enabled);
     const disabledReferences = profile.resources.skills.filter((reference) => !reference.enabled);
+    const disabledReferencesFor = (skill: SkillInventoryEntry) =>
+      disabledReferences.filter(
+        (reference) =>
+          reference.libraryId === skill.libraryId ||
+          normalizeSkillKey(reference.targetName) ===
+            normalizeSkillKey(skill.deploymentName ?? skill.id) ||
+          normalizeSkillKey(
+            skillLibrary.find((candidate) => candidate.id === reference.libraryId)?.name ??
+              reference.targetName
+          ) === normalizeSkillKey(skill.runtimeName ?? skill.name)
+      );
     const desired = desiredSkillTargets(profile);
     const desiredRuntimeNames = new Set(
       desiredRuntimeSkills(profile, skillLibrary).map((item) =>
@@ -913,15 +925,8 @@ export const createActivationService = ({
       ) {
         return false;
       }
-      return disabledReferences.some(
-        (reference) =>
-          reference.libraryId === skill.libraryId ||
-          normalizeSkillKey(reference.targetName) ===
-            normalizeSkillKey(skill.deploymentName ?? skill.id) ||
-          normalizeSkillKey(
-            skillLibrary.find((candidate) => candidate.id === reference.libraryId)?.name ??
-              reference.targetName
-          ) === normalizeSkillKey(skill.runtimeName ?? skill.name)
+      return disabledReferencesFor(skill).some(
+        (reference) => !globallyDisabledSkillIds.has(reference.libraryId)
       );
     });
     const conflictIssues = conflicts.map((skill) => {
@@ -1080,7 +1085,8 @@ export const createActivationService = ({
           inventory,
           skillLibrary,
           targetPaths,
-          new Set(skillDeploymentPlan.sharedPaths.map((path) => resolve(path)))
+          new Set(skillDeploymentPlan.sharedPaths.map((path) => resolve(path))),
+          new Set(disabledLibrarySkills)
         )
       : {
           profile: deploymentProfile,
@@ -1766,10 +1772,12 @@ export const createActivationService = ({
           throw new Error(`${adapter.descriptor.name} requires recovery before migration.`);
         }
         if (
-          JSON.stringify([...preparation.sharedPaths].map((path) => resolve(path)).sort()) !==
+          JSON.stringify([...(preparation.sharedPaths ?? [])].map((path) => resolve(path)).sort()) !==
           JSON.stringify(normalizedSharedPaths)
         ) {
-          throw new Error(`${adapter.descriptor.name} was prepared for a different shared copy.`);
+          throw new Error(
+            `${adapter.descriptor.name}'s saved preparation no longer matches this shared copy. Apply its current Profile again, then retry replacement.`
+          );
         }
 
         const sourceProfile = await profileStore.readProfile(stateFile.state.activeProfileId);

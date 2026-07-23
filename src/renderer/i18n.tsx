@@ -1137,6 +1137,7 @@ Object.assign(zhCN, {
   "Review again": "重新检查",
   "Replace shared Skill copy": "替换共享技能副本",
   "Replace shared copy": "替换共享副本",
+  "Replace shared copies": "替换共享副本",
   "Replacing...": "正在替换...",
   "Each Target will use its saved Profile instead of the shared {{name}} copy.": "每个目标将改用已保存的配置方案，不再使用共享的 {{name}} 副本。",
   "After replacement": "替换后",
@@ -1664,6 +1665,29 @@ Object.assign(zhCN, {
   "Rename source {{name}}": "重命名来源 {{name}}",
   "Source name": "来源名称",
   "Source name updated": "来源名称已更新"
+});
+
+Object.assign(zhCN, {
+  "Folder or ZIP": "文件夹或 ZIP",
+  "Local Skill source path": "本地技能来源路径",
+  "No source selected": "尚未选择来源",
+  "Choose local Skill source": "选择本地技能来源",
+  "Choose source": "选择来源",
+  "Skills in this ZIP": "ZIP 中的技能",
+  "ZIP contents are copied into Library. The archive is never changed.": "ZIP 内容会复制到资源库，原压缩包不会被修改。",
+  "Import all": "全部导入",
+  "Files in {{name}}": "{{name}} 中的文件",
+  "Read-only Library files": "只读资源库文件",
+  "Skill file tree": "技能文件树",
+  "File preview": "文件预览",
+  "Loading files": "正在加载文件",
+  "No previewable files": "没有可预览的文件",
+  "Select a file": "选择一个文件",
+  "Loading preview": "正在加载预览",
+  "Binary files cannot be previewed": "无法预览二进制文件",
+  "This file is too large to preview": "文件过大，无法预览",
+  "archive": "压缩包",
+  "importing-all": "正在全部导入"
 });
 
 const zhTW: Record<string, string> = {

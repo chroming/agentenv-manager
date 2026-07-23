@@ -7,6 +7,7 @@ import {
   shell,
   type MenuItemConstructorOptions
 } from "electron";
+import { stat } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import type { ActivationService } from "./activationService";
 import type { BackupMaintenanceService } from "./backupMaintenanceService";
@@ -53,6 +54,8 @@ import type { MutationCoordinator } from "./mutationCoordinator";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { parseDesktopContextMenuItems } from "../shared/desktopContextMenu";
 import { pathEntryExists } from "./fileUtils";
+import { createSkillArchiveService } from "./skillArchiveService";
+import { createSkillFileBrowser } from "./skillFileBrowser";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -104,6 +107,8 @@ export const registerIpcHandlers = ({
   workspaceSyncService,
   cancelRepositoryOperations
 }: IpcServices) => {
+  const skillArchiveService = createSkillArchiveService();
+  const skillFileBrowser = createSkillFileBrowser(paths, settingsStore);
   const handleMutation = (
     channel: string,
     handler: (event: any, ...args: any[]) => any
@@ -252,6 +257,28 @@ export const registerIpcHandlers = ({
 
     return result.canceled ? undefined : result.filePaths[0];
   });
+  ipcMain.handle("dialog:select-local-skill-source", async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Select Skill folder or ZIP",
+      properties: ["openFile", "openDirectory"] as Array<"openFile" | "openDirectory">,
+      filters: [{ name: "Skill sources", extensions: ["zip"] }]
+    };
+    const result = window
+      ? await dialog.showOpenDialog(window, options)
+      : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths[0]) return undefined;
+    const selectedPath = result.filePaths[0];
+    const selectedStats = await stat(selectedPath);
+    if (selectedStats.isDirectory()) {
+      const path = resolve(selectedPath);
+      return { kind: "folder", path, rootPath: path };
+    }
+    return skillArchiveService.prepare(selectedPath);
+  });
+  ipcMain.handle("skills:release-archive", (_event, token: unknown) =>
+    skillArchiveService.release(String(token))
+  );
   ipcMain.handle("dialog:select-target-config-root", async (event, targetId: unknown) => {
     const id = parseId(targetId, "target id");
     const target = targetRegistry.get(id).descriptor;
@@ -308,6 +335,15 @@ export const registerIpcHandlers = ({
     };
   });
   ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
+  ipcMain.handle("skills:list-files", (_event, id: unknown) =>
+    skillFileBrowser.list(parseId(id, "skill id"))
+  );
+  ipcMain.handle("skills:read-file", (_event, input: unknown) => {
+    if (!input || typeof input !== "object") throw new Error("Invalid Skill file selection");
+    const candidate = input as { id?: unknown; path?: unknown };
+    if (typeof candidate.path !== "string") throw new Error("Invalid Skill file path");
+    return skillFileBrowser.read(parseId(candidate.id, "skill id"), candidate.path);
+  });
   ipcMain.handle("skills:scan-inventory", async () => {
     await waitForAutomationBackgroundDelay();
     const targets = await targetDiscoveryService.listTargets();

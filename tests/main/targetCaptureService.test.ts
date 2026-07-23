@@ -72,6 +72,7 @@ describe("target capture service v2", () => {
 
     const preview = await service.previewTarget("opencode");
 
+    expect(preview.suggestedName).toBe("OpenCode");
     expect(preview.errors).toEqual([]);
     expect(preview.resources).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: "instructions", action: "include" }),

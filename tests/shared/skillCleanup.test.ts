@@ -355,7 +355,13 @@ describe("skill cleanup groups", () => {
 
     const [waiting] = buildSkillCleanupGroups([sharedCopy, openCodeCopy], {
       installedTargetIds: ["opencode", "codex"],
-      preparedTargetIdsBySkill: { reviewer: ["opencode"] }
+      preparedTargetsBySkill: {
+        reviewer: [{
+          targetId: "opencode",
+          libraryId: "reviewer",
+          sharedPaths: ["/tmp/home/.agents/skills/reviewer"]
+        }]
+      }
     });
     expect(waiting.sharedMigration).toEqual({
       state: "waiting",
@@ -373,7 +379,13 @@ describe("skill cleanup groups", () => {
 
     const [ready] = buildSkillCleanupGroups([sharedCopy, openCodeCopy, codexCopy], {
       installedTargetIds: ["opencode", "codex"],
-      preparedTargetIdsBySkill: { reviewer: ["opencode", "codex"] }
+      preparedTargetsBySkill: {
+        reviewer: ["opencode", "codex"].map((targetId) => ({
+          targetId,
+          libraryId: "reviewer",
+          sharedPaths: ["/tmp/home/.agents/skills/reviewer"]
+        }))
+      }
     });
     expect(ready.sharedMigration).toMatchObject({ state: "ready", pendingConsumers: [] });
     expect(ready.presentation).toEqual({
@@ -381,6 +393,25 @@ describe("skill cleanup groups", () => {
       action: "review-replacement"
     });
     expect(ready).toMatchObject({ resolution: "manual", bucket: "ready" });
+
+    const [stale] = buildSkillCleanupGroups([sharedCopy, openCodeCopy, codexCopy], {
+      installedTargetIds: ["opencode", "codex"],
+      preparedTargetsBySkill: {
+        reviewer: ["opencode", "codex"].map((targetId) => ({
+          targetId,
+          libraryId: "reviewer",
+          sharedPaths: ["/tmp/home/.agents/skills/older-reviewer"]
+        }))
+      }
+    });
+    expect(stale.sharedMigration).toMatchObject({
+      state: "waiting",
+      pendingConsumers: ["codex", "opencode"]
+    });
+    expect(stale.presentation).toEqual({
+      state: "shared-copy-in-use",
+      action: "open-profiles"
+    });
   });
 
   it("distinguishes unimported, retained, external, and conflicting shared copies", () => {

@@ -220,6 +220,67 @@ describe("activation service v2", () => {
     );
   });
 
+  it("does not block Trae Apply on external copies of a globally disabled Library Skill", async () => {
+    const { paths, profileStore, service, skillLibraryStore } = await makeEnv();
+    const source = join(root, "source", "ppe-debug");
+    const traeDir = join(paths.homeDir, ".trae");
+    const externalPaths = [
+      join(paths.homeDir, ".coco", "skills", "ppe-debug"),
+      join(paths.homeDir, ".trae-cn", "skills", "ppe-debug")
+    ];
+    await mkdir(source, { recursive: true });
+    await writeFile(
+      join(source, "SKILL.md"),
+      "---\nname: ppe-debug\ndescription: Debug PPE.\n---\n# PPE Debug\n"
+    );
+    await skillLibraryStore.importSkill({ sourcePath: source, id: "ppe-debug" });
+    await skillLibraryStore.setAvailability({ id: "ppe-debug", enabled: false });
+    for (const externalPath of externalPaths) {
+      await mkdir(externalPath, { recursive: true });
+      await cp(source, externalPath, { recursive: true });
+    }
+    await mkdir(traeDir, { recursive: true });
+    await writeFile(join(traeDir, "AGENTS.md"), "# Existing Trae guidance\n");
+    await profileStore.saveProfile({
+      manifest: {
+        id: "trae-captured",
+        name: "Trae CLI",
+        description: "Captured Trae environment",
+        preferredTargetId: "trae-cli",
+        version: 2
+      },
+      instructions: "# Managed Trae guidance\n",
+      resources: {
+        skills: [{ libraryId: "ppe-debug", targetName: "ppe-debug", enabled: true }],
+        mcpByTarget: {
+          "trae-cli": { mode: "ignore", selections: [] }
+        }
+      }
+    });
+
+    const preview = await service.previewProfile("trae-captured", "trae-cli");
+
+    expect(blockingMessages(preview.issues)).toEqual([]);
+    expect(noticeMessages(preview.issues)).toContain(
+      "Library Skill ppe-debug is globally disabled and will not be applied"
+    );
+    expect(preview.issues.filter(({ resourceId }) => resourceId === "ppe-debug"))
+      .not.toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining("Cannot turn off Skill")
+        })
+      ]));
+    await expect(service.applyProfile("trae-captured", preview.id)).resolves.toEqual(
+      expect.objectContaining({ ok: true })
+    );
+    await expect(readFile(join(traeDir, "AGENTS.md"), "utf8"))
+      .resolves.toBe("# Managed Trae guidance\n");
+    for (const externalPath of externalPaths) {
+      await expect(readFile(join(externalPath, "SKILL.md"), "utf8"))
+        .resolves.toContain("# PPE Debug");
+    }
+  });
+
   it("accepts a semantically identical AgentEnv state serialization", async () => {
     const { paths, service } = await makeEnv();
     await writeCodexLiveFiles(paths);

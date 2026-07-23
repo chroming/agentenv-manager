@@ -70,6 +70,25 @@ export interface SharedSkillMigration {
   libraryId?: string;
 }
 
+export interface SkillCleanupPreparedTarget {
+  targetId: string;
+  libraryId?: string;
+  sharedPaths?: readonly string[];
+}
+
+const comparablePaths = (paths: readonly string[] = []) =>
+  [...new Set(paths.map((path) => path.length > 1 ? path.replace(/[\\/]+$/, "") : path))].sort();
+
+export const isSkillCleanupPreparationCurrent = (
+  preparation: SkillCleanupPreparedTarget,
+  libraryId: string | undefined,
+  sharedPaths: readonly string[]
+) =>
+  Boolean(libraryId) &&
+  preparation.libraryId === libraryId &&
+  JSON.stringify(comparablePaths(preparation.sharedPaths)) ===
+    JSON.stringify(comparablePaths(sharedPaths));
+
 export interface SkillCleanupGroup {
   skillKey: string;
   items: SkillInventoryEntry[];
@@ -88,7 +107,9 @@ export const buildSkillCleanupGroups = (
   skillInventory: SkillInventoryEntry[],
   options: {
     installedTargetIds?: readonly string[];
-    preparedTargetIdsBySkill?: Readonly<Record<string, readonly string[]>>;
+    preparedTargetsBySkill?: Readonly<
+      Record<string, readonly SkillCleanupPreparedTarget[]>
+    >;
   } = {}
 ): SkillCleanupGroup[] => {
   const byKey = new Map<string, SkillInventoryEntry[]>();
@@ -147,7 +168,18 @@ export const buildSkillCleanupGroups = (
       const sharedLibraryItem = sharedItems.find(
         (item) => item.libraryId && item.contentMatchesLibrary === true
       );
-      const preparedTargets = new Set(options.preparedTargetIdsBySkill?.[skillKey] ?? []);
+      const sharedPaths = [...new Set(sharedItems.map((item) => item.path))].sort();
+      const preparedTargets = new Set(
+        (options.preparedTargetsBySkill?.[skillKey] ?? [])
+          .filter((preparation) =>
+            isSkillCleanupPreparationCurrent(
+              preparation,
+              sharedLibraryItem?.libraryId,
+              sharedPaths
+            )
+          )
+          .map((preparation) => preparation.targetId)
+      );
       const pendingConsumers = consumers.filter(
         (targetId) => !preparedTargets.has(targetId)
       );
@@ -176,7 +208,7 @@ export const buildSkillCleanupGroups = (
                       : "ready",
             consumers,
             pendingConsumers,
-            paths: [...new Set(sharedItems.map((item) => item.path))].sort(),
+            paths: sharedPaths,
             libraryId: sharedLibraryItem?.libraryId
           };
       const hasLibraryCopy = activeItems.some((item) => Boolean(item.libraryId));

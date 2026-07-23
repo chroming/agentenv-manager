@@ -42,6 +42,7 @@
   line-height: 1.45;
   margin: 0;
   overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .cleanup-bucket-heading {

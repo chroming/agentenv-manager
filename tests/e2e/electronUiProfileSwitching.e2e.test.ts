@@ -33,6 +33,7 @@ import {
   expectTopmost,
   findVisibleTextLayoutDefects
 } from "./layoutAssertions";
+import { createStoredZip } from "../helpers/createStoredZip";
 
 let root = "";
 let app: ElectronApplication | undefined;
@@ -620,10 +621,17 @@ const launchApp = async (
   await writeUnmanagedTargetSkill(opencodeDir);
   if (options.projectSkillFixture) {
     const projectSkillDir = join(projectSkillRoot, "skills", "project-release");
+    const projectDocsDir = join(projectSkillRoot, "skills", "project-docs");
     await mkdir(projectSkillDir, { recursive: true });
+    await mkdir(projectDocsDir, { recursive: true });
     await writeFile(
       join(projectSkillDir, "SKILL.md"),
       "---\nname: Project Release\ndescription: Release checks from a project checkout.\nversion: 2.1.0\n---\n\n# Project Release\n",
+      "utf8"
+    );
+    await writeFile(
+      join(projectDocsDir, "SKILL.md"),
+      "---\nname: Project Docs\ndescription: Documentation checks from a project checkout.\nversion: 1.0.0\n---\n\n# Project Docs\n",
       "utf8"
     );
   }
@@ -691,8 +699,11 @@ const selectProfile = async (page: Page, name: string) => {
     .getByRole("button", { name: "Profiles", exact: true })
     .click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-  await page.getByRole("button", { name: new RegExp(name) }).click();
-  await page.getByRole("heading", { name }).waitFor({ state: "visible" });
+  await page
+    .getByRole("group", { name: `Profile ${name}`, exact: true })
+    .locator(".profile-row__content")
+    .click();
+  await page.getByRole("heading", { name, exact: true }).waitFor({ state: "visible" });
   await page
     .locator(".profile-editor-surface .profile-composer:not(.profile-composer--loading)")
     .waitFor({ state: "visible" });
@@ -922,17 +933,17 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Import skills" }).click();
     const dialog = page.getByRole("dialog", { name: "Import skills" });
-    await dialog.getByRole("button", { name: "Choose local skill folder" }).click();
-    const projectSkillRow = dialog.locator(".project-skill-row").filter({ hasText: "Project Release" });
-    await projectSkillRow.waitFor({ state: "visible" });
-    await projectSkillRow.getByRole("button", { name: "Import", exact: true }).click();
+    await dialog.getByRole("button", { name: "Choose local Skill source" }).click();
+    await dialog.getByText("Project Release", { exact: true }).waitFor({ state: "visible" });
+    await dialog.getByRole("button", { name: "Import all", exact: true }).click();
 
     await expect.poll(() => fileExists(join(appDataRoot, "skills-library", "project-release", "SKILL.md"))).toBe(true);
-    await expect.poll(() => dialog.getByText("In Library", { exact: true }).count()).toBe(1);
+    await expect.poll(() => fileExists(join(appDataRoot, "skills-library", "project-docs", "SKILL.md"))).toBe(true);
+    await expect.poll(() => dialog.getByText("In Library", { exact: true }).count()).toBe(2);
     expect(await readFile(sourcePath, "utf8")).toBe(sourceBefore);
     expect((await lstat(sourceDirectory)).isSymbolicLink()).toBe(false);
     await expectNoHorizontalOverflow(page, [".library-import-dialog"]);
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await page.getByRole("tab", { name: "By source" }).click();
     await expectNoHorizontalOverflow(page, [".editor-panel", ".skill-source-view"]);
     await page.getByRole("tab", { name: /Manual only/ }).click();
@@ -958,6 +969,65 @@ describe("Electron UI profile switching e2e", () => {
         automaticChecks: true
       })
     );
+  }, 30_000);
+
+  it("imports Skills from a ZIP and browses Library files read-only", async () => {
+    const { appDataRoot, page } = await launchApp();
+    await resizeAppWindow(page, 920, 620);
+    const archivePath = join(root, "portable-skills.zip");
+    await writeFile(archivePath, createStoredZip([
+      {
+        path: "zip-review/SKILL.md",
+        content: "---\nname: ZIP Review\ndescription: Imported from an archive.\nversion: 1.0.0\n---\n\n# ZIP Review\n"
+      },
+      {
+        path: "zip-review/references/checklist.md",
+        content: "# Archive Checklist\n"
+      }
+    ]));
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      archivePath
+    );
+
+    await page.getByRole("button", { name: "Import skills" }).click();
+    const importDialog = page.getByRole("dialog", { name: "Import skills" });
+    await importDialog.getByRole("button", { name: "Choose local Skill source" }).click();
+    await importDialog.getByText("Skills in this ZIP", { exact: true }).waitFor({ state: "visible" });
+    await importDialog.getByRole("button", { name: "Import all", exact: true }).click();
+    await expect.poll(() =>
+      fileExists(join(appDataRoot, "skills-library", "zip-review", "SKILL.md"))
+    ).toBe(true);
+    const metadata = await readJson<{
+      source?: string;
+      updateCheckEnabled?: boolean;
+      upstream?: { locator?: string; subpath?: string };
+    }>(join(appDataRoot, "skills-library", "zip-review", ".agentenv-skill.json"));
+    expect(metadata).toMatchObject({
+      source: archivePath,
+      updateCheckEnabled: false,
+      upstream: { locator: archivePath, subpath: "zip-review" }
+    });
+    await importDialog.getByRole("button", { name: "Close", exact: true }).click();
+
+    const row = page.getByRole("group", { name: "Library item zip-review" });
+    await row.waitFor({ state: "visible" });
+    await row.locator(".skill-title-stack").click();
+    const filesDialog = page.getByRole("dialog", { name: "Files in ZIP Review" });
+    await filesDialog.waitFor({ state: "visible" });
+    await filesDialog.getByRole("button", { name: "SKILL.md" }).waitFor({ state: "visible" });
+    await expect.poll(() =>
+      filesDialog.locator(".skill-file-preview__content").textContent()
+    ).toContain("ZIP Review");
+    await expectNoHorizontalOverflow(page, [".skill-file-browser", ".skill-file-browser__body"]);
+    await page.keyboard.press("Escape");
+    await filesDialog.waitFor({ state: "hidden" });
   }, 30_000);
 
   it("restores a missing managed OpenCode Skill from one fresh Preview", async () => {
@@ -1091,15 +1161,15 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("tablist", { name: "Profile sections" }).count()).toBe(0);
 
     await page.getByRole("button", { name: "Import skills" }).click();
-    expect(await page.getByLabel("Local skill folder path").count()).toBe(1);
+    expect(await page.getByLabel("Local Skill source path").count()).toBe(1);
     expect(await page.getByLabel("Repository address").count()).toBe(0);
     await page.getByRole("tab", { name: "Repository" }).click();
-    expect(await page.getByLabel("Local skill folder path").count()).toBe(0);
+    expect(await page.getByLabel("Local Skill source path").count()).toBe(0);
     await page
       .getByLabel("Repository address")
       .fill("https://github.com/acme/agent-skills/tree/main/skills/reviewer");
     expect(await page.getByRole("button", { name: "Scan", exact: true }).isEnabled()).toBe(true);
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
 
     await selectProfile(page, "UI OpenCode alpha");
     await expect.poll(() => applyActionButton(page, "OpenCode").count()).toBe(1);
@@ -4082,7 +4152,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Import skills" }).click();
     const importDialog = page.getByRole("dialog", { name: "Import skills" });
-    await page.getByRole("button", { name: "Choose local skill folder" }).waitFor({
+    await page.getByRole("button", { name: "Choose local Skill source" }).waitFor({
       state: "visible"
     });
     await expectInViewport(page, importDialog);
@@ -4112,9 +4182,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(drawerMetrics.clientHeight).toBeGreaterThanOrEqual(
       Math.min(drawerMetrics.scrollHeight, 360)
     );
-    await page.getByRole("button", { name: "Choose local skill folder" }).click();
+    await page.getByRole("button", { name: "Choose local Skill source" }).click();
     await expect
-      .poll(() => page.getByLabel("Local skill folder path").inputValue(), { timeout: 5_000 })
+      .poll(() => page.getByLabel("Local Skill source path").inputValue(), { timeout: 5_000 })
       .toBe(localSkillDir);
     const localSkillRow = importDialog.locator(".project-skill-row").filter({ hasText: "Path Reviewer" });
     await localSkillRow.waitFor({ state: "visible" });
@@ -4138,7 +4208,7 @@ describe("Electron UI profile switching e2e", () => {
       updateCheckEnabled: false,
       sourceCollection: { kind: "local", sourceSubpath: "" }
     });
-    await importDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await importDialog.getByRole("button", { name: "Close", exact: true }).click();
     await importDialog.waitFor({ state: "hidden" });
     await page
       .getByRole("group", { name: "Library item path-reviewer" })
@@ -4172,7 +4242,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Import skills" }).click();
-    await page.getByRole("button", { name: "Choose local skill folder" }).click();
+    await page.getByRole("button", { name: "Choose local Skill source" }).click();
     await page.locator(".project-skill-row")
       .filter({ hasText: "Shared Reviewer" })
       .getByRole("button", { name: "Import", exact: true })
@@ -4195,7 +4265,7 @@ describe("Electron UI profile switching e2e", () => {
     await conflict.getByRole("button", { name: "Save another Skill" }).click();
     await conflict.waitFor({ state: "hidden" });
     const importDialog = page.getByRole("dialog", { name: "Import skills" });
-    await importDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await importDialog.getByRole("button", { name: "Close", exact: true }).click();
     await importDialog.waitFor({ state: "hidden" });
 
     await page.getByRole("group", { name: "Library item shared-reviewer-alternative" })
@@ -4269,7 +4339,7 @@ describe("Electron UI profile switching e2e", () => {
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Import skills" }).click();
     const importDialog = page.getByRole("dialog", { name: "Import skills" });
-    await page.getByRole("button", { name: "Choose local skill folder" }).click();
+    await page.getByRole("button", { name: "Choose local Skill source" }).click();
     await expect.poll(() => importDialog.getByRole("status").textContent()).toContain(
       "back up this Agent copy"
     );
@@ -4534,6 +4604,9 @@ describe("Electron UI profile switching e2e", () => {
     cleanupGroup = page.getByRole("group", { name: `Cleanup group ${skillId}` });
     await expect.poll(() => cleanupGroup.textContent()).toContain("Ready");
     await expect.poll(() => cleanupGroup.textContent()).toContain("All consumer Agents are ready");
+    await expect(
+      page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).count()
+    ).resolves.toBe(1);
     for (const viewport of [
       { width: 1180, height: 728 },
       { width: 920, height: 620 }
@@ -4673,7 +4746,7 @@ describe("Electron UI profile switching e2e", () => {
 
     const assertCleanupLayout = async (stacked: boolean) => {
       const geometry = await page.getByRole("region", { name: "Environment skills" }).evaluate((drawer) => {
-        const heading = drawer.querySelector<HTMLElement>(".cleanup-section-heading")!;
+        const heading = drawer.querySelector<HTMLElement>(".cleanup-bucket-heading--ready")!;
         const headingCopy = heading.firstElementChild!.getBoundingClientRect();
         const autoAction = heading.querySelector<HTMLElement>(".cleanup-auto-action")!.getBoundingClientRect();
         const rows = Array.from(drawer.querySelectorAll<HTMLElement>(".cleanup-group-row")).map((row) => {
@@ -4708,7 +4781,7 @@ describe("Electron UI profile switching e2e", () => {
         });
         return {
           actionBelowCopy: autoAction.top >= headingCopy.bottom - 1,
-          actionAfterCopy: autoAction.left >= headingCopy.right,
+          actionAfterCopy: autoAction.left >= headingCopy.right - 1,
           actionContained: autoAction.right <= heading.getBoundingClientRect().right + 1,
           actionWidths: Array.from(
             drawer.querySelectorAll<HTMLElement>(".cleanup-current-action")
@@ -5898,7 +5971,7 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.getByRole("button", { name: "Save Profile" }).click();
     await dialog.waitFor({ state: "hidden" });
     await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
-      "OpenCode Current created. Agent unchanged."
+      "OpenCode created. Agent unchanged."
     );
 
     await expect(
@@ -5921,12 +5994,12 @@ describe("Electron UI profile switching e2e", () => {
         .filter((entry) => entry.isDirectory())
         .map((entry) => readJson<{ id: string; name: string }>(join(appDataRoot, "profiles", entry.name, "profile.json")))
     );
-    const captured = manifests.find((manifest) => manifest.name === "OpenCode Current");
+    const captured = manifests.find((manifest) => manifest.name === "OpenCode");
     expect(captured?.id).toBeTruthy();
     await expect(fileExists(join(appDataRoot, "target-states", "opencode.json"))).resolves.toBe(false);
 
     await page.getByRole("button", { name: "Profiles", exact: true }).click();
-    await selectProfile(page, "OpenCode Current");
+    await selectProfile(page, "OpenCode");
     await expandComposerSection(page, "Skills");
     const capturedSkillRow = page.getByRole("listitem", {
       name: "Profile skill target-only-reviewer"
@@ -5966,7 +6039,7 @@ describe("Electron UI profile switching e2e", () => {
         .filter((entry) => entry.isDirectory())
         .map((entry) => readJson<{ name: string }>(join(appDataRoot, "profiles", entry.name, "profile.json")))
     );
-    expect(manifests.some((manifest) => manifest.name === "Trae CLI Current")).toBe(true);
+    expect(manifests.some((manifest) => manifest.name === "Trae CLI")).toBe(true);
     expect((await lstat(brokenSkill)).isSymbolicLink()).toBe(true);
   }, 30_000);
 
@@ -5980,7 +6053,7 @@ describe("Electron UI profile switching e2e", () => {
           id: "dense-capture-preview",
           targetId: "opencode",
           targetName: "OpenCode",
-          suggestedName: "OpenCode Current",
+          suggestedName: "OpenCode",
           createdAt: "2026-07-14T00:00:00.000Z",
           resources: Array.from({ length: 30 }, (_, index) => ({
             kind: index === 0 ? "instructions" : "skill",
@@ -6061,7 +6134,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(geometry.bodyScrollable).toBe(true);
     expect(geometry.nestedScrollers).toBe(0);
     await dialog.getByRole("button", { name: "Back" }).click();
-    await expect.poll(() => page.getByLabel("Profile name").inputValue()).toBe("OpenCode Current");
+    await expect.poll(() => page.getByLabel("Profile name").inputValue()).toBe("OpenCode");
     await page.keyboard.press("Escape");
   }, 30_000);
 

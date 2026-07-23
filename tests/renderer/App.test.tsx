@@ -293,12 +293,21 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     openContextMenu: vi.fn().mockResolvedValue(undefined),
     copyText: vi.fn().mockResolvedValue(undefined),
     selectSkillFolder: vi.fn().mockResolvedValue(undefined),
+    selectLocalSkillSource: vi.fn().mockResolvedValue(undefined),
+    releaseSkillArchive: vi.fn().mockResolvedValue(undefined),
     selectTargetConfigRoot: vi.fn().mockResolvedValue(undefined),
     listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
     listTargets: vi.fn().mockResolvedValue([target]),
     listTargetStates: vi.fn().mockResolvedValue([]),
     listNativeMcpConnections: vi.fn().mockResolvedValue({ connections: [], issues: [] }),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
+    listSkillFiles: vi.fn().mockResolvedValue([]),
+    readSkillFile: vi.fn().mockResolvedValue({
+      path: "SKILL.md",
+      kind: "text",
+      sizeBytes: 0,
+      content: ""
+    }),
     scanSkillInventory: vi.fn().mockResolvedValue([]),
     listSkillCleanupBackups: vi.fn().mockResolvedValue([]),
     ignoreSkillGroup: vi.fn().mockResolvedValue({
@@ -2932,7 +2941,7 @@ describe("App", () => {
       manifest: {
         ...profile.manifest,
         id: "captured-opencode",
-        name: "OpenCode Current",
+        name: "OpenCode",
         description: "Captured from OpenCode"
       }
     };
@@ -2941,7 +2950,7 @@ describe("App", () => {
         id: "capture-preview",
         targetId: "opencode",
         targetName: "OpenCode",
-        suggestedName: "OpenCode Current",
+        suggestedName: "OpenCode",
         createdAt: "2026-07-14T00:00:00.000Z",
         resources: [
           {
@@ -2986,7 +2995,7 @@ describe("App", () => {
     expect(within(dialog).getByText("2 source copies stay unchanged")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Back" }));
     dialog = screen.getByRole("dialog", { name: "Create profile from OpenCode" });
-    expect(within(dialog).getByLabelText("Profile name")).toHaveValue("OpenCode Current");
+    expect(within(dialog).getByLabelText("Profile name")).toHaveValue("OpenCode");
     fireEvent.click(within(dialog).getByRole("button", { name: "Review" }));
     dialog = await screen.findByRole("dialog", { name: "Review OpenCode capture" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save Profile" }));
@@ -2994,10 +3003,10 @@ describe("App", () => {
     await waitFor(() =>
       expect(api.createProfileFromTarget).toHaveBeenCalledWith({
         previewId: "capture-preview",
-        name: "OpenCode Current"
+        name: "OpenCode"
       })
     );
-    expect(await screen.findByText("OpenCode Current created. Agent unchanged.")).toBeInTheDocument();
+    expect(await screen.findByText("OpenCode created. Agent unchanged.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
   });
@@ -3029,7 +3038,7 @@ describe("App", () => {
           id: "refreshed-capture-preview",
           targetId: "opencode",
           targetName: "OpenCode",
-          suggestedName: "OpenCode Current",
+          suggestedName: "OpenCode",
           createdAt: "2026-07-14T00:00:00.000Z",
           resources: [],
           warnings: [],

@@ -137,9 +137,20 @@ describe("SkillLibraryPanel", () => {
     const onCloseTool = vi.fn();
     const onRefreshInventory = vi.fn().mockResolvedValue(undefined);
     const onViewStateChange = vi.fn();
-    const onSelectLocalSkillFolder = vi.fn().mockResolvedValue(
-      "/tmp/opencode/skills/target-only-reviewer"
-    );
+    const onListSkillFiles = vi.fn().mockResolvedValue([
+      { kind: "file" as const, name: "SKILL.md", path: "SKILL.md", sizeBytes: 16 }
+    ]);
+    const onReadSkillFile = vi.fn().mockResolvedValue({
+      path: "SKILL.md",
+      kind: "text" as const,
+      sizeBytes: 16,
+      content: "# Shared Reviewer\n"
+    });
+    const onSelectLocalSkillSource = vi.fn().mockResolvedValue({
+      kind: "folder" as const,
+      path: "/tmp/opencode/skills/target-only-reviewer",
+      rootPath: "/tmp/opencode/skills/target-only-reviewer"
+    });
 
     const renderPanel = (
       activeTool?: "import" | "discoveries",
@@ -496,15 +507,30 @@ describe("SkillLibraryPanel", () => {
         installedTargetIds={["opencode", "codex"]}
         preparedTargetsBySkill={{
           "compat-reviewer": [
-            { targetId: "opencode", targetName: "compat-reviewer", disposition: "install" },
-            { targetId: "codex", targetName: "compat-reviewer", disposition: "omit" }
+            {
+              targetId: "opencode",
+              targetName: "compat-reviewer",
+              disposition: "install",
+              libraryId: "compat-reviewer",
+              sharedPaths: ["/tmp/home/.agents/skills/compat-reviewer"]
+            },
+            {
+              targetId: "codex",
+              targetName: "compat-reviewer",
+              disposition: "omit",
+              libraryId: "compat-reviewer",
+              sharedPaths: ["/tmp/home/.agents/skills/compat-reviewer"]
+            }
           ]
         }}
         activeTool={activeTool}
         isRefreshingInventory={false}
         onCloseTool={onCloseTool}
         onRefreshInventory={onRefreshInventory}
-        onSelectLocalSkillFolder={onSelectLocalSkillFolder}
+        onSelectLocalSkillSource={onSelectLocalSkillSource}
+        onReleaseSkillArchive={vi.fn().mockResolvedValue(undefined)}
+        onListSkillFiles={onListSkillFiles}
+        onReadSkillFile={onReadSkillFile}
         onImportUnmanaged={onImportUnmanaged}
         onImportExternal={onImportExternal}
         onScanGitHubSkills={onScanGitHubSkills}
@@ -593,6 +619,17 @@ describe("SkillLibraryPanel", () => {
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
     expect(sharedRow).toHaveTextContent("1 profile");
     expect(sharedRow).toHaveTextContent("2 Agents");
+    fireEvent.click(within(sharedRow).getByText("Shared Reviewer"));
+    const filesDialog = await screen.findByRole("dialog", { name: "Files in Shared Reviewer" });
+    expect(onListSkillFiles).toHaveBeenCalledWith("shared-reviewer");
+    await waitFor(() =>
+      expect(onReadSkillFile).toHaveBeenCalledWith("shared-reviewer", "SKILL.md")
+    );
+    await waitFor(() =>
+      expect(filesDialog.querySelector(".skill-file-preview__content"))
+        .toHaveTextContent("Shared Reviewer")
+    );
+    fireEvent.click(within(filesDialog).getByRole("button", { name: "Close" }));
     const sharedUsage = within(sharedRow).getByLabelText("Usage details for shared-reviewer");
     fireEvent.focus(sharedUsage);
     expect(screen.getByRole("tooltip")).toHaveTextContent("Daily Coding");
@@ -770,13 +807,13 @@ describe("SkillLibraryPanel", () => {
     expect(importDialog).toHaveClass("ui-modal", "library-import-dialog");
     expect(within(importDialog).getByRole("button", { name: "Close import" }))
       .toHaveClass("ui-icon-button");
-    expect(within(importDialog).getByRole("button", { name: "Cancel" }))
+    expect(within(importDialog).getByRole("button", { name: "Close" }))
       .toHaveClass("ui-button");
-    fireEvent.click(screen.getByRole("button", { name: "Choose local skill folder" }));
-    expect(onSelectLocalSkillFolder).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Choose local Skill source" }));
+    expect(onSelectLocalSkillSource).toHaveBeenCalled();
     await waitFor(() => expect(onRefreshInventory).toHaveBeenCalledWith(false));
     await waitFor(() =>
-      expect(screen.getByLabelText("Local skill folder path")).toHaveValue(
+      expect(screen.getByLabelText("Local Skill source path")).toHaveValue(
         "/tmp/opencode/skills/target-only-reviewer"
       )
     );
@@ -786,12 +823,12 @@ describe("SkillLibraryPanel", () => {
     const localImportButton = screen.getByRole("button", { name: "Import & manage" });
     fireEvent.click(localImportButton);
     await waitFor(() =>
-      expect(screen.getByLabelText("Local skill folder path")).toHaveValue(
+      expect(screen.getByLabelText("Local Skill source path")).toHaveValue(
         "/tmp/opencode/skills/target-only-reviewer"
       )
     );
     fireEvent.click(localImportButton);
-    await waitFor(() => expect(screen.getByLabelText("Local skill folder path")).toHaveValue(""));
+    await waitFor(() => expect(screen.getByLabelText("Local Skill source path")).toHaveValue(""));
     expect(onImportUnmanaged).toHaveBeenCalledWith(
       "/tmp/opencode/skills/target-only-reviewer"
     );
@@ -957,6 +994,7 @@ describe("SkillLibraryPanel", () => {
       libraryId: "compat-reviewer",
       paths: ["/tmp/home/.agents/skills/compat-reviewer"]
     }));
+    onRetireSharedSkill.mockClear();
     const changedManagedGroup = screen.getByRole("group", {
       name: "Cleanup group copied-local"
     });
@@ -972,24 +1010,29 @@ describe("SkillLibraryPanel", () => {
       })
     );
     const takeOverAllButton = within(discoveries).getByRole("button", {
-      name: "Clean up 3 ready Skills"
+      name: "Clean up 4 ready Skills"
     });
-    expect(takeOverAllButton).toHaveTextContent("Clean up 3");
+    expect(takeOverAllButton.closest(".cleanup-bucket-heading--ready")).not.toBeNull();
+    expect(takeOverAllButton).toHaveTextContent("Clean up 4");
     fireEvent.click(takeOverAllButton);
     const bulkCleanupDialog = screen.getByRole("dialog", { name: "Clean up local Skills" });
     expect(bulkCleanupDialog).toHaveTextContent("Repair managed links");
     expect(bulkCleanupDialog).toHaveTextContent("Add to Library and link copies");
     expect(bulkCleanupDialog).toHaveTextContent("Copied Local");
     expect(bulkCleanupDialog).toHaveTextContent("Legacy Reviewer");
+    expect(bulkCleanupDialog).toHaveTextContent("Replace shared copies");
+    expect(bulkCleanupDialog).toHaveTextContent("compat-reviewer");
     fireEvent.click(
-      within(bulkCleanupDialog).getByRole("button", { name: "Clean up 3 skills" })
+      within(bulkCleanupDialog).getByRole("button", { name: "Clean up 4 skills" })
     );
-    expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ skillKey: "copied-local" }),
-        expect.objectContaining({ skillKey: "legacy-reviewer" }),
-        expect.objectContaining({ skillKey: "target-only-reviewer" })
-      ])
+    await waitFor(() =>
+      expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ skillKey: "copied-local" }),
+          expect.objectContaining({ skillKey: "legacy-reviewer" }),
+          expect.objectContaining({ skillKey: "target-only-reviewer" })
+        ])
+      )
     );
     expect(takeOverAllButton).toHaveTextContent("Cleaning up...");
     expect(screen.getByRole("button", { name: "Close library tool" })).toBeDisabled();
@@ -1003,6 +1046,11 @@ describe("SkillLibraryPanel", () => {
         within(externalGroup).getByRole("button", { name: "Review ownership external-reviewer" })
       ).toBeEnabled()
     );
+    expect(onRetireSharedSkill).toHaveBeenCalledWith({
+      skillKey: "compat-reviewer",
+      libraryId: "compat-reviewer",
+      paths: ["/tmp/home/.agents/skills/compat-reviewer"]
+    });
     fireEvent.click(
       within(externalGroup).getByRole("button", { name: "Review ownership external-reviewer" })
     );
@@ -1340,7 +1388,15 @@ describe("SkillLibraryPanel", () => {
         activeTool="import"
         onCloseTool={noop}
         onRefreshInventory={vi.fn().mockResolvedValue(undefined)}
-        onSelectLocalSkillFolder={vi.fn().mockResolvedValue(undefined)}
+        onSelectLocalSkillSource={vi.fn().mockResolvedValue(undefined)}
+        onReleaseSkillArchive={vi.fn().mockResolvedValue(undefined)}
+        onListSkillFiles={vi.fn().mockResolvedValue([])}
+        onReadSkillFile={vi.fn().mockResolvedValue({
+          path: "SKILL.md",
+          kind: "text",
+          sizeBytes: 0,
+          content: ""
+        })}
         onImportUnmanaged={vi.fn().mockResolvedValue(false)}
         onImportExternal={vi.fn().mockResolvedValue(false)}
         onScanGitHubSkills={onScanGitHubSkills}
@@ -1386,9 +1442,9 @@ describe("SkillLibraryPanel", () => {
     });
     const scanButton = screen.getByRole("button", { name: "Scan" });
     fireEvent.click(scanButton);
-    const cancelButton = screen.getByRole("button", { name: "Cancel" });
-    await waitFor(() => expect(cancelButton).toBeEnabled());
-    fireEvent.click(cancelButton);
+    const closeButton = screen.getByRole("button", { name: "Close" });
+    await waitFor(() => expect(closeButton).toBeEnabled());
+    fireEvent.click(closeButton);
     await waitFor(() => expect(onCancelRepositoryOperations).toHaveBeenCalledTimes(1));
     await screen.findByText("Git command was cancelled");
     await waitFor(() => expect(scanButton).toBeEnabled());
@@ -1521,7 +1577,15 @@ describe("SkillLibraryPanel", () => {
         cleanupBackups={[]}
         skillUsage={{ "reviewer-alpha": ["Daily Coding"] }}
         onRefreshInventory={vi.fn().mockResolvedValue(undefined)}
-        onSelectLocalSkillFolder={vi.fn().mockResolvedValue(undefined)}
+        onSelectLocalSkillSource={vi.fn().mockResolvedValue(undefined)}
+        onReleaseSkillArchive={vi.fn().mockResolvedValue(undefined)}
+        onListSkillFiles={vi.fn().mockResolvedValue([])}
+        onReadSkillFile={vi.fn().mockResolvedValue({
+          path: "SKILL.md",
+          kind: "text",
+          sizeBytes: 0,
+          content: ""
+        })}
         onImportUnmanaged={vi.fn().mockResolvedValue(false)}
         onImportExternal={vi.fn().mockResolvedValue(false)}
         onScanGitHubSkills={vi.fn()}

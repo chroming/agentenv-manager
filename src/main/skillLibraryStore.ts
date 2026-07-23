@@ -615,7 +615,9 @@ export const createSkillLibraryStore = (
             })()
           : {
               sourceType: "local",
-              source: sourceDir,
+              source: source.input.upstream?.kind === "local"
+                ? source.input.upstream.locator
+                : sourceDir,
               upstream: source.input.upstream ?? { kind: "local", locator: sourceDir }
             }
       );
@@ -1242,10 +1244,12 @@ export const createSkillLibraryStore = (
           remotePath: upstream.subpath
         })
       : undefined;
+    const persistedLocalSource =
+      upstream?.kind === "local" ? upstream.locator : sourcePath;
     if (plan.sourceOnly) {
       await writeMetadata(targetDir, {
         sourceType: githubSource ? "github" : sourceType,
-        source: githubSource?.sourceUrl ?? sourcePath,
+        source: githubSource?.sourceUrl ?? persistedLocalSource,
         remoteRef: githubSource?.ref,
         remotePath: githubSource?.remotePath,
         remoteRevision: githubSource ? upstream?.revision : validatedSourceCollection ? preview.incoming.contentHash : undefined,
@@ -1254,7 +1258,7 @@ export const createSkillLibraryStore = (
         globallyEnabled: previousMetadata?.globallyEnabled,
         upstream: upstream ?? {
           kind: "local",
-          locator: sourcePath,
+          locator: persistedLocalSource,
           revision: validatedSourceCollection ? preview.incoming.contentHash : undefined
         },
         provenance: provenance ?? previousMetadata?.provenance ?? { importedVia: "agentenv" },
@@ -1272,7 +1276,7 @@ export const createSkillLibraryStore = (
     try {
       await writeMetadata(targetDir, {
         sourceType: githubSource ? "github" : sourceType,
-        source: githubSource?.sourceUrl ?? sourcePath,
+        source: githubSource?.sourceUrl ?? persistedLocalSource,
         remoteRef: githubSource?.ref,
         remotePath: githubSource?.remotePath,
         remoteRevision: githubSource ? upstream?.revision : validatedSourceCollection ? preview.incoming.contentHash : undefined,
@@ -1281,7 +1285,7 @@ export const createSkillLibraryStore = (
         globallyEnabled: previousMetadata?.globallyEnabled,
         upstream: upstream ?? {
           kind: "local",
-          locator: sourcePath,
+          locator: persistedLocalSource,
           revision: validatedSourceCollection ? preview.incoming.contentHash : undefined
         },
         provenance: provenance ?? { importedVia: "agentenv" },

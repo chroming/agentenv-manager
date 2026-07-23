@@ -75,6 +75,7 @@ import type {
   SkillSourceMergePreview,
   SkillSourceMergePreviewInput,
   SkillSourceMergeResult,
+  SkillUpstream,
   SkillMergeInput,
   SkillMergePreview,
   SkillUpdatePolicyInput,
@@ -1474,7 +1475,7 @@ const AppContent = ({
     const target = targets.find((item) => item.id === targetId);
     setProfileForm({
       targetId,
-      name: target ? `${target.name} Current` : "Current Environment",
+      name: target?.name ?? "",
       description: ""
     });
     setProfileCreateSource("target");
@@ -1941,9 +1942,9 @@ const AppContent = ({
             bySkill[preparation.skillKey] = [
               ...(bySkill[preparation.skillKey] ?? []),
               {
-                targetId: target.targetId,
-                targetName: preparation.targetName,
-                disposition: preparation.disposition
+                targetId: target.targetId, targetName: preparation.targetName,
+                disposition: preparation.disposition, libraryId: preparation.libraryId,
+                sharedPaths: preparation.sharedPaths
               }
             ];
           }
@@ -2385,14 +2386,14 @@ const AppContent = ({
     sourcePath: string,
     sourceHandling?: SkillImportInput["sourceHandling"],
     errorScope: "global" | "caller" = "global",
-    sourceCollection?: SkillImportInput["sourceCollection"]
+    sourceCollection?: SkillImportInput["sourceCollection"], upstream?: SkillUpstream
   ) => {
     setBusy(true);
     setError(undefined);
     try {
       const prepared = await prepareSkillImport({
         kind: "local",
-        input: { sourcePath, sourceHandling, sourceCollection }
+        input: { sourcePath, sourceHandling, sourceCollection, upstream }
       });
       if (!prepared || prepared.kind !== "local") return false;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
@@ -4093,11 +4094,14 @@ const AppContent = ({
                 isRefreshingInventory={skillInventoryRefreshing}
                 onCloseTool={() => setSkillLibraryTool(undefined)}
                 onRefreshInventory={refreshSkillDiscoveries}
-                onSelectLocalSkillFolder={() => window.agentEnv.selectSkillFolder()}
+                onSelectLocalSkillSource={() => window.agentEnv.selectLocalSkillSource()}
+                onReleaseSkillArchive={(token) => window.agentEnv.releaseSkillArchive(token)}
                 onScanLocalSkillSource={(rootPath) => window.agentEnv.scanLocalSkillSource(rootPath)}
                 onImportUnmanaged={importUnmanagedSkill}
-                onImportLocalSourceSkill={(sourcePath, sourceCollection) =>
-                  importUnmanagedSkill(sourcePath, "copy-only", "caller", sourceCollection)}
+                onImportLocalSourceSkill={(sourcePath, sourceCollection, upstream) =>
+                  importUnmanagedSkill(sourcePath, "copy-only", "caller", sourceCollection, upstream)}
+                onListSkillFiles={(id) => window.agentEnv.listSkillFiles(id)}
+                onReadSkillFile={(id, path) => window.agentEnv.readSkillFile({ id, path })}
                 onImportExternal={importExternalSkill}
                 onScanGitHubSkills={scanGitHubSkills}
                 onImportGitHubSkills={importGitHubSkills}
@@ -4666,7 +4670,7 @@ const AppContent = ({
                                     setProfileForm((current) => ({
                                       ...current,
                                       targetId: nextTarget.id,
-                                      name: current.name.trim() || `${nextTarget.name} Current`
+                                      name: current.name.trim() || nextTarget.name
                                     }));
                                   }
                                 }}
@@ -5523,7 +5527,7 @@ const AppContent = ({
               setProfileForm((current) => ({
                 ...current,
                 targetId,
-                name: target ? `${target.name} Current` : current.name
+                name: target?.name ?? current.name
               }));
             }}
             onBack={() => {

@@ -44,6 +44,7 @@ import type {
   GitHubSkillImportInput,
   GitHubSkillImportResult,
   GitHubSkillScanResult,
+  LocalSkillSourceSelection,
   ProjectSkillScanResult,
   RepositorySkillImportInput,
   RepositorySkillImportResult,
@@ -54,6 +55,8 @@ import type {
   SharedSkillRetentionInput,
   SkillCleanupBackupSummary,
   SkillCleanupRequest,
+  SkillFileContent,
+  SkillFileNode,
   SkillAvailabilityInput,
   SkillInventoryEntry,
   SkillIconInput,
@@ -90,6 +93,7 @@ import {
 import {
   automaticSkillCleanupRequest,
   buildSkillCleanupGroups,
+  isSkillCleanupPreparationCurrent,
   type SkillCleanupAutomaticEffect,
   type SkillCleanupBucket,
   type SkillCleanupDisplayState,
@@ -103,6 +107,7 @@ import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
 import { SkillSourceView } from "./SkillSourceView";
 import { ProjectSkillDiscoveryPanel } from "./ProjectSkillDiscoveryPanel";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
+import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -136,6 +141,8 @@ export interface PreparedSkillTarget {
   targetId: string;
   targetName: string;
   disposition: "install" | "omit";
+  libraryId: string;
+  sharedPaths: string[];
 }
 
 type SkillMenuAction = "update" | "availability" | "settings" | "merge" | "remove";
@@ -161,13 +168,17 @@ interface SkillLibraryPanelProps {
   isRefreshingInventory?: boolean;
   onCloseTool?(): void;
   onRefreshInventory(announce?: boolean): Promise<void>;
-  onSelectLocalSkillFolder(): Promise<string | undefined>;
+  onSelectLocalSkillSource(): Promise<LocalSkillSourceSelection | undefined>;
+  onReleaseSkillArchive(token: string): Promise<void>;
   onScanLocalSkillSource?(rootPath: string): Promise<ProjectSkillScanResult>;
   onImportUnmanaged(sourcePath: string): Promise<boolean>;
   onImportLocalSourceSkill?(
     sourcePath: string,
-    sourceCollection: SkillSourceCollectionRef
+    sourceCollection?: SkillSourceCollectionRef,
+    upstream?: import("../../shared/types").SkillUpstream
   ): Promise<boolean>;
+  onListSkillFiles(id: string): Promise<SkillFileNode[]>;
+  onReadSkillFile(id: string, path: string): Promise<SkillFileContent>;
   onImportExternal(skill: SkillInventoryEntry): Promise<boolean>;
   onScanGitHubSkills(url: string): Promise<GitHubSkillScanResult>;
   onImportGitHubSkills(
@@ -414,10 +425,13 @@ export const SkillLibraryPanel = ({
   isRefreshingInventory = false,
   onCloseTool,
   onRefreshInventory,
-  onSelectLocalSkillFolder,
+  onSelectLocalSkillSource,
+  onReleaseSkillArchive,
   onScanLocalSkillSource,
   onImportUnmanaged,
   onImportLocalSourceSkill,
+  onListSkillFiles,
+  onReadSkillFile,
   onImportExternal,
   onScanGitHubSkills,
   onImportGitHubSkills,
@@ -495,8 +509,9 @@ export const SkillLibraryPanel = ({
     action: "keep" | "review" | "retire";
   }>();
   const [githubOperationError, setGithubOperationError] = useState("");
-  const [localSkillPath, setLocalSkillPath] = useState("");
+  const [localSkillSource, setLocalSkillSource] = useState<LocalSkillSourceSelection>();
   const [importSource, setImportSource] = useState<"local" | "github">("local");
+  const [browsingSkill, setBrowsingSkill] = useState<SkillLibraryEntry>();
   const [repositoryRef, setRepositoryRef] = useState("");
   const [repositoryDirectory, setRepositoryDirectory] = useState("");
   const [repositoryConnection, setRepositoryConnection] = useState<"auto" | "system-git">("auto");
@@ -604,7 +619,9 @@ export const SkillLibraryPanel = ({
     (progress) => progress.status === "skipped"
   ).length;
   const dismissModal = () => {
-    if (selectedUpdatePlan) {
+    if (browsingSkill) {
+      setBrowsingSkill(undefined);
+    } else if (selectedUpdatePlan) {
       onCloseUpdatePreview();
     } else if (deleteCandidate) {
       setDeleteCandidate(undefined);
@@ -636,6 +653,7 @@ export const SkillLibraryPanel = ({
       disableCandidate ||
       sourceCandidate ||
       mergePreview ||
+      browsingSkill ||
       bulkUpdatePlans ||
       externalImport ||
       cleanupDetailsKey ||
@@ -660,6 +678,10 @@ export const SkillLibraryPanel = ({
     if (githubOperation && repositoryOperationCancelable) {
       await onCancelRepositoryOperations();
     }
+    if (localSkillSource?.archiveToken) {
+      await onReleaseSkillArchive(localSkillSource.archiveToken);
+    }
+    setLocalSkillSource(undefined);
     onCloseTool?.();
   };
   const openMergePreview = async (skill: SkillLibraryEntry) => {
@@ -959,12 +981,7 @@ export const SkillLibraryPanel = ({
   const cleanupGroups = useMemo(
     () => buildSkillCleanupGroups(skillInventory, {
       installedTargetIds,
-      preparedTargetIdsBySkill: Object.fromEntries(
-        Object.entries(preparedTargetsBySkill).map(([skillKey, targets]) => [
-          skillKey,
-          targets.map((target) => target.targetId)
-        ])
-      )
+      preparedTargetsBySkill
     }),
     [installedTargetIds, preparedTargetsBySkill, skillInventory]
   );
@@ -1000,27 +1017,25 @@ export const SkillLibraryPanel = ({
     return requests;
   }, [automaticCleanupRequests, cleanupGroups]);
   const manualCleanupCount = cleanupGroupsByBucket.decision.length;
-  const readyCleanupCount = automaticCleanupRequests.length;
-  const sharedReplacementReadyCount = cleanupGroupsByBucket.ready.filter(
-    (group) => group.sharedMigration?.state === "ready"
-  ).length;
+  const sharedReplacementCandidates = cleanupGroupsByBucket.ready.filter(
+    (group) =>
+      group.sharedMigration?.state === "ready" &&
+      Boolean(group.sharedMigration.libraryId)
+  );
+  const readyCleanupCount =
+    automaticCleanupRequests.length + sharedReplacementCandidates.length;
   const migrationSummary = [
     manualCleanupCount > 0
       ? t(manualCleanupCount === 1 ? "1 needs your decision" : "{{count}} need your decision", { count: manualCleanupCount })
       : "",
     readyCleanupCount > 0
       ? t(readyCleanupCount === 1 ? "1 ready to clean up" : "{{count}} ready to clean up", { count: readyCleanupCount })
-      : "",
-    sharedReplacementReadyCount > 0
-      ? t(
-          sharedReplacementReadyCount === 1
-            ? "1 shared copy ready to replace"
-            : "{{count}} shared copies ready to replace",
-          { count: sharedReplacementReadyCount }
-        )
       : ""
   ].filter(Boolean).join(" · ");
-  const normalizedLocalSkillPath = localSkillPath.trim().replace(/\/+$/, "");
+  const localSkillPath = localSkillSource?.path ?? "";
+  const normalizedLocalSkillPath = localSkillSource?.kind === "folder"
+    ? localSkillPath.trim().replace(/\/+$/, "")
+    : "";
   const selectedLocalInventory = skillInventory.find(
     (item) => item.path.replace(/\/+$/, "") === normalizedLocalSkillPath
   );
@@ -1104,8 +1119,16 @@ export const SkillLibraryPanel = ({
   const sharedRetireCandidate = sharedRetireKey
     ? cleanupGroups.find((group) => group.skillKey === sharedRetireKey)
     : undefined;
-  const sharedRetireTargets = sharedRetireKey
-    ? preparedTargetsBySkill[sharedRetireKey] ?? []
+  const preparedTargetsForCleanupGroup = (group: (typeof cleanupGroups)[number]) =>
+    (preparedTargetsBySkill[group.skillKey] ?? []).filter((preparation) =>
+        isSkillCleanupPreparationCurrent(
+          preparation,
+          group.sharedMigration?.libraryId,
+          group.sharedMigration?.paths ?? []
+        )
+      );
+  const sharedRetireTargets = sharedRetireCandidate?.sharedMigration
+    ? preparedTargetsForCleanupGroup(sharedRetireCandidate)
     : [];
   const externalImportGroup = externalImport
     ? cleanupGroups.find((group) => group.skillKey === externalImport.skillKey)
@@ -1485,7 +1508,6 @@ export const SkillLibraryPanel = ({
         ? await onImportExternal(selectedLocalInventory)
         : await onImportUnmanaged(sourcePath);
       if (imported) {
-        setLocalSkillPath("");
         await closeImportTool();
       }
     } finally {
@@ -1517,14 +1539,31 @@ export const SkillLibraryPanel = ({
     key: string,
     requests: SkillCleanupRequest[]
   ) => {
-    if (automaticCleanupKey || requests.length === 0) {
+    if (
+      automaticCleanupKey ||
+      (requests.length === 0 && sharedReplacementCandidates.length === 0)
+    ) {
       return;
     }
     setAutomaticCleanupKey(key);
     setAutoCleanupReviewOpen(false);
     try {
-      await onAutoConsolidateSkillGroups(requests);
+      for (const group of sharedReplacementCandidates) {
+        const migration = group.sharedMigration;
+        if (!migration?.libraryId) continue;
+        setSharedOperation({ skillKey: group.skillKey, action: "retire" });
+        const completed = await onRetireSharedSkill({
+          skillKey: group.skillKey,
+          libraryId: migration.libraryId,
+          paths: migration.paths
+        });
+        if (!completed) return;
+      }
+      if (requests.length > 0) {
+        await onAutoConsolidateSkillGroups(requests);
+      }
     } finally {
+      setSharedOperation(undefined);
       setAutomaticCleanupKey(undefined);
     }
   };
@@ -1572,12 +1611,15 @@ export const SkillLibraryPanel = ({
   };
 
   const selectLocalSkillFolder = async () => {
-    const sourcePath = await onSelectLocalSkillFolder();
-    if (sourcePath) {
-      setLocalSkillPath(sourcePath);
+    const source = await onSelectLocalSkillSource();
+    if (source) {
+      if (localSkillSource?.archiveToken) {
+        await onReleaseSkillArchive(localSkillSource.archiveToken);
+      }
+      setLocalSkillSource(source);
       setLocalImportOperation(true);
       try {
-        await onRefreshInventory(false);
+        if (source.kind === "folder") await onRefreshInventory(false);
       } finally {
         setLocalImportOperation(false);
       }
@@ -1991,6 +2033,27 @@ export const SkillLibraryPanel = ({
                     );
                   }
                 }}
+                onClick={(event) => {
+                  if (
+                    event.target instanceof Element &&
+                    event.target.closest("button, a, input, select, textarea")
+                  ) {
+                    return;
+                  }
+                  modalFallbackFocusRef.current = event.currentTarget;
+                  setBrowsingSkill(skill);
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    (event.key === "Enter" || event.key === " ") &&
+                    event.target === event.currentTarget
+                  ) {
+                    event.preventDefault();
+                    modalFallbackFocusRef.current = event.currentTarget;
+                    setBrowsingSkill(skill);
+                  }
+                }}
+                tabIndex={0}
               >
                 <div className="library-resource-cell">
                   <ResourceIconPicker
@@ -2301,6 +2364,17 @@ export const SkillLibraryPanel = ({
         onClose={onCloseUpdatePreview}
         onConfirm={onUpdateLibrarySkill}
       />
+
+      {browsingSkill ? (
+        <SkillFileBrowserDialog
+          skill={browsingSkill}
+          dialogRef={modalDialogRef}
+          initialFocusRef={modalInitialFocusRef}
+          onListFiles={onListSkillFiles}
+          onReadFile={onReadSkillFile}
+          onClose={() => setBrowsingSkill(undefined)}
+        />
+      ) : null}
 
       {mergePreview && mergeKeepEntry && mergeSourceEntry ? (
         <div className="preview-modal-backdrop" onClick={() => !mergeOperation && setMergePreview(undefined)}>
@@ -2733,6 +2807,26 @@ export const SkillLibraryPanel = ({
                   <p>{items.map((item) => item.name).join(", ")}</p>
                 </section>
               ))}
+              {sharedReplacementCandidates.length > 0 ? (
+                <section className="cleanup-bulk-effect">
+                  <div>
+                    <strong>{t("Replace shared copies")}</strong>
+                    <span>{sharedReplacementCandidates.length}</span>
+                  </div>
+                  <p>
+                    {sharedReplacementCandidates.map((group) => {
+                      const decisions = preparedTargetsForCleanupGroup(group)
+                        .map((target) =>
+                          target.disposition === "install"
+                            ? `${targetNameFor(target.targetId, targetNames, target.targetId)}: ${t("Install as {{name}}", { name: target.targetName })}`
+                            : `${targetNameFor(target.targetId, targetNames, target.targetId)}: ${t("Do not install")}`
+                        )
+                        .join("; ");
+                      return `${group.primary?.name ?? group.skillKey}${decisions ? ` - ${decisions}` : ""}`;
+                    }).join("\n")}
+                  </p>
+                </section>
+              ) : null}
               <small>{t("Each Skill is backed up independently. A failure does not undo completed Skills.")}</small>
             </div>
             <footer className="preview-actions">
@@ -2749,7 +2843,7 @@ export const SkillLibraryPanel = ({
                 type="button"
                 onClick={() => void runAutomaticCleanup("all", automaticCleanupRequests)}
               >
-                {t("Clean up {{count}} skills", { count: automaticCleanupRequests.length })}
+                {t("Clean up {{count}} skills", { count: readyCleanupCount })}
               </button>
             </footer>
           </section>
@@ -3585,28 +3679,6 @@ export const SkillLibraryPanel = ({
                 </div>
                 <small>{migrationSummary || t("No cleanup actions needed")}</small>
               </div>
-              {automaticCleanupRequests.length > 0 ? (
-                <button
-                  className="primary-action cleanup-auto-action"
-                  type="button"
-                  aria-label={t("Clean up {{count}} ready Skills", { count: automaticCleanupRequests.length })}
-                  disabled={Boolean(automaticCleanupKey)}
-                  onClick={() => setAutoCleanupReviewOpen(true)}
-                >
-                  <Sparkles
-                    className={automaticCleanupKey === "all" ? "is-spinning" : undefined}
-                    size={15}
-                    strokeWidth={2.2}
-                    aria-hidden="true"
-                  />
-                  {t(
-                    automaticCleanupKey === "all"
-                      ? "Cleaning up..."
-                      : "Clean up {{count}}",
-                    { count: automaticCleanupRequests.length }
-                  )}
-                </button>
-              ) : null}
             </div>
             <div className="resource-list resource-list--unmanaged">
               {cleanupGroups.length === 0 ? (
@@ -3733,6 +3805,28 @@ export const SkillLibraryPanel = ({
                           <strong>{t(cleanupBucketLabel(group.bucket))}</strong>
                           <span>{cleanupGroupsByBucket[group.bucket].length}</span>
                         </div>
+                        {group.bucket === "ready" && readyCleanupCount > 0 ? (
+                          <button
+                            className="primary-action cleanup-auto-action"
+                            type="button"
+                            aria-label={t("Clean up {{count}} ready Skills", { count: readyCleanupCount })}
+                            disabled={Boolean(automaticCleanupKey)}
+                            onClick={() => setAutoCleanupReviewOpen(true)}
+                          >
+                            <Sparkles
+                              className={automaticCleanupKey === "all" ? "is-spinning" : undefined}
+                              size={15}
+                              strokeWidth={2.2}
+                              aria-hidden="true"
+                            />
+                            {t(
+                              automaticCleanupKey === "all"
+                                ? "Cleaning up..."
+                                : "Clean up {{count}}",
+                              { count: readyCleanupCount }
+                            )}
+                          </button>
+                        ) : null}
                         {sectionCanCollapse ? (
                           <button
                             className="icon-action"
@@ -4008,7 +4102,7 @@ export const SkillLibraryPanel = ({
                     onClick={() => setImportSource("local")}
                   >
                     <Folder size={15} strokeWidth={2.2} aria-hidden="true" />
-                    {t("Local folder")}
+                    {t("Local")}
                   </button>
                   <button
                     className={importSource === "github" ? "is-active" : ""}
@@ -4028,23 +4122,23 @@ export const SkillLibraryPanel = ({
                     <section className="library-import-panel">
                       <div className="library-import-grid">
                         <label>
-                          <span>{t("Skill folder")}</span>
+                          <span>{t("Folder or ZIP")}</span>
                           <input
-                            aria-label={t("Local skill folder path")}
-                            placeholder={t("No folder selected")}
+                            aria-label={t("Local Skill source path")}
+                            placeholder={t("No source selected")}
                             readOnly
                             value={localSkillPath}
                           />
                         </label>
                         <Button
-                          aria-label={t("Choose local skill folder")}
+                          aria-label={t("Choose local Skill source")}
                           disabled={localImportOperation || Boolean(githubOperation)}
                           icon={<Folder size={15} strokeWidth={2.2} />}
                           onClick={() => {
                             void selectLocalSkillFolder();
                           }}
                         >
-                          {t("Choose folder")}
+                          {t("Choose source")}
                         </Button>
                       </div>
                       {localImportImpact ? (
@@ -4064,9 +4158,11 @@ export const SkillLibraryPanel = ({
                           <span>{t(localImportImpact.message, localImportImpact.values)}</span>
                         </div>
                       ) : null}
-                      {localSkillPath && !selectedLocalInventory && onScanLocalSkillSource && onImportLocalSourceSkill ? (
+                      {localSkillSource && !selectedLocalInventory && onScanLocalSkillSource && onImportLocalSourceSkill ? (
                         <ProjectSkillDiscoveryPanel
-                          rootPath={localSkillPath}
+                          rootPath={localSkillSource.rootPath}
+                          sourceKind={localSkillSource.kind}
+                          sourcePath={localSkillSource.path}
                           onScan={onScanLocalSkillSource}
                           onImport={onImportLocalSourceSkill}
                         />
@@ -4395,7 +4491,7 @@ export const SkillLibraryPanel = ({
                     {t(
                       githubOperation === "importing"
                         ? importStopRequested ? "Stopping..." : "Stop import"
-                        : githubImportResult ? "Close" : "Cancel"
+                        : "Close"
                     )}
                   </Button>
                   {importSource === "local" && selectedLocalInventory ? (
