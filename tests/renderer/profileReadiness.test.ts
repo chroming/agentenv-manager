@@ -36,7 +36,7 @@ const unmanagedState = {
 
 const issue = (
   message: string,
-  code: ApplyIssue["code"] = "generic-blocker",
+  code: ApplyIssue["code"] = "operation-precondition",
   disposition: ApplyIssue["disposition"] = "block"
 ): ApplyIssue => ({
   id: `${code}:${message}`,

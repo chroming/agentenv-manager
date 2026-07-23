@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { normalizeSkillKey } from "../shared/skillIdentity";
 import { profileManagesResource } from "../shared/profileResources";
@@ -7,6 +8,7 @@ import type {
   ProfileDetail,
   SkillInventoryEntry,
   SkillLibraryEntry,
+  SkillRuntimeIssue,
   TargetPaths,
   TargetState
 } from "../shared/types";
@@ -34,14 +36,49 @@ export const desiredRuntimeSkills = (
       source: `Library / ${reference.libraryId}`
     }));
 
+interface NativeSkillState {
+  disabledRuntimeNames: string[];
+  issues: SkillRuntimeIssue[];
+}
+
+export const fingerprintRuntimeSkillPreconditions = (
+  nativeState: NativeSkillState,
+  profile: ProfileDetail,
+  skillLibrary: SkillLibraryEntry[]
+) => {
+  const desiredNames = new Set(
+    desiredRuntimeSkills(profile, skillLibrary).map((item) =>
+      normalizeSkillKey(item.runtimeName)
+    )
+  );
+  const comparable = {
+    disabledDesiredRuntimeNames: nativeState.disabledRuntimeNames
+      .filter((name) => desiredNames.has(normalizeSkillKey(name)))
+      .map(normalizeSkillKey)
+      .sort(),
+    errors: nativeState.issues
+      .filter((issue) => issue.severity === "error")
+      .map((issue) => ({
+        code: issue.code,
+        message: issue.message
+      }))
+      .sort((left, right) =>
+        `${left.code}:${left.message}`.localeCompare(`${right.code}:${right.message}`)
+      )
+  };
+  return createHash("sha256").update(JSON.stringify(comparable)).digest("hex");
+};
+
 export const validateRuntimeSkills = async (
   adapter: AgentTargetAdapter,
   targetPaths: TargetPaths,
   profile: ProfileDetail,
   skillLibrary: SkillLibraryEntry[],
-  inventory: SkillInventoryEntry[]
+  inventory: SkillInventoryEntry[],
+  nativeState?: NativeSkillState
 ) => {
-  const nativeState = await adapter.skills.readNativeState(targetPaths);
+  const currentNativeState =
+    nativeState ?? await adapter.skills.readNativeState(targetPaths);
   const desired = desiredRuntimeSkills(profile, skillLibrary);
   const byRuntimeName = new Map<string, typeof desired>();
   for (const item of desired) {
@@ -54,8 +91,6 @@ export const validateRuntimeSkills = async (
       ? [
           createApplyIssue({
             code: "duplicate-runtime-skill",
-            disposition: "block",
-            resolution: "edit-profile",
             resourceKind: "skill",
             resourceId: runtimeName,
             message: `Profile declares runtime Skill name ${runtimeName} more than once`,
@@ -65,24 +100,20 @@ export const validateRuntimeSkills = async (
       : []
   );
   issues.push(
-    ...nativeState.issues
+    ...currentNativeState.issues
       .filter((issue) => issue.severity !== "error")
       .map((issue) =>
         createApplyIssue({
-          code: "generic-notice",
-          disposition: "notice",
-          resolution: "preserve",
+          code: "runtime-observation",
           resourceKind: "skill",
           message: issue.message
         })
       ),
-    ...nativeState.issues
+    ...currentNativeState.issues
       .filter((issue) => issue.severity === "error")
       .map((issue) =>
         createApplyIssue({
-          code: "generic-blocker",
-          disposition: "block",
-          resolution: "external-action",
+          code: "runtime-state-unavailable",
           resourceKind: "skill",
           message: issue.message
         })
@@ -90,13 +121,11 @@ export const validateRuntimeSkills = async (
   );
 
   const desiredNames = new Set(byRuntimeName.keys());
-  for (const runtimeName of nativeState.disabledRuntimeNames) {
+  for (const runtimeName of currentNativeState.disabledRuntimeNames) {
     if (desiredNames.has(normalizeSkillKey(runtimeName))) {
       issues.push(
         createApplyIssue({
           code: "native-disabled-skill",
-          disposition: "block",
-          resolution: "external-action",
           resourceKind: "skill",
           resourceId: runtimeName,
           message: `${adapter.descriptor.name} has Skill ${runtimeName} disabled in native settings; enable it there before applying this Profile`
@@ -127,8 +156,6 @@ export const validateRuntimeSkills = async (
       issues.push(
         createApplyIssue({
           code: "runtime-skill-conflict",
-          disposition: "block",
-          resolution: "external-action",
           resourceKind: "skill",
           resourceId: desiredItem.runtimeName,
           path,
@@ -189,8 +216,6 @@ export const findManagedDrift = async ({
         issues.push(
           createApplyIssue({
             code: "managed-resource-missing",
-            disposition: "notice",
-            resolution: "automatic",
             resourceKind: resource.kind === "instructions" ? "instructions" : "skill",
             resourceId: resource.id,
             path: resource.path,
@@ -218,8 +243,6 @@ export const findManagedDrift = async ({
     issues.push(
       createApplyIssue({
         code: "managed-resource-drift",
-        disposition: "review",
-        resolution: "backup-replace",
         resourceKind: resource.kind === "instructions" ? "instructions" : "skill",
         resourceId: resource.id,
         path: resource.path,
@@ -254,8 +277,6 @@ export const preservedUnmanagedSkillIssues = (
             : skill.status === "external"
               ? "external-skill-preserved"
               : "unmanaged-skill-preserved",
-        disposition: "notice",
-        resolution: "preserve",
         resourceKind: "skill",
         resourceId: skill.runtimeName ?? skill.id,
         path: skill.path,

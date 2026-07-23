@@ -4260,8 +4260,9 @@ describe("Electron UI profile switching e2e", () => {
 
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Import skills" }).click();
+    const importDialog = page.getByRole("dialog", { name: "Import skills" });
     await page.getByRole("button", { name: "Choose local skill folder" }).click();
-    await expect.poll(() => page.getByRole("status").textContent()).toContain(
+    await expect.poll(() => importDialog.getByRole("status").textContent()).toContain(
       "back up this Agent copy"
     );
     await page.getByRole("button", { name: "Import & manage", exact: true }).click();
@@ -4285,7 +4286,7 @@ describe("Electron UI profile switching e2e", () => {
       })
     ]);
 
-    await page.getByRole("dialog", { name: "Import skills" }).waitFor({ state: "hidden" });
+    await importDialog.waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Scan local" }).click();
     await page.getByRole("button", { name: "Expand Managed" }).click();
     const cleanupGroup = page.getByRole("group", {

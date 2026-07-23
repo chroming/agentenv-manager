@@ -226,8 +226,6 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       (message) =>
         createApplyIssue({
           code: "secret-warning",
-          disposition: "notice",
-          resolution: "automatic",
           resourceKind: "instructions",
           message
         })
@@ -252,8 +250,6 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
       if (!liveConfig.ok) {
         issues.push(createApplyIssue({
           code: "invalid-native-config",
-          disposition: "block",
-          resolution: "external-action",
           resourceKind: "configuration",
           path: targetPaths.configPath,
           message: liveConfig.message
@@ -268,8 +264,6 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
             if (selection.enabled) {
               issues.push(createApplyIssue({
                 code: "missing-native-mcp",
-                disposition: "block",
-                resolution: "edit-profile",
                 resourceKind: "mcp",
                 resourceId: selection.name,
                 path: targetPaths.configPath,

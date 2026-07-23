@@ -297,8 +297,6 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
       (message) =>
         createApplyIssue({
           code: "secret-warning",
-          disposition: "notice",
-          resolution: "automatic",
           resourceKind: "instructions",
           message
         })
@@ -313,8 +311,6 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     if (profile.resources.mcpByTarget["claude-code"]?.mode === "manage") {
       issues.push(createApplyIssue({
         code: "unsupported-mcp-management",
-        disposition: "block",
-        resolution: "edit-profile",
         resourceKind: "mcp",
         message: "Claude Code MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Claude Code."
       }));

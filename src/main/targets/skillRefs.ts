@@ -46,9 +46,7 @@ export const validateSkillRefs = async ({
   if (!targetPaths.skillsDir) {
     return skillRefs.some((skill) => skill.enabled)
       ? [createApplyIssue({
-          code: "generic-blocker",
-          disposition: "block",
-          resolution: "edit-profile",
+          code: "unsupported-skill-management",
           resourceKind: "skill",
           message: "Agent does not expose a Skills directory"
         })]
@@ -57,8 +55,6 @@ export const validateSkillRefs = async ({
   if (!skillLibraryDir) {
     return [createApplyIssue({
       code: "missing-library-skill",
-      disposition: "block",
-      resolution: "edit-profile",
       resourceKind: "skill",
       message: "Skill Library directory is required for Profile Skills"
     })];
@@ -74,8 +70,6 @@ export const validateSkillRefs = async ({
       if (targetExists && !owned && !replaceable) {
         issues.push(createApplyIssue({
           code: "external-skill-conflict",
-          disposition: "block",
-          resolution: "external-action",
           resourceKind: "skill",
           resourceId: skillRef.targetName,
           path: targetDir,
@@ -88,8 +82,6 @@ export const validateSkillRefs = async ({
     if (!(await pathExists(join(sourceDir, "SKILL.md")))) {
       issues.push(createApplyIssue({
         code: "missing-library-skill",
-        disposition: "block",
-        resolution: "edit-profile",
         resourceKind: "skill",
         resourceId: skillRef.libraryId,
         path: sourceDir,
@@ -106,8 +98,6 @@ export const validateSkillRefs = async ({
     if (targetExists && !owned && !matchingUnmanaged && !replaceable) {
       issues.push(createApplyIssue({
         code: "external-skill-conflict",
-        disposition: "block",
-        resolution: "external-action",
         resourceKind: "skill",
         resourceId: skillRef.targetName,
         path: targetDir,

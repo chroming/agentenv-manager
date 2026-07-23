@@ -354,7 +354,14 @@ const prepareFixture = async (root) => {
   await execFile("git", ["add", "."], { cwd: gitFixtureRepo });
   await execFile("git", ["commit", "-m", "visual fixture"], { cwd: gitFixtureRepo });
 
-  return { appDataRoot, binDir, gitFixtureRepo, githubFixtureRoot, homeDir };
+  return {
+    appDataRoot,
+    binDir,
+    gitFixtureRepo,
+    githubFixtureRoot,
+    homeDir,
+    projectSkillRoot
+  };
 };
 
 const capturePage = async (
@@ -520,7 +527,14 @@ if (suppliedReference && suppliedReference !== referencePath) {
 const fixtureRoot = await mkdtemp(join(tmpdir(), "agentenv-profiles-capture-"));
 let app;
 try {
-  const { appDataRoot, binDir, gitFixtureRepo, githubFixtureRoot, homeDir } = await prepareFixture(fixtureRoot);
+  const {
+    appDataRoot,
+    binDir,
+    gitFixtureRepo,
+    githubFixtureRoot,
+    homeDir,
+    projectSkillRoot
+  } = await prepareFixture(fixtureRoot);
   app = await electron.launch({
     executablePath: electronPath,
     args: ["--disable-gpu", join(projectRoot, "out", "main", "main.js")],
@@ -649,8 +663,17 @@ try {
   await capturePage(page, join(outputDir, "skills-import-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-import-920x620.png"));
-  await importDialog.getByRole("tab", { name: "Projects" }).click();
-  await importDialog.getByRole("button", { name: "Scan", exact: true }).click();
+  await app.evaluate(
+    ({ dialog }, selectedPath) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [selectedPath],
+        bookmarks: []
+      });
+    },
+    projectSkillRoot
+  );
+  await importDialog.getByRole("button", { name: "Choose local skill folder" }).click();
   await importDialog.locator(".project-skill-row").first().waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-import-projects-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);

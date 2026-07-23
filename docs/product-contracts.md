@@ -418,6 +418,8 @@ Preview hierarchy MUST name the Profile and Target, then show one of `Ready to a
 - `review`: AgentEnv has one deterministic, complete mutation plan with an exact affected path, Backup, verification, and rollback. Confirming this Preview is the explicit authorization; a second checkbox or confirmation step MUST NOT be required.
 - `block`: AgentEnv cannot produce a deterministic complete plan without changing Profile intent, taking ownership from another manager, resolving ambiguity, or recovering damaged state.
 
+Issue disposition and recovery are owned by one Agent-neutral policy keyed by stable issue code. Target adapters and resource scanners report capabilities and concrete facts; they MUST NOT independently promote the same fact to a stronger disposition. Expected product conditions MUST use a specific issue code. Generic blocking issues are forbidden.
+
 True blockers appear before the change plan. Replaceable Agent drift, an ordinary unmanaged destination, and a Target Skills root link are review requirements rather than duplicate blockers. `After Apply` describes the final effective Instructions, Skills, and MCP payload; `Changes this Apply` contains only actual mutations grouped by semantic resource type. Concrete identities and actions precede secondary filesystem detail. Full paths remain selectable through hover/focus detail, file diffs expand on their owning rows, and preserved unmanaged items and non-blocking notes remain collapsed after the change plan. Header and footer stay fixed while one dialog body owns vertical scrolling; only large diff content may own nested code scrolling. Preview does not display generation timestamps because freshness is enforced by the stale-preview contract rather than user inspection.
 
 Managed Skill drift compares canonical Skill content rather than symbolic-link text. A Live link or managed copy that exactly matches the currently referenced Library content is an expected Library transition, not an external Agent change. Every genuine drift issue names the concrete Skill and exposes its selectable path; repeated anonymous Target-level warnings are forbidden.
@@ -429,6 +431,8 @@ A Preview becomes stale when any of these changes:
 - Any live file or resource included in the plan.
 - Deployment state.
 - Selected Target.
+
+Skill inventory freshness is a semantic projection, not a fingerprint of every discovered Skill. It includes exact Profile destinations, relevant runtime-name conflicts, Profile-referenced resources, AgentEnv-owned cleanup candidates, and shared compatibility facts used by the plan. An unrelated local Skill that cannot change the reviewed result MUST NOT stale Apply.
 
 Apply MUST reject a stale Preview before writing. The client SHOULD refresh that Preview in place and require confirmation of the refreshed effects instead of presenting stale data as a permanent blocking issue. A concurrent operation is a temporary working state, not a resource conflict; it MUST NOT be rendered as a permanent Preview blocker.
 
@@ -459,6 +463,8 @@ It MUST:
 6. Write deployment state only after all resource writes succeed.
 7. Record one history entry only after success.
 8. Refresh visible Profile and Target state after completion.
+
+Apply executes the immutable Preview plan. It MAY re-read and hash the plan's bound preconditions, but MUST NOT rerun runtime conflict classification, asset ownership classification, backup-path discovery, or stale-resource discovery after confirmation. Newly discovered facts outside the reviewed plan remain untouched. A changed bound precondition returns `stale` before Backup or mutation.
 
 Switching Profiles MUST remove managed external resources owned by the previously active Profile when they are absent or disabled in the new Profile. MCP choices absent from the new sparse policy remain Agent-owned and unchanged. Unmanaged resources MUST remain untouched unless they occupy an exact destination that the reviewed Apply must install, replace, or remove. For an ordinary unmanaged Skill at such a destination, Preview MUST show the exact backup-and-replace or backup-and-remove effect. Confirming that fresh Preview authorizes only those named paths.
 
@@ -1069,6 +1075,10 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Different Profiles active on different Targets.
 - Switching active Profile removes only previous managed resources.
 - Identical second Preview produces no changes and no Apply action.
+- Preview followed by Apply followed by another Preview converges to no changes for every supported Agent unless a named external writer changes a deployment-relevant fact.
+- A missing AgentEnv-managed resource is restored by one fresh Apply and the next Preview is a no-op.
+- Adding or changing an unrelated local Skill after Preview does not stale Apply; adding a Skill that conflicts with a desired runtime name does.
+- Apply executes only the resource additions, replacements, and removals named by Preview. It never discovers and deletes a new stale resource during execution.
 - Dirty Profile blocks Preview and preserves draft.
 - Active Profile is selected for the chosen Target without changing persisted creation-time ordering; a single installed Target is static context.
 - Disabling a Skill in Library preserves its content and every existing Profile reference, hides it from every Add Skill picker, excludes it from update checks and effective Apply payloads, and leaves it visible but locked in Profiles until globally enabled again.

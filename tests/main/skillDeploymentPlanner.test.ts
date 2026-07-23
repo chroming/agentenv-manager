@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSkillDeploymentPlan,
+  deploymentRelevantSkillInventory,
   fingerprintSkillInventory
 } from "../../src/main/skillDeploymentPlanner";
 import type {
@@ -334,5 +335,44 @@ describe("skill deployment planner", () => {
     expect(
       fingerprintSkillInventory([inventoryEntry({ sharedLocation: true })])
     ).not.toBe(fingerprint);
+  });
+
+  it("projects only inventory facts that can change the current deployment plan", () => {
+    const input = {
+      profile: profile(),
+      skillLibrary: [librarySkill()],
+      targetPaths: targetPaths(),
+      inventory: [
+        inventoryEntry({
+          id: "unrelated",
+          name: "unrelated",
+          skillKey: "unrelated",
+          runtimeName: "unrelated",
+          deploymentName: "unrelated",
+          path: "/home/.codex/skills/unrelated",
+          libraryId: undefined,
+          contentMatchesLibrary: false
+        }),
+        inventoryEntry({
+          id: "runtime-conflict",
+          name: "reviewer",
+          skillKey: "reviewer",
+          runtimeName: "reviewer",
+          deploymentName: "runtime-conflict",
+          path: "/home/.codex/skills/runtime-conflict",
+          libraryId: undefined,
+          contentMatchesLibrary: false
+        }),
+        inventoryEntry({
+          id: "shared-review",
+          path: "/home/.agents/skills/review",
+          sharedLocation: true
+        })
+      ]
+    };
+
+    expect(
+      deploymentRelevantSkillInventory(input).map((entry) => entry.id)
+    ).toEqual(["runtime-conflict", "shared-review"]);
   });
 });

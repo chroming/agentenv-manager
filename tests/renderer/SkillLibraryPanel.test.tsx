@@ -774,6 +774,7 @@ describe("SkillLibraryPanel", () => {
       .toHaveClass("ui-button");
     fireEvent.click(screen.getByRole("button", { name: "Choose local skill folder" }));
     expect(onSelectLocalSkillFolder).toHaveBeenCalled();
+    await waitFor(() => expect(onRefreshInventory).toHaveBeenCalledWith(false));
     await waitFor(() =>
       expect(screen.getByLabelText("Local skill folder path")).toHaveValue(
         "/tmp/opencode/skills/target-only-reviewer"
@@ -915,7 +916,7 @@ describe("SkillLibraryPanel", () => {
     rerender(renderPanel("discoveries"));
     const discoveries = screen.getByRole("region", { name: "Environment skills" });
     fireEvent.click(within(discoveries).getByRole("button", { name: "Refresh local skills" }));
-    expect(onRefreshInventory).toHaveBeenCalledTimes(1);
+    expect(onRefreshInventory).toHaveBeenCalledTimes(2);
     fireEvent.mouseDown(document.body);
     expect(onCloseTool).toHaveBeenCalledTimes(3);
     expect(discoveries).toHaveTextContent("Managed");

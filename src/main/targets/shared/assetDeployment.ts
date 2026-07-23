@@ -52,7 +52,10 @@ export const createDirectoryAssetDriver = (
   },
   applyAssets: async (input) => {
     if (!managesSkills(input)) return;
-    for (const stalePath of await staleOwnedSkillPaths(input)) {
+    const stalePaths = input.plannedResourceRemovals
+      ? [...input.plannedResourceRemovals]
+      : await staleOwnedSkillPaths(input);
+    for (const stalePath of stalePaths) {
       await removeSkillDeployment(stalePath);
     }
     await applySkillRefs(input);

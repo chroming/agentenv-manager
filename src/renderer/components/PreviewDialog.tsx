@@ -197,7 +197,7 @@ export const PreviewDialog = ({
     : [
         ...preview.errors.map((message, index) => ({
           id: `legacy-block:${index}`,
-          code: "generic-blocker" as const,
+          code: "operation-precondition" as const,
           disposition: "block" as const,
           resolution: "external-action" as const,
           resourceKind: "target" as const,
@@ -205,7 +205,7 @@ export const PreviewDialog = ({
         })),
         ...preview.warnings.map((message, index) => ({
           id: `legacy-notice:${index}`,
-          code: "generic-notice" as const,
+          code: "operation-notice" as const,
           disposition: "notice" as const,
           resolution: "preserve" as const,
           resourceKind: "target" as const,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  APPLY_ISSUE_POLICY,
   createApplyIssue,
   dedupeApplyIssues,
   replaceableApplyPaths
@@ -11,8 +12,6 @@ describe("Apply issues", () => {
     const issues = dedupeApplyIssues([
       createApplyIssue({
         code: "missing-native-mcp",
-        disposition: "block",
-        resolution: "edit-profile",
         resourceKind: "mcp",
         resourceId: "github",
         path,
@@ -20,8 +19,6 @@ describe("Apply issues", () => {
       }),
       createApplyIssue({
         code: "missing-native-mcp",
-        disposition: "block",
-        resolution: "edit-profile",
         resourceKind: "mcp",
         resourceId: "postgres",
         path,
@@ -37,8 +34,6 @@ describe("Apply issues", () => {
     const issues = dedupeApplyIssues([
       createApplyIssue({
         code: "unmanaged-skill-preserved",
-        disposition: "notice",
-        resolution: "preserve",
         resourceKind: "skill",
         resourceId: "reviewer",
         path,
@@ -46,8 +41,6 @@ describe("Apply issues", () => {
       }),
       createApplyIssue({
         code: "unmanaged-skill-replacement",
-        disposition: "review",
-        resolution: "backup-replace",
         resourceKind: "skill",
         resourceId: "reviewer",
         path,
@@ -58,5 +51,28 @@ describe("Apply issues", () => {
     expect(issues).toHaveLength(1);
     expect(issues[0].disposition).toBe("review");
     expect(replaceableApplyPaths(issues)).toEqual(new Set([path]));
+  });
+
+  it("centralizes blocking and reviewed replacement policy by issue code", () => {
+    expect(APPLY_ISSUE_POLICY["managed-resource-missing"]).toEqual({
+      disposition: "notice",
+      resolution: "automatic"
+    });
+    expect(APPLY_ISSUE_POLICY["managed-resource-drift"]).toEqual({
+      disposition: "review",
+      resolution: "backup-replace"
+    });
+    expect(APPLY_ISSUE_POLICY["unmanaged-skill-replacement"]).toEqual({
+      disposition: "review",
+      resolution: "backup-replace"
+    });
+    expect(APPLY_ISSUE_POLICY["external-skill-conflict"]).toEqual({
+      disposition: "block",
+      resolution: "external-action"
+    });
+    expect(APPLY_ISSUE_POLICY["recovery-required"]).toEqual({
+      disposition: "block",
+      resolution: "open-recovery"
+    });
   });
 });

@@ -183,8 +183,6 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       (message) =>
         createApplyIssue({
           code: "secret-warning",
-          disposition: "notice",
-          resolution: "automatic",
           resourceKind: "instructions",
           message
         })
@@ -200,8 +198,6 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     ) {
       issues.push(createApplyIssue({
         code: "instruction-alias",
-        disposition: "notice",
-        resolution: "preserve",
         resourceKind: "instructions",
         path: targetPaths.instructionsOverridePath,
         message: `${targetPaths.instructionsOverridePath} exists and may override AGENTS.md`
@@ -223,8 +219,6 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
       if (!validation.ok) {
         issues.push(createApplyIssue({
           code: "invalid-native-config",
-          disposition: "block",
-          resolution: "external-action",
           resourceKind: "configuration",
           path: targetPaths.configPath,
           message: `Invalid live config.toml: ${validation.message}`
@@ -242,8 +236,6 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
             if (selection.enabled) {
               issues.push(createApplyIssue({
                 code: "missing-native-mcp",
-                disposition: "block",
-                resolution: "edit-profile",
                 resourceKind: "mcp",
                 resourceId: selection.name,
                 path: targetPaths.configPath,

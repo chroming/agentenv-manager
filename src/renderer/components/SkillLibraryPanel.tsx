@@ -158,7 +158,7 @@ interface SkillLibraryPanelProps {
   activeTool?: "import" | "discoveries";
   isRefreshingInventory?: boolean;
   onCloseTool?(): void;
-  onRefreshInventory(): Promise<void>;
+  onRefreshInventory(announce?: boolean): Promise<void>;
   onSelectLocalSkillFolder(): Promise<string | undefined>;
   onScanLocalSkillSource?(rootPath: string): Promise<ProjectSkillScanResult>;
   onImportUnmanaged(sourcePath: string): Promise<boolean>;
@@ -1561,6 +1561,12 @@ export const SkillLibraryPanel = ({
     const sourcePath = await onSelectLocalSkillFolder();
     if (sourcePath) {
       setLocalSkillPath(sourcePath);
+      setLocalImportOperation(true);
+      try {
+        await onRefreshInventory(false);
+      } finally {
+        setLocalImportOperation(false);
+      }
     }
   };
   const mergeKeepEntry = mergePreview?.entries.find((entry) => entry.id === mergeKeepId);

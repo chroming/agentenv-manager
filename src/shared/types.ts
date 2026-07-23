@@ -1230,14 +1230,17 @@ export type ApplyIssueCode =
   | "ignored-skill-preserved"
   | "duplicate-runtime-skill"
   | "native-disabled-skill"
+  | "runtime-observation"
+  | "runtime-state-unavailable"
   | "runtime-skill-conflict"
+  | "unsupported-skill-management"
   | "shared-skill-conflict"
   | "shared-skill-deferred"
   | "skill-root-isolation"
   | "invalid-skill-root"
   | "recovery-required"
-  | "generic-blocker"
-  | "generic-notice";
+  | "operation-precondition"
+  | "operation-notice";
 
 export interface ApplyIssue {
   id: string;

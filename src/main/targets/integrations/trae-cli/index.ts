@@ -503,8 +503,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
         (message) =>
           createApplyIssue({
             code: "secret-warning",
-            disposition: "notice",
-            resolution: "automatic",
             resourceKind: "instructions",
             message
           })
@@ -525,8 +523,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
       if (managesInstructions && aliasInstructions.some((content) => content.trim())) {
         issues.push(createApplyIssue({
           code: "instruction-alias",
-          disposition: "notice",
-          resolution: "preserve",
           resourceKind: "instructions",
           message: "Trae CLI also has user instruction aliases outside AgentEnv management; they may add guidance."
         }));
@@ -564,8 +560,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
         if (!yaml.ok) {
           issues.push(createApplyIssue({
             code: "invalid-native-config",
-            disposition: "block",
-            resolution: "external-action",
             resourceKind: "configuration",
             path: targetPaths.configPath,
             message: yaml.message
@@ -574,8 +568,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
         if (!json.ok) {
           issues.push(createApplyIssue({
             code: "invalid-native-config",
-            disposition: "block",
-            resolution: "external-action",
             resourceKind: "configuration",
             path: targetPaths.mcpConfigPath ?? targetPaths.configPath,
             message: json.message
@@ -584,8 +576,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
         if (!legacyYaml.ok) {
           issues.push(createApplyIssue({
             code: "invalid-native-config",
-            disposition: "block",
-            resolution: "external-action",
             resourceKind: "configuration",
             path: legacyYamlPath,
             message: legacyYaml.message
@@ -606,8 +596,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
             if (occurrenceCount > 1) {
               issues.push(createApplyIssue({
                 code: "duplicate-native-mcp",
-                disposition: "block",
-                resolution: "external-action",
                 resourceKind: "mcp",
                 resourceId: selection.name,
                 message: `MCP server ${selection.name} is defined in multiple Trae CLI user files. Keep one definition or use the Agent setting.`
@@ -617,8 +605,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
             if (legacyYamlServer) {
               issues.push(createApplyIssue({
                 code: "agent-owned-native-mcp",
-                disposition: "block",
-                resolution: "external-action",
                 resourceKind: "mcp",
                 resourceId: selection.name,
                 path: legacyYamlPath,
@@ -630,8 +616,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
               if (selection.enabled) {
                 issues.push(createApplyIssue({
                   code: "missing-native-mcp",
-                  disposition: "block",
-                  resolution: "edit-profile",
                   resourceKind: "mcp",
                   resourceId: selection.name,
                   message: `MCP server ${selection.name} is not configured in Trae CLI. Turn it off in this Profile or configure it in Trae CLI.`
@@ -647,8 +631,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
               if (!currentYaml.ok || !currentServer?.node) {
                 issues.push(createApplyIssue({
                   code: "unsafe-native-mcp-update",
-                  disposition: "block",
-                  resolution: "external-action",
                   resourceKind: "mcp",
                   resourceId: selection.name,
                   path: targetPaths.configPath,
@@ -667,8 +649,6 @@ export const traeCliIntegration: AgentTargetIntegration = {
               if (!updated.ok) {
                 issues.push(createApplyIssue({
                   code: "unsafe-native-mcp-update",
-                  disposition: "block",
-                  resolution: "external-action",
                   resourceKind: "mcp",
                   resourceId: selection.name,
                   path: targetPaths.configPath,

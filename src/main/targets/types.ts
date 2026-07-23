@@ -23,6 +23,7 @@ export interface TargetAssetInput {
   skillSyncMethod?: "symlink" | "copy" | "auto";
   approvedUnmanagedSkillHashes?: ReadonlyMap<string, string>;
   replaceablePaths?: ReadonlySet<string>;
+  plannedResourceRemovals?: ReadonlySet<string>;
   isolateSkillRoot?: boolean;
 }
 

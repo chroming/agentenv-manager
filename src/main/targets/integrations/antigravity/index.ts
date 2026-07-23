@@ -180,8 +180,6 @@ export const antigravityIntegration: AgentTargetIntegration = {
         (message) =>
           createApplyIssue({
             code: "secret-warning",
-            disposition: "notice",
-            resolution: "automatic",
             resourceKind: "instructions",
             message
           })
@@ -193,8 +191,6 @@ export const antigravityIntegration: AgentTargetIntegration = {
       if (managesInstructions && [...profile.instructions].length > 12_000) {
         issues.push(createApplyIssue({
           code: "target-instruction-limit",
-          disposition: "block",
-          resolution: "edit-profile",
           resourceKind: "instructions",
           path: targetPaths.instructionsPath,
           message: "Antigravity GEMINI.md exceeds the 12,000 character limit"
@@ -206,8 +202,6 @@ export const antigravityIntegration: AgentTargetIntegration = {
       if (profile.resources.mcpByTarget.antigravity?.mode === "manage") {
         issues.push(createApplyIssue({
           code: "unsupported-mcp-management",
-          disposition: "block",
-          resolution: "edit-profile",
           resourceKind: "mcp",
           message: "Antigravity MCP activation is Agent-controlled. Set this Profile to Ignore MCPs for Antigravity."
         }));

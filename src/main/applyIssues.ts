@@ -8,14 +8,56 @@ import type {
 
 export interface ApplyIssueInput {
   code: ApplyIssueCode;
-  disposition: ApplyIssueDisposition;
-  resolution: ApplyIssueResolution;
   resourceKind: ApplyIssueResourceKind;
   resourceId?: string;
   path?: string;
   message: string;
   detail?: string;
 }
+
+interface ApplyIssuePolicy {
+  disposition: ApplyIssueDisposition;
+  resolution: ApplyIssueResolution;
+}
+
+export const APPLY_ISSUE_POLICY: Record<ApplyIssueCode, ApplyIssuePolicy> = {
+  "target-unavailable": { disposition: "block", resolution: "external-action" },
+  "profile-validation": { disposition: "block", resolution: "edit-profile" },
+  "secret-warning": { disposition: "notice", resolution: "automatic" },
+  "native-setting-preserved": { disposition: "notice", resolution: "preserve" },
+  "instruction-alias": { disposition: "notice", resolution: "preserve" },
+  "invalid-native-config": { disposition: "block", resolution: "external-action" },
+  "missing-native-mcp": { disposition: "block", resolution: "edit-profile" },
+  "unsupported-mcp-management": { disposition: "block", resolution: "edit-profile" },
+  "target-instruction-limit": { disposition: "block", resolution: "edit-profile" },
+  "duplicate-native-mcp": { disposition: "block", resolution: "external-action" },
+  "agent-owned-native-mcp": { disposition: "block", resolution: "external-action" },
+  "unsafe-native-mcp-update": { disposition: "block", resolution: "external-action" },
+  "globally-disabled-skill": { disposition: "notice", resolution: "automatic" },
+  "missing-library-skill": { disposition: "block", resolution: "edit-profile" },
+  "unmanaged-skill-replacement": { disposition: "review", resolution: "backup-replace" },
+  "unmanaged-skill-removal": { disposition: "review", resolution: "backup-replace" },
+  "managed-resource-drift": { disposition: "review", resolution: "backup-replace" },
+  "managed-resource-missing": { disposition: "notice", resolution: "automatic" },
+  "ignored-skill-conflict": { disposition: "block", resolution: "edit-profile" },
+  "external-skill-conflict": { disposition: "block", resolution: "external-action" },
+  "external-skill-preserved": { disposition: "notice", resolution: "preserve" },
+  "unmanaged-skill-preserved": { disposition: "notice", resolution: "preserve" },
+  "ignored-skill-preserved": { disposition: "notice", resolution: "preserve" },
+  "duplicate-runtime-skill": { disposition: "block", resolution: "edit-profile" },
+  "native-disabled-skill": { disposition: "block", resolution: "external-action" },
+  "runtime-observation": { disposition: "notice", resolution: "preserve" },
+  "runtime-state-unavailable": { disposition: "block", resolution: "external-action" },
+  "runtime-skill-conflict": { disposition: "block", resolution: "external-action" },
+  "unsupported-skill-management": { disposition: "block", resolution: "edit-profile" },
+  "shared-skill-conflict": { disposition: "block", resolution: "external-action" },
+  "shared-skill-deferred": { disposition: "notice", resolution: "preserve" },
+  "skill-root-isolation": { disposition: "review", resolution: "backup-replace" },
+  "invalid-skill-root": { disposition: "block", resolution: "external-action" },
+  "recovery-required": { disposition: "block", resolution: "open-recovery" },
+  "operation-precondition": { disposition: "block", resolution: "external-action" },
+  "operation-notice": { disposition: "notice", resolution: "preserve" }
+};
 
 const issueIdentity = ({
   code,
@@ -25,10 +67,14 @@ const issueIdentity = ({
 }: Pick<ApplyIssueInput, "code" | "resourceKind" | "resourceId" | "path">) =>
   [code, resourceKind, resourceId, path].join("\u0000");
 
-export const createApplyIssue = (input: ApplyIssueInput): ApplyIssue => ({
-  id: issueIdentity(input),
-  ...input
-});
+export const createApplyIssue = (input: ApplyIssueInput): ApplyIssue => {
+  const policy = APPLY_ISSUE_POLICY[input.code];
+  return {
+    id: issueIdentity(input),
+    ...input,
+    ...policy
+  };
+};
 
 const dispositionPriority: Record<ApplyIssueDisposition, number> = {
   notice: 0,

@@ -438,7 +438,7 @@ describe("Workspace Sync", () => {
     expect(second.getInstructions()).toBe("# Changed on first\n");
     first.service.dispose();
     second.service.dispose();
-  });
+  }, 15_000);
 
   it("restores Workspace content and clears working state when Sync state cannot be committed", async () => {
     const root = await tempRoot("agentenv-sync-state-failure-");

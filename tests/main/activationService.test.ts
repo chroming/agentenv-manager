@@ -626,7 +626,7 @@ describe("activation service v2", () => {
       .resolves.toBe("# Changed after preview\n");
   });
 
-  it("rejects a Preview when any deployment-relevant Skill fact changes", async () => {
+  it("does not stale a Preview when an unrelated local Skill appears", async () => {
     const { paths, service } = await makeEnv();
     await writeCodexLiveFiles(paths);
     const preview = await service.previewProfile("daily-coding", "codex");
@@ -634,10 +634,29 @@ describe("activation service v2", () => {
     await mkdir(lateSkill, { recursive: true });
     await writeFile(join(lateSkill, "SKILL.md"), "---\nname: late-skill\n---\n# Late\n");
 
+    await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual(
+      expect.objectContaining({ ok: true })
+    );
+    await expect(readFile(paths.globalAgentsPath, "utf8"))
+      .resolves.toBe("# New guidance\n");
+    await expect(readFile(join(lateSkill, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Late");
+  });
+
+  it("rejects a Preview when a deployment-relevant runtime Skill appears", async () => {
+    const { paths, service } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const preview = await service.previewProfile("daily-coding", "codex");
+    const lateSkill = join(paths.codexHome, "skills", "late-review");
+    await mkdir(lateSkill, { recursive: true });
+    await writeFile(join(lateSkill, "SKILL.md"), "---\nname: review\n---\n# Late\n");
+
     await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual({
       ok: false,
       kind: "stale",
-      errors: ["Skill environment changed after preview; review the latest version"]
+      errors: [
+        "A deployment-relevant Skill changed after preview; review the latest version"
+      ]
     });
     await expect(readFile(paths.globalAgentsPath, "utf8"))
       .resolves.toBe("# Old guidance\n");

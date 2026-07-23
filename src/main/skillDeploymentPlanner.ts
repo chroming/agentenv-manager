@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import type { ProfileSkill } from "../shared/schemas";
+import { normalizeSkillKey } from "../shared/skillIdentity";
 import { profileManagesResource } from "../shared/profileResources";
 import type {
   ApplyIssue,
@@ -126,6 +127,73 @@ export const fingerprintSkillInventory = (inventory: SkillInventoryEntry[]): str
   return createHash("sha256").update(JSON.stringify(comparable)).digest("hex");
 };
 
+export const deploymentRelevantSkillInventory = ({
+  inventory,
+  profile,
+  skillLibrary,
+  targetPaths
+}: {
+  inventory: SkillInventoryEntry[];
+  profile: ProfileDetail;
+  skillLibrary: SkillLibraryEntry[];
+  targetPaths: TargetPaths;
+}) => {
+  const libraryById = new Map(skillLibrary.map((skill) => [skill.id, skill]));
+  const profileLibraryIds = new Set(
+    profile.resources.skills.map((reference) => reference.libraryId)
+  );
+  const profileDeploymentNames = new Set(
+    profile.resources.skills.map((reference) => normalizeSkillKey(reference.targetName))
+  );
+  const desiredRuntimeNames = new Set(
+    profile.resources.skills
+      .filter((reference) => reference.enabled)
+      .map((reference) =>
+        normalizeSkillKey(
+          libraryById.get(reference.libraryId)?.name ?? reference.targetName
+        )
+      )
+  );
+  const exactTargetPaths = new Set(
+    targetPaths.skillsDir
+      ? profile.resources.skills.map((reference) =>
+          resolve(join(targetPaths.skillsDir as string, reference.targetName))
+        )
+      : []
+  );
+
+  return inventory.filter((entry) => {
+    const path = resolve(entry.path);
+    if (exactTargetPaths.has(path)) return true;
+    if (entry.managedByTarget === true) return true;
+    if (
+      entry.sharedLocation &&
+      entry.libraryId &&
+      entry.contentMatchesLibrary === true &&
+      entry.ignoreReason !== "keep-shared"
+    ) {
+      return true;
+    }
+    if (entry.libraryId && profileLibraryIds.has(entry.libraryId)) return true;
+    if (
+      profileDeploymentNames.has(
+        normalizeSkillKey(entry.deploymentName ?? entry.id)
+      )
+    ) {
+      return true;
+    }
+    return (
+      entry.locationRole !== "discovery-only" &&
+      entry.runtimeAvailability !== "disabled" &&
+      desiredRuntimeNames.has(normalizeSkillKey(entry.runtimeName ?? entry.name))
+    );
+  });
+};
+
+export const fingerprintSkillDeploymentFacts = (
+  input: Parameters<typeof deploymentRelevantSkillInventory>[0]
+) => fingerprintSkillInventory(deploymentRelevantSkillInventory(input));
+
 export const buildSkillDeploymentPlan = ({
   profile,
   targetPaths,
@@ -235,9 +303,10 @@ export const buildSkillDeploymentPlan = ({
       !replaceTargetCopy
     ) {
       issues.push(createApplyIssue({
-        code: "shared-skill-conflict",
-        disposition: "block",
-        resolution: occupyingItem.status === "ignored" ? "edit-profile" : "external-action",
+        code:
+          occupyingItem.status === "ignored"
+            ? "ignored-skill-conflict"
+            : "shared-skill-conflict",
         resourceKind: "skill",
         resourceId: shared.skillKey,
         path: targetPath,
@@ -256,8 +325,6 @@ export const buildSkillDeploymentPlan = ({
     if (replaceTargetCopy && targetPath) {
       issues.push(createApplyIssue({
         code: "unmanaged-skill-replacement",
-        disposition: "review",
-        resolution: "backup-replace",
         resourceKind: "skill",
         resourceId: shared.skillKey,
         path: targetPath,
@@ -345,8 +412,6 @@ export const buildSkillDeploymentPlan = ({
             : `Shared Skill ${shared.skillKey} stays active until shared migration removes the compatibility copy; this Profile will omit it afterward.`;
     issues.push(createApplyIssue({
       code: "shared-skill-deferred",
-      disposition: "notice",
-      resolution: "preserve",
       resourceKind: "skill",
       resourceId: shared.skillKey,
       path: groupPaths[0],
@@ -444,8 +509,6 @@ export const buildSkillDeploymentPlan = ({
     }
     issues.push(createApplyIssue({
       code: "unmanaged-skill-replacement",
-      disposition: "review",
-      resolution: "backup-replace",
       resourceKind: "skill",
       resourceId: reference.targetName,
       path: targetPath,
