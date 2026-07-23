@@ -110,6 +110,7 @@ import { ProfileList } from "./components/ProfileList";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
 import { ProfileComposerSection } from "./components/ProfileComposerSection";
 import { ResourceIconPicker } from "./components/ResourceIconPicker";
+import { GeneralSettingsSection, SettingsCategoryTabs, type SettingsCategory } from "./components/SettingsCategoryTabs";
 import {
   ProfileSidebar,
   targetIconFor,
@@ -176,7 +177,6 @@ type ProfileDialogMode = "create" | "edit";
 type ProfileCreateSource = "blank" | "target";
 type ProfileCaptureOrigin = "profiles" | "targets";
 type ProfileCaptureActivity = "idle" | "reviewing" | "creating";
-
 interface PendingProfileAction {
   label: string;
 }
@@ -491,6 +491,7 @@ const AppContent = ({
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
   const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const [quickOpen, setQuickOpen] = useState(false);
   const [skillLibraryViewState, setSkillLibraryViewState] = useState(
     defaultSkillLibraryViewState
@@ -2171,6 +2172,7 @@ const AppContent = ({
       return;
     }
     if (readiness.remediationLabel === "Open Recovery") {
+      setSettingsCategory("data");
       setActiveWorkspace("settings");
       setBackupManagerOpen(true);
     }
@@ -3727,6 +3729,7 @@ const AppContent = ({
   const openGitHubConnectionSettings = () => {
     setError(undefined);
     setSkillUpdateCheckStatus(undefined);
+    setSettingsCategory("connections");
     setActiveWorkspace("settings");
     window.setTimeout(() => {
       const section = document.getElementById("github-connection-settings");
@@ -3983,6 +3986,7 @@ const AppContent = ({
     <main
       className={`app-shell${activeWorkspace === "library" ? " app-shell--library" : ""}${
         activeWorkspace === "profiles" ? " app-shell--profiles" : ""
+      }${activeWorkspace === "settings" ? " app-shell--settings" : ""
       }`}
     >
       <ProfileSidebar
@@ -4175,13 +4179,12 @@ const AppContent = ({
             <PageHeader
               className="page-header profile-page-header"
               title={t("Profiles")}
-              description={t("Compose reusable environments and apply them safely to local Agents.")}
               actions={(
                 <div className="profile-page-actions" ref={profilePageActionsRef}>
                   <Button
-                    className={`profile-new-button${profiles.length === 0 ? " is-primary" : ""}`}
+                    className={`profile-new-button${isProfileDirty ? "" : " is-primary"}`}
                     size="prominent"
-                    variant={profiles.length === 0 ? "primary" : "secondary"}
+                    variant={isProfileDirty ? "secondary" : "primary"}
                     icon={<Plus size={15} strokeWidth={2.3} />}
                     onClick={openCreateProfileDialog}
                   >
@@ -4564,6 +4567,7 @@ const AppContent = ({
                         confirmBusy={isProfileApplying}
                         onOpenRecovery={() => {
                           setPreview(undefined);
+                          setSettingsCategory("data");
                           setActiveWorkspace("settings");
                           setBackupManagerOpen(true);
                         }}
@@ -4831,37 +4835,21 @@ const AppContent = ({
             <PageHeader
               className="page-header"
               title={t("Settings")}
-              description={t("Local defaults and connected services.")}
             />
-            <section className="resource-section settings-section" aria-labelledby="appearance-heading">
-              <div className="settings-section-title">
-                <div>
-                  <div className="resource-heading" id="appearance-heading">{t("Appearance")}</div>
-                  <p className="settings-muted">{t("Choose how AgentEnv Manager displays its interface.")}</p>
-                </div>
-              </div>
-              <div className="settings-preference-list">
-                <label className="settings-preference-row">
-                  <span className="settings-preference-copy">
-                    <strong>{t("Language")}</strong>
-                    <small>{t("Uses your system language until you choose another language.")}</small>
-                  </span>
-                  <select
-                    data-testid="locale-select"
-                    aria-label={t("Interface language")}
-                    value={skillSettings.locale}
-                    onChange={(event) =>
-                      updateSkillSettings({ locale: event.currentTarget.value as AppLocale })
-                    }
-                  >
-                    <option value="system">{t("System default")}</option>
-                    <option value="en">{t("English")}</option>
-                    <option value="zh_CN">{t("Simplified Chinese")}</option>
-                    <option value="zh_TW">{t("Traditional Chinese")}</option>
-                  </select>
-                </label>
-              </div>
-            </section>
+            <SettingsCategoryTabs active={settingsCategory} onChange={setSettingsCategory} />
+            <div
+              className="settings-category-panel ui-surface-frame"
+              id="settings-category-panel"
+              role="tabpanel"
+              aria-labelledby={`settings-tab-${settingsCategory}`}
+            >
+            {settingsCategory === "general" ? (
+              <GeneralSettingsSection
+                locale={skillSettings.locale}
+                onLocaleChange={(locale) => updateSkillSettings({ locale })}
+              />
+            ) : null}
+            {settingsCategory === "agents" ? (
             <AgentSettingsSection
               supportedAgents={supportedTargets}
               enabledAgentIds={
@@ -4876,6 +4864,8 @@ const AppContent = ({
               onChooseConfigRoot={chooseTargetConfigRoot}
               onResetConfigRoot={resetTargetConfigRoot}
             />
+            ) : null}
+            {settingsCategory === "skills" ? (
             <section className="resource-section settings-section" aria-labelledby="library-defaults-heading">
               <div className="settings-section-title">
                 <div>
@@ -4925,9 +4915,10 @@ const AppContent = ({
                     }
                   />
                 </div>
-                <label className="settings-preference-row">
+                <label className={`settings-preference-row settings-dependent-row${skillSettings.skillAutoCheckEnabled ? "" : " is-disabled"}`}>
                   <span className="settings-preference-copy">
                     <strong>{t("Check interval")}</strong>
+                    <small>{t("Used only while automatic checks are enabled.")}</small>
                   </span>
                   <span className="settings-interval-control">
                     <input
@@ -4949,7 +4940,112 @@ const AppContent = ({
                 </label>
               </div>
             </section>
-            <WorkspaceSyncSettings />
+            ) : null}
+            {settingsCategory === "connections" ? (
+              <>
+                <WorkspaceSyncSettings />
+                <section
+                  className="resource-section github-settings-section"
+                  id="github-connection-settings"
+                  tabIndex={-1}
+                  aria-label={t("GitHub OAuth settings")}
+                >
+                  <div className="settings-section-header github-account-header">
+                    <div className="github-account-identity">
+                      <span className="settings-service-icon" aria-hidden="true">
+                        <GitFork size={20} strokeWidth={2} />
+                      </span>
+                      <div>
+                        <div className="resource-heading">GitHub</div>
+                        <p className="settings-muted">
+                          {githubAuthStatus.state === "signed-in"
+                            ? githubAuthStatus.user
+                              ? t("Connected as {{login}}", { login: githubAuthStatus.user.login })
+                              : t("Connected; GitHub status is temporarily unavailable")
+                            : githubDeviceLogin ? t("Authorize AgentEnv Manager in your browser")
+                            : t("Connect for reliable GitHub imports and update checks")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="github-settings-actions">
+                      {githubAuthStatus.state === "signed-in" ? (
+                        <button disabled={busy || githubLoginChecking} onClick={signOutGitHub} type="button">
+                          {t("Sign out")}
+                        </button>
+                      ) : !githubDeviceLogin ? (
+                        <button
+                          className="primary-button"
+                          disabled={busy || githubLoginChecking}
+                          onClick={startGitHubLogin}
+                          type="button"
+                        >
+                          <GitFork size={15} strokeWidth={2.2} aria-hidden="true" />
+                          {githubLoginChecking ? t("Connecting...") : t("Sign in with GitHub")}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                  {githubDeviceLogin ? (
+                    <div className="github-device-card">
+                      <button
+                        className={`github-device-code${githubCodeCopied ? " is-copied" : ""}`}
+                        type="button"
+                        aria-label={t("Copy GitHub device code {{code}}", { code: githubDeviceLogin.userCode })}
+                        onClick={copyGitHubDeviceCode}
+                      >
+                        <span>{t("Device code")}</span>
+                        <strong>{githubDeviceLogin.userCode}</strong>
+                        <span className="github-device-copy-state">
+                          {githubCodeCopied ? <CheckCircle2 size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+                          {githubCodeCopied ? t("Copied") : t("Copy")}
+                        </span>
+                      </button>
+                      <div className="github-device-status" role="status" aria-live="polite">
+                        <RefreshCw className={githubLoginChecking ? "is-spinning" : ""} size={15} aria-hidden="true" />
+                        <span>{githubLoginMessage || t("Waiting for authorization. This page updates automatically.")}</span>
+                      </div>
+                      <div className="github-device-actions">
+                        <button
+                          className="primary-button"
+                          onClick={() => window.agentEnv.openGitHubDevicePage(githubDeviceLogin.verificationUri)}
+                          type="button"
+                        >
+                          <ExternalLink size={15} aria-hidden="true" />
+                          {t("Open GitHub")}
+                        </button>
+                        <button disabled={githubLoginChecking} onClick={() => void pollGitHubLogin()} type="button">
+                          {t("Check now")}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  {githubAuthStatus.state === "signed-in" ? (
+                    <div className="github-connected-row" role="status">
+                      <span className="github-connected-indicator" aria-hidden="true" />
+                      <strong>{t("Connected")}</strong>
+                      {githubAuthStatus.rateLimit ? (
+                        <span>
+                          {t("{{remaining}} of {{limit}} API requests remaining · resets {{time}}", {
+                            remaining: formatNumber(githubAuthStatus.rateLimit.remaining),
+                            limit: formatNumber(githubAuthStatus.rateLimit.limit),
+                            time: formatDate(githubAuthStatus.rateLimit.resetAt)
+                          })}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : githubLoginMessage && !githubDeviceLogin ? (
+                    <div className="github-login-result" role="status">{githubLoginMessage}</div>
+                  ) : null}
+                  {githubAuthStatus.error ? (
+                    <div className={`github-login-result${githubAuthStatus.verification === "unavailable" ? "" : " github-login-result--error"}`}
+                      role={githubAuthStatus.verification === "unavailable" ? "status" : "alert"}>
+                      {githubAuthStatus.error}
+                    </div>
+                  ) : null}
+                </section>
+              </>
+            ) : null}
+            {settingsCategory === "data" ? (
             <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">
               <div className="settings-section-header settings-data-header">
                 <div>
@@ -5025,105 +5121,8 @@ const AppContent = ({
                 </div>
               </div>
             </section>
-            <section
-              className="resource-section github-settings-section"
-              id="github-connection-settings"
-              tabIndex={-1}
-              aria-label={t("GitHub OAuth settings")}
-            >
-              <div className="settings-section-header github-account-header">
-                <div className="github-account-identity">
-                  <span className="settings-service-icon" aria-hidden="true">
-                    <GitFork size={20} strokeWidth={2} />
-                  </span>
-                  <div>
-                    <div className="resource-heading">GitHub</div>
-                    <p className="settings-muted">
-                      {githubAuthStatus.state === "signed-in"
-                        ? githubAuthStatus.user
-                          ? t("Connected as {{login}}", { login: githubAuthStatus.user.login })
-                          : t("Connected; GitHub status is temporarily unavailable")
-                        : githubDeviceLogin ? t("Authorize AgentEnv Manager in your browser")
-                        : t("Connect for reliable GitHub imports and update checks")}
-                    </p>
-                  </div>
-                </div>
-                <div className="github-settings-actions">
-                  {githubAuthStatus.state === "signed-in" ? (
-                    <button disabled={busy || githubLoginChecking} onClick={signOutGitHub} type="button">
-                      {t("Sign out")}
-                    </button>
-                  ) : !githubDeviceLogin ? (
-                    <button
-                      className="primary-button"
-                      disabled={busy || githubLoginChecking}
-                      onClick={startGitHubLogin}
-                      type="button"
-                    >
-                      <GitFork size={15} strokeWidth={2.2} aria-hidden="true" />
-                      {githubLoginChecking ? t("Connecting...") : t("Sign in with GitHub")}
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              {githubDeviceLogin ? (
-                <div className="github-device-card">
-                  <button
-                    className={`github-device-code${githubCodeCopied ? " is-copied" : ""}`}
-                    type="button"
-                    aria-label={t("Copy GitHub device code {{code}}", { code: githubDeviceLogin.userCode })}
-                    onClick={copyGitHubDeviceCode}
-                  >
-                    <span>{t("Device code")}</span>
-                    <strong>{githubDeviceLogin.userCode}</strong>
-                    <span className="github-device-copy-state">
-                      {githubCodeCopied ? <CheckCircle2 size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-                      {githubCodeCopied ? t("Copied") : t("Copy")}
-                    </span>
-                  </button>
-                  <div className="github-device-status" role="status" aria-live="polite">
-                    <RefreshCw className={githubLoginChecking ? "is-spinning" : ""} size={15} aria-hidden="true" />
-                    <span>{githubLoginMessage || t("Waiting for authorization. This page updates automatically.")}</span>
-                  </div>
-                  <div className="github-device-actions">
-                    <button
-                      className="primary-button"
-                      onClick={() => window.agentEnv.openGitHubDevicePage(githubDeviceLogin.verificationUri)}
-                      type="button"
-                    >
-                      <ExternalLink size={15} aria-hidden="true" />
-                      {t("Open GitHub")}
-                    </button>
-                    <button disabled={githubLoginChecking} onClick={() => void pollGitHubLogin()} type="button">
-                      {t("Check now")}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-              {githubAuthStatus.state === "signed-in" ? (
-                <div className="github-connected-row" role="status">
-                  <span className="github-connected-indicator" aria-hidden="true" />
-                  <strong>{t("Connected")}</strong>
-                  {githubAuthStatus.rateLimit ? (
-                    <span>
-                      {t("{{remaining}} of {{limit}} API requests remaining · resets {{time}}", {
-                        remaining: formatNumber(githubAuthStatus.rateLimit.remaining),
-                        limit: formatNumber(githubAuthStatus.rateLimit.limit),
-                        time: formatDate(githubAuthStatus.rateLimit.resetAt)
-                      })}
-                    </span>
-                  ) : null}
-                </div>
-              ) : githubLoginMessage && !githubDeviceLogin ? (
-                <div className="github-login-result" role="status">{githubLoginMessage}</div>
-              ) : null}
-              {githubAuthStatus.error ? (
-                <div className={`github-login-result${githubAuthStatus.verification === "unavailable" ? "" : " github-login-result--error"}`}
-                  role={githubAuthStatus.verification === "unavailable" ? "status" : "alert"}>
-                  {githubAuthStatus.error}
-                </div>
-              ) : null}
-            </section>
+            ) : null}
+            </div>
             {backupManagerOpen ? (
               <div className="preview-modal-backdrop" onClick={busy ? undefined : closeBackupManager}>
                 <section

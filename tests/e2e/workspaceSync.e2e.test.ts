@@ -44,8 +44,10 @@ describe("Workspace Sync desktop flow", () => {
       timeout: 15_000
     }).toEqual({ state: "ready" });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByRole("tab", { name: "Connections" }).click();
     const section = page.getByRole("region", { name: "Workspace Sync" });
     await section.waitFor({ state: "visible" });
+    await section.getByRole("button", { name: "Set up" }).click();
     await section.getByLabel("Private Git repository").fill(remote);
     await section.getByLabel("Branch").fill("main");
     await section.getByRole("button", { name: "Connect repository" }).click();

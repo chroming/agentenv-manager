@@ -734,6 +734,18 @@ const openSkillLibrary = async (page: Page) => {
     .click();
 };
 
+type SettingsCategoryName = "General" | "Agents" | "Skills" | "Connections" | "Data";
+
+const openSettingsCategory = async (page: Page, category: SettingsCategoryName) => {
+  await page
+    .getByRole("complementary", { name: "Global navigation" })
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  const tab = page.getByRole("tab", { name: category, exact: true });
+  await tab.click();
+  await expect.poll(() => tab.getAttribute("aria-selected")).toBe("true");
+};
+
 type ApplyTargetName = "OpenCode" | "Codex" | "Claude Code" | "Trae CLI";
 
 const applyActionButton = (page: Page, _targetName: ApplyTargetName) =>
@@ -3044,7 +3056,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(Math.abs(saveBox!.height - applyButtonBox!.height)).toBeLessThanOrEqual(1);
       expect(Math.abs(saveBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
       expect(Math.round(saveBox!.height)).toBe(34);
-      expect(Math.round(saveBox!.width)).toBe((page.viewportSize()?.width ?? 0) <= 1050 ? 96 : 104);
+      expect(Math.round(saveBox!.width)).toBe(104);
 
       const controlsFitText = await commitActions.locator("button").evaluateAll((buttons) =>
         buttons.every((button) => {
@@ -3263,13 +3275,14 @@ describe("Electron UI profile switching e2e", () => {
     const skillsButton = navigation.getByRole("button", { name: "Skills", exact: true });
     const profilesButton = navigation.getByRole("button", { name: "Profiles", exact: true });
 
-    const readGeometry = async (headingName: string, actionName: string) => {
+    const readGeometry = async (headingName: string, actionName?: string) => {
       const heading = page.getByRole("heading", { name: headingName, exact: true });
-      const action = page.getByRole("button", { name: actionName, exact: true });
       await heading.waitFor({ state: "visible" });
       const headingElement = await heading.elementHandle();
-      const actionElement = await action.elementHandle();
-      if (!headingElement || !actionElement) {
+      const actionElement = actionName
+        ? await page.getByRole("button", { name: actionName, exact: true }).elementHandle()
+        : null;
+      if (!headingElement) {
         throw new Error(`Unable to measure ${headingName}`);
       }
       return page.evaluate(
@@ -3332,7 +3345,7 @@ describe("Electron UI profile switching e2e", () => {
       const workspaces = [
         { button: "Profiles", heading: "Profiles", action: "New Profile" },
         { button: "Agents", heading: "Agents", action: "Refresh" },
-        { button: "Settings", heading: "Settings", action: "Sign in with GitHub" }
+        { button: "Settings", heading: "Settings", action: undefined }
       ];
       for (const workspace of workspaces) {
         await navigation.getByRole("button", { name: workspace.button, exact: true }).click();
@@ -3366,8 +3379,13 @@ describe("Electron UI profile switching e2e", () => {
           lineHeight: skillsGeometry.heading.lineHeight,
           x: skillsGeometry.heading.x
         });
-        expect(workspaceGeometry.action?.height).toBe(skillsGeometry.action?.height);
+        if (workspace.action) {
+          expect(workspaceGeometry.action?.height).toBe(skillsGeometry.action?.height);
+        } else {
+          expect(workspaceGeometry.action).toBeUndefined();
+        }
         if (workspace.button === "Settings") {
+          await page.getByRole("tab", { name: "Data", exact: true }).click();
           const actionGeometry = await page.locator(".settings-data-actions button").evaluateAll(
             (buttons) =>
               buttons.map((button) => {
@@ -3748,7 +3766,7 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible" });
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
-      .toContain("ui-button--ghost");
+      .toContain("ui-icon-button--ghost");
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).getAttribute("class"))
       .toContain("ui-button--secondary");
@@ -3808,7 +3826,7 @@ describe("Electron UI profile switching e2e", () => {
       .toContain("ui-button--secondary");
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
-      .toContain("ui-button--ghost");
+      .toContain("ui-icon-button--ghost");
     await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
     await openCodeCard.getByRole("button", { name: "Stop managing OpenCode" }).click();
 
@@ -5451,7 +5469,7 @@ describe("Electron UI profile switching e2e", () => {
   it("detects and applies updates after a library skill is installed on OpenCode", async () => {
     const { librarySkill, opencodeDir, page } = await launchApp();
 
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettingsCategory(page, "Skills");
     await page.getByLabel("Global skill sync method").selectOption("copy");
     const autoCheck = page.getByRole("switch", { name: "Skill auto update check" });
     await autoCheck.waitFor({ state: "visible" });
@@ -5769,7 +5787,7 @@ describe("Electron UI profile switching e2e", () => {
       },
       backupRoot
     );
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettingsCategory(page, "Data");
     await page.getByRole("button", { name: "Export data" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain(
       "Data export created"
@@ -5842,7 +5860,7 @@ describe("Electron UI profile switching e2e", () => {
       "Latest Recovery"
     );
 
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettingsCategory(page, "Data");
     await page.getByLabel("Backup retention").selectOption("30");
     await expect.poll(() => page.getByLabel("Backup retention").inputValue()).toBe("30");
     await page.getByRole("button", { name: "Manage", exact: true }).click();
@@ -5872,7 +5890,7 @@ describe("Electron UI profile switching e2e", () => {
   it("installs library skills using copy mode from Settings", async () => {
     const { opencodeDir, page } = await launchApp();
 
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettingsCategory(page, "Skills");
     await page.getByLabel("Global skill sync method").selectOption("copy");
     await expect
       .poll(() => page.getByLabel("Global skill sync method").inputValue())
@@ -5894,7 +5912,7 @@ describe("Electron UI profile switching e2e", () => {
   it("keeps canonical skills in app data while installing Target-specific runtime copies", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
 
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettingsCategory(page, "Data");
     await expect.poll(() => page.locator(".settings-data-path").textContent())
       .toBe(appDataRoot);
     expect(await page.getByLabel("Global skill storage location").count()).toBe(0);
@@ -6148,7 +6166,7 @@ describe("Electron UI profile switching e2e", () => {
   it("persists skill background update check settings from Settings", async () => {
     const { appDataRoot, page } = await launchApp();
 
-    await page.getByRole("button", { name: "Settings" }).click();
+    await openSettingsCategory(page, "Skills");
     const autoCheck = page.getByRole("switch", { name: "Skill auto update check" });
     const interval = page.getByLabel("Skill auto check interval minutes");
     const assertAutoCheckLayout = async () => {
@@ -6261,7 +6279,7 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
 
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettingsCategory(page, "Agents");
     const openCodeSwitch = page.getByRole("switch", { name: "Turn off OpenCode" });
     await openCodeSwitch.waitFor({ state: "visible" });
 
@@ -6357,7 +6375,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({
       state: "visible"
     });
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettingsCategory(page, "Agents");
     await page.getByRole("switch", { name: "Turn on OpenCode" }).click();
     await page.getByRole("switch", { name: "Turn off OpenCode" }).waitFor({ state: "visible" });
 
@@ -6369,10 +6387,11 @@ describe("Electron UI profile switching e2e", () => {
   it("switches, persists, and contains all supported interface languages", async () => {
     const { app: electronApp, appDataRoot, page } = await launchApp();
 
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettingsCategory(page, "General");
     await page.getByTestId("locale-select").selectOption("zh_CN");
     await page.getByRole("heading", { name: "设置", exact: true }).waitFor();
     await page.getByRole("status").filter({ hasText: "设置已保存" }).waitFor();
+    await page.getByRole("tab", { name: "Agents", exact: true }).click();
     await page.getByText("管理 OpenCode 的指令、技能和 MCP 启用状态。", { exact: true }).waitFor();
     expect(await page.getByText("Manage OpenCode instructions, Skills, and MCP activation.", { exact: true }).count()).toBe(0);
     await expect
@@ -6395,6 +6414,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.locator("html").getAttribute("lang")).toBe("zh-CN");
 
     await page.getByRole("button", { name: "设置", exact: true }).click();
+    await page.getByRole("tab", { name: "通用", exact: true }).click();
     await page.getByTestId("locale-select").selectOption("zh_TW");
     await page.getByRole("heading", { name: "設定", exact: true }).waitFor();
     expect(await page.locator("html").getAttribute("lang")).toBe("zh-TW");
@@ -6558,7 +6578,7 @@ describe("Electron UI profile switching e2e", () => {
       ipcMain.handle("github:open-device-page", () => undefined);
     });
 
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettingsCategory(page, "Connections");
     await page.getByRole("button", { name: "Sign in with GitHub" }).click();
     const codeButton = page.getByRole("button", { name: "Copy GitHub device code E2E1-CODE" });
     await codeButton.click();
@@ -7645,8 +7665,11 @@ describe("Electron UI profile switching e2e", () => {
     const targetListGeometry = await page.locator(".target-list").evaluate((list) => {
       const rows = Array.from(list.querySelectorAll<HTMLElement>(".target-card--workflow"));
       const listBox = list.getBoundingClientRect();
-      const summaryLefts = rows.map((row) =>
-        row.querySelector<HTMLElement>(".target-workflow-summary")!.getBoundingClientRect().left
+      const lifecycleLefts = rows.map((row) =>
+        row.querySelector<HTMLElement>(".target-workflow-lifecycle")!.getBoundingClientRect().left
+      );
+      const profileLefts = rows.map((row) =>
+        row.querySelector<HTMLElement>(".target-workflow-profile")!.getBoundingClientRect().left
       );
       const actionLefts = rows.map((row) =>
         row.querySelector<HTMLElement>(".target-workflow-actions")!.getBoundingClientRect().left
@@ -7668,7 +7691,8 @@ describe("Electron UI profile switching e2e", () => {
           const status = row.querySelector<HTMLElement>(".target-health-status")!;
           return getComputedStyle(status).backgroundColor === "rgba(0, 0, 0, 0)";
         }),
-        summaryLanesAligned: Math.max(...summaryLefts) - Math.min(...summaryLefts) <= 1,
+        lifecycleLanesAligned: Math.max(...lifecycleLefts) - Math.min(...lifecycleLefts) <= 1,
+        profileLanesAligned: Math.max(...profileLefts) - Math.min(...profileLefts) <= 1,
         actionLanesAligned: Math.max(...actionLefts) - Math.min(...actionLefts) <= 1
       };
     });
@@ -7678,7 +7702,8 @@ describe("Electron UI profile switching e2e", () => {
       continuous: true,
       flatRows: true,
       healthBackgroundsAreNeutral: true,
-      summaryLanesAligned: true
+      lifecycleLanesAligned: true,
+      profileLanesAligned: true
     });
     const targetTypography = await page.locator(".target-card--workflow").first().evaluate((row) => ({
       description: getComputedStyle(row.querySelector<HTMLElement>(".target-workflow-description")!).fontWeight,
@@ -7687,7 +7712,7 @@ describe("Electron UI profile switching e2e", () => {
     }));
     expect(targetTypography).toEqual({ description: "400", name: "500", status: "400" });
 
-    await sidebar.getByRole("button", { name: "Settings", exact: true }).click();
+    await openSettingsCategory(page, "Skills");
     const preferenceGeometry = await page.locator(".settings-preference-row").evaluateAll((rows) =>
       rows.map((row) => {
         const copy = row.querySelector<HTMLElement>(".settings-preference-copy")!;
@@ -7710,7 +7735,7 @@ describe("Electron UI profile switching e2e", () => {
         };
       })
     );
-    expect(preferenceGeometry.length).toBeGreaterThanOrEqual(4);
+    expect(preferenceGeometry.length).toBeGreaterThanOrEqual(3);
     expect(preferenceGeometry.every((row) => row.contained && !row.overlaps)).toBe(true);
     expect(preferenceGeometry.every((row) => Math.abs(row.height - 34) <= 1)).toBe(true);
     const preferenceTypography = await page.locator(".settings-preference-copy").first().evaluate((copy) => ({
@@ -7718,9 +7743,10 @@ describe("Electron UI profile switching e2e", () => {
       label: getComputedStyle(copy.querySelector<HTMLElement>("strong")!).fontWeight
     }));
     expect(preferenceTypography).toEqual({ description: "400", label: "500" });
+    await page.getByRole("tab", { name: "Data", exact: true }).click();
     const settingsActionHeights = await page
       .locator(
-        ".settings-data-actions button, .backup-settings-row > button, .backup-settings-row > select, .github-settings-actions button, .github-device-actions button"
+        ".settings-data-actions button, .backup-settings-row > button, .backup-settings-row > select"
       )
       .evaluateAll((controls) =>
         controls.map((control) => (control as HTMLElement).getBoundingClientRect().height)

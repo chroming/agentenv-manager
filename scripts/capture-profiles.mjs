@@ -673,7 +673,7 @@ try {
     },
     projectSkillRoot
   );
-  await importDialog.getByRole("button", { name: "Choose local skill folder" }).click();
+  await importDialog.getByRole("button", { name: "Choose local Skill source" }).click();
   await importDialog.locator(".project-skill-row").first().waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-import-projects-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -687,7 +687,7 @@ try {
   await importDialog.getByRole("button", { name: "Scan", exact: true }).click();
   await importDialog.locator(".github-candidate-row").first().waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-import-results-920x620.png"));
-  await importDialog.getByRole("button", { name: "Close import" }).click();
+  await importDialog.getByRole("button", { name: "Close", exact: true }).click();
   await importDialog.waitFor({ state: "hidden" });
 
   const skillActionsButton = page.getByRole("button", {
@@ -1007,7 +1007,7 @@ try {
     "settings",
     () => page.getByRole("region", { name: "Settings", exact: true })
   );
-  const settingsScroller = page.locator(".editor-panel");
+  await page.getByRole("tab", { name: "Agents" }).click();
   const customFolders = page.locator("details.agent-path-settings");
   await customFolders.getByText("Custom folders", { exact: true }).click();
   await customFolders.scrollIntoViewIfNeeded();
@@ -1017,21 +1017,22 @@ try {
   await capturePage(page, join(outputDir, "settings-custom-folders-1180x728.png"));
   await customFolders.getByText("Custom folders", { exact: true }).click();
   await setWindowSize(page, windowHandle, 920, 620);
-  await settingsScroller.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
-  await page.waitForTimeout(150);
+  await page.getByRole("tab", { name: "Skills" }).click();
   await capturePage(page, join(outputDir, "settings-controls-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
-  await settingsScroller.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
-  await page.waitForTimeout(150);
   await capturePage(page, join(outputDir, "settings-controls-1180x728.png"));
-  await settingsScroller.evaluate((element) => {
-    element.scrollTop = 0;
-  });
+  await page.getByRole("tab", { name: "Connections" }).click();
+  await capturePage(page, join(outputDir, "settings-connections-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
+  await capturePage(page, join(outputDir, "settings-connections-920x620.png"));
+  await page.getByRole("button", { name: "Set up" }).click();
+  await capturePage(page, join(outputDir, "settings-connections-setup-920x620.png"));
+  await page.getByRole("tab", { name: "Data" }).click();
+  await capturePage(page, join(outputDir, "settings-data-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "settings-data-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await page.getByRole("tab", { name: "General" }).click();
   await page.getByLabel("Interface language").selectOption("zh_CN");
   await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-zh-cn-920x620.png"));

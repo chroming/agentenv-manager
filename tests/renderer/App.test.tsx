@@ -768,6 +768,12 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
   };
 
+  const openSettingsCategory = async (category: "General" | "Agents" | "Skills" | "Connections" | "Data") => {
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("tab", { name: category }));
+  };
+
   const openRecoveryHistory = async () => {
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     fireEvent.click(await screen.findByRole("button", { name: /Recovery/ }));
@@ -785,7 +791,7 @@ describe("App", () => {
     expect(brandIcon?.getAttribute("src")).toContain("app-icon");
     const composer = await screen.findByRole("region", { name: "Profile composer" });
     expect(within(composer).queryByRole("heading", { name: "Profile Composer" })).not.toBeInTheDocument();
-    expect(screen.getByText("Compose reusable environments and apply them safely to local Agents.")).toBeInTheDocument();
+    expect(screen.queryByText("Compose reusable environments and apply them safely to local Agents.")).not.toBeInTheDocument();
     expect(screen.queryByRole("status", { name: "Safe apply" })).not.toBeInTheDocument();
     expect(document.querySelector(".profile-readiness-strip")).toBeNull();
     expect(screen.getByRole("status", { name: "Profile readiness" })).toHaveTextContent(
@@ -1323,8 +1329,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await openSettingsCategory("Connections");
     fireEvent.click(screen.getByRole("button", { name: "Sign in with GitHub" }));
 
     expect(api.updateSettings).not.toHaveBeenCalled();
@@ -1345,8 +1350,7 @@ describe("App", () => {
     installApi();
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await openSettingsCategory("Skills");
 
     const syncMethod = screen.getByLabelText("Global skill sync method");
     expect(syncMethod).toHaveValue("symlink");
@@ -1388,6 +1392,33 @@ describe("App", () => {
     await waitFor(() => expect(document.documentElement.lang).toBe("en-US"));
   });
 
+  it("moves between Settings categories with desktop tab keyboard controls", async () => {
+    installApi();
+    render(<App />);
+
+    await openSettingsCategory("General");
+    const generalTab = screen.getByRole("tab", { name: "General" });
+    generalTab.focus();
+    fireEvent.keyDown(generalTab, { key: "ArrowRight" });
+
+    const agentsTab = screen.getByRole("tab", { name: "Agents" });
+    expect(agentsTab).toHaveFocus();
+    expect(agentsTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByTestId("locale-select")).not.toBeInTheDocument();
+    expect(await screen.findByRole("switch", { name: "Turn off OpenCode" })).toBeInTheDocument();
+
+    fireEvent.keyDown(agentsTab, { key: "End" });
+    const dataTab = screen.getByRole("tab", { name: "Data" });
+    expect(dataTab).toHaveFocus();
+    expect(dataTab).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText("Data & Backups")).toBeInTheDocument();
+
+    fireEvent.keyDown(dataTab, { key: "Home" });
+    expect(generalTab).toHaveFocus();
+    expect(generalTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("locale-select")).toBeInTheDocument();
+  });
+
   it("turns Agents off and removes their operational UI", async () => {
     let enabledTargetIds = ["opencode", "codex"];
     const allTargets = [target, codexTarget];
@@ -1422,8 +1453,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await openSettingsCategory("Agents");
     fireEvent.click(screen.getByRole("switch", { name: "Turn off Codex" }));
 
     await waitFor(() =>
@@ -1473,8 +1503,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await openSettingsCategory("Agents");
     fireEvent.click(screen.getByRole("switch", { name: "Turn off OpenCode" }));
 
     const dialog = screen.getByRole("dialog", { name: "Turn off OpenCode?" });
@@ -1517,8 +1546,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await openSettingsCategory("Agents");
 
     expect(await screen.findByText("Recovery required")).toBeInTheDocument();
     expect(screen.getByRole("switch", { name: "Turn off OpenCode" })).toBeDisabled();
@@ -2782,8 +2810,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await openSettingsCategory("Data");
     const restoreTrigger = screen.getByRole("button", { name: "Restore data" });
     restoreTrigger.focus();
     fireEvent.click(restoreTrigger);
@@ -2849,8 +2876,7 @@ describe("App", () => {
     });
     render(<App />);
 
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await openSettingsCategory("Data");
     expect(await screen.findByText("2 backups · 6.0 KB")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Backup retention"), { target: { value: "90" } });
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ backupRetentionDays: 90 }));

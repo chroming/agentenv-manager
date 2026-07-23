@@ -70,6 +70,7 @@ export const WorkspaceSyncSettings = () => {
   const [status, setStatus] = useState(emptyStatus);
   const [repository, setRepository] = useState("");
   const [branch, setBranch] = useState("main");
+  const [isSetupOpen, setIsSetupOpen] = useState(false);
   const [review, setReview] = useState<WorkspaceSyncReview>();
   const [choices, setChoices] = useState<Record<string, WorkspaceSyncConflictChoice>>({});
   const [acceptLive, setAcceptLive] = useState(false);
@@ -190,7 +191,10 @@ export const WorkspaceSyncSettings = () => {
 
   const connect = async () => {
     const next = await run("connect", () => window.agentEnv.connectWorkspaceSync({ repository, branch }));
-    if (next) setStatus(next);
+    if (next) {
+      setStatus(next);
+      setIsSetupOpen(false);
+    }
   };
   const check = async () => {
     const next = await run("check", () => window.agentEnv.checkWorkspaceSync());
@@ -250,19 +254,35 @@ export const WorkspaceSyncSettings = () => {
         ) : null}
       </div>
       {!connected ? (
-        <div className="workspace-sync-connect">
-          <label>
-            <span>{t("Private Git repository")}</span>
-            <input value={repository} onChange={(event) => setRepository(event.currentTarget.value)} placeholder="git@github.com:you/agentenv-workspace.git" />
-          </label>
-          <label className="workspace-sync-branch">
-            <span>{t("Branch")}</span>
-            <input value={branch} onChange={(event) => setBranch(event.currentTarget.value)} />
-          </label>
-          <Button variant="primary" icon={working === "connect" ? <LoaderCircle className="spin" /> : <GitBranch />} disabled={!repository.trim() || !branch.trim() || Boolean(working)} onClick={() => void connect()}>
-            {t("Connect repository")}
-          </Button>
-        </div>
+        <>
+          <div className="workspace-sync-disconnected">
+            <span className="settings-service-icon" aria-hidden="true">
+              <GitBranch size={19} />
+            </span>
+            <span>
+              <strong>{t("Not configured")}</strong>
+              <small>{t("Connect a private Git repository when you want to reuse this Workspace on another Mac.")}</small>
+            </span>
+            <Button variant="secondary" onClick={() => setIsSetupOpen((current) => !current)}>
+              {t(isSetupOpen ? "Cancel" : "Set up")}
+            </Button>
+          </div>
+          {isSetupOpen ? (
+            <div className="workspace-sync-connect">
+              <label>
+                <span>{t("Private Git repository")}</span>
+                <input value={repository} onChange={(event) => setRepository(event.currentTarget.value)} placeholder="git@github.com:you/agentenv-workspace.git" />
+              </label>
+              <label className="workspace-sync-branch">
+                <span>{t("Branch")}</span>
+                <input value={branch} onChange={(event) => setBranch(event.currentTarget.value)} />
+              </label>
+              <Button variant="primary" icon={working === "connect" ? <LoaderCircle className="spin" /> : <GitBranch />} disabled={!repository.trim() || !branch.trim() || Boolean(working)} onClick={() => void connect()}>
+                {t("Connect repository")}
+              </Button>
+            </div>
+          ) : null}
+        </>
       ) : (
         <>
           <div className="workspace-sync-connection">

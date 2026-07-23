@@ -223,79 +223,87 @@ export const ProfileList = ({
                       focusable={false}
                       text={profile.description || t("No description")}
                     />
-                    <span className="profile-row__stats">
-                      <span>{t("{{count}} skills", { count: counts?.skills.count ?? 0 })}</span>
-                      <span>{counts?.mcp.count ?? 0} MCP</span>
-                      <span>{t("{{count}} files", { count: counts?.instructions.count ?? 0 })}</span>
+                    <span className="profile-row__footer">
+                      <span className="profile-row__stats">
+                        <span>{t("{{count}} skills", { count: counts?.skills.count ?? 0 })}</span>
+                        <span>{counts?.mcp.count ?? 0} MCP</span>
+                        <span>{t("{{count}} files", { count: counts?.instructions.count ?? 0 })}</span>
+                      </span>
+                      <span
+                        className={`profile-row__deployments${applications.length === 0 ? " profile-row__deployments--empty" : ""}`}
+                        aria-label={
+                          applications.length > 0
+                            ? t("Active on: {{targets}}", {
+                                targets: applications
+                                  .map((application) => application.target?.name ?? application.state.targetId)
+                                  .join(", ")
+                              })
+                            : t("Not active")
+                        }
+                        title={
+                          applications.length > 0
+                            ? t("Active on: {{targets}}", {
+                                targets: applications
+                                  .map((application) => application.target?.name ?? application.state.targetId)
+                                  .join(", ")
+                              })
+                            : t("Not active")
+                        }
+                      >
+                        {applications.length === 0 ? (
+                          <Monitor size={12} strokeWidth={2} aria-hidden="true" />
+                        ) : applications.map((application) => {
+                          const targetName = application.target?.name ?? application.state.targetId;
+                          const targetIcon = application.target
+                            ? targetIconFor(application.target)
+                            : undefined;
+                          const needsAttention =
+                            application.state.lifecycleStatus === "drifted" ||
+                            application.state.lifecycleStatus === "recovery-required" ||
+                            (application.state.errorCount ?? 0) > 0;
+                          const isCurrent = Boolean(
+                            !needsAttention &&
+                            application.state.appliedProfileHash &&
+                            application.state.appliedProfileHash ===
+                              (profile.targetContentHashes?.[application.state.targetId] ??
+                                profile.contentHash) &&
+                            libraryResourceVersionsEqual(
+                              application.state.appliedLibraryVersions,
+                              profileLibraryVersions[profile.id]
+                            )
+                          );
+                          const deploymentState = needsAttention
+                            ? "attention"
+                            : isCurrent
+                              ? "current"
+                              : "pending";
+                          const deploymentTitle = needsAttention
+                            ? t("{{name}} needs attention", { name: targetName })
+                            : isCurrent
+                              ? t("{{name}} is up to date", { name: targetName })
+                              : t("{{name}} uses this profile; changes are pending", { name: targetName });
+                          return (
+                            <span
+                              className={`profile-target-chip profile-target-chip--${deploymentState}`}
+                              title={deploymentTitle}
+                              key={application.state.targetId}
+                            >
+                              {targetIcon?.assetUrl ? (
+                                <img
+                                  className={`profile-target-logo profile-target-logo--${targetIcon.flavor}`}
+                                  src={targetIcon.assetUrl}
+                                  alt=""
+                                />
+                              ) : (
+                                <Monitor size={12} strokeWidth={2.2} aria-hidden="true" />
+                              )}
+                            </span>
+                          );
+                        })}
+                      </span>
                     </span>
                   </>
                 )}
-                {!isBroken ? (
-                  <span
-                    className={`profile-row__deployments${applications.length === 0 ? " profile-row__deployments--empty" : ""}`}
-                    aria-label={
-                      applications.length > 0
-                        ? t("Active on: {{targets}}", {
-                            targets: applications
-                              .map((application) => application.target?.name ?? application.state.targetId)
-                              .join(", ")
-                          })
-                        : t("Not active")
-                    }
-                  >
-                    {applications.length === 0 ? (
-                      <span>{t("Not active")}</span>
-                    ) : applications.map((application) => {
-                      const targetName = application.target?.name ?? application.state.targetId;
-                      const targetIcon = application.target
-                        ? targetIconFor(application.target)
-                        : undefined;
-                      const needsAttention =
-                        application.state.lifecycleStatus === "drifted" ||
-                        application.state.lifecycleStatus === "recovery-required" ||
-                        (application.state.errorCount ?? 0) > 0;
-                      const isCurrent = Boolean(
-                        !needsAttention &&
-                        application.state.appliedProfileHash &&
-                        application.state.appliedProfileHash ===
-                          (profile.targetContentHashes?.[application.state.targetId] ??
-                            profile.contentHash) &&
-                        libraryResourceVersionsEqual(
-                          application.state.appliedLibraryVersions,
-                          profileLibraryVersions[profile.id]
-                        )
-                      );
-                      const deploymentState = needsAttention
-                        ? "attention"
-                        : isCurrent
-                          ? "current"
-                          : "pending";
-                      const deploymentTitle = needsAttention
-                        ? t("{{name}} needs attention", { name: targetName })
-                        : isCurrent
-                          ? t("{{name}} is up to date", { name: targetName })
-                          : t("{{name}} uses this profile; changes are pending", { name: targetName });
-                      return (
-                        <span
-                          className={`profile-target-chip profile-target-chip--${deploymentState}`}
-                          title={deploymentTitle}
-                          key={application.state.targetId}
-                        >
-                          {targetIcon?.assetUrl ? (
-                            <img
-                              className={`profile-target-logo profile-target-logo--${targetIcon.flavor}`}
-                              src={targetIcon.assetUrl}
-                              alt=""
-                            />
-                          ) : (
-                            <Monitor size={12} strokeWidth={2.2} aria-hidden="true" />
-                          )}
-                          <span>{targetName}</span>
-                        </span>
-                      );
-                    })}
-                  </span>
-                ) : null}
               </button>
             </div>
           );

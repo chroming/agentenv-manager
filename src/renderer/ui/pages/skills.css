@@ -493,6 +493,12 @@
       34px;
   }
 
+  .skill-library-panel .library-table-row {
+    box-sizing: border-box;
+    height: 68px;
+    min-height: 68px;
+  }
+
   .skill-library-panel .library-toolbar {
     grid-template-columns: minmax(180px, 1fr) auto auto auto;
   }

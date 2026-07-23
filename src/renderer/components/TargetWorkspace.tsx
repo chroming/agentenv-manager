@@ -3,8 +3,8 @@ import {
   ArchiveRestore,
   ArrowRight,
   Clock3,
+  CopyPlus,
   Monitor,
-  Plus,
   RefreshCw,
   TerminalSquare
 } from "lucide-react";
@@ -135,7 +135,6 @@ export const TargetWorkspace = ({
       <PageHeader
         className="page-header workspace-page-header"
         title={t("Agents")}
-        description={t("Inspect local Agents, management state, and recovery points.")}
         help={<InfoTip label={t("Agents are local coding tools. Manage environments from Profiles and inspect runtime paths here only when diagnosing a problem.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
@@ -165,6 +164,17 @@ export const TargetWorkspace = ({
       />
 
       <div className="target-list">
+        {targets.length > 0 ? (
+          <div className="target-list__header" aria-hidden="true">
+            <span />
+            <span>{t("Agent")}</span>
+            <span>{t("Status")}</span>
+            <span>{t("Management")}</span>
+            <span>{t("Profile")}</span>
+            <span>{t("Last applied")}</span>
+            <span>{t("Actions")}</span>
+          </div>
+        ) : null}
         {targets.length === 0 ? (
           <div className="inline-state inline-state--panel">
             <span className="inline-state__icon" aria-hidden="true"><Monitor size={15} /></span>
@@ -195,27 +205,28 @@ export const TargetWorkspace = ({
                 <span className={`target-health-status target-health-status--${target.health.status}`}>
                   {t(targetStatusLabel[target.health.status])}
                 </span>
-                <span className="target-workflow-summary">
-                  <strong className="target-workflow-lifecycle">{t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}</strong>
-                  <span className="target-workflow-profile">{state?.activeProfileName ?? t("None")}</span>
-                  <span className="target-workflow-last-applied">
-                    <Clock3 size={12} />
-                    {formatLastApplied(state?.lastAppliedAt, localeTag, t("Never applied"))}
-                  </span>
+                <strong className="target-workflow-lifecycle">
+                  {t(state?.lifecycleStatus ? lifecycleLabel[state.lifecycleStatus] : isManaged ? "Managed by AgentEnv" : "Not managed")}
+                </strong>
+                <span className="target-workflow-profile">
+                  {state?.activeProfileName ?? t("None")}
+                </span>
+                <span className="target-workflow-last-applied">
+                  <Clock3 size={12} />
+                  {formatLastApplied(state?.lastAppliedAt, localeTag, t("Never applied"))}
                 </span>
                 <ControlGroup className="target-workflow-actions" aria-label={t("Agent actions")}>
-                  <Button
+                  <IconButton
                     className="target-capture-action"
                     size="compact"
                     variant="ghost"
-                    aria-label={t("Create profile from {{name}}", { name: target.name })}
+                    label={t("Create profile from {{name}}", { name: target.name })}
                     disabled={busy || !isTargetInstalled(target.health)}
                     title={isTargetInstalled(target.health) ? t("Capture") : t("{{name}} is not detected", { name: target.name })}
-                    icon={<Plus size={14} strokeWidth={2.2} />}
                     onClick={() => onCreateProfileFromTarget(target.id)}
                   >
-                    {t("Capture")}
-                  </Button>
+                    <CopyPlus size={15} strokeWidth={2.2} />
+                  </IconButton>
                   <Button
                     className="target-profile-action"
                     size="compact"
