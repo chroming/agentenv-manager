@@ -425,9 +425,8 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     listSkillSourceGroups: vi.fn().mockResolvedValue([]),
     setSkillSourceName: vi.fn(),
     checkSkillSourceGroup: vi.fn(),
-    checkAllSkillSourceGroups: vi.fn().mockResolvedValue({ groups: [], checked: 0, failed: 0 }),
-    checkAutomaticSkillSourceGroups: vi.fn().mockResolvedValue({ groups: [], checked: 0, failed: 0 }),
-    setSkillSourceAutomaticChecks: vi.fn().mockImplementation(async ({ sourceId, enabled }) => ({
+    checkMonitoredSkillSourceGroups: vi.fn().mockResolvedValue({ groups: [], checked: 0, failed: 0 }),
+    setSkillSourceMonitored: vi.fn().mockImplementation(async ({ sourceId, enabled }) => ({
       formatVersion: 1,
       sourceId,
       sourceKind: "repository",
@@ -811,7 +810,7 @@ describe("App", () => {
   it("renders Library Skills before startup discovery and update checks finish", async () => {
     const targetRequest = deferred<TargetInfo[]>();
     const inventoryRequest = deferred<Awaited<ReturnType<AgentEnvApi["scanSkillInventory"]>>>();
-    const updateRequest = deferred<Awaited<ReturnType<AgentEnvApi["checkAutomaticSkillSourceGroups"]>>>();
+    const updateRequest = deferred<Awaited<ReturnType<AgentEnvApi["checkMonitoredSkillSourceGroups"]>>>();
     const api = installApi({
       listTargets: vi.fn().mockReturnValue(targetRequest.promise),
       listSkillLibrary: vi.fn().mockResolvedValue([
@@ -828,7 +827,7 @@ describe("App", () => {
         }
       ]),
       scanSkillInventory: vi.fn().mockReturnValue(inventoryRequest.promise),
-      checkAutomaticSkillSourceGroups: vi.fn().mockReturnValue(updateRequest.promise)
+      checkMonitoredSkillSourceGroups: vi.fn().mockReturnValue(updateRequest.promise)
     });
     render(<App />);
 
@@ -837,14 +836,14 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Loading skills")).not.toBeInTheDocument();
     expect(api.scanSkillInventory).not.toHaveBeenCalled();
-    expect(api.checkAutomaticSkillSourceGroups).not.toHaveBeenCalled();
+    expect(api.checkMonitoredSkillSourceGroups).not.toHaveBeenCalled();
 
     await act(async () => {
       targetRequest.resolve([target]);
       await Promise.resolve();
     });
     await waitFor(() => expect(api.scanSkillInventory).toHaveBeenCalledTimes(1));
-    expect(api.checkAutomaticSkillSourceGroups).toHaveBeenCalledTimes(1);
+    expect(api.checkMonitoredSkillSourceGroups).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("region", { name: "Skill library" })).toHaveTextContent(
       "Startup Reviewer"
     );
@@ -887,7 +886,7 @@ describe("App", () => {
     ]);
     installApi({
       listSkillLibrary,
-      checkAutomaticSkillSourceGroups: vi.fn().mockResolvedValue({
+      checkMonitoredSkillSourceGroups: vi.fn().mockResolvedValue({
         checked: 1,
         failed: 0,
         groups: [{
@@ -1067,7 +1066,7 @@ describe("App", () => {
     const api = installApi({
       listSkillLibrary: vi.fn().mockResolvedValue([skill]),
       listSkillSourceGroups: vi.fn().mockResolvedValue([sourceGroup("update")]),
-      checkAutomaticSkillSourceGroups: vi.fn().mockResolvedValue({
+      checkMonitoredSkillSourceGroups: vi.fn().mockResolvedValue({
         groups: [sourceGroup("update")],
         checked: 1,
         failed: 0
@@ -1092,6 +1091,58 @@ describe("App", () => {
     await waitFor(() => expect(
       within(row).queryByRole("button", { name: "Review update source-reviewer" })
     ).toBeNull());
+  });
+
+  it("checks only monitored source groups from the By source toolbar", async () => {
+    const sourceGroup = {
+      formatVersion: 1 as const,
+      sourceId: "source-acme",
+      sourceKind: "repository" as const,
+      automaticChecks: true,
+      canonicalLink: "https://github.com/acme/skills/tree/main",
+      repository: "https://github.com/acme/skills.git",
+      ref: "main",
+      directory: "",
+      observationState: "ready" as const,
+      counts: { total: 1, updates: 0, new: 0, removed: 0 },
+      candidates: []
+    };
+    const manualSourceGroup = {
+      ...sourceGroup,
+      sourceId: "source-local",
+      sourceKind: "local" as const,
+      automaticChecks: false,
+      canonicalLink: "file:///tmp/old-skills",
+      repository: "/tmp/old-skills",
+      ref: "",
+      counts: { total: 1, updates: 1, new: 0, removed: 0 }
+    };
+    const checkMonitored = vi.fn().mockResolvedValue({
+      groups: [sourceGroup, manualSourceGroup],
+      checked: 1,
+      failed: 0
+    });
+    const api = installApi({
+      readSettings: vi.fn().mockResolvedValue({
+        locale: "system",
+        skillSyncMethod: "symlink",
+        skillStorageLocation: "appData",
+        skillAutoCheckEnabled: false,
+        skillAutoCheckIntervalMinutes: 60,
+        backupRetentionDays: null
+      }),
+      listSkillSourceGroups: vi.fn().mockResolvedValue([sourceGroup, manualSourceGroup]),
+      checkMonitoredSkillSourceGroups: checkMonitored
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "By source" }));
+    const checkButton = await screen.findByRole("button", { name: "Check monitored" });
+    fireEvent.click(checkButton);
+
+    await waitFor(() => expect(checkMonitored).toHaveBeenCalledTimes(1));
+    await screen.findByText("Monitored sources are current");
+    expect(api.checkMonitoredSkillSourceGroups).toBe(checkMonitored);
   });
 
   it("updates Skill metadata locally without reloading Profiles or Target inventory", async () => {
@@ -1218,7 +1269,7 @@ describe("App", () => {
         skillAutoCheckEnabled: true,
         skillAutoCheckIntervalMinutes: 5
       }),
-      checkAutomaticSkillSourceGroups: vi.fn().mockResolvedValue({
+      checkMonitoredSkillSourceGroups: vi.fn().mockResolvedValue({
         groups: [],
         checked: 0,
         failed: 0
@@ -1231,7 +1282,7 @@ describe("App", () => {
         await Promise.resolve();
       }
     });
-    expect(api.checkAutomaticSkillSourceGroups).toHaveBeenCalledTimes(1);
+    expect(api.checkMonitoredSkillSourceGroups).toHaveBeenCalledTimes(1);
     expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 5 * 60 * 1000);
     expect(intervalCallback).toBeDefined();
 
@@ -1241,7 +1292,7 @@ describe("App", () => {
         await Promise.resolve();
       }
     });
-    expect(api.checkAutomaticSkillSourceGroups).toHaveBeenCalledTimes(2);
+    expect(api.checkMonitoredSkillSourceGroups).toHaveBeenCalledTimes(2);
   });
 
   it("starts and completes GitHub OAuth login from Settings", async () => {

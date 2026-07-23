@@ -68,12 +68,16 @@
   border-bottom: 1px solid var(--border);
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(220px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
   padding: 10px 12px;
 }
 
 .skill-source-toolbar.is-merge-selection {
-  grid-template-columns: minmax(220px, 1fr) auto auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto auto;
+}
+
+.skill-source-filter-panel {
+  grid-template-columns: repeat(2, minmax(120px, 1fr)) auto;
 }
 
 .skill-source-exit-selection {
@@ -638,7 +642,15 @@
 
 @container skill-library (max-width: 760px) {
   .skill-source-toolbar {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+  }
+
+  .skill-source-toolbar.is-merge-selection {
+    grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  }
+
+  .skill-source-filter-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
   }
 
   .skill-source-counts {

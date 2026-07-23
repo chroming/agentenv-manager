@@ -508,11 +508,8 @@ export const registerIpcHandlers = ({
   ipcMain.handle("skills:check-source-group", (_event, sourceId: unknown) =>
     skillLibraryStore.checkSourceGroup(String(sourceId))
   );
-  ipcMain.handle("skills:check-all-source-groups", () =>
-    skillLibraryStore.checkAllSourceGroups()
-  );
-  ipcMain.handle("skills:check-automatic-source-groups", () =>
-    skillLibraryStore.checkAutomaticSourceGroups()
+  ipcMain.handle("skills:check-monitored-source-groups", () =>
+    skillLibraryStore.checkMonitoredSourceGroups()
   );
   handleMutation("skills:set-source-name", (_event, input: unknown) => {
     if (!input || typeof input !== "object") {
@@ -528,15 +525,15 @@ export const registerIpcHandlers = ({
       name: candidate.name
     });
   });
-  handleMutation("skills:set-source-automatic-checks", (_event, input: unknown) => {
+  handleMutation("skills:set-source-monitored", (_event, input: unknown) => {
     if (!input || typeof input !== "object") {
-      throw new Error("Skill source automatic check setting is invalid");
+      throw new Error("Skill source monitoring setting is invalid");
     }
     const candidate = input as { sourceId?: unknown; enabled?: unknown };
     if (typeof candidate.sourceId !== "string" || typeof candidate.enabled !== "boolean") {
-      throw new Error("Skill source automatic check setting is invalid");
+      throw new Error("Skill source monitoring setting is invalid");
     }
-    return skillLibraryStore.setSourceAutomaticChecks({
+    return skillLibraryStore.setSourceMonitored({
       sourceId: candidate.sourceId,
       enabled: candidate.enabled
     });

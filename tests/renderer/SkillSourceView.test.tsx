@@ -66,8 +66,8 @@ const group: SkillSourceGroupView = {
 };
 
 describe("SkillSourceView", () => {
-  it("changes source-level automatic checks without running a source scan", async () => {
-    const onSetAutomaticChecks = vi.fn().mockResolvedValue(undefined);
+  it("changes source monitoring without running a source scan", async () => {
+    const onSetMonitored = vi.fn().mockResolvedValue(undefined);
     const onCheckGroup = vi.fn().mockResolvedValue(undefined);
     render(
       <SkillSourceView
@@ -75,9 +75,9 @@ describe("SkillSourceView", () => {
         groups={[group]}
         loading={false}
         onCheckGroup={onCheckGroup}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
-        onSetAutomaticChecks={onSetAutomaticChecks}
+        onSetMonitored={onSetMonitored}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
         onAdd={vi.fn()}
@@ -89,8 +89,10 @@ describe("SkillSourceView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("switch", { name: "Automatic checks for acme/skills · /engineering" }));
-    await waitFor(() => expect(onSetAutomaticChecks).toHaveBeenCalledWith("source-engineering", false));
+    fireEvent.click(screen.getByRole("switch", {
+      name: "Monitor acme/skills · /engineering in routine checks"
+    }));
+    await waitFor(() => expect(onSetMonitored).toHaveBeenCalledWith("source-engineering", false));
     expect(onCheckGroup).not.toHaveBeenCalled();
   });
 
@@ -106,7 +108,7 @@ describe("SkillSourceView", () => {
         groups={[group]}
         loading={false}
         onCheckGroup={onCheckGroup}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -156,7 +158,7 @@ describe("SkillSourceView", () => {
         groups={[group]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -179,7 +181,7 @@ describe("SkillSourceView", () => {
         groups={[group]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -195,6 +197,104 @@ describe("SkillSourceView", () => {
       .toHaveClass("is-inactive");
     expect(document.querySelector<HTMLInputElement>("[aria-label='Search sources and skills']"))
       .toHaveValue("testing");
+  });
+
+  it("keeps routine-check scope separate from source type and result filters", () => {
+    const manualLocalGroup: SkillSourceGroupView = {
+      ...group,
+      sourceId: "source-local",
+      sourceKind: "local",
+      automaticChecks: false,
+      canonicalLink: "file:///tmp/project-skills",
+      repository: "/tmp/project-skills",
+      ref: "",
+      directory: "",
+      displayName: "Local project skills",
+      checkedAt: undefined,
+      observationState: "error",
+      error: "Folder is unavailable",
+      counts: { total: 1, updates: 0, new: 0, removed: 0 },
+      candidates: []
+    };
+    const props = {
+      active: true,
+      groups: [group, manualLocalGroup],
+      loading: false,
+      onCheckGroup: vi.fn().mockResolvedValue(undefined),
+      onCheckMonitored: vi.fn().mockResolvedValue(undefined),
+      onRename: vi.fn().mockResolvedValue(undefined),
+      onPreviewMerge: vi.fn(),
+      onMerge: vi.fn(),
+      onAdd: vi.fn().mockResolvedValue(true),
+      onUpdate: vi.fn(),
+      onReviewUpdates: vi.fn(),
+      onDelete: vi.fn(),
+      onOpenSource: vi.fn(),
+      onCopySource: vi.fn()
+    };
+    const { rerender } = render(
+      <SkillSourceView {...props} scopeFilter="monitored" />
+    );
+
+    expect(screen.getByText("acme/skills · /engineering")).toBeInTheDocument();
+    expect(screen.queryByText("Local project skills")).not.toBeInTheDocument();
+
+    rerender(<SkillSourceView {...props} scopeFilter="manual" />);
+    expect(screen.queryByText("acme/skills · /engineering")).not.toBeInTheDocument();
+    expect(screen.getByText("Local project skills")).toBeInTheDocument();
+
+    rerender(
+      <SkillSourceView
+        {...props}
+        scopeFilter="all"
+        sourceKindFilter="local"
+        resultFilter="failed"
+      />
+    );
+    expect(screen.queryByText("acme/skills · /engineering")).not.toBeInTheDocument();
+    expect(screen.getByText("Local project skills")).toBeInTheDocument();
+  });
+
+  it("exposes the shared Online and Local source filter grammar", () => {
+    const onSourceKindFilterChange = vi.fn();
+    const onResultFilterChange = vi.fn();
+    render(
+      <SkillSourceView
+        active
+        groups={[group]}
+        loading={false}
+        sourceKindFilter="all"
+        resultFilter="all"
+        onSourceKindFilterChange={onSourceKindFilterChange}
+        onResultFilterChange={onResultFilterChange}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    const filters = screen.getByRole("button", { name: "Filters" });
+    fireEvent.click(filters);
+    fireEvent.change(screen.getByRole("combobox", { name: "Source type filter" }), {
+      target: { value: "online" }
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Source result filter" }), {
+      target: { value: "changes" }
+    });
+
+    expect(onSourceKindFilterChange).toHaveBeenCalledWith("online");
+    expect(onResultFilterChange).toHaveBeenCalledWith("changes");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("group", { name: "Source filters" })).not.toBeInTheDocument();
+    expect(filters).toHaveFocus();
   });
 
   it("selects consecutive source groups by dragging through the selection rail", () => {
@@ -213,7 +313,7 @@ describe("SkillSourceView", () => {
         groups={groups}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -253,7 +353,7 @@ describe("SkillSourceView", () => {
         groups={[group, secondGroup]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -283,7 +383,7 @@ describe("SkillSourceView", () => {
         groups={[group]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -304,7 +404,7 @@ describe("SkillSourceView", () => {
     expect(screen.getByRole("button", { name: "Collapse source" })).toBeInTheDocument();
   });
 
-  it("shows local progress while checking all sources", async () => {
+  it("shows local progress while checking monitored sources", async () => {
     let finishCheck!: () => void;
     const onCheckAll = vi.fn(() => new Promise<void>((resolve) => {
       finishCheck = resolve;
@@ -315,7 +415,7 @@ describe("SkillSourceView", () => {
         groups={[group]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={onCheckAll}
+        onCheckMonitored={onCheckAll}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -328,12 +428,12 @@ describe("SkillSourceView", () => {
       />
     );
 
-    const checkAll = screen.getByRole("button", { name: "Check all" });
-    fireEvent.click(checkAll);
-    expect(checkAll).toHaveAttribute("aria-busy", "true");
-    expect(checkAll.querySelector(".is-spinning")).not.toBeNull();
+    const checkMonitored = screen.getByRole("button", { name: "Check monitored" });
+    fireEvent.click(checkMonitored);
+    expect(checkMonitored).toHaveAttribute("aria-busy", "true");
+    expect(checkMonitored.querySelector(".is-spinning")).not.toBeNull();
     finishCheck();
-    await waitFor(() => expect(checkAll).toHaveAttribute("aria-busy", "false"));
+    await waitFor(() => expect(checkMonitored).toHaveAttribute("aria-busy", "false"));
   });
 
   it("animates the action that is waiting for an update preview", async () => {
@@ -347,7 +447,7 @@ describe("SkillSourceView", () => {
         groups={[group]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -375,7 +475,7 @@ describe("SkillSourceView", () => {
       groups: [group],
       loading: false,
       onCheckGroup: vi.fn().mockResolvedValue(undefined),
-      onCheckAll: vi.fn().mockResolvedValue(undefined),
+      onCheckMonitored: vi.fn().mockResolvedValue(undefined),
       onRename: vi.fn().mockResolvedValue(undefined),
       onPreviewMerge: vi.fn(),
       onMerge: vi.fn(),
@@ -394,11 +494,11 @@ describe("SkillSourceView", () => {
     );
 
     expect(screen.getByRole("button", { name: "Check" })).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByRole("button", { name: "Check all" })).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("button", { name: "Check monitored" })).toHaveAttribute("aria-busy", "false");
 
     rerender(<SkillSourceView {...props} updateActivity={{ kind: "check-sources" }} />);
     expect(screen.getByRole("button", { name: "Check" })).toHaveAttribute("aria-busy", "false");
-    expect(screen.getByRole("button", { name: "Check all" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Check monitored" })).toHaveAttribute("aria-busy", "true");
   });
 
   it("requires an explicit preview before merging selected source scopes", async () => {
@@ -438,7 +538,7 @@ describe("SkillSourceView", () => {
         groups={[group, secondGroup]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={onPreviewMerge}
         onMerge={onMerge}
@@ -478,7 +578,7 @@ describe("SkillSourceView", () => {
         groups={[group]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={onRename}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -513,7 +613,7 @@ describe("SkillSourceView", () => {
         groups={[{ ...group, counts: { total: 1, updates: 0, new: 0, removed: 0 } }]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={vi.fn()}
         onMerge={vi.fn()}
@@ -548,7 +648,7 @@ describe("SkillSourceView", () => {
         groups={[group, secondGroup]}
         loading={false}
         onCheckGroup={vi.fn().mockResolvedValue(undefined)}
-        onCheckAll={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
         onRename={vi.fn().mockResolvedValue(undefined)}
         onPreviewMerge={onPreviewMerge}
         onMerge={vi.fn()}

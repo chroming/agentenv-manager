@@ -91,10 +91,9 @@ export interface AgentEnvApi {
   importRepositorySkills(inputs: RepositorySkillImportInput[]): Promise<RepositorySkillImportResult>;
   listSkillSourceGroups(): Promise<SkillSourceGroupView[]>;
   checkSkillSourceGroup(sourceId: string): Promise<SkillSourceGroupView>;
-  checkAllSkillSourceGroups(): Promise<SkillSourceCheckAllResult>;
-  checkAutomaticSkillSourceGroups(): Promise<SkillSourceCheckAllResult>;
+  checkMonitoredSkillSourceGroups(): Promise<SkillSourceCheckAllResult>;
   setSkillSourceName(input: SkillSourceNameInput): Promise<SkillSourceGroupView>;
-  setSkillSourceAutomaticChecks(input: SkillSourceAutomaticChecksInput): Promise<SkillSourceGroupView>;
+  setSkillSourceMonitored(input: SkillSourceMonitoringInput): Promise<SkillSourceGroupView>;
   previewSkillSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   mergeSkillSources(previewId: string): Promise<SkillSourceMergeResult>;
   cancelRepositoryOperations(): Promise<void>;
@@ -452,7 +451,7 @@ export interface SkillSourceNameInput {
   name?: string;
 }
 
-export interface SkillSourceAutomaticChecksInput {
+export interface SkillSourceMonitoringInput {
   sourceId: string;
   enabled: boolean;
 }

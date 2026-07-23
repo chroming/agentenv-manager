@@ -1,13 +1,16 @@
 import type {
   SkillInventoryEntry,
   SkillLibraryEntry,
-  SkillSourceType,
   SkillUpdateInfo
 } from "../shared/types";
 
+export type SkillSourceKindFilter = "all" | "online" | "local";
+export type SkillSourceScopeFilter = "monitored" | "manual" | "all";
+export type SkillSourceResultFilter = "all" | "changes" | "failed" | "not-checked";
+
 export interface SkillLibraryViewState {
   search: string;
-  sourceFilter: "all" | SkillSourceType;
+  sourceFilter: SkillSourceKindFilter;
   statusFilter: "enabled" | "updates" | "disabled";
   targetFilter: "all" | SkillInventoryEntry["status"] | "not-installed";
   usageFilter: "all" | "referenced" | "unreferenced";

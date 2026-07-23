@@ -791,9 +791,7 @@ const AppContent = ({
     const [sourceChecksResult, skillInventoryResult, githubStatusResult] =
       await Promise.allSettled([
         checkSkillUpdates && (forceSkillUpdateCheck || settings.skillAutoCheckEnabled)
-          ? forceSkillUpdateCheck
-            ? window.agentEnv.checkAllSkillSourceGroups()
-            : window.agentEnv.checkAutomaticSkillSourceGroups()
+          ? window.agentEnv.checkMonitoredSkillSourceGroups()
           : Promise.resolve(undefined),
         window.agentEnv.scanSkillInventory(),
         window.agentEnv.readGitHubAuthStatus()
@@ -2904,14 +2902,14 @@ const AppContent = ({
     }
   };
 
-  const checkAllSkillSourceGroups = async () => {
+  const checkMonitoredSkillSourceGroups = async () => {
     const activity: SkillUpdateActivity = { kind: "check-sources" };
     if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
     setSkillUpdateFeedbackWorkspace("library");
-    setSkillUpdateCheckStatus({ state: "checking", message: t("Checking all sources...") });
+    setSkillUpdateCheckStatus({ state: "checking", message: t("Checking monitored sources...") });
     try {
-      const result = await window.agentEnv.checkAllSkillSourceGroups();
+      const result = await window.agentEnv.checkMonitoredSkillSourceGroups();
       setSkillSourceGroups(result.groups);
       syncSkillUpdatesFromSourceGroups(result.groups);
       if (result.failed > 0) {
@@ -2922,10 +2920,9 @@ const AppContent = ({
         setError(t("Open each failed source for details and retry."));
         return;
       }
-      const changes = result.groups.reduce(
-        (count, group) => count + group.counts.updates + group.counts.new + group.counts.removed,
-        0
-      );
+      const changes = result.groups.filter((group) => group.automaticChecks !== false)
+        .reduce((count, group) =>
+          count + group.counts.updates + group.counts.new + group.counts.removed, 0);
       setSkillUpdateCheckStatus({
         state: "success",
         message: changes > 0
@@ -2933,7 +2930,7 @@ const AppContent = ({
               sources: result.checked,
               changes
             })
-          : t("All sources are current")
+          : t("Monitored sources are current")
       });
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
@@ -2960,17 +2957,17 @@ const AppContent = ({
     }
   };
 
-  const setSkillSourceAutomaticChecks = async (sourceId: string, enabled: boolean) => {
+  const setSkillSourceMonitored = async (sourceId: string, enabled: boolean) => {
     setError(undefined);
     try {
-      const group = await window.agentEnv.setSkillSourceAutomaticChecks({ sourceId, enabled });
+      const group = await window.agentEnv.setSkillSourceMonitored({ sourceId, enabled });
       setSkillSourceGroups((current) => current.map((candidate) =>
         candidate.sourceId === group.sourceId ? group : candidate
       ));
       setSkillUpdateFeedbackWorkspace("library");
       setSkillUpdateCheckStatus({
         state: "success",
-        message: t(enabled ? "Automatic source checks enabled" : "Automatic source checks disabled")
+        message: t(enabled ? "Source added to routine checks" : "Source set to manual only")
       });
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
@@ -4108,9 +4105,9 @@ const AppContent = ({
                 onImportRepositorySkills={importRepositorySkills}
                 onLibraryModeChange={setSkillLibraryMode}
                 onCheckSourceGroup={checkSkillSourceGroup}
-                onCheckAllSourceGroups={checkAllSkillSourceGroups}
+                onCheckMonitoredSourceGroups={checkMonitoredSkillSourceGroups}
                 onSetSourceName={setSkillSourceName}
-                onSetSourceAutomaticChecks={setSkillSourceAutomaticChecks}
+                onSetSourceMonitored={setSkillSourceMonitored}
                 onPreviewSourceMerge={previewSkillSourceMerge}
                 onMergeSources={mergeSkillSources}
                 onCancelRepositoryOperations={() => window.agentEnv.cancelRepositoryOperations()}
@@ -4911,7 +4908,7 @@ const AppContent = ({
                 <div className="settings-preference-row">
                   <span className="settings-preference-copy">
                     <strong>{t("Auto-check")}</strong>
-                    <small>{t("Checks enabled sources, then reports tracked Skills.")}</small>
+                    <small>{t("Checks monitored sources, then reports tracked Skills.")}</small>
                   </span>
                   <Switch
                     checked={skillSettings.skillAutoCheckEnabled}

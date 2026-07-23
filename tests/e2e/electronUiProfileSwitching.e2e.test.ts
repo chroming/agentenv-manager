@@ -935,11 +935,19 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.getByRole("tab", { name: "By source" }).click();
     await expectNoHorizontalOverflow(page, [".editor-panel", ".skill-source-view"]);
-    const automaticChecks = page.getByRole("switch", { name: /Automatic checks.*project-skills/i });
-    await automaticChecks.waitFor({ state: "visible" });
-    await expect.poll(() => automaticChecks.getAttribute("aria-checked")).toBe("false");
-    await automaticChecks.click();
-    await expect.poll(() => automaticChecks.getAttribute("aria-checked")).toBe("true");
+    await page.getByRole("tab", { name: /Manual only/ }).click();
+    const routineChecks = page.getByRole("switch", {
+      name: /Monitor.*project-skills.*routine checks/i
+    });
+    await routineChecks.waitFor({ state: "visible" });
+    await expect.poll(() => routineChecks.getAttribute("aria-checked")).toBe("false");
+    await routineChecks.click();
+    await page.getByRole("tab", { name: /Monitored/ }).click();
+    await expect.poll(() =>
+      page.getByRole("switch", {
+        name: /Monitor.*project-skills.*routine checks/i
+      }).getAttribute("aria-checked")
+    ).toBe("true");
     const registry = await readJson<{
       sources: Array<{ kind?: string; automaticChecks?: boolean }>;
     }>(join(appDataRoot, "skill-sources.json"));
@@ -1414,7 +1422,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(filterGeometry.controlsDoNotOverlap).toBe(true);
       expect(filterGeometry.noHorizontalOverflow).toBe(true);
       const sourceFilter = page.getByRole("combobox", { name: "Skill source filter" });
-      await sourceFilter.selectOption("github");
+      await sourceFilter.selectOption("online");
       await expect.poll(() => allRows.count()).toBe(0);
       await sourceFilter.selectOption("local");
       await expect.poll(() => allRows.count()).toBe(testCase.count + 4);

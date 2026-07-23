@@ -45,7 +45,7 @@ export const useScheduledSkillUpdateChecks = ({
     if (!enabled) return undefined;
     const timer = window.setInterval(() => {
       if (activityRef.current) return;
-      void window.agentEnv.checkAutomaticSkillSourceGroups()
+      void window.agentEnv.checkMonitoredSkillSourceGroups()
         .then((result) => callbacksRef.current.onResult(result))
         .catch((error) => callbacksRef.current.onError(error));
     }, Math.max(5, intervalMinutes) * 60 * 1000);

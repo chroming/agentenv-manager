@@ -34,7 +34,7 @@ const scanResult = (): RepositorySkillScanResult => ({
 });
 
 describe("skill source library", () => {
-  it("checks only source groups that opt into background checks", async () => {
+  it("checks only source groups monitored by routine checks", async () => {
     const groups = [true, false].map((automaticChecks, index) => ({
       formatVersion: 1 as const,
       sourceId: `source-${index}`,
@@ -51,8 +51,7 @@ describe("skill source library", () => {
     const checkGroup = vi.fn(async (sourceId: string) => groups.find((group) => group.sourceId === sourceId)!);
     const service = {
       listGroups: vi.fn().mockResolvedValue(groups),
-      checkGroup,
-      checkAll: vi.fn()
+      checkGroup
     };
     const registry = {
       list: vi.fn().mockResolvedValue(groups.map((group) => ({
@@ -71,7 +70,7 @@ describe("skill source library", () => {
       registry as never
     );
 
-    const result = await store.checkAutomaticSourceGroups();
+    const result = await store.checkMonitoredSourceGroups();
 
     expect(checkGroup).toHaveBeenCalledTimes(1);
     expect(checkGroup).toHaveBeenCalledWith("source-0", []);

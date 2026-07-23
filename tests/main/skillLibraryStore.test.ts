@@ -594,7 +594,7 @@ description: >
       candidates: [expect.objectContaining({ libraryId: "reviewer", state: "unchecked" })]
     }]);
     const [group] = await store.listSourceGroups();
-    await store.setSourceAutomaticChecks({ sourceId: group!.sourceId, enabled: true });
+    await store.setSourceMonitored({ sourceId: group!.sourceId, enabled: true });
     expect((await store.listSourceGroups())[0]?.automaticChecks).toBe(true);
 
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n\n# Changed\n", "utf8");

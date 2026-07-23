@@ -175,11 +175,7 @@ export const createSkillSourceGroupStore = (
       }
       return (await decorate([await service.checkGroup(sourceId, await listSkills())]))[0]!;
     },
-    checkAllSourceGroups: async () => {
-      const result = await service.checkAll(await listSkills());
-      return { ...result, groups: await decorate(result.groups) };
-    },
-    checkAutomaticSourceGroups: async () => {
+    checkMonitoredSourceGroups: async () => {
       const skills = await listSkills();
       const groups = await decorate(await service.listGroups(skills));
       const selected = groups.filter((group) => group.automaticChecks);
@@ -211,11 +207,11 @@ export const createSkillSourceGroupStore = (
       if (!group) throw new Error("Skill source no longer exists");
       return group;
     },
-    setSourceAutomaticChecks: async (
-      input: import("../shared/types").SkillSourceAutomaticChecksInput
+    setSourceMonitored: async (
+      input: import("../shared/types").SkillSourceMonitoringInput
     ) => {
       if (!input || typeof input.sourceId !== "string" || typeof input.enabled !== "boolean") {
-        throw new Error("Skill source automatic check setting is invalid");
+        throw new Error("Skill source monitoring setting is invalid");
       }
       await registry.setAutomaticChecks(input.sourceId, input.enabled);
       const group = (await listSourceGroups()).find((candidate) => candidate.sourceId === input.sourceId);

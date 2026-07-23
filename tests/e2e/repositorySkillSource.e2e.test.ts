@@ -101,10 +101,34 @@ describe("Repository Skill source", () => {
 
     await page.getByRole("tab", { name: "By source" }).click();
     expect(await page.getByRole("tab", { name: /^Enabled / }).count()).toBe(0);
+    expect(await page.getByRole("tab", { name: /^Monitored 1$/ }).count()).toBe(1);
+    expect(await page.getByRole("tab", { name: /^Manual only 0$/ }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "Refresh skills" }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
+    expect(await page.getByRole("button", { name: "Check monitored" }).count()).toBe(1);
     const sourceGroup = page.locator(".skill-source-group");
     await expect.poll(() => sourceGroup.count()).toBe(1);
+    await page.getByRole("button", { name: "Filters", exact: true }).click();
+    const sourceFilterPanel = page.getByRole("group", { name: "Source filters" });
+    expect(await sourceFilterPanel.evaluate((panel) => {
+      const bounds = panel.getBoundingClientRect();
+      const controlsInside = [...panel.querySelectorAll<HTMLElement>("select, button")]
+        .every((control) => {
+          const rect = control.getBoundingClientRect();
+          return rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1 &&
+            rect.top >= bounds.top - 1 && rect.bottom <= bounds.bottom + 1;
+        });
+      return controlsInside && panel.scrollWidth <= panel.clientWidth;
+    })).toBe(true);
+    const sourceTypeFilter = page.getByRole("combobox", { name: "Source type filter" });
+    await sourceTypeFilter.selectOption("local");
+    await expect.poll(() => sourceGroup.count()).toBe(0);
+    await sourceTypeFilter.selectOption("online");
+    await expect.poll(() => sourceGroup.count()).toBe(1);
+    await page.getByRole("combobox", { name: "Source result filter" }).selectOption("changes");
+    await expect.poll(() => sourceGroup.count()).toBe(1);
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await page.getByRole("button", { name: /Filters/, exact: false }).click();
     await sourceGroup.getByRole("button", { name: "Expand source" }).click();
     const firstCandidate = sourceGroup.locator(".skill-source-candidate").first();
     expect(await firstCandidate.locator(".skill-source-candidate-field-label").allTextContents())

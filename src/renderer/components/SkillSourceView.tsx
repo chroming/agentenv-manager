@@ -7,9 +7,11 @@ import {
   Copy,
   ExternalLink,
   GitMerge,
+  ListFilter,
   LoaderCircle,
   Pencil,
   RefreshCw,
+  RotateCcw,
   Search,
   Trash2,
   X
@@ -23,6 +25,11 @@ import type {
   SkillSourceMergeResult
 } from "../../shared/types";
 import { useI18n } from "../i18n";
+import type {
+  SkillSourceKindFilter,
+  SkillSourceResultFilter,
+  SkillSourceScopeFilter
+} from "../libraryViewState";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
@@ -34,10 +41,15 @@ interface SkillSourceViewProps {
   updateActivity?: SkillUpdateActivity;
   groups: SkillSourceGroupView[];
   loading: boolean;
+  scopeFilter?: SkillSourceScopeFilter;
+  sourceKindFilter?: SkillSourceKindFilter;
+  resultFilter?: SkillSourceResultFilter;
+  onSourceKindFilterChange?(filter: SkillSourceKindFilter): void;
+  onResultFilterChange?(filter: SkillSourceResultFilter): void;
   onCheckGroup(sourceId: string): Promise<void>;
-  onCheckAll(): Promise<void>;
+  onCheckMonitored(): Promise<void>;
   onRename(input: SkillSourceNameInput): Promise<void>;
-  onSetAutomaticChecks?(sourceId: string, enabled: boolean): Promise<void>;
+  onSetMonitored?(sourceId: string, enabled: boolean): Promise<void>;
   onPreviewMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   onMerge(previewId: string): Promise<SkillSourceMergeResult>;
   onAdd(group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate): Promise<boolean>;
@@ -95,10 +107,15 @@ export const SkillSourceView = ({
   updateActivity,
   groups,
   loading,
+  scopeFilter = "monitored",
+  sourceKindFilter = "all",
+  resultFilter = "all",
+  onSourceKindFilterChange = () => undefined,
+  onResultFilterChange = () => undefined,
   onCheckGroup,
-  onCheckAll,
+  onCheckMonitored,
   onRename,
-  onSetAutomaticChecks,
+  onSetMonitored,
   onPreviewMerge,
   onMerge,
   onAdd,
@@ -110,11 +127,12 @@ export const SkillSourceView = ({
 }: SkillSourceViewProps) => {
   const { formatDate, t } = useI18n();
   const [search, setSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const [checkingAll, setCheckingAll] = useState(false);
   const [operation, setOperation] = useState<string>();
-  const [automaticChecksOperation, setAutomaticChecksOperation] = useState<string>();
+  const [monitoringOperation, setMonitoringOperation] = useState<string>();
   const [mergeSelectionMode, setMergeSelectionMode] = useState(false);
   const [selectionDragging, setSelectionDragging] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -129,23 +147,56 @@ export const SkillSourceView = ({
   const [renameError, setRenameError] = useState<string>();
   const mergeDialogRef = useRef<HTMLElement>(null);
   const renameDialogRef = useRef<HTMLElement>(null);
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
+  const filterPanelRef = useRef<HTMLDivElement>(null);
   const selectionDragRef = useRef<{ selected: boolean; visited: Set<string> } | undefined>(undefined);
   const suppressSelectionClickRef = useRef(false);
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const activeCheckingAll = checkingAll || updateActivity?.kind === "check-sources";
   const activeCheckingSourceId =
     updateActivity?.kind === "check-source" ? updateActivity.sourceId : undefined;
+  const monitoredSourceCount = groups.filter(
+    (group) => group.automaticChecks !== false
+  ).length;
+  const activeFilterCount = [sourceKindFilter, resultFilter].filter(
+    (filter) => filter !== "all"
+  ).length;
   const visibleGroups = useMemo(() => {
-    if (!normalizedSearch) return groups;
-    return groups.filter((group) =>
-      group.displayName?.toLocaleLowerCase().includes(normalizedSearch) ||
-      group.canonicalLink.toLocaleLowerCase().includes(normalizedSearch) ||
-      group.candidates.some((candidate) =>
-        candidate.name.toLocaleLowerCase().includes(normalizedSearch) ||
-        candidate.libraryName?.toLocaleLowerCase().includes(normalizedSearch)
-      )
-    );
-  }, [groups, normalizedSearch]);
+    return groups.filter((group) => {
+      const isMonitored = group.automaticChecks !== false;
+      const matchesScope =
+        scopeFilter === "all" ||
+        (scopeFilter === "monitored" ? isMonitored : !isMonitored);
+      const matchesKind =
+        sourceKindFilter === "all" ||
+        (sourceKindFilter === "local"
+          ? group.sourceKind === "local"
+          : group.sourceKind !== "local");
+      const changes =
+        group.counts.updates + group.counts.new + group.counts.removed;
+      const matchesResult =
+        resultFilter === "all" ||
+        (resultFilter === "changes" && changes > 0) ||
+        (resultFilter === "failed" &&
+          (Boolean(group.error) || group.observationState === "error")) ||
+        (resultFilter === "not-checked" && !group.checkedAt && !group.error);
+      const matchesSearch =
+        !normalizedSearch ||
+        group.displayName?.toLocaleLowerCase().includes(normalizedSearch) ||
+        group.canonicalLink.toLocaleLowerCase().includes(normalizedSearch) ||
+        group.candidates.some((candidate) =>
+          candidate.name.toLocaleLowerCase().includes(normalizedSearch) ||
+          candidate.libraryName?.toLocaleLowerCase().includes(normalizedSearch)
+        );
+      return matchesScope && matchesKind && matchesResult && matchesSearch;
+    });
+  }, [
+    groups,
+    normalizedSearch,
+    resultFilter,
+    scopeFilter,
+    sourceKindFilter
+  ]);
 
   const selectedMergeGroups = useMemo(
     () => groups.filter((group) => mergeSelection.has(group.sourceId)),
@@ -171,7 +222,11 @@ export const SkillSourceView = ({
   const mergePreviewIsCurrent = mergeIsLocal
     ? mergePreview?.mergedSource.repository === activeMergeDirectory
     : mergePreview?.mergedSource.directory === activeMergeDirectory;
-  const canMergeSources = groups.length >= 2;
+  const visibleSourceIds = useMemo(
+    () => new Set(visibleGroups.map((group) => group.sourceId)),
+    [visibleGroups]
+  );
+  const canMergeSources = visibleGroups.length >= 2;
 
   const exitMergeSelection = () => {
     setMergeSelectionMode(false);
@@ -198,6 +253,29 @@ export const SkillSourceView = ({
   }, [selectionDragging]);
 
   useEffect(() => {
+    if (!filtersOpen) return;
+    const dismissFilters = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (filterPanelRef.current?.contains(target) || filterTriggerRef.current?.contains(target)) {
+        return;
+      }
+      setFiltersOpen(false);
+    };
+    const dismissFiltersOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setFiltersOpen(false);
+      filterTriggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", dismissFilters);
+    document.addEventListener("keydown", dismissFiltersOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissFilters);
+      document.removeEventListener("keydown", dismissFiltersOnEscape);
+    };
+  }, [filtersOpen]);
+
+  useEffect(() => {
     if (!mergeSelectionMode || mergeOpen || renameSource) return;
     const exitOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -211,6 +289,13 @@ export const SkillSourceView = ({
   useEffect(() => {
     if (!canMergeSources && mergeSelectionMode) exitMergeSelection();
   }, [canMergeSources, mergeSelectionMode]);
+
+  useEffect(() => {
+    setMergeSelection((current) => {
+      const next = new Set([...current].filter((sourceId) => visibleSourceIds.has(sourceId)));
+      return next.size === current.size ? current : next;
+    });
+  }, [visibleSourceIds]);
 
   const setSourceSelected = (sourceId: string, selected: boolean) => {
     setMergeSelection((current) => {
@@ -318,13 +403,13 @@ export const SkillSourceView = ({
     }
   };
 
-  const toggleAutomaticChecks = async (group: SkillSourceGroupView) => {
-    if (!onSetAutomaticChecks) return;
-    setAutomaticChecksOperation(group.sourceId);
+  const toggleMonitoring = async (group: SkillSourceGroupView) => {
+    if (!onSetMonitored) return;
+    setMonitoringOperation(group.sourceId);
     try {
-      await onSetAutomaticChecks(group.sourceId, group.automaticChecks === false);
+      await onSetMonitored(group.sourceId, group.automaticChecks === false);
     } finally {
-      setAutomaticChecksOperation(undefined);
+      setMonitoringOperation(undefined);
     }
   };
 
@@ -384,10 +469,10 @@ export const SkillSourceView = ({
     }
   };
 
-  const runCheckAll = async () => {
+  const runCheckMonitored = async () => {
     setCheckingAll(true);
     try {
-      await onCheckAll();
+      await onCheckMonitored();
     } finally {
       setCheckingAll(false);
     }
@@ -450,18 +535,35 @@ export const SkillSourceView = ({
           />
         </label>
         <button
-          aria-busy={activeCheckingAll}
-          className="secondary-action"
+          aria-expanded={filtersOpen}
+          className={`secondary-action library-filter-trigger${activeFilterCount > 0 ? " has-filters" : ""}`}
+          ref={filterTriggerRef}
           type="button"
-          disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || groups.length === 0}
-          onClick={() => void runCheckAll()}
+          onClick={() => setFiltersOpen((current) => !current)}
+        >
+          <ListFilter size={15} strokeWidth={2.2} />
+          <span>{t("Filters")}</span>
+          {activeFilterCount > 0 ? (
+            <strong aria-label={t("{{count}} active filters", { count: activeFilterCount })}>
+              {activeFilterCount}
+            </strong>
+          ) : null}
+        </button>
+        <button
+          aria-busy={activeCheckingAll}
+          aria-label={t("Check monitored")}
+          className="secondary-action library-toolbar-action"
+          title={t("Check monitored")}
+          type="button"
+          disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || monitoredSourceCount === 0}
+          onClick={() => void runCheckMonitored()}
         >
           {activeCheckingAll ? (
             <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
           ) : (
             <RefreshCw size={15} strokeWidth={2.2} />
           )}
-          <span>{t("Check all")}</span>
+          <span>{t("Check monitored")}</span>
         </button>
         {canMergeSources ? (
           <button
@@ -487,6 +589,58 @@ export const SkillSourceView = ({
             <X />
           </IconButton>
         ) : null}
+        {filtersOpen ? (
+          <div
+            className="library-filter-panel skill-source-filter-panel"
+            ref={filterPanelRef}
+            role="group"
+            aria-label={t("Source filters")}
+          >
+            <label>
+              <span>{t("Type")}</span>
+              <select
+                aria-label={t("Source type filter")}
+                value={sourceKindFilter}
+                onChange={(event) =>
+                  onSourceKindFilterChange(
+                    event.currentTarget.value as SkillSourceKindFilter
+                  )}
+              >
+                <option value="all">{t("All types")}</option>
+                <option value="online">{t("Online")}</option>
+                <option value="local">{t("Local")}</option>
+              </select>
+            </label>
+            <label>
+              <span>{t("Result")}</span>
+              <select
+                aria-label={t("Source result filter")}
+                value={resultFilter}
+                onChange={(event) =>
+                  onResultFilterChange(
+                    event.currentTarget.value as SkillSourceResultFilter
+                  )}
+              >
+                <option value="all">{t("All results")}</option>
+                <option value="changes">{t("Changes")}</option>
+                <option value="failed">{t("Failed")}</option>
+                <option value="not-checked">{t("Not checked")}</option>
+              </select>
+            </label>
+            <button
+              className="secondary-action library-filter-reset"
+              type="button"
+              disabled={activeFilterCount === 0}
+              onClick={() => {
+                onSourceKindFilterChange("all");
+                onResultFilterChange("all");
+              }}
+            >
+              <RotateCcw size={15} strokeWidth={2.2} />
+              <span>{t("Reset")}</span>
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -507,7 +661,7 @@ export const SkillSourceView = ({
         ) : null}
         {groups.length > 0 && visibleGroups.length === 0 ? (
           <div className="skill-source-empty">
-            <strong>{t("No sources match this search")}</strong>
+            <strong>{t("No sources match the current filters")}</strong>
           </div>
         ) : null}
         {visibleGroups.map((group) => {
@@ -642,15 +796,15 @@ export const SkillSourceView = ({
                 <div className="skill-source-group-actions">
                   <Switch
                     checked={group.automaticChecks !== false}
-                    hidden={!onSetAutomaticChecks}
-                    disabled={automaticChecksOperation === group.sourceId || isChecking || activeCheckingAll}
-                    label={t("Automatic checks for {{name}}", { name: groupName })}
-                    onClick={() => void toggleAutomaticChecks(group)}
+                    hidden={!onSetMonitored}
+                    disabled={monitoringOperation === group.sourceId || isChecking || activeCheckingAll}
+                    label={t("Monitor {{name}} in routine checks", { name: groupName })}
+                    onClick={() => void toggleMonitoring(group)}
                   >
-                    {automaticChecksOperation === group.sourceId ? (
+                    {monitoringOperation === group.sourceId ? (
                       <LoaderCircle className="is-spinning" size={13} />
                     ) : null}
-                    <span>{t("Auto")}</span>
+                    <span>{t("Monitor")}</span>
                   </Switch>
                   {reviewableUpdateIds.length > 0 ? (
                     <button

@@ -3,7 +3,6 @@ import type {
   RepositorySkillScanResult,
   ProjectSkillScanResult,
   SkillLibraryEntry,
-  SkillSourceCheckAllResult,
   SkillSourceGroupView,
   SkillSourceScope
 } from "../shared/types";
@@ -22,7 +21,6 @@ export interface SkillSourceService {
   recordGitHubScan(scope: SkillSourceScope, result: GitHubSkillScanResult): Promise<void>;
   recordLocalScan(scope: SkillSourceScope, result: ProjectSkillScanResult): Promise<void>;
   checkGroup(sourceId: string, skills: SkillLibraryEntry[]): Promise<SkillSourceGroupView>;
-  checkAll(skills: SkillLibraryEntry[]): Promise<SkillSourceCheckAllResult>;
 }
 
 interface SkillSourceServiceOptions {
@@ -172,23 +170,5 @@ export const createSkillSourceService = (
     return refreshed;
   };
 
-  const checkAll = async (skills: SkillLibraryEntry[]): Promise<SkillSourceCheckAllResult> => {
-    const groups = await listGroups(skills);
-    let nextIndex = 0;
-    const workers = Array.from({ length: Math.min(2, groups.length) }, async () => {
-      while (nextIndex < groups.length) {
-        const group = groups[nextIndex++];
-        await checkGroup(group.sourceId, skills);
-      }
-    });
-    await Promise.all(workers);
-    const refreshed = await listGroups(skills);
-    return {
-      groups: refreshed,
-      checked: refreshed.length,
-      failed: refreshed.filter((group) => group.observationState === "error").length
-    };
-  };
-
-  return { listGroups, recordRepositoryScan, recordGitHubScan, recordLocalScan, checkGroup, checkAll };
+  return { listGroups, recordRepositoryScan, recordGitHubScan, recordLocalScan, checkGroup };
 };

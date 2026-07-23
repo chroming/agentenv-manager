@@ -83,6 +83,8 @@ import {
   matchesSkillStatusFilter,
   matchesSkillUsageFilter,
   type SkillLibraryViewState,
+  type SkillSourceResultFilter,
+  type SkillSourceScopeFilter,
   updateSkillLibraryControls
 } from "../libraryViewState";
 import {
@@ -179,9 +181,9 @@ interface SkillLibraryPanelProps {
   ): Promise<RepositorySkillImportResult>;
   onLibraryModeChange(mode: "skills" | "sources"): void;
   onCheckSourceGroup(sourceId: string): Promise<void>;
-  onCheckAllSourceGroups(): Promise<void>;
+  onCheckMonitoredSourceGroups(): Promise<void>;
   onSetSourceName(input: SkillSourceNameInput): Promise<void>;
-  onSetSourceAutomaticChecks?(sourceId: string, enabled: boolean): Promise<void>;
+  onSetSourceMonitored?(sourceId: string, enabled: boolean): Promise<void>;
   onPreviewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   onMergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   onCancelRepositoryOperations(): Promise<void>;
@@ -423,9 +425,9 @@ export const SkillLibraryPanel = ({
   onImportRepositorySkills,
   onLibraryModeChange,
   onCheckSourceGroup,
-  onCheckAllSourceGroups,
+  onCheckMonitoredSourceGroups,
   onSetSourceName,
-  onSetSourceAutomaticChecks,
+  onSetSourceMonitored,
   onPreviewSourceMerge,
   onMergeSources,
   onCancelRepositoryOperations,
@@ -509,6 +511,10 @@ export const SkillLibraryPanel = ({
   const [githubApiRetryAvailable, setGithubApiRetryAvailable] = useState(false);
   const { search, sourceFilter, statusFilter, targetFilter, usageFilter } = viewState;
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sourceScopeFilter, setSourceScopeFilter] =
+    useState<SkillSourceScopeFilter>("monitored");
+  const [sourceResultFilter, setSourceResultFilter] =
+    useState<SkillSourceResultFilter>("all");
   const updateControls = (
     patch: Partial<Omit<SkillLibraryViewState, "scrollTop">>
   ) => onViewStateChange(updateSkillLibraryControls(viewState, patch));
@@ -830,7 +836,11 @@ export const SkillLibraryPanel = ({
       [skill.id, skill.name, skill.description, sourceLabel(skill)]
         .filter(Boolean)
         .some((value) => value?.toLowerCase().includes(query));
-    const matchesSource = sourceFilter === "all" || skill.sourceType === sourceFilter;
+    const matchesSource =
+      sourceFilter === "all" ||
+      (sourceFilter === "local"
+        ? skill.sourceType === "local"
+        : skill.sourceType === "github" || skill.sourceType === "git");
     const matchesTarget =
       targetFilter === "all" ||
       (targetFilter === "not-installed"
@@ -893,6 +903,10 @@ export const SkillLibraryPanel = ({
   const disabledSkillCount = librarySkills.filter(
     (skill) => skill.globallyEnabled === false
   ).length;
+  const monitoredSourceCount = sourceGroups.filter(
+    (group) => group.automaticChecks !== false
+  ).length;
+  const manualSourceCount = sourceGroups.length - monitoredSourceCount;
   const runAvailabilityChange = async (input: SkillAvailabilityInput) => {
     if (availabilityOperation) return;
     setAvailabilityOperation(input);
@@ -1694,6 +1708,40 @@ export const SkillLibraryPanel = ({
             {t("Disabled")} <strong>{disabledSkillCount}</strong>
           </button>
           </div>
+          <div
+            className="library-status-tabs"
+            role="tablist"
+            aria-label={t("Source check scope")}
+            hidden={libraryMode !== "sources"}
+          >
+            <button
+              className={`library-quick-tab${sourceScopeFilter === "monitored" ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={sourceScopeFilter === "monitored"}
+              onClick={() => setSourceScopeFilter("monitored")}
+            >
+              {t("Monitored")} <strong>{monitoredSourceCount}</strong>
+            </button>
+            <button
+              className={`library-quick-tab${sourceScopeFilter === "manual" ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={sourceScopeFilter === "manual"}
+              onClick={() => setSourceScopeFilter("manual")}
+            >
+              {t("Manual only")} <strong>{manualSourceCount}</strong>
+            </button>
+            <button
+              className={`library-quick-tab${sourceScopeFilter === "all" ? " is-active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={sourceScopeFilter === "all"}
+              onClick={() => setSourceScopeFilter("all")}
+            >
+              {t("All")} <strong>{sourceGroups.length}</strong>
+            </button>
+          </div>
         </div>
         <div className="library-toolbar" hidden={libraryMode !== "skills"}>
           <label className="library-search">
@@ -1768,8 +1816,7 @@ export const SkillLibraryPanel = ({
                   }
                 >
                   <option value="all">{t("All sources")}</option>
-                  <option value="github">GitHub</option>
-                  <option value="git">{t("Repository")}</option>
+                  <option value="online">{t("Online")}</option>
                   <option value="local">{t("Local")}</option>
                 </select>
               </label>
@@ -2226,10 +2273,15 @@ export const SkillLibraryPanel = ({
         updateActivity={updateActivity}
         groups={sourceGroups}
         loading={sourceGroupsLoading}
+        scopeFilter={sourceScopeFilter}
+        sourceKindFilter={sourceFilter}
+        resultFilter={sourceResultFilter}
+        onSourceKindFilterChange={(filter) => updateControls({ sourceFilter: filter })}
+        onResultFilterChange={setSourceResultFilter}
         onCheckGroup={onCheckSourceGroup}
-        onCheckAll={onCheckAllSourceGroups}
+        onCheckMonitored={onCheckMonitoredSourceGroups}
         onRename={onSetSourceName}
-        onSetAutomaticChecks={onSetSourceAutomaticChecks}
+        onSetMonitored={onSetSourceMonitored}
         onPreviewMerge={onPreviewSourceMerge}
         onMerge={onMergeSources}
         onAdd={addSourceCandidate}
