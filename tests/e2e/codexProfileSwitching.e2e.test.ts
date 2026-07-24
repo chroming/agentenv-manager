@@ -205,7 +205,7 @@ describe("Codex Profile v2 switching e2e", () => {
       "codex"
     );
     expect(reviewMessages(changedPreview.issues)).toContainEqual(
-      expect.stringContaining("Existing unmanaged Skill k8s-ops will be backed up and replaced")
+      expect.stringContaining("Existing Skill k8s-ops will be backed up and brought under AgentEnv")
     );
     expect(reviewMessages(changedPreview.issues).join("\n")).toContain(privateSkill);
     expect((await lstat(privateSkill)).isDirectory()).toBe(true);

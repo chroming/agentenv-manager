@@ -81,8 +81,7 @@ export interface AgentEnvApi {
   readSkillFile(input: SkillFileReadInput): Promise<SkillFileContent>;
   scanSkillInventory(): Promise<SkillInventoryEntry[]>;
   listSkillCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
-  ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
-  unignoreSkillGroup(skillKey: string): Promise<void>;
+  setSkillPathPolicies(input: SkillPathPolicyUpdate): Promise<SkillPathPolicy[]>;
   scanUnmanagedSkills(): Promise<UnmanagedSkillEntry[]>;
   scanLocalSkillSource(rootPath: string): Promise<ProjectSkillScanResult>;
   previewSkillImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
@@ -257,7 +256,7 @@ export interface SkillProvenance {
   externalLockPath?: string;
 }
 
-export interface SkillExternalOwnership {
+export interface SkillExternalEvidence {
   manager: "skills-cli" | "claude-plugin" | "agent-builtin";
   displayName?: string;
   importable?: boolean;
@@ -663,7 +662,7 @@ export interface SkillUpdateConfirmation {
   previewId: string;
 }
 
-export type SkillInventoryStatus = "managed" | "library" | "external" | "unmanaged" | "ignored";
+export type SkillInventoryStatus = "managed" | "library" | "outside" | "kept-outside";
 
 export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   status: SkillInventoryStatus;
@@ -679,14 +678,15 @@ export interface SkillInventoryEntry extends UnmanagedSkillEntry {
   runtimeIssues?: SkillRuntimeIssue[];
   runtimeStates?: SkillRuntimeTargetState[];
   contentHash: string;
-  ignoreRuleId?: string;
+  pathPolicyId?: string;
+  pathPolicy?: SkillPathPolicyMode;
   installMethod?: "linked" | "copied";
   contentMatchesLibrary?: boolean;
-  externalOwnership?: SkillExternalOwnership;
+  externalEvidence?: SkillExternalEvidence;
   locationRole?: TargetSkillLocationRole;
   sharedLocation?: boolean;
   legacyLocation?: boolean;
-  ignoreReason?: string;
+  locationManagement?: TargetSkillLocation["management"];
 }
 
 export type SkillScanDepth = "direct" | "recursive";
@@ -728,7 +728,7 @@ export interface SkillRuntimeObservation {
   locationRole: TargetSkillLocationRole;
   shared: boolean;
   legacy: boolean;
-  externalOwnership?: SkillExternalOwnership;
+  externalEvidence?: SkillExternalEvidence;
   issues: SkillRuntimeIssue[];
 }
 
@@ -804,14 +804,27 @@ export type SkillUpdatePolicy = "tracked" | "untracked";
 export type SkillSyncMethod = "symlink" | "copy" | "auto";
 export type SkillStorageLocation = "appData" | "agents";
 
-export interface SkillCleanupIgnoreRule {
+export type SkillPathPolicyMode = "keep-outside" | "keep-shared";
+
+export interface SkillPathPolicy {
   id: string;
-  scope: "group" | "location";
-  skillKey?: string;
-  path?: string;
-  reason?: string;
+  path: string;
+  skillKey: string;
+  targetId?: string;
+  mode: SkillPathPolicyMode;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SkillPathPolicyInput {
+  path: string;
+  skillKey: string;
+  targetId?: string;
+}
+
+export interface SkillPathPolicyUpdate {
+  items: SkillPathPolicyInput[];
+  mode?: SkillPathPolicyMode;
 }
 
 export type McpTransport = "stdio" | "http" | "sse";
@@ -1066,7 +1079,7 @@ export interface TargetSkillLocation {
 
 export interface TargetSkillExternalContainerMarker {
   relativePath: string;
-  manager: SkillExternalOwnership["manager"];
+  manager: SkillExternalEvidence["manager"];
   displayName: string;
   importable: boolean;
 }
@@ -1079,8 +1092,16 @@ export interface TargetState {
   appliedLibraryVersions?: LibraryResourceVersions;
   lastAppliedAt?: string;
   managedResources?: ManagedResourceSnapshot[];
+  keptOutsideSkills?: TargetKeptOutsideSkill[];
   sharedSkillPreparations?: SharedSkillPreparation[];
   recoveryRequired?: TargetRecoveryState;
+}
+
+export interface TargetKeptOutsideSkill {
+  path: string;
+  skillKey: string;
+  libraryId: string;
+  targetName: string;
 }
 
 export interface SharedSkillPreparation {
@@ -1097,6 +1118,7 @@ export type TargetManagementStatus = "unmanaged" | "managed";
 export type TargetLifecycleStatus =
   | "unmanaged"
   | "applied"
+  | "applied-with-outside"
   | "pending"
   | "drifted"
   | "recovery-required";
@@ -1119,6 +1141,7 @@ export interface TargetManagementState {
   lifecycleReason?: string;
   lastAppliedAt?: string;
   managedResourceCount: number;
+  keptOutsideSkills?: TargetKeptOutsideSkill[];
   sharedSkillPreparations?: SharedSkillPreparation[];
   warningCount: number;
   errorCount: number;
@@ -1281,15 +1304,11 @@ export type ApplyIssueCode =
   | "unsafe-native-mcp-update"
   | "globally-disabled-skill"
   | "missing-library-skill"
-  | "unmanaged-skill-replacement"
-  | "unmanaged-skill-removal"
+  | "outside-skill-replacement"
+  | "outside-skill-removal"
+  | "kept-outside-skill"
   | "managed-resource-drift"
   | "managed-resource-missing"
-  | "ignored-skill-conflict"
-  | "external-skill-conflict"
-  | "external-skill-preserved"
-  | "unmanaged-skill-preserved"
-  | "ignored-skill-preserved"
   | "duplicate-runtime-skill"
   | "native-disabled-skill"
   | "runtime-observation"
@@ -1329,6 +1348,7 @@ export interface ActivationPreview {
   resourceFingerprints: Record<string, string>;
   sourceFingerprints: Record<string, string>;
   sharedSkillPreparations?: SharedSkillPreparation[];
+  keptOutsideSkills?: TargetKeptOutsideSkill[];
   sharedSkillPreparationChanged?: boolean;
   targetStateChanged?: boolean;
   targetId: string;

@@ -112,7 +112,7 @@ describe("filesystem Skill runtime driver", () => {
 
     expect(snapshot.observations[0]).toMatchObject({
       owner: "external",
-      externalOwnership: {
+      externalEvidence: {
         manager: "claude-plugin",
         displayName: "Claude Code plugin",
         importable: false

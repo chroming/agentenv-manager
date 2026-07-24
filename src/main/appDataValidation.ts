@@ -51,6 +51,17 @@ const SkillIgnoreRulesSchema = z.array(
     "Skill ignore rule is incomplete"
   )
 );
+const SkillPathPoliciesSchema = z.array(
+  z.object({
+    id: z.string().min(1),
+    path: z.string().min(1),
+    skillKey: z.string().min(1),
+    targetId: z.string().min(1).optional(),
+    mode: z.enum(["keep-outside", "keep-shared"]),
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1)
+  })
+);
 
 const readJsonIfPresent = async (path: string): Promise<unknown | undefined> => {
   try {
@@ -96,6 +107,10 @@ export const validateAppDataRoot = async (
     join(appDataRoot, "skill-cleanup-ignore-rules.json")
   );
   if (ignoreRules !== undefined) SkillIgnoreRulesSchema.parse(ignoreRules);
+  const pathPolicies = await readJsonIfPresent(
+    join(appDataRoot, "skill-path-policies.json")
+  );
+  if (pathPolicies !== undefined) SkillPathPoliciesSchema.parse(pathPolicies);
 
   const workspaceSync = await readJsonIfPresent(paths.workspaceSyncStatePath);
   if (workspaceSync !== undefined) parseWorkspaceSyncStateData(workspaceSync);

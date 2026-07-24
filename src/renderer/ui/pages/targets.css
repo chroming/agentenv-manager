@@ -724,6 +724,10 @@
   color: var(--success);
 }
 
+.agent-skill-context__state--applied-with-outside {
+  color: var(--warning);
+}
+
 .agent-skill-context__profile > svg {
   color: var(--muted);
   flex: 0 0 auto;

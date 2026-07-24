@@ -1957,21 +1957,6 @@ summary {
   color: var(--accent-strong);
 }
 
-.resource-chip--unmanaged {
-  background: var(--warning-bg);
-  color: var(--warning);
-}
-
-.resource-chip--external {
-  background: #eef2f7;
-  color: #52617a;
-}
-
-.resource-chip--ignored {
-  background: #f3f5f8;
-  color: #647084;
-}
-
 .resource-chip--duplicate {
   background: #edfdf8;
   color: #0f8a68;

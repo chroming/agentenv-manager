@@ -180,6 +180,19 @@
   min-width: 0;
 }
 
+.cleanup-details-location__actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 7px;
+}
+
+.cleanup-path-policy-action {
+  min-height: 28px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
 .cleanup-details-location > small {
   color: var(--muted);
   font-size: 11px;

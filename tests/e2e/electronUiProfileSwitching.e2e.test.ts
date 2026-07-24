@@ -2260,7 +2260,7 @@ describe("Electron UI profile switching e2e", () => {
     ).resolves.toBe(false);
   }, 30_000);
 
-  it("keeps ignored local skill groups visible and blocks conflicting profile apply", async () => {
+  it("keeps a concrete local Skill path outside AgentEnv without blocking Profile apply", async () => {
     const { opencodeDir, page } = await launchApp();
     await writeUnmanagedTargetSkill(
       opencodeDir,
@@ -2275,11 +2275,11 @@ describe("Electron UI profile switching e2e", () => {
     await cleanupGroup
       .getByRole("button", { name: "More cleanup actions for ui-alpha-skill" })
       .click();
-    await page.getByRole("menuitem", { name: "Ignore" }).click();
+    await page.getByRole("menuitem", { name: "Keep outside AgentEnv" }).click();
     await cleanupGroup.waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Expand Kept outside AgentEnv" }).click();
     await cleanupGroup.waitFor({ state: "visible" });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Ignored");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Kept");
 
     await selectProfile(page, "UI OpenCode alpha");
     await applyActionButton(page, "OpenCode").click();
@@ -2287,14 +2287,20 @@ describe("Electron UI profile switching e2e", () => {
     await previewDialog.waitFor({ state: "visible" });
     await resizeAppWindow(page, 920, 620);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
-    await expect
-      .poll(() => previewDialog.textContent())
-      .toMatch(
-        /Cannot install (?:ui-alpha-skill|Ui Alpha Skill) because (?:it is explicitly ignored|an ignored unmanaged skill already exists)/
-      );
+    await expect.poll(() => previewDialog.textContent()).toContain(
+      "Preserved outside this Profile"
+    );
+    await expect.poll(() => previewDialog.textContent()).toContain(
+      "ui-alpha-skill stays outside AgentEnv"
+    );
     await expect
       .poll(() => previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled())
-      .toBe(true);
+      .toBe(false);
+    await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+    await expect(
+      readFile(join(opencodeDir, "skills", "ui-alpha-skill", "SKILL.md"), "utf8")
+    ).resolves.toContain("Local copy intentionally left unmanaged.");
   }, 30_000);
 
   it("backs up and replaces managed OpenCode drift after explicit confirmation", async () => {
@@ -2430,7 +2436,7 @@ describe("Electron UI profile switching e2e", () => {
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
     await expect.poll(() => previewDialog.textContent()).toContain(
-      "Existing unmanaged Skill will be replaced"
+      "Existing Skill will be brought under AgentEnv"
     );
     await previewDialog.getByLabel("Full issue detail").hover();
     await expect.poll(() => page.locator(".skill-description-tooltip").textContent())
@@ -3656,8 +3662,8 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, previewDialog.locator(".preview-actions"));
     const body = previewDialog.locator(".apply-preview-body");
     await previewDialog.locator(".apply-preview-scroll-cue").waitFor({ state: "visible" });
-    const status = previewDialog.getByRole("region", { name: "Ready to apply" });
-    const changes = previewDialog.getByRole("region", { name: "Planned changes" });
+    const status = previewDialog.locator(".apply-preview-status");
+    const changes = previewDialog.locator(".apply-preview-changes");
     const [statusBox, changesBox] = await Promise.all([
       status.boundingBox(),
       changes.boundingBox()
@@ -4510,7 +4516,7 @@ describe("Electron UI profile switching e2e", () => {
       .resolves.toBe(true);
   }, 45_000);
 
-  it("imports a Target-local skill and immediately replaces the source with a managed install", async () => {
+  it("imports a Target-local Skill as an independent Library copy", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
     const localSkillDir = join(opencodeDir, "skills", "managed-after-import");
     await mkdir(localSkillDir, { recursive: true });
@@ -4535,24 +4541,28 @@ describe("Electron UI profile switching e2e", () => {
     const importDialog = page.getByRole("dialog", { name: "Import skills" });
     await page.getByRole("button", { name: "Choose local Skill source" }).click();
     await expect.poll(() => importDialog.getByRole("status").textContent()).toContain(
-      "back up this Agent copy"
+      "independent Library copy"
     );
-    await page.getByRole("button", { name: "Import & manage", exact: true }).click();
+    await page.getByRole("button", { name: "Import copy", exact: true }).click();
 
     const markerPath = `${localSkillDir}.agentenv-owner.json`;
-    await expect.poll(() => fileExists(markerPath), { timeout: 5_000 }).toBe(true);
+    await expect.poll(
+      () => fileExists(join(appDataRoot, "skills-library", "managed-after-import", "SKILL.md")),
+      { timeout: 5_000 }
+    ).toBe(true);
+    await expect(fileExists(markerPath)).resolves.toBe(false);
     await expect(
       readFile(join(appDataRoot, "skills-library", "managed-after-import", "SKILL.md"), "utf8")
     ).resolves.toContain("The original Target copy becomes managed");
-    await expect(readFile(markerPath, "utf8")).resolves.toContain(
-      '"source": "skills-library/managed-after-import"'
+    await expect(readFile(join(localSkillDir, "SKILL.md"), "utf8")).resolves.toContain(
+      "The original Target copy becomes managed"
     );
     const managedInventory = await page.evaluate(() => window.agentEnv.scanSkillInventory());
     expect(
       managedInventory.filter((item) => item.skillKey === "managed-after-import")
     ).toEqual([
       expect.objectContaining({
-        status: "managed",
+        status: "library",
         libraryId: "managed-after-import",
         contentMatchesLibrary: true
       })
@@ -4560,12 +4570,11 @@ describe("Electron UI profile switching e2e", () => {
 
     await importDialog.waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Scan local" }).click();
-    await page.getByRole("button", { name: "Expand Managed" }).click();
     const cleanupGroup = page.getByRole("group", {
       name: "Cleanup group managed-after-import"
     });
     await cleanupGroup.waitFor({ state: "visible" });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Managed");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Ready");
     expect(
       await cleanupGroup.getByRole("button", { name: "Add to Library managed-after-import" }).count()
     ).toBe(0);
@@ -5213,7 +5222,7 @@ describe("Electron UI profile switching e2e", () => {
     );
   }, 30_000);
 
-  it("imports a Skills CLI installation without changing the external copy or lock", async () => {
+  it("imports a Skills CLI installation as a Library copy without changing the runtime path or lock", async () => {
     const { appDataRoot, homeDir, opencodeDir, page } = await launchApp();
     const canonicalDir = join(homeDir, ".agents", "skills", "skills-cli-reviewer");
     const targetSkillsDir = join(opencodeDir, "skills");
@@ -5241,15 +5250,24 @@ describe("Electron UI profile switching e2e", () => {
     await symlink(canonicalDir, targetDir, "dir");
     await writeFile(lockPath, lockContent);
 
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      targetDir
+    );
+
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
-    const group = page.getByRole("group", { name: "Cleanup group skills-cli-reviewer" });
-    await group.waitFor({ state: "visible", timeout: 5_000 });
-    await expect.poll(() => group.textContent()).toContain("External");
-    await group.getByRole("button", { name: "Review ownership skills-cli-reviewer" }).click();
-    const dialog = page.getByRole("dialog", { name: "Import external skill" });
-    await dialog.waitFor({ state: "visible", timeout: 5_000 });
-    await expect.poll(() => dialog.textContent()).toContain("lock data stay unchanged");
+    await page.getByRole("button", { name: "Import skills" }).click();
+    const dialog = page.getByRole("dialog", { name: "Import skills" });
+    await dialog.getByRole("button", { name: "Choose local Skill source" }).click();
+    await dialog.getByRole("button", { name: "Import copy", exact: true }).waitFor({
+      state: "visible"
+    });
     await resizeAppWindow(page, 920, 620);
     const dialogGeometry = await dialog.evaluate((element) => {
       const rect = element.getBoundingClientRect();
@@ -5272,7 +5290,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(dialogGeometry.actionsBottom).toBeLessThanOrEqual(dialogGeometry.bottom);
     expect(dialogGeometry.buttonsFit).toBe(true);
     expect(new Set(dialogGeometry.buttonHeights).size).toBe(1);
-    await dialog.getByRole("button", { name: "Import copy" }).click();
+    await dialog.getByRole("button", { name: "Import copy", exact: true }).click();
 
     await page
       .getByRole("group", { name: "Library item skills-cli-reviewer" })
@@ -5327,13 +5345,22 @@ describe("Electron UI profile switching e2e", () => {
       }
     });
 
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      targetDir
+    );
+
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
-    const group = page.getByRole("group", { name: `Cleanup group ${skillId}` });
-    await group.waitFor({ state: "visible" });
-    await group.getByRole("button", { name: `Review ownership ${skillId}` }).click();
-    const dialog = page.getByRole("dialog", { name: "Import external skill" });
-    await dialog.getByRole("button", { name: "Import copy" }).click();
+    await page.getByRole("button", { name: "Import skills" }).click();
+    const dialog = page.getByRole("dialog", { name: "Import skills" });
+    await dialog.getByRole("button", { name: "Choose local Skill source" }).click();
+    await dialog.getByRole("button", { name: "Import copy", exact: true }).click();
     await dialog.waitFor({ state: "hidden" });
     const duplicateDialog = page.getByRole("dialog", { name: "Review duplicate Skill" });
     await duplicateDialog.waitFor({ state: "visible" });
@@ -5352,19 +5379,6 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(appDataRoot, "skills-library", "open-browser-use-2", "SKILL.md"), "utf8"))
       .resolves.toContain("# External");
     expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
-    await page.getByRole("button", { name: "Scan local" }).click();
-    await page.getByRole("button", { name: "Expand Kept outside AgentEnv" }).click();
-    const representedReview = page.getByRole("button", { name: `Review ownership ${skillId}` });
-    await representedReview.waitFor({ state: "visible" });
-    await representedReview.click();
-    const representedDialog = page.getByRole("dialog", { name: "Import external skill" });
-    await expect.poll(() => representedDialog.textContent()).toContain("Review the matching Library copy");
-    await representedDialog.getByRole("button", { name: "Review Library copy" }).click();
-    const representedConflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
-    await representedConflict.waitFor({ state: "visible" });
-    await expect.poll(() => representedConflict.textContent()).toContain("Identical");
-    await representedConflict.getByRole("button", { name: "Use existing" }).click();
-    await representedConflict.waitFor({ state: "hidden" });
     const repeatedImport = await page.evaluate(async (sourcePath) => {
       const preview = await window.agentEnv.previewSkillImport({
         kind: "local",
@@ -5420,15 +5434,22 @@ describe("Electron UI profile switching e2e", () => {
       }
     });
 
+    await app!.evaluate(
+      ({ dialog }, selectedPath) => {
+        dialog.showOpenDialog = async () => ({
+          canceled: false,
+          filePaths: [selectedPath],
+          bookmarks: []
+        });
+      },
+      targetDir
+    );
+
     await openSkillLibrary(page);
-    await page.getByRole("button", { name: "Scan local" }).click();
-    await page.getByRole("button", { name: "Expand Kept outside AgentEnv" }).click();
-    const group = page.getByRole("group", { name: `Cleanup group ${skillId}` });
-    await group.waitFor({ state: "visible" });
-    await group.getByRole("button", { name: `Review ownership ${skillId}` }).click();
-    const externalDialog = page.getByRole("dialog", { name: "Import external skill" });
-    await expect.poll(() => externalDialog.textContent()).toContain("Review the matching Library copy");
-    await externalDialog.getByRole("button", { name: "Review Library copy" }).click();
+    await page.getByRole("button", { name: "Import skills" }).click();
+    const importDialog = page.getByRole("dialog", { name: "Import skills" });
+    await importDialog.getByRole("button", { name: "Choose local Skill source" }).click();
+    await importDialog.getByRole("button", { name: "Import copy", exact: true }).click();
     const conflict = page.getByRole("dialog", { name: "Review duplicate Skill" });
     await conflict.waitFor({ state: "visible" });
     await expect.poll(() => conflict.textContent()).toContain("Source available");
@@ -5688,7 +5709,7 @@ describe("Electron UI profile switching e2e", () => {
     });
     await updateDialog.waitFor({ state: "visible" });
     await updateDialog
-      .getByText(/Used by 1 Profiles.*1 copied Agent installs wait for Apply or Sync/)
+      .getByText(/Used by 1 Profiles.*1 copied Agent installs update with this Library change/)
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
     await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated shared-reviewer");
@@ -5697,35 +5718,13 @@ describe("Electron UI profile switching e2e", () => {
       .getByText("Installed update guidance.")
       .waitFor({ state: "visible" });
 
-    await expect(readFile(installedSkillMd, "utf8")).resolves.not.toContain(
-      "Use the installed update path."
-    );
-    await page.setViewportSize({ width: 920, height: 620 });
-    const updatedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
-    await updatedRow.getByText("1 out of sync").waitFor({ state: "visible" });
-    const installActionGeometry = await updatedRow.evaluate((element) => {
-      const status = element.querySelector<HTMLElement>(".library-status-cell")!;
-      const actions = element.querySelector<HTMLElement>(".library-actions-cell")!;
-      const syncButton = status.querySelector<HTMLElement>(".library-status-action")!;
-      const syncDetail = status.querySelector<HTMLElement>(".library-status-detail")!;
-      const statusBox = status.getBoundingClientRect();
-      const actionsBox = actions.getBoundingClientRect();
-      const buttonBox = syncButton.getBoundingClientRect();
-      const detailBox = syncDetail.getBoundingClientRect();
-      return {
-        columnGap: actionsBox.left - statusBox.right,
-        detailClearance: detailBox.top - buttonBox.bottom,
-        verticalOverlap: buttonBox.bottom > detailBox.top
-      };
-    });
-    expect(installActionGeometry.columnGap).toBeGreaterThanOrEqual(0);
-    expect(installActionGeometry.detailClearance).toBeGreaterThanOrEqual(3);
-    expect(installActionGeometry.verticalOverlap).toBe(false);
-    await updatedRow.getByRole("button", { name: "Sync install of shared-reviewer" }).click();
-    await updatedRow.getByText("Up to date").waitFor({ state: "visible" });
     await expect(readFile(installedSkillMd, "utf8")).resolves.toContain(
       "Use the installed update path."
     );
+    const updatedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
+    await updatedRow.getByText("Up to date").waitFor({ state: "visible" });
+    expect(await updatedRow.getByText("1 out of sync").count()).toBe(0);
+    expect(await updatedRow.getByRole("button", { name: "Sync install of shared-reviewer" }).count()).toBe(0);
   }, 30_000);
 
   it("keeps the five Skill lanes aligned across status actions and supported widths", async () => {

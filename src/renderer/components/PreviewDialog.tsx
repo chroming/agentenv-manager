@@ -35,6 +35,7 @@ interface PreviewDialogProps {
   targetNames?: TargetNameIndex;
   onOpenRecovery?(): void;
   onAdoptTargetChanges?(): void;
+  onKeepSkillOutside?(issue: ApplyIssue): Promise<void> | void;
   onCancel?(): void;
   onConfirm?(): void;
 }
@@ -64,16 +65,16 @@ const presentIssue = (
     };
   }
 
-  if (issue.code === "unmanaged-skill-replacement") {
+  if (issue.code === "outside-skill-replacement") {
     return {
-      title: t("Existing unmanaged Skill will be replaced"),
+      title: t("Existing Skill will be brought under AgentEnv"),
       detail: issue.detail ?? issue.path
     };
   }
 
-  if (issue.code === "unmanaged-skill-removal") {
+  if (issue.code === "outside-skill-removal") {
     return {
-      title: t("Existing unmanaged Skill will be removed"),
+      title: t("Skill outside AgentEnv will be removed"),
       detail: issue.detail ?? issue.path
     };
   }
@@ -93,6 +94,7 @@ export const PreviewDialog = ({
   targetNames = {},
   onOpenRecovery,
   onAdoptTargetChanges,
+  onKeepSkillOutside,
   onCancel,
   onConfirm
 }: PreviewDialogProps) => {
@@ -103,6 +105,7 @@ export const PreviewDialog = ({
   const bodyRef = useRef<HTMLDivElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const [hasMoreBelow, setHasMoreBelow] = useState(false);
+  const [resolvingIssueId, setResolvingIssueId] = useState<string>();
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
 
@@ -215,10 +218,10 @@ export const PreviewDialog = ({
   const managedDriftIssues = issues.filter((issue) => issue.code === "managed-resource-drift");
   const blockedItems = issues
     .filter((issue) => issue.disposition === "block")
-    .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
+    .map((issue) => ({ issue, id: issue.id, ...presentIssue(issue, targetName, t) }));
   const reviewItems = issues
     .filter((issue) => issue.disposition === "review")
-    .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
+    .map((issue) => ({ issue, id: issue.id, ...presentIssue(issue, targetName, t) }));
   const preservedItems = issues
     .filter((issue) => issue.disposition === "notice" && issue.resolution === "preserve")
     .map((issue) => ({ id: issue.id, ...presentIssue(issue, targetName, t) }));
@@ -260,7 +263,7 @@ export const PreviewDialog = ({
       : t("Review the changes below before continuing.");
 
   const issueList = (
-    items: Array<{ id: string; title: string; detail?: string }>,
+    items: Array<{ issue: ApplyIssue; id: string; title: string; detail?: string }>,
     kind: "blocked" | "review"
   ) => (
     <section className={`apply-preview-issues apply-preview-issues--${kind}`}>
@@ -279,6 +282,28 @@ export const PreviewDialog = ({
         {items.map((item) => (
           <article key={item.id}>
             <strong>{item.title}</strong>
+            {kind === "review" &&
+            onKeepSkillOutside &&
+            (item.issue.code === "outside-skill-replacement" ||
+              item.issue.code === "outside-skill-removal") ? (
+              <button
+                className="apply-preview-issue-action secondary-action"
+                type="button"
+                disabled={Boolean(resolvingIssueId)}
+                aria-busy={resolvingIssueId === item.id}
+                onClick={() => {
+                  setResolvingIssueId(item.id);
+                  void Promise.resolve(onKeepSkillOutside(item.issue)).finally(() => {
+                    setResolvingIssueId(undefined);
+                  });
+                }}
+              >
+                {resolvingIssueId === item.id ? (
+                  <LoaderCircle className="is-spinning" size={14} aria-hidden="true" />
+                ) : null}
+                {t("Keep outside")}
+              </button>
+            ) : null}
             {item.detail ? (
               <OverflowTooltip
                 ariaLabel={t("Full issue detail")}

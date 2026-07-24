@@ -69,11 +69,11 @@ export const validateSkillRefs = async ({
     if (!skillRef.enabled) {
       if (targetExists && !owned && !replaceable) {
         issues.push(createApplyIssue({
-          code: "external-skill-conflict",
+          code: "outside-skill-removal",
           resourceKind: "skill",
           resourceId: skillRef.targetName,
           path: targetDir,
-          message: `Cannot turn off Skill ${skillRef.targetName} because the active copy is outside AgentEnv ownership`
+          message: `${skillRef.targetName} is outside AgentEnv and requires review before removal`
         }));
       }
       continue;
@@ -97,11 +97,11 @@ export const validateSkillRefs = async ({
     );
     if (targetExists && !owned && !matchingUnmanaged && !replaceable) {
       issues.push(createApplyIssue({
-        code: "external-skill-conflict",
+        code: "outside-skill-replacement",
         resourceKind: "skill",
         resourceId: skillRef.targetName,
         path: targetDir,
-        message: `Skill target already exists and is not AgentEnv-owned: ${skillRef.targetName}`
+        message: `${skillRef.targetName} is outside AgentEnv and requires review before takeover`
       }));
     }
   }

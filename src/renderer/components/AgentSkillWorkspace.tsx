@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import type {
+  ApplyIssue,
   ActivationPreview,
   ProfileDetail,
   ProfileResourceMode,
@@ -23,6 +24,7 @@ import type {
   TargetManagementState
 } from "../../shared/types";
 import { collectLibraryResourceVersions, libraryResourceVersionsEqual } from "../../shared/libraryVersions";
+import { profileWithoutLocalSkillExceptions } from "../../shared/effectiveProfile";
 import { profileResourceMode } from "../../shared/profileResources";
 import { isTargetInstalled } from "../../shared/targetHealth";
 import { useModalDialog } from "../hooks/useModalDialog";
@@ -72,11 +74,13 @@ interface AgentSkillWorkspaceProps {
   onPreviewApply(): void;
   onCancelPreview(): void;
   onApply(): void;
+  onKeepSkillOutside(issue: ApplyIssue): Promise<void>;
 }
 
 const lifecycleLabels: Record<TargetManagementState["lifecycleStatus"], string> = {
   unmanaged: "Not managed",
   applied: "Applied",
+  "applied-with-outside": "Applied with outside resources",
   pending: "Changes pending",
   drifted: "Changed outside AgentEnv",
   "recovery-required": "Recovery required"
@@ -110,7 +114,8 @@ export const AgentSkillWorkspace = ({
   onSaveProfileSkills,
   onPreviewApply,
   onCancelPreview,
-  onApply
+  onApply,
+  onKeepSkillOutside
 }: AgentSkillWorkspaceProps) => {
   const { t } = useI18n();
   const [pendingChange, setPendingChange] = useState<PendingProfileChange>();
@@ -124,7 +129,15 @@ export const AgentSkillWorkspace = ({
     profile && profileResourceMode(profile.resources, target.id, "skills") === "manage"
   );
   const expectedVersions = profile
-    ? collectLibraryResourceVersions(profile, librarySkills, target.id)
+    ? collectLibraryResourceVersions(
+        profileWithoutLocalSkillExceptions(
+          profile,
+          targetState?.keptOutsideSkills,
+          targetState?.sharedSkillPreparations
+        ),
+        librarySkills,
+        target.id
+      )
     : undefined;
   const attachableImportedSkills = profile
     ? importedSkills.filter(
@@ -143,7 +156,8 @@ export const AgentSkillWorkspace = ({
     sharedProfileTargetNames.length > (profileActive ? 1 : 0);
   const upToDate = Boolean(
     profileActive &&
-    targetState?.lifecycleStatus === "applied" &&
+    (targetState?.lifecycleStatus === "applied" ||
+      targetState?.lifecycleStatus === "applied-with-outside") &&
     profileHash &&
     targetState.appliedProfileHash === profileHash &&
     libraryResourceVersionsEqual(
@@ -449,6 +463,7 @@ export const AgentSkillWorkspace = ({
           confirmBusy={applying}
           onCancel={applying ? undefined : onCancelPreview}
           onConfirm={onApply}
+          onKeepSkillOutside={onKeepSkillOutside}
         />
       ) : null}
 

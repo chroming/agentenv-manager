@@ -14,7 +14,6 @@ import type {
   RepositorySkillScanResult,
   RepositorySkillSourceInput,
   ProjectSkillScanResult,
-  SkillCleanupIgnoreRule,
   SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillAvailabilityInput,
@@ -42,6 +41,9 @@ import type {
   SkillUpdatePreviewBatchResult,
   SkillUpdateSettingsInput,
   SkillUpdateSourceInput,
+  SkillPathPolicy,
+  SkillPathPolicyInput,
+  SkillPathPolicyUpdate,
   SkillRuntimeObservation,
   SkillRuntimeSnapshot,
   SkillSourceCheckAllResult,
@@ -74,6 +76,7 @@ import { deploySkillDirectory, removeSkillDeployment } from "./skillDeployment";
 import { createTargetRegistry } from "./targets/registry";
 import { targetPathInputFor } from "./targets/pathInput";
 import { createFilesystemSkillDriver } from "./targets/shared/skillRuntime";
+import { applyLibraryUpdatePropagation, prepareLibraryUpdatePropagation } from "./skillLibraryUpdatePropagation";
 import type { GitCliSkillSource } from "./skillSources/contract";
 import { parseRepositoryLocation } from "./skillSources/repositoryLocation";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
@@ -153,6 +156,7 @@ const mergeInventoryLocation = (
     entry.sharedLocation = location?.shared;
     entry.runtimeScope = location?.scope ?? (location?.shared ? "shared" : "user");
     entry.legacyLocation = location?.management === "legacy";
+    entry.locationManagement = location?.management;
     if (observation) {
       entry.runtimeAvailability = observation.availability;
       entry.runtimeConfidence = observation.confidence;
@@ -222,8 +226,7 @@ export interface SkillLibraryStore {
   ): Promise<SkillInventoryEntry[]>;
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
   listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
-  ignoreSkillGroup(skillKey: string): Promise<SkillCleanupIgnoreRule>;
-  unignoreSkillGroup(skillKey: string): Promise<void>;
+  setSkillPathPolicies(input: SkillPathPolicyUpdate): Promise<SkillPathPolicy[]>;
   scanUnmanaged(targetPaths: TargetPaths[]): Promise<UnmanagedSkillEntry[]>;
   scanLocalSkillSource(rootPath: string): Promise<ProjectSkillScanResult>;
   previewImport(input: SkillImportPreviewInput): Promise<SkillImportPreview>;
@@ -286,6 +289,16 @@ interface PendingSkillUpdate {
   expectedMetadataHash: string;
   createdAt: number;
   nextMetadata: SkillMetadataFile;
+}
+
+interface LegacySkillCleanupIgnoreRule {
+  id: string;
+  scope: "group" | "location";
+  skillKey?: string;
+  path?: string;
+  reason?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const SKILL_UPDATE_PREVIEW_TTL_MS = 30 * 60 * 1000;
@@ -357,7 +370,8 @@ export const createSkillLibraryStore = (
 ): SkillLibraryStore => {
   const readSettings = () => settingsStore?.readSettings() ?? Promise.resolve(DEFAULT_SETTINGS);
   const libraryDir = async () => resolveSkillsLibraryDir(paths, await readSettings());
-  const ignoreRulesPath = join(paths.appDataRoot, "skill-cleanup-ignore-rules.json");
+  const pathPoliciesPath = join(paths.appDataRoot, "skill-path-policies.json");
+  const legacyIgnoreRulesPath = join(paths.appDataRoot, "skill-cleanup-ignore-rules.json");
   const fetchImpl = options.fetch ?? fetch;
   const authTokenProvider = options.authTokenProvider;
   const profileStore = options.profileStore;
@@ -418,71 +432,129 @@ export const createSkillLibraryStore = (
     );
   };
 
-  const readIgnoreRules = async () =>
-    (await readJsonIfExists<SkillCleanupIgnoreRule[]>(ignoreRulesPath))?.filter(
-      (rule) =>
-        rule &&
-        (rule.scope === "group" || rule.scope === "location") &&
-        (typeof rule.skillKey === "string" || typeof rule.path === "string")
-    ) ?? [];
-
-  const writeIgnoreRules = async (rules: SkillCleanupIgnoreRule[]) => {
-    await writeAtomic(ignoreRulesPath, `${JSON.stringify(rules, null, 2)}\n`);
-  };
-
-  const findIgnoreRule = (
-    rules: SkillCleanupIgnoreRule[],
-    input: { skillKey: string; path: string }
-  ) =>
-    rules.find((rule) =>
-      rule.scope === "location"
-        ? rule.path === input.path
-        : rule.skillKey === input.skillKey
-    );
-
-  const ignoreSkillGroup = async (skillKey: string): Promise<SkillCleanupIgnoreRule> => {
-    const normalized = normalizeSkillKey(skillKey);
-    if (!normalized) {
+  const normalizePolicyInput = (input: SkillPathPolicyInput): SkillPathPolicyInput => {
+    const skillKey = normalizeSkillKey(input.skillKey);
+    if (!skillKey) {
       throw new Error("Skill key is required");
     }
-    const rules = await readIgnoreRules();
-    const existing = rules.find((rule) => rule.scope === "group" && rule.skillKey === normalized);
-    if (existing) {
-      return existing;
+    if (!input.path.trim()) {
+      throw new Error("Skill path is required");
     }
-    const now = new Date().toISOString();
-    const rule: SkillCleanupIgnoreRule = {
-      id: `ignore-${normalized}`,
-      scope: "group",
-      skillKey: normalized,
-      createdAt: now,
-      updatedAt: now
+    return {
+      path: resolve(input.path),
+      skillKey,
+      targetId: input.targetId?.trim() || undefined
     };
-    await writeIgnoreRules([...rules, rule]);
-    return rule;
   };
 
-  const unignoreSkillGroup = async (skillKey: string): Promise<void> => {
-    const normalized = normalizeSkillKey(skillKey);
-    const rules = await readIgnoreRules();
-    const relatedRuleIds = new Set<string>();
-    if (!rules.some((rule) => rule.scope === "group" && rule.skillKey === normalized)) {
-      const inventory = await scanInventory(await targetPathsProvider());
-      for (const entry of inventory) {
-        if (entry.skillKey === normalized && entry.ignoreRuleId) {
-          relatedRuleIds.add(entry.ignoreRuleId);
-        }
+  const readPathPolicies = async (): Promise<SkillPathPolicy[]> =>
+    ((await readJsonIfExists<SkillPathPolicy[]>(pathPoliciesPath)) ?? []).filter(
+      (policy) =>
+        policy &&
+        typeof policy.id === "string" &&
+        typeof policy.path === "string" &&
+        typeof policy.skillKey === "string" &&
+        (policy.mode === "keep-outside" || policy.mode === "keep-shared")
+    );
+
+  const migrateLegacyPathPolicies = async (
+    snapshots: Array<{ target: TargetPaths; snapshot: SkillRuntimeSnapshot }>
+  ): Promise<SkillPathPolicy[]> => {
+    const current = await readPathPolicies();
+    if ((await pathExists(pathPoliciesPath)) || !(await pathExists(legacyIgnoreRulesPath))) {
+      return current;
+    }
+    const legacyRules =
+      (await readJsonIfExists<LegacySkillCleanupIgnoreRule[]>(legacyIgnoreRulesPath)) ?? [];
+    const migrated = new Map<string, SkillPathPolicy>();
+    const now = new Date().toISOString();
+    for (const { target, snapshot } of snapshots) {
+      for (const observation of snapshot.observations) {
+        const skillKey = normalizeSkillKey(observation.runtimeName || observation.deploymentName);
+        const matched = legacyRules.find((rule) =>
+          rule.scope === "location"
+            ? resolve(rule.path ?? "") === resolve(observation.path)
+            : [skillKey, normalizeSkillKey(observation.deploymentName)].includes(
+                normalizeSkillKey(rule.skillKey ?? "")
+              )
+        );
+        if (!matched) continue;
+        const path = resolve(observation.path);
+        const mode = matched.reason === "keep-shared" ? "keep-shared" : "keep-outside";
+        const targetId = observation.shared ? undefined : target.targetId;
+        const key = `${targetId ?? "*"}:${skillKey}:${path}`;
+        migrated.set(key, {
+          id: `skill-policy-${createHash("sha256").update(key).digest("hex").slice(0, 16)}`,
+          path,
+          skillKey,
+          targetId,
+          mode,
+          createdAt: matched.createdAt || now,
+          updatedAt: now
+        });
       }
     }
-    await writeIgnoreRules(
-      rules.filter(
-        (rule) =>
-          !(
-            rule.scope === "group" &&
-            (rule.skillKey === normalized || relatedRuleIds.has(rule.id))
-          )
-      )
+    const policies = [...migrated.values()];
+    await writePathPolicies(policies);
+    await rename(
+      legacyIgnoreRulesPath,
+      `${legacyIgnoreRulesPath}.migrated-${now.replaceAll(":", "-")}`
     );
+    return policies;
+  };
+
+  const writePathPolicies = async (policies: SkillPathPolicy[]) => {
+    await writeAtomic(pathPoliciesPath, `${JSON.stringify(policies, null, 2)}\n`);
+  };
+
+  const findPathPolicy = (
+    policies: SkillPathPolicy[],
+    input: SkillPathPolicyInput
+  ) => {
+    const normalized = normalizePolicyInput(input);
+    return policies.find(
+      (policy) =>
+        resolve(policy.path) === normalized.path &&
+        (!policy.targetId || !normalized.targetId || policy.targetId === normalized.targetId)
+    );
+  };
+
+  const setSkillPathPolicies = async ({
+    items,
+    mode
+  }: SkillPathPolicyUpdate): Promise<SkillPathPolicy[]> => {
+    const normalizedItems = items.map(normalizePolicyInput);
+    if (normalizedItems.length === 0) {
+      return readPathPolicies();
+    }
+    const now = new Date().toISOString();
+    const policies = await readPathPolicies();
+    const itemKeys = new Set(
+      normalizedItems.map((item) => `${item.targetId ?? "*"}:${item.path}`)
+    );
+    const remaining = policies.filter(
+      (policy) =>
+        !itemKeys.has(`${policy.targetId ?? "*"}:${resolve(policy.path)}`)
+    );
+    if (mode) {
+      for (const item of normalizedItems) {
+        const existing = findPathPolicy(policies, item);
+        remaining.push({
+          id:
+            existing?.id ??
+            `skill-policy-${createHash("sha256")
+              .update(`${item.targetId ?? "*"}:${item.path}`)
+              .digest("hex")
+              .slice(0, 16)}`,
+          ...item,
+          mode,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now
+        });
+      }
+    }
+    await writePathPolicies(remaining);
+    return remaining;
   };
 
   const setSharedSkillRetention = async ({
@@ -491,27 +563,10 @@ export const createSkillLibraryStore = (
     retained
   }: SharedSkillRetentionInput): Promise<void> => {
     const normalized = normalizeSkillKey(skillKey);
-    const pathsToUpdate = new Set(retainedPaths);
-    const rules = await readIgnoreRules();
-    const nextRules = rules.filter(
-      (rule) =>
-        !(rule.scope === "location" && rule.path && pathsToUpdate.has(rule.path) && rule.reason === "keep-shared")
-    );
-    if (retained) {
-      const now = new Date().toISOString();
-      for (const path of pathsToUpdate) {
-        nextRules.push({
-          id: `keep-shared-${normalized}-${createHash("sha256").update(path).digest("hex").slice(0, 10)}`,
-          scope: "location",
-          skillKey: normalized,
-          path,
-          reason: "keep-shared",
-          createdAt: now,
-          updatedAt: now
-        });
-      }
-    }
-    await writeIgnoreRules(nextRules);
+    await setSkillPathPolicies({
+      items: retainedPaths.map((path) => ({ path, skillKey: normalized })),
+      mode: retained ? "keep-shared" : undefined
+    });
   };
 
   const entryFor = (id: string, skillDir: string) =>
@@ -915,7 +970,6 @@ export const createSkillLibraryStore = (
       const key = normalizeSkillKey(skill.name || skill.id);
       libraryBySkillKey.set(key, [...(libraryBySkillKey.get(key) ?? []), skill]);
     }
-    const ignoreRules = await readIgnoreRules();
     const skillsCliEvidence = (
       await inspectSkillsCliLocks(paths.homeDir, options.skillsCliLockPaths)
     ).evidenceBySkillKey;
@@ -924,6 +978,7 @@ export const createSkillLibraryStore = (
       target,
       snapshot: await runtimeSnapshotProvider(target)
     })));
+    const pathPolicies = await migrateLegacyPathPolicies(snapshots);
     for (const { target, snapshot } of snapshots) {
       for (const observation of snapshot.observations) {
         const deploymentName = observation.deploymentName;
@@ -936,11 +991,15 @@ export const createSkillLibraryStore = (
         );
         const unreadable = observation.issues.some((issue) => issue.code === "unreadable-skill");
         if (unreadable) {
-          const ignoreRule = findIgnoreRule(ignoreRules, { skillKey, path: skillDir });
-          const externalOwnership = evidence
+          const pathPolicy = findPathPolicy(pathPolicies, {
+            skillKey,
+            path: skillDir,
+            targetId: target.targetId
+          });
+          const externalEvidence = evidence
             ? { ...evidence, confidence: "confirmed" as const, state: "broken-link" as const }
-            : observation.externalOwnership;
-          const status = ignoreRule ? "ignored" : externalOwnership ? "external" : "unmanaged";
+            : observation.externalEvidence;
+          const status = pathPolicy ? "kept-outside" : "outside";
           const key = `${status}:${deploymentName}:${skillDir}`;
           const existing = byKey.get(key);
           if (existing) {
@@ -959,7 +1018,7 @@ export const createSkillLibraryStore = (
             runtimeName: observation.runtimeName,
             deploymentName,
             runtimeScope: observation.scope,
-            runtimeOwner: externalOwnership ? "external" : observation.owner,
+            runtimeOwner: externalEvidence ? "external" : observation.owner,
             managedByTarget: false,
             runtimeAvailability: observation.availability,
             runtimeConfidence: observation.confidence,
@@ -971,12 +1030,13 @@ export const createSkillLibraryStore = (
               issues: observation.issues
             }],
             contentHash: "",
-            ignoreRuleId: ignoreRule?.id,
-            ignoreReason: ignoreRule?.reason,
+            pathPolicyId: pathPolicy?.id,
+            pathPolicy: pathPolicy?.mode,
+            locationManagement: location?.management,
             locationRole: observation.locationRole,
             sharedLocation: observation.shared,
             legacyLocation: observation.legacy,
-            externalOwnership
+            externalEvidence
           });
           continue;
         }
@@ -990,30 +1050,38 @@ export const createSkillLibraryStore = (
           kind: "skill"
         });
         const managedByAgentEnv = agentEnvOwned || Boolean(markerId);
-        const ignoreRule =
-          findIgnoreRule(ignoreRules, { skillKey, path: skillDir }) ??
+        const pathPolicy =
+          findPathPolicy(pathPolicies, {
+            skillKey,
+            path: skillDir,
+            targetId: target.targetId
+          }) ??
           (skillKey !== deploymentKey
-            ? findIgnoreRule(ignoreRules, { skillKey: deploymentKey, path: skillDir })
+            ? findPathPolicy(pathPolicies, {
+                skillKey: deploymentKey,
+                path: skillDir,
+                targetId: target.targetId
+              })
             : undefined);
-        let externalOwnership = managedByAgentEnv
+        let externalEvidence = managedByAgentEnv
           ? undefined
-          : evidence ?? observation.externalOwnership;
-        if (externalOwnership) {
-          let confidence = externalOwnership.confidence;
+          : evidence ?? observation.externalEvidence;
+        if (externalEvidence) {
+          let confidence = externalEvidence.confidence;
           try {
             if (
-              skillDir === externalOwnership.canonicalPath ||
-              (await realpath(skillDir)) === (await realpath(externalOwnership.canonicalPath))
+              skillDir === externalEvidence.canonicalPath ||
+              (await realpath(skillDir)) === (await realpath(externalEvidence.canonicalPath))
             ) {
               confidence = "confirmed";
             }
           } catch {
             // The lock is still useful evidence when its canonical copy is unavailable.
           }
-          externalOwnership = { ...externalOwnership, confidence, state: "healthy" };
+          externalEvidence = { ...externalEvidence, confidence, state: "healthy" };
         }
         const contentHash = await computeContentHash(skillDir);
-        const externalLibraryId = externalOwnership
+        const externalLibraryId = externalEvidence
           ? librarySkills.find((skill) => skill.contentHash === contentHash)?.id
           : undefined;
         const runtimeLibraryCandidates = libraryBySkillKey.get(skillKey) ?? [];
@@ -1025,13 +1093,11 @@ export const createSkillLibraryStore = (
           : runtimeLibraryId;
         const status = managedByAgentEnv
           ? "managed"
-          : ignoreRule
-            ? "ignored"
-            : externalOwnership
-              ? "external"
-              : localLibraryId
-                ? "library"
-                : "unmanaged";
+          : pathPolicy
+            ? "kept-outside"
+            : localLibraryId
+              ? "library"
+              : "outside";
         const libraryId = markerId ?? externalLibraryId ?? localLibraryId;
         const key = `${status}:${libraryId ?? deploymentName}:${skillDir}`;
         const existing = byKey.get(key);
@@ -1056,7 +1122,7 @@ export const createSkillLibraryStore = (
           runtimeScope: observation.scope,
           runtimeOwner: managedByAgentEnv
             ? "agentenv"
-            : externalOwnership
+            : externalEvidence
               ? "external"
               : observation.owner,
           managedByTarget: agentEnvOwned,
@@ -1071,8 +1137,8 @@ export const createSkillLibraryStore = (
           }],
           contentHash,
           modifiedAt: skillFileStats.mtime.toISOString(),
-          ignoreRuleId: ignoreRule?.id,
-          ignoreReason: ignoreRule?.reason,
+          pathPolicyId: pathPolicy?.id,
+          pathPolicy: pathPolicy?.mode,
           installMethod: managedByAgentEnv
             ? skillDirStats.isSymbolicLink() || skillFileLinkStats.isSymbolicLink()
               ? "linked"
@@ -1083,10 +1149,11 @@ export const createSkillLibraryStore = (
             : libraryId
               ? libraryById.get(libraryId)?.contentHash === contentHash
               : undefined,
-          externalOwnership,
+          externalEvidence,
           locationRole: observation.locationRole,
           sharedLocation: observation.shared,
-          legacyLocation: observation.legacy
+          legacyLocation: observation.legacy,
+          locationManagement: location?.management
         });
       }
     }
@@ -1125,7 +1192,7 @@ export const createSkillLibraryStore = (
   const scanUnmanaged = async (targetPaths: TargetPaths[]) => {
     const inventory = await scanInventory(targetPaths);
     return inventory
-      .filter((skill) => skill.status === "unmanaged")
+      .filter((skill) => skill.status === "outside")
       .map(({ id, name, description, path, foundIn, modifiedAt }) => ({
         id,
         name,
@@ -1248,55 +1315,41 @@ export const createSkillLibraryStore = (
       : undefined;
     const persistedLocalSource =
       upstream?.kind === "local" ? upstream.locator : sourcePath;
+    const nextMetadata = {
+      sourceType: githubSource ? "github" as const : sourceType,
+      source: githubSource?.sourceUrl ?? persistedLocalSource,
+      remoteRef: githubSource?.ref,
+      remotePath: githubSource?.remotePath,
+      remoteRevision: githubSource
+        ? upstream?.revision
+        : validatedSourceCollection
+          ? preview.incoming.contentHash
+          : undefined,
+      updatePolicy: githubSource ? "tracked" as const : "untracked" as const,
+      iconKey: previousMetadata?.iconKey,
+      globallyEnabled: previousMetadata?.globallyEnabled,
+      upstream: upstream ?? {
+        kind: "local" as const,
+        locator: persistedLocalSource,
+        revision: validatedSourceCollection ? preview.incoming.contentHash : undefined
+      },
+      provenance: provenance ?? previousMetadata?.provenance ?? { importedVia: "agentenv" as const },
+      sourceCollection: validatedSourceCollection
+    };
     if (plan.sourceOnly) {
-      await writeMetadata(targetDir, {
-        sourceType: githubSource ? "github" : sourceType,
-        source: githubSource?.sourceUrl ?? persistedLocalSource,
-        remoteRef: githubSource?.ref,
-        remotePath: githubSource?.remotePath,
-        remoteRevision: githubSource ? upstream?.revision : validatedSourceCollection ? preview.incoming.contentHash : undefined,
-        updatePolicy: githubSource ? "tracked" : "untracked",
-        iconKey: previousMetadata?.iconKey,
-        globallyEnabled: previousMetadata?.globallyEnabled,
-        upstream: upstream ?? {
-          kind: "local",
-          locator: persistedLocalSource,
-          revision: validatedSourceCollection ? preview.incoming.contentHash : undefined
-        },
-        provenance: provenance ?? previousMetadata?.provenance ?? { importedVia: "agentenv" },
-        sourceCollection: validatedSourceCollection
-      });
+      await writeMetadata(targetDir, nextMetadata);
       return entryFor(plan.id, targetDir);
     }
     const backup = plan.replace ? await createLibraryUpdateBackup(plan.id, targetDir) : undefined;
     try {
-      await removeAndCopy(sourcePath, targetDir);
-    } catch (error) {
-      if (backup) return failAfterCleanupRollback(backup, `Replacing ${plan.id}`, error);
-      throw error;
-    }
-    try {
-      await writeMetadata(targetDir, {
-        sourceType: githubSource ? "github" : sourceType,
-        source: githubSource?.sourceUrl ?? persistedLocalSource,
-        remoteRef: githubSource?.ref,
-        remotePath: githubSource?.remotePath,
-        remoteRevision: githubSource ? upstream?.revision : validatedSourceCollection ? preview.incoming.contentHash : undefined,
-        updatePolicy: githubSource ? "tracked" : "untracked",
-        iconKey: previousMetadata?.iconKey,
-        globallyEnabled: previousMetadata?.globallyEnabled,
-        upstream: upstream ?? {
-          kind: "local",
-          locator: persistedLocalSource,
-          revision: validatedSourceCollection ? preview.incoming.contentHash : undefined
-        },
-        provenance: provenance ?? { importedVia: "agentenv" },
-        sourceCollection: validatedSourceCollection
+      await replacePathAtomically(targetDir, async (stagingPath) => {
+        await cp(sourcePath, stagingPath, { recursive: true, dereference: true });
+        await rm(join(stagingPath, ".agentenv-owner.json"), { force: true });
+        await writeMetadata(stagingPath, nextMetadata);
       });
       return entryFor(plan.id, targetDir);
     } catch (error) {
       if (backup) return failAfterCleanupRollback(backup, `Replacing ${plan.id}`, error);
-      await rm(targetDir, { recursive: true, force: true });
       throw error;
     }
   };
@@ -1312,6 +1365,7 @@ export const createSkillLibraryStore = (
     return [
       await libraryDir(),
       paths.profilesDir,
+      paths.targetStatesDir,
       paths.userSkillsDir,
       ...targetRoots
     ]
@@ -3010,7 +3064,9 @@ export const createSkillLibraryStore = (
 
   const createLibraryUpdateBackup = async (
     libraryId: string,
-    targetLibraryDir: string
+    targetLibraryDir: string,
+    copiedInstallPaths: string[] = [],
+    statePaths: string[] = []
   ): Promise<SkillCleanupBackupManifest> => {
     const backupId = `update-${Date.now()}-${randomUUID().slice(0, 8)}`;
     const backupDir = join(cleanupBackupRoot(), backupId);
@@ -3020,6 +3076,25 @@ export const createSkillLibraryStore = (
       recursive: true,
       dereference: false
     });
+    const entries: SkillCleanupBackupManifest["entries"] = [];
+    for (const [index, sourcePath] of copiedInstallPaths.entries()) {
+      const backupPath = join(backupDir, "locations", `${index}-${basename(sourcePath)}`);
+      await mkdir(dirname(backupPath), { recursive: true });
+      await cp(sourcePath, backupPath, { recursive: true, dereference: false });
+      entries.push({ sourcePath, backupPath });
+      const sidecarPath = markerPathForFile(sourcePath);
+      if (await pathEntryExists(sidecarPath)) {
+        const sidecarBackupPath = `${backupPath}.agentenv-owner.json`;
+        await cp(sidecarPath, sidecarBackupPath, { dereference: false });
+        entries.push({ sourcePath: sidecarPath, backupPath: sidecarBackupPath });
+      }
+    }
+    for (const [index, sourcePath] of statePaths.entries()) {
+      const backupPath = join(backupDir, "locations", `${copiedInstallPaths.length + index}-${basename(sourcePath)}`);
+      await mkdir(dirname(backupPath), { recursive: true });
+      await cp(sourcePath, backupPath, { dereference: false });
+      entries.push({ sourcePath, backupPath });
+    }
     const manifest: SkillCleanupBackupManifest = {
       id: backupId,
       libraryId,
@@ -3028,7 +3103,7 @@ export const createSkillLibraryStore = (
       libraryBackupPath,
       operation: "update",
       createdAt: new Date().toISOString(),
-      entries: []
+      entries
     };
     await writeAtomic(
       join(backupDir, "manifest.json"),
@@ -3071,7 +3146,21 @@ export const createSkillLibraryStore = (
       throw new Error("Reviewed Skill update candidate is no longer available; review it again");
     }
 
-    const backup = await createLibraryUpdateBackup(safeId, targetDir);
+    const targetPaths = await targetPathsProvider();
+    const inventory = await scanInventory(targetPaths);
+    const propagation = await prepareLibraryUpdatePropagation({
+      inventory,
+      libraryId: safeId,
+      currentContentHash,
+      nextContentHash: pending.candidateContentHash,
+      targetStatesDir: paths.targetStatesDir
+    });
+    const backup = await createLibraryUpdateBackup(
+      safeId,
+      targetDir,
+      propagation.copiedInstalls.map((entry) => entry.path),
+      propagation.stateUpdates.map((entry) => entry.path)
+    );
     try {
       await removeAndCopy(pending.candidateDir, targetDir);
       await writeMetadata(targetDir, pending.nextMetadata);
@@ -3079,6 +3168,11 @@ export const createSkillLibraryStore = (
       if (await computeContentHash(targetDir) !== pending.candidateContentHash) {
         throw new Error("The updated Library copy did not match the reviewed candidate");
       }
+      await applyLibraryUpdatePropagation({
+        sourceDir: targetDir,
+        nextContentHash: pending.candidateContentHash,
+        propagation
+      });
       await discardPendingUpdatesForSkill(safeId);
       return updated;
     } catch (error) {
@@ -3096,8 +3190,7 @@ export const createSkillLibraryStore = (
     scanInventory,
     findManagedInstallPaths,
     listCleanupBackups,
-    ignoreSkillGroup,
-    unignoreSkillGroup,
+    setSkillPathPolicies,
     scanUnmanaged,
     previewImport,
     previewMerge,

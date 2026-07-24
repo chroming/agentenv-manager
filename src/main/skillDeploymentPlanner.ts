@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { ProfileSkill } from "../shared/schemas";
 import { normalizeSkillKey } from "../shared/skillIdentity";
 import { profileManagesResource } from "../shared/profileResources";
@@ -32,9 +32,9 @@ export interface SkillDeploymentDecision {
     | "managed-exact"
     | "managed-changed"
     | "captured-exact"
-    | "matching-unmanaged"
+    | "matching-outside"
     | "shared-compatible"
-    | "external-exact"
+    | "kept-outside"
     | "occupied";
 }
 
@@ -44,6 +44,7 @@ export interface SkillDeploymentPlan {
   decisions: SkillDeploymentDecision[];
   sharedPreparations: SharedSkillPreparation[];
   sharedPaths: string[];
+  removalPaths: string[];
   issues: ApplyIssue[];
 }
 
@@ -90,9 +91,8 @@ const matchesCurrentLibrary = (
 ) =>
   Boolean(
     currentLibraryHash &&
-    entry.libraryId === libraryId &&
-    entry.contentMatchesLibrary === true &&
-    entry.contentHash === currentLibraryHash
+    entry.contentHash === currentLibraryHash &&
+    (entry.libraryId === libraryId || entry.libraryId === undefined)
   );
 
 export const fingerprintSkillInventory = (inventory: SkillInventoryEntry[]): string => {
@@ -112,16 +112,9 @@ export const fingerprintSkillInventory = (inventory: SkillInventoryEntry[]): str
       locationRole: entry.locationRole ?? null,
       sharedLocation: entry.sharedLocation ?? null,
       legacyLocation: entry.legacyLocation ?? null,
-      ignoreRuleId: entry.ignoreRuleId ?? null,
-      ignoreReason: entry.ignoreReason ?? null,
-      externalOwnership: entry.externalOwnership
-        ? {
-            manager: entry.externalOwnership.manager,
-            canonicalPath: entry.externalOwnership.canonicalPath,
-            confidence: entry.externalOwnership.confidence,
-            state: entry.externalOwnership.state
-          }
-        : null
+      pathPolicyId: entry.pathPolicyId ?? null,
+      pathPolicy: entry.pathPolicy ?? null,
+      locationManagement: entry.locationManagement ?? null
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
   return createHash("sha256").update(JSON.stringify(comparable)).digest("hex");
@@ -170,7 +163,7 @@ export const deploymentRelevantSkillInventory = ({
       entry.sharedLocation &&
       entry.libraryId &&
       entry.contentMatchesLibrary === true &&
-      entry.ignoreReason !== "keep-shared"
+      entry.pathPolicy !== "keep-shared"
     ) {
       return true;
     }
@@ -209,6 +202,7 @@ export const buildSkillDeploymentPlan = ({
       decisions: [],
       sharedPreparations: [],
       sharedPaths: [],
+      removalPaths: [],
       issues: []
     };
   }
@@ -219,10 +213,12 @@ export const buildSkillDeploymentPlan = ({
   const canonicalLibraryPaths = new Set(skillLibrary.map((skill) => resolve(skill.path)));
   const enabledReferences = profile.resources.skills.filter((reference) => reference.enabled);
   const deferredReferences = new Set<string>();
+  const syntheticDisabledReferences: ProfileSkill[] = [];
   const approvedSkills = new Map<string, string>();
   const decisions: SkillDeploymentDecision[] = [];
   const issues: ApplyIssue[] = [];
   const sharedPaths = new Set<string>();
+  const removalPaths = new Set<string>();
   const sharedPreparations: SharedSkillPreparation[] = [];
   const sharedBySkill = new Map<
     string,
@@ -230,11 +226,49 @@ export const buildSkillDeploymentPlan = ({
   >();
 
   for (const entry of inventory) {
+    if (!entry.sharedLocation || entry.pathPolicy !== "keep-shared") continue;
+    const runtimeKeys = new Set(
+      [
+        entry.skillKey,
+        entry.runtimeName,
+        entry.deploymentName,
+        entry.id,
+        entry.name
+      ]
+        .filter((value): value is string => Boolean(value))
+        .map(normalizeSkillKey)
+    );
+    const reference = profile.resources.skills.find(
+      (item) =>
+        item.libraryId === entry.libraryId ||
+        runtimeKeys.has(normalizeSkillKey(item.targetName)) ||
+        runtimeKeys.has(normalizeSkillKey(libraryById.get(item.libraryId)?.name ?? ""))
+    );
+    if (reference) {
+      deferredReferences.add(referenceKey(reference));
+    }
+    decisions.push({
+      libraryId: reference?.libraryId ?? entry.libraryId ?? entry.id,
+      targetName: reference?.targetName ?? entry.deploymentName ?? entry.id,
+      path: entry.path,
+      action: "preserve",
+      reason: "kept-outside"
+    });
+    issues.push(createApplyIssue({
+      code: "kept-outside-skill",
+      resourceKind: "skill",
+      resourceId: entry.runtimeName ?? entry.id,
+      path: entry.path,
+      message: `${entry.runtimeName ?? entry.id} stays active from its shared compatibility path`
+    }));
+  }
+
+  for (const entry of inventory) {
     if (
       !entry.sharedLocation ||
       !entry.libraryId ||
       entry.contentMatchesLibrary !== true ||
-      entry.ignoreReason === "keep-shared" ||
+      entry.pathPolicy === "keep-shared" ||
       canonicalLibraryPaths.has(resolve(entry.path))
     ) {
       continue;
@@ -259,12 +293,11 @@ export const buildSkillDeploymentPlan = ({
       : undefined;
     const occupyingItem = targetPath ? inventoryByPath.get(targetPath) : undefined;
     const currentLibraryHash = libraryById.get(shared.libraryId)?.contentHash;
-    const exactUnmanaged = Boolean(
+    const exactOutside = Boolean(
       reference &&
       occupyingItem &&
       !isTargetOwned(occupyingItem) &&
-      occupyingItem.status !== "external" &&
-      occupyingItem.status !== "ignored" &&
+      occupyingItem.status !== "kept-outside" &&
       (matchesCurrentLibrary(occupyingItem, shared.libraryId, currentLibraryHash) ||
         matchingCaptureCopy(
           captureReceipt,
@@ -273,7 +306,7 @@ export const buildSkillDeploymentPlan = ({
           currentLibraryHash
         ))
     );
-    const adoptTargetCopy = Boolean(reference && exactUnmanaged && targetPath);
+    const adoptTargetCopy = Boolean(reference && exactOutside && targetPath);
     const keepManagedTargetCopy = Boolean(
       reference &&
       occupyingItem &&
@@ -290,8 +323,7 @@ export const buildSkillDeploymentPlan = ({
       reference &&
       occupyingItem &&
       !isTargetOwned(occupyingItem) &&
-      occupyingItem.status !== "external" &&
-      occupyingItem.status !== "ignored" &&
+      occupyingItem.status !== "kept-outside" &&
       !adoptTargetCopy &&
       targetPath
     );
@@ -303,32 +335,30 @@ export const buildSkillDeploymentPlan = ({
       !replaceTargetCopy
     ) {
       issues.push(createApplyIssue({
-        code:
-          occupyingItem.status === "ignored"
-            ? "ignored-skill-conflict"
-            : "shared-skill-conflict",
+        code: "kept-outside-skill",
         resourceKind: "skill",
         resourceId: shared.skillKey,
         path: targetPath,
-        message: `Cannot prepare shared Skill ${shared.skillKey} because its Agent destination is controlled outside AgentEnv`
+        message: `${shared.skillKey} stays outside AgentEnv on ${targetPaths.targetId}`
       }));
       decisions.push({
         libraryId: shared.libraryId,
         targetName,
         path: targetPath,
-        action: "block",
-        reason: "occupied"
+        action: "preserve",
+        reason: "kept-outside"
       });
+      if (reference) deferredReferences.add(referenceKey(reference));
       continue;
     }
 
     if (replaceTargetCopy && targetPath) {
       issues.push(createApplyIssue({
-        code: "unmanaged-skill-replacement",
+        code: "outside-skill-replacement",
         resourceKind: "skill",
         resourceId: shared.skillKey,
         path: targetPath,
-        message: `Existing unmanaged Skill ${shared.skillKey} will be backed up and replaced`
+        message: `Existing Skill ${shared.skillKey} will be backed up and brought under AgentEnv`
       }));
     }
 
@@ -358,7 +388,7 @@ export const buildSkillDeploymentPlan = ({
           currentLibraryHash
         )
           ? "captured-exact"
-          : "matching-unmanaged"
+          : "matching-outside"
       });
     } else if (keepManagedTargetCopy && targetPath && occupyingItem) {
       const exact = matchesCurrentLibrary(
@@ -458,17 +488,22 @@ export const buildSkillDeploymentPlan = ({
       });
       continue;
     }
-    if (
-      occupyingItem.status === "external" &&
-      matchesCurrentLibrary(occupyingItem, reference.libraryId, currentLibraryHash)
-    ) {
+    if (occupyingItem.status === "kept-outside") {
+      deferredReferences.add(referenceKey(reference));
       decisions.push({
         libraryId: reference.libraryId,
         targetName: reference.targetName,
         path: targetPath,
         action: "preserve",
-        reason: "external-exact"
+        reason: "kept-outside"
       });
+      issues.push(createApplyIssue({
+        code: "kept-outside-skill",
+        resourceKind: "skill",
+        resourceId: reference.targetName,
+        path: targetPath,
+        message: `${reference.targetName} stays outside AgentEnv on ${targetPaths.targetId}`
+      }));
       continue;
     }
     const capturedExact = matchingCaptureCopy(
@@ -477,42 +512,31 @@ export const buildSkillDeploymentPlan = ({
       occupyingItem,
       currentLibraryHash
     );
-    const matchingUnmanaged = matchesCurrentLibrary(
+    const matchingOutside = matchesCurrentLibrary(
       occupyingItem,
       reference.libraryId,
       currentLibraryHash
     );
-    if (
-      occupyingItem.status !== "external" &&
-      occupyingItem.status !== "ignored" &&
-      (capturedExact || matchingUnmanaged)
-    ) {
+    if (capturedExact || matchingOutside) {
       approvedSkills.set(targetPath, occupyingItem.contentHash);
       decisions.push({
         libraryId: reference.libraryId,
         targetName: reference.targetName,
         path: targetPath,
         action: "adopt",
-        reason: capturedExact ? "captured-exact" : "matching-unmanaged"
-      });
-      continue;
-    }
-    if (occupyingItem.status === "external" || occupyingItem.status === "ignored") {
-      decisions.push({
-        libraryId: reference.libraryId,
-        targetName: reference.targetName,
-        path: targetPath,
-        action: "block",
-        reason: "occupied"
+        reason: capturedExact ? "captured-exact" : "matching-outside"
       });
       continue;
     }
     issues.push(createApplyIssue({
-      code: "unmanaged-skill-replacement",
+      code: "outside-skill-replacement",
       resourceKind: "skill",
       resourceId: reference.targetName,
       path: targetPath,
-      message: `Existing unmanaged Skill ${reference.targetName} will be backed up and replaced`
+      message: `Existing Skill ${reference.targetName} will be backed up and brought under AgentEnv`,
+      detail: occupyingItem.externalEvidence
+        ? `AgentEnv found ${occupyingItem.externalEvidence.displayName ?? occupyingItem.externalEvidence.manager} metadata. This is evidence only; the destination path is still eligible for takeover.`
+        : undefined
     }));
     decisions.push({
       libraryId: reference.libraryId,
@@ -523,8 +547,104 @@ export const buildSkillDeploymentPlan = ({
     });
   }
 
+  if (targetPaths.skillsDir) {
+    for (const reference of profile.resources.skills.filter((item) => !item.enabled)) {
+      const targetPath = resolve(join(targetPaths.skillsDir, reference.targetName));
+      const occupyingItem = inventoryByPath.get(targetPath);
+      if (!occupyingItem) continue;
+      if (occupyingItem.status === "kept-outside") {
+        deferredReferences.add(referenceKey(reference));
+        decisions.push({
+          libraryId: reference.libraryId,
+          targetName: reference.targetName,
+          path: targetPath,
+          action: "preserve",
+          reason: "kept-outside"
+        });
+        issues.push(createApplyIssue({
+          code: "kept-outside-skill",
+          resourceKind: "skill",
+          resourceId: reference.targetName,
+          path: targetPath,
+          message: `${reference.targetName} stays outside AgentEnv on ${targetPaths.targetId}`
+        }));
+      } else if (!isTargetOwned(occupyingItem)) {
+        issues.push(createApplyIssue({
+          code: "outside-skill-removal",
+          resourceKind: "skill",
+          resourceId: reference.targetName,
+          path: targetPath,
+          message: `${reference.targetName} is disabled in this Profile and will be backed up and removed`
+        }));
+      }
+    }
+
+    const desiredTargetPaths = new Set(
+      profile.resources.skills.map((reference) =>
+        resolve(join(targetPaths.skillsDir as string, reference.targetName))
+      )
+    );
+    const controllableRoots = new Set([
+      resolve(targetPaths.skillsDir),
+      ...(targetPaths.skillLocations ?? [])
+        .filter(
+          (location) =>
+            location.management === "managed" &&
+            location.shared !== true &&
+            location.role !== "discovery-only"
+        )
+        .map((location) => resolve(location.path))
+    ]);
+    for (const item of inventory) {
+      if (
+        !controllableRoots.has(dirname(resolve(item.path))) ||
+        item.locationRole === "discovery-only" ||
+        desiredTargetPaths.has(resolve(item.path))
+      ) {
+        continue;
+      }
+      if (item.status === "kept-outside") {
+        decisions.push({
+          libraryId: item.libraryId ?? item.id,
+          targetName: item.deploymentName ?? item.id,
+          path: item.path,
+          action: "preserve",
+          reason: "kept-outside"
+        });
+        issues.push(createApplyIssue({
+          code: "kept-outside-skill",
+          resourceKind: "skill",
+          resourceId: item.runtimeName ?? item.id,
+          path: item.path,
+          message: `${item.runtimeName ?? item.id} is not in this Profile and stays outside AgentEnv`
+        }));
+        continue;
+      }
+      const libraryId = item.libraryId ?? item.id;
+      const targetName = item.deploymentName ?? item.id;
+      if (dirname(resolve(item.path)) === resolve(targetPaths.skillsDir)) {
+        syntheticDisabledReferences.push({
+          libraryId,
+          targetName,
+          enabled: false
+        });
+      } else {
+        removalPaths.add(resolve(item.path));
+      }
+      if (!isTargetOwned(item)) {
+        issues.push(createApplyIssue({
+          code: "outside-skill-removal",
+          resourceKind: "skill",
+          resourceId: item.runtimeName ?? item.id,
+          path: item.path,
+          message: `${item.runtimeName ?? item.id} is not in this Profile and will be backed up and removed`
+        }));
+      }
+    }
+  }
+
   return {
-    effectiveSkills: profile.resources.skills.filter(
+    effectiveSkills: [...profile.resources.skills, ...syntheticDisabledReferences].filter(
       (reference) => !deferredReferences.has(referenceKey(reference))
     ),
     approvedUnmanagedSkills: [...approvedSkills]
@@ -543,6 +663,7 @@ export const buildSkillDeploymentPlan = ({
         left.disposition.localeCompare(right.disposition)
     ),
     sharedPaths: [...sharedPaths].sort(),
+    removalPaths: [...removalPaths].sort(),
     issues: dedupeApplyIssues(issues)
   };
 };

@@ -25,7 +25,7 @@ describe("library resource versions", () => {
     });
   });
 
-  it("does not make ignored Target Skills stale when Library content changes", () => {
+  it("does not make a Target stale when Skill management is off", () => {
     const profile = {
       resources: {
         skills: [{ libraryId: "enabled", targetName: "enabled", enabled: true }],

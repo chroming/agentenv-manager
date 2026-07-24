@@ -34,14 +34,14 @@ describe("Apply issues", () => {
     const path = "/home/.codex/skills/reviewer";
     const issues = dedupeApplyIssues([
       createApplyIssue({
-        code: "unmanaged-skill-preserved",
+        code: "kept-outside-skill",
         resourceKind: "skill",
         resourceId: "reviewer",
         path,
         message: "reviewer is preserved"
       }),
       createApplyIssue({
-        code: "unmanaged-skill-replacement",
+        code: "outside-skill-replacement",
         resourceKind: "skill",
         resourceId: "reviewer",
         path,
@@ -63,13 +63,13 @@ describe("Apply issues", () => {
       disposition: "review",
       resolution: "backup-replace"
     });
-    expect(APPLY_ISSUE_POLICY["unmanaged-skill-replacement"]).toEqual({
+    expect(APPLY_ISSUE_POLICY["outside-skill-replacement"]).toEqual({
       disposition: "review",
       resolution: "backup-replace"
     });
-    expect(APPLY_ISSUE_POLICY["external-skill-conflict"]).toEqual({
-      disposition: "block",
-      resolution: "external-action"
+    expect(APPLY_ISSUE_POLICY["kept-outside-skill"]).toEqual({
+      disposition: "notice",
+      resolution: "preserve"
     });
     expect(APPLY_ISSUE_POLICY["recovery-required"]).toEqual({
       disposition: "block",

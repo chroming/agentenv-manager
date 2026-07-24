@@ -52,7 +52,7 @@ const preview: ActivationPreview = {
   createdAt: "2026-06-30T00:00:00.000Z",
   issues: [{
     id: "unmanaged-skill-preserved:manual-reviewer",
-    code: "unmanaged-skill-preserved",
+    code: "kept-outside-skill",
     disposition: "notice",
     resolution: "preserve",
     resourceKind: "skill",
@@ -334,14 +334,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     }),
     scanSkillInventory: vi.fn().mockResolvedValue([]),
     listSkillCleanupBackups: vi.fn().mockResolvedValue([]),
-    ignoreSkillGroup: vi.fn().mockResolvedValue({
-      id: "ignore-skill",
-      scope: "group",
-      skillKey: "skill",
-      createdAt: "2026-07-09T00:00:00.000Z",
-      updatedAt: "2026-07-09T00:00:00.000Z"
-    }),
-    unignoreSkillGroup: vi.fn().mockResolvedValue(undefined),
+    setSkillPathPolicies: vi.fn().mockResolvedValue([]),
     scanUnmanagedSkills: vi.fn().mockResolvedValue([]),
     scanLocalSkillSource: vi.fn().mockResolvedValue({
       roots: [],
@@ -1333,7 +1326,7 @@ describe("App", () => {
           description: "Found on disk",
           path: "/tmp/opencode/skills/target-only-reviewer",
           foundIn: ["opencode"],
-          status: "unmanaged"
+          status: "outside"
         }
       ]).mockResolvedValueOnce([
         {
@@ -1342,7 +1335,7 @@ describe("App", () => {
           description: "Found after rescanning",
           path: "/tmp/opencode/skills/refreshed-reviewer",
           foundIn: ["opencode"],
-          status: "unmanaged"
+          status: "outside"
         }
       ])
     });

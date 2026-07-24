@@ -141,7 +141,7 @@ describe("Claude Code Profile v2 adapter", () => {
       owner: "external",
       availability: "unknown",
       locationRole: "discovery-only",
-      externalOwnership: {
+      externalEvidence: {
         manager: "claude-plugin",
         displayName: "Claude Code plugin",
         importable: false

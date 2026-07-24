@@ -139,6 +139,47 @@ describe("target capture service v2", () => {
     });
   });
 
+  it("includes a readable kept-outside Skill without changing the device path", async () => {
+    const { homeDir, service, skillLibraryStore } = await setup("opencode");
+    const targetDir = join(homeDir, ".config", "opencode");
+    const skillDir = join(targetDir, "skills", "local-reviewer");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(targetDir, "AGENTS.md"), "# Existing OpenCode\n");
+    await writeFile(join(targetDir, "opencode.jsonc"), "{}\n");
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      "---\nname: local-reviewer\ndescription: Device copy.\n---\n# Local\n"
+    );
+    await skillLibraryStore.setSkillPathPolicies({
+      items: [{
+        path: skillDir,
+        skillKey: "local-reviewer",
+        targetId: "opencode"
+      }],
+      mode: "keep-outside"
+    });
+
+    const preview = await service.previewTarget("opencode");
+
+    expect(preview.resources).toContainEqual(expect.objectContaining({
+      kind: "skill",
+      id: "local-reviewer",
+      action: "import",
+      detail: expect.stringContaining("keeps the current path outside AgentEnv")
+    }));
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "OpenCode local"
+    });
+    expect(result.profile.resources.skills).toContainEqual({
+      libraryId: "local-reviewer",
+      targetName: "local-reviewer",
+      enabled: true
+    });
+    await expect(readFile(join(skillDir, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Local");
+  });
+
   it("rejects a stale preview before importing anything", async () => {
     const { homeDir, service, profileStore, paths } = await setup("opencode");
     const targetDir = join(homeDir, ".config", "opencode");

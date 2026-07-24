@@ -220,7 +220,7 @@ describe("activation service v2", () => {
     );
   });
 
-  it("does not block Trae Apply on external copies of a globally disabled Library Skill", async () => {
+  it("removes writable Trae copies of a globally disabled Library Skill without treating evidence as ownership", async () => {
     const { paths, profileStore, service, skillLibraryStore } = await makeEnv();
     const source = join(root, "source", "ppe-debug");
     const traeDir = join(paths.homeDir, ".trae");
@@ -276,8 +276,10 @@ describe("activation service v2", () => {
     );
     await expect(readFile(join(traeDir, "AGENTS.md"), "utf8"))
       .resolves.toBe("# Managed Trae guidance\n");
-    for (const externalPath of externalPaths) {
-      await expect(readFile(join(externalPath, "SKILL.md"), "utf8"))
+    await expect(readFile(join(externalPaths[0], "SKILL.md"), "utf8"))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    for (const observedPath of externalPaths.slice(1)) {
+      await expect(readFile(join(observedPath, "SKILL.md"), "utf8"))
         .resolves.toContain("# PPE Debug");
     }
   });
@@ -374,6 +376,10 @@ describe("activation service v2", () => {
     const first = await service.previewProfile(profile.id, "codex");
     expect(first.sharedSkillPreparations).toHaveLength(2);
     expect((await service.applyProfile(profile.id, first.id)).ok).toBe(true);
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "applied",
+      appliedLibraryVersions: { skills: {} }
+    });
     const statePath = join(paths.targetStatesDir, "codex.json");
     const state = JSON.parse(await readFile(statePath, "utf8")) as {
       sharedSkillPreparations: Array<{ sharedPaths: string[] }>;
@@ -639,6 +645,102 @@ describe("activation service v2", () => {
     await expect(createBackupStore(paths).listBackups()).resolves.toHaveLength(1);
   });
 
+  it("keeps a reviewed Skill path outside AgentEnv without changing the portable Profile", async () => {
+    const { paths, service, skillLibraryStore, profileStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const outsidePath = join(paths.codexHome, "skills", "review");
+    await mkdir(outsidePath, { recursive: true });
+    await writeFile(
+      join(outsidePath, "SKILL.md"),
+      "---\nname: review\n---\n# Device-specific review\n"
+    );
+
+    const firstPreview = await service.previewProfile("daily-coding", "codex");
+    expect(firstPreview.issues).toContainEqual(expect.objectContaining({
+      code: "outside-skill-replacement",
+      path: outsidePath,
+      disposition: "review"
+    }));
+
+    await skillLibraryStore.setSkillPathPolicies({
+      items: [{
+        path: outsidePath,
+        skillKey: "review",
+        targetId: "codex"
+      }],
+      mode: "keep-outside"
+    });
+    const keptPreview = await service.previewProfile("daily-coding", "codex");
+
+    expect(reviewMessages(keptPreview.issues)).toEqual([]);
+    expect(keptPreview.issues).toContainEqual(expect.objectContaining({
+      code: "kept-outside-skill",
+      path: outsidePath,
+      disposition: "notice"
+    }));
+    expect(keptPreview.resourceChanges.map((change) => change.path)).not.toContain(outsidePath);
+    expect((await profileStore.readProfile("daily-coding")).resources.skills).toEqual([
+      { libraryId: "review", targetName: "review", enabled: true }
+    ]);
+
+    expect((await service.applyProfile("daily-coding", keptPreview.id)).ok).toBe(true);
+    await expect(readFile(join(outsidePath, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Device-specific review");
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "applied-with-outside",
+      warningCount: 1,
+      keptOutsideSkills: [{
+        path: outsidePath,
+        libraryId: "review",
+        targetName: "review"
+      }],
+      appliedLibraryVersions: { skills: {} }
+    });
+
+    const stablePreview = await service.previewProfile("daily-coding", "codex");
+    expect(reviewMessages(stablePreview.issues)).toEqual([]);
+    expect(stablePreview.resourceChanges).toEqual([]);
+  });
+
+  it("keeps a disabled Skill path visible as a device exception after Apply", async () => {
+    const { paths, service, skillLibraryStore, profileStore, profile } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const outsidePath = join(paths.codexHome, "skills", "review");
+    await mkdir(outsidePath, { recursive: true });
+    await writeFile(
+      join(outsidePath, "SKILL.md"),
+      "---\nname: review\n---\n# Device-specific review\n"
+    );
+    await profileStore.saveProfile({
+      manifest: profile.manifest,
+      instructions: profile.instructions,
+      resources: {
+        ...profile.resources,
+        skills: [{ libraryId: "review", targetName: "review", enabled: false }]
+      }
+    });
+    await skillLibraryStore.setSkillPathPolicies({
+      items: [{ path: outsidePath, skillKey: "review", targetId: "codex" }],
+      mode: "keep-outside"
+    });
+
+    const preview = await service.previewProfile(profile.id, "codex");
+    expect(reviewMessages(preview.issues)).toEqual([]);
+    expect(preview.issues).toContainEqual(expect.objectContaining({
+      code: "kept-outside-skill",
+      path: outsidePath
+    }));
+    expect((await service.applyProfile(profile.id, preview.id)).ok).toBe(true);
+
+    await expect(readFile(join(outsidePath, "SKILL.md"), "utf8"))
+      .resolves.toContain("# Device-specific review");
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "applied-with-outside",
+      warningCount: 1,
+      appliedLibraryVersions: { skills: {} }
+    });
+  });
+
   it("records a disabled shared Skill intent without claiming that Apply removes the shared copy", async () => {
     const { paths, service, profileStore, profile, skillLibraryStore } = await makeEnv();
     await writeCodexLiveFiles(paths);
@@ -671,6 +773,38 @@ describe("activation service v2", () => {
     }));
     expect((await service.applyProfile(profile.id, preview.id)).ok).toBe(true);
     await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
+  });
+
+  it("keeps a reviewed shared compatibility copy without installing a duplicate", async () => {
+    const { paths, service, skillLibraryStore } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const librarySkill = (await skillLibraryStore.listSkills()).find((skill) => skill.id === "review");
+    if (!librarySkill) throw new Error("Expected review in the Skill Library");
+    const sharedSkill = join(paths.homeDir, ".agents", "skills", "review");
+    const targetSkill = join(paths.codexHome, "skills", "review");
+    await mkdir(join(paths.homeDir, ".agents", "skills"), { recursive: true });
+    await cp(librarySkill.path, sharedSkill, { recursive: true });
+    await skillLibraryStore.setSharedSkillRetention({
+      skillKey: "review",
+      paths: [sharedSkill],
+      retained: true
+    });
+
+    const preview = await service.previewProfile("daily-coding", "codex");
+    expect(reviewMessages(preview.issues)).toEqual([]);
+    expect(preview.keptOutsideSkills).toContainEqual(expect.objectContaining({
+      path: sharedSkill,
+      libraryId: "review",
+      targetName: "review"
+    }));
+    expect((await service.applyProfile("daily-coding", preview.id)).ok).toBe(true);
+
+    await expect(readFile(join(sharedSkill, "SKILL.md"), "utf8")).resolves.toContain("# Review");
+    await expect(lstat(targetSkill)).rejects.toThrow();
+    expect((await service.listTargetStates())[0]).toMatchObject({
+      lifecycleStatus: "applied-with-outside",
+      keptOutsideSkills: [expect.objectContaining({ path: sharedSkill })]
+    });
   });
 
   it("rejects stale previews without overwriting live files", async () => {

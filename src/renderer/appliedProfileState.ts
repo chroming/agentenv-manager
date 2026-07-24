@@ -31,11 +31,16 @@ export const acceptAppliedProfileState = ({
     appliedProfileHash,
     appliedLibraryVersions: preview.libraryVersions,
     status: "managed",
-    lifecycleStatus: "applied",
+    lifecycleStatus: preview.issues.some(
+      (issue) => issue.code === "kept-outside-skill"
+    )
+      ? "applied-with-outside"
+      : "applied",
     lastAppliedAt: appliedAt,
     managedResourceCount:
       preview.effectivePayload?.total ??
       preview.changes.length + preview.resourceChanges.length,
+    keptOutsideSkills: preview.keptOutsideSkills ?? [],
     sharedSkillPreparations: preview.sharedSkillPreparations ?? [],
     warningCount: preview.issues.filter(
       (issue) => issue.disposition === "notice"

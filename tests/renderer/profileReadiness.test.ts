@@ -246,6 +246,25 @@ describe("profile readiness", () => {
     ).toBe("Review Codex issues");
   });
 
+  it("keeps a current Profile applied while naming machine-local Skill exceptions", () => {
+    expect(
+      deriveProfileReadiness({
+        profile,
+        target,
+        targetState: {
+          ...managedState,
+          lifecycleStatus: "applied-with-outside",
+          lifecycleReason: "1 Skill stays outside AgentEnv on this device"
+        },
+        isDirty: false
+      })
+    ).toEqual({
+      status: "applied",
+      label: "Applied",
+      message: "1 Skill stays outside AgentEnv on this device"
+    });
+  });
+
   it("offers a distinct recovery destination only when target recovery is required", () => {
     expect(
       deriveProfileReadiness({

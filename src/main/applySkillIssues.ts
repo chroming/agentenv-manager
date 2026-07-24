@@ -264,28 +264,16 @@ export const preservedUnmanagedSkillIssues = (
   return inventory
     .filter(
       (skill) =>
-        (skill.status === "unmanaged" ||
-          skill.status === "ignored" ||
-          skill.status === "external") &&
+        skill.status === "kept-outside" &&
         !desired.has(skill.id)
     )
     .map((skill) =>
       createApplyIssue({
-        code:
-          skill.status === "ignored"
-            ? "ignored-skill-preserved"
-            : skill.status === "external"
-              ? "external-skill-preserved"
-              : "unmanaged-skill-preserved",
+        code: "kept-outside-skill",
         resourceKind: "skill",
         resourceId: skill.runtimeName ?? skill.id,
         path: skill.path,
-        message:
-          skill.status === "ignored"
-            ? `Ignored local Skill ${skill.runtimeName ?? skill.id} will be preserved`
-            : skill.status === "external"
-              ? `${skill.externalOwnership?.displayName ?? skill.externalOwnership?.manager ?? "Externally"}-managed Skill ${skill.runtimeName ?? skill.id} will be preserved`
-              : `Unmanaged local Skill ${skill.runtimeName ?? skill.id} will be preserved`
+        message: `${skill.runtimeName ?? skill.id} stays outside AgentEnv on this Agent`
       })
     );
 };

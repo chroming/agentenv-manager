@@ -69,6 +69,7 @@ import type {
   SkillSourceMergeResult,
   SkillMergeInput,
   SkillMergePreview,
+  SkillPathPolicyUpdate,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult,
@@ -218,8 +219,9 @@ interface SkillLibraryPanelProps {
   onCheckUpdates(): void;
   onOpenSource(url: string): void;
   onCopySource(source: string): void;
-  onIgnoreSkillGroup(skillKey: string): void;
-  onUnignoreSkillGroup(skillKey: string): void;
+  onKeepSkillGroupOutside(skillKey: string): void;
+  onReviewSkillGroupAgain(skillKey: string): void;
+  onSetSkillPathPolicies?(input: SkillPathPolicyUpdate): Promise<boolean>;
   onSetSharedSkillRetention(input: SharedSkillRetentionInput): Promise<boolean>;
   onRetireSharedSkill(input: RetireSharedSkillInput): Promise<boolean>;
   onOpenProfiles(): void;
@@ -292,25 +294,29 @@ const cleanupLocationLabel = (
 
 const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
   if (status === "library") return "Imported";
-  if (status === "external") return "External";
-  if (status === "unmanaged") return "Unmanaged";
-  if (status === "ignored") return "Ignored";
+  if (status === "outside") return "Outside AgentEnv";
+  if (status === "kept-outside") return "Kept outside";
   return "Managed";
 };
 
 const cleanupInventoryStatusLabel = (item: SkillInventoryEntry) =>
-  item.externalOwnership?.state === "broken-link"
+  item.externalEvidence?.state === "broken-link"
     ? "Unavailable"
     : inventoryStatusLabel(item.status);
 
 const cleanupInventoryStatusClass = (item: SkillInventoryEntry) =>
-  item.externalOwnership?.state === "broken-link" ? "stale" : item.status;
+  item.externalEvidence?.state === "broken-link" ? "stale" : item.status;
 
 const externalManagerLabel = (skill: SkillInventoryEntry | undefined) =>
-  skill?.externalOwnership?.displayName ??
-  (skill?.externalOwnership?.manager === "skills-cli"
+  skill?.externalEvidence?.displayName ??
+  (skill?.externalEvidence?.manager === "skills-cli"
     ? "Skills CLI"
-    : skill?.externalOwnership?.manager ?? "External manager");
+    : skill?.externalEvidence?.manager ?? "Detected source");
+
+const isCleanupManageable = (item: SkillInventoryEntry) =>
+  item.status !== "kept-outside" &&
+  item.locationRole !== "discovery-only" &&
+  (item.locationManagement !== "observed" || item.sharedLocation === true);
 
 const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "not-in-library") return "Not in Library";
@@ -319,11 +325,11 @@ const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "copies-not-managed") return "Copies not managed";
   if (state === "local-changes-found") return "Local changes found";
   if (state === "managed-copy-changed") return "Managed copy changed";
-  if (state === "managed-elsewhere") return "Managed elsewhere";
+  if (state === "outside-agentenv") return "Outside AgentEnv";
   if (state === "shared-copy-in-use") return "Shared copy still active";
   if (state === "shared-copy-replaceable") return "Shared copy can be replaced";
   if (state === "kept-shared") return "Kept shared";
-  if (state === "ignored") return "Ignored";
+  if (state === "kept-outside") return "Kept outside";
   if (state === "unavailable") return "Unavailable";
   return "Managed";
 };
@@ -333,25 +339,25 @@ const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState) => {
   if (state === "unavailable") return "Unavailable";
   if (state === "multiple-versions") return "Multiple versions";
   if (state === "local-changes-found" || state === "managed-copy-changed") return "Changed";
-  if (state === "managed-elsewhere") return "External";
+  if (state === "outside-agentenv") return "Outside";
   if (state === "shared-copy-in-use") return "Shared";
   if (state === "shared-copy-replaceable") return "Ready";
   if (state === "kept-shared") return "Kept";
-  if (state === "ignored") return "Ignored";
+  if (state === "kept-outside") return "Kept";
   if (state === "managed") return "Managed";
   return "Unmanaged";
 };
 
 const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) => {
   if (state === "managed" || state === "shared-copy-replaceable") return "managed";
-  if (state === "ignored" || state === "kept-shared") return "ignored";
-  if (state === "managed-elsewhere") return "external";
+  if (state === "kept-outside" || state === "kept-shared") return "kept-outside";
+  if (state === "outside-agentenv") return "outside";
   if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
   if (state === "managed-copy-changed") return "stale";
   if (state === "shared-copy-in-use") return "pending";
   if (state === "duplicate-copies") return "library";
   if (state === "unavailable") return "stale";
-  return "unmanaged";
+  return "outside";
 };
 
 const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
@@ -359,7 +365,7 @@ const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
   if (action === "manage-copies") return "Manage copies";
   if (action === "review-differences") return "Review differences";
   if (action === "review-drift") return "Review drift";
-  if (action === "review-ownership") return "Review ownership";
+  if (action === "review-paths") return "Review paths";
   if (action === "open-profiles") return "Review shared copy";
   if (action === "review-replacement") return "Review replacement";
   if (action === "review-details") return "Review details";
@@ -376,7 +382,7 @@ const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
   if (
     action === "review-differences" ||
     action === "review-drift" ||
-    action === "review-ownership" ||
+    action === "review-paths" ||
     action === "review-details"
   ) {
     return "Review";
@@ -457,8 +463,9 @@ export const SkillLibraryPanel = ({
   onCheckUpdates,
   onOpenSource,
   onCopySource,
-  onIgnoreSkillGroup,
-  onUnignoreSkillGroup,
+  onKeepSkillGroupOutside,
+  onReviewSkillGroupAgain,
+  onSetSkillPathPolicies,
   onSetSharedSkillRetention,
   onRetireSharedSkill,
   onOpenProfiles,
@@ -550,6 +557,7 @@ export const SkillLibraryPanel = ({
     skillKey: string;
     sourcePath: string;
   }>();
+  const [pathPolicyOperationPath, setPathPolicyOperationPath] = useState<string>();
   const previewingSkillId =
     updateActivity?.kind === "preview-skill"
       ? updateActivity.skillId
@@ -1027,52 +1035,46 @@ export const SkillLibraryPanel = ({
   const selectedLocalInventory = skillInventory.find(
     (item) => item.path.replace(/\/+$/, "") === normalizedLocalSkillPath
   );
-  const selectedLocalConflict = Boolean(
-    selectedLocalInventory?.status === "library" &&
-      selectedLocalInventory.contentMatchesLibrary !== true
-  );
-  const selectedLocalCanManage = Boolean(
+  const selectedLocalCanImport = Boolean(
     selectedLocalInventory &&
-      (selectedLocalInventory.status === "unmanaged" ||
-        (selectedLocalInventory.status === "library" && !selectedLocalConflict))
+      (!selectedLocalInventory.externalEvidence ||
+        isExternalSkillImportable(selectedLocalInventory.externalEvidence))
   );
   const localImportBlocked = Boolean(
     selectedLocalInventory &&
       (selectedLocalInventory.status === "managed" ||
-        selectedLocalInventory.status === "ignored" ||
-        (selectedLocalInventory.status === "external" &&
-          !isExternalSkillImportable(selectedLocalInventory.externalOwnership)) ||
-        selectedLocalConflict)
+        !selectedLocalCanImport)
   );
   const localImportImpact = !selectedLocalInventory
     ? undefined
     : selectedLocalInventory.status === "managed"
       ? { message: "This Agent copy is already managed by AgentEnv and is present in Library." }
-      : selectedLocalInventory.status === "ignored"
-        ? { message: "This group is ignored. Restore it in Scan local before managing it." }
-        : selectedLocalConflict
+      : selectedLocalInventory.status === "kept-outside"
+        ? { message: "This path stays outside AgentEnv. Import creates an independent Library copy and does not change that policy." }
+        : selectedLocalInventory.status === "library" &&
+            selectedLocalInventory.contentMatchesLibrary !== true
           ? {
               message:
-                "This folder differs from the existing Library version. Use Scan local to review the conflict."
+                "This folder differs from the existing Library version. Import will open a comparison before making changes."
             }
-          : selectedLocalInventory.status === "external"
-            ? selectedLocalInventory.externalOwnership?.importable === false
+          : selectedLocalInventory.status === "outside"
+            ? selectedLocalInventory.externalEvidence?.importable === false
               ? {
                   message: "This Skill is provided by {{manager}} and remains read-only here.",
                   values: { manager: externalManagerLabel(selectedLocalInventory) }
                 }
-              : {
+              : selectedLocalInventory.externalEvidence
+                ? {
                   message:
-                    "This installation is owned by {{manager}}. AgentEnv will import an independent Library copy and leave it unchanged.",
+                    "AgentEnv found {{manager}} metadata. Import creates an independent Library copy and leaves this path unchanged.",
                   values: { manager: externalManagerLabel(selectedLocalInventory) }
                 }
-            : selectedLocalCanManage
-              ? {
+                : {
                   message:
-                    "AgentEnv will back up this Agent copy, import it to Library, then replace the folder with a managed copy."
+                    "Import creates an independent Library copy and leaves this Agent path unchanged."
                 }
-              : undefined;
-  const localImportLabel = selectedLocalCanManage ? "Import & manage" : "Import copy";
+            : undefined;
+  const localImportLabel = "Import copy";
   const cleanupCandidate = cleanupDraft
     ? cleanupGroups.find((group) => group.skillKey === cleanupDraft.skillKey)
     : undefined;
@@ -1116,8 +1118,8 @@ export const SkillLibraryPanel = ({
   const externalImportItems =
     externalImportGroup?.activeItems.filter(
       (item) =>
-        item.status === "external" &&
-        isExternalSkillImportable(item.externalOwnership)
+        item.status === "outside" &&
+        isExternalSkillImportable(item.externalEvidence)
     ) ?? [];
   const selectedExternalImport = externalImportItems.find(
     (item) => item.path === externalImport?.sourcePath
@@ -1130,10 +1132,33 @@ export const SkillLibraryPanel = ({
     ? librarySkills.find((skill) => skill.id === cleanupDraft.libraryId)
     : undefined;
 
+  const changePathPolicy = async (
+    item: SkillInventoryEntry,
+    mode?: "keep-outside"
+  ) => {
+    if (!onSetSkillPathPolicies || pathPolicyOperationPath) return;
+    setPathPolicyOperationPath(item.path);
+    try {
+      await onSetSkillPathPolicies({
+        items:
+          item.sharedLocation || item.foundIn.length === 0
+            ? [{ path: item.path, skillKey: item.skillKey }]
+            : item.foundIn.map((targetId) => ({
+                path: item.path,
+                skillKey: item.skillKey,
+                targetId
+              })),
+        mode
+      });
+    } finally {
+      setPathPolicyOperationPath(undefined);
+    }
+  };
+
   const openCleanupReview = (group: (typeof cleanupGroups)[number]) => {
     const libraryId = group.items.find((item) => item.libraryId)?.libraryId ?? group.skillKey;
     const manageableItems = group.activeItems.filter(
-      (item) => item.status !== "ignored" && item.status !== "external"
+      isCleanupManageable
     );
     const canonical =
       manageableItems.find((item) => item.status === "library") ?? manageableItems[0];
@@ -1484,7 +1509,7 @@ export const SkillLibraryPanel = ({
     }
     setLocalImportOperation(true);
     try {
-      const imported = selectedLocalInventory?.status === "external"
+      const imported = selectedLocalInventory?.externalEvidence
         ? await onImportExternal(selectedLocalInventory)
         : await onImportUnmanaged(sourcePath);
       if (imported) {
@@ -1502,7 +1527,7 @@ export const SkillLibraryPanel = ({
     const selected = externalImportItems.find(
       (item) => item.path === externalImport.sourcePath
     );
-    if (!selected || selected.externalOwnership?.state === "broken-link") {
+    if (!selected || selected.externalEvidence?.state === "broken-link") {
       return;
     }
     setLocalImportOperation(true);
@@ -1868,8 +1893,8 @@ export const SkillLibraryPanel = ({
                   <option value="all">{t("All Agents")}</option>
                   <option value="managed">{t("Managed")}</option>
                   <option value="library">{t("Imported")}</option>
-                  <option value="unmanaged">{t("Unmanaged")}</option>
-                  <option value="ignored">{t("Ignored")}</option>
+                  <option value="outside">{t("Unmanaged")}</option>
+                  <option value="kept-outside">{t("Kept outside")}</option>
                   <option value="not-installed">{t("Not installed")}</option>
                 </select>
               </label>
@@ -2934,7 +2959,7 @@ export const SkillLibraryPanel = ({
                   </summary>
                   {plan.impact ? (
                     <p className="skill-update-impact">
-                      {t("{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs wait", {
+                      {t("{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs update in this transaction", {
                         profiles: plan.impact.profileNames.length,
                         linked: plan.impact.linkedInstallCount,
                         copied: plan.impact.copiedInstallCount
@@ -2994,7 +3019,7 @@ export const SkillLibraryPanel = ({
                 <p className="muted ui-dialog-description">
                   {selectedExternalImport?.contentMatchesLibrary
                     ? t("Review the matching Library copy and any source changes. External files and lock data stay unchanged.")
-                    : selectedExternalImport?.externalOwnership?.manager === "skills-cli"
+                    : selectedExternalImport?.externalEvidence?.manager === "skills-cli"
                       ? t("Create an independent Library copy. Skills CLI files and lock data stay unchanged.")
                       : t("Create an independent Library copy. {{manager}} files stay unchanged.", {
                           manager: externalManagerLabel(selectedExternalImport)
@@ -3010,7 +3035,7 @@ export const SkillLibraryPanel = ({
                     type="radio"
                     name="external-skill-source"
                     checked={externalImport.sourcePath === item.path}
-                    disabled={item.externalOwnership?.state === "broken-link"}
+                    disabled={item.externalEvidence?.state === "broken-link"}
                     onChange={() =>
                       setExternalImport({
                         skillKey: externalImport.skillKey,
@@ -3031,7 +3056,7 @@ export const SkillLibraryPanel = ({
                     ) : null}
                   </span>
                   <em>
-                    {item.externalOwnership?.state === "broken-link"
+                    {item.externalEvidence?.state === "broken-link"
                       ? t("Missing")
                       : t("Content {{hash}}", { hash: item.contentHash.slice(0, 7) })}
                   </em>
@@ -3055,7 +3080,7 @@ export const SkillLibraryPanel = ({
                 disabled={localImportOperation || !externalImportItems.some(
                   (item) =>
                     item.path === externalImport.sourcePath &&
-                    item.externalOwnership?.state !== "broken-link"
+                    item.externalEvidence?.state !== "broken-link"
                 )}
                 onClick={() => void importSelectedExternalSkill()}
               >
@@ -3124,11 +3149,37 @@ export const SkillLibraryPanel = ({
                     <div className="cleanup-details-location" key={`${item.status}-${item.path}`}>
                       <div>
                         <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
-                        <span
-                          className={`resource-chip resource-chip--${cleanupInventoryStatusClass(item)}`}
-                        >
-                          {t(cleanupInventoryStatusLabel(item))}
-                        </span>
+                        <div className="cleanup-details-location__actions">
+                          <span
+                            className={`resource-chip resource-chip--${cleanupInventoryStatusClass(item)}`}
+                          >
+                            {t(cleanupInventoryStatusLabel(item))}
+                          </span>
+                          {onSetSkillPathPolicies &&
+                          !item.sharedLocation &&
+                          (item.status === "outside" || item.status === "kept-outside") ? (
+                            <button
+                              className="secondary-action cleanup-path-policy-action"
+                              type="button"
+                              disabled={Boolean(pathPolicyOperationPath)}
+                              aria-busy={pathPolicyOperationPath === item.path}
+                              onClick={() =>
+                                void changePathPolicy(
+                                  item,
+                                  item.status === "kept-outside" ? undefined : "keep-outside"
+                                )}
+                            >
+                              {pathPolicyOperationPath === item.path ? (
+                                <LoaderCircle className="is-spinning" size={13} aria-hidden="true" />
+                              ) : null}
+                              {t(
+                                item.status === "kept-outside"
+                                  ? "Review again"
+                                  : "Keep outside AgentEnv"
+                              )}
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                       <PreviewText
                         ariaLabel={t("Full detail path {{path}}", { path: item.path })}
@@ -3250,7 +3301,7 @@ export const SkillLibraryPanel = ({
                     </span>
                   </label>
                   {cleanupDraft.libraryAction === "replace" ? cleanupCandidate.activeItems
-                    .filter((item) => item.status !== "ignored" && item.status !== "external")
+                    .filter(isCleanupManageable)
                     .map((item) => (
                       <label className="cleanup-review-option cleanup-review-option--nested" key={`canonical-${item.path}`}>
                         <input
@@ -3288,7 +3339,7 @@ export const SkillLibraryPanel = ({
                     <small>{t("Choose the copy whose contents you want to preserve.")}</small>
                   </legend>
                   {cleanupCandidate.items
-                    .filter((item) => item.status !== "managed" && item.status !== "ignored")
+                    .filter((item) => item.status !== "managed" && item.status !== "kept-outside")
                     .map((item) => (
                       <label className="cleanup-review-option" key={`canonical-${item.path}`}>
                         <input
@@ -3345,7 +3396,7 @@ export const SkillLibraryPanel = ({
                       checked={cleanupDraft.selectedPaths.includes(item.path)}
                       disabled={
                         item.status === "managed" ||
-                        item.status === "ignored" ||
+                        item.status === "kept-outside" ||
                         Boolean(cleanupCandidate.sharedMigration) ||
                         (cleanupDraft.libraryAction !== "keep" && cleanupDraft.canonicalPath === item.path)
                       }
@@ -3371,8 +3422,8 @@ export const SkillLibraryPanel = ({
                     <em>
                       {item.status === "managed"
                         ? t("Already managed")
-                        : item.status === "ignored"
-                          ? t("Ignored")
+                        : item.status === "kept-outside"
+                          ? t("Kept outside")
                           : cleanupCandidate.sharedMigration && item.sharedLocation
                             ? t("Keep active")
                             : cleanupCandidate.sharedMigration
@@ -3515,8 +3566,8 @@ export const SkillLibraryPanel = ({
                 const sectionExpanded = collapsibleBucket
                   ? expandedCleanupBuckets[collapsibleBucket]
                   : true;
-                const hasIgnored = group.items.some((skill) => skill.status === "ignored");
-                const allIgnored = group.activeItems.length === 0;
+                const hasIgnored = group.items.some((skill) => skill.status === "kept-outside");
+                const allKeptOutside = group.activeItems.length === 0;
                 const canIgnore = group.activeItems.some((skill) => skill.status !== "managed");
                 const sharedMigration = group.sharedMigration;
                 const linkedLibraryId = group.items.find((item) => item.libraryId)?.libraryId;
@@ -3593,15 +3644,9 @@ export const SkillLibraryPanel = ({
                     setCleanupDetailsKey(group.skillKey);
                     return;
                   }
-                  if (group.presentation.action === "review-ownership") {
-                    const source = group.activeItems.find(
-                      (item) =>
-                        item.status === "external" &&
-                        isExternalSkillImportable(item.externalOwnership) &&
-                        item.externalOwnership?.state !== "broken-link"
-                    );
-                    if (source) {
-                      setExternalImport({ skillKey: group.skillKey, sourcePath: source.path });
+                  if (group.presentation.action === "review-paths") {
+                    if (group.activeItems.some(isCleanupManageable)) {
+                      openCleanupReview(group);
                     } else {
                       setCleanupDetailsKey(group.skillKey);
                     }
@@ -3737,7 +3782,7 @@ export const SkillLibraryPanel = ({
                                 <Search size={14} strokeWidth={2.2} />
                                 <span><strong>{t("Details")}</strong></span>
                               </button>
-                              {sharedMigration && sharedMigration.state !== "external" && sharedMigration.state !== "kept" ? (
+                              {sharedMigration && sharedMigration.state !== "outside" && sharedMigration.state !== "kept" ? (
                                 <button
                                   className="row-action-item"
                                   type="button"
@@ -3770,12 +3815,12 @@ export const SkillLibraryPanel = ({
                                   type="button"
                                   role="menuitem"
                                   onClick={() => {
-                                    onIgnoreSkillGroup(group.skillKey);
+                                    onKeepSkillGroupOutside(group.skillKey);
                                     setOpenAction(undefined);
                                   }}
                                 >
                                   <Link2Off size={14} strokeWidth={2.2} />
-                                  <span><strong>{t("Ignore")}</strong></span>
+                                  <span><strong>{t("Keep outside AgentEnv")}</strong></span>
                                 </button>
                               ) : null}
                               {!sharedMigration && hasIgnored ? (
@@ -3784,12 +3829,12 @@ export const SkillLibraryPanel = ({
                                   type="button"
                                   role="menuitem"
                                   onClick={() => {
-                                    onUnignoreSkillGroup(group.skillKey);
+                                    onReviewSkillGroupAgain(group.skillKey);
                                     setOpenAction(undefined);
                                   }}
                                 >
                                   <RotateCcw size={14} strokeWidth={2.2} />
-                                  <span><strong>{t(allIgnored ? "Unignore" : "Restore ignored")}</strong></span>
+                                  <span><strong>{t(allKeptOutside ? "Review again" : "Review kept paths")}</strong></span>
                                 </button>
                               ) : null}
                             </div>,
@@ -3936,8 +3981,6 @@ export const SkillLibraryPanel = ({
                         >
                           {localImportBlocked ? (
                             <TriangleAlert size={15} strokeWidth={2.2} aria-hidden="true" />
-                          ) : selectedLocalCanManage ? (
-                            <SlidersHorizontal size={15} strokeWidth={2.2} aria-hidden="true" />
                           ) : (
                             <CheckCircle2 size={15} strokeWidth={2.2} aria-hidden="true" />
                           )}

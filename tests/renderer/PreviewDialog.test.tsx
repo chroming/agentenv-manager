@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PreviewDialog } from "../../src/renderer/components/PreviewDialog";
 import type { ActivationPreview } from "../../src/shared/types";
@@ -143,7 +143,7 @@ describe("PreviewDialog", () => {
     expect(payload).toHaveTextContent("0MCP overrides");
   });
 
-  it("presents an unmanaged Skill destination as an explicit backup replacement", () => {
+  it("presents a Skill outside AgentEnv as an explicit backup replacement", () => {
     const path = "/Users/test/.claude/skills/bytedcli";
     render(
       <PreviewDialog
@@ -153,7 +153,7 @@ describe("PreviewDialog", () => {
           targetId: "claude-code",
           issues: [{
             id: `unmanaged-skill-replacement:${path}`,
-            code: "unmanaged-skill-replacement",
+            code: "outside-skill-replacement",
             disposition: "review",
             resolution: "backup-replace",
             resourceKind: "skill",
@@ -170,7 +170,7 @@ describe("PreviewDialog", () => {
       />
     );
 
-    expect(screen.getByText("Existing unmanaged Skill will be replaced")).toBeInTheDocument();
+    expect(screen.getByText("Existing Skill will be brought under AgentEnv")).toBeInTheDocument();
     const issueLocation = screen.getByLabelText("Full issue detail");
     fireEvent.focus(issueLocation);
     expect(screen.getByText(path)).toBeInTheDocument();
@@ -178,6 +178,44 @@ describe("PreviewDialog", () => {
     expect(screen.queryByText("Blocking issues")).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled();
+  });
+
+  it("lets the user keep a reviewed Skill path outside AgentEnv with local progress", async () => {
+    const path = "/Users/test/.claude/skills/bytedcli";
+    let finish!: () => void;
+    const onKeepSkillOutside = vi.fn().mockImplementation(
+      () => new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+    );
+    const issue = {
+      id: `outside-skill-replacement:${path}`,
+      code: "outside-skill-replacement" as const,
+      disposition: "review" as const,
+      resolution: "backup-replace" as const,
+      resourceKind: "skill" as const,
+      resourceId: "bytedcli",
+      path,
+      message: "Existing Skill bytedcli will be backed up and brought under AgentEnv"
+    };
+    render(
+      <PreviewDialog
+        preview={{ ...preview, issues: [issue] }}
+        onKeepSkillOutside={onKeepSkillOutside}
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    );
+
+    const keepButton = screen.getByRole("button", { name: "Keep outside" });
+    fireEvent.click(keepButton);
+
+    expect(onKeepSkillOutside).toHaveBeenCalledWith(issue);
+    expect(keepButton).toHaveAttribute("aria-busy", "true");
+    expect(keepButton).toBeDisabled();
+
+    finish();
+    await waitFor(() => expect(keepButton).toHaveAttribute("aria-busy", "false"));
   });
 
   it("puts true blockers before the change plan", () => {
@@ -218,7 +256,7 @@ describe("PreviewDialog", () => {
           issues: [
             {
               id: "unmanaged-skill-preserved:/skills/local-only",
-              code: "unmanaged-skill-preserved",
+              code: "kept-outside-skill",
               disposition: "notice",
               resolution: "preserve",
               resourceKind: "skill",

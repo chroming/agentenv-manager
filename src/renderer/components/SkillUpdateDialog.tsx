@@ -56,7 +56,7 @@ export const SkillUpdateDialog = ({
       }));
     }
     if (planImpact.copiedInstallCount > 0) {
-      parts.push(t("{{count}} copied Agent installs wait for Apply or Sync", {
+      parts.push(t("{{count}} copied Agent installs update with this Library change", {
         count: planImpact.copiedInstallCount
       }));
     }

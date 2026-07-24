@@ -152,7 +152,9 @@ export const deriveProfileReadiness = ({
 
   if (
     targetState.activeProfileId === profile.id &&
-    (targetState.lifecycleStatus === "applied" || !targetState.lifecycleStatus) &&
+    (targetState.lifecycleStatus === "applied" ||
+      targetState.lifecycleStatus === "applied-with-outside" ||
+      !targetState.lifecycleStatus) &&
     Boolean(profile.contentHash) &&
     targetState.appliedProfileHash === profile.contentHash &&
     dependenciesCurrent !== false
@@ -160,7 +162,9 @@ export const deriveProfileReadiness = ({
     return {
       status: "applied",
       label: "Applied",
-      message: `${target.name} matches this profile`
+      message: targetState.lifecycleStatus === "applied-with-outside"
+        ? targetState.lifecycleReason ?? `${target.name} uses this profile with local exceptions`
+        : `${target.name} matches this profile`
     };
   }
 

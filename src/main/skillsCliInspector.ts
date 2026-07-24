@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SkillExternalOwnership, SkillUpstream } from "../shared/types";
+import type { SkillExternalEvidence, SkillUpstream } from "../shared/types";
 import { normalizeSkillKey } from "../shared/skillIdentity";
 
 interface SkillsCliLockEntry {
@@ -18,7 +18,7 @@ interface SkillsCliLockFile {
 }
 
 export interface SkillsCliInspection {
-  evidenceBySkillKey: Map<string, SkillExternalOwnership>;
+  evidenceBySkillKey: Map<string, SkillExternalEvidence>;
   diagnostics: string[];
 }
 
@@ -71,7 +71,7 @@ export const inspectSkillsCliLocks = async (
   homeDir: string,
   lockPaths = defaultSkillsCliLockPaths(homeDir)
 ): Promise<SkillsCliInspection> => {
-  const evidenceBySkillKey = new Map<string, SkillExternalOwnership>();
+  const evidenceBySkillKey = new Map<string, SkillExternalEvidence>();
   const diagnostics: string[] = [];
 
   for (const lockPath of [...new Set(lockPaths)]) {

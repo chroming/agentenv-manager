@@ -245,8 +245,8 @@ description: >
       name: "Reviewer",
       description: "Review code from a shared Skills CLI installation.",
       modifiedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
-      status: "external",
-      externalOwnership: {
+      status: "outside",
+      externalEvidence: {
         manager: "skills-cli",
         confidence: "confirmed",
         state: "healthy"
@@ -256,7 +256,7 @@ description: >
     const imported = await store.importSkill({
       sourcePath: inventory[0].path,
       id: inventory[0].skillKey,
-      upstream: inventory[0].externalOwnership?.upstream,
+      upstream: inventory[0].externalEvidence?.upstream,
       provenance: {
         importedVia: "local-scan",
         externalManager: "skills-cli",
@@ -285,7 +285,7 @@ description: >
       }
     ]);
     expect(representedInventory[0]).toMatchObject({
-      status: "external",
+      status: "library",
       libraryId: "reviewer",
       contentMatchesLibrary: true
     });
@@ -333,9 +333,9 @@ description: >
 
     expect(inventory[0]).toMatchObject({
       id: "missing-reviewer",
-      status: "external",
+      status: "outside",
       contentHash: "",
-      externalOwnership: { state: "broken-link" }
+      externalEvidence: { state: "broken-link" }
     });
     expect(buildSkillCleanupGroups(inventory)[0]).toMatchObject({
       state: "broken",
@@ -366,7 +366,7 @@ description: >
 
     expect(inventory[0]).toMatchObject({
       id: "missing-local",
-      status: "unmanaged",
+      status: "outside",
       runtimeAvailability: "unknown",
       runtimeIssues: [expect.objectContaining({ code: "unreadable-skill" })]
     });
@@ -454,10 +454,10 @@ description: >
       expect.objectContaining({
         id: "reviewer",
         skillKey: "reviewer",
-        status: "external",
+        status: "outside",
         foundIn: ["claude-code", "opencode"],
         runtimeOwner: "external",
-        externalOwnership: expect.objectContaining({
+        externalEvidence: expect.objectContaining({
           manager: "claude-plugin",
           displayName: "Claude Code plugin",
           importable: false
@@ -1268,7 +1268,7 @@ description: >
         description: "Import me.",
         path: unmanagedDir,
         foundIn: ["opencode"],
-        status: "unmanaged",
+        status: "outside",
         libraryId: undefined,
         skillKey: "legacy"
       },
@@ -1288,7 +1288,7 @@ description: >
     expect(inventory.every((skill) => skill.contentHash.length === 64)).toBe(true);
   });
 
-  it("marks ignored local skill groups without hiding them from inventory", async () => {
+  it("keeps path-policy Skill groups visible in inventory", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
     const codexCopy = join(root, "home", ".agents", "skills", "duplicate-reviewer");
@@ -1330,8 +1330,15 @@ description: >
     ]);
     expect(new Set(firstScan.map((skill) => skill.contentHash)).size).toBe(1);
 
-    await store.ignoreSkillGroup("duplicate-reviewer");
-    const ignoredScan = await store.scanInventory([
+    await store.setSkillPathPolicies({
+      items: firstScan.map((skill) => ({
+        path: skill.path,
+        skillKey: skill.skillKey,
+        targetId: skill.foundIn[0]
+      })),
+      mode: "keep-outside"
+    });
+    const keptScan = await store.scanInventory([
       {
         targetId: "codex",
         configDir: join(root, "home", ".codex"),
@@ -1348,11 +1355,17 @@ description: >
       }
     ]);
 
-    expect(ignoredScan).toHaveLength(2);
-    expect(ignoredScan.map((skill) => skill.status)).toEqual(["ignored", "ignored"]);
-    expect(ignoredScan.every((skill) => skill.ignoreRuleId)).toBe(true);
+    expect(keptScan).toHaveLength(2);
+    expect(keptScan.map((skill) => skill.status)).toEqual(["kept-outside", "kept-outside"]);
+    expect(keptScan.every((skill) => skill.pathPolicyId)).toBe(true);
 
-    await store.unignoreSkillGroup("duplicate-reviewer");
+    await store.setSkillPathPolicies({
+      items: keptScan.map((skill) => ({
+        path: skill.path,
+        skillKey: skill.skillKey,
+        targetId: skill.foundIn[0]
+      }))
+    });
     await expect(
       store.scanInventory([
         {
@@ -1363,7 +1376,7 @@ description: >
           skillsDir: join(root, "home", ".agents", "skills")
         }
       ])
-    ).resolves.toMatchObject([{ status: "unmanaged" }]);
+    ).resolves.toMatchObject([{ status: "outside" }]);
   });
 
   it("restores a legacy directory-key ignore rule through the runtime Skill name", async () => {
@@ -1385,11 +1398,18 @@ description: >
     const targetPaths = createOpenCodeTargetAdapter().createTargetPaths({ homeDir });
 
     await expect(store.scanInventory([targetPaths])).resolves.toEqual([
-      expect.objectContaining({ skillKey: "runtime-reviewer", status: "ignored" })
+      expect.objectContaining({ skillKey: "runtime-reviewer", status: "kept-outside" })
     ]);
-    await store.unignoreSkillGroup("runtime-reviewer");
+    const kept = await store.scanInventory([targetPaths]);
+    await store.setSkillPathPolicies({
+      items: kept.map((skill) => ({
+        path: skill.path,
+        skillKey: skill.skillKey,
+        targetId: skill.foundIn[0]
+      }))
+    });
     await expect(store.scanInventory([targetPaths])).resolves.toEqual([
-      expect.objectContaining({ skillKey: "runtime-reviewer", status: "unmanaged" })
+      expect.objectContaining({ skillKey: "runtime-reviewer", status: "outside" })
     ]);
   });
 
@@ -1422,12 +1442,12 @@ description: >
     expect(firstScan.find((item) => item.path === sharedCopy)).toMatchObject({
       locationRole: "compatibility-runtime",
       sharedLocation: true,
-      status: "unmanaged"
+      status: "outside"
     });
     expect(firstScan.find((item) => item.path === targetCopy)).toMatchObject({
       locationRole: "preferred-runtime",
       sharedLocation: false,
-      status: "unmanaged"
+      status: "outside"
     });
 
     await store.setSharedSkillRetention({
@@ -1437,10 +1457,10 @@ description: >
     });
     const retainedScan = await store.scanInventory([targetPaths]);
     expect(retainedScan.find((item) => item.path === sharedCopy)).toMatchObject({
-      status: "ignored",
-      ignoreReason: "keep-shared"
+      status: "kept-outside",
+      pathPolicy: "keep-shared"
     });
-    expect(retainedScan.find((item) => item.path === targetCopy)?.status).toBe("unmanaged");
+    expect(retainedScan.find((item) => item.path === targetCopy)?.status).toBe("outside");
 
     await store.setSharedSkillRetention({
       skillKey: "reviewer",
@@ -1448,7 +1468,7 @@ description: >
       retained: false
     });
     await expect(store.scanInventory([targetPaths])).resolves.toEqual(
-      expect.arrayContaining([expect.objectContaining({ path: sharedCopy, status: "unmanaged" })])
+      expect.arrayContaining([expect.objectContaining({ path: sharedCopy, status: "outside" })])
     );
   });
 
@@ -1483,7 +1503,8 @@ description: >
     expect(group?.items.find((item) => item.path === claudeCopy)).toMatchObject({
       foundIn: ["claude-code", "opencode"],
       locationRole: "preferred-runtime",
-      sharedLocation: false
+      sharedLocation: false,
+      locationManagement: "managed"
     });
 
     const sharedPaths = group?.items.filter((item) => item.sharedLocation).map((item) => item.path) ?? [];
@@ -2326,6 +2347,24 @@ description: >
       libraryId: "reviewer",
       profileId: profile.id
     });
+    const initialLibrary = (await store.listSkills()).find((skill) => skill.id === "reviewer")!;
+    const claudeInstallPath = join(claudePaths.skillsDir!, "reviewer");
+    await mkdir(paths.targetStatesDir, { recursive: true });
+    await writeFile(join(paths.targetStatesDir, "claude-code.json"), JSON.stringify({
+      formatVersion: 2,
+      managedMcpNames: [],
+      activeProfileId: profile.id,
+      appliedProfileHash: "profile-hash",
+      appliedLibraryVersions: { skills: { reviewer: initialLibrary.contentHash } },
+      managedResources: [{
+        kind: "skill",
+        id: "reviewer",
+        path: claudeInstallPath,
+        contentHash: initialLibrary.contentHash
+      }],
+      keptOutsideSkills: [],
+      sharedSkillPreparations: []
+    }));
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
 
     const plan = await store.previewUpdate("reviewer");
@@ -2337,6 +2376,43 @@ description: >
       copiedInstallCount: 1,
       copiedTargetIds: ["claude-code", "opencode"]
     });
+    const updated = await store.updateSkill({ id: "reviewer", previewId: plan.previewId! });
+    await expect(
+      readFile(join(openCodePaths.skillsDir!, "reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("# v2");
+    await expect(
+      readFile(join(claudePaths.skillsDir!, "reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("# v2");
+    await expect(
+      readFile(join(paths.targetStatesDir, "claude-code.json"), "utf8")
+        .then((content) => JSON.parse(content))
+    ).resolves.toMatchObject({
+      appliedLibraryVersions: { skills: { reviewer: updated.contentHash } },
+      managedResources: [{
+        kind: "skill",
+        id: "reviewer",
+        path: claudeInstallPath,
+        contentHash: updated.contentHash
+      }]
+    });
+
+    await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v3\n", "utf8");
+    const nextPlan = await store.previewUpdate("reviewer");
+    await writeFile(
+      join(claudePaths.skillsDir!, "reviewer", "SKILL.md"),
+      "---\nname: reviewer\n---\n# device edit\n",
+      "utf8"
+    );
+
+    await expect(
+      store.updateSkill({ id: "reviewer", previewId: nextPlan.previewId! })
+    ).rejects.toThrow("review that Agent copy before updating the Library");
+    await expect(
+      readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("# v2");
+    await expect(
+      readFile(join(claudePaths.skillsDir!, "reviewer", "SKILL.md"), "utf8")
+    ).resolves.toContain("# device edit");
   });
 
   it("refreshes local-source skills and records a new content hash", async () => {

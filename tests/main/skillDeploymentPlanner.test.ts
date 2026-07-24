@@ -132,7 +132,7 @@ describe("skill deployment planner", () => {
     ]);
     expect(firstTakeover.decisions[0]).toMatchObject({
       action: "adopt",
-      reason: "matching-unmanaged"
+      reason: "matching-outside"
     });
 
     const managedApply = plan({ inventory: [inventoryEntry()] });
@@ -147,7 +147,7 @@ describe("skill deployment planner", () => {
     expect(changed.approvedUnmanagedSkills).toEqual([]);
     expect(changed.decisions[0]).toMatchObject({ action: "replace" });
     expect(reviewMessages(changed.issues)).toEqual([
-      expect.stringContaining("backed up and replaced")
+      expect.stringContaining("backed up and brought under AgentEnv")
     ]);
   });
 
@@ -167,7 +167,7 @@ describe("skill deployment planner", () => {
       receipt,
       inventory: [
         inventoryEntry({
-          status: "unmanaged",
+          status: "outside",
           libraryId: undefined,
           contentMatchesLibrary: undefined
         })
@@ -183,7 +183,7 @@ describe("skill deployment planner", () => {
       skill: librarySkill({ contentHash: "new-library-hash" }),
       inventory: [
         inventoryEntry({
-          status: "unmanaged",
+          status: "outside",
           libraryId: undefined,
           contentMatchesLibrary: undefined
         })
@@ -210,6 +210,31 @@ describe("skill deployment planner", () => {
       })
     ]);
     expect(result.decisions[0]).toMatchObject({ action: "defer" });
+  });
+
+  it("uses a kept shared copy instead of installing a duplicate Target copy", () => {
+    const shared = inventoryEntry({
+      path: "/home/.agents/skills/reviewer",
+      status: "kept-outside",
+      pathPolicy: "keep-shared",
+      locationRole: "compatibility-runtime",
+      sharedLocation: true,
+      contentHash: "device-version",
+      contentMatchesLibrary: false
+    });
+    const result = plan({ inventory: [shared] });
+
+    expect(result.effectiveSkills).toEqual([]);
+    expect(result.sharedPreparations).toEqual([]);
+    expect(result.decisions).toContainEqual(expect.objectContaining({
+      action: "preserve",
+      reason: "kept-outside",
+      path: "/home/.agents/skills/reviewer"
+    }));
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: "kept-outside-skill",
+      path: "/home/.agents/skills/reviewer"
+    }));
   });
 
   it("adopts an exact dedicated copy without losing shared migration intent", () => {
@@ -273,7 +298,7 @@ describe("skill deployment planner", () => {
     expect(result.approvedUnmanagedSkills).toEqual([]);
     expect(blockingMessages(result.issues)).toEqual([]);
     expect(reviewMessages(result.issues)).toEqual([
-      expect.stringContaining("backed up and replaced")
+      expect.stringContaining("backed up and brought under AgentEnv")
     ]);
   });
 
@@ -308,9 +333,9 @@ describe("skill deployment planner", () => {
       plan({
         inventory: [
           inventoryEntry({
-            status: "external",
+            status: "outside",
             runtimeOwner: "external",
-            externalOwnership: {
+            externalEvidence: {
               manager: "skills-cli",
               canonicalPath: "/external/reviewer",
               confidence: "confirmed",
@@ -319,7 +344,43 @@ describe("skill deployment planner", () => {
           })
         ]
       }).decisions[0]
-    ).toMatchObject({ action: "preserve", reason: "external-exact" });
+    ).toMatchObject({ action: "adopt", reason: "matching-outside" });
+  });
+
+  it("records kept paths even when the Skill is disabled or absent from the Profile", () => {
+    const disabled = plan({
+      selectedProfile: profile({ enabled: false }),
+      inventory: [inventoryEntry({ status: "kept-outside", pathPolicy: "keep-outside" })]
+    });
+    expect(disabled.decisions).toContainEqual(expect.objectContaining({
+      action: "preserve",
+      reason: "kept-outside",
+      path: "/home/.codex/skills/reviewer"
+    }));
+
+    const extra = plan({
+      inventory: [
+        inventoryEntry({
+          id: "local-only",
+          name: "Local only",
+          path: "/home/.codex/skills/local-only",
+          status: "kept-outside",
+          libraryId: undefined,
+          skillKey: "local-only",
+          runtimeName: "local-only",
+          deploymentName: "local-only",
+          contentHash: "local-only-hash",
+          contentMatchesLibrary: undefined,
+          pathPolicy: "keep-outside"
+        })
+      ]
+    });
+    expect(extra.decisions).toContainEqual(expect.objectContaining({
+      action: "preserve",
+      reason: "kept-outside",
+      targetName: "local-only",
+      path: "/home/.codex/skills/local-only"
+    }));
   });
 
   it("fingerprints every deployment fact used by Apply freshness checks", () => {

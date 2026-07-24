@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import type {
-  SkillExternalOwnership,
+  SkillExternalEvidence,
   SkillRuntimeIssue,
   SkillRuntimeObservation,
   SkillRuntimeSnapshot,
@@ -120,10 +120,10 @@ export const discoverSkillDirectories = async (
   return discovered;
 };
 
-export const inspectExternalSkillOwnership = async (
+export const inspectExternalSkillEvidence = async (
   skillPath: string,
   location: TargetSkillLocation | undefined
-): Promise<SkillExternalOwnership | undefined> => {
+): Promise<SkillExternalEvidence | undefined> => {
   if (!location?.externalContainerMarkers?.length) return undefined;
 
   const canonicalPath = await realpath(skillPath).catch(() => resolve(skillPath));
@@ -257,16 +257,16 @@ export const createFilesystemSkillDriver = (
           });
         }
 
-        const externalOwnership = await inspectExternalSkillOwnership(candidate.path, location);
+        const externalEvidence = await inspectExternalSkillEvidence(candidate.path, location);
         const agentEnvOwned = await isAgentEnvOwnedDir(candidate.path, {
           targetId: options.targetId,
           kind: "skill"
         });
-        if (externalOwnership) {
+        if (externalEvidence) {
           issues.push({
             code: "external-owner",
             severity: "info",
-            message: `${runtimeName} is provided by ${externalOwnership.displayName ?? externalOwnership.manager}`
+            message: `${runtimeName} is provided by ${externalEvidence.displayName ?? externalEvidence.manager}`
           });
         }
 
@@ -280,7 +280,7 @@ export const createFilesystemSkillDriver = (
           scope: location.scope ?? (location.shared ? "shared" : "user"),
           owner: agentEnvOwned
             ? "agentenv"
-            : externalOwnership
+            : externalEvidence
               ? "external"
               : location.scope === "builtin"
                 ? "agent"
@@ -295,7 +295,7 @@ export const createFilesystemSkillDriver = (
           locationRole: location.role,
           shared: location.shared,
           legacy: location.management === "legacy",
-          externalOwnership,
+          externalEvidence,
           issues
         });
       }

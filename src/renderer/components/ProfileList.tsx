@@ -263,14 +263,17 @@ export const ProfileList = ({
                             (application.state.errorCount ?? 0) > 0;
                           const isCurrent = Boolean(
                             !needsAttention &&
+                            (application.state.lifecycleStatus === "applied" ||
+                              application.state.lifecycleStatus === "applied-with-outside") &&
                             application.state.appliedProfileHash &&
                             application.state.appliedProfileHash ===
                               (profile.targetContentHashes?.[application.state.targetId] ??
                                 profile.contentHash) &&
-                            libraryResourceVersionsEqual(
-                              application.state.appliedLibraryVersions,
-                              profileLibraryVersions[profile.id]
-                            )
+                            (application.state.lifecycleStatus === "applied-with-outside" ||
+                              libraryResourceVersionsEqual(
+                                application.state.appliedLibraryVersions,
+                                profileLibraryVersions[profile.id]
+                              ))
                           );
                           const deploymentState = needsAttention
                             ? "attention"
@@ -280,7 +283,9 @@ export const ProfileList = ({
                           const deploymentTitle = needsAttention
                             ? t("{{name}} needs attention", { name: targetName })
                             : isCurrent
-                              ? t("{{name}} is up to date", { name: targetName })
+                              ? application.state.lifecycleStatus === "applied-with-outside"
+                                ? t("{{name}} is applied with local exceptions", { name: targetName })
+                                : t("{{name}} is up to date", { name: targetName })
                               : t("{{name}} uses this profile; changes are pending", { name: targetName });
                           return (
                             <span

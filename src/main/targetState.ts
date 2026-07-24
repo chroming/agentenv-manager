@@ -20,6 +20,13 @@ const SharedSkillPreparationSchema = z.object({
   profileHash: z.string().min(1)
 });
 
+const TargetKeptOutsideSkillSchema = z.object({
+  path: z.string().min(1),
+  skillKey: z.string().min(1),
+  libraryId: z.string().min(1),
+  targetName: z.string().min(1)
+});
+
 const TargetRecoverySchema = z.object({
   operation: z.enum(["apply", "rollback"]),
   error: z.string().min(1),
@@ -39,6 +46,7 @@ export const TargetStateSchema = z.object({
   appliedLibraryVersions: LibraryResourceVersionsSchema.optional(),
   lastAppliedAt: z.string().optional(),
   managedResources: z.array(ManagedResourceSchema).default([]),
+  keptOutsideSkills: z.array(TargetKeptOutsideSkillSchema).default([]),
   sharedSkillPreparations: z.array(SharedSkillPreparationSchema).default([]),
   recoveryRequired: TargetRecoverySchema.optional()
 });
@@ -50,5 +58,6 @@ export const defaultTargetState = (): TargetState => ({
   formatVersion: 2,
   managedMcpNames: [],
   managedResources: [],
+  keptOutsideSkills: [],
   sharedSkillPreparations: []
 });

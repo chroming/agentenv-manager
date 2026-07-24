@@ -125,8 +125,8 @@ describe("SkillLibraryPanel", () => {
     const onManageTargetSkill = vi.fn();
     const onConsolidateSkillGroup = vi.fn().mockResolvedValue(true);
     const onAutoConsolidateSkillGroups = vi.fn().mockResolvedValue(undefined);
-    const onIgnoreSkillGroup = vi.fn();
-    const onUnignoreSkillGroup = vi.fn();
+    const onKeepSkillGroupOutside = vi.fn();
+    const onReviewSkillGroupAgain = vi.fn();
     const onSetSharedSkillRetention = vi.fn().mockResolvedValue(true);
     const onRetireSharedSkill = vi.fn().mockResolvedValue(true);
     const onOpenProfiles = vi.fn();
@@ -342,7 +342,7 @@ describe("SkillLibraryPanel", () => {
             description: "Found on disk",
             path: "/tmp/opencode/skills/target-only-reviewer",
             foundIn: ["opencode"],
-            status: "unmanaged",
+            status: "outside",
             skillKey: "target-only-reviewer",
             contentHash: "target-only-hash"
           },
@@ -352,11 +352,24 @@ describe("SkillLibraryPanel", () => {
             description: "Found on disk",
             path: "/tmp/codex/skills/target-only-reviewer",
             foundIn: ["codex"],
-            status: "ignored",
+            status: "kept-outside",
             libraryId: undefined,
             skillKey: "target-only-reviewer",
             contentHash: "target-only-hash",
-            ignoreRuleId: "ignore-target-only-reviewer"
+            pathPolicyId: "keep-target-only-reviewer",
+            pathPolicy: "keep-outside"
+          },
+          {
+            id: "kept-reviewer",
+            name: "Kept Reviewer",
+            description: "Intentionally stays outside AgentEnv",
+            path: "/tmp/opencode/skills/kept-reviewer",
+            foundIn: ["opencode"],
+            status: "kept-outside",
+            skillKey: "kept-reviewer",
+            contentHash: "kept-hash",
+            pathPolicyId: "keep-kept-reviewer",
+            pathPolicy: "keep-outside"
           },
           {
             id: "conflict-reviewer",
@@ -364,7 +377,7 @@ describe("SkillLibraryPanel", () => {
             description: "Preserve the OpenCode variant with its full review workflow and detailed instructions.",
             path: "/tmp/opencode/skills/a-very-long-parent-directory/conflict-reviewer",
             foundIn: ["opencode"],
-            status: "unmanaged",
+            status: "outside",
             skillKey: "conflict-reviewer",
             contentHash: "opencode-conflict-hash",
             modifiedAt: "2026-07-18T08:00:00.000Z"
@@ -375,7 +388,7 @@ describe("SkillLibraryPanel", () => {
             description: "Preserve the Codex variant with its alternate review workflow and detailed instructions.",
             path: "/tmp/codex/skills/another-very-long-parent-directory/conflict-reviewer",
             foundIn: ["codex"],
-            status: "unmanaged",
+            status: "outside",
             skillKey: "conflict-reviewer",
             contentHash: "codex-conflict-hash",
             modifiedAt: "2026-07-20T09:30:00.000Z"
@@ -386,10 +399,10 @@ describe("SkillLibraryPanel", () => {
             description: "Installed with Skills CLI",
             path: "/tmp/opencode/skills/external-reviewer",
             foundIn: ["opencode"],
-            status: "external",
+            status: "outside",
             skillKey: "external-reviewer",
             contentHash: "external-hash",
-            externalOwnership: {
+            externalEvidence: {
               manager: "skills-cli",
               lockPath: "/tmp/home/.agents/.skill-lock.json",
               lockVersion: 3,
@@ -410,12 +423,12 @@ describe("SkillLibraryPanel", () => {
             description: "External content already represented in Library",
             path: "/tmp/opencode/skills/represented-external",
             foundIn: ["opencode"],
-            status: "external",
+            status: "outside",
             libraryId: "represented-external",
             contentMatchesLibrary: true,
             skillKey: "represented-external",
             contentHash: "represented-external-hash",
-            externalOwnership: {
+            externalEvidence: {
               manager: "skills-cli",
               lockPath: "/tmp/home/.agents/.skill-lock.json",
               lockVersion: 3,
@@ -433,10 +446,10 @@ describe("SkillLibraryPanel", () => {
           {
             id: "external-reviewer",
             name: "External Reviewer Local Copy",
-            description: "Same identity without external ownership",
+            description: "Same identity without manager evidence",
             path: "/tmp/codex/skills/external-reviewer",
             foundIn: ["codex"],
-            status: "unmanaged",
+            status: "outside",
             skillKey: "external-reviewer",
             contentHash: "local-copy-hash"
           }
@@ -557,8 +570,8 @@ describe("SkillLibraryPanel", () => {
         onManageTargetSkill={onManageTargetSkill}
         onConsolidateSkillGroup={onConsolidateSkillGroup}
         onAutoConsolidateSkillGroups={onAutoConsolidateSkillGroups}
-        onIgnoreSkillGroup={onIgnoreSkillGroup}
-        onUnignoreSkillGroup={onUnignoreSkillGroup}
+        onKeepSkillGroupOutside={onKeepSkillGroupOutside}
+        onReviewSkillGroupAgain={onReviewSkillGroupAgain}
         onSetSharedSkillRetention={onSetSharedSkillRetention}
         onRetireSharedSkill={onRetireSharedSkill}
         onOpenProfiles={onOpenProfiles}
@@ -868,9 +881,9 @@ describe("SkillLibraryPanel", () => {
       )
     );
     expect(screen.getByRole("status")).toHaveTextContent(
-      "back up this Agent copy"
+      "independent Library copy"
     );
-    const localImportButton = screen.getByRole("button", { name: "Import & manage" });
+    const localImportButton = screen.getByRole("button", { name: "Import copy" });
     fireEvent.click(localImportButton);
     await waitFor(() =>
       expect(screen.getByLabelText("Local Skill source path")).toHaveValue(
@@ -1060,7 +1073,7 @@ describe("SkillLibraryPanel", () => {
       })
     );
     const takeOverAllButton = within(discoveries).getByRole("button", {
-      name: "Clean up 4 ready Skills"
+      name: "Clean up 5 ready Skills"
     });
     expect(takeOverAllButton.closest(".cleanup-bucket-heading--ready")).not.toBeNull();
     expect(takeOverAllButton.closest(".cleanup-bucket-actions")).not.toBeNull();
@@ -1069,7 +1082,7 @@ describe("SkillLibraryPanel", () => {
       "ui-button--compact",
       "ui-button--primary"
     );
-    expect(takeOverAllButton).toHaveTextContent("Clean up 4");
+    expect(takeOverAllButton).toHaveTextContent("Clean up 5");
     fireEvent.click(takeOverAllButton);
     const bulkCleanupDialog = screen.getByRole("dialog", { name: "Clean up local Skills" });
     expect(bulkCleanupDialog).toHaveTextContent("Repair managed links");
@@ -1079,7 +1092,7 @@ describe("SkillLibraryPanel", () => {
     expect(bulkCleanupDialog).toHaveTextContent("Replace shared copies");
     expect(bulkCleanupDialog).toHaveTextContent("compat-reviewer");
     fireEvent.click(
-      within(bulkCleanupDialog).getByRole("button", { name: "Clean up 4 skills" })
+      within(bulkCleanupDialog).getByRole("button", { name: "Clean up 5 skills" })
     );
     await waitFor(() =>
       expect(onAutoConsolidateSkillGroups).toHaveBeenCalledWith(
@@ -1096,10 +1109,10 @@ describe("SkillLibraryPanel", () => {
     const externalGroup = screen.getByRole("group", {
       name: "Cleanup group external-reviewer"
     });
-    expect(externalGroup).toHaveTextContent("External");
+    expect(externalGroup).toHaveTextContent("2 versions");
     await waitFor(() =>
       expect(
-        within(externalGroup).getByRole("button", { name: "Review ownership external-reviewer" })
+        within(externalGroup).getByRole("button", { name: "Add to Library external-reviewer" })
       ).toBeEnabled()
     );
     expect(onRetireSharedSkill).toHaveBeenCalledWith({
@@ -1108,48 +1121,21 @@ describe("SkillLibraryPanel", () => {
       paths: ["/tmp/home/.agents/skills/compat-reviewer"]
     });
     fireEvent.click(
-      within(externalGroup).getByRole("button", { name: "Review ownership external-reviewer" })
+      within(externalGroup).getByRole("button", { name: "Add to Library external-reviewer" })
     );
-    let externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
-    expect(externalDialog).toHaveTextContent("Skills CLI files and lock data stay unchanged");
+    const externalDialog = screen.getByRole("dialog", { name: "Review skill cleanup" });
+    expect(externalDialog).toHaveTextContent("Version to keep in Library");
     expect(externalDialog).toHaveTextContent("/tmp/opencode/skills/external-reviewer");
-    expect(externalDialog).not.toHaveTextContent("/tmp/codex/skills/external-reviewer");
+    expect(externalDialog).toHaveTextContent("/tmp/codex/skills/external-reviewer");
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Import external skill" })).not.toBeInTheDocument();
-    fireEvent.click(
-      within(externalGroup).getByRole("button", { name: "Review ownership external-reviewer" })
-    );
-    externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
-    fireEvent.click(within(externalDialog).getByRole("button", { name: "Import copy" }));
-    await waitFor(() =>
-      expect(onImportExternal).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "external-reviewer", status: "external" })
-      )
-    );
-    expect(
-      screen.queryByRole("group", { name: "Cleanup group represented-external" })
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Expand Kept outside AgentEnv" }));
+    expect(screen.queryByRole("dialog", { name: "Review skill cleanup" })).not.toBeInTheDocument();
     const representedExternalGroup = screen.getByRole("group", {
       name: "Cleanup group represented-external"
     });
-    expect(representedExternalGroup).toHaveTextContent("External");
-    const reviewRepresented = within(representedExternalGroup).getByRole("button", {
-      name: "Review ownership represented-external"
-    });
-    fireEvent.click(reviewRepresented);
-    externalDialog = screen.getByRole("dialog", { name: "Import external skill" });
-    expect(externalDialog).toHaveTextContent("Review the matching Library copy");
-    fireEvent.click(within(externalDialog).getByRole("button", { name: "Review Library copy" }));
-    await waitFor(() =>
-      expect(onImportExternal).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: "represented-external",
-          status: "external",
-          contentMatchesLibrary: true
-        })
-      )
-    );
+    expect(representedExternalGroup).toHaveTextContent("Ready");
+    expect(
+      within(representedExternalGroup).queryByRole("button", { name: /ownership/i })
+    ).not.toBeInTheDocument();
     const cleanupHistory = screen.getByRole("region", { name: "Cleanup history" });
     expect(cleanupHistory).toHaveTextContent("shared-reviewer");
     expect(cleanupHistory).not.toHaveClass("resource-section");
@@ -1189,8 +1175,8 @@ describe("SkillLibraryPanel", () => {
         name: "More cleanup actions for target-only-reviewer"
       })
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Restore ignored" }));
-    expect(onUnignoreSkillGroup).toHaveBeenCalledWith("target-only-reviewer");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Review kept paths" }));
+    expect(onReviewSkillGroupAgain).toHaveBeenCalledWith("target-only-reviewer");
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Close library tool" })).toBeEnabled()
     );
@@ -1216,8 +1202,8 @@ describe("SkillLibraryPanel", () => {
         name: "More cleanup actions for conflict-reviewer"
       })
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Ignore" }));
-    expect(onIgnoreSkillGroup).toHaveBeenCalledWith("conflict-reviewer");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Keep outside AgentEnv" }));
+    expect(onKeepSkillGroupOutside).toHaveBeenCalledWith("conflict-reviewer");
     const conflictLocations = within(conflictGroup).getByLabelText(
       "Full cleanup locations conflict-reviewer"
     );
@@ -1480,8 +1466,8 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={noop}
         onOpenSource={noop}
         onCopySource={noop}
-        onIgnoreSkillGroup={noop}
-        onUnignoreSkillGroup={noop}
+        onKeepSkillGroupOutside={noop}
+        onReviewSkillGroupAgain={noop}
         onSetSharedSkillRetention={vi.fn().mockResolvedValue(false)}
         onRetireSharedSkill={vi.fn().mockResolvedValue(false)}
         onOpenProfiles={noop}
@@ -1668,8 +1654,8 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={noop}
         onOpenSource={noop}
         onCopySource={noop}
-        onIgnoreSkillGroup={noop}
-        onUnignoreSkillGroup={noop}
+        onKeepSkillGroupOutside={noop}
+        onReviewSkillGroupAgain={noop}
         onSetSharedSkillRetention={vi.fn().mockResolvedValue(true)}
         onRetireSharedSkill={vi.fn().mockResolvedValue(true)}
         onOpenProfiles={noop}

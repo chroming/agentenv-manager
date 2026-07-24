@@ -13,7 +13,7 @@ const inventoryItem = (
   description: "Review code",
   path: "/tmp/opencode/skills/reviewer",
   foundIn: ["opencode"],
-  status: "unmanaged",
+  status: "outside",
   skillKey: "reviewer",
   contentHash: "same-hash",
   ...overrides
@@ -95,23 +95,23 @@ describe("skill cleanup groups", () => {
     const brokenGroup = buildSkillCleanupGroups([
       inventoryItem({
         path: "/tmp/trae/skills/reviewer",
-        status: "external",
+        status: "outside",
         contentHash: "",
-        externalOwnership: brokenOwnership,
+        externalEvidence: brokenOwnership,
         runtimeIssues: brokenIssues
       }),
       inventoryItem({
         path: "/tmp/trae-cn/skills/reviewer",
-        status: "external",
+        status: "outside",
         contentHash: "",
-        externalOwnership: brokenOwnership,
+        externalEvidence: brokenOwnership,
         runtimeIssues: brokenIssues
       }),
       inventoryItem({
         path: "/tmp/coco/skills/reviewer",
-        status: "external",
+        status: "outside",
         contentHash: "",
-        externalOwnership: brokenOwnership,
+        externalEvidence: brokenOwnership,
         runtimeIssues: brokenIssues
       })
     ])[0];
@@ -126,14 +126,14 @@ describe("skill cleanup groups", () => {
 
     const healthyExternal = buildSkillCleanupGroups([
       inventoryItem({
-        status: "external",
+        status: "outside",
         contentHash: "",
-        externalOwnership: { ...brokenOwnership, state: "healthy" },
+        externalEvidence: { ...brokenOwnership, state: "healthy" },
         runtimeIssues: brokenIssues
       })
     ])[0];
-    expect(healthyExternal).toMatchObject({ resolution: "manual", bucket: "decision" });
-    expect(automaticSkillCleanupRequest(healthyExternal)).toBeUndefined();
+    expect(healthyExternal).toMatchObject({ resolution: "automatic", bucket: "ready" });
+    expect(automaticSkillCleanupRequest(healthyExternal)).toBeDefined();
   });
 
   it("keeps an unreadable manifest decision-only", () => {
@@ -177,7 +177,7 @@ describe("skill cleanup groups", () => {
 
     expect(groups.map(({ skillKey, state, resolution }) => ({ skillKey, state, resolution }))).toEqual([
       { skillKey: "formatter", state: "duplicate", resolution: "automatic" },
-      { skillKey: "reviewer", state: "unmanaged", resolution: "automatic" }
+      { skillKey: "reviewer", state: "outside", resolution: "automatic" }
     ]);
     expect(automaticSkillCleanupRequest(groups[0])).toMatchObject({
       libraryId: "formatter",
@@ -214,7 +214,7 @@ describe("skill cleanup groups", () => {
         id: "external",
         skillKey: "external",
         path: "/tmp/opencode/skills/external",
-        status: "external"
+        status: "outside"
       })
     ]);
 
@@ -228,7 +228,7 @@ describe("skill cleanup groups", () => {
           bucket: "ready",
           automaticEffect: "archive-and-link"
         }),
-        expect.objectContaining({ skillKey: "external", state: "external", resolution: "manual" })
+        expect.objectContaining({ skillKey: "external", state: "outside", resolution: "automatic" })
       ])
     );
     expect(groups.find((group) => group.skillKey === "reviewer")?.presentation).toEqual({
@@ -240,8 +240,8 @@ describe("skill cleanup groups", () => {
       action: "review-differences"
     });
     expect(groups.find((group) => group.skillKey === "external")?.presentation).toEqual({
-      state: "managed-elsewhere",
-      action: "review-ownership"
+      state: "not-in-library",
+      action: "add-to-library"
     });
     expect(automaticSkillCleanupRequest(
       groups.find((group) => group.skillKey === "library-copy")!
@@ -256,20 +256,20 @@ describe("skill cleanup groups", () => {
       inventoryItem({
         id: "external",
         skillKey: "external",
-        status: "external",
+        status: "outside",
         libraryId: "external-2",
         contentMatchesLibrary: true
       })
     ]);
 
     expect(group).toMatchObject({
-      state: "external",
-      resolution: "resolved",
-      presentation: { state: "managed-elsewhere", action: "review-ownership" }
+      state: "outside",
+      resolution: "automatic",
+      presentation: { state: "copies-not-managed", action: "manage-copies" }
     });
   });
 
-  it("auto-refreshes stale managed copies and excludes resolved or ignored groups", () => {
+  it("auto-refreshes stale managed copies and excludes resolved or kept groups", () => {
     const groups = buildSkillCleanupGroups([
       inventoryItem({
         status: "managed",
@@ -286,10 +286,10 @@ describe("skill cleanup groups", () => {
         installMethod: "linked"
       }),
       inventoryItem({
-        id: "ignored",
-        skillKey: "ignored",
-        status: "ignored",
-        ignoreRuleId: "ignore-ignored"
+        id: "kept",
+        skillKey: "kept",
+        status: "kept-outside",
+        pathPolicyId: "keep-kept"
       })
     ]);
 
@@ -302,7 +302,7 @@ describe("skill cleanup groups", () => {
       automaticSkillCleanupRequest(groups.find((group) => group.skillKey === "reviewer")!)
     ).toMatchObject({ libraryId: "reviewer" });
     expect(groups.find((group) => group.skillKey === "current")?.resolution).toBe("resolved");
-    expect(groups.find((group) => group.skillKey === "ignored")?.resolution).toBe("resolved");
+    expect(groups.find((group) => group.skillKey === "kept")?.resolution).toBe("resolved");
   });
 
   it("treats multiple current managed locations as one resolved group", () => {
@@ -427,14 +427,14 @@ describe("skill cleanup groups", () => {
         ...shared,
         id: "kept",
         skillKey: "kept",
-        status: "ignored",
-        ignoreReason: "keep-shared"
+        status: "kept-outside",
+        pathPolicy: "keep-shared"
       }),
       inventoryItem({
         ...shared,
         id: "external",
         skillKey: "external",
-        status: "external"
+        status: "outside"
       }),
       inventoryItem({
         ...shared,
@@ -463,7 +463,7 @@ describe("skill cleanup groups", () => {
     expect(groups.find((group) => group.skillKey === "kept")?.sharedMigration?.state)
       .toBe("kept");
     expect(groups.find((group) => group.skillKey === "external")?.sharedMigration?.state)
-      .toBe("external");
+      .toBe("not-imported");
     expect(groups.find((group) => group.skillKey === "conflict")?.sharedMigration?.state)
       .toBe("conflict");
     expect(groups.find((group) => group.skillKey === "reviewer")?.presentation).toEqual({
@@ -475,8 +475,8 @@ describe("skill cleanup groups", () => {
       action: "none"
     });
     expect(groups.find((group) => group.skillKey === "external")?.presentation).toEqual({
-      state: "managed-elsewhere",
-      action: "review-ownership"
+      state: "not-in-library",
+      action: "add-to-library"
     });
     expect(groups.find((group) => group.skillKey === "conflict")?.presentation).toEqual({
       state: "local-changes-found",

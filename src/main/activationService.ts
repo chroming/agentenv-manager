@@ -25,6 +25,7 @@ import {
 } from "./skillLibraryStore";
 import { normalizeSkillKey } from "../shared/skillIdentity";
 import { profileManagesResource } from "../shared/profileResources";
+import { profileWithoutLocalSkillExceptions } from "../shared/effectiveProfile";
 import {
   createTargetRegistry,
   type TargetRegistry
@@ -210,6 +211,18 @@ const normalizeSharedSkillPreparations = (
         left.profileHash.localeCompare(right.profileHash)
     );
 
+const normalizeKeptOutsideSkills = (
+  entries: Readonly<NonNullable<TargetState["keptOutsideSkills"]>> = []
+) =>
+  entries
+    .map((entry) => ({ ...entry, path: resolve(entry.path) }))
+    .sort(
+      (left, right) =>
+        left.path.localeCompare(right.path) ||
+        left.libraryId.localeCompare(right.libraryId) ||
+        left.targetName.localeCompare(right.targetName)
+    );
+
 const sharedSkillPreparationsEqual = (
   left: readonly SharedSkillPreparation[] = [],
   right: readonly SharedSkillPreparation[] = []
@@ -237,6 +250,7 @@ const fingerprintTargetState = (state: TargetState): string => {
     appliedLibraryVersions: { skills: appliedSkillVersions },
     managedMcpNames: [...new Set(state.managedMcpNames)].sort(),
     managedResources,
+    keptOutsideSkills: normalizeKeptOutsideSkills(state.keptOutsideSkills),
     sharedSkillPreparations: normalizeSharedSkillPreparations(
       state.sharedSkillPreparations
     ),
@@ -594,7 +608,11 @@ export const createActivationService = ({
                   activeProfile.targetContentHashes?.[targetId] ??
                   createProfileContentHash(activeProfile, targetId);
                 const currentVersions = collectLibraryResourceVersions(
-                  activeProfile,
+                  profileWithoutLocalSkillExceptions(
+                    activeProfile,
+                    state.keptOutsideSkills,
+                    state.sharedSkillPreparations
+                  ),
                   skillLibrary,
                   targetId
                 );
@@ -602,9 +620,17 @@ export const createActivationService = ({
                   Boolean(expectedHash) &&
                   expectedHash === state.appliedProfileHash &&
                   libraryResourceVersionsEqual(currentVersions, state.appliedLibraryVersions);
-                lifecycleStatus = isCurrent ? "applied" : "pending";
+                lifecycleStatus = isCurrent
+                  ? (state.keptOutsideSkills?.length ?? 0) > 0
+                    ? "applied-with-outside"
+                    : "applied"
+                  : "pending";
                 if (!isCurrent) {
                   lifecycleReason = "Saved Profile or Library resources changed after the last Apply";
+                } else if ((state.keptOutsideSkills?.length ?? 0) > 0) {
+                  lifecycleReason = `${state.keptOutsideSkills!.length} ${
+                    state.keptOutsideSkills!.length === 1 ? "Skill stays" : "Skills stay"
+                  } outside AgentEnv on this device`;
                 }
               } else {
                 lifecycleStatus = "pending";
@@ -622,8 +648,9 @@ export const createActivationService = ({
               lifecycleReason,
               lastAppliedAt: state.lastAppliedAt,
               managedResourceCount: activeManagedResources.length,
+              warningCount: state.keptOutsideSkills?.length ?? 0,
+              keptOutsideSkills: state.keptOutsideSkills ?? [],
               sharedSkillPreparations: state.sharedSkillPreparations ?? [],
-              warningCount: 0,
               errorCount: driftCount
             };
           } catch (error) {
@@ -841,163 +868,6 @@ export const createActivationService = ({
     };
   };
 
-  const ignoredSkillConflicts = async (
-    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    inventory: SkillInventoryEntry[]
-  ) => {
-    const desiredSkillTargets = new Set(
-      profile.resources.skills
-        .filter((skillRef) => skillRef.enabled)
-        .map((skillRef) => skillRef.targetName)
-    );
-    if (desiredSkillTargets.size === 0) {
-      return [];
-    }
-
-    return inventory
-      .filter((skill) => skill.status === "ignored" && desiredSkillTargets.has(skill.id))
-      .map((skill) => createApplyIssue({
-        code: "ignored-skill-conflict",
-        resourceKind: "skill",
-        resourceId: skill.runtimeName ?? skill.id,
-        path: skill.path,
-        message: `Cannot install ${skill.runtimeName ?? skill.id} because it is explicitly ignored`
-      }));
-  };
-
-  const resolveExternalSkills = async (
-    profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
-    inventory: SkillInventoryEntry[],
-    skillLibrary: SkillLibraryEntry[],
-    targetPaths: TargetPaths,
-    deferredSharedPaths: ReadonlySet<string>,
-    globallyDisabledSkillIds: ReadonlySet<string>
-  ) => {
-    const references = profile.resources.skills.filter((reference) => reference.enabled);
-    const disabledReferences = profile.resources.skills.filter((reference) => !reference.enabled);
-    const disabledReferencesFor = (skill: SkillInventoryEntry) =>
-      disabledReferences.filter(
-        (reference) =>
-          reference.libraryId === skill.libraryId ||
-          normalizeSkillKey(reference.targetName) ===
-            normalizeSkillKey(skill.deploymentName ?? skill.id) ||
-          normalizeSkillKey(
-            skillLibrary.find((candidate) => candidate.id === reference.libraryId)?.name ??
-              reference.targetName
-          ) === normalizeSkillKey(skill.runtimeName ?? skill.name)
-      );
-    const desired = desiredSkillTargets(profile);
-    const desiredRuntimeNames = new Set(
-      desiredRuntimeSkills(profile, skillLibrary).map((item) =>
-        normalizeSkillKey(item.runtimeName)
-      )
-    );
-    const external = desired.size === 0
-      ? []
-      : inventory.filter(
-          (skill) =>
-            skill.status === "external" &&
-            (desired.has(skill.id) || desiredRuntimeNames.has(skill.skillKey))
-        );
-    const preservedReferences = new Set(
-      external.flatMap((skill) => {
-        const reference = references.find(
-          (item) => item.targetName === skill.id && item.libraryId === skill.libraryId
-        );
-        return reference && skill.contentMatchesLibrary === true
-          ? [`${reference.libraryId}:${reference.targetName}`]
-          : [];
-      })
-    );
-    const conflicts = external.filter(
-      (skill) =>
-        !references.some(
-          (reference) =>
-            preservedReferences.has(`${reference.libraryId}:${reference.targetName}`) &&
-            reference.targetName === skill.id
-        )
-    );
-    const disabledConflicts = inventory.filter((skill) => {
-      if (
-        skill.locationRole === "discovery-only" ||
-        skill.runtimeAvailability === "disabled" ||
-        (skill.status === "managed" && skill.managedByTarget === true)
-      ) {
-        return false;
-      }
-      return disabledReferencesFor(skill).some(
-        (reference) => !globallyDisabledSkillIds.has(reference.libraryId)
-      );
-    });
-    const conflictIssues = conflicts.map((skill) => {
-      const manager = skill.externalOwnership?.displayName ??
-        skill.externalOwnership?.manager ??
-        "another tool";
-      return createApplyIssue({
-        code: "external-skill-conflict",
-        resourceKind: "skill",
-        resourceId: skill.runtimeName ?? skill.id,
-        path: skill.path,
-        message:
-          skill.externalOwnership?.manager === "skills-cli"
-            ? `Cannot install ${skill.runtimeName ?? skill.id} because Skills CLI manages the existing Skill. Remove it from Skills CLI, then rescan.`
-            : `Cannot install ${skill.runtimeName ?? skill.id} because ${manager} manages the existing Skill. Disable or remove it from ${manager}, then rescan.`
-      });
-    });
-    const disabledIssues = disabledConflicts.flatMap((skill) => {
-      const path = resolve(skill.path);
-      const exactManagedDestination = disabledReferences.some(
-        (reference) =>
-          targetPaths.skillsDir &&
-          resolve(join(targetPaths.skillsDir, reference.targetName)) === path
-      );
-      if (
-        deferredSharedPaths.has(path) &&
-        skill.status !== "external" &&
-        skill.status !== "ignored"
-      ) {
-        return [];
-      }
-      const externallyControlled =
-        skill.status === "external" ||
-        skill.status === "ignored" ||
-        !exactManagedDestination;
-      return createApplyIssue({
-        code: externallyControlled ? "external-skill-conflict" : "unmanaged-skill-removal",
-        resourceKind: "skill",
-        resourceId: skill.runtimeName ?? skill.id,
-        path: skill.path,
-        message: externallyControlled
-          ? `Cannot turn off Skill ${skill.runtimeName ?? skill.id} because its active copy is outside this Agent's managed Skills directory or controlled by another manager`
-          : `Active unmanaged Skill ${skill.runtimeName ?? skill.id} will be backed up and removed`
-      });
-    });
-    const preservedIssues = external
-      .filter((skill) => !conflicts.includes(skill))
-      .map((skill) => createApplyIssue({
-        code: "external-skill-preserved",
-        resourceKind: "skill",
-        resourceId: skill.runtimeName ?? skill.id,
-        path: skill.path,
-        message: `${skill.runtimeName ?? skill.id} is already provided by ${skill.externalOwnership?.displayName ?? skill.externalOwnership?.manager ?? "another tool"} with matching content and will be preserved`
-      }));
-    return {
-      profile: preservedReferences.size === 0
-        ? profile
-        : {
-            ...profile,
-            resources: {
-              ...profile.resources,
-              skills: profile.resources.skills.filter(
-                (reference) =>
-                  !preservedReferences.has(`${reference.libraryId}:${reference.targetName}`)
-              )
-            }
-          },
-      issues: dedupeApplyIssues([...conflictIssues, ...disabledIssues, ...preservedIssues])
-    };
-  };
-
   const previewProfile = async (
     profileId: string,
     requestedTargetId?: string
@@ -1079,20 +949,7 @@ export const createActivationService = ({
         skills: skillDeploymentPlan.effectiveSkills
       }
     };
-    const externallyResolved = managesSkills
-      ? await resolveExternalSkills(
-          deploymentProfile,
-          inventory,
-          skillLibrary,
-          targetPaths,
-          new Set(skillDeploymentPlan.sharedPaths.map((path) => resolve(path))),
-          new Set(disabledLibrarySkills)
-        )
-      : {
-          profile: deploymentProfile,
-          issues: [] as ApplyIssue[]
-        };
-    const materializedProfile = externallyResolved.profile;
+    const materializedProfile = deploymentProfile;
     const approvedUnmanagedSkillHashes = new Map(
       skillDeploymentPlan.approvedUnmanagedSkills.map((skill) => [
         skill.path,
@@ -1152,6 +1009,7 @@ export const createActivationService = ({
     if (skillRootTransition) {
       assetBackupPaths.push(skillRootTransition.path);
     }
+    assetBackupPaths.push(...skillDeploymentPlan.removalPaths);
     const legacySkillPaths = (managesSkills ? inventory : [])
       .filter(
         (skill) =>
@@ -1201,9 +1059,6 @@ export const createActivationService = ({
     const unmanagedIssues = managesSkills
       ? preservedUnmanagedSkillIssues(materializedProfile, inventory)
       : [];
-    const ignoredIssues = managesSkills
-      ? await ignoredSkillConflicts(materializedProfile, inventory)
-      : [];
     const rootTransitionIssues: ApplyIssue[] = skillRootTransition
       ? [createApplyIssue({
           code: "skill-root-isolation",
@@ -1227,8 +1082,6 @@ export const createActivationService = ({
       ...recoveryIssues,
       ...profileIssues,
       ...drift.issues,
-      ...ignoredIssues,
-      ...externallyResolved.issues,
       ...skillDeploymentPlan.issues,
       ...runtimeValidation,
       ...unmanagedIssues,
@@ -1258,11 +1111,29 @@ export const createActivationService = ({
       )
     );
     const issues = dedupeApplyIssues([...preAssetIssues, ...assetIssues]);
+    const keptOutsideSkills = normalizeKeptOutsideSkills(
+      skillDeploymentPlan.decisions
+        .filter(
+          (decision) =>
+            decision.reason === "kept-outside" &&
+            Boolean(decision.path)
+        )
+        .map((decision) => ({
+          path: decision.path!,
+          skillKey: decision.targetName,
+          libraryId: decision.libraryId,
+          targetName: decision.targetName
+        }))
+    );
     const preview: InternalActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
       profileContentHash,
-      libraryVersions: collectLibraryResourceVersions(profile, skillLibrary, targetId),
+      libraryVersions: collectLibraryResourceVersions(
+        materializedProfile,
+        skillLibrary,
+        targetId
+      ),
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
       issues,
@@ -1297,6 +1168,7 @@ export const createActivationService = ({
       sharedSkillPreparations: normalizeSharedSkillPreparations(
         skillDeploymentPlan.sharedPreparations
       ),
+      keptOutsideSkills,
       sharedSkillPreparationChanged: !sharedSkillPreparationsEqual(
         stateFile.state.sharedSkillPreparations,
         skillDeploymentPlan.sharedPreparations
@@ -1413,7 +1285,7 @@ export const createActivationService = ({
         };
       }
       const currentLibraryVersions = collectLibraryResourceVersions(
-        profile,
+        preview.skillDeployment.profile,
         skillLibrary,
         preview.targetId
       );
@@ -1658,6 +1530,7 @@ export const createActivationService = ({
           appliedLibraryVersions: currentLibraryVersions,
           lastAppliedAt: new Date().toISOString(),
           managedResources,
+          keptOutsideSkills: preview.keptOutsideSkills,
           sharedSkillPreparations: preview.skillDeployment.plan.sharedPreparations,
           recoveryRequired: undefined
         });
@@ -1789,7 +1662,11 @@ export const createActivationService = ({
           sourceProfile.targetContentHashes?.[targetId] ??
           createProfileContentHash(sourceProfile, targetId);
         const currentLibraryVersions = collectLibraryResourceVersions(
-          effectiveProfile,
+          profileWithoutLocalSkillExceptions(
+            effectiveProfile,
+            stateFile.state.keptOutsideSkills,
+            stateFile.state.sharedSkillPreparations
+          ),
           skillLibrary,
           targetId
         );

@@ -36,6 +36,7 @@ import type {
   SkillImportPreviewInput,
   SkillIconInput,
   SkillMergeInput,
+  SkillPathPolicyUpdate,
   SkillSourceMergePreviewInput,
   SaveProfileInput,
   UpdateProfileMetadataInput,
@@ -51,7 +52,6 @@ import type { AgentEnvPaths } from "./paths";
 import { createDataBackup, inspectDataBackup, restoreDataBackup } from "./dataBackupService";
 import { parseExternalUrl } from "./externalUrl";
 import { isTargetInstalled } from "../shared/targetHealth";
-import { isExternalSkillImportable } from "../shared/skillIdentity";
 import type { MutationCoordinator } from "./mutationCoordinator";
 import { readAllProfilesForResourceMutation } from "./profileSafety";
 import { parseDesktopContextMenuItems } from "../shared/desktopContextMenu";
@@ -359,12 +359,15 @@ export const registerIpcHandlers = ({
       .flat()
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   );
-  handleMutation("skills:ignore-group", (_event, skillKey: unknown) =>
-    skillLibraryStore.ignoreSkillGroup(String(skillKey))
-  );
-  handleMutation("skills:unignore-group", (_event, skillKey: unknown) =>
-    skillLibraryStore.unignoreSkillGroup(String(skillKey))
-  );
+  handleMutation("skills:set-path-policies", (_event, input: SkillPathPolicyUpdate) => {
+    if (!input || !Array.isArray(input.items)) {
+      throw new Error("Skill path policy requires at least one path");
+    }
+    if (input.mode !== undefined && !["keep-outside", "keep-shared"].includes(input.mode)) {
+      throw new Error("Invalid Skill path policy");
+    }
+    return skillLibraryStore.setSkillPathPolicies(input);
+  });
   ipcMain.handle("skills:scan-unmanaged", () =>
     targetDiscoveryService
       .listTargets()
@@ -409,14 +412,6 @@ export const registerIpcHandlers = ({
     );
     const localInstall = inventory.find((item) => resolve(item.path) === sourcePath);
 
-    if (
-      localInstall?.status === "external" &&
-      !isExternalSkillImportable(localInstall.externalOwnership)
-    ) {
-      const manager = localInstall.externalOwnership?.displayName ?? "another tool";
-      throw new Error(`${localInstall.name} is managed by ${manager} and cannot be imported from this runtime copy`);
-    }
-
     if (localInstall?.status === "managed" && localInstall.libraryId) {
       const skill = (await skillLibraryStore.listSkills()).find(
         (item) => item.id === localInstall.libraryId
@@ -424,78 +419,6 @@ export const registerIpcHandlers = ({
       if (skill) {
         return { skill, managedLocations: [sourcePath], reused: true };
       }
-    }
-
-    const canTakeOwnership =
-      input.sourceHandling !== "copy-only" &&
-      localInstall &&
-      !localInstall.sharedLocation &&
-      localInstall.status !== "external" &&
-      localInstall.status !== "ignored" &&
-      input.conflictResolution?.action !== "update-source" &&
-      input.provenance?.externalManager !== "skills-cli";
-    if (canTakeOwnership) {
-      const preview = await skillLibraryStore.previewImport({ kind: "local", input });
-      if (input.expectedContentHash && preview.incoming.contentHash !== input.expectedContentHash) {
-        throw new Error("Skill changed after the import preview; review the latest version");
-      }
-      const resolution = input.conflictResolution;
-      const selectedConflict = resolution?.action === "keep-both"
-        ? undefined
-        : preview.conflicts.find(
-            (conflict) => conflict.existing.id === resolution?.existingId
-          );
-      if (preview.conflicts.length > 0 && !resolution) {
-        throw new Error(`Skill name or ID already exists in Library: ${preview.incoming.name}`);
-      }
-      if (resolution?.action === "reuse") {
-        if (!selectedConflict?.identical) {
-          throw new Error("Only an identical Library skill can be reused");
-        }
-      }
-      const resolvedLibraryId = resolution?.action === "keep-both"
-        ? SafeIdSchema.parse(resolution.id)
-        : resolution?.action === "replace"
-          ? selectedConflict?.existing.id
-          : resolution?.action === "reuse"
-            ? selectedConflict?.existing.id
-          : preview.incoming.id;
-      if (!resolvedLibraryId) throw new Error("The selected Library conflict no longer exists");
-      if (
-        resolution?.action === "keep-both" &&
-        (await skillLibraryStore.listSkills()).some((skill) => skill.id === resolvedLibraryId)
-      ) {
-        throw new Error(`Library skill already exists: ${resolvedLibraryId}`);
-      }
-      const target = targets
-        .filter((item) => localInstall.foundIn.includes(item.id))
-        .sort((left, right) => {
-          const leftPreferred = resolve(left.paths.skillsDir ?? "") === dirname(sourcePath);
-          const rightPreferred = resolve(right.paths.skillsDir ?? "") === dirname(sourcePath);
-          return Number(rightPreferred) - Number(leftPreferred);
-        })[0];
-      if (!target) {
-        throw new Error(`No enabled Agent owns the local Skill path: ${sourcePath}`);
-      }
-      const cleanup = await skillLibraryStore.consolidateSkillGroup({
-        skillKey: localInstall.skillKey,
-        libraryId: resolvedLibraryId,
-        canonicalPath: sourcePath,
-        replaceLibrary: resolution?.action === "replace",
-        locations: [{ targetPaths: target.paths, targetDir: sourcePath }]
-      });
-      const skill = (await skillLibraryStore.listSkills()).find(
-        (item) => item.id === cleanup.libraryId
-      );
-      if (!skill) {
-        throw new Error(`Imported Library skill could not be read: ${cleanup.libraryId}`);
-      }
-      return {
-        skill,
-        managedLocations: cleanup.managedLocations,
-        backupId: cleanup.backupId,
-        reused: resolution?.action === "reuse"
-      };
     }
 
     const skill = await skillLibraryStore.importSkill({
@@ -659,7 +582,7 @@ export const registerIpcHandlers = ({
         const current = inventoryByPath.get(resolve(String(location.path)));
         return Boolean(
           current &&
-          (current.status !== "external" || current.externalOwnership?.state === "broken-link") &&
+          current.status !== "kept-outside" &&
           current.contentHash === "" &&
           current.runtimeIssues?.some(
             (issue) =>

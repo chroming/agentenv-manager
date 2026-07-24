@@ -203,6 +203,6 @@ describe("OpenCode Profile v2 switching e2e", () => {
     await expect(readFile(join(targetDir, "skills", "beta", "SKILL.md"), "utf8"))
       .resolves.toContain("# beta");
     await expect(readFile(join(targetDir, "skills", "manual", "SKILL.md"), "utf8"))
-      .resolves.toContain("# Manual");
+      .rejects.toThrow();
   });
 });

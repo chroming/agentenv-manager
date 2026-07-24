@@ -1,4 +1,5 @@
 import type {
+  ApplyIssue,
   ProfileResourceMode,
   ProfileResources,
   SkillLibraryEntry,
@@ -23,6 +24,7 @@ interface AgentSkillWorkspaceRouteProps {
   onPreviewSkillUpdate(id: string): void;
   onCloseSkillUpdate(): void;
   onConfirmSkillUpdate(plan: SkillUpdatePlan): void;
+  onKeepSkillOutside(issue: ApplyIssue): Promise<void>;
 }
 
 export const AgentSkillWorkspaceRoute = ({
@@ -38,7 +40,8 @@ export const AgentSkillWorkspaceRoute = ({
   onCheckSkillUpdates,
   onPreviewSkillUpdate,
   onCloseSkillUpdate,
-  onConfirmSkillUpdate
+  onConfirmSkillUpdate,
+  onKeepSkillOutside
 }: AgentSkillWorkspaceRouteProps) => {
   const target = workspace.selectedTarget;
   if (!target) return null;
@@ -81,6 +84,7 @@ export const AgentSkillWorkspaceRoute = ({
         onPreviewApply={() => void workspace.previewApply()}
         onCancelPreview={workspace.cancelPreview}
         onApply={() => void workspace.apply()}
+        onKeepSkillOutside={onKeepSkillOutside}
       />
       <SkillUpdateDialog
         plan={selectedSkillUpdatePlan}

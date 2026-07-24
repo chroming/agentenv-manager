@@ -85,6 +85,7 @@ import type {
   SkillUpstream,
   SkillMergeInput,
   SkillMergePreview,
+  SkillPathPolicyUpdate,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult,
@@ -94,6 +95,7 @@ import type {
   TargetCapturePreview,
   TargetManagementState
 } from "../shared/types";
+import { profileWithoutLocalSkillExceptions } from "../shared/effectiveProfile";
 import { I18nProvider, useI18n, type TranslationValues } from "./i18n";
 import { acceptAppliedProfileState } from "./appliedProfileState";
 import {
@@ -140,6 +142,12 @@ import { SkillsEditor } from "./components/SkillsEditor";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
 import { WorkspaceSyncSettings } from "./components/WorkspaceSyncSettings";
+import { createValidationRows } from "./profileValidationRows";
+import {
+  updateAppliedTargetLibraryVersions,
+  updateCopiedSkillInventory,
+  updateProfileLibraryVersions
+} from "./libraryUpdateState";
 import { runSkillImportQueue } from "./skillImportQueue";
 import { useScheduledSkillUpdateChecks, useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
 import {
@@ -367,83 +375,6 @@ export const AppFeedback = ({
 
 const isGitHubRateLimitError = (message: string) =>
   /github.*(?:rate limit|api limit)|(?:rate limit|api limit).*github/i.test(message);
-
-type ValidationLevel = "ok" | "warning" | "error" | "pending";
-
-interface ValidationRow {
-  source: "access" | "instructions" | "skills" | "conflicts";
-  label: string;
-  value: string;
-  detail?: string;
-  level: ValidationLevel;
-}
-
-const createValidationRows = (
-  profile: ProfileDetail,
-  target?: TargetInfo,
-  preview?: ActivationPreview
-): ValidationRow[] => {
-  const targetLevel: ValidationLevel =
-    target?.health.status === "ready"
-      ? "ok"
-      : target?.health.status === "missing"
-        ? "error"
-        : target
-          ? "warning"
-          : "pending";
-
-  const blockingIssues = preview?.issues.filter((issue) => issue.disposition === "block") ?? [];
-
-  return [
-    {
-      source: "access",
-      label: `${target?.name ?? "Agent"} access`,
-      value:
-        target?.health.status === "ready"
-          ? "OK"
-          : target?.health.status === "missing"
-            ? "Blocked"
-            : target?.health.status === "guarded"
-              ? "Guarded"
-              : target
-                ? "Needs setup"
-                : "Pending",
-      detail: target?.health.summary,
-      level: targetLevel
-    },
-    {
-      source: "instructions",
-      label: target?.instructionsLabel ?? "Instructions",
-      value: profile.instructions.trim().length > 0 ? "OK" : "Empty",
-      detail:
-        profile.instructions.trim().length === 0
-          ? "Applying this Profile clears managed instructions"
-          : undefined,
-      level:
-        profile.instructions.trim().length === 0
-          ? "warning"
-          : "ok"
-    },
-    {
-      source: "skills",
-      label: "Skills",
-      value: `${profile.resources.skills.length}`,
-      detail: "Preview verifies Library availability and Agent ownership",
-      level: "pending"
-    },
-    {
-      source: "conflicts",
-      label: "Live conflicts",
-      value: preview ? (blockingIssues.length > 0 ? "Blocked" : "OK") : "Pending",
-      detail: preview
-        ? blockingIssues.length > 0
-          ? `${blockingIssues.length} issue${blockingIssues.length === 1 ? "" : "s"} found`
-          : "Preview checks passed"
-        : "Run preview to check live files",
-      level: preview ? (blockingIssues.length > 0 ? "error" : "ok") : "pending"
-    }
-  ];
-};
 
 const AppContent = ({
   onLocalePreferenceChange
@@ -993,11 +924,7 @@ const AppContent = ({
     setLibrarySkills((current) =>
       current.map((skill) => updatesById.get(skill.id) ?? skill)
     );
-    setSkillInventory((current) => current.map((item) =>
-      item.installMethod === "copied" && item.libraryId && updatesById.has(item.libraryId)
-        ? { ...item, contentMatchesLibrary: false }
-        : item
-    ));
+    setSkillInventory((current) => updateCopiedSkillInventory(current, updatedSkills));
     commitSkillUpdates((current) => [
       ...current.filter((item) => !updatesById.has(item.id)),
       ...updatedSkills
@@ -1013,42 +940,9 @@ const AppContent = ({
         }))
     ]);
     setProfileLibraryVersions((current) =>
-      Object.fromEntries(
-        Object.entries(current).map(([profileId, versions]) => {
-          const skills = { ...versions.skills };
-          for (const skill of updatedSkills) {
-            if (Object.prototype.hasOwnProperty.call(skills, skill.id)) {
-              skills[skill.id] = skill.contentHash;
-            }
-          }
-          return [profileId, { ...versions, skills }];
-        })
-      )
-    );
+      updateProfileLibraryVersions(current, updatedSkills));
     setTargetStates((current) =>
-      current.map((state) => {
-        const appliedSkills = state.appliedLibraryVersions?.skills ?? {};
-        const changedDeployment = updatedSkills.some(
-          (skill) =>
-            Object.prototype.hasOwnProperty.call(
-              appliedSkills,
-              skill.id
-            ) && appliedSkills[skill.id] !== skill.contentHash
-        );
-        if (
-          !changedDeployment ||
-          state.lifecycleStatus === "drifted" ||
-          state.lifecycleStatus === "recovery-required"
-        ) {
-          return state;
-        }
-        return {
-          ...state,
-          lifecycleStatus: "pending" as const,
-          lifecycleReason: "Library resources changed after the last Apply"
-        };
-      })
-    );
+      updateAppliedTargetLibraryVersions(current, updatedSkills));
   };
 
   const refreshTrackedSkillUpdateLocally = (skill: SkillLibraryEntry) => {
@@ -2113,7 +2007,6 @@ const AppContent = ({
   const preparedSkillTargetsBySkill = useMemo(
     () =>
       targetStates
-        .filter((target) => target.lifecycleStatus === "applied")
         .reduce<Record<string, PreparedSkillTarget[]>>((bySkill, target) => {
           for (const preparation of target.sharedSkillPreparations ?? []) {
             bySkill[preparation.skillKey] = [
@@ -2191,7 +2084,11 @@ const AppContent = ({
             selectedTargetState?.appliedLibraryVersions,
             draftProfile
               ? collectLibraryResourceVersions(
-                  draftProfile,
+                  profileWithoutLocalSkillExceptions(
+                    draftProfile,
+                    selectedTargetState?.keptOutsideSkills,
+                    selectedTargetState?.sharedSkillPreparations
+                  ),
                   librarySkills,
                   selectedTarget?.id
                 )
@@ -2415,6 +2312,30 @@ const AppContent = ({
     }
   };
 
+  const keepPreviewSkillOutside = async (
+    issue: ApplyIssue,
+    targetId: string,
+    refreshPreview: () => Promise<void>
+  ) => {
+    if (!issue.path || !issue.resourceId) return;
+    setError(undefined);
+    try {
+      await window.agentEnv.setSkillPathPolicies({
+        items: [{
+          path: issue.path,
+          skillKey: issue.resourceId,
+          targetId
+        }],
+        mode: "keep-outside"
+      });
+      setSkillInventory(await window.agentEnv.scanSkillInventory());
+      await refreshPreview();
+      setProfileSaveStatus(`${issue.resourceId} will stay outside AgentEnv on this Mac.`);
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    }
+  };
+
   const adoptCompatibleTargetChanges = async () => {
     if (!draftProfile || !selectedTarget) return;
     setBusy(true);
@@ -2578,9 +2499,9 @@ const AppContent = ({
 
   const importExternalSkill = async (skill: SkillInventoryEntry) => {
     if (
-      !isExternalSkillImportable(skill.externalOwnership)
+      !isExternalSkillImportable(skill.externalEvidence)
     ) {
-      setError(`${skill.name} is managed by ${skill.externalOwnership?.displayName ?? "another tool"} and cannot be imported from this runtime copy.`);
+      setError(`${skill.name} is managed by ${skill.externalEvidence?.displayName ?? "another tool"} and cannot be imported from this runtime copy.`);
       return false;
     }
     setBusy(true);
@@ -2591,11 +2512,11 @@ const AppContent = ({
         input: {
           sourcePath: skill.path,
           id: skill.skillKey,
-          upstream: skill.externalOwnership?.upstream,
+          upstream: skill.externalEvidence?.upstream,
           provenance: {
             importedVia: "local-scan",
             externalManager: "skills-cli",
-            externalLockPath: skill.externalOwnership?.lockPath
+            externalLockPath: skill.externalEvidence?.lockPath
           }
         }
       });
@@ -2920,49 +2841,86 @@ const AppContent = ({
     await refreshSkillDiscoveries(false);
   };
 
-  const ignoreSkillGroup = async (skillKey: string) => {
+  const setSkillPathPolicies = async (input: SkillPathPolicyUpdate) => {
+    setError(undefined);
+    try {
+      await window.agentEnv.setSkillPathPolicies(input);
+      setSkillInventory(await window.agentEnv.scanSkillInventory());
+      return true;
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
+    }
+  };
+
+  const keepSkillGroupOutside = async (skillKey: string) => {
     setBusy(true);
     setError(undefined);
     setProfileSaveStatus("");
     setSkillUpdateCheckStatus({
       state: "checking",
-      message: `Ignoring ${skillKey}...`
+      message: `Keeping ${skillKey} outside AgentEnv...`
     });
     try {
-      await window.agentEnv.ignoreSkillGroup(skillKey);
+      await window.agentEnv.setSkillPathPolicies({
+        items: skillInventory
+          .filter((item) => item.skillKey === skillKey && item.status !== "managed")
+          .flatMap((item) =>
+            item.foundIn.length > 0
+              ? item.foundIn.map((targetId) => ({
+                  path: item.path,
+                  skillKey: item.skillKey,
+                  targetId: item.sharedLocation ? undefined : targetId
+                }))
+              : [{ path: item.path, skillKey: item.skillKey }]
+          ),
+        mode: "keep-outside"
+      });
       setSkillInventory(await window.agentEnv.scanSkillInventory());
       setSkillUpdateCheckStatus({
         state: "success",
-        message: `Ignored ${skillKey}`
+        message: `${skillKey} will stay outside AgentEnv`
       });
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);
-      setSkillUpdateCheckStatus({ state: "error", message: "Ignore failed" });
+      setSkillUpdateCheckStatus({ state: "error", message: "Could not save path policy" });
     } finally {
       setBusy(false);
     }
   };
 
-  const unignoreSkillGroup = async (skillKey: string) => {
+  const reviewSkillGroupAgain = async (skillKey: string) => {
     setBusy(true);
     setError(undefined);
     setProfileSaveStatus("");
     setSkillUpdateCheckStatus({
       state: "checking",
-      message: `Restoring ${skillKey}...`
+      message: `Reviewing ${skillKey} again...`
     });
     try {
-      await window.agentEnv.unignoreSkillGroup(skillKey);
+      await window.agentEnv.setSkillPathPolicies({
+        items: skillInventory
+          .filter((item) => item.skillKey === skillKey && item.status === "kept-outside")
+          .flatMap((item) =>
+            item.foundIn.length > 0
+              ? item.foundIn.map((targetId) => ({
+                  path: item.path,
+                  skillKey: item.skillKey,
+                  targetId: item.sharedLocation ? undefined : targetId
+                }))
+              : [{ path: item.path, skillKey: item.skillKey }]
+          )
+      });
       setSkillInventory(await window.agentEnv.scanSkillInventory());
       setSkillUpdateCheckStatus({
         state: "success",
-        message: `Restored ${skillKey}`
+        message: `${skillKey} is back in review`
       });
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);
-      setSkillUpdateCheckStatus({ state: "error", message: "Restore failed" });
+      setSkillUpdateCheckStatus({ state: "error", message: "Could not clear path policy" });
     } finally {
       setBusy(false);
     }
@@ -4288,12 +4246,13 @@ const AppContent = ({
                     setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
                   });
                 }}
-                onIgnoreSkillGroup={(skillKey) => {
-                  void ignoreSkillGroup(skillKey);
+                onKeepSkillGroupOutside={(skillKey) => {
+                  void keepSkillGroupOutside(skillKey);
                 }}
-                onUnignoreSkillGroup={(skillKey) => {
-                  void unignoreSkillGroup(skillKey);
+                onReviewSkillGroupAgain={(skillKey) => {
+                  void reviewSkillGroupAgain(skillKey);
                 }}
+                onSetSkillPathPolicies={setSkillPathPolicies}
                 onSetSharedSkillRetention={setSharedSkillRetention}
                 onRetireSharedSkill={retireSharedSkill}
                 onOpenProfiles={openProfilesForSharedSkill}
@@ -4703,6 +4662,16 @@ const AppContent = ({
                           setBackupManagerOpen(true);
                         }}
                         onAdoptTargetChanges={adoptCompatibleTargetChanges}
+                        onKeepSkillOutside={(issue) =>
+                          keepPreviewSkillOutside(issue, preview.targetId, async () => {
+                            if (!draftProfile) return;
+                            setPreview(
+                              await window.agentEnv.previewApply(
+                                draftProfile.id,
+                                preview.targetId
+                              )
+                            );
+                          })}
                         onCancel={() => setPreview(undefined)}
                         onConfirm={applySelectedProfile}
                       />
@@ -4849,6 +4818,14 @@ const AppContent = ({
               onPreviewSkillUpdate={(id) => void previewLibrarySkillUpdate(id)}
               onCloseSkillUpdate={() => setSelectedSkillUpdatePlan(undefined)}
               onConfirmSkillUpdate={(plan) => void updateLibrarySkill(plan)}
+              onKeepSkillOutside={(issue) =>
+                keepPreviewSkillOutside(
+                  issue,
+                  agentWorkspace.selectedTarget!.id,
+                  async () => {
+                    await agentWorkspace.previewApply();
+                  }
+                )}
             />
           ) : (
             <TargetWorkspace
