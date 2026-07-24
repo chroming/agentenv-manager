@@ -5,9 +5,16 @@ import { parseOpenCodeExportMessages } from "../../../src/main/targets/conversat
 import type { AgentConversationCandidate } from "../../../src/main/targets/types";
 
 const candidate = (overrides: Partial<AgentConversationCandidate> = {}): AgentConversationCandidate => ({
-  sourceId: "source-session",
-  sourceVersion: "42:1",
-  sourceLocator: "/tmp/read-only-history.jsonl",
+  recordId: "source-record",
+  source: {
+    version: "42:1",
+    locator: "/tmp/read-only-history.jsonl"
+  },
+  providerSession: {
+    kind: "native",
+    id: "source-session",
+    resumeLocator: "source-session"
+  },
   updatedAt: "2026-07-24T06:00:00.000Z",
   detailState: "full",
   ...overrides
@@ -54,7 +61,7 @@ describe("conversation history adapters", () => {
     ].join("\n"));
 
     expect(detail).toMatchObject({
-      id: "codex:codex-session",
+      id: "codex:source-record",
       sourceId: "codex-session",
       workspacePath: "/work/project",
       title: "Investigate the failing build",
@@ -96,7 +103,8 @@ describe("conversation history adapters", () => {
     ].join("\n"));
 
     expect(detail).toMatchObject({
-      id: "claude-code:claude-session",
+      id: "claude-code:source-record",
+      sourceId: "claude-session",
       title: "Repair the release workflow",
       workspacePath: "/work/claude",
       messageCount: 2

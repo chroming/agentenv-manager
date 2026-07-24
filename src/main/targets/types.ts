@@ -56,9 +56,17 @@ export interface TargetInstallationResult {
 }
 
 export interface AgentConversationCandidate {
-  sourceId: string;
-  sourceVersion: string;
-  sourceLocator: string;
+  recordId: string;
+  source: {
+    version: string;
+    locator: string;
+    runtimeHome?: string;
+  };
+  providerSession?: {
+    kind: "native" | "file" | "database";
+    id: string;
+    resumeLocator?: string;
+  };
   title?: string;
   snippet?: string;
   workspacePath?: string;
@@ -79,6 +87,8 @@ export interface ConversationLaunchSpec {
   executablePath: string;
   args: string[];
   cwd?: string;
+  env?: Record<string, string>;
+  envToDelete?: string[];
 }
 
 export interface ConversationContinuationInput extends AgentConversationContext {
@@ -87,10 +97,18 @@ export interface ConversationContinuationInput extends AgentConversationContext 
 }
 
 export interface AgentConversationCapability {
-  discover(context: AgentConversationContext): Promise<AgentConversationCandidate[]>;
+  historyDetail: ConversationDetailState;
+  discover(context: AgentConversationContext): Promise<{
+    candidates: AgentConversationCandidate[];
+    complete: boolean;
+  }>;
   read(
     context: AgentConversationContext,
-    candidate: AgentConversationCandidate
+    candidate: AgentConversationCandidate,
+    previous?: {
+      detail: ConversationDetail;
+      sourceVersion: string;
+    }
   ): Promise<ConversationDetail>;
   openOriginal?(
     context: AgentConversationContext,

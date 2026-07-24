@@ -20,6 +20,7 @@ const zhCN: Record<string, string> = {
   "Find local Agent history and continue it in another Agent.": "查找本地 Agent 对话，并在另一个 Agent 中继续。",
   "Continue": "继续",
   "Continue in": "继续到",
+  "Paste required": "需要粘贴",
   "Continue in {{name}}": "在 {{name}} 中继续",
   "Some Agent histories could not be refreshed": "部分 Agent 对话未能刷新",
   "Conversations refreshed": "对话已刷新",

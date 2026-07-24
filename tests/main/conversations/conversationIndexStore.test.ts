@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 
 const detail: ConversationDetail = {
-  id: "codex:session-1",
+  id: "codex:file-record",
   agentId: "codex",
   agentName: "Codex",
   sourceId: "session-1",
@@ -38,9 +38,16 @@ const detail: ConversationDetail = {
 };
 
 const candidate: AgentConversationCandidate = {
-  sourceId: "session-1",
-  sourceVersion: "100:123",
-  sourceLocator: "/history/session-1.jsonl",
+  recordId: "file-record",
+  source: {
+    version: "100:123",
+    locator: "/history/session-1.jsonl"
+  },
+  providerSession: {
+    kind: "native",
+    id: "session-1",
+    resumeLocator: "session-1"
+  },
   updatedAt: detail.updatedAt,
   detailState: "full"
 };
@@ -59,14 +66,22 @@ describe("conversation index store", () => {
     await writeFile(source, "immutable source\n");
     const before = await readFile(source, "utf8");
 
-    index.upsert(detail, { ...candidate, sourceLocator: source });
+    index.upsert(detail, {
+      ...candidate,
+      source: { ...candidate.source, locator: source }
+    });
 
     expect(index.list({ query: "发布" }).items).toHaveLength(1);
     expect(index.list({ query: "OLD TOKEN" }).items).toHaveLength(1);
     expect(index.read(detail.id).messages).toEqual(detail.messages);
     expect(index.record(detail.id)).toMatchObject({
-      sourceVersion: candidate.sourceVersion,
-      sourceLocator: source
+      candidate: {
+        recordId: "file-record",
+        source: {
+          version: candidate.source.version,
+          locator: source
+        }
+      }
     });
     expect(await readFile(source, "utf8")).toBe(before);
     expect((await stat(path)).mode & 0o777).toBe(0o600);
@@ -83,8 +98,16 @@ describe("conversation index store", () => {
       sourceId: "session-2"
     }, {
       ...candidate,
-      sourceId: "session-2",
-      sourceLocator: "/history/session-2.jsonl"
+      recordId: "session-2",
+      source: {
+        ...candidate.source,
+        locator: "/history/session-2.jsonl"
+      },
+      providerSession: {
+        kind: "native",
+        id: "session-2",
+        resumeLocator: "session-2"
+      }
     });
 
     index.upsert({
@@ -92,7 +115,10 @@ describe("conversation index store", () => {
       title: "Updated title",
       messageCount: 1,
       messages: [{ id: "u2", role: "user", text: "replacement" }]
-    }, { ...candidate, sourceVersion: "101:124" });
+    }, {
+      ...candidate,
+      source: { ...candidate.source, version: "101:124" }
+    });
 
     expect(index.read(detail.id).messages).toEqual([
       { id: "u2", role: "user", text: "replacement" }

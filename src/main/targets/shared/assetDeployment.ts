@@ -52,11 +52,22 @@ export const createDirectoryAssetDriver = (
   },
   applyAssets: async (input) => {
     if (!managesSkills(input)) return;
+    const usesApprovedPreviewRemovals = Boolean(input.plannedResourceRemovals);
     const stalePaths = input.plannedResourceRemovals
       ? [...input.plannedResourceRemovals]
       : await staleOwnedSkillPaths(input);
     for (const stalePath of stalePaths) {
-      await removeSkillDeployment(stalePath);
+      await removeSkillDeployment(stalePath, {
+        allowedRoot: input.targetPaths.skillsDir!,
+        ...(!usesApprovedPreviewRemovals
+          ? {
+              expectedOwnership: {
+                targetId: input.targetPaths.targetId,
+                kind: "skill" as const
+              }
+            }
+          : {})
+      });
     }
     await applySkillRefs(input);
   }

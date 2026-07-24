@@ -223,6 +223,22 @@ export type StartupStatus =
 
 export type ConversationRole = "user" | "assistant";
 export type ConversationDetailState = "full" | "summary-only";
+export type ConversationCapabilityState =
+  | "available"
+  | "degraded"
+  | "unavailable"
+  | "unsupported";
+
+export interface ConversationCapabilityStatus {
+  state: ConversationCapabilityState;
+  evidence: string[];
+}
+
+export interface TargetConversationCapabilities {
+  history: ConversationCapabilityStatus;
+  openOriginal: ConversationCapabilityStatus;
+  continue: ConversationCapabilityStatus;
+}
 
 export interface ConversationSummary {
   id: string;
@@ -1269,6 +1285,7 @@ export interface TargetInstallationEvidence {
 export interface TargetInfo extends TargetDescriptor {
   paths: TargetPaths;
   health: TargetHealth;
+  conversationCapabilities: TargetConversationCapabilities;
 }
 
 export interface TargetActivationPreview {

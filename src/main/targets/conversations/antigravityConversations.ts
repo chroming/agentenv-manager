@@ -12,6 +12,7 @@ import {
 const agent = { id: "antigravity", name: "Antigravity CLI" };
 
 export const createAntigravityConversationCapability = (): AgentConversationCapability => ({
+  historyDetail: "summary-only",
   discover: async ({ targetPaths }) => {
     const summariesPath = join(
       targetPaths.configDir,
@@ -22,7 +23,7 @@ export const createAntigravityConversationCapability = (): AgentConversationCapa
     try {
       await access(summariesPath);
     } catch {
-      return [];
+      return { candidates: [], complete: false };
     }
     const database = new DatabaseSync(summariesPath, { readOnly: true });
     try {
@@ -32,7 +33,8 @@ export const createAntigravityConversationCapability = (): AgentConversationCapa
         FROM conversation_summaries
         ORDER BY last_modified_time DESC
       `).all() as Array<Record<string, string | number>>;
-      return rows.map((row) => {
+      return {
+        candidates: rows.map((row) => {
         let workspacePath: string | undefined;
         try {
           const uris = JSON.parse(String(row.workspace_uris ?? "[]"));
@@ -42,10 +44,19 @@ export const createAntigravityConversationCapability = (): AgentConversationCapa
           // A malformed optional workspace field does not invalidate the summary.
         }
         const updatedAt = isoDate(row.last_modified_time, new Date());
+        const sourceId = String(row.conversation_id);
         return {
-          sourceId: String(row.conversation_id),
-          sourceVersion: `${row.last_modified_time}:${row.step_count}`,
-          sourceLocator: summariesPath,
+          recordId: sourceId,
+          source: {
+            version: `${row.last_modified_time}:${row.step_count}`,
+            locator: summariesPath,
+            runtimeHome: targetPaths.configDir
+          },
+          providerSession: {
+            kind: "database" as const,
+            id: sourceId,
+            resumeLocator: sourceId
+          },
           title: trimConversationText(row.title),
           snippet: conversationSnippetFrom(trimConversationText(row.preview)),
           workspacePath,
@@ -54,7 +65,9 @@ export const createAntigravityConversationCapability = (): AgentConversationCapa
           messageCount: Number(row.step_count ?? 0),
           detailState: "summary-only" as const
         };
-      });
+        }),
+        complete: true
+      };
     } finally {
       database.close();
     }
@@ -68,7 +81,12 @@ export const createAntigravityConversationCapability = (): AgentConversationCapa
   openOriginal: ({ executablePath }, candidate) => executablePath
     ? {
         executablePath,
-        args: ["--conversation", candidate.sourceId],
+        args: [
+          "--conversation",
+          candidate.providerSession?.resumeLocator ??
+            candidate.providerSession?.id ??
+            candidate.recordId
+        ],
         cwd: candidate.workspacePath
       }
     : undefined,

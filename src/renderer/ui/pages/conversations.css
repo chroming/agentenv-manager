@@ -311,6 +311,18 @@
   min-height: 38px;
 }
 
+.conversation-target-menu__copy {
+  display: grid;
+  min-width: 0;
+  text-align: left;
+}
+
+.conversation-target-menu__copy small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 500;
+}
+
 .conversation-target-menu .conversation-agent-icon {
   width: 26px;
   height: 26px;

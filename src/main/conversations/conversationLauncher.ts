@@ -12,6 +12,22 @@ export interface ConversationLauncher {
 }
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+const environmentName = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+const environmentLines = (spec: ConversationLaunchSpec) => {
+  const names = [
+    ...Object.keys(spec.env ?? {}),
+    ...(spec.envToDelete ?? [])
+  ];
+  const invalid = names.find((name) => !environmentName.test(name));
+  if (invalid) throw new Error(`Invalid launch environment name: ${invalid}`);
+  return [
+    ...[...new Set(spec.envToDelete ?? [])].map((name) => `unset ${name}`),
+    ...Object.entries(spec.env ?? {}).map(
+      ([name, value]) => `export ${name}=${shellQuote(value)}`
+    )
+  ];
+};
 
 export const terminalScriptFor = (
   scriptPath: string,
@@ -20,6 +36,7 @@ export const terminalScriptFor = (
   "#!/bin/zsh",
   "set -e",
   `rm -f -- ${shellQuote(scriptPath)}`,
+  ...environmentLines(spec),
   ...(spec.cwd ? [`cd -- ${shellQuote(spec.cwd)}`] : []),
   `exec ${[spec.executablePath, ...spec.args].map(shellQuote).join(" ")}`
 ].join("\n") + "\n";

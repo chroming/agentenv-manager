@@ -19,14 +19,26 @@ describe("conversation launcher", () => {
     const script = terminalScriptFor("/tmp/launch file.command", {
       executablePath: "/Applications/Agent Tool",
       args: ["--file", "/tmp/context with 'quote'.md"],
-      cwd: "/tmp/project directory"
+      cwd: "/tmp/project directory",
+      env: { CODEX_HOME: "/tmp/custom codex" },
+      envToDelete: ["OPENCODE_CONFIG_DIR"]
     });
 
     expect(script).toContain("rm -f -- '/tmp/launch file.command'");
     expect(script).toContain("cd -- '/tmp/project directory'");
+    expect(script).toContain("unset OPENCODE_CONFIG_DIR");
+    expect(script).toContain("export CODEX_HOME='/tmp/custom codex'");
     expect(script).toContain(
       "exec '/Applications/Agent Tool' '--file' '/tmp/context with '\\''quote'\\''.md'"
     );
+  });
+
+  it("rejects unsafe environment variable names", () => {
+    expect(() => terminalScriptFor("/tmp/launch.command", {
+      executablePath: "/usr/bin/true",
+      args: [],
+      env: { "BAD-NAME": "value" }
+    })).toThrow("Invalid launch environment name");
   });
 
   it("passes only a temporary script path to Terminal", async () => {

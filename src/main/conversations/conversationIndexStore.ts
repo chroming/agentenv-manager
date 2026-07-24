@@ -14,9 +14,13 @@ interface ConversationRow {
   id: string;
   agent_id: string;
   agent_name: string;
+  record_id: string;
   source_id: string;
   source_version: string;
   source_locator: string;
+  source_runtime_home: string | null;
+  provider_session_kind: "native" | "file" | "database" | null;
+  provider_resume_locator: string | null;
   title: string;
   snippet: string;
   workspace_path: string | null;
@@ -36,8 +40,7 @@ interface MessageRow {
 
 export interface IndexedConversationRecord {
   summary: ConversationSummary;
-  sourceVersion: string;
-  sourceLocator: string;
+  candidate: AgentConversationCandidate;
 }
 
 export interface ConversationIndexStore {
@@ -72,7 +75,7 @@ const createDatabase = (path: string) => {
       (database.prepare("PRAGMA user_version").get() as { user_version: number })
         .user_version
     );
-    if (version > 1) throw new Error("Conversation cache uses a newer schema");
+    if (version > 2) throw new Error("Conversation cache uses a newer schema");
     database.exec(`
       PRAGMA foreign_keys = ON;
       PRAGMA journal_mode = WAL;
@@ -80,9 +83,13 @@ const createDatabase = (path: string) => {
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
         agent_name TEXT NOT NULL,
+        record_id TEXT NOT NULL,
         source_id TEXT NOT NULL,
         source_version TEXT NOT NULL,
         source_locator TEXT NOT NULL,
+        source_runtime_home TEXT,
+        provider_session_kind TEXT,
+        provider_resume_locator TEXT,
         title TEXT NOT NULL,
         snippet TEXT NOT NULL,
         workspace_path TEXT,
@@ -106,10 +113,37 @@ const createDatabase = (path: string) => {
         created_at TEXT,
         PRIMARY KEY (conversation_id, ordinal)
       );
-      PRAGMA user_version = 1;
     `);
+    if (version < 2) {
+      const columns = new Set(
+        (database.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>)
+          .map((column) => column.name)
+      );
+      const addColumn = (name: string, definition: string) => {
+        if (!columns.has(name)) database.exec(`ALTER TABLE conversations ADD COLUMN ${definition}`);
+      };
+      addColumn("record_id", "record_id TEXT");
+      addColumn("source_runtime_home", "source_runtime_home TEXT");
+      addColumn("provider_session_kind", "provider_session_kind TEXT");
+      addColumn("provider_resume_locator", "provider_resume_locator TEXT");
+      database.exec(`
+        UPDATE conversations
+        SET record_id = CASE
+          WHEN instr(id, ':') > 0 THEN substr(id, instr(id, ':') + 1)
+          ELSE source_id
+        END
+        WHERE record_id IS NULL OR record_id = '';
+        UPDATE conversations
+        SET provider_session_kind = 'native'
+        WHERE provider_session_kind IS NULL;
+        UPDATE conversations
+        SET provider_resume_locator = source_id
+        WHERE provider_resume_locator IS NULL;
+      `);
+    }
+    database.exec("PRAGMA user_version = 2;");
     database.prepare(`
-      SELECT id, agent_id, source_version, source_locator, search_text
+      SELECT id, agent_id, record_id, source_version, source_locator, search_text
       FROM conversations
       LIMIT 0
     `);
@@ -164,16 +198,21 @@ export const createConversationIndexStore = async (
   `);
   const upsertStatement = database.prepare(`
     INSERT INTO conversations (
-      id, agent_id, agent_name, source_id, source_version, source_locator,
+      id, agent_id, agent_name, record_id, source_id, source_version, source_locator,
+      source_runtime_home, provider_session_kind, provider_resume_locator,
       title, snippet, workspace_path, created_at, updated_at, message_count,
       detail_state, archived, search_text
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       agent_id = excluded.agent_id,
       agent_name = excluded.agent_name,
+      record_id = excluded.record_id,
       source_id = excluded.source_id,
       source_version = excluded.source_version,
       source_locator = excluded.source_locator,
+      source_runtime_home = excluded.source_runtime_home,
+      provider_session_kind = excluded.provider_session_kind,
+      provider_resume_locator = excluded.provider_resume_locator,
       title = excluded.title,
       snippet = excluded.snippet,
       workspace_path = excluded.workspace_path,
@@ -217,9 +256,13 @@ export const createConversationIndexStore = async (
           detail.id,
           detail.agentId,
           detail.agentName,
+          candidate.recordId,
           detail.sourceId,
-          candidate.sourceVersion,
-          candidate.sourceLocator,
+          candidate.source.version,
+          candidate.source.locator,
+          candidate.source.runtimeHome ?? null,
+          candidate.providerSession?.kind ?? null,
+          detail.sourceId,
           detail.title,
           detail.snippet,
           detail.workspacePath ?? null,
@@ -308,8 +351,29 @@ export const createConversationIndexStore = async (
       const row = rowFor(id);
       return {
         summary: summaryFromRow(row),
-        sourceVersion: row.source_version,
-        sourceLocator: row.source_locator
+        candidate: {
+          recordId: row.record_id,
+          source: {
+            version: row.source_version,
+            locator: row.source_locator,
+            ...(row.source_runtime_home
+              ? { runtimeHome: row.source_runtime_home }
+              : {})
+          },
+          providerSession: {
+            kind: row.provider_session_kind ?? "native",
+            id: row.source_id,
+            resumeLocator: row.provider_resume_locator ?? row.source_id
+          },
+          title: row.title,
+          snippet: row.snippet,
+          workspacePath: row.workspace_path ?? undefined,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          messageCount: row.message_count,
+          detailState: row.detail_state,
+          archived: row.archived === 1 || undefined
+        }
       };
     },
     close: () => database.close()

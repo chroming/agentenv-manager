@@ -51,14 +51,17 @@ describe("Antigravity conversation adapter", () => {
     };
     const capability = createAntigravityConversationCapability();
 
-    const candidates = await capability.discover({
+    const discovery = await capability.discover({
       homeDir: root,
       targetPaths,
       executablePath: "/usr/local/bin/agy"
     });
+    const candidates = discovery.candidates;
+    expect(discovery.complete).toBe(true);
     expect(candidates).toEqual([
       expect.objectContaining({
-        sourceId: "ag-session",
+        recordId: "ag-session",
+        providerSession: expect.objectContaining({ id: "ag-session" }),
         title: "Review desktop shell",
         workspacePath: "/work/project",
         messageCount: 4,

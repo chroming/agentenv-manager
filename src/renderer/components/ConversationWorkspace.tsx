@@ -163,7 +163,12 @@ const TargetMenu = ({
                         ? <img src={icon.assetUrl} alt="" />
                         : target.name.slice(0, 1)}
                     </span>
-                    <span>{target.name}</span>
+                    <span className="conversation-target-menu__copy">
+                      <span>{target.name}</span>
+                      {target.conversationCapabilities.continue.state === "degraded"
+                        ? <small>{t("Paste required")}</small>
+                        : null}
+                    </span>
                   </button>
                 );
               })}
@@ -347,13 +352,17 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
 
   const continueTargets = useMemo(
     () => targets.filter(
-      (target) => target.health.installationFound && target.id !== detail?.agentId
+      (target) =>
+        (target.conversationCapabilities.continue.state === "available" ||
+          target.conversationCapabilities.continue.state === "degraded") &&
+        target.id !== detail?.agentId
     ),
     [detail?.agentId, targets]
   );
   const sourceCanOpenOriginal = Boolean(
     detail &&
-    targets.find((target) => target.id === detail.agentId)?.health.executablePath
+    targets.find((target) => target.id === detail.agentId)
+      ?.conversationCapabilities.openOriginal.state === "available"
   );
 
   const executeContinuation = async (previewId: string) => {

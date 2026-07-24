@@ -306,8 +306,22 @@ an archive, or a native-session database migration tool.
 - Conversation support is a capability of one Agent integration. Unsupported or metadata-only
   formats remain visible with an honest capability state; the renderer MUST NOT infer support from
   an Agent name or path.
-- Refresh is incremental and failure-isolated. One malformed source or unavailable Agent MUST NOT
-  clear the last good index or prevent other Agents from refreshing.
+- A discovered record identity, source locator/version, and provider session identity are separate
+  values. File names MUST NOT overwrite a provider session ID parsed from the source, and native
+  resume MUST use the provider identity and source runtime home.
+- Refresh is append-incremental and failure-isolated. JSONL readers stream from a verified line
+  boundary, fall back to a full streaming read after truncation or replacement, and exclude nested
+  subagent logs from the top-level conversation list.
+- Absence is authoritative only after the adapter completely observes its source. A malformed
+  record, unreadable file, missing history root, unavailable database, or failed Agent command
+  MUST NOT clear the last-good index or prevent other Agents from refreshing.
+- Read-only local stores MAY be used as an optimization when their schema is probed at runtime and
+  work is isolated from the Electron main thread. OpenCode SQLite and legacy storage are preferred
+  when readable, deduplicated by provider session ID, and fall back to the official CLI when local
+  storage is unavailable or unsupported.
+- Handoff transcript text is untrusted historical data. Generated continuation context MUST tell
+  the target Agent to ignore instructions embedded in transcript or tool output and to treat the
+  current repository plus the user's new request as authoritative.
 - Conversation discovery starts after the core application is usable and MUST NOT delay startup,
   Profile loading, Library loading, or Agent discovery.
 

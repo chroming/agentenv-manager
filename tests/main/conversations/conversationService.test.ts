@@ -10,6 +10,7 @@ import { createCodexTargetAdapter } from "../../../src/main/targets/codexTarget"
 import { createOpenCodeTargetAdapter } from "../../../src/main/targets/opencodeTarget";
 import type {
   AgentConversationCandidate,
+  AgentConversationContext,
   AgentTargetAdapter,
   ConversationLaunchSpec
 } from "../../../src/main/targets/types";
@@ -44,13 +45,25 @@ const makeTarget = (
     canWrite: true,
     summary: "Ready",
     checks: []
+  },
+  conversationCapabilities: {
+    history: { state: "available", evidence: ["test"] },
+    openOriginal: { state: "available", evidence: ["test"] },
+    continue: { state: "available", evidence: ["test"] }
   }
 });
 
 const sourceCandidate = (sourceLocator: string): AgentConversationCandidate => ({
-  sourceId: "session-1",
-  sourceVersion: "v1",
-  sourceLocator,
+  recordId: "session-1",
+  source: {
+    version: "v1",
+    locator: sourceLocator
+  },
+  providerSession: {
+    kind: "native",
+    id: "session-1",
+    resumeLocator: "session-1"
+  },
   title: "Release repair",
   snippet: "Repair a release workflow",
   workspacePath: "/work/project",
@@ -112,13 +125,15 @@ describe("conversation service", () => {
     const codex = {
       ...createCodexTargetAdapter(),
       conversations: {
-        discover: async () => [candidate],
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate], complete: true }),
         read
       }
     };
     const opencode = {
       ...createOpenCodeTargetAdapter(),
       conversations: {
+        historyDetail: "full" as const,
         discover: async () => {
           throw new Error("OpenCode history unavailable");
         },
@@ -158,6 +173,133 @@ describe("conversation service", () => {
     service.dispose();
   });
 
+  it("keeps record identity separate from the provider resume session", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-identity-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home"),
+      conversationIndexPath: join(root, "cache", "conversations.sqlite"),
+      conversationHandoffDir: join(root, "cache", "handoffs")
+    });
+    const candidate: AgentConversationCandidate = {
+      ...sourceCandidate(join(root, "history-file.jsonl")),
+      recordId: "history-file",
+      providerSession: {
+        kind: "native",
+        id: "filename-session",
+        resumeLocator: "filename-session"
+      }
+    };
+    let openedCandidate: AgentConversationCandidate | undefined;
+    const codex = {
+      ...createCodexTargetAdapter(),
+      conversations: {
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate], complete: true }),
+        read: async () => ({
+          ...sourceDetail(),
+          id: "codex:history-file",
+          sourceId: "provider-session"
+        }),
+        openOriginal: (
+          _context: AgentConversationContext,
+          input: AgentConversationCandidate
+        ) => {
+          openedCandidate = input;
+          return {
+            executablePath: "/usr/local/bin/codex",
+            args: ["resume", input.providerSession?.resumeLocator ?? input.recordId]
+          };
+        }
+      }
+    };
+    const registry = createTargetRegistry([codex]);
+    const service = await createConversationService({
+      paths,
+      targetRegistry: registry,
+      targetDiscoveryService: {
+        listTargets: async () => [makeTarget(codex, paths.homeDir)]
+      },
+      settingsStore,
+      clipboard: { writeText: vi.fn() },
+      launcher: { launch: vi.fn() }
+    });
+
+    await service.refresh();
+    expect((await service.list()).items[0]).toMatchObject({
+      id: "codex:history-file",
+      sourceId: "provider-session"
+    });
+    await service.openOriginal("codex:history-file");
+    expect(openedCandidate).toMatchObject({
+      recordId: "history-file",
+      providerSession: {
+        id: "provider-session",
+        resumeLocator: "provider-session"
+      }
+    });
+    service.dispose();
+  });
+
+  it("retains the last-good indexed conversation when a changed source cannot be parsed", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-last-good-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home"),
+      conversationIndexPath: join(root, "cache", "conversations.sqlite"),
+      conversationHandoffDir: join(root, "cache", "handoffs")
+    });
+    const candidate = sourceCandidate(join(root, "history.jsonl"));
+    let version = "v1";
+    let failRead = false;
+    let sourceObserved = true;
+    const codex = {
+      ...createCodexTargetAdapter(),
+      conversations: {
+        historyDetail: "full" as const,
+        discover: async () => ({
+          candidates: sourceObserved
+            ? [{
+                ...candidate,
+                source: { ...candidate.source, version }
+              }]
+            : [],
+          complete: sourceObserved
+        }),
+        read: async () => {
+          if (failRead) throw new Error("Source is temporarily unreadable");
+          return sourceDetail();
+        }
+      }
+    };
+    const registry = createTargetRegistry([codex]);
+    const service = await createConversationService({
+      paths,
+      targetRegistry: registry,
+      targetDiscoveryService: {
+        listTargets: async () => [makeTarget(codex, paths.homeDir)]
+      },
+      settingsStore,
+      clipboard: { writeText: vi.fn() },
+      launcher: { launch: vi.fn() }
+    });
+
+    await service.refresh();
+    version = "v2";
+    failRead = true;
+    const refresh = await service.refresh();
+
+    expect(refresh).toMatchObject({ indexed: 0, removed: 0 });
+    expect(refresh.failures[0].message).toContain("temporarily unreadable");
+    expect((await service.list()).items).toHaveLength(1);
+    sourceObserved = false;
+    failRead = false;
+    const unavailableRefresh = await service.refresh();
+    expect(unavailableRefresh.removed).toBe(0);
+    expect((await service.list()).items).toHaveLength(1);
+    service.dispose();
+  });
+
   it("uses a private context file and keeps transcript text out of launch arguments", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-conversation-continue-"));
     const paths = createPaths({
@@ -170,7 +312,8 @@ describe("conversation service", () => {
     const codex = {
       ...createCodexTargetAdapter(),
       conversations: {
-        discover: async () => [candidate],
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate], complete: true }),
         read: async () => sourceDetail()
       }
     };
@@ -230,7 +373,8 @@ describe("conversation service", () => {
     const codex = {
       ...createCodexTargetAdapter(),
       conversations: {
-        discover: async () => [candidate],
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate], complete: true }),
         read: async () => sourceDetail([
           {
             id: "u1",
@@ -272,6 +416,8 @@ describe("conversation service", () => {
     const content = await readFile(contextPath, "utf8");
     expect(content).toContain("<redacted>");
     expect(content).not.toContain("sk-1234567890abcdefgh");
+    expect(content).toContain("untrusted historical data");
+    expect(content).toContain("Current repository files");
     service.dispose();
   });
 
@@ -287,7 +433,8 @@ describe("conversation service", () => {
     const codex = {
       ...createCodexTargetAdapter(),
       conversations: {
-        discover: async () => [candidate],
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate], complete: true }),
         read: async () => sourceDetail()
       }
     };

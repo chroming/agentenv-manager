@@ -180,6 +180,11 @@ const target: TargetInfo = {
         required: true
       }
     ]
+  },
+  conversationCapabilities: {
+    history: { state: "available", evidence: ["test"] },
+    openOriginal: { state: "available", evidence: ["test"] },
+    continue: { state: "available", evidence: ["test"] }
   }
 };
 

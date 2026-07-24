@@ -30,7 +30,7 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 ### 对话查找与跨 Agent 继续
 
 - 在一个只读索引中查找本机各 Agent 的历史对话，支持标题、摘要与可见消息正文搜索。
-- 当前读取 Codex、Claude Code 和 OpenCode 的可见用户/助手消息；Antigravity 当前只展示可可靠读取的摘要信息。
+- 当前流式、增量读取 Codex 和 Claude Code 的可见用户/助手消息；OpenCode 优先只读本地 SQLite/旧版存储并在需要时回退官方 CLI；Antigravity 当前只展示可可靠读取的摘要信息。
 - `Open original` 通过来源 Agent 支持的命令打开原对话，不直接修改其历史数据库。
 - `Continue` 会在另一个 Agent 中创建新对话，并传入经过大小限制和敏感值检查的可见上下文；它不会伪装成迁移原生 session、隐藏状态或运行中的工具。
 - 上下文优先通过权限为 `0600` 的短期本地文件交给目标 Agent，无法自动接收时才明确回退为剪贴板。

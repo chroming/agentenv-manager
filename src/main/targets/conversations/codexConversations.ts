@@ -1,14 +1,19 @@
-import { readFile, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { ConversationMessage } from "../../../shared/types";
+import type {
+  ConversationDetail,
+  ConversationMessage
+} from "../../../shared/types";
 import type { AgentConversationCapability } from "../types";
 import {
-  MAX_CONVERSATION_SOURCE_BYTES,
   candidateForFile,
+  canResumeJsonLines,
   createConversationDetail,
+  forEachJsonLine,
   isoDate,
   listFilesRecursively,
   sourceIdFromFilename,
+  sourceByteSize,
   trimConversationText,
   visibleMessage
 } from "../../conversations/adapterUtils";
@@ -31,73 +36,140 @@ export const parseCodexConversation = (
   candidate: Parameters<AgentConversationCapability["read"]>[1],
   content: string
 ) => {
-  const messages: ConversationMessage[] = [];
-  let sessionId = candidate.sourceId;
-  let workspacePath = candidate.workspacePath;
-  let createdAt = candidate.createdAt;
-
+  const accumulator = createCodexAccumulator(candidate);
   for (const [index, line] of content.split(/\r?\n/).entries()) {
     if (!line.trim()) continue;
-    let record: any;
     try {
-      record = JSON.parse(line);
+      accumulator.consume(JSON.parse(line), index);
     } catch {
-      continue;
+      // A malformed record does not invalidate the remaining transcript.
     }
+  }
+  return accumulator.finish();
+};
+
+const createCodexAccumulator = (
+  candidate: Parameters<AgentConversationCapability["read"]>[1],
+  seed?: ConversationDetail
+) => {
+  const messages: ConversationMessage[] = seed ? [...seed.messages] : [];
+  let sessionId =
+    seed?.sourceId ??
+    candidate.providerSession?.id ??
+    candidate.recordId;
+  let workspacePath = seed?.workspacePath ?? candidate.workspacePath;
+  let createdAt = seed?.createdAt ?? candidate.createdAt;
+
+  const consume = (record: any, index: number) => {
     if (record?.type === "session_meta" && record.payload && typeof record.payload === "object") {
-      sessionId = String(record.payload.id ?? record.payload.session_id ?? sessionId);
+      sessionId =
+        trimConversationText(record.payload.id) ||
+        trimConversationText(record.payload.session_id) ||
+        sessionId;
       workspacePath = trimConversationText(record.payload.cwd) || workspacePath;
       createdAt = isoDate(record.payload.timestamp, new Date(candidate.updatedAt));
-      continue;
+      return;
     }
-    if (record?.type !== "response_item" || record.payload?.type !== "message") continue;
+    if (record?.type !== "response_item" || record.payload?.type !== "message") return;
     const message = visibleMessage(
       String(record.payload.id ?? `${sessionId}:${index}`),
       record.payload.role,
       contentText(record.payload.content)
     );
     if (message) messages.push(message);
-  }
+  };
 
-  return createConversationDetail(
-    agent,
-    { ...candidate, sourceId: sessionId },
-    messages,
-    { workspacePath, createdAt }
-  );
+  return {
+    consume,
+    finish: () => createConversationDetail(
+      agent,
+      {
+        ...candidate,
+        providerSession: {
+          kind: "native",
+          id: sessionId,
+          resumeLocator: sessionId
+        }
+      },
+      messages,
+      { workspacePath, createdAt }
+    )
+  };
 };
 
 export const createCodexConversationCapability = (): AgentConversationCapability => ({
+  historyDetail: "full",
   discover: async ({ targetPaths }) => {
     const roots = [
       { path: join(targetPaths.configDir, "sessions"), archived: false },
       { path: join(targetPaths.configDir, "archived_sessions"), archived: true }
     ];
     const candidates = [];
+    let primaryRootObserved = false;
     for (const root of roots) {
+      try {
+        await stat(root.path);
+        if (!root.archived) primaryRootObserved = true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+        throw error;
+      }
       for (const path of await listFilesRecursively(root.path, (file) => file.endsWith(".jsonl"))) {
-        const info = await stat(path);
-        if (info.size > MAX_CONVERSATION_SOURCE_BYTES) continue;
+        const sourceId = sourceIdFromFilename(path);
         candidates.push(await candidateForFile(path, {
-          sourceId: sourceIdFromFilename(path),
+          recordId: sourceId,
+          providerSession: {
+            kind: "native",
+            id: sourceId,
+            resumeLocator: sourceId
+          },
+          runtimeHome: targetPaths.configDir,
           detailState: "full",
           archived: root.archived
         }));
       }
     }
-    return candidates;
+    return { candidates, complete: primaryRootObserved };
   },
-  read: async (_context, candidate) =>
-    parseCodexConversation(candidate, await readFile(candidate.sourceLocator, "utf8")),
+  read: async (_context, candidate, previous) => {
+    const previousSize = previous
+      ? sourceByteSize(previous.sourceVersion)
+      : undefined;
+    const currentSize = sourceByteSize(candidate.source.version);
+    const canResume = Boolean(
+      previous &&
+      previousSize !== undefined &&
+      currentSize !== undefined &&
+      currentSize > previousSize &&
+      await canResumeJsonLines(
+        candidate.source.locator,
+        previous!.sourceVersion,
+        candidate.source.version
+      )
+    );
+    const accumulator = createCodexAccumulator(
+      candidate,
+      canResume ? previous?.detail : undefined
+    );
+    await forEachJsonLine(candidate.source.locator, accumulator.consume, {
+      start: canResume ? previousSize : 0
+    });
+    return accumulator.finish();
+  },
   openOriginal: ({ executablePath }, candidate) => executablePath
     ? {
         executablePath,
         args: [
           "resume",
-          candidate.sourceId,
+          candidate.providerSession?.resumeLocator ??
+            candidate.providerSession?.id ??
+            candidate.recordId,
           ...(candidate.workspacePath ? ["-C", candidate.workspacePath] : [])
         ],
-        cwd: candidate.workspacePath
+        cwd: candidate.workspacePath,
+        ...(candidate.source.runtimeHome
+          ? { env: { CODEX_HOME: candidate.source.runtimeHome } }
+          : {})
       }
     : undefined,
   continueWithContext: ({ executablePath, conversation, contextFilePath }) => executablePath
