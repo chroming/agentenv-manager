@@ -1841,6 +1841,8 @@ describe("App", () => {
       health: {
         ...target.health,
         status: "missing" as const,
+        installationFound: false,
+        installationEvidence: [],
         executableFound: false,
         executablePath: undefined,
         canWrite: true,
@@ -1868,6 +1870,43 @@ describe("App", () => {
     );
     expect(await screen.findByRole("status")).toHaveTextContent("Agents refreshed");
     expect(screen.queryByRole("button", { name: "Dismiss message" })).not.toBeInTheDocument();
+  });
+
+  it("opens Agent Skills from its name and explains unavailable setup", async () => {
+    const unavailableTarget = {
+      ...target,
+      health: {
+        ...target.health,
+        status: "missing" as const,
+        installationFound: false,
+        installationEvidence: [],
+        executableFound: false,
+        executablePath: undefined,
+        canWrite: false,
+        summary: "opencode CLI not found"
+      }
+    };
+    installApi({
+      listTargets: vi.fn().mockResolvedValue([unavailableTarget]),
+      listTargetStates: vi.fn().mockResolvedValue([])
+    });
+    render(<App />);
+
+    await screen.findByRole("region", { name: "Skill library" });
+    fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    const targetCard = await screen.findByRole("article", { name: "Agent OpenCode" });
+    fireEvent.click(within(targetCard).getByRole("button", { name: "OpenCode" }));
+
+    const workspace = await screen.findByRole("region", { name: "Manage OpenCode Skills" });
+    expect(within(workspace).getByRole("heading", { name: "OpenCode is not installed" }))
+      .toBeInTheDocument();
+    expect(workspace).toHaveTextContent(
+      "AgentEnv cannot manage this Agent's Skills until its command or app is detected."
+    );
+    expect(within(workspace).getByRole("button", { name: "Manage OpenCode Skills" }))
+      .toBeDisabled();
+    expect(within(workspace).getByRole("button", { name: "Manage OpenCode Skills" }))
+      .toHaveAttribute("title", "OpenCode is not detected");
   });
 
   it("opens at most one composer section and allows all sections to collapse", async () => {

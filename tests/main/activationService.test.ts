@@ -225,6 +225,7 @@ describe("activation service v2", () => {
     const source = join(root, "source", "ppe-debug");
     const traeDir = join(paths.homeDir, ".trae");
     const externalPaths = [
+      join(traeDir, "skills", "ppe-debug"),
       join(paths.homeDir, ".coco", "skills", "ppe-debug"),
       join(paths.homeDir, ".trae-cn", "skills", "ppe-debug")
     ];

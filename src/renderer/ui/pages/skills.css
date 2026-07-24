@@ -682,10 +682,7 @@
 }
 
 .cleanup-section-heading {
-  align-items: center;
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: block;
   min-width: 0;
 }
 
@@ -702,17 +699,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.cleanup-auto-action {
-  justify-self: end;
-  min-height: 36px;
-  padding-inline: 12px;
-  white-space: nowrap;
-}
-
-.cleanup-auto-action .is-spinning {
-  animation: spin 0.9s linear infinite;
 }
 
 .skill-library-panel .library-drawer__refresh {
@@ -799,19 +785,6 @@
 .skill-library-panel .cleanup-group-actions .cleanup-current-action {
   justify-content: center;
   width: 132px;
-}
-
-@container skill-library (max-width: 560px) {
-  .cleanup-section-heading {
-    align-items: stretch;
-    gap: 10px;
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .cleanup-auto-action {
-    justify-self: stretch;
-    width: 100%;
-  }
 }
 
 @container skill-library (max-width: 560px) {

@@ -400,8 +400,8 @@ const applyLibrarySkillAvailability = (
     ...profile,
     resources: {
       ...profile.resources,
-      skills: profile.resources.skills.map((reference) =>
-        disabledIds.has(reference.libraryId) ? { ...reference, enabled: false } : reference
+      skills: profile.resources.skills.filter(
+        (reference) => !disabledIds.has(reference.libraryId)
       )
     }
   };

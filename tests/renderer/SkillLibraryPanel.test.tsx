@@ -1063,6 +1063,12 @@ describe("SkillLibraryPanel", () => {
       name: "Clean up 4 ready Skills"
     });
     expect(takeOverAllButton.closest(".cleanup-bucket-heading--ready")).not.toBeNull();
+    expect(takeOverAllButton.closest(".cleanup-bucket-actions")).not.toBeNull();
+    expect(takeOverAllButton).toHaveClass(
+      "ui-button",
+      "ui-button--compact",
+      "ui-button--primary"
+    );
     expect(takeOverAllButton).toHaveTextContent("Clean up 4");
     fireEvent.click(takeOverAllButton);
     const bulkCleanupDialog = screen.getByRole("dialog", { name: "Clean up local Skills" });

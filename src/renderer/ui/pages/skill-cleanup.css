@@ -50,16 +50,34 @@
   background: var(--surface-muted);
   border-bottom: 1px solid var(--border);
   display: flex;
-  justify-content: space-between;
+  gap: var(--space-2);
   min-height: 36px;
   padding: 6px 10px 6px 52px;
 }
 
-.cleanup-bucket-heading > div {
+.cleanup-bucket-copy {
   align-items: center;
   display: flex;
   gap: 7px;
   min-width: 0;
+}
+
+.cleanup-bucket-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.cleanup-bucket-actions .cleanup-auto-action {
+  max-width: none;
+  white-space: nowrap;
+  width: auto;
+}
+
+.cleanup-bucket-actions .cleanup-auto-action .is-spinning {
+  animation: spin 0.9s linear infinite;
 }
 
 .cleanup-bucket-heading strong {

@@ -275,14 +275,22 @@ export const AgentSkillWorkspace = ({
             </div>
           </section>
         ) : !profile ? (
-          <section className="agent-skill-onboarding">
+          <section className={`agent-skill-onboarding${installed ? "" : " is-unavailable"}`}>
             <span className="agent-skill-onboarding__icon" aria-hidden="true">
-              <ShieldCheck size={22} strokeWidth={2} />
+              {installed
+                ? <ShieldCheck size={22} strokeWidth={2} />
+                : <TriangleAlert size={22} strokeWidth={2} />}
             </span>
             <div>
-              <h3>{t("Preserve and manage this Agent's Skills")}</h3>
+              <h3>
+                {t(installed
+                  ? "Preserve and manage this Agent's Skills"
+                  : "{{name}} is not installed", { name: target.name })}
+              </h3>
               <p>
-                {localSkillCount > 0
+                {!installed
+                  ? t("AgentEnv cannot manage this Agent's Skills until its command or app is detected. Install it, then return to Agents and Refresh.")
+                  : localSkillCount > 0
                   ? t("{{count}} local Skills detected. AgentEnv will preserve their content before anything changes.", {
                       count: localSkillCount
                     })
@@ -292,6 +300,9 @@ export const AgentSkillWorkspace = ({
                 size="prominent"
                 variant="primary"
                 disabled={!installed}
+                title={!installed
+                  ? t("{{name}} is not detected", { name: target.name })
+                  : undefined}
                 icon={<ArrowRight size={15} strokeWidth={2.3} />}
                 onClick={() => onBeginSetup("skills")}
               >

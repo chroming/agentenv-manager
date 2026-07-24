@@ -194,7 +194,14 @@ export const TargetWorkspace = ({
                 </span>
                 <span className="target-workflow-title">
                   <span className="target-workflow-name-line">
-                    <strong>{target.name}</strong>
+                    <button
+                      className="target-workflow-name-action"
+                      type="button"
+                      title={t("Manage {{name}} Skills", { name: target.name })}
+                      onClick={() => onManageSkills(target.id)}
+                    >
+                      <strong>{target.name}</strong>
+                    </button>
                   </span>
                   <OverflowTooltip
                     className="target-workflow-description"

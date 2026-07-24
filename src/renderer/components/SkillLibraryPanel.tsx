@@ -10,7 +10,6 @@ import {
 import {
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
   Circle,
   CircleSlash2,
   Combine,
@@ -93,7 +92,6 @@ import {
   buildSkillCleanupGroups,
   isSkillCleanupPreparationCurrent,
   type SkillCleanupAutomaticEffect,
-  type SkillCleanupBucket,
   type SkillCleanupDisplayState,
   type SkillCleanupRecommendedAction
 } from "../../shared/skillCleanup";
@@ -109,6 +107,7 @@ import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
 import {
   SkillUpdateSettingsDialog
 } from "./SkillUpdateSettingsDialog";
+import { CleanupBucketHeader } from "./CleanupBucketHeader";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -392,13 +391,6 @@ const cleanupEffectLabel = (effect: SkillCleanupAutomaticEffect) => {
   if (effect === "archive-and-link") return "Back up local changes and link to Library";
   if (effect === "repair-link") return "Repair managed links";
   return "Remove unavailable links";
-};
-
-const cleanupBucketLabel = (bucket: SkillCleanupBucket) => {
-  if (bucket === "decision") return "Needs your decision";
-  if (bucket === "ready") return "Ready to clean up";
-  if (bucket === "managed") return "Managed";
-  return "Kept outside AgentEnv";
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -3627,57 +3619,23 @@ export const SkillLibraryPanel = ({
                 return (
                   <Fragment key={group.skillKey}>
                     {sectionStarts ? (
-                      <div className={`cleanup-bucket-heading cleanup-bucket-heading--${group.bucket}`}>
-                        <div>
-                          <strong>{t(cleanupBucketLabel(group.bucket))}</strong>
-                          <span>{cleanupGroupsByBucket[group.bucket].length}</span>
-                        </div>
-                        {group.bucket === "ready" && readyCleanupCount > 0 ? (
-                          <button
-                            className="primary-action cleanup-auto-action"
-                            type="button"
-                            aria-label={t("Clean up {{count}} ready Skills", { count: readyCleanupCount })}
-                            disabled={Boolean(automaticCleanupKey)}
-                            onClick={() => setAutoCleanupReviewOpen(true)}
-                          >
-                            <Sparkles
-                              className={automaticCleanupKey === "all" ? "is-spinning" : undefined}
-                              size={15}
-                              strokeWidth={2.2}
-                              aria-hidden="true"
-                            />
-                            {t(
-                              automaticCleanupKey === "all"
-                                ? "Cleaning up..."
-                                : "Clean up {{count}}",
-                              { count: readyCleanupCount }
-                            )}
-                          </button>
-                        ) : null}
-                        {sectionCanCollapse ? (
-                          <button
-                            className="icon-action"
-                            type="button"
-                            aria-label={t(sectionExpanded ? "Collapse {{section}}" : "Expand {{section}}", {
-                              section: t(cleanupBucketLabel(group.bucket))
-                            })}
-                            aria-expanded={sectionExpanded}
-                            onClick={() => {
-                              if (!collapsibleBucket) return;
-                              setExpandedCleanupBuckets((current) => ({
-                                ...current,
-                                [collapsibleBucket]: !sectionExpanded
-                              }));
-                            }}
-                          >
-                            {sectionExpanded ? (
-                              <ChevronDown size={15} strokeWidth={2.2} />
-                            ) : (
-                              <ChevronRight size={15} strokeWidth={2.2} />
-                            )}
-                          </button>
-                        ) : null}
-                      </div>
+                      <CleanupBucketHeader
+                        actionDisabled={Boolean(automaticCleanupKey)}
+                        actionWorking={automaticCleanupKey === "all"}
+                        bucket={group.bucket}
+                        collapsible={sectionCanCollapse}
+                        count={cleanupGroupsByBucket[group.bucket].length}
+                        expanded={sectionExpanded}
+                        readyCleanupCount={readyCleanupCount}
+                        onReviewCleanup={() => setAutoCleanupReviewOpen(true)}
+                        onToggle={() => {
+                          if (!collapsibleBucket) return;
+                          setExpandedCleanupBuckets((current) => ({
+                            ...current,
+                            [collapsibleBucket]: !sectionExpanded
+                          }));
+                        }}
+                      />
                     ) : null}
                     {sectionExpanded ? (
                   <div

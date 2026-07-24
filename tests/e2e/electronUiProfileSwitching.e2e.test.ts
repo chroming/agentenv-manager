@@ -3978,7 +3978,7 @@ describe("Electron UI profile switching e2e", () => {
     await recoveryDialog.waitFor({ state: "hidden" });
     expect(await recoveryTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
 
-    await codexCard.getByRole("button", { name: "Manage Codex Skills" }).click();
+    await codexCard.getByRole("button", { name: "Codex", exact: true }).click();
     await page.getByRole("region", { name: "Manage Codex Skills" }).waitFor({ state: "visible" });
   }, 30_000);
 
@@ -4941,8 +4941,13 @@ describe("Electron UI profile switching e2e", () => {
     const assertCleanupLayout = async (stacked: boolean) => {
       const geometry = await page.getByRole("region", { name: "Environment skills" }).evaluate((drawer) => {
         const heading = drawer.querySelector<HTMLElement>(".cleanup-bucket-heading--ready")!;
+        const headingBox = heading.getBoundingClientRect();
         const headingCopy = heading.firstElementChild!.getBoundingClientRect();
         const autoAction = heading.querySelector<HTMLElement>(".cleanup-auto-action")!.getBoundingClientRect();
+        const compactControlHeight = Number.parseFloat(
+          getComputedStyle(document.documentElement)
+            .getPropertyValue("--control-height-compact")
+        );
         const rows = Array.from(drawer.querySelectorAll<HTMLElement>(".cleanup-group-row")).map((row) => {
           const rowBox = row.getBoundingClientRect();
           const main = row.querySelector<HTMLElement>(".resource-row__main")!.getBoundingClientRect();
@@ -4976,7 +4981,11 @@ describe("Electron UI profile switching e2e", () => {
         return {
           actionBelowCopy: autoAction.top >= headingCopy.bottom - 1,
           actionAfterCopy: autoAction.left >= headingCopy.right - 1,
-          actionContained: autoAction.right <= heading.getBoundingClientRect().right + 1,
+          actionContained: autoAction.right <= headingBox.right + 1,
+          actionHeight: Math.round(autoAction.height),
+          actionIsCompact: autoAction.width < headingBox.width / 3,
+          actionWidth: Math.round(autoAction.width),
+          compactControlHeight,
           actionWidths: Array.from(
             drawer.querySelectorAll<HTMLElement>(".cleanup-current-action")
           ).map((button) => Math.round(button.getBoundingClientRect().width)),
@@ -4984,6 +4993,8 @@ describe("Electron UI profile switching e2e", () => {
         };
       });
       expect(geometry.actionContained).toBe(true);
+      expect(geometry.actionHeight).toBe(geometry.compactControlHeight);
+      expect(geometry.actionIsCompact).toBe(true);
       expect(stacked ? geometry.actionBelowCopy : geometry.actionAfterCopy).toBe(true);
       expect(
         geometry.rows.every(
@@ -4992,10 +5003,12 @@ describe("Electron UI profile switching e2e", () => {
       ).toBe(true);
       expect(new Set(geometry.rows.map((row) => row.stateLeft)).size).toBe(1);
       expect(new Set(geometry.actionWidths).size).toBeLessThanOrEqual(1);
+      return geometry;
     };
-    await assertCleanupLayout(false);
+    const wideCleanupLayout = await assertCleanupLayout(false);
     await resizeAppWindow(page, 920, 620);
-    await assertCleanupLayout(false);
+    const minimumCleanupLayout = await assertCleanupLayout(false);
+    expect(minimumCleanupLayout.actionWidth).toBe(wideCleanupLayout.actionWidth);
 
     expect(
       await duplicateGroup
@@ -6445,6 +6458,60 @@ describe("Electron UI profile switching e2e", () => {
     await page
       .getByRole("region", { name: "Manage Codex Skills" })
       .waitFor({ state: "visible" });
+  }, 30_000);
+
+  it("explains why an unavailable Agent cannot start Skill management", async () => {
+    const { app: electronApp, page } = await launchApp();
+    const targets = await page.evaluate(() => window.agentEnv.listTargets());
+    await electronApp.evaluate(({ ipcMain }, currentTargets) => {
+      ipcMain.removeHandler("targets:list");
+      ipcMain.handle("targets:list", () =>
+        currentTargets.map((target) =>
+          target.id === "antigravity"
+            ? {
+                ...target,
+                health: {
+                  ...target.health,
+                  status: "missing",
+                  installationFound: false,
+                  installationEvidence: [],
+                  executableFound: false,
+                  executablePath: undefined,
+                  canWrite: false,
+                  summary: "agy command was not found"
+                }
+              }
+            : target
+        )
+      );
+    }, targets);
+
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    await page.getByRole("button", { name: "Refresh" }).click();
+    const antigravityCard = page.getByRole("article", { name: "Agent Antigravity CLI" });
+    await antigravityCard.waitFor({ state: "visible", timeout: 5_000 });
+    const nameAction = antigravityCard.getByRole("button", {
+      name: "Antigravity CLI",
+      exact: true
+    });
+    await nameAction.waitFor({ state: "visible", timeout: 5_000 });
+    await nameAction.click();
+
+    const workspace = page.getByRole("region", {
+      name: "Manage Antigravity CLI Skills"
+    });
+    await workspace.waitFor({ state: "visible", timeout: 5_000 });
+    await workspace
+      .getByRole("heading", { name: "Antigravity CLI is not installed" })
+      .waitFor({ state: "visible", timeout: 5_000 });
+    await expect
+      .poll(() => workspace.textContent())
+      .toContain("AgentEnv cannot manage this Agent's Skills until its command or app is detected.");
+    const setup = workspace.getByRole("button", {
+      name: "Manage Antigravity CLI Skills"
+    });
+    expect(await setup.isDisabled()).toBe(true);
+    expect(await setup.getAttribute("title")).toBe("Antigravity CLI is not detected");
   }, 30_000);
 
   it("persists enabled Agents and excludes disabled Agents from operations", async () => {

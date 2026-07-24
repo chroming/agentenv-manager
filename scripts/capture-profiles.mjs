@@ -250,6 +250,14 @@ const prepareFixture = async (root) => {
       "utf8"
     );
   }
+  const readyCleanupSkillName = "ready-local-cleanup";
+  const readyCleanupSkillDir = join(opencodeDir, "skills", readyCleanupSkillName);
+  await mkdir(readyCleanupSkillDir, { recursive: true });
+  await writeFile(
+    join(readyCleanupSkillDir, "SKILL.md"),
+    "---\nname: Ready Local Cleanup\ndescription: A safe local copy ready for reviewed cleanup.\n---\n\n# Ready Local Cleanup\n",
+    "utf8"
+  );
   const sharedSkillName = "shared-compatibility-reviewer";
   const sharedSkillDir = join(homeDir, ".agents", "skills", sharedSkillName);
   await mkdir(sharedSkillDir, { recursive: true });
@@ -744,9 +752,10 @@ try {
   });
   await cleanupGroup.waitFor({ state: "visible", timeout: 5_000 });
   const cleanupAction = page.getByRole("button", { name: /Clean up \d+ ready Skills/ });
-  if ((await cleanupAction.count()) !== 0) {
-    throw new Error("Cleanup must not offer a bulk action when no safe cleanup candidates exist");
-  }
+  await page
+    .getByRole("group", { name: "Cleanup group ready-local-cleanup" })
+    .waitFor({ state: "visible", timeout: 5_000 });
+  await cleanupAction.waitFor({ state: "visible", timeout: 5_000 });
   await setWindowSize(page, windowHandle, 1180, 728);
   await capturePage(page, join(outputDir, "skills-cleanup-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
