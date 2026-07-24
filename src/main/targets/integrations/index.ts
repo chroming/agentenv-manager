@@ -22,6 +22,7 @@ const composeBuiltInIntegration = (
     createPreview: adapter.createPreview
   },
   skills: adapter.skills,
+  conversations: adapter.conversations,
   assets: {
     validateAssets: adapter.validateAssets,
     getAssetBackupPaths: adapter.getAssetBackupPaths,

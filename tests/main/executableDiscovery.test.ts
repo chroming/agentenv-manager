@@ -1,8 +1,11 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { findExecutable } from "../../src/main/executableDiscovery";
+import {
+  createExecutableResolver,
+  findExecutable
+} from "../../src/main/executableDiscovery";
 
 let root = "";
 
@@ -59,7 +62,7 @@ describe("executable discovery", () => {
     const executable = join(root, "shell-bin", "git");
     const shell = join(root, "login-shell");
     await executableFile(executable);
-    await executableFile(shell, `#!/bin/sh\nprintf '%s\\n' '${executable}'\n`);
+    await executableFile(shell, `#!/bin/sh\nprintf '%s' '${join(root, "shell-bin")}'\n`);
 
     await expect(
       findExecutable("git", {
@@ -71,6 +74,30 @@ describe("executable discovery", () => {
         shellTimeoutMs: 2_000
       })
     ).resolves.toBe(executable);
+  });
+
+  it("hydrates the login-shell PATH once for multiple command probes", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-executable-"));
+    const binDir = join(root, "shell-bin");
+    const shell = join(root, "login-shell");
+    const counter = join(root, "shell-count");
+    await executableFile(join(binDir, "codex"));
+    await executableFile(join(binDir, "claude"));
+    await executableFile(
+      shell,
+      `#!/bin/sh\nprintf x >> '${counter}'\nprintf '%s' '${binDir}'\n`
+    );
+    const resolver = createExecutableResolver({
+      homeDir: root,
+      pathEnv: "",
+      systemPathLookup: false,
+      shellPathLookup: true,
+      shellCandidates: [shell]
+    });
+
+    await expect(resolver.find("codex")).resolves.toBe(join(binDir, "codex"));
+    await expect(resolver.find("claude")).resolves.toBe(join(binDir, "claude"));
+    await expect(readFile(counter, "utf8")).resolves.toBe("x");
   });
 
   it("accepts an executable absolute path and rejects unsafe command names", async () => {

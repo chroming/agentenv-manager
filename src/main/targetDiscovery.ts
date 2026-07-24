@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { dirname } from "node:path";
 import type { AgentEnvPaths } from "./paths";
 import { isMissingFileError, pathExists } from "./fileUtils";
-import { findExecutable } from "./executableDiscovery";
+import { createExecutableResolver } from "./executableDiscovery";
 import type { TargetRegistry } from "./targets/registry";
 import { createTargetScope, type TargetScope } from "./targets/targetScope";
 import { createSettingsStore, type SettingsStore } from "./settingsStore";
@@ -11,6 +11,7 @@ import { targetPathInputFor } from "./targets/pathInput";
 import type {
   TargetHealth,
   TargetHealthStatus,
+  TargetConversationCapabilities,
   TargetInfo,
   TargetPathCheck,
   TargetPaths
@@ -132,6 +133,62 @@ const summarizeHealth = (
   return `${targetName} not detected`;
 };
 
+const conversationCapabilitiesFor = (
+  adapter: ReturnType<TargetRegistry["listAdapters"]>[number],
+  health: TargetHealth
+): TargetConversationCapabilities => {
+  const conversations = adapter.conversations;
+  const executableEvidence = health.executablePath
+    ? [`Command: ${health.executablePath}`]
+    : ["No compatible command was detected"];
+  const installationEvidence = health.installationEvidence.map(
+    (evidence) => `${evidence.label}: ${evidence.path}`
+  );
+  return {
+    history: conversations
+      ? {
+          state: conversations.historyDetail === "full" ? "available" : "degraded",
+          evidence: [
+            conversations.historyDetail === "full"
+              ? "Full local transcript reader"
+              : "Local history exposes summaries only"
+          ]
+        }
+      : {
+          state: "unsupported",
+          evidence: ["No local history reader is registered"]
+        },
+    openOriginal: conversations?.openOriginal
+      ? {
+          state: health.executablePath ? "available" : "unavailable",
+          evidence: executableEvidence
+        }
+      : {
+          state: "unsupported",
+          evidence: ["This Agent has no verified native resume command"]
+        },
+    continue: health.executablePath && conversations?.continueWithContext
+      ? {
+          state: "available",
+          evidence: executableEvidence
+        }
+      : health.installationFound
+        ? {
+            state: "degraded",
+            evidence: [
+              ...installationEvidence,
+              "Continuation uses reviewed clipboard context"
+            ]
+          }
+        : {
+            state: conversations?.continueWithContext ? "unavailable" : "unsupported",
+            evidence: conversations?.continueWithContext
+              ? executableEvidence
+              : ["No continuation path is available"]
+          }
+  };
+};
+
 export const createTargetDiscoveryService = (
   options: TargetDiscoveryOptions
 ): TargetDiscoveryService => {
@@ -151,6 +208,12 @@ export const createTargetDiscoveryService = (
     { path?: string; checkedAt: number }
   >();
   const executableCacheTtlMs = 30_000;
+  const executableResolver = createExecutableResolver({
+    pathEnv,
+    homeDir: paths.homeDir,
+    systemPathLookup,
+    shellPathLookup
+  });
   const discoverExecutable = async (name: string, forceRefresh: boolean) => {
     const cached = executableCache.get(name);
     if (!forceRefresh && cached && Date.now() - cached.checkedAt < executableCacheTtlMs) {
@@ -158,18 +221,16 @@ export const createTargetDiscoveryService = (
         return cached.path;
       }
     }
-    const path = await findExecutable(name, {
-      pathEnv,
-      homeDir: paths.homeDir,
-      systemPathLookup,
-      shellPathLookup
-    });
+    const path = await executableResolver.find(name);
     executableCache.set(name, { path, checkedAt: Date.now() });
     return path;
   };
   const listTargets = async (
     listOptions: { forceRefresh?: boolean } = {}
   ): Promise<TargetInfo[]> => {
+    if (listOptions.forceRefresh) {
+      executableResolver.invalidateShellPath();
+    }
     const enabledAdapters = await targetScope.listEnabledAdapters();
     const settings = await settingsStore.readSettings();
     return Promise.all(
@@ -227,7 +288,8 @@ export const createTargetDiscoveryService = (
         return {
           ...adapter.descriptor,
           paths: targetPaths,
-          health
+          health,
+          conversationCapabilities: conversationCapabilitiesFor(adapter, health)
         };
       })
     );

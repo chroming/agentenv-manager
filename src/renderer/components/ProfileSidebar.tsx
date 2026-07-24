@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   BookOpen,
   Boxes,
+  MessageSquareText,
   Monitor,
   Network,
   Search,
@@ -26,7 +27,12 @@ const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.u
 const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
 const traeIconUrl = new URL("../assets/target-icons/trae.png", import.meta.url).href;
 
-export type AppWorkspace = "library" | "profiles" | "targets" | "settings";
+export type AppWorkspace =
+  | "library"
+  | "profiles"
+  | "conversations"
+  | "targets"
+  | "settings";
 
 interface ProfileSidebarProps {
   targets: TargetInfo[];
@@ -280,6 +286,12 @@ export const ProfileSidebar = ({
     icon: LucideIcon;
   }> = [
     { id: "profiles", label: t("Profiles"), detail: t("Compose environments"), icon: Boxes },
+    {
+      id: "conversations",
+      label: t("Conversations"),
+      detail: t("Continue across Agents"),
+      icon: MessageSquareText
+    },
     ...(targets.length > 0
       ? [{ id: "targets" as const, label: t("Agents"), detail: t("Local agent tools"), icon: Monitor }]
       : [])

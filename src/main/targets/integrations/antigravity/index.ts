@@ -7,6 +7,7 @@ import type {
 } from "../../../../shared/types";
 import { profileManagesResource } from "../../../../shared/profileResources";
 import { createApplyIssue } from "../../../applyIssues";
+import { createAntigravityConversationCapability } from "../../conversations/antigravityConversations";
 import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
@@ -222,6 +223,7 @@ export const antigravityIntegration: AgentTargetIntegration = {
       };
     }
   },
+  conversations: createAntigravityConversationCapability(),
   assets
 };
 

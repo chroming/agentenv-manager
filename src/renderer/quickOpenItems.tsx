@@ -1,4 +1,11 @@
-import { BookOpenText, FolderKanban, Monitor, RefreshCw, Settings2 } from "lucide-react";
+import {
+  BookOpenText,
+  FolderKanban,
+  MessageSquareText,
+  Monitor,
+  RefreshCw,
+  Settings2
+} from "lucide-react";
 import type { ProfileSummary, SkillLibraryEntry, TargetInfo } from "../shared/types";
 import type { AppWorkspace } from "./components/ProfileSidebar";
 import type { QuickOpenItem } from "./components/QuickOpen";
@@ -44,6 +51,14 @@ export const buildQuickOpenItems = ({
     description: t("Compose environments"),
     icon: <FolderKanban size={16} strokeWidth={2.2} />,
     onSelect: () => onOpenWorkspace("profiles")
+  },
+  {
+    id: "workspace:conversations",
+    group: t("Pages"),
+    label: t("Conversations"),
+    description: t("Continue across Agents"),
+    icon: <MessageSquareText size={16} strokeWidth={2.2} />,
+    onSelect: () => onOpenWorkspace("conversations")
   },
   ...(targets.length > 0 ? [{
     id: "workspace:targets",

@@ -1,8 +1,23 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { deploySkillDirectory } from "../../src/main/skillDeployment";
+import {
+  deploySkillDirectory,
+  removeSkillDeployment
+} from "../../src/main/skillDeployment";
+import {
+  createOwnerMarkerContent,
+  markerPathFor
+} from "../../src/main/ownershipMarkers";
 
 let root = "";
 
@@ -65,5 +80,46 @@ describe("Skill deployment", () => {
         throw codedError("ENOTSUP");
       }
     })).rejects.toMatchObject({ code: "ENOTSUP" });
+  });
+
+  it("removes only an owned deployment and never follows nested symbolic links", async () => {
+    const fixture = await createFixture();
+    const outside = join(root, "outside");
+    await mkdir(fixture.targetDir, { recursive: true });
+    await mkdir(outside, { recursive: true });
+    await writeFile(join(outside, "keep.txt"), "keep", "utf8");
+    await symlink(outside, join(fixture.targetDir, "cycle"));
+    await writeFile(
+      markerPathFor(fixture.targetDir),
+      createOwnerMarkerContent({
+        profileId: "profile-1",
+        targetId: "codex",
+        kind: "skill",
+        source: "skills-library/review"
+      }),
+      "utf8"
+    );
+
+    await removeSkillDeployment(fixture.targetDir, {
+      allowedRoot: join(root, "agent", "skills"),
+      expectedOwnership: { targetId: "codex", kind: "skill" }
+    });
+
+    await expect(access(fixture.targetDir)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(join(outside, "keep.txt"), "utf8")).resolves.toBe("keep");
+  });
+
+  it("refuses unowned or root-level removal", async () => {
+    const fixture = await createFixture();
+    await mkdir(fixture.targetDir, { recursive: true });
+    const skillsRoot = join(root, "agent", "skills");
+
+    await expect(removeSkillDeployment(fixture.targetDir, {
+      allowedRoot: skillsRoot,
+      expectedOwnership: { targetId: "codex", kind: "skill" }
+    })).rejects.toThrow("outside AgentEnv ownership");
+    await expect(removeSkillDeployment(skillsRoot, {
+      allowedRoot: skillsRoot
+    })).rejects.toThrow("outside its allowed root");
   });
 });

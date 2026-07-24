@@ -32,6 +32,15 @@ const api: AgentEnvApi = {
   listSupportedTargets: () => ipcRenderer.invoke("targets:list-supported"),
   listTargets: (forceRefresh) => ipcRenderer.invoke("targets:list", forceRefresh),
   listTargetStates: () => ipcRenderer.invoke("targets:list-states"),
+  listConversations: (input) => ipcRenderer.invoke("conversations:list", input),
+  readConversation: (id) => ipcRenderer.invoke("conversations:read", id),
+  refreshConversations: () => ipcRenderer.invoke("conversations:refresh"),
+  openOriginalConversation: (id) =>
+    ipcRenderer.invoke("conversations:open-original", id),
+  previewConversationContinuation: (input) =>
+    ipcRenderer.invoke("conversations:preview-continue", input),
+  continueConversation: (previewId) =>
+    ipcRenderer.invoke("conversations:continue", previewId),
   listNativeMcpConnections: () =>
     ipcRenderer.invoke("targets:list-native-mcps"),
   listSkillLibrary: () => ipcRenderer.invoke("skills:list-library"),

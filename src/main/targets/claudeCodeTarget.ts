@@ -15,6 +15,7 @@ import type {
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
+import { createClaudeConversationCapability } from "./conversations/claudeConversations";
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -239,6 +240,7 @@ export const createClaudeCodeTargetAdapter = (): AgentTargetAdapter => ({
     };
   },
   skills,
+  conversations: createClaudeConversationCapability(),
   createDefaultProfile: (id) => ({
     id,
     manifest: {

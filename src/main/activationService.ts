@@ -1480,7 +1480,9 @@ export const createActivationService = ({
           });
         }
         for (const legacyPath of preview.legacySkillPaths ?? []) {
-          await removeSkillDeployment(legacyPath);
+          await removeSkillDeployment(legacyPath, {
+            allowedRoot: dirname(legacyPath)
+          });
           if (await pathEntryExists(legacyPath)) {
             throw new Error(`Post-apply verification failed for legacy Skill ${legacyPath}`);
           }
@@ -1753,7 +1755,9 @@ export const createActivationService = ({
           )
         );
         for (const sharedPath of normalizedSharedPaths) {
-          await rm(sharedPath, { recursive: true, force: true });
+          await removeSkillDeployment(sharedPath, {
+            allowedRoot: dirname(sharedPath)
+          });
         }
         for (const context of contexts) {
           if (context.preparation.disposition === "install") {
@@ -1765,7 +1769,9 @@ export const createActivationService = ({
             });
             installedPaths.push(context.targetPath);
           } else {
-            await removeSkillDeployment(context.targetPath);
+            await removeSkillDeployment(context.targetPath, {
+              allowedRoot: context.targetPaths.skillsDir ?? dirname(context.targetPath)
+            });
           }
 
           const retainedResources = (context.state.managedResources ?? []).filter(

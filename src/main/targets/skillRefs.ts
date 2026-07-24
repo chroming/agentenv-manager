@@ -135,7 +135,9 @@ export const applySkillRefs = async ({
   for (const skillRef of profile.resources.skills.filter((skill) => !skill.enabled)) {
     const targetDir = join(targetPaths.skillsDir, skillRef.targetName);
     if (replaceablePaths?.has(resolve(targetDir))) {
-      await removeSkillDeployment(targetDir);
+      await removeSkillDeployment(targetDir, {
+        allowedRoot: targetPaths.skillsDir
+      });
     }
   }
 

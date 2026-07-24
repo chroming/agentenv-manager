@@ -51,10 +51,7 @@ export const createExecutableSearchPaths = (
       : [])
   ]);
 
-const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
-
-const findExecutableFromLoginShell = async (
-  name: string,
+const readPathFromLoginShell = async (
   options: ExecutableDiscoveryOptions
 ) => {
   const shells = unique(
@@ -64,16 +61,13 @@ const findExecutableFromLoginShell = async (
     try {
       const { stdout } = await execFileAsync(
         shell,
-        ["-lc", `command -v -- ${shellQuote(name)}`],
+        ["-lc", "printf '%s' \"$PATH\""],
         {
           env: { ...process.env, HOME: options.homeDir },
           timeout: options.shellTimeoutMs ?? 2_000
         }
       );
-      const candidate = stdout.trim().split("\n")[0];
-      if (candidate && isAbsolute(candidate) && (await canExecute(candidate))) {
-        return candidate;
-      }
+      if (stdout.trim()) return stdout.trim();
     } catch {
       // Shell startup files vary by machine; direct search paths remain authoritative.
     }
@@ -81,31 +75,48 @@ const findExecutableFromLoginShell = async (
   return undefined;
 };
 
+export interface ExecutableResolver {
+  find(name: string): Promise<string | undefined>;
+  invalidateShellPath(): void;
+}
+
+export const createExecutableResolver = (
+  options: ExecutableDiscoveryOptions
+): ExecutableResolver => {
+  let shellPathPromise: Promise<string | undefined> | undefined;
+  const directPath = options.pathEnv ?? process.env.PATH ?? "";
+  const systemPathLookup = options.systemPathLookup ?? true;
+  const shellPathLookup = options.shellPathLookup ?? true;
+  const search = async (name: string, pathEnv: string) => {
+    const candidates = isAbsolute(name)
+      ? [name]
+      : createExecutableSearchPaths(pathEnv, options.homeDir, systemPathLookup).map(
+          (dir) => join(dir, name)
+        );
+    for (const candidate of candidates) {
+      if (await canExecute(candidate)) return candidate;
+    }
+    return undefined;
+  };
+
+  return {
+    find: async (name) => {
+      if (!isAbsolute(name) && !/^[A-Za-z0-9._+-]+$/.test(name)) {
+        throw new Error("Executable name is invalid");
+      }
+      const direct = await search(name, directPath);
+      if (direct || !shellPathLookup || isAbsolute(name)) return direct;
+      shellPathPromise ??= readPathFromLoginShell(options);
+      const shellPath = await shellPathPromise;
+      return shellPath ? search(name, shellPath) : undefined;
+    },
+    invalidateShellPath: () => {
+      shellPathPromise = undefined;
+    }
+  };
+};
+
 export const findExecutable = async (
   name: string,
   options: ExecutableDiscoveryOptions
-): Promise<string | undefined> => {
-  if (!isAbsolute(name) && !/^[A-Za-z0-9._+-]+$/.test(name)) {
-    throw new Error("Executable name is invalid");
-  }
-
-  const pathEnv = options.pathEnv ?? process.env.PATH ?? "";
-  const systemPathLookup = options.systemPathLookup ?? true;
-  const shellPathLookup = options.shellPathLookup ?? true;
-  const candidates = isAbsolute(name)
-    ? [name]
-    : createExecutableSearchPaths(pathEnv, options.homeDir, systemPathLookup).map((dir) =>
-        join(dir, name)
-      );
-
-  for (const candidate of candidates) {
-    if (await canExecute(candidate)) {
-      return candidate;
-    }
-  }
-
-  if (!shellPathLookup || isAbsolute(name)) {
-    return undefined;
-  }
-  return findExecutableFromLoginShell(name, options);
-};
+): Promise<string | undefined> => createExecutableResolver(options).find(name);

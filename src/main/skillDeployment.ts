@@ -1,8 +1,22 @@
-import { cp, mkdir, readdir, rm, symlink } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  cp,
+  lstat,
+  mkdir,
+  readdir,
+  rm,
+  rmdir,
+  symlink,
+  unlink
+} from "node:fs/promises";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import type { AgentEnvSettings } from "../shared/types";
-import { replacePathAtomically, writeAtomic } from "./fileUtils";
-import { markerPathFor, markerPathForFile } from "./ownershipMarkers";
+import { isMissingFileError, replacePathAtomically, writeAtomic } from "./fileUtils";
+import {
+  isAgentEnvOwnedDir,
+  markerPathFor,
+  markerPathForFile,
+  type OwnedDirExpectation
+} from "./ownershipMarkers";
 
 const copySkillEntries = async (sourceDir: string, targetDir: string) => {
   await mkdir(targetDir, { recursive: true });
@@ -60,7 +74,47 @@ export const deploySkillDirectory = async (input: {
   return deployedAs;
 };
 
-export const removeSkillDeployment = async (targetDir: string) => {
-  await rm(targetDir, { recursive: true, force: true });
+const assertContainedChild = (targetPath: string, allowedRoot: string) => {
+  const root = resolve(allowedRoot);
+  const target = resolve(targetPath);
+  const child = relative(root, target);
+  if (!child || child.startsWith("..") || isAbsolute(child)) {
+    throw new Error(`Refusing to remove a Skill outside its allowed root: ${targetPath}`);
+  }
+};
+
+const removeTreeWithoutFollowingLinks = async (path: string): Promise<void> => {
+  let info;
+  try {
+    info = await lstat(path);
+  } catch (error) {
+    if (isMissingFileError(error)) return;
+    throw error;
+  }
+  if (info.isDirectory() && !info.isSymbolicLink()) {
+    for (const entry of await readdir(path)) {
+      await removeTreeWithoutFollowingLinks(join(path, entry));
+    }
+    await rmdir(path);
+    return;
+  }
+  await unlink(path);
+};
+
+export const removeSkillDeployment = async (
+  targetDir: string,
+  options: {
+    allowedRoot: string;
+    expectedOwnership?: OwnedDirExpectation;
+  }
+) => {
+  assertContainedChild(targetDir, options.allowedRoot);
+  if (
+    options.expectedOwnership &&
+    !(await isAgentEnvOwnedDir(targetDir, options.expectedOwnership))
+  ) {
+    throw new Error(`Refusing to remove a Skill outside AgentEnv ownership: ${targetDir}`);
+  }
+  await removeTreeWithoutFollowingLinks(targetDir);
   await rm(markerPathForFile(targetDir), { force: true });
 };

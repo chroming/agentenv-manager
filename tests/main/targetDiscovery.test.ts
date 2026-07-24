@@ -73,6 +73,11 @@ describe("target discovery", () => {
     expect(opencode?.health.status).toBe("missing");
     expect(opencode?.health.executableFound).toBe(false);
     expect(opencode?.health.canWrite).toBe(false);
+    expect(opencode?.conversationCapabilities).toMatchObject({
+      history: { state: "available" },
+      openOriginal: { state: "unavailable" },
+      continue: { state: "unavailable" }
+    });
     expect(opencode?.health.checks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -110,6 +115,11 @@ describe("target discovery", () => {
     expect(opencode?.health.status).toBe("ready");
     expect(opencode?.health.executablePath).toBe(executable);
     expect(opencode?.health.canWrite).toBe(true);
+    expect(opencode?.conversationCapabilities).toMatchObject({
+      history: { state: "available" },
+      openOriginal: { state: "available" },
+      continue: { state: "available" }
+    });
   });
 
   it("marks OpenCode ready when the CLI exists and config paths can be created", async () => {

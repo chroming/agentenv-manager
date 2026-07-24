@@ -1576,7 +1576,9 @@ export const createSkillLibraryStore = (
 
     try {
       for (const sourcePath of uniqueInstallPaths) {
-        await removeSkillDeployment(sourcePath);
+        await removeSkillDeployment(sourcePath, {
+          allowedRoot: dirname(sourcePath)
+        });
       }
       await rm(targetLibraryDir, { recursive: true, force: true });
       return {
@@ -2399,7 +2401,9 @@ export const createSkillLibraryStore = (
         await rm(markerPathForFile(sharedPath), { force: true });
       }
       for (const duplicatePath of uniqueDuplicatePaths) {
-        await removeSkillDeployment(duplicatePath);
+        await removeSkillDeployment(duplicatePath, {
+          allowedRoot: dirname(duplicatePath)
+        });
       }
       return {
         backupId,

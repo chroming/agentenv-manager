@@ -38,6 +38,7 @@ export const defineTargetIntegration = (
     createTargetPaths: (input) =>
       validatePaths(integration.descriptor, integration.paths.createTargetPaths(input)),
     skills: integration.skills,
+    conversations: integration.conversations,
     createDefaultProfile: (id) => integration.profile.createDefaultProfile(id),
     captureProfile: (targetPaths) => integration.profile.captureProfile(targetPaths),
     createPreview: (input) => integration.preview.createPreview(input),

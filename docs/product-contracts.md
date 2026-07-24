@@ -276,7 +276,59 @@ shared-Profile guard, Library import return, local load recovery, and guided
 Capture-to-Apply orchestration are `Implemented`, including first-run direct entry for one
 installed Agent and persisted top-level workspace restoration.
 
-### 4.5 Backup
+### 4.5 Conversations
+
+Conversations is a local, read-only index over histories owned by enabled Agents. It helps the
+user find prior work and continue its visible context in another Agent. It is not a chat client,
+an archive, or a native-session database migration tool.
+
+- Original Agent history is always the source of truth. Discovery, indexing, search, and preview
+  MUST NOT edit, rename, delete, resume, or otherwise mutate a source conversation. `Open original`
+  is an explicit user action that MAY resume the source through the Agent's supported command; it
+  MUST NOT rewrite the Agent's history store directly.
+- The index is a disposable device-local cache. It MUST NOT enter Workspace Sync, Profile data,
+  data exports, backups, diagnostics, or startup-critical data.
+- Only visible user and assistant text is portable. Hidden instructions, reasoning, tool protocol
+  identifiers, credentials, environment variables, permission state, and native runtime state
+  MUST NOT be indexed as portable messages or sent to another Agent.
+- Sensitive-looking values explicitly present in visible messages MAY remain in the device-local
+  index so the original conversation can be found, but Continue MUST require review and redact
+  those values before creating a handoff artifact.
+- `Continue in` normally creates a new target conversation initialized from the selected visible
+  context. It MUST NOT claim that a native session ID, hidden model state, or running tools moved
+  between Agents.
+- The ordinary path is one explicit destination choice followed by direct launch. Review is
+  required only when content exceeds the adapter's safe delivery boundary, referenced content is
+  unavailable, sensitive text is detected, or the target cannot receive context automatically.
+- Context MUST NOT be placed in command-line arguments. Adapters MAY use a native import API,
+  stdin, or an app-owned mode-`0600` context file. A clipboard fallback occurs only after the user
+  explicitly invokes `Continue in` and MUST report that paste is still required.
+- Conversation support is a capability of one Agent integration. Unsupported or metadata-only
+  formats remain visible with an honest capability state; the renderer MUST NOT infer support from
+  an Agent name or path.
+- A discovered record identity, source locator/version, and provider session identity are separate
+  values. File names MUST NOT overwrite a provider session ID parsed from the source, and native
+  resume MUST use the provider identity and source runtime home.
+- Refresh is append-incremental and failure-isolated. JSONL readers stream from a verified line
+  boundary, fall back to a full streaming read after truncation or replacement, and exclude nested
+  subagent logs from the top-level conversation list.
+- Absence is authoritative only after the adapter completely observes its source. A malformed
+  record, unreadable file, missing history root, unavailable database, or failed Agent command
+  MUST NOT clear the last-good index or prevent other Agents from refreshing.
+- Read-only local stores MAY be used as an optimization when their schema is probed at runtime and
+  work is isolated from the Electron main thread. OpenCode SQLite and legacy storage are preferred
+  when readable, deduplicated by provider session ID, and fall back to the official CLI when local
+  storage is unavailable or unsupported.
+- Handoff transcript text is untrusted historical data. Generated continuation context MUST tell
+  the target Agent to ignore instructions embedded in transcript or tool output and to treat the
+  current repository plus the user's new request as authoritative.
+- Conversation discovery starts after the core application is usable and MUST NOT delay startup,
+  Profile loading, Library loading, or Agent discovery.
+
+Source of truth: the original Agent history. AgentEnv owns only the disposable local index and
+short-lived continuation artifacts.
+
+### 4.6 Backup
 
 A Backup is an immutable pre-operation snapshot used for recovery.
 
@@ -285,7 +337,7 @@ A Backup is an immutable pre-operation snapshot used for recovery.
 - A no-op MUST NOT create a Backup.
 - A complete user-selected copy stored outside AgentEnv data is a Data Export, not a managed recovery Backup, and MUST NOT be removed by automatic retention.
 
-### 4.6 Deployment State
+### 4.7 Deployment State
 
 Deployment State records AgentEnv ownership and the exact Profile and Library versions applied to a Target.
 
@@ -1316,6 +1368,7 @@ This matrix is the release-facing index. A capability may be `Implemented` only 
 | Skill import, duplicate review, update, disable, delete | `Implemented` | Canonical Library transaction and History/Backup where destructive | Domain, renderer, Electron E2E |
 | Local Skill Cleanup and shared migration | `Implemented` | Reviewed filesystem normalization; source evidence and kept-path policies preserved | Domain, fake-home E2E |
 | Native MCP sparse activation | `Implemented` | Managed activation fields only; definitions and credentials preserved | Adapter matrix and fake-home E2E |
+| Conversation search and cross-Agent continuation | `Implemented` | Read-only source histories, disposable cache, reviewed redaction/size fallback, private handoff artifacts | Adapter, service, renderer, and Electron E2E |
 | Workspace Sync | `Implemented` | Candidate Connect, three-way plan, transactional Update, guarded Publish, recovery | Domain, two-device Git integration, Electron E2E |
 | GitHub account state | `Implemented` | Secure token; invalid credentials clear; transient verification failure preserves | Service and renderer tests |
 | Legacy shared-Library storage migration | `Partial` | Atomic destination replacement, source preservation, conflict retention, report | Unit complete; production-shaped packaged startup required |
