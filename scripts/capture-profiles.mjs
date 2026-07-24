@@ -990,6 +990,22 @@ try {
     () => page.getByRole("region", { name: "Agents", exact: true })
   );
   const openCodeAgent = page.getByRole("article", { name: "Agent OpenCode" });
+  await openCodeAgent.getByRole("button", { name: "Manage OpenCode Skills" }).click();
+  const agentSkillWorkspace = page.getByRole("region", {
+    name: "Manage OpenCode Skills"
+  });
+  await agentSkillWorkspace.waitFor({ state: "visible" });
+  await agentSkillWorkspace.getByRole("region", { name: "Profile skills" }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "target-skills-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "target-skills-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await agentSkillWorkspace.getByRole("button", { name: "Agents" }).click();
+  await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
+    state: "visible"
+  });
   await openCodeAgent.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
   await openCodeAgent.getByRole("region", { name: "OpenCode diagnostics" }).waitFor({
     state: "visible"

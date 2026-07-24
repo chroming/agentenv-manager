@@ -16,9 +16,11 @@ interface SkillsEditorProps {
   librarySkills?: SkillLibraryEntry[];
   skillUpdates?: SkillUpdateInfo[];
   checkingSkillUpdates?: boolean;
+  disabled?: boolean;
   appliedSkillVersions?: Record<string, string>;
   selectedTargetName?: string;
   onCheckSkillUpdates?(ids: string[]): void;
+  onImportNewSkill?(): void;
   onPreviewSkillUpdate?(id: string): void;
   onChange(value: ProfileResources): void;
 }
@@ -28,9 +30,11 @@ export const SkillsEditor = ({
   librarySkills = [],
   skillUpdates = [],
   checkingSkillUpdates = false,
+  disabled = false,
   appliedSkillVersions,
   selectedTargetName,
   onCheckSkillUpdates,
+  onImportNewSkill,
   onPreviewSkillUpdate,
   onChange
 }: SkillsEditorProps) => {
@@ -137,7 +141,7 @@ export const SkillsEditor = ({
             className="secondary-action profile-skill-check"
             type="button"
             aria-label={t("Check profile skill updates")}
-            disabled={checkingSkillUpdates || checkableIds.length === 0}
+            disabled={disabled || checkingSkillUpdates || checkableIds.length === 0}
             onClick={() => onCheckSkillUpdates?.(checkableIds)}
           >
             <RefreshCw
@@ -152,6 +156,7 @@ export const SkillsEditor = ({
             className="secondary-action"
             ref={pickerTriggerRef}
             type="button"
+            disabled={disabled}
             onClick={() => openPicker()}
           >
             <Plus size={14} strokeWidth={2.2} aria-hidden="true" />
@@ -229,13 +234,14 @@ export const SkillsEditor = ({
                 ) : null}
               </span>
               {!skill ? (
-                <button className="secondary-action profile-skill-update" type="button" onClick={() => openPicker(index)}>
+                <button className="secondary-action profile-skill-update" type="button" disabled={disabled} onClick={() => openPicker(index)}>
                   {t("Relink")}
                 </button>
               ) : enabled && update?.updateAvailable ? (
                 <button
                   className="secondary-action profile-skill-update"
                   type="button"
+                  disabled={disabled}
                   onClick={() => onPreviewSkillUpdate?.(reference.libraryId)}
                 >
                   {t("Update")}
@@ -244,7 +250,7 @@ export const SkillsEditor = ({
               <Switch
                 checked={enabled}
                 className="profile-skill-switch"
-                disabled={!skill || !globallyEnabled}
+                disabled={disabled || !skill || !globallyEnabled}
                 label={t(!globallyEnabled
                   ? "{{name}} is disabled in Library"
                   : profileEnabled
@@ -262,6 +268,7 @@ export const SkillsEditor = ({
               <button
                 className="icon-action"
                 type="button"
+                disabled={disabled}
                 aria-label={t("Remove {{name}} from profile", { name: skill?.name ?? reference.targetName })}
                 title={t("Remove from profile")}
                 onClick={() => onChange({
@@ -338,10 +345,22 @@ export const SkillsEditor = ({
               </div>
             </div>
             <footer className="preview-actions ui-dialog-footer">
+              {onImportNewSkill ? (
+                <button
+                  className="secondary-action resource-picker-import"
+                  type="button"
+                  onClick={() => {
+                    closePicker();
+                    onImportNewSkill();
+                  }}
+                >
+                  {t("Import new Skill")}
+                </button>
+              ) : null}
               <button ref={pickerCancelRef} className="secondary-action" type="button" onClick={closePicker}>
                 {t("Cancel")}
               </button>
-              <button className="primary-action" type="button" disabled={selectedIds.length === 0} onClick={commitPicker}>
+              <button className="primary-action" type="button" disabled={disabled || selectedIds.length === 0} onClick={commitPicker}>
                 {replacingIndex !== undefined
                   ? t("Relink skill")
                   : t("Add {{count}}", { count: selectedIds.length })}

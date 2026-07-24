@@ -135,6 +135,91 @@ describe("profile store v2", () => {
     expect(updated.resources.skills).toHaveLength(1);
   });
 
+  it("updates only Profile Skills from an Agent detail and skips semantic no-ops", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-skills-"));
+    await writeProfile(root);
+    const store = createProfileStore({ appDataRoot: root });
+    const profile = await store.readProfile("daily-coding");
+
+    const noOp = await store.updateProfileSkills({
+      profileId: profile.id,
+      targetId: "codex",
+      expectedContentHash: profile.contentHash!,
+      skills: profile.resources.skills
+    });
+    expect(noOp.changed).toBe(false);
+
+    const updated = await store.updateProfileSkills({
+      profileId: profile.id,
+      targetId: "codex",
+      expectedContentHash: profile.contentHash!,
+      skills: [
+        ...profile.resources.skills,
+        { libraryId: "testing", targetName: "testing", enabled: false }
+      ],
+      managementMode: "manage"
+    });
+
+    expect(updated.changed).toBe(true);
+    expect(updated.profile.instructions).toBe("# Agent\n");
+    expect(updated.profile.resources.mcpByTarget).toEqual(profile.resources.mcpByTarget);
+    expect(updated.profile.resources.skills).toEqual([
+      { libraryId: "review", targetName: "review", enabled: true },
+      { libraryId: "testing", targetName: "testing", enabled: false }
+    ]);
+  });
+
+  it("rejects stale Agent-detail Skill edits", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-skills-stale-"));
+    await writeProfile(root);
+    const store = createProfileStore({ appDataRoot: root });
+    const profile = await store.readProfile("daily-coding");
+    await store.saveProfile({
+      manifest: profile.manifest,
+      instructions: "# Changed elsewhere\n",
+      resources: profile.resources
+    });
+
+    await expect(store.updateProfileSkills({
+      profileId: profile.id,
+      targetId: "codex",
+      expectedContentHash: profile.contentHash!,
+      skills: []
+    })).rejects.toThrow("changed outside this Agent view");
+
+    expect((await store.readProfile(profile.id)).instructions).toBe("# Changed elsewhere\n");
+  });
+
+  it("forks a shared Profile and applies the Agent-specific Skill intent", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-profile-skills-fork-"));
+    await writeProfile(root);
+    const store = createProfileStore({ appDataRoot: root });
+    const profile = await store.readProfile("daily-coding");
+
+    const result = await store.forkProfileSkills({
+      profileId: profile.id,
+      targetId: "opencode",
+      expectedContentHash: profile.contentHash!,
+      name: "Daily Coding (OpenCode)",
+      skills: [
+        { libraryId: "review", targetName: "review", enabled: false }
+      ],
+      managementMode: "manage"
+    });
+
+    expect(result.profile.id).not.toBe(profile.id);
+    expect(result.profile.manifest).toMatchObject({
+      name: "Daily Coding (OpenCode)",
+      preferredTargetId: "opencode"
+    });
+    expect(result.profile.resources.skills).toEqual([
+      { libraryId: "review", targetName: "review", enabled: false }
+    ]);
+    expect((await store.readProfile(profile.id)).resources.skills).toEqual([
+      { libraryId: "review", targetName: "review", enabled: true }
+    ]);
+  });
+
   it("rejects unsafe ids, duplicate resources, and literal credentials", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-profile-validation-"));
     await writeProfile(root);

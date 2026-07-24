@@ -458,6 +458,7 @@ const launchApp = async (
     malformedOpenCodeConfig?: boolean;
     missingProfileSkill?: boolean;
     openCodeDesktopOnly?: boolean;
+    omitOpenCodeProfiles?: boolean;
     projectSkillFixture?: boolean;
   } = {}
 ) => {
@@ -553,8 +554,10 @@ const launchApp = async (
     ].join("\n"),
     "utf8"
   );
-  await writeOpenCodeProfile(appDataRoot, "alpha");
-  await writeOpenCodeProfile(appDataRoot, "beta", options.openCodeBetaProfileName);
+  if (!options.omitOpenCodeProfiles) {
+    await writeOpenCodeProfile(appDataRoot, "alpha");
+    await writeOpenCodeProfile(appDataRoot, "beta", options.openCodeBetaProfileName);
+  }
   await writeCodexProfile(appDataRoot, "alpha");
   await writeCodexProfile(appDataRoot, "beta");
   if (options.malformedProfile) {
@@ -1723,9 +1726,154 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => openCodeCard.textContent()).toContain("UI OpenCode alpha");
     await expect
       .poll(() =>
-        openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).textContent()
+        openCodeCard.getByRole("button", { name: "Manage OpenCode Skills" }).textContent()
       )
-      .toContain("Open Profile");
+      .toContain("Manage Skills");
+  }, 30_000);
+
+  it("starts Skill management from an unmanaged Agent without touching other resources", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp({
+      omitOpenCodeProfiles: true
+    });
+    const instructionsPath = join(opencodeDir, "AGENTS.md");
+    const configPath = join(opencodeDir, "opencode.jsonc");
+    const originalInstructions = await readFile(instructionsPath, "utf8");
+    const originalConfig = await readFile(configPath, "utf8");
+    const originalSkillPath = join(
+      opencodeDir,
+      "skills",
+      "target-only-reviewer",
+      "SKILL.md"
+    );
+    const originalSkill = await readFile(originalSkillPath, "utf8");
+
+    await resizeAppWindow(page, 920, 620);
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    const targetCard = page.getByRole("article", { name: "Agent OpenCode" });
+    await targetCard.getByRole("button", { name: "Manage OpenCode Skills" }).click();
+
+    const workspace = page.getByRole("region", { name: "Manage OpenCode Skills" });
+    await workspace.getByText("Skills are not managed yet", { exact: true }).waitFor({
+      state: "visible"
+    });
+    await expectNoHorizontalOverflow(page, [".agent-skill-page"]);
+    await workspace
+      .getByRole("button", { name: "Manage OpenCode Skills" })
+      .click();
+
+    let dialog = page.getByRole("dialog", { name: "Manage OpenCode Skills" });
+    await dialog.getByRole("button", { name: "Review" }).click();
+    dialog = page.getByRole("dialog", { name: "Review OpenCode Skill setup" });
+    await expect.poll(() => dialog.textContent()).toContain("Target Only Reviewer");
+    expect(await dialog.getByRole("region", { name: "Instructions" }).count()).toBe(0);
+    expect(await dialog.getByRole("region", { name: "MCPs" }).count()).toBe(0);
+    await dialog.getByRole("region", { name: "Skills" }).waitFor({
+      state: "visible"
+    });
+    await dialog.getByRole("button", { name: "Save setup" }).click();
+    await dialog.waitFor({ state: "hidden" });
+
+    const captured = await findProfileByName(appDataRoot, "OpenCode");
+    expect(captured?.id).toBeTruthy();
+    const capturedResources = await readJson<{
+      skills: Array<{ libraryId: string; enabled?: boolean }>;
+      managementByTarget?: Record<
+        string,
+        { instructions?: string; skills?: string }
+      >;
+      mcpByTarget: Record<string, { mode: string }>;
+    }>(
+      join(appDataRoot, "profiles", captured!.id, "resources.json")
+    );
+    expect(capturedResources.skills).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          libraryId: "target-only-reviewer",
+          enabled: true
+        })
+      ])
+    );
+    expect(capturedResources.managementByTarget?.opencode).toEqual({
+      instructions: "ignore",
+      skills: "manage"
+    });
+    expect(capturedResources.mcpByTarget.opencode?.mode).toBe("ignore");
+    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
+    await expect(readFile(configPath, "utf8")).resolves.toBe(originalConfig);
+    await expect(readFile(originalSkillPath, "utf8")).resolves.toBe(originalSkill);
+
+    await workspace
+      .getByRole("button", { name: "Review and apply" })
+      .waitFor({ state: "visible" });
+    await workspace.getByRole("button", { name: "Review and apply" }).click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await previewDialog.getByRole("button", { name: /^Apply/ }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+
+    await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
+    await expect(readFile(configPath, "utf8")).resolves.toBe(originalConfig);
+    await expect(readFile(originalSkillPath, "utf8")).resolves.toBe(originalSkill);
+    const managedSkillDir = join(opencodeDir, "skills", "target-only-reviewer");
+    expect(
+      (await fileExists(join(managedSkillDir, ".agentenv-owner.json"))) ||
+      (await fileExists(`${managedSkillDir}.agentenv-owner.json`))
+    ).toBe(true);
+  }, 30_000);
+
+  it("saves Agent Skill edits before Apply changes the live Agent", async () => {
+    const { appDataRoot, opencodeDir, page } = await launchApp();
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+    const runtimeSkillPath = join(
+      opencodeDir,
+      "skills",
+      "ui-alpha-skill",
+      "SKILL.md"
+    );
+    await expect(fileExists(runtimeSkillPath)).resolves.toBe(true);
+
+    await resizeAppWindow(page, 920, 620);
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    const targetCard = page.getByRole("article", { name: "Agent OpenCode" });
+    await targetCard.getByRole("button", { name: "Manage OpenCode Skills" }).click();
+    const workspace = page.getByRole("region", { name: "Manage OpenCode Skills" });
+    const skillSwitch = workspace.getByRole("switch", {
+      name: "Disable ui-alpha-skill"
+    });
+    await skillSwitch.waitFor({ state: "visible" });
+    await expectNoHorizontalOverflow(page, [".agent-skill-page"]);
+    await skillSwitch.click();
+    await workspace.getByText("Skill changes saved", { exact: true }).waitFor({
+      state: "visible"
+    });
+
+    await expect(fileExists(runtimeSkillPath)).resolves.toBe(true);
+    const savedResources = await readJson<{
+      skills: Array<{ libraryId: string; enabled?: boolean }>;
+    }>(
+      join(
+        appDataRoot,
+        "profiles",
+        "ui-opencode-alpha",
+        "resources.json"
+      )
+    );
+    expect(
+      savedResources.skills.find((skill) => skill.libraryId === "ui-alpha-skill")
+        ?.enabled
+    ).toBe(false);
+
+    const applyButton = workspace.getByRole("button", {
+      name: "Review and apply"
+    });
+    await expect.poll(() => applyButton.isEnabled()).toBe(true);
+    await applyButton.click();
+    const previewDialog = page.getByRole("dialog", { name: "Preview" });
+    await previewDialog.waitFor({ state: "visible" });
+    await previewDialog.getByRole("button", { name: /^Apply/ }).click();
+    await previewDialog.waitFor({ state: "hidden" });
+    await expect(fileExists(runtimeSkillPath)).resolves.toBe(false);
   }, 30_000);
 
   it("blocks profile apply when the target paths are no longer writable", async () => {
@@ -3232,20 +3380,20 @@ describe("Electron UI profile switching e2e", () => {
     const claudeTarget = page.getByRole("article", { name: "Agent Claude Code" });
     await expect
       .poll(() =>
-        openCodeTarget.getByRole("button", { name: "Open OpenCode in Profiles" }).textContent()
+        openCodeTarget.getByRole("button", { name: "Manage OpenCode Skills" }).textContent()
       )
-      .toContain("Choose Profile");
+      .toContain("Manage Skills");
     await expect
       .poll(() =>
         claudeTarget
-          .getByRole("button", { name: "Open Claude Code in Profiles" })
+          .getByRole("button", { name: "Manage Claude Code Skills" })
           .textContent()
       )
-      .toContain("Choose Profile");
+      .toContain("Manage Skills");
     const targetPeerActions = await Promise.all(
       [
         openCodeTarget.getByRole("button", { name: "Create profile from OpenCode" }),
-        openCodeTarget.getByRole("button", { name: "Open OpenCode in Profiles" })
+        openCodeTarget.getByRole("button", { name: "Manage OpenCode Skills" })
       ].map((button) =>
         button.evaluate((element) => ({
           background: getComputedStyle(element).backgroundColor,
@@ -3772,13 +3920,13 @@ describe("Electron UI profile switching e2e", () => {
     expect(compactClaudeBox!.y).toBeGreaterThan(compactOpenCodeBox!.y);
 
     await openCodeCard
-      .getByRole("button", { name: "Open OpenCode in Profiles" })
+      .getByRole("button", { name: "Manage OpenCode Skills" })
       .waitFor({ state: "visible" });
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
       .toContain("ui-icon-button--ghost");
     await expect
-      .poll(() => openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).getAttribute("class"))
+      .poll(() => openCodeCard.getByRole("button", { name: "Manage OpenCode Skills" }).getAttribute("class"))
       .toContain("ui-button--secondary");
     expect(
       await claudeCard.getByRole("button", { name: "Show Claude Code diagnostics" }).getAttribute("aria-expanded")
@@ -3819,9 +3967,8 @@ describe("Electron UI profile switching e2e", () => {
     await recoveryDialog.waitFor({ state: "hidden" });
     expect(await recoveryTrigger.evaluate((element) => document.activeElement === element)).toBe(true);
 
-    await codexCard.getByRole("button", { name: "Open Codex in Profiles" }).click();
-    await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Apply", exact: true }).waitFor({ state: "visible" });
+    await codexCard.getByRole("button", { name: "Manage Codex Skills" }).click();
+    await page.getByRole("region", { name: "Manage Codex Skills" }).waitFor({ state: "visible" });
   }, 30_000);
 
   it("stops managing OpenCode while keeping deployed files and clearing ownership", async () => {
@@ -3833,7 +3980,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     const openCodeCard = page.getByRole("article", { name: "Agent OpenCode" });
     await expect
-      .poll(() => openCodeCard.getByRole("button", { name: "Open OpenCode in Profiles" }).getAttribute("class"))
+      .poll(() => openCodeCard.getByRole("button", { name: "Manage OpenCode Skills" }).getAttribute("class"))
       .toContain("ui-button--secondary");
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))

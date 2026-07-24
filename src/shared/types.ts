@@ -23,7 +23,9 @@ export type {
 } from "./schemas";
 import type {
   ProfileManifest,
+  ProfileResourceMode,
   ProfileResources,
+  ProfileSkill,
   ResourceIconKey
 } from "./schemas";
 import type { DesktopContextMenuItem } from "./desktopContextMenu";
@@ -134,9 +136,14 @@ export interface AgentEnvApi {
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
+  updateProfileSkills(input: UpdateProfileSkillsInput): Promise<UpdateProfileSkillsResult>;
+  forkProfileSkills(input: ForkProfileSkillsInput): Promise<UpdateProfileSkillsResult>;
   updateProfileMetadata(input: UpdateProfileMetadataInput): Promise<ProfileDetail>;
   createProfile(input: CreateProfileInput): Promise<ProfileDetail>;
-  previewCreateProfileFromTarget(targetId: string): Promise<TargetCapturePreview>;
+  previewCreateProfileFromTarget(
+    targetId: string,
+    scope?: TargetCaptureScope
+  ): Promise<TargetCapturePreview>;
   createProfileFromTarget(input: CreateProfileFromTargetInput): Promise<TargetCaptureResult>;
   duplicateProfile(id: string): Promise<ProfileDetail>;
   deleteProfile(id: string): Promise<void>;
@@ -965,6 +972,8 @@ export interface CreateProfileFromTargetInput {
   name: string;
 }
 
+export type TargetCaptureScope = "all" | "skills";
+
 export interface TargetCaptureResource {
   kind: "instructions" | "skill" | "mcp";
   id: string;
@@ -979,6 +988,7 @@ export interface TargetCapturePreview {
   id: string;
   targetId: string;
   targetName: string;
+  scope: TargetCaptureScope;
   suggestedName: string;
   createdAt: string;
   resources: TargetCaptureResource[];
@@ -1191,6 +1201,23 @@ export interface SaveProfileInput {
   manifest: ProfileManifest;
   instructions: string;
   resources: ProfileResources;
+}
+
+export interface UpdateProfileSkillsInput {
+  profileId: string;
+  targetId: string;
+  expectedContentHash: string;
+  skills: ProfileSkill[];
+  managementMode?: ProfileResourceMode;
+}
+
+export interface UpdateProfileSkillsResult {
+  profile: ProfileDetail;
+  changed: boolean;
+}
+
+export interface ForkProfileSkillsInput extends UpdateProfileSkillsInput {
+  name: string;
 }
 
 export interface UpdateProfileMetadataInput {

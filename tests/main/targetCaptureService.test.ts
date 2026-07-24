@@ -101,6 +101,44 @@ describe("target capture service v2", () => {
     await expect(readFile(join(agentDir, "agent.md"), "utf8")).resolves.toBe("# Reviewer\n");
   });
 
+  it("captures only Skills for the lightweight Agent management flow", async () => {
+    const { homeDir, service } = await setup("opencode");
+    const targetDir = join(homeDir, ".config", "opencode");
+    const skillDir = join(targetDir, "skills", "review-workflow");
+    await mkdir(skillDir, { recursive: true });
+    await writeFile(join(targetDir, "AGENTS.md"), "# Existing OpenCode\n");
+    await writeFile(join(targetDir, "opencode.jsonc"), "{ invalid native config\n");
+    await writeFile(
+      join(skillDir, "SKILL.md"),
+      "---\nname: review-workflow\ndescription: Review changes.\n---\n"
+    );
+
+    const preview = await service.previewTarget("opencode", "skills");
+
+    expect(preview.scope).toBe("skills");
+    expect(preview.resources).toEqual([
+      expect.objectContaining({
+        kind: "skill",
+        id: "review-workflow",
+        action: "import"
+      })
+    ]);
+
+    const result = await service.createFromTarget({
+      previewId: preview.id,
+      name: "OpenCode Skills"
+    });
+    expect(result.profile.instructions).toBe("");
+    expect(result.profile.resources.managementByTarget?.opencode).toEqual({
+      instructions: "ignore",
+      skills: "manage"
+    });
+    expect(result.profile.resources.mcpByTarget.opencode).toEqual({
+      mode: "ignore",
+      selections: []
+    });
+  });
+
   it("rejects a stale preview before importing anything", async () => {
     const { homeDir, service, profileStore, paths } = await setup("opencode");
     const targetDir = join(homeDir, ".config", "opencode");

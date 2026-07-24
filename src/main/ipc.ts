@@ -24,6 +24,7 @@ import type {
   CreateProfileInput,
   CreateProfileFromTargetInput,
   DeleteManagedBackupInput,
+  ForkProfileSkillsInput,
   GitHubSkillImportInput,
   RepositorySkillImportInput,
   RepositorySkillSourceInput,
@@ -38,10 +39,12 @@ import type {
   SkillSourceMergePreviewInput,
   SaveProfileInput,
   UpdateProfileMetadataInput,
+  UpdateProfileSkillsInput,
   SkillUpdatePolicyInput,
   SkillUpdateConfirmation,
   SkillAvailabilityInput,
   SkillUpdateSourceInput,
+  TargetCaptureScope,
   TargetPaths
 } from "../shared/types";
 import type { TargetRegistry } from "./targets/registry";
@@ -927,6 +930,12 @@ export const registerIpcHandlers = ({
   handleMutation("profiles:save", (_event, input: SaveProfileInput) =>
     profileStore.saveProfile(input)
   );
+  handleMutation("profiles:update-skills", (_event, input: UpdateProfileSkillsInput) =>
+    profileStore.updateProfileSkills(input)
+  );
+  handleMutation("profiles:fork-skills", (_event, input: ForkProfileSkillsInput) =>
+    profileStore.forkProfileSkills(input)
+  );
   handleMutation(
     "profiles:update-metadata",
     (_event, input: UpdateProfileMetadataInput) => profileStore.updateProfileMetadata(input)
@@ -936,8 +945,17 @@ export const registerIpcHandlers = ({
       typeof input === "string" ? { preferredTargetId: parseId(input, "target id") } : input
     )
   );
-  ipcMain.handle("profiles:preview-create-from-target", (_event, targetId: unknown) =>
-    targetCaptureService.previewTarget(parseId(targetId, "target id"))
+  ipcMain.handle(
+    "profiles:preview-create-from-target",
+    (_event, targetId: unknown, scope: TargetCaptureScope | undefined) => {
+      if (scope !== undefined && scope !== "all" && scope !== "skills") {
+        throw new Error("Invalid capture scope");
+      }
+      return targetCaptureService.previewTarget(
+        parseId(targetId, "target id"),
+        scope
+      );
+    }
   );
   handleMutation("profiles:create-from-target", (_event, input: CreateProfileFromTargetInput) =>
     targetCaptureService.createFromTarget(input)

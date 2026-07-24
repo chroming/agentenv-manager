@@ -219,6 +219,61 @@ Settings owns the explicit set of enabled Agents.
 
 Status: explicit persisted scope, discovery filtering, command and compatible macOS desktop-application evidence, renderer filtering, operation guards, managed-Agent confirmation, and recovery lock are `Implemented`. IDE extension discovery is intentionally out of scope.
 
+### 4.4.2 Agent Skill Management
+
+Agents is the contextual entry for users who want to manage the Skills used by one
+installed Agent without first learning Library maintenance, Profile composition, or local
+cleanup. It is a facade over the same canonical Library, ordinary v2 Profile, and
+Preview/Apply transaction used everywhere else; it is not a simple mode or a second
+resource model.
+
+- `Manage Skills` opens a dedicated Agent detail surface. The Agent list MUST NOT expand a
+  second editor inside a row.
+- An unmanaged Agent first offers to preserve its current Skills. This command reuses
+  Create from Target: the read-only Capture review creates an ordinary Profile and imports
+  or reuses canonical Library Skills. It never changes the Agent.
+- Skills-only Capture MUST NOT parse or depend on native Instructions or MCP configuration.
+  A malformed native config cannot block Skill management when the Skill directories remain
+  readable.
+- Saving the captured setup and applying it are separate persistence boundaries inside
+  one guided intent. If saving fails, partial Profile and Library changes are rolled back.
+  If Apply later fails, the valid saved setup remains available for retry while the Agent
+  is restored or left unchanged by the normal Apply contract.
+- If a previously captured Profile for the Agent was saved but never applied, `Manage
+  Skills` resumes the newest valid saved setup instead of asking the user to capture the
+  same Agent again.
+- A managed Agent detail shows the active Profile's Skill references, Library identity,
+  version, source, deployed state, and availability. It does not duplicate global source
+  settings, global disable, duplicate cleanup, or Library deletion.
+- Enabling, disabling, adding, relinking, or removing a Skill from this surface updates
+  the ordinary Profile intent atomically and marks affected Agent deployments pending.
+  It does not write an Agent until the user chooses `Review and apply`.
+- An Agent detail Skill edit MUST use the latest persisted Profile and reject stale
+  content. A semantic no-op performs no write and does not create pending deployment.
+- If the Profile is active on more than one Agent, the first edit MUST ask whether to
+  update the shared Profile or create an Agent-specific copy. It MUST NOT silently change
+  the desired environment of peer Agents.
+- Adding from Library filters out globally disabled and already attached Skills. Importing
+  new content remains a Library operation, but an import initiated from Agent detail MUST
+  retain the parent intent and offer to attach the imported Skills to that Agent's Profile.
+- A Library update remains a global canonical mutation. Agent detail may start its review,
+  but impact disclosure MUST name every affected Profile and linked Agent. Live-link
+  effects are never represented as Apply-gated.
+- Drift, externally owned resources, broken links, ambiguous duplicates, and recovery are
+  conditional decisions inside `Manage Skills`. They do not become permanent peer
+  workflows or require the user to visit Local Skill Cleanup unless that owning surface is
+  necessary to resolve the exact issue.
+- A missing or malformed active Profile is a recoverable local error, never an unmanaged
+  state. The Agent detail shows the failure and Retry instead of offering a new takeover.
+- One detected enabled Agent MAY open directly to its detail after the user enters Agents.
+  Multiple Agents first show the ordered Agent list. Back returns to that list without
+  changing persisted state.
+
+Status: contextual Agent detail, Skills-only Capture, atomic Profile Skill intent editing,
+shared-Profile guard, Library import return, local load recovery, and guided
+Capture-to-Apply orchestration are `Implemented`. Automatic direct entry when exactly one
+Agent is installed remains optional and is not currently enabled.
+
 ### 4.5 Backup
 
 A Backup is an immutable pre-operation snapshot used for recovery.
@@ -767,7 +822,7 @@ Shared compatibility migration contract:
 - A shared Skill not yet in Library follows the same `Add to Library` intent as every other local Skill. One content version is eligible for the confirmed `Clean up N` plan; multiple different content hashes remain in `Needs your decision`, show the number of different versions in the row, and add version choice inside `Add to Library`.
 - Adding a shared Skill to Library is one transaction: back up all copies, create the Library canonical copy, keep exactly one shared compatibility copy active, and remove redundant Target-specific copies. The shared copy MUST NOT receive a Target ownership marker.
 - Once Library is ready, Cleanup shows the compact `Shared` badge and states that consumer Targets still load the compatibility copy independently of Profile references. This is a managed compatibility state, not a content decision, so it belongs in the collapsed `Managed` section. `Review shared copy` presents the two valid outcomes in one workflow: open Profiles so each affected Target can receive its intended Profile, or `Keep shared copy`. A Profile that omits the Skill is a valid explicit decision to remove it for that Target. Cleanup MUST NOT show per-Target `Needs Apply` chips, expose internal preparation or migration phases as commands, or pretend Profile Apply is a Cleanup step.
-- An installed Target that still reads the compatibility location remains a consumer even when AgentEnv does not manage its Profile. AgentEnv MUST preserve the shared copy and block replacement until that Target records an explicit applied decision. `Keep shared copy` is the non-takeover outcome; skills-only Target ownership is not currently supported and MUST NOT be implied by the UI.
+- An installed Target that still reads the compatibility location remains a consumer even when AgentEnv does not manage its Profile. AgentEnv MUST preserve the shared copy and block replacement until that Target records an explicit applied decision. A successfully applied Skills-only Profile is a valid decision because it records install-or-omit intent while leaving Instructions and MCPs unmanaged; merely opening Agent detail, capturing, or saving that Profile is not. `Keep shared copy` remains the non-takeover outcome.
 - After every affected Target has an explicit current decision for the current Library ID and exact current shared-path set, the row moves to `Ready to clean up` and shows `Ready` / `Replace shared copy`; either the dedicated confirmation or the reviewed `Clean up N` batch may cross the mutation boundary. A preparation for an older or different shared copy is stale, does not count toward readiness, and directs the user to Apply that Target's saved Profile again.
 - Profiles independently save and apply each Target's install-or-omit decision. Apply Preview describes the final outcome as `After cleanup: install as <name>` or `After cleanup: remove from this Target`; it MUST NOT expose preparation records or migration decisions. Preparation MUST leave the shared path active and MUST NOT create a same-name Target-specific duplicate.
 - `Replace shared copy` requires confirmation that lists each prepared Target's final `Install as <name>` or `Do not install` decision. It executes one cross-Target transaction: back up all shared, destination, and state paths; remove the shared source; deploy or omit per prepared Profile; verify every destination; then clear preparations. Any failed step restores all paths and states.
@@ -863,7 +918,10 @@ Create from Target gives an existing native environment a reusable Profile repre
 - Blank Profile creation MUST start with empty Instructions, Skills, and MCP policy. Native Agent resources are discovery candidates only and MUST NOT be adopted until the user explicitly adds an override; only Create from Target may intentionally capture the current environment.
 - Create from Target defaults the Profile name to the Agent display name. The default MUST NOT add transient state words such as `Current`; users may edit the name before saving.
 - A Target-row capture command MUST keep the invoking Targets workspace visible until the user confirms. Cancel and Escape return focus to that exact command without changing workspace.
-- Target-row command hierarchy follows lifecycle state: an unmanaged Target presents `Capture` as the primary action and `Choose Profile` as secondary; a managed Target presents `Open Profile` as the primary action and Capture as secondary. Both commands remain available without competing primary emphasis.
+- Every installed Target presents `Manage Skills` as the stable primary action. An
+  unmanaged Target runs the guided Capture-to-Apply path; a managed Target opens the
+  active Profile's contextual Skill surface. `Create Profile from Agent`, `Open Profile`,
+  Diagnostics, and Recovery remain secondary or advanced commands.
 - Profiles may offer a general `From Target` entry, but a Target-row entry MUST bind the source Target directly and MUST NOT ask the user to choose Blank versus From Target again.
 - Capture uses two explicit steps: setup and capture review. Review provides Back without losing the Profile name or selected Target.
 - Preview MUST list portable resources to include or reuse, new Skill Library imports, discovered native MCP activation choices, excluded resources, and conflicts.

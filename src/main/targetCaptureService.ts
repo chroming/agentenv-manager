@@ -5,6 +5,7 @@ import type {
   TargetCapturePreview,
   TargetCaptureResource,
   TargetCaptureResult,
+  TargetCaptureScope,
   SkillImportConflictResolution
 } from "../shared/types";
 import { pathExists } from "./fileUtils";
@@ -37,13 +38,14 @@ interface CapturedSkill {
 
 interface InternalCapture {
   preview: TargetCapturePreview;
+  scope: TargetCaptureScope;
   captured: CapturedTargetProfile;
   skills: CapturedSkill[];
   fingerprints: Record<string, string>;
 }
 
 export interface TargetCaptureService {
-  previewTarget(targetId: string): Promise<TargetCapturePreview>;
+  previewTarget(targetId: string, scope?: TargetCaptureScope): Promise<TargetCapturePreview>;
   createFromTarget(input: CreateProfileFromTargetInput): Promise<TargetCaptureResult>;
 }
 
@@ -98,7 +100,10 @@ export const createTargetCaptureService = ({
   const previews = new Map<string, InternalCapture>();
   const captureReceiptStore = createCaptureReceiptStore(paths);
 
-  const buildCapture = async (targetId: string): Promise<InternalCapture> => {
+  const buildCapture = async (
+    targetId: string,
+    scope: TargetCaptureScope = "all"
+  ): Promise<InternalCapture> => {
     await targetScope?.assertEnabled(targetId);
     const discoveredTargets = await targetDiscoveryService.listTargets();
     const target = discoveredTargets.find((item) => item.id === targetId);
@@ -108,7 +113,14 @@ export const createTargetCaptureService = ({
     const adapter = targetRegistry.get(targetId);
     const settings = await settingsStore.readSettings();
     const targetPaths = adapter.createTargetPaths(targetPathInputFor(paths, settings, targetId));
-    const captured = await adapter.captureProfile(targetPaths);
+    const captured: CapturedTargetProfile = scope === "skills"
+      ? {
+          instructions: "",
+          mcpConnections: [],
+          warnings: [],
+          excluded: []
+        }
+      : await adapter.captureProfile(targetPaths);
     const librarySkills = await skillLibraryStore.listSkills();
     const inventory = await skillLibraryStore.scanInventory(
       [targetPaths],
@@ -144,7 +156,7 @@ export const createTargetCaptureService = ({
 
     const resources: TargetCaptureResource[] = [];
     const errors: string[] = [];
-    const warnings = [...captured.warnings];
+    const warnings = scope === "all" ? [...captured.warnings] : [];
     for (const entry of unavailableInventory) {
       const runtimeIssue = entry.runtimeIssues?.find(
         (issue) => issue.code === "unreadable-skill"
@@ -255,40 +267,46 @@ export const createTargetCaptureService = ({
       });
     }
 
-    for (const connection of captured.mcpConnections ?? []) {
-      resources.push({
-        kind: "mcp",
-        id: connection.name,
-        name: connection.name,
-        sourcePath: connection.sourcePath,
-        action: "include",
-        detail: connection.controllable
-          ? connection.enabled
-            ? "Enabled; Profile can control activation"
-            : "Disabled; Profile can control activation"
-          : connection.enabled
-            ? "Enabled; remains Agent-controlled"
-            : "Disabled; remains Agent-controlled"
-      });
-    }
+    if (scope === "all") {
+      for (const connection of captured.mcpConnections ?? []) {
+        resources.push({
+          kind: "mcp",
+          id: connection.name,
+          name: connection.name,
+          sourcePath: connection.sourcePath,
+          action: "include",
+          detail: connection.controllable
+            ? connection.enabled
+              ? "Enabled; Profile can control activation"
+              : "Disabled; Profile can control activation"
+            : connection.enabled
+              ? "Enabled; remains Agent-controlled"
+              : "Disabled; remains Agent-controlled"
+        });
+      }
 
-    if (captured.instructions.trim()) {
-      resources.unshift({
-        kind: "instructions",
-        id: "instructions",
-        name: adapter.descriptor.instructionsLabel,
-        sourcePath: targetPaths.instructionsPath,
-        action: "include"
-      });
-    }
-    for (const excluded of captured.excluded) {
-      warnings.push(`${excluded} remains Agent-owned`);
+      if (captured.instructions.trim()) {
+        resources.unshift({
+          kind: "instructions",
+          id: "instructions",
+          name: adapter.descriptor.instructionsLabel,
+          sourcePath: targetPaths.instructionsPath,
+          action: "include"
+        });
+      }
+      for (const excluded of captured.excluded) {
+        warnings.push(`${excluded} remains Agent-owned`);
+      }
     }
 
     const fingerprintPaths = new Set([
-      targetPaths.instructionsPath,
-      targetPaths.configPath,
-      ...(targetPaths.mcpConfigPath ? [targetPaths.mcpConfigPath] : []),
+      ...(scope === "all"
+        ? [
+            targetPaths.instructionsPath,
+            targetPaths.configPath,
+            ...(targetPaths.mcpConfigPath ? [targetPaths.mcpConfigPath] : [])
+          ]
+        : []),
       ...skills.flatMap((skill) => skill.sourcePaths)
     ]);
     const fingerprints = Object.fromEntries(
@@ -298,17 +316,21 @@ export const createTargetCaptureService = ({
       id: randomUUID(),
       targetId,
       targetName: adapter.descriptor.name,
+      scope,
       suggestedName: adapter.descriptor.name,
       createdAt: new Date().toISOString(),
       resources,
       warnings,
       errors
     };
-    return { preview, captured, skills, fingerprints };
+    return { preview, scope, captured, skills, fingerprints };
   };
 
-  const previewTarget = async (targetId: string) => {
-    const capture = await buildCapture(targetId);
+  const previewTarget = async (
+    targetId: string,
+    scope: TargetCaptureScope = "all"
+  ) => {
+    const capture = await buildCapture(targetId, scope);
     previews.set(capture.preview.id, capture);
     return capture.preview;
   };
@@ -350,10 +372,14 @@ export const createTargetCaptureService = ({
       });
       profileId = created.id;
       const adapter = targetRegistry.get(capture.preview.targetId);
-      const capturedMcp = (capture.captured.mcpConnections ?? []).filter(
-        (connection) => connection.controllable
-      );
-      const mcpPolicy = adapter.descriptor.capabilities.mcpActivation && capturedMcp.length > 0
+      const capturedMcp = capture.scope === "all"
+        ? (capture.captured.mcpConnections ?? []).filter(
+            (connection) => connection.controllable
+          )
+        : [];
+      const mcpPolicy = capture.scope === "all" &&
+        adapter.descriptor.capabilities.mcpActivation &&
+        capturedMcp.length > 0
         ? {
             mode: "manage" as const,
             selections: capturedMcp.map((connection) => ({
@@ -370,13 +396,19 @@ export const createTargetCaptureService = ({
           preferredTargetId: capture.preview.targetId,
           createdFromTargetId: capture.preview.targetId
         },
-        instructions: capture.captured.instructions,
+        instructions: capture.scope === "all" ? capture.captured.instructions : "",
         resources: {
           skills: capture.skills.map((skill) => ({
             libraryId: skill.libraryId,
             targetName: skill.targetName,
             enabled: true
           })),
+          managementByTarget: {
+            [capture.preview.targetId]: {
+              instructions: capture.scope === "all" ? "manage" : "ignore",
+              skills: "manage"
+            }
+          },
           mcpByTarget: {
             [capture.preview.targetId]: mcpPolicy
           }

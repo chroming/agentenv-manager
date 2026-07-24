@@ -2,16 +2,22 @@ import { lstat, mkdir, readdir, readFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import {
   ProfileManifestSchema,
+  ProfileResourceModeSchema,
   ProfileResourcesSchema,
+  ProfileSkillSchema,
   SafeIdSchema
 } from "../shared/schemas";
 import type {
   CreateProfileInput,
+  ForkProfileSkillsInput,
   ProfileDetail,
   ProfileSummary,
   SaveProfileInput,
+  UpdateProfileSkillsInput,
+  UpdateProfileSkillsResult,
   UpdateProfileMetadataInput
 } from "../shared/types";
+import { setProfileResourceMode } from "../shared/profileResources";
 import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils";
 import { createPaths, type PathOverrides } from "./paths";
 import { createProfileContentHash } from "./profileFingerprint";
@@ -22,6 +28,8 @@ export interface ProfileStore {
   listProfiles(): Promise<ProfileSummary[]>;
   readProfile(id: string): Promise<ProfileDetail>;
   saveProfile(input: SaveProfileInput): Promise<ProfileDetail>;
+  updateProfileSkills(input: UpdateProfileSkillsInput): Promise<UpdateProfileSkillsResult>;
+  forkProfileSkills(input: ForkProfileSkillsInput): Promise<UpdateProfileSkillsResult>;
   updateProfileMetadata(input: UpdateProfileMetadataInput): Promise<ProfileDetail>;
   createProfile(input: CreateProfileInput): Promise<ProfileDetail>;
   duplicateProfile(id: string): Promise<ProfileDetail>;
@@ -259,6 +267,88 @@ export const createProfileStore = (
     });
   };
 
+  const updateProfileSkills = async (
+    input: UpdateProfileSkillsInput
+  ): Promise<UpdateProfileSkillsResult> => {
+    const profileId = parseProfileId(input.profileId);
+    const targetId = SafeIdSchema.parse(input.targetId);
+    targetRegistry.get(targetId);
+    const current = await readProfile(profileId);
+    if (!input.expectedContentHash || current.contentHash !== input.expectedContentHash) {
+      throw new Error(
+        `Profile ${profileId} changed outside this Agent view. Refresh it before editing Skills.`
+      );
+    }
+
+    const skills = ProfileSkillSchema.array().parse(input.skills);
+    let resources = ProfileResourcesSchema.parse({
+      ...current.resources,
+      skills
+    });
+    if (input.managementMode !== undefined) {
+      resources = setProfileResourceMode(
+        resources,
+        targetId,
+        "skills",
+        ProfileResourceModeSchema.parse(input.managementMode)
+      );
+    }
+    resources = ProfileResourcesSchema.parse(resources);
+
+    if (JSON.stringify(resources) === JSON.stringify(current.resources)) {
+      return { profile: current, changed: false };
+    }
+
+    const profile = await saveProfile({
+      manifest: current.manifest,
+      instructions: current.instructions,
+      resources
+    });
+    return { profile, changed: true };
+  };
+
+  const forkProfileSkills = async (
+    input: ForkProfileSkillsInput
+  ): Promise<UpdateProfileSkillsResult> => {
+    const source = await readProfile(parseProfileId(input.profileId));
+    if (!input.expectedContentHash || source.contentHash !== input.expectedContentHash) {
+      throw new Error(
+        `Profile ${source.id} changed outside this Agent view. Refresh it before editing Skills.`
+      );
+    }
+    const name = input.name.trim();
+    if (!name) throw new Error("Profile name is required");
+    const targetId = SafeIdSchema.parse(input.targetId);
+    targetRegistry.get(targetId);
+    const duplicate = await duplicateProfile(source.id);
+    try {
+      const skills = ProfileSkillSchema.array().parse(input.skills);
+      let resources = ProfileResourcesSchema.parse({
+        ...duplicate.resources,
+        skills
+      });
+      resources = setProfileResourceMode(
+        resources,
+        targetId,
+        "skills",
+        ProfileResourceModeSchema.parse(input.managementMode ?? "manage")
+      );
+      const profile = await saveProfile({
+        manifest: {
+          ...duplicate.manifest,
+          name,
+          preferredTargetId: targetId
+        },
+        instructions: duplicate.instructions,
+        resources
+      });
+      return { profile, changed: true };
+    } catch (error) {
+      await deleteProfile(duplicate.id);
+      throw error;
+    }
+  };
+
   const updateProfileMetadata = async (
     input: UpdateProfileMetadataInput
   ): Promise<ProfileDetail> => {
@@ -310,6 +400,8 @@ export const createProfileStore = (
     listProfiles,
     readProfile,
     saveProfile,
+    updateProfileSkills,
+    forkProfileSkills,
     updateProfileMetadata,
     createProfile,
     duplicateProfile,

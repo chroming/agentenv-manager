@@ -38,7 +38,7 @@ interface TargetWorkspaceProps {
   stopManagingPreview?: StopManagingPreview;
   busy: boolean;
   onRefresh(): Promise<void>;
-  onManageTarget(targetId: string): void;
+  onManageSkills(targetId: string): void;
   onCreateProfileFromTarget(targetId: string): void;
   onPreviewRollback(backupId: string): void;
   onCancelRollback(): void;
@@ -90,7 +90,7 @@ export const TargetWorkspace = ({
   stopManagingPreview,
   busy,
   onRefresh,
-  onManageTarget,
+  onManageSkills,
   onCreateProfileFromTarget,
   onPreviewRollback,
   onCancelRollback,
@@ -230,10 +230,10 @@ export const TargetWorkspace = ({
                   <Button
                     className="target-profile-action"
                     size="compact"
-                    aria-label={t("Open {{name}} in Profiles", { name: target.name })}
-                    onClick={() => onManageTarget(target.id)}
+                    aria-label={t("Manage {{name}} Skills", { name: target.name })}
+                    onClick={() => onManageSkills(target.id)}
                   >
-                    <span>{t(isManaged ? "Open Profile" : "Choose Profile")}</span>
+                    <span>{t("Manage Skills")}</span>
                     <ArrowRight size={14} strokeWidth={2.2} />
                   </Button>
                   <IconButton

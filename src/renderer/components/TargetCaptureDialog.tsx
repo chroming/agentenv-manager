@@ -23,6 +23,7 @@ interface TargetCaptureDialogProps {
   targets: TargetInfo[];
   name: string;
   origin: "profiles" | "targets";
+  scope: "all" | "skills";
   preview?: TargetCapturePreview;
   activity: CaptureActivity;
   nameError?: string;
@@ -62,6 +63,7 @@ export const TargetCaptureDialog = ({
   targets,
   name,
   origin,
+  scope,
   preview,
   activity,
   nameError,
@@ -79,6 +81,7 @@ export const TargetCaptureDialog = ({
   const { t } = useI18n();
   const isReview = Boolean(preview);
   const isBusy = activity !== "idle";
+  const isSkillsOnly = scope === "skills";
   const targetIcon = target ? targetIconFor(target) : undefined;
   const includedResources = preview?.resources.filter((resource) => resource.action !== "exclude") ?? [];
   const importedResources = preview?.resources.filter((resource) => resource.action === "import") ?? [];
@@ -97,18 +100,37 @@ export const TargetCaptureDialog = ({
         role="dialog"
         aria-modal="true"
         aria-label={isReview
-          ? t("Review {{name}} capture", { name: target?.name ?? t("Agent") })
-          : t("Create profile from {{name}}", { name: target?.name ?? t("Agent") })}
+          ? t(isSkillsOnly ? "Review {{name}} Skill setup" : "Review {{name}} capture", {
+              name: target?.name ?? t("Agent")
+            })
+          : t(isSkillsOnly ? "Manage {{name}} Skills" : "Create profile from {{name}}", {
+              name: target?.name ?? t("Agent")
+            })}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="capture-dialog__header ui-dialog-header">
           <div>
             <span className="capture-dialog__eyebrow">{t(isReview ? "Step 2 of 2" : "Step 1 of 2")}</span>
-            <h2>{isReview ? t("Review captured Profile") : t("Create profile from {{name}}", { name: target?.name ?? t("Agent") })}</h2>
+            <h2>
+              {isReview
+                ? t(isSkillsOnly ? "Review managed Skill setup" : "Review captured Profile")
+                : t(isSkillsOnly ? "Manage {{name}} Skills" : "Create profile from {{name}}", {
+                    name: target?.name ?? t("Agent")
+                  })}
+            </h2>
             <p>
               {isReview
-                ? t("Confirm what AgentEnv will save from {{name}}.", { name: target?.name ?? t("this Agent") })
-                : t("Save the current environment as a reusable Profile without changing the Agent.")}
+                ? t(
+                    isSkillsOnly
+                      ? "Confirm which Skills AgentEnv will preserve and manage for {{name}}."
+                      : "Confirm what AgentEnv will save from {{name}}.",
+                    { name: target?.name ?? t("this Agent") }
+                  )
+                : t(
+                    isSkillsOnly
+                      ? "Preserve the current Skills in a reusable setup. Instructions and MCPs stay Agent-controlled."
+                      : "Save the current environment as a reusable Profile without changing the Agent."
+                  )}
             </p>
           </div>
         </header>
@@ -164,7 +186,13 @@ export const TargetCaptureDialog = ({
                 <ShieldCheck size={18} strokeWidth={2.1} aria-hidden="true" />
                 <span>
                   <strong>{t("Non-invasive capture")}</strong>
-                  <small>{t("AgentEnv reads the current files and saves copies to Library and Profile. Source files stay unchanged.")}</small>
+                  <small>
+                    {t(
+                      isSkillsOnly
+                        ? "AgentEnv reads current Skills and saves canonical copies. The Agent stays unchanged until Apply."
+                        : "AgentEnv reads the current files and saves copies to Library and Profile. Source files stay unchanged."
+                    )}
+                  </small>
                 </span>
               </div>
             </div>
@@ -205,7 +233,13 @@ export const TargetCaptureDialog = ({
                 <ShieldCheck size={18} strokeWidth={2.1} aria-hidden="true" />
                 <span>
                   <strong>{t("Agent stays unchanged")}</strong>
-                  <small>{t("After saving, review the Profile and use Apply when you are ready to take over this Agent.")}</small>
+                  <small>
+                    {t(
+                      isSkillsOnly
+                        ? "After saving, review and apply the Skill setup when you are ready."
+                        : "After saving, review the Profile and use Apply when you are ready to take over this Agent."
+                    )}
+                  </small>
                 </span>
               </div>
 
@@ -271,7 +305,15 @@ export const TargetCaptureDialog = ({
                 {isBusy ? <LoaderCircle size={15} /> : null}
               </span>
               <span aria-live="polite">
-                {t(activity === "reviewing" ? "Reviewing..." : activity === "creating" ? "Creating..." : isReview ? "Save Profile" : "Review")}
+                {t(
+                  activity === "reviewing"
+                    ? "Reviewing..."
+                    : activity === "creating"
+                      ? "Creating..."
+                      : isReview
+                        ? isSkillsOnly ? "Save setup" : "Save Profile"
+                        : "Review"
+                )}
               </span>
             </button>
           </div>

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SetStateAction
+} from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -89,6 +96,7 @@ import type {
   TargetManagementState
 } from "../shared/types";
 import { I18nProvider, useI18n, type TranslationValues } from "./i18n";
+import { acceptAppliedProfileState } from "./appliedProfileState";
 import {
   collectLibraryResourceVersions,
   libraryResourceVersionsEqual
@@ -101,10 +109,14 @@ import {
 } from "../shared/profileResources";
 import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
+import { AgentSkillWorkspaceRoute } from "./components/AgentSkillWorkspaceRoute";
 import { DataRootPath } from "./components/DataRootPath";
 import { DiffViewer } from "./components/DiffViewer";
+import { LibraryHeaderActions } from "./components/LibraryHeaderActions";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
+import { ProfileDeleteDialog } from "./components/ProfileDeleteDialog";
+import { ProfileFormDialog } from "./components/ProfileFormDialog";
 import { QuickOpen } from "./components/QuickOpen";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileActionsMenu } from "./components/ProfileActionsMenu";
@@ -150,6 +162,7 @@ import {
 import { useLibraryScrollRestoration } from "./hooks/useLibraryScrollRestoration";
 import { useModalDialog } from "./hooks/useModalDialog";
 import { useDesktopShortcuts } from "./hooks/useDesktopShortcuts";
+import { useAgentSkillWorkspace } from "./hooks/useAgentSkillWorkspace";
 import {
   preferredTargetForProfile,
   reconcileProfileUsage,
@@ -500,7 +513,7 @@ const AppContent = ({
   const [skillUpdateCheckStatus, setSkillUpdateCheckStatus] =
     useState<SkillUpdateCheckStatus>();
   const [skillUpdateFeedbackWorkspace, setSkillUpdateFeedbackWorkspace] =
-    useState<"library" | "profiles">("library");
+    useState<"library" | "profiles" | "targets">("library");
   const [checkingProfileSkillUpdates, setCheckingProfileSkillUpdates] = useState(false);
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
@@ -528,6 +541,8 @@ const AppContent = ({
   const [profileDialogMode, setProfileDialogMode] = useState<ProfileDialogMode>();
   const [profileCreateSource, setProfileCreateSource] = useState<ProfileCreateSource>("blank");
   const [profileCaptureOrigin, setProfileCaptureOrigin] = useState<ProfileCaptureOrigin>("profiles");
+  const [profileCaptureScope, setProfileCaptureScope] =
+    useState<"all" | "skills">("all");
   const [profileCaptureActivity, setProfileCaptureActivity] = useState<ProfileCaptureActivity>("idle");
   const [targetCapturePreview, setTargetCapturePreview] = useState<TargetCapturePreview>();
   const [profileCaptureStatus, setProfileCaptureStatus] = useState("");
@@ -553,6 +568,7 @@ const AppContent = ({
   const profileSearchInputRef = useRef<HTMLInputElement>(null);
   const skillSearchInputRef = useRef<HTMLInputElement>(null);
   const dataRefreshRequestRef = useRef(0);
+  const skillUpdateResultRevisionRef = useRef(0);
   const profileFlowRequestRef = useRef(0);
   const activeProfileFlowRequestRef = useRef<number | undefined>(undefined);
   const saveInFlightRef = useRef(false);
@@ -783,6 +799,7 @@ const AppContent = ({
     shouldApply: () => boolean = () => true,
     forceSkillUpdateCheck = false
   ) => {
+    const skillUpdateResultRevision = skillUpdateResultRevisionRef.current;
     const {
       supportedTargetItems,
       targetItems,
@@ -846,8 +863,10 @@ const AppContent = ({
     if (!shouldApply()) {
       return { skillUpdateItems };
     }
-    setSkillUpdates(skillUpdateItems);
-    if (checkedSources) setSkillSourceGroups(checkedSources.groups);
+    if (skillUpdateResultRevision === skillUpdateResultRevisionRef.current) {
+      setSkillUpdates(skillUpdateItems);
+      if (checkedSources) setSkillSourceGroups(checkedSources.groups);
+    }
     setSkillInventory(skillInventoryItems);
     setGithubAuthStatus(githubStatus);
     setSkillUsage(usage);
@@ -898,6 +917,11 @@ const AppContent = ({
     }
   };
 
+  const commitSkillUpdates = (next: SetStateAction<SkillUpdateInfo[]>) => {
+    skillUpdateResultRevisionRef.current += 1;
+    setSkillUpdates(next);
+  };
+
   const replaceLibrarySkillLocally = (
     updated: SkillLibraryEntry,
     options: { invalidateUpdateCheck?: boolean } = {}
@@ -908,7 +932,8 @@ const AppContent = ({
         : current.concat(updated)
     );
     if (options.invalidateUpdateCheck) {
-      setSkillUpdates((current) => current.filter((item) => item.id !== updated.id));
+      commitSkillUpdates((current) =>
+        current.filter((item) => item.id !== updated.id));
       setSelectedSkillUpdatePlan((current) =>
         current?.id === updated.id ? undefined : current
       );
@@ -926,7 +951,7 @@ const AppContent = ({
         ? { ...item, contentMatchesLibrary: false }
         : item
     ));
-    setSkillUpdates((current) => [
+    commitSkillUpdates((current) => [
       ...current.filter((item) => !updatesById.has(item.id)),
       ...updatedSkills
         .filter((skill) => skill.updatePolicy === "tracked")
@@ -984,13 +1009,13 @@ const AppContent = ({
     void window.agentEnv
       .checkSkillLibraryUpdates([skill.id])
       .then((updates) => {
-        setSkillUpdates((current) => [
+        commitSkillUpdates((current) => [
           ...current.filter((item) => item.id !== skill.id),
           ...updates
         ]);
       })
       .catch((unknownError) => {
-        setSkillUpdates((current) => [
+        commitSkillUpdates((current) => [
           ...current.filter((item) => item.id !== skill.id),
           {
             id: skill.id,
@@ -1095,7 +1120,8 @@ const AppContent = ({
 
   const selectProfileNow = async (
     profileId: string,
-    composerSection?: ComposerSection
+    composerSection?: ComposerSection,
+    targetOverrideId?: string
   ) => {
     const requestId = ++profileFlowRequestRef.current;
     activeProfileFlowRequestRef.current = requestId;
@@ -1115,13 +1141,15 @@ const AppContent = ({
       if (requestId !== profileFlowRequestRef.current) {
         return;
       }
-      const profileTargetId = preferredTargetForProfile(
-        profile.id,
-        profile.manifest.preferredTargetId,
-        targetStates,
-        targets,
-        profileTargetSelections[profile.id]
-      );
+      const profileTargetId =
+        targetOverrideId ??
+        preferredTargetForProfile(
+          profile.id,
+          profile.manifest.preferredTargetId,
+          targetStates,
+          targets,
+          profileTargetSelections[profile.id]
+        );
       setSelectedTargetId(profileTargetId);
       setSelectedProfileId(profileId);
       if (profileTargetId) {
@@ -1160,6 +1188,9 @@ const AppContent = ({
 
   const selectWorkspace = (workspace: AppWorkspace) => {
     if (workspace === activeWorkspace) {
+      if (workspace === "targets" && agentWorkspace.selectedTargetId) {
+        agentWorkspace.close();
+      }
       return;
     }
     const label = {
@@ -1170,6 +1201,8 @@ const AppContent = ({
     }[workspace];
     guardProfileAction(label, () => {
       libraryScroll.captureScroll();
+      agentWorkspace.clearImportReturn();
+      agentWorkspace.clearImportedSkills();
       if (workspace === "library") {
         setSkillUpdateFeedbackWorkspace("library");
       }
@@ -1177,9 +1210,18 @@ const AppContent = ({
     });
   };
 
+  const openAgentSkills = (targetId: string) => {
+    const targetName = targets.find((target) => target.id === targetId)?.name ?? "Agent";
+    guardProfileAction(
+      `manage ${targetName} Skills`,
+      () => agentWorkspace.open(targetId)
+    );
+  };
+
   const selectProfile = (
     profileId: string,
-    composerSection?: ComposerSection
+    composerSection?: ComposerSection,
+    targetOverrideId?: string
   ) => {
     const summary = profiles.find((profile) => profile.id === profileId);
     if (summary?.loadError) {
@@ -1190,13 +1232,20 @@ const AppContent = ({
       return;
     }
     if (profileId === selectedProfileId) {
+      if (targetOverrideId) {
+        setSelectedTargetId(targetOverrideId);
+        setProfileTargetSelections((current) => ({
+          ...current,
+          [profileId]: targetOverrideId
+        }));
+      }
       setActiveWorkspace("profiles");
       setActiveComposerSection(composerSection);
       return;
     }
     const profileName = profiles.find((profile) => profile.id === profileId)?.name ?? "profile";
     guardProfileAction(`switch to ${profileName}`, () =>
-      selectProfileNow(profileId, composerSection)
+      selectProfileNow(profileId, composerSection, targetOverrideId)
     );
   };
 
@@ -1459,6 +1508,7 @@ const AppContent = ({
     setProfileForm({ targetId, name: "", description: "" });
     setProfileCreateSource("blank");
     setProfileCaptureOrigin("profiles");
+    setProfileCaptureScope("all");
     setProfileCaptureActivity("idle");
     setTargetCapturePreview(undefined);
     setProfileCaptureError("");
@@ -1472,7 +1522,10 @@ const AppContent = ({
     guardProfileAction("create a new profile", openCreateProfileDialogNow);
   };
 
-  const openCreateFromTargetDialogNow = (targetId: string) => {
+  const openCreateFromTargetDialogNow = (
+    targetId: string,
+    scope: "all" | "skills" = "all"
+  ) => {
     const target = targets.find((item) => item.id === targetId);
     setProfileForm({
       targetId,
@@ -1481,6 +1534,7 @@ const AppContent = ({
     });
     setProfileCreateSource("target");
     setProfileCaptureOrigin("targets");
+    setProfileCaptureScope(scope);
     setProfileCaptureActivity("idle");
     setTargetCapturePreview(undefined);
     setProfileCaptureError("");
@@ -1488,9 +1542,17 @@ const AppContent = ({
     setProfileDialogMode("create");
   };
 
-  const openCreateFromTargetDialog = (targetId: string) => {
+  const openCreateFromTargetDialog = (
+    targetId: string,
+    scope: "all" | "skills" = "all"
+  ) => {
     const targetName = targets.find((item) => item.id === targetId)?.name ?? "Agent";
-    guardProfileAction(`create a profile from ${targetName}`, () => openCreateFromTargetDialogNow(targetId));
+    guardProfileAction(
+      scope === "skills"
+        ? `manage ${targetName} Skills`
+        : `create a profile from ${targetName}`,
+      () => openCreateFromTargetDialogNow(targetId, scope)
+    );
   };
 
   const openEditProfileDialog = () => {
@@ -1520,7 +1582,10 @@ const AppContent = ({
     setProfileCaptureActivity("reviewing");
     setBusy(true);
     try {
-      const captured = await window.agentEnv.previewCreateProfileFromTarget(profileForm.targetId);
+      const captured = await window.agentEnv.previewCreateProfileFromTarget(
+        profileForm.targetId,
+        profileCaptureScope
+      );
       setTargetCapturePreview(captured);
       setProfileForm((current) => ({
         ...current,
@@ -1580,7 +1645,16 @@ const AppContent = ({
         setSelectedProfileId(saved.id);
         setDraftProfile(saved);
         if (profileCreateSource === "target") {
-          setProfileCaptureStatus(t("{{name}} created. Agent unchanged.", { name: saved.manifest.name }));
+          setProfileCaptureStatus(
+            profileCaptureScope === "skills"
+              ? t("Skill setup saved. Agent unchanged.")
+              : t("{{name}} created. Agent unchanged.", {
+                  name: saved.manifest.name
+                })
+          );
+          if (profileCaptureScope === "skills") {
+            agentWorkspace.acceptCapturedProfile(profileForm.targetId, saved);
+          }
         }
       } else if (draftProfile) {
         setProfileSaveStatus("Saving profile details");
@@ -1592,7 +1666,11 @@ const AppContent = ({
         acceptProfileMetadata(saved, draftProfile.manifest.name);
       }
       setActiveComposerSection(undefined);
-      setActiveWorkspace("profiles");
+      setActiveWorkspace(
+        profileCaptureOrigin === "targets" && profileCaptureScope === "skills"
+          ? "targets"
+          : "profiles"
+      );
       setProfileDialogMode(undefined);
       setTargetCapturePreview(undefined);
       setPreview(undefined);
@@ -1924,6 +2002,27 @@ const AppContent = ({
     window.requestAnimationFrame(() => focusInitialActionMenuItem(profileActionsMenuRef.current));
   }, [isProfileActionsOpen]);
 
+  const agentWorkspace = useAgentSkillWorkspace({
+    targets,
+    targetStates,
+    profiles,
+    librarySkills,
+    skillInventory,
+    draftProfile,
+    isProfileDirty,
+    setProfiles,
+    setTargetStates,
+    setProfileResourceCounts,
+    setProfileLibraryVersions,
+    setSkillInventory,
+    setSkillUsage,
+    setDraftProfile,
+    setBackups,
+    setSelectedTargetId,
+    setError,
+    openTargetsWorkspace: () => setActiveWorkspace("targets")
+  });
+
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
   const loadingProfileSummary = profileLoadingId
     ? profiles.find((profile) => profile.id === profileLoadingId)
@@ -2182,6 +2281,19 @@ const AppContent = ({
     setActiveComposerSection((current) => current === section ? undefined : section);
   };
 
+  const acceptAppliedProfile = (
+    appliedProfile: ProfileDetail,
+    appliedPreview: ActivationPreview
+  ) => {
+    acceptAppliedProfileState({
+      profile: appliedProfile,
+      preview: appliedPreview,
+      setTargetStates,
+      setBackups,
+      setSkillInventory
+    });
+  };
+
   const applySelectedProfile = async () => {
     if (!draftProfile || !preview) {
       return;
@@ -2217,46 +2329,9 @@ const AppContent = ({
         setError(result.errors.join("\n"));
         return;
       }
-      const appliedAt = new Date().toISOString();
-      setTargetStates((current) => {
-        const appliedState: TargetManagementState = {
-          targetId: preview.targetId,
-          activeProfileId: draftProfile.id,
-          activeProfileName: draftProfile.manifest.name,
-          appliedProfileHash: preview.profileContentHash,
-          appliedLibraryVersions: preview.libraryVersions,
-          status: "managed",
-          lifecycleStatus: "applied",
-          lastAppliedAt: appliedAt,
-          managedResourceCount: preview.effectivePayload?.total ??
-            preview.changes.length + preview.resourceChanges.length,
-          sharedSkillPreparations: preview.sharedSkillPreparations ?? [],
-          warningCount: preview.issues.filter((issue) => issue.disposition === "notice").length,
-          errorCount: 0
-        };
-        return current.some((state) => state.targetId === preview.targetId)
-          ? current.map((state) => state.targetId === preview.targetId ? appliedState : state)
-          : current.concat(appliedState);
-      });
+      acceptAppliedProfile(draftProfile, preview);
       setPreview(undefined);
       setRollbackPreview(undefined);
-      void window.agentEnv.listBackups().then(setBackups).catch(() => undefined);
-      const appliedProfileHash = preview.profileContentHash;
-      void window.agentEnv
-        .listTargetStates()
-        .then((refreshedStates) => {
-          setTargetStates((current) =>
-            current.find((state) => state.targetId === preview.targetId)?.appliedProfileHash ===
-            appliedProfileHash
-              ? refreshedStates
-              : current
-          );
-        })
-        .catch(() => undefined);
-      void window.agentEnv
-        .scanSkillInventory()
-        .then(setSkillInventory)
-        .catch(() => undefined);
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2399,6 +2474,7 @@ const AppContent = ({
       });
       if (!prepared || prepared.kind !== "local") return false;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
+      agentWorkspace.rememberImportedSkills([result.skill]);
       setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
@@ -2450,6 +2526,7 @@ const AppContent = ({
       });
       if (!prepared || prepared.kind !== "local") return false;
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
+      agentWorkspace.rememberImportedSkills([result.skill]);
       setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
       await refreshProfiles();
@@ -2693,7 +2770,7 @@ const AppContent = ({
     setSkillUpdateCheckStatus({ state: "checking", message: "Checking library updates..." });
     try {
       const skillUpdateItems = await window.agentEnv.checkSkillLibraryUpdates();
-      setSkillUpdates(skillUpdateItems);
+      commitSkillUpdates(skillUpdateItems);
       setSkillUpdateCheckStatus(summarizeSkillUpdateChecks(skillUpdateItems, t));
       const checkError = skillUpdateItems.find((item) => item.error)?.error;
       if (checkError) {
@@ -2714,12 +2791,14 @@ const AppContent = ({
     }
     setCheckingProfileSkillUpdates(true);
     setError(undefined);
-    setSkillUpdateFeedbackWorkspace("profiles");
+    setSkillUpdateFeedbackWorkspace(
+      activeWorkspace === "targets" ? "targets" : "profiles"
+    );
     setSkillUpdateCheckStatus({ state: "checking", message: "Checking profile skills..." });
     try {
       const updates = await window.agentEnv.checkSkillLibraryUpdates(ids);
       const selectedIds = new Set(ids);
-      setSkillUpdates((current) => [
+      commitSkillUpdates((current) => [
         ...current.filter((update) => !selectedIds.has(update.id)),
         ...updates
       ]);
@@ -2863,7 +2942,7 @@ const AppContent = ({
         candidate.libraryId ? [candidate.libraryId] : []
       ))
     );
-    setSkillUpdates((current) => [
+    commitSkillUpdates((current) => [
       ...current.filter((update) => !sourceIds.has(update.id)),
       ...sourceUpdates
     ]);
@@ -3035,6 +3114,7 @@ const AppContent = ({
         imported: queueResult.imported,
         failed: queueResult.failed
       };
+      agentWorkspace.rememberImportedSkills(result.imported);
       const updatedSourceCount = queueResult.updatedSourceCount;
       setSelectedSkillUpdatePlan(undefined);
       try {
@@ -3043,7 +3123,8 @@ const AppContent = ({
       } catch (refreshError) {
         setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
       } finally {
-        setSkillUpdates((current) => reconcileImportedSkillUpdates(current, result.imported));
+        commitSkillUpdates((current) =>
+          reconcileImportedSkillUpdates(current, result.imported));
       }
       if (result.imported.length > 0) {
         setSkillUpdateCheckStatus({
@@ -3092,6 +3173,7 @@ const AppContent = ({
         imported: queueResult.imported,
         failed: queueResult.failed
       };
+      agentWorkspace.rememberImportedSkills(result.imported);
       const updatedSourceCount = queueResult.updatedSourceCount;
       setSelectedSkillUpdatePlan(undefined);
       try {
@@ -3100,7 +3182,8 @@ const AppContent = ({
       } catch (refreshError) {
         setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
       } finally {
-        setSkillUpdates((current) => reconcileImportedSkillUpdates(current, result.imported));
+        commitSkillUpdates((current) =>
+          reconcileImportedSkillUpdates(current, result.imported));
       }
       if (result.imported.length > 0) {
         setSkillUpdateCheckStatus({
@@ -3338,7 +3421,7 @@ const AppContent = ({
           updatePlan.updateAvailable && updatePlan.changes.length > 0 ? updatePlan : undefined
         );
         if (!updatePlan.updateAvailable && updatePlan.latestRevision) {
-          setSkillUpdates((current) => current.map((update) =>
+          commitSkillUpdates((current) => current.map((update) =>
             update.id === id
               ? {
                   ...update,
@@ -3975,8 +4058,7 @@ const AppContent = ({
       selectWorkspace("library");
     },
     onOpenTarget: (targetId) => {
-      setSelectedTargetId(targetId);
-      selectWorkspace("targets");
+      openAgentSkills(targetId);
     },
     onRefreshSkills: refreshSkills,
     onRefreshTargets: refreshTargets
@@ -4022,57 +4104,48 @@ const AppContent = ({
               className="page-header library-page-header"
               title={t("Skills")}
               actions={
-                <ControlGroup
-                  className="page-actions"
-                  aria-label={t("Library actions")}
-                >
-                  <Button
-                    className="primary-inline-action"
-                    size="prominent"
-                    variant="primary"
-                    aria-label={t("Import skills")}
-                    icon={<Plus size={16} strokeWidth={2.4} />}
-                    onClick={() => setSkillLibraryTool("import")}
-                  >
-                    {t("Import")}
-                  </Button>
-                  <Button
-                    className="secondary-action"
-                    size="prominent"
-                    icon={<ScanLine size={15} strokeWidth={2.2} />}
-                    onClick={() => {
-                      void openSkillDiscoveries();
-                    }}
-                  >
-                    {t("Scan local")}
-                  </Button>
-                  <Button
-                    className="secondary-action"
-                    size="prominent"
-                    aria-label={t(skillLibraryMode === "sources" ? "Refresh sources" : "Refresh skills")}
-                    disabled={skillRefreshStatus === "refreshing" || skillSourceGroupsLoading}
-                    icon={(
-                      <RefreshCw
-                        className={
-                          skillRefreshStatus === "refreshing" || skillSourceGroupsLoading
-                            ? "is-spinning"
-                            : ""
+                <LibraryHeaderActions
+                  mode={skillLibraryMode}
+                  refreshing={
+                    skillRefreshStatus === "refreshing" ||
+                    skillSourceGroupsLoading
+                  }
+                  returnTargetName={
+                    agentWorkspace.importReturnTargetId
+                      ? targets.find(
+                          (target) =>
+                            target.id ===
+                            agentWorkspace.importReturnTargetId
+                        )?.name ?? t("Agent")
+                      : undefined
+                  }
+                  onReturn={
+                    agentWorkspace.importReturnTargetId
+                      ? () => {
+                          const targetId =
+                            agentWorkspace.importReturnTargetId;
+                          if (!targetId) return;
+                          setSkillLibraryTool(undefined);
+                          agentWorkspace.clearImportReturn();
+                          void agentWorkspace.open(
+                            targetId,
+                            agentWorkspace.profileByTarget[targetId]
+                          );
                         }
-                        size={15}
-                        strokeWidth={2.2}
-                      />
-                    )}
-                    onClick={() => {
-                      if (skillLibraryMode === "sources") {
-                        void refreshSkillSourceGroups();
-                      } else {
-                        void refreshSkills();
-                      }
-                    }}
-                  >
-                    {t("Refresh")}
-                  </Button>
-                </ControlGroup>
+                      : undefined
+                  }
+                  onImport={() => setSkillLibraryTool("import")}
+                  onScanLocal={() => {
+                    void openSkillDiscoveries();
+                  }}
+                  onRefresh={() => {
+                    if (skillLibraryMode === "sources") {
+                      void refreshSkillSourceGroups();
+                    } else {
+                      void refreshSkills();
+                    }
+                  }}
+                />
               }
             />
             <SkillLibraryPanel
@@ -4625,211 +4698,125 @@ const AppContent = ({
                   </section>
                 </div>
               ) : null}
-              {profileDialogMode && !(profileDialogMode === "create" && profileCreateSource === "target") ? (
-                <div className="preview-modal-backdrop" onClick={busy ? undefined : closeProfileDialog}>
-                  <section
-                    ref={appModalDialogRef}
-                    className="profile-form-dialog profile-editor-dialog ui-dialog-shell"
-                    role="dialog"
-                    aria-label={t(profileDialogMode === "create" ? "New profile" : "Edit profile")}
-                    aria-modal="true"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <header className="profile-dialog-header ui-dialog-header">
-                      <div className="ui-dialog-header__copy">
-                        <div className="section-title ui-dialog-title">
-                          {t(profileDialogMode === "create" ? "New profile" : "Edit profile")}
-                        </div>
-                        <p className="muted ui-dialog-description">
-                          {profileDialogMode === "create"
-                            ? t("Start blank or capture an existing local agent environment.")
-                            : t("Update the profile name and description.")}
-                        </p>
-                      </div>
-                    </header>
-                    <div className="profile-form-grid ui-dialog-body">
-                      {profileDialogMode === "create" ? (
-                        <>
-                          {!targetCapturePreview ? (
-                            <div className="profile-source-choice" role="group" aria-label={t("Profile source")}>
-                              <button
-                                className={profileCreateSource === "blank" ? "is-selected" : ""}
-                                type="button"
-                                onClick={() => setProfileCreateSource("blank")}
-                              >
-                                {t("Blank")}
-                              </button>
-                              <button
-                                className={profileCreateSource === "target" ? "is-selected" : ""}
-                                type="button"
-                                onClick={() => {
-                                  setProfileCreateSource("target");
-                                  setProfileCaptureOrigin("profiles");
-                                  setProfileCaptureError("");
-                                  const currentTarget = targets.find((target) => target.id === profileForm.targetId);
-                                  const nextTarget = currentTarget && isTargetInstalled(currentTarget.health)
-                                    ? currentTarget
-                                    : targets.find((target) => isTargetInstalled(target.health));
-                                  if (nextTarget) {
-                                    setProfileForm((current) => ({
-                                      ...current,
-                                      targetId: nextTarget.id,
-                                      name: current.name.trim() || nextTarget.name
-                                    }));
-                                  }
-                                }}
-                              >
-                                {t("From Agent")}
-                              </button>
-                            </div>
-                          ) : null}
-                          <label>
-                            <span>
-                              {profileCreateSource === "target"
-                                ? t("Source Agent")
-                                : t("Preferred Agent")}
-                            </span>
-                            <select
-                              aria-label={
-                                profileCreateSource === "target"
-                                  ? t("Source Agent")
-                                  : t("Preferred Agent")
-                              }
-                              value={profileForm.targetId}
-                              onChange={(event) => {
-                                setProfileForm({ ...profileForm, targetId: event.currentTarget.value });
-                              }}
-                            >
-                              {targets.map((target) => (
-                                <option value={target.id} key={target.id}>{target.name}</option>
-                              ))}
-                            </select>
-                          </label>
-                        </>
-                      ) : null}
-                      <label>
-                        <span>{t("Profile name")}</span>
-                        <input
-                          aria-label={t("Profile name")}
-                          aria-invalid={Boolean(profileFormError)}
-                          aria-describedby={profileFormError ? "profile-name-error" : undefined}
-                          value={profileForm.name}
-                          onChange={(event) => {
-                            setProfileFormError("");
-                            setProfileForm({ ...profileForm, name: event.currentTarget.value });
-                          }}
-                        />
-                        {profileFormError ? (
-                          <small className="field-error" id="profile-name-error">
-                            {profileFormError}
-                          </small>
-                        ) : null}
-                      </label>
-                      {profileDialogMode === "edit" || profileCreateSource === "blank" ? (
-                        <label>
-                          <span>{t("Description")}</span>
-                          <textarea
-                            aria-label={t("Description")}
-                            rows={3}
-                            value={profileForm.description}
-                            onChange={(event) =>
-                              setProfileForm({ ...profileForm, description: event.currentTarget.value })
-                            }
-                          />
-                        </label>
-                      ) : null}
-                    </div>
-                    <footer className="preview-actions ui-dialog-footer">
-                      <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
-                        {t("Cancel")}
-                      </button>
-                      <button
-                        className="primary-action"
-                        type="button"
-                        disabled={
-                          busy ||
-                          profileForm.name.trim().length === 0
-                        }
-                        onClick={submitProfileDialog}
-                      >
-                        {t(profileDialogMode === "edit" ? "Done" : "Create")}
-                      </button>
-                    </footer>
-                  </section>
-                </div>
-              ) : null}
-              {deleteProfileCandidateId ? (
-                <div className="preview-modal-backdrop" onClick={busy ? undefined : closeProfileDialog}>
-                  <section
-                    ref={appModalDialogRef}
-                    className="profile-form-dialog profile-form-dialog--compact"
-                    role="dialog"
-                    aria-label={t("Delete profile")}
-                    aria-modal="true"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <header className="profile-dialog-header">
-                      <div className="ui-dialog-header__copy">
-                        <div className="section-title ui-dialog-title">{t("Delete profile")}</div>
-                        <p className="muted ui-dialog-description">
-                          {isDeleteProfileCandidateActive
-                            ? t("{{name}} is active on {{targets}}. Apply another profile or stop managing each Agent before removing it.", { name: deleteProfileCandidateName, targets: deleteProfileCandidateActiveTargets.join(", ") })
-                            : t("Remove {{name}}? Applied Agent files and backups are not removed.", { name: deleteProfileCandidateName })}
-                        </p>
-                      </div>
-                    </header>
-                    <footer className="preview-actions">
-                      <button ref={appModalInitialFocusRef} className="secondary-action" type="button" disabled={busy} onClick={closeProfileDialog}>
-                        {t("Cancel")}
-                      </button>
-                      {!isDeleteProfileCandidateActive ? (
-                        <button className="danger-action" type="button" disabled={busy} onClick={deleteProfile}>
-                          {t("Remove profile")}
-                        </button>
-                      ) : (
-                        <button
-                          className="primary-action"
-                          type="button"
-                          onClick={() => {
-                            closeProfileDialog();
-                            setActiveWorkspace("targets");
-                          }}
-                        >
-                          {t("Open Agents")}
-                        </button>
-                      )}
-                    </footer>
-                  </section>
-                </div>
-              ) : null}
+              <ProfileFormDialog
+                open={Boolean(
+                  profileDialogMode &&
+                  !(profileDialogMode === "create" && profileCreateSource === "target")
+                )}
+                mode={profileDialogMode ?? "create"}
+                source={profileCreateSource}
+                sourceChoiceComplete={Boolean(targetCapturePreview)}
+                busy={busy}
+                targets={targets}
+                form={profileForm}
+                error={profileFormError}
+                dialogRef={appModalDialogRef}
+                initialFocusRef={appModalInitialFocusRef}
+                onSourceChange={(source) => {
+                  setProfileCreateSource(source);
+                  if (source !== "target") return;
+                  setProfileCaptureOrigin("profiles");
+                  setProfileCaptureError("");
+                  const currentTarget = targets.find(
+                    (target) => target.id === profileForm.targetId
+                  );
+                  const nextTarget =
+                    currentTarget && isTargetInstalled(currentTarget.health)
+                      ? currentTarget
+                      : targets.find((target) =>
+                          isTargetInstalled(target.health));
+                  if (nextTarget) {
+                    setProfileForm((current) => ({
+                      ...current,
+                      targetId: nextTarget.id,
+                      name: current.name.trim() || nextTarget.name
+                    }));
+                  }
+                }}
+                onTargetChange={(targetId) =>
+                  setProfileForm({ ...profileForm, targetId })}
+                onNameChange={(name) => {
+                  setProfileFormError("");
+                  setProfileForm({ ...profileForm, name });
+                }}
+                onDescriptionChange={(description) =>
+                  setProfileForm({ ...profileForm, description })}
+                onClose={closeProfileDialog}
+                onSubmit={() => {
+                  void submitProfileDialog();
+                }}
+              />
+              <ProfileDeleteDialog
+                open={Boolean(deleteProfileCandidateId)}
+                busy={busy}
+                active={isDeleteProfileCandidateActive}
+                profileName={deleteProfileCandidateName}
+                activeTargetNames={deleteProfileCandidateActiveTargets}
+                dialogRef={appModalDialogRef}
+                initialFocusRef={appModalInitialFocusRef}
+                onClose={closeProfileDialog}
+                onDelete={() => {
+                  void deleteProfile();
+                }}
+                onOpenAgents={() => {
+                  closeProfileDialog();
+                  setActiveWorkspace("targets");
+                }}
+              />
             </section>
           </>
         ) : activeWorkspace === "targets" ? (
-          <TargetWorkspace
-            targets={targets}
-            targetStates={targetStates}
-            mcpConnections={nativeMcpConnections ?? []}
-            backups={backups}
-            rollbackPreview={rollbackPreview}
-            rollbackError={rollbackError}
-            stopManagingPreview={stopManagingPreview}
-            busy={busy}
-            onRefresh={refreshTargets}
-            onManageTarget={(targetId) => {
-              selectTarget(targetId);
-              setActiveWorkspace("profiles");
-            }}
-            onCreateProfileFromTarget={openCreateFromTargetDialog}
-            onPreviewRollback={previewSelectedRollback}
-            onCancelRollback={() => {
-              setRollbackPreview(undefined);
-              setRollbackError(undefined);
-            }}
-            onRestoreRollback={restoreSelectedRollback}
-            onPreviewStopManaging={previewStopManaging}
-            onCancelStopManaging={() => setStopManagingPreview(undefined)}
-            onStopManaging={confirmStopManaging}
-          />
+          agentWorkspace.selectedTarget ? (
+            <AgentSkillWorkspaceRoute
+              workspace={agentWorkspace}
+              librarySkills={librarySkills}
+              skillUpdates={skillUpdates}
+              checkingSkillUpdates={checkingProfileSkillUpdates}
+              selectedSkillUpdatePlan={selectedSkillUpdatePlan}
+              updateBusy={busy}
+              onBeginSetup={(scope) =>
+                openCreateFromTargetDialog(
+                  agentWorkspace.selectedTarget!.id,
+                  scope
+                )}
+              onOpenProfile={(profileId, targetId) =>
+                selectProfile(profileId, "skills", targetId)}
+              onOpenImport={() => {
+                agentWorkspace.beginImport();
+                setSkillLibraryTool("import");
+                setSkillLibraryMode("skills");
+                setActiveWorkspace("library");
+              }}
+              onCheckSkillUpdates={(ids) => void checkProfileSkillUpdates(ids)}
+              onPreviewSkillUpdate={(id) => void previewLibrarySkillUpdate(id)}
+              onCloseSkillUpdate={() => setSelectedSkillUpdatePlan(undefined)}
+              onConfirmSkillUpdate={(plan) => void updateLibrarySkill(plan)}
+            />
+          ) : (
+            <TargetWorkspace
+              targets={targets}
+              targetStates={targetStates}
+              mcpConnections={nativeMcpConnections ?? []}
+              backups={backups}
+              rollbackPreview={rollbackPreview}
+              rollbackError={rollbackError}
+              stopManagingPreview={stopManagingPreview}
+              busy={busy}
+              onRefresh={refreshTargets}
+              onManageSkills={openAgentSkills}
+              onCreateProfileFromTarget={(targetId) =>
+                openCreateFromTargetDialog(targetId, "all")}
+              onPreviewRollback={previewSelectedRollback}
+              onCancelRollback={() => {
+                setRollbackPreview(undefined);
+                setRollbackError(undefined);
+              }}
+              onRestoreRollback={restoreSelectedRollback}
+              onPreviewStopManaging={previewStopManaging}
+              onCancelStopManaging={() => setStopManagingPreview(undefined)}
+              onStopManaging={confirmStopManaging}
+            />
+          )
         ) : activeWorkspace === "settings" ? (
           <section className="settings-page" aria-label={t("Settings")}>
             <PageHeader
@@ -5508,6 +5495,7 @@ const AppContent = ({
             targets={targets}
             name={profileForm.name}
             origin={profileCaptureOrigin}
+            scope={profileCaptureScope}
             preview={targetCapturePreview}
             activity={profileCaptureActivity}
             nameError={profileFormError}
