@@ -75,6 +75,14 @@ export interface AgentEnvApi {
   listSupportedTargets(): Promise<TargetDescriptor[]>;
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
+  listConversations(input?: ConversationListInput): Promise<ConversationListResult>;
+  readConversation(id: string): Promise<ConversationDetail>;
+  refreshConversations(): Promise<ConversationRefreshResult>;
+  openOriginalConversation(id: string): Promise<ConversationLaunchResult>;
+  previewConversationContinuation(
+    input: ConversationContinueInput
+  ): Promise<ConversationContinuationPreview>;
+  continueConversation(previewId: string): Promise<ConversationLaunchResult>;
   listNativeMcpConnections(): Promise<NativeMcpInspection>;
   listSkillLibrary(): Promise<SkillLibraryEntry[]>;
   listSkillFiles(id: string): Promise<SkillFileNode[]>;
@@ -212,6 +220,85 @@ export type StartupStatus =
       dataRoot?: string;
       canRetry: boolean;
     };
+
+export type ConversationRole = "user" | "assistant";
+export type ConversationDetailState = "full" | "summary-only";
+
+export interface ConversationSummary {
+  id: string;
+  agentId: string;
+  agentName: string;
+  sourceId: string;
+  title: string;
+  snippet: string;
+  workspacePath?: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  detailState: ConversationDetailState;
+  archived?: boolean;
+}
+
+export interface ConversationMessage {
+  id: string;
+  role: ConversationRole;
+  text: string;
+  createdAt?: string;
+}
+
+export interface ConversationDetail extends ConversationSummary {
+  messages: ConversationMessage[];
+}
+
+export interface ConversationListInput {
+  query?: string;
+  agentIds?: string[];
+  limit?: number;
+  offset?: number;
+}
+
+export interface ConversationListResult {
+  items: ConversationSummary[];
+  total: number;
+}
+
+export interface ConversationRefreshFailure {
+  agentId: string;
+  message: string;
+}
+
+export interface ConversationRefreshResult {
+  indexed: number;
+  unchanged: number;
+  removed: number;
+  failures: ConversationRefreshFailure[];
+}
+
+export interface ConversationContinueInput {
+  conversationId: string;
+  targetId: string;
+}
+
+export type ConversationLaunchMode = "native" | "context-file" | "clipboard";
+
+export interface ConversationContinuationPreview {
+  previewId: string;
+  conversationId: string;
+  targetId: string;
+  targetName: string;
+  mode: ConversationLaunchMode;
+  portableMessageCount: number;
+  totalMessageCount: number;
+  omittedMessageCount: number;
+  sensitiveValuesRedacted: boolean;
+  warnings: string[];
+  requiresReview: boolean;
+}
+
+export interface ConversationLaunchResult {
+  mode: ConversationLaunchMode;
+  message: string;
+}
 
 export type AdoptedTargetResource = "instructions" | "mcp";
 

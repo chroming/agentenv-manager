@@ -111,6 +111,7 @@ import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { AgentSkillWorkspaceRoute } from "./components/AgentSkillWorkspaceRoute";
 import { DataRootPath } from "./components/DataRootPath";
 import { DiffViewer } from "./components/DiffViewer";
+import { ConversationWorkspace } from "./components/ConversationWorkspace";
 import { LibraryHeaderActions } from "./components/LibraryHeaderActions";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ProfileMcpEditor } from "./components/ProfileMcpEditor";
@@ -192,6 +193,7 @@ const workspacePreferenceKey = "agentenv:last-workspace";
 const workspaceValues = new Set<AppWorkspace>([
   "library",
   "profiles",
+  "conversations",
   "targets",
   "settings"
 ]);
@@ -1260,6 +1262,7 @@ const AppContent = ({
     const label = {
       library: "open Skills",
       profiles: "open Profiles",
+      conversations: "open Conversations",
       targets: "open Agents",
       settings: "open Settings"
     }[workspace];
@@ -4130,6 +4133,7 @@ const AppContent = ({
     <main
       className={`app-shell${activeWorkspace === "library" ? " app-shell--library" : ""}${
         activeWorkspace === "profiles" ? " app-shell--profiles" : ""
+      }${activeWorkspace === "conversations" ? " app-shell--conversations" : ""
       }${activeWorkspace === "settings" ? " app-shell--settings" : ""
       }`}
     >
@@ -4156,6 +4160,8 @@ const AppContent = ({
             ? t("Library workspace")
             : activeWorkspace === "profiles"
               ? t("Profile editor")
+              : activeWorkspace === "conversations"
+                ? t("Conversation workspace")
               : t("{{name}} workspace", { name: activeWorkspace })
         }
       >
@@ -4823,6 +4829,8 @@ const AppContent = ({
               />
             </section>
           </>
+        ) : activeWorkspace === "conversations" ? (
+          <ConversationWorkspace targets={targets} />
         ) : activeWorkspace === "targets" ? (
           agentWorkspace.selectedTarget ? (
             <AgentSkillWorkspaceRoute

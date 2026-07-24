@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, shell } from "electron";
 import { createHash } from "node:crypto";
 import { chmod, mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -19,6 +19,10 @@ import { createSettingsStore } from "./settingsStore";
 import { createSkillLibraryStore } from "./skillLibraryStore";
 import { createTargetDiscoveryService } from "./targetDiscovery";
 import { createTargetCaptureService } from "./targetCaptureService";
+import {
+  createConversationService,
+  type ConversationService
+} from "./conversations/conversationService";
 import { createTargetRegistry } from "./targets/registry";
 import { createFilesystemSkillDriver } from "./targets/shared/skillRuntime";
 import { createTargetScope } from "./targets/targetScope";
@@ -498,6 +502,38 @@ const createServices = async () => {
     targetScope,
     settingsStore
   });
+  let loadedConversationService: Promise<ConversationService> | undefined;
+  let conversationServiceDisposed = false;
+  const loadConversationService = () => {
+    if (conversationServiceDisposed) {
+      return Promise.reject(new Error("Conversation service is shutting down"));
+    }
+    loadedConversationService ??= createConversationService({
+      paths,
+      targetRegistry,
+      targetDiscoveryService,
+      settingsStore,
+      clipboard
+    });
+    return loadedConversationService;
+  };
+  const conversationService: ConversationService = {
+    list: (input) => loadConversationService().then((service) => service.list(input)),
+    read: (id) => loadConversationService().then((service) => service.read(id)),
+    refresh: () => loadConversationService().then((service) => service.refresh()),
+    openOriginal: (id) =>
+      loadConversationService().then((service) => service.openOriginal(id)),
+    previewContinuation: (input) =>
+      loadConversationService().then((service) => service.previewContinuation(input)),
+    continue: (previewId) =>
+      loadConversationService().then((service) => service.continue(previewId)),
+    dispose: () => {
+      conversationServiceDisposed = true;
+      void loadedConversationService
+        ?.then((service) => service.dispose())
+        .catch(() => undefined);
+    }
+  };
   let syncTransport: GitSyncTransport | undefined;
   let syncTransportDisposed = false;
   const loadSyncTransport = async () => {
@@ -545,6 +581,7 @@ const createServices = async () => {
     targetCaptureService,
     targetRegistry,
     targetDiscoveryService,
+    conversationService,
     mutationCoordinator,
     workspaceSyncService,
     cancelRepositoryOperations: () => gitRunner?.cancelActive(),
@@ -552,6 +589,7 @@ const createServices = async () => {
       repositoryServicesDisposed = true;
       syncTransportDisposed = true;
       workspaceSyncService.dispose();
+      conversationService.dispose();
       gitRunner?.dispose();
     }
   };

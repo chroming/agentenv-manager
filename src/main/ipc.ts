@@ -58,6 +58,7 @@ import { parseDesktopContextMenuItems } from "../shared/desktopContextMenu";
 import { pathEntryExists } from "./fileUtils";
 import { createSkillArchiveService } from "./skillArchiveService";
 import { createSkillFileBrowser } from "./skillFileBrowser";
+import type { ConversationService } from "./conversations/conversationService";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -69,6 +70,7 @@ export interface IpcServices {
   skillLibraryStore: SkillLibraryStore;
   targetRegistry: TargetRegistry;
   targetDiscoveryService: TargetDiscoveryService;
+  conversationService: ConversationService;
   targetCaptureService: TargetCaptureService;
   mutationCoordinator: MutationCoordinator;
   paths: AgentEnvPaths;
@@ -103,6 +105,7 @@ export const registerIpcHandlers = ({
   skillLibraryStore,
   targetRegistry,
   targetDiscoveryService,
+  conversationService,
   targetCaptureService,
   mutationCoordinator,
   paths,
@@ -220,6 +223,29 @@ export const registerIpcHandlers = ({
   ipcMain.handle("clipboard:write-text", (_event, text: unknown) => {
     clipboard.writeText(String(text));
   });
+  ipcMain.handle("conversations:list", (_event, input: unknown) =>
+    conversationService.list(input && typeof input === "object" ? input : undefined)
+  );
+  ipcMain.handle("conversations:read", (_event, id: unknown) =>
+    conversationService.read(String(id ?? ""))
+  );
+  ipcMain.handle("conversations:refresh", () => conversationService.refresh());
+  ipcMain.handle("conversations:open-original", (_event, id: unknown) =>
+    conversationService.openOriginal(String(id ?? ""))
+  );
+  ipcMain.handle("conversations:preview-continue", (_event, input: unknown) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Conversation continuation requires a source and target");
+    }
+    const value = input as { conversationId?: unknown; targetId?: unknown };
+    return conversationService.previewContinuation({
+      conversationId: String(value.conversationId ?? ""),
+      targetId: parseId(value.targetId, "target id")
+    });
+  });
+  ipcMain.handle("conversations:continue", (_event, previewId: unknown) =>
+    conversationService.continue(String(previewId ?? ""))
+  );
   ipcMain.handle("menu:open-context", (event, value: unknown) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window || window.isDestroyed()) return undefined;

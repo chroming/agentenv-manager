@@ -15,6 +15,7 @@
 @import "./pages/skill-cleanup.css" layer(pages);
 @import "./pages/skills-dialogs.css" layer(pages);
 @import "./pages/profiles.css" layer(pages);
+@import "./pages/conversations.css" layer(pages);
 @import "./pages/profile-mcp.css" layer(pages);
 @import "./pages/profile-composer.css" layer(pages);
 @import "./pages/apply-preview.css" layer(pages);

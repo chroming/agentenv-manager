@@ -8,6 +8,7 @@ import type {
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
+import { createCodexConversationCapability } from "./conversations/codexConversations";
 import { createUnifiedDiff } from "../diff";
 import { pathExists, readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -102,6 +103,7 @@ export const createCodexTargetAdapter = (): AgentTargetAdapter => ({
     };
   },
   skills,
+  conversations: createCodexConversationCapability(),
   createDefaultProfile: (id) => ({
     id,
     manifest: {

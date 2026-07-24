@@ -14,6 +14,7 @@ import type {
 } from "../../shared/types";
 import { profileManagesResource } from "../../shared/profileResources";
 import { createApplyIssue } from "../applyIssues";
+import { createOpenCodeConversationCapability } from "./conversations/opencodeConversations";
 import { createUnifiedDiff } from "../diff";
 import { readTextIfExists } from "../fileUtils";
 import { findSecretWarnings } from "../secretWarnings";
@@ -175,6 +176,7 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     };
   },
   skills,
+  conversations: createOpenCodeConversationCapability(),
   createDefaultProfile: (id) => ({
     id,
     manifest: {

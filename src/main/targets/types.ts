@@ -1,5 +1,7 @@
 import type {
   ApplyIssue,
+  ConversationDetail,
+  ConversationDetailState,
   NativeMcpConnection,
   ProfileDetail,
   TargetActivationPreview,
@@ -53,6 +55,52 @@ export interface TargetInstallationResult {
   evidence: TargetInstallationEvidence[];
 }
 
+export interface AgentConversationCandidate {
+  sourceId: string;
+  sourceVersion: string;
+  sourceLocator: string;
+  title?: string;
+  snippet?: string;
+  workspacePath?: string;
+  createdAt?: string;
+  updatedAt: string;
+  messageCount?: number;
+  detailState: ConversationDetailState;
+  archived?: boolean;
+}
+
+export interface AgentConversationContext {
+  homeDir: string;
+  executablePath?: string;
+  targetPaths: TargetPaths;
+}
+
+export interface ConversationLaunchSpec {
+  executablePath: string;
+  args: string[];
+  cwd?: string;
+}
+
+export interface ConversationContinuationInput extends AgentConversationContext {
+  conversation: ConversationDetail;
+  contextFilePath: string;
+}
+
+export interface AgentConversationCapability {
+  discover(context: AgentConversationContext): Promise<AgentConversationCandidate[]>;
+  read(
+    context: AgentConversationContext,
+    candidate: AgentConversationCandidate
+  ): Promise<ConversationDetail>;
+  openOriginal?(
+    context: AgentConversationContext,
+    candidate: AgentConversationCandidate
+  ): ConversationLaunchSpec | undefined;
+  continueWithContext?(
+    input: ConversationContinuationInput
+  ): ConversationLaunchSpec | undefined;
+}
+
 export interface AgentTargetAdapter {
   descriptor: TargetDescriptor;
   detectInstallation(input: TargetInstallationInput): Promise<TargetInstallationResult>;
@@ -61,6 +109,7 @@ export interface AgentTargetAdapter {
     readNativeState(targetPaths: TargetPaths): Promise<SkillRuntimeNativeState>;
     inspectRuntime(targetPaths: TargetPaths): Promise<SkillRuntimeSnapshot>;
   };
+  conversations?: AgentConversationCapability;
   createDefaultProfile(id: string): Omit<ProfileDetail, "profileDir">;
   captureProfile(targetPaths: TargetPaths): Promise<CapturedTargetProfile>;
   createPreview(input: TargetPreviewInput): Promise<TargetActivationPreview>;

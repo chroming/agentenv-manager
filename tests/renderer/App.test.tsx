@@ -302,7 +302,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
-    runtimeVersion: 4,
+    runtimeVersion: 5,
     platform: "darwin",
     readStartupStatus: vi.fn().mockResolvedValue({ state: "ready" }),
     onStartupStatusChanged: vi.fn().mockReturnValue(() => undefined),
@@ -323,6 +323,25 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     listSupportedTargets: vi.fn().mockResolvedValue([target, codexTarget]),
     listTargets: vi.fn().mockResolvedValue([target]),
     listTargetStates: vi.fn().mockResolvedValue([]),
+    listConversations: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    readConversation: vi.fn().mockRejectedValue(new Error("Conversation not found")),
+    refreshConversations: vi.fn().mockResolvedValue({
+      indexed: 0,
+      unchanged: 0,
+      removed: 0,
+      failures: []
+    }),
+    openOriginalConversation: vi.fn().mockResolvedValue({
+      mode: "native",
+      message: "Opened"
+    }),
+    previewConversationContinuation: vi.fn().mockRejectedValue(
+      new Error("Conversation not found")
+    ),
+    continueConversation: vi.fn().mockResolvedValue({
+      mode: "context-file",
+      message: "Started"
+    }),
     listNativeMcpConnections: vi.fn().mockResolvedValue({ connections: [], issues: [] }),
     listSkillLibrary: vi.fn().mockResolvedValue([]),
     listSkillFiles: vi.fn().mockResolvedValue([]),

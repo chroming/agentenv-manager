@@ -6,6 +6,7 @@ import type {
   TargetPaths
 } from "../../shared/types";
 import type {
+  AgentConversationCapability,
   AgentTargetAdapter,
   CapturedTargetProfile,
   TargetAssetInput,
@@ -61,5 +62,6 @@ export interface AgentTargetIntegration {
   profile: TargetProfileDriver;
   preview: TargetPreviewDriver;
   skills: TargetSkillDriver;
+  conversations?: AgentConversationCapability;
   assets: TargetAssetDriver;
 }
