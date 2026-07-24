@@ -19,7 +19,7 @@ export const OverflowTooltip = ({
   className,
   displayText,
   displayContent,
-  focusable = true,
+  focusable = false,
   id,
   preferredPlacement,
   text,

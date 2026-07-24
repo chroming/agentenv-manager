@@ -40,10 +40,9 @@ import type {
   SaveProfileInput,
   UpdateProfileMetadataInput,
   UpdateProfileSkillsInput,
-  SkillUpdatePolicyInput,
+  SkillUpdateSettingsInput,
   SkillUpdateConfirmation,
   SkillAvailabilityInput,
-  SkillUpdateSourceInput,
   TargetCaptureScope,
   TargetPaths
 } from "../shared/types";
@@ -813,16 +812,27 @@ export const registerIpcHandlers = ({
       Array.isArray(ids) ? ids.map((id) => parseId(id, "skill id")) : undefined
     );
   });
-  handleMutation("skills:set-update-source", (_event, input: SkillUpdateSourceInput) =>
-    skillLibraryStore.setUpdateSource(input)
-  );
   handleMutation(
-    "skills:set-update-policy",
-    (_event, input: SkillUpdatePolicyInput) =>
-      skillLibraryStore.setUpdatePolicy({
-        id: parseId(input?.id, "skill id"),
-        policy: input?.policy === "tracked" ? "tracked" : "untracked"
-      })
+    "skills:set-update-settings",
+    (_event, input: SkillUpdateSettingsInput) => {
+      const policyId = parseId(input?.policy?.id, "skill id");
+      const source = input?.source
+        ? {
+            ...input.source,
+            id: parseId(input.source.id, "skill source id")
+          }
+        : undefined;
+      if (source && source.id !== policyId) {
+        throw new Error("Skill update source and policy must refer to the same Skill");
+      }
+      return skillLibraryStore.setUpdateSettings({
+        source,
+        policy: {
+          id: policyId,
+          policy: input?.policy?.policy === "tracked" ? "tracked" : "untracked"
+        }
+      });
+    }
   );
   handleMutation(
     "skills:set-availability",

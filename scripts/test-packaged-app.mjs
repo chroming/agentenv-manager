@@ -89,6 +89,7 @@ try {
 
   application = await electron.launch({
     executablePath,
+    args: [`--user-data-dir=${join(root, "electron-user-data")}`],
     env: {
       ...process.env,
       AGENTENV_AUTOMATION: "1",

@@ -44,7 +44,10 @@ describe("Repository Skill source", () => {
 
     app = await electron.launch({
       executablePath: electronPath as unknown as string,
-      args: [join(process.cwd(), "out", "main", "main.js")],
+      args: [
+        `--user-data-dir=${join(root, "electron-user-data")}`,
+        join(process.cwd(), "out", "main", "main.js")
+      ],
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",
@@ -234,7 +237,10 @@ describe("Repository Skill source", () => {
     });
     app = await electron.launch({
       executablePath: electronPath as unknown as string,
-      args: [join(process.cwd(), "out", "main", "main.js")],
+      args: [
+        `--user-data-dir=${join(root, "electron-user-data")}`,
+        join(process.cwd(), "out", "main", "main.js")
+      ],
       env: {
         ...process.env,
         AGENTENV_AUTOMATION: "1",

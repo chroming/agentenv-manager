@@ -72,9 +72,28 @@ html[data-platform="darwin"] {
 
 .agent-chip-row > .agent-chip {
   aspect-ratio: 1;
+  block-size: var(--agent-chip-size);
+  box-sizing: border-box;
+  cursor: pointer;
   flex: 0 0 var(--agent-chip-size);
+  height: var(--agent-chip-size);
+  inline-size: var(--agent-chip-size);
+  max-block-size: var(--agent-chip-size);
+  max-height: var(--agent-chip-size);
+  max-inline-size: var(--agent-chip-size);
   max-width: var(--agent-chip-size);
+  min-block-size: var(--agent-chip-size);
+  min-height: var(--agent-chip-size);
+  min-inline-size: var(--agent-chip-size);
   min-width: var(--agent-chip-size);
+  padding: 0;
+  width: var(--agent-chip-size);
+}
+
+.agent-chip-row > .agent-chip:hover,
+.agent-chip-row > .agent-chip:focus-visible {
+  border-color: var(--accent);
+  outline: none;
 }
 
 .agent-chip--more {
@@ -128,11 +147,25 @@ html[data-platform="darwin"] {
 
 .agent-overflow-popover__item {
   align-items: center;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  cursor: pointer;
   display: grid;
   gap: 9px;
   grid-template-columns: 28px minmax(0, 1fr);
   min-height: 42px;
   padding: 4px 5px;
+  text-align: left;
+  width: 100%;
+}
+
+.agent-overflow-popover__item:hover,
+.agent-overflow-popover__item:focus-visible {
+  background: var(--surface-muted);
+  outline: none;
 }
 
 .agent-overflow-popover__copy {

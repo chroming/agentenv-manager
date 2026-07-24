@@ -97,29 +97,23 @@ export const ProfileFormDialog = ({
                   </button>
                 </div>
               ) : null}
-              <label>
-                <span>
-                  {source === "target"
-                    ? t("Source Agent")
-                    : t("Preferred Agent")}
-                </span>
-                <select
-                  aria-label={
-                    source === "target"
-                      ? t("Source Agent")
-                      : t("Preferred Agent")
-                  }
-                  value={form.targetId}
-                  onChange={(event) =>
-                    onTargetChange(event.currentTarget.value)}
-                >
-                  {targets.map((target) => (
-                    <option value={target.id} key={target.id}>
-                      {target.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {source === "target" ? (
+                <label>
+                  <span>{t("Source Agent")}</span>
+                  <select
+                    aria-label={t("Source Agent")}
+                    value={form.targetId}
+                    onChange={(event) =>
+                      onTargetChange(event.currentTarget.value)}
+                  >
+                    {targets.map((target) => (
+                      <option value={target.id} key={target.id}>
+                        {target.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
             </>
           ) : null}
           <label>

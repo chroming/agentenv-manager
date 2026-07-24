@@ -85,11 +85,10 @@ import type {
   SkillUpstream,
   SkillMergeInput,
   SkillMergePreview,
-  SkillUpdatePolicyInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult,
-  SkillUpdateSourceInput,
+  SkillUpdateSettingsInput,
   TargetDescriptor,
   TargetInfo,
   TargetCapturePreview,
@@ -136,6 +135,7 @@ import {
   type SkillUpdateCheckStatus
 } from "./components/SkillLibraryPanel";
 import { SkillUpdateDialog } from "./components/SkillUpdateDialog";
+import { SkillSettingsSection } from "./components/SkillSettingsSection";
 import { SkillsEditor } from "./components/SkillsEditor";
 import { TargetCaptureDialog } from "./components/TargetCaptureDialog";
 import { TargetWorkspace } from "./components/TargetWorkspace";
@@ -147,8 +147,7 @@ import {
   ControlGroup,
   focusInitialActionMenuItem,
   handleActionMenuKeyDown,
-  PageHeader,
-  Switch
+  PageHeader
 } from "./components/ui";
 import {
   deriveApplyActionLabel,
@@ -188,6 +187,25 @@ const emptyProfileResources: ProfileResources = {
 type ComposerSection = "instructions" | "skills" | "mcp";
 type ProfileDialogMode = "create" | "edit";
 type ProfileCreateSource = "blank" | "target";
+
+const workspacePreferenceKey = "agentenv:last-workspace";
+const workspaceValues = new Set<AppWorkspace>([
+  "library",
+  "profiles",
+  "targets",
+  "settings"
+]);
+
+const readWorkspacePreference = (): AppWorkspace | undefined => {
+  try {
+    const value = window.localStorage.getItem(workspacePreferenceKey);
+    return value && workspaceValues.has(value as AppWorkspace)
+      ? value as AppWorkspace
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
 type ProfileCaptureOrigin = "profiles" | "targets";
 type ProfileCaptureActivity = "idle" | "reviewing" | "creating";
 interface PendingProfileAction {
@@ -503,7 +521,15 @@ const AppContent = ({
   const [rollbackPreview, setRollbackPreview] = useState<RollbackPreview>();
   const [stopManagingPreview, setStopManagingPreview] = useState<StopManagingPreview>();
   const [rollbackError, setRollbackError] = useState<string>();
-  const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>("library");
+  const [initialWorkspacePreference] = useState(readWorkspacePreference);
+  const [activeWorkspace, setActiveWorkspace] = useState<AppWorkspace>(
+    initialWorkspacePreference ?? "library"
+  );
+  const [workspacePreferenceReady, setWorkspacePreferenceReady] = useState(
+    Boolean(initialWorkspacePreference)
+  );
+  const [pendingInitialAgentTargetId, setPendingInitialAgentTargetId] =
+    useState<string>();
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const [quickOpen, setQuickOpen] = useState(false);
   const [skillLibraryViewState, setSkillLibraryViewState] = useState(
@@ -691,6 +717,15 @@ const AppContent = ({
     const timeout = window.setTimeout(() => setSkillUpdateCheckStatus(undefined), 5000);
     return () => window.clearTimeout(timeout);
   }, [skillUpdateCheckStatus]);
+
+  useEffect(() => {
+    if (!workspacePreferenceReady) return;
+    try {
+      window.localStorage.setItem(workspacePreferenceKey, activeWorkspace);
+    } catch {
+      // A blocked UI preference must never prevent the local manager from working.
+    }
+  }, [activeWorkspace, workspacePreferenceReady]);
 
   const invalidateProfileFlow = () => {
     profileFlowRequestRef.current += 1;
@@ -909,7 +944,19 @@ const AppContent = ({
     setError(undefined);
     setSkillRefreshStatus("refreshing");
     try {
-      await refreshProfiles({ checkSkillUpdates: false });
+      const [skillItems, inventoryItems, cleanupBackupItems, sourceGroupItems] =
+        await Promise.all([
+          window.agentEnv.listSkillLibrary(),
+          window.agentEnv.scanSkillInventory(),
+          window.agentEnv.listSkillCleanupBackups(),
+          skillLibraryMode === "sources"
+            ? window.agentEnv.listSkillSourceGroups()
+            : Promise.resolve(undefined)
+        ]);
+      setLibrarySkills(skillItems);
+      setSkillInventory(inventoryItems);
+      setSkillCleanupBackups(cleanupBackupItems);
+      if (sourceGroupItems) setSkillSourceGroups(sourceGroupItems);
       setSkillRefreshStatus("refreshed");
     } catch (unknownError) {
       setSkillRefreshStatus(undefined);
@@ -1051,6 +1098,23 @@ const AppContent = ({
 
         const { profileItems, targetItems, targetStateItems } = core;
         const usableProfiles = profileItems.filter((profile) => !profile.loadError);
+        if (!initialWorkspacePreference) {
+          const installedTargets = targetItems.filter((target) =>
+            isTargetInstalled(target.health)
+          );
+          if (usableProfiles.length === 0 && installedTargets.length > 0) {
+            setActiveWorkspace("targets");
+            if (installedTargets.length === 1) {
+              setPendingInitialAgentTargetId(installedTargets[0].id);
+            }
+          }
+          setWorkspacePreferenceReady(true);
+        } else if (
+          initialWorkspacePreference === "targets" &&
+          targetItems.length === 0
+        ) {
+          setActiveWorkspace("library");
+        }
         if (usableProfiles.length === 0) {
           return;
         }
@@ -2023,6 +2087,19 @@ const AppContent = ({
     openTargetsWorkspace: () => setActiveWorkspace("targets")
   });
 
+  useEffect(() => {
+    if (
+      !pendingInitialAgentTargetId ||
+      activeWorkspace !== "targets" ||
+      !targets.some((target) => target.id === pendingInitialAgentTargetId)
+    ) {
+      return;
+    }
+    const targetId = pendingInitialAgentTargetId;
+    setPendingInitialAgentTargetId(undefined);
+    void agentWorkspace.open(targetId);
+  }, [activeWorkspace, pendingInitialAgentTargetId, targets]);
+
   const selectedTarget = targets.find((target) => target.id === selectedTargetId);
   const loadingProfileSummary = profileLoadingId
     ? profiles.find((profile) => profile.id === profileLoadingId)
@@ -2183,8 +2260,6 @@ const AppContent = ({
         : t(readiness.message);
   const previewHasBlockingIssues =
     preview?.issues.some((issue) => issue.disposition === "block") === true;
-  const previewRequiresBackupReview =
-    preview?.issues.some((issue) => issue.disposition === "review") === true;
   const canApply = Boolean(
     preview &&
       (preview.changes.length > 0 ||
@@ -3324,36 +3399,23 @@ const AppContent = ({
     }
   };
 
-  const setSkillUpdateSource = async (input: SkillUpdateSourceInput) => {
+  const saveSkillUpdateSettings = async (
+    change: SkillUpdateSettingsInput
+  ): Promise<boolean> => {
     setBusy(true);
     setError(undefined);
     try {
-      const updated = await window.agentEnv.setSkillUpdateSource(input);
-      replaceLibrarySkillLocally(updated, { invalidateUpdateCheck: true });
-      refreshTrackedSkillUpdateLocally(updated);
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const setSkillUpdatePolicy = async (input: SkillUpdatePolicyInput) => {
-    setBusy(true);
-    setError(undefined);
-    try {
-      const updated = await window.agentEnv.setSkillUpdatePolicy(input);
+      const updated = await window.agentEnv.setSkillUpdateSettings(change);
       replaceLibrarySkillLocally(updated, { invalidateUpdateCheck: true });
       refreshTrackedSkillUpdateLocally(updated);
       setSkillUpdateCheckStatus({
         state: "success",
-        message:
-          input.policy === "tracked"
-            ? `Tracking updates for ${input.id}`
-            : `Update tracking disabled for ${input.id}`
+        message: t("Update settings saved for {{name}}", { name: updated.name })
       });
+      return true;
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -4077,6 +4139,7 @@ const AppContent = ({
         isLoading={isLoading}
         activeWorkspace={activeWorkspace}
         onWorkspaceSelect={selectWorkspace}
+        onAgentSelect={openAgentSkills}
         onQuickOpen={() => setQuickOpen(true)}
       />
 
@@ -4195,8 +4258,7 @@ const AppContent = ({
                 onManageTargetSkill={manageTargetSkill}
                 onConsolidateSkillGroup={consolidateSkillGroup}
                 onAutoConsolidateSkillGroups={autoConsolidateSkillGroups}
-                onSetUpdateSource={setSkillUpdateSource}
-                onSetUpdatePolicy={(input) => void setSkillUpdatePolicy(input)}
+                onSaveUpdateSettings={saveSkillUpdateSettings}
                 onSetAvailability={setSkillAvailability}
                 onSetIcon={(input) => void setSkillIcon(input)}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
@@ -4357,7 +4419,7 @@ const AppContent = ({
                         <div className="profile-hero__meta">
                           {draftProfile.manifest.preferredTargetId ? (
                             <span className="native-target-pill">
-                              {t("Preferred: {{name}}", {
+                              {t("Preview Agent: {{name}}", {
                                 name: targets.find(
                                   (target) => target.id === draftProfile.manifest.preferredTargetId
                                 )?.name ?? draftProfile.manifest.preferredTargetId
@@ -4631,11 +4693,7 @@ const AppContent = ({
                           profile: draftProfile.manifest.name,
                           target: activeTargetName
                         })}
-                        confirmLabel={t(
-                          previewRequiresBackupReview
-                            ? "Apply with backup"
-                            : "Apply"
-                        )}
+                        confirmLabel={t("Apply")}
                         confirmDisabled={!canApply || busy}
                         confirmBusy={isProfileApplying}
                         onOpenRecovery={() => {
@@ -4853,80 +4911,11 @@ const AppContent = ({
             />
             ) : null}
             {settingsCategory === "skills" ? (
-            <section className="resource-section settings-section" aria-labelledby="library-defaults-heading">
-              <div className="settings-section-title">
-                <div>
-                  <div className="resource-heading" id="library-defaults-heading">{t("Skills library")}</div>
-                  <p className="settings-muted">{t("Defaults used when installing managed skills.")}</p>
-                </div>
-              </div>
-              <div className="settings-preference-list">
-                <label className="settings-preference-row">
-                  <span className="settings-preference-copy">
-                    <strong>{t("Sync")}</strong>
-                    <small>
-                      {skillSettings.skillSyncMethod === "copy"
-                        ? t("Library updates stay pending until installs are explicitly synchronized.")
-                        : skillSettings.skillSyncMethod === "auto"
-                          ? t("Uses live links when supported and falls back to copied installs.")
-                          : t("Library updates immediately change linked Agent Skills without another Apply preview.")}
-                    </small>
-                  </span>
-                  <select
-                    aria-label={t("Global skill sync method")}
-                    value={skillSettings.skillSyncMethod}
-                    onChange={(event) =>
-                      updateSkillSettings({
-                        skillSyncMethod: event.currentTarget.value as AgentEnvSettings["skillSyncMethod"]
-                      })
-                    }
-                  >
-                    <option value="symlink">{t("Live link (recommended)")}</option>
-                    <option value="copy">{t("Copy (apply-gated updates)")}</option>
-                    <option value="auto">{t("Auto (live link when possible)")}</option>
-                  </select>
-                </label>
-                <div className="settings-preference-row">
-                  <span className="settings-preference-copy">
-                    <strong>{t("Auto-check")}</strong>
-                    <small>{t("Checks monitored sources, then reports tracked Skills.")}</small>
-                  </span>
-                  <Switch
-                    checked={skillSettings.skillAutoCheckEnabled}
-                    label={t("Skill auto update check")}
-                    disabled={busy}
-                    onClick={() =>
-                      updateSkillSettings({
-                        skillAutoCheckEnabled: !skillSettings.skillAutoCheckEnabled
-                      })
-                    }
-                  />
-                </div>
-                <label className={`settings-preference-row settings-dependent-row${skillSettings.skillAutoCheckEnabled ? "" : " is-disabled"}`}>
-                  <span className="settings-preference-copy">
-                    <strong>{t("Check interval")}</strong>
-                    <small>{t("Used only while automatic checks are enabled.")}</small>
-                  </span>
-                  <span className="settings-interval-control">
-                    <input
-                      aria-label={t("Skill auto check interval minutes")}
-                      min={5}
-                      max={1440}
-                      step={5}
-                      type="number"
-                      disabled={!skillSettings.skillAutoCheckEnabled || busy}
-                      value={skillSettings.skillAutoCheckIntervalMinutes}
-                      onChange={(event) =>
-                        updateSkillSettings({
-                          skillAutoCheckIntervalMinutes: Number(event.currentTarget.value)
-                        })
-                      }
-                    />
-                    <span aria-hidden="true">{t("min")}</span>
-                  </span>
-                </label>
-              </div>
-            </section>
+              <SkillSettingsSection
+                busy={busy}
+                settings={skillSettings}
+                onChange={(input) => void updateSkillSettings(input)}
+              />
             ) : null}
             {settingsCategory === "connections" ? (
               <>

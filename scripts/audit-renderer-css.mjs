@@ -38,6 +38,9 @@ const primitiveRootSelectors = new Set([
   ".ui-surface-frame",
   ".ui-switch"
 ]);
+const runtimeCustomProperties = new Set([
+  "--hover-detail-arrow-left"
+]);
 
 const selectorCounts = (content) => {
   const counts = new Map();
@@ -55,8 +58,18 @@ const selectorCounts = (content) => {
 };
 
 const reports = [];
+const declaredCustomProperties = new Set();
+const usedCustomProperties = new Map();
 for (const file of files) {
   const content = await readFile(resolve(projectRoot, file), "utf8");
+  for (const match of content.matchAll(/(--[a-zA-Z0-9_-]+)\s*:/g)) {
+    declaredCustomProperties.add(match[1]);
+  }
+  for (const match of content.matchAll(/var\((--[a-zA-Z0-9_-]+)/g)) {
+    const locations = usedCustomProperties.get(match[1]) ?? new Set();
+    locations.add(file);
+    usedCustomProperties.set(match[1], locations);
+  }
   const selectors = selectorCounts(content);
   const hardcodedRadii = [...content.matchAll(/border-radius:\s*([^;]+);/g)]
     .map((match) => match[1].trim())
@@ -101,6 +114,17 @@ const pagePrimitiveRedefinitions = reports.flatMap((report) => {
     .filter((selector) => primitiveRootSelectors.has(selector))
     .map((selector) => ({ file: report.file, selector }));
 });
+const undefinedCustomProperties = [...usedCustomProperties.entries()]
+  .filter(
+    ([property]) =>
+      !declaredCustomProperties.has(property) &&
+      !runtimeCustomProperties.has(property)
+  )
+  .map(([property, locations]) => ({
+    property,
+    files: [...locations].sort()
+  }))
+  .sort((left, right) => left.property.localeCompare(right.property));
 
 const result = {
   files: reports.map(({ selectors: _selectors, ...report }) => report),
@@ -127,6 +151,7 @@ const result = {
   },
   architecture: {
     pagePrimitiveRedefinitions,
+    undefinedCustomProperties,
     usesLateSystemLayer: /(?:\bsystem\b|system\.css)/.test(rendererIndex)
   },
   topCrossFileSelectors: sharedSelectors.slice(0, 25).map(([selector, locations]) => ({
@@ -157,6 +182,11 @@ if (shouldCheck) {
       ? `Page styles must not redefine primitive roots: ${result.architecture.pagePrimitiveRedefinitions
           .map(({ file, selector }) => `${file} (${selector})`)
           .join(", ")}`
+      : undefined,
+    result.architecture.undefinedCustomProperties.length > 0
+      ? `CSS custom properties must be declared in the renderer token system: ${result.architecture.undefinedCustomProperties
+          .map(({ property, files }) => `${property} (${files.join(", ")})`)
+          .join("; ")}`
       : undefined,
     result.totals.crossFileSelectors > 141
       ? "Cross-file selector duplication grew beyond the ownership migration baseline"

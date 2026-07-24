@@ -185,10 +185,6 @@ export const deriveApplyActionLabel = (input: ProfileReadinessInput): string => 
     return "Save profile first";
   }
 
-  if (preview && hasManagedTargetDrift(preview.issues)) {
-    return `Apply with backup to ${target.name}`;
-  }
-
   const readiness = deriveProfileReadiness(input);
   if (readiness.status === "applied") {
     return `Applied to ${target.name}`;

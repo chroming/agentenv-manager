@@ -8,7 +8,7 @@ import {
   within,
   act
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App, AppFeedback } from "../../src/renderer/App";
 import { reconcileImportedSkillUpdates } from "../../src/renderer/skillUpdateSummary";
 import type {
@@ -80,6 +80,30 @@ const preview: ActivationPreview = {
   sourceFingerprints: {},
   targetState: { managedMcpNames: [] }
 };
+
+const localStorageValues = new Map<string, string>();
+const localStorageMock: Storage = {
+  get length() {
+    return localStorageValues.size;
+  },
+  clear: () => localStorageValues.clear(),
+  getItem: (key) => localStorageValues.get(key) ?? null,
+  key: (index) => Array.from(localStorageValues.keys())[index] ?? null,
+  removeItem: (key) => {
+    localStorageValues.delete(key);
+  },
+  setItem: (key, value) => {
+    localStorageValues.set(key, String(value));
+  }
+};
+
+beforeEach(() => {
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: localStorageMock
+  });
+  window.localStorage.clear();
+});
 
 const backup = {
   id: "2026-06-30T09-19-41-374Z",
@@ -471,24 +495,14 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       operation: "retire"
     }),
     rollbackSkillCleanup: vi.fn().mockResolvedValue(undefined),
-    setSkillUpdateSource: vi.fn().mockImplementation(async (input) => ({
-      id: input.id,
-      name: input.id,
+    setSkillUpdateSettings: vi.fn().mockImplementation(async (input) => ({
+      id: input.policy.id,
+      name: input.policy.id,
       description: "",
       path: "/tmp/skill",
-      sourceType: input.sourceType,
-      source: input.source,
-      contentHash: "hash",
-      updatedAt: "2026-07-02T00:00:00.000Z"
-    })),
-    setSkillUpdatePolicy: vi.fn().mockImplementation(async (input) => ({
-      id: input.id,
-      name: input.id,
-      description: "",
-      path: "/tmp/skill",
-      sourceType: "local",
-      source: "/tmp/skill",
-      updatePolicy: input.policy,
+      sourceType: input.source?.sourceType ?? "local",
+      source: input.source?.source ?? "/tmp/skill",
+      updatePolicy: input.policy.policy,
       contentHash: "hash",
       updatedAt: "2026-07-02T00:00:00.000Z"
     })),
@@ -725,11 +739,49 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
 describe("App", () => {
+  it("opens the single installed Agent directly for a first-run Skill setup", async () => {
+    installApi({
+      listProfiles: vi.fn().mockResolvedValue([]),
+      listTargetStates: vi.fn().mockResolvedValue([])
+    });
+
+    render(<App />);
+
+    const workspace = await screen.findByRole("region", {
+      name: "Manage OpenCode Skills"
+    });
+    expect(within(workspace).getByText("Skills are not managed yet")).toBeInTheDocument();
+    expect(
+      within(workspace).getByRole("button", { name: "Manage OpenCode Skills" })
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(window.localStorage.getItem("agentenv:last-workspace")).toBe("targets")
+    );
+  });
+
+  it("restores the last stable workspace on the next launch", async () => {
+    installApi();
+    const firstLaunch = render(<App />);
+    await screen.findByRole("region", { name: "Library workspace" });
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await screen.findByRole("region", { name: "Settings" });
+    await waitFor(() =>
+      expect(window.localStorage.getItem("agentenv:last-workspace")).toBe("settings")
+    );
+    firstLaunch.unmount();
+
+    installApi();
+    render(<App />);
+
+    expect(await screen.findByRole("region", { name: "Settings" })).toBeInTheDocument();
+  });
+
   it("replaces stale same-id update results with the revision that was just imported", () => {
     const stale: SkillUpdateInfo = {
       id: "yao-meta-skill",
@@ -791,13 +843,11 @@ describe("App", () => {
   });
 
   const openProfiles = async () => {
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Profiles" }));
   };
 
   const openSettingsCategory = async (category: "General" | "Agents" | "Skills" | "Connections" | "Data") => {
-    await screen.findByRole("region", { name: "Library workspace" });
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
     fireEvent.click(screen.getByRole("tab", { name: category }));
   };
 
@@ -830,7 +880,7 @@ describe("App", () => {
     );
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
-    expect(screen.getByText("Preferred: OpenCode")).toBeInTheDocument();
+    expect(screen.getByText("Preview Agent: OpenCode")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
     const emptyMcpRow = within(composer).getByRole("button", { name: "MCPs" });
     expect(emptyMcpRow).toBeInTheDocument();
@@ -926,7 +976,7 @@ describe("App", () => {
         updateAvailable: true
       }
     ]);
-    installApi({
+    const api = installApi({
       listSkillLibrary,
       checkMonitoredSkillSourceGroups: vi.fn().mockResolvedValue({
         checked: 1,
@@ -980,10 +1030,20 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("1 update available"));
 
+    const unrelatedReads = [
+      api.listTargets,
+      api.listTargetStates,
+      api.listProfiles,
+      api.listBackups,
+      api.listNativeMcpConnections,
+      api.readGitHubAuthStatus
+    ];
+    unrelatedReads.forEach((read) => vi.mocked(read).mockClear());
     fireEvent.click(screen.getByRole("button", { name: "Refresh skills" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Skills refreshed"));
     expect(listSkillLibrary).toHaveBeenCalledTimes(2);
     expect(checkSkillLibraryUpdates).toHaveBeenCalledTimes(1);
+    unrelatedReads.forEach((read) => expect(read).not.toHaveBeenCalled());
   });
 
   it("offers GitHub connection recovery when an anonymous update check is rate limited", async () => {
@@ -1223,25 +1283,37 @@ describe("App", () => {
       name: "Track updates for local-reviewer"
     });
     fireEvent.click(trackingSwitch);
+    expect(api.setSkillUpdateSettings).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     await waitFor(() =>
-      expect(api.setSkillUpdatePolicy).toHaveBeenCalledWith({
-        id: "local-reviewer",
-        policy: "untracked"
+      expect(api.setSkillUpdateSettings).toHaveBeenCalledWith({
+        policy: {
+          id: "local-reviewer",
+          policy: "untracked"
+        }
       })
     );
-    await waitFor(() => expect(trackingSwitch).toHaveAttribute("aria-checked", "false"));
-    fireEvent.click(trackingSwitch);
+    expect(screen.queryByRole("dialog", { name: "Update settings for local-reviewer" }))
+      .not.toBeInTheDocument();
+    fireEvent.click(within(localRow).getByRole("button", { name: "More actions for local-reviewer" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Update settings" }));
+    const restoredTrackingSwitch = screen.getByRole("switch", {
+      name: "Track updates for local-reviewer"
+    });
+    await waitFor(() => expect(restoredTrackingSwitch).toHaveAttribute("aria-checked", "false"));
+    fireEvent.click(restoredTrackingSwitch);
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
     await waitFor(() =>
-      expect(api.setSkillUpdatePolicy).toHaveBeenCalledWith({
-        id: "local-reviewer",
-        policy: "tracked"
+      expect(api.setSkillUpdateSettings).toHaveBeenCalledWith({
+        policy: {
+          id: "local-reviewer",
+          policy: "tracked"
+        }
       })
     );
     await waitFor(() =>
       expect(api.checkSkillLibraryUpdates).toHaveBeenCalledWith(["local-reviewer"])
     );
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-
     fireEvent.click(
       screen.getByRole("button", { name: "Change icon for local-reviewer" })
     );
@@ -1379,7 +1451,7 @@ describe("App", () => {
 
     await openSettingsCategory("Skills");
 
-    const syncMethod = screen.getByLabelText("Global skill sync method");
+    const syncMethod = screen.getByLabelText("Global skill deployment method");
     expect(syncMethod).toHaveValue("symlink");
     expect(
       within(syncMethod).getByRole("option", { name: "Live link (recommended)" })
@@ -2658,14 +2730,14 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(driftApi.previewApply).toHaveBeenCalledWith("daily-coding", "opencode"));
     action = document.querySelector<HTMLButtonElement>(".profile-apply-button")!;
-    expect(action).toHaveAttribute("title", "Apply with backup to OpenCode");
+    expect(action).toHaveAttribute("title", "Preview & apply to OpenCode");
     readiness = screen.getByRole("status", { name: "Profile readiness" });
     expect(readiness).toHaveTextContent("Review protected changes on OpenCode");
     expect(screen.queryByRole("button", { name: "Review preview" })).not.toBeInTheDocument();
     dialog = screen.getByRole("dialog", { name: "Preview" });
     expect(dialog).toHaveTextContent("Skill review changed outside AgentEnv");
     expect(dialog).not.toHaveTextContent("OpenCode skill changed outside AgentEnv");
-    const replaceButton = within(dialog).getByRole("button", { name: "Apply with backup" });
+    const replaceButton = within(dialog).getByRole("button", { name: /^Apply$/ });
     expect(replaceButton).toBeEnabled();
     expect(within(dialog).getByRole("button", { name: "Open recovery history" })).toBeInTheDocument();
     fireEvent.click(replaceButton);
@@ -2856,7 +2928,7 @@ describe("App", () => {
     const workspace = await screen.findByRole("region", {
       name: "Manage OpenCode Skills"
     });
-    expect(within(workspace).getByText("Using Daily Coding")).toBeInTheDocument();
+    expect(within(workspace).getByText("Skills managed by AgentEnv")).toBeInTheDocument();
     fireEvent.click(
       await within(workspace).findByRole("switch", { name: "Disable Review Workflow" })
     );
@@ -3036,7 +3108,7 @@ describe("App", () => {
     const workspace = await screen.findByRole("region", {
       name: "Manage Codex Skills"
     });
-    await within(workspace).findByText("Using Daily Coding");
+    await within(workspace).findByText("Skills managed by AgentEnv");
     fireEvent.click(within(workspace).getByText("Advanced"));
     fireEvent.click(
       within(workspace).getByRole("button", { name: "Open full Profile" })
@@ -3083,7 +3155,7 @@ describe("App", () => {
     expect(within(workspace).queryByText("Skills are not managed yet")).toBeNull();
     profileReadFails = false;
     fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
-    expect(await within(workspace).findByText("Using Daily Coding")).toBeInTheDocument();
+    expect(await within(workspace).findByText("Skills managed by AgentEnv")).toBeInTheDocument();
   });
 
   it("starts an unmanaged Agent through a Skills-only capture flow", async () => {
@@ -3163,7 +3235,7 @@ describe("App", () => {
       })
     );
     workspace = screen.getByRole("region", { name: "Manage OpenCode Skills" });
-    expect(within(workspace).getByText("Using OpenCode")).toBeInTheDocument();
+    expect(within(workspace).getByText("Skills managed by AgentEnv")).toBeInTheDocument();
     expect(screen.getByText("Skill setup saved. Agent unchanged.")).toBeInTheDocument();
   });
 
@@ -3329,6 +3401,8 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "New Profile" }));
     const createDialog = screen.getByRole("dialog", { name: "New profile" });
+    expect(within(createDialog).queryByLabelText("Preferred Agent")).not.toBeInTheDocument();
+    expect(within(createDialog).queryByLabelText("Source Agent")).not.toBeInTheDocument();
     fireEvent.change(within(createDialog).getByLabelText("Profile name"), {
       target: { value: "Docs Writing" }
     });

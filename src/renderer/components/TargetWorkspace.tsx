@@ -76,7 +76,7 @@ const lifecycleLabel: Record<TargetManagementState["lifecycleStatus"], string> =
   unmanaged: "Not managed",
   applied: "Applied",
   pending: "Changes pending",
-  drifted: "Drift detected",
+  drifted: "Changed outside AgentEnv",
   "recovery-required": "Recovery required"
 };
 
@@ -135,7 +135,7 @@ export const TargetWorkspace = ({
       <PageHeader
         className="page-header workspace-page-header"
         title={t("Agents")}
-        help={<InfoTip label={t("Agents are local coding tools. Manage environments from Profiles and inspect runtime paths here only when diagnosing a problem.")} />}
+        help={<InfoTip label={t("Manage one Agent's Skills here, compose reusable environments in Profiles, and open diagnostics only when troubleshooting.")} />}
         actions={(
           <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
             <Button

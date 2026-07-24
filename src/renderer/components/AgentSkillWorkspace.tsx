@@ -229,7 +229,7 @@ export const AgentSkillWorkspace = ({
           </span>
           <span>
             {profile
-              ? t("Using {{name}}", { name: profile.manifest.name })
+              ? t("Skills managed by AgentEnv")
               : loadError
                 ? t("Profile needs attention")
                 : t("Skills are not managed yet")}
@@ -430,11 +430,7 @@ export const AgentSkillWorkspace = ({
             profile: profile?.manifest.name ?? t("Profile"),
             target: target.name
           })}
-          confirmLabel={
-            preview.issues.some((issue) => issue.disposition === "review")
-              ? t("Apply with backup")
-              : t("Apply")
-          }
+          confirmLabel={t("Apply")}
           confirmDisabled={
             applying ||
             preview.issues.some((issue) => issue.disposition === "block")

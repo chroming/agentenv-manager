@@ -115,9 +115,8 @@ describe("SkillLibraryPanel", () => {
     const onCheckUpdates = vi.fn();
     const onOpenSource = vi.fn();
     const onCopySource = vi.fn();
-    const onSetUpdateSource = vi.fn();
+    const onSaveUpdateSettings = vi.fn().mockResolvedValue(true);
     const onImportExternal = vi.fn().mockResolvedValue(true);
-    const onSetUpdatePolicy = vi.fn();
     let resolveAvailability: ((succeeded: boolean) => void) | undefined;
     const onSetAvailability = vi.fn(
       () => new Promise<boolean>((resolve) => (resolveAvailability = resolve))
@@ -552,8 +551,7 @@ describe("SkillLibraryPanel", () => {
         onCheckUpdates={onCheckUpdates}
         onOpenSource={onOpenSource}
         onCopySource={onCopySource}
-        onSetUpdateSource={onSetUpdateSource}
-        onSetUpdatePolicy={onSetUpdatePolicy}
+        onSaveUpdateSettings={onSaveUpdateSettings}
         onSetAvailability={onSetAvailability}
         onSetIcon={onSetIcon}
         onManageTargetSkill={onManageTargetSkill}
@@ -635,8 +633,8 @@ describe("SkillLibraryPanel", () => {
       .not.toBeInTheDocument();
     expect(onListSkillFiles).toHaveBeenCalledTimes(1);
     const sharedUsage = within(sharedRow).getByLabelText("Usage details for shared-reviewer");
-    fireEvent.focus(sharedUsage);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Daily Coding");
+    fireEvent.mouseEnter(sharedUsage);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Daily Coding");
     expect(screen.getByRole("tooltip")).toHaveTextContent("OpenCode, Codex");
     fireEvent.mouseLeave(sharedUsage);
     await waitFor(() => expect(screen.queryByRole("tooltip")).not.toBeInTheDocument());
@@ -657,8 +655,8 @@ describe("SkillLibraryPanel", () => {
     ).toHaveTextContent("Review");
     const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
     expect(githubSource).not.toHaveAttribute("title");
-    fireEvent.focus(githubSource);
-    expect(screen.getByRole("tooltip")).toHaveTextContent(
+    fireEvent.mouseEnter(githubSource);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
       "https://github.com/acme/agent-skills/tree/main/skills/reviewer"
     );
     fireEvent.mouseLeave(githubSource);
@@ -686,23 +684,45 @@ describe("SkillLibraryPanel", () => {
     fireEvent.change(screen.getByLabelText("Update source ref for internal-review"), {
       target: { value: "main" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save source" }));
-    expect(onSetUpdateSource).toHaveBeenCalledWith({
-      id: "internal-review",
-      sourceType: "git",
-      source: "git@code.example:platform/agent-skills.git",
-      ref: "main",
-      directory: "skills/engineering/review"
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(onSaveUpdateSettings).toHaveBeenCalledWith({
+      policy: {
+        id: "internal-review",
+        policy: "tracked"
+      },
+      source: {
+        id: "internal-review",
+        sourceType: "git",
+        source: "git@code.example:platform/agent-skills.git",
+        ref: "main",
+        directory: "skills/engineering/review"
+      }
+    }));
+    expect(onSaveUpdateSettings).toHaveBeenLastCalledWith({
+      policy: {
+        id: "internal-review",
+        policy: "tracked"
+      },
+      source: {
+        id: "internal-review",
+        sourceType: "git",
+        source: "git@code.example:platform/agent-skills.git",
+        ref: "main",
+        directory: "skills/engineering/review"
+      }
     });
     const localSource = within(
       screen.getByRole("group", { name: "Library item shared-reviewer" })
     ).getByLabelText("Full source for shared-reviewer");
-    fireEvent.focus(localSource);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("/tmp/source/shared-reviewer");
-    fireEvent.blur(localSource);
+    fireEvent.mouseEnter(localSource);
+    await waitFor(() =>
+      expect(screen.getByRole("tooltip")).toHaveTextContent("/tmp/source/shared-reviewer")
+    );
+    fireEvent.mouseLeave(localSource);
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
     const copiedLocalRow = screen.getByRole("group", { name: "Library item copied-local" });
+    expect(copiedLocalRow).toHaveTextContent("Local import");
     expect(copiedLocalRow).toHaveTextContent("Needs sync");
     expect(copiedLocalRow).toHaveTextContent("1 out of sync");
     expect(within(copiedLocalRow).queryByRole("button", { name: /Check update/ })).toBeNull();
@@ -736,13 +756,30 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Update settings" }));
     fireEvent.change(screen.getByLabelText("Update source for shared-reviewer"), {
-      target: { value: "/tmp/source/shared-reviewer" }
+      target: { value: "/tmp/source/shared-reviewer-v2" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save source" }));
-    expect(onSetUpdateSource).toHaveBeenCalledWith({
-      id: "shared-reviewer",
-      sourceType: "local",
-      source: "/tmp/source/shared-reviewer"
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(onSaveUpdateSettings).toHaveBeenLastCalledWith({
+      policy: {
+        id: "shared-reviewer",
+        policy: "tracked"
+      },
+      source: {
+        id: "shared-reviewer",
+        sourceType: "local",
+        source: "/tmp/source/shared-reviewer-v2"
+      }
+    }));
+    expect(onSaveUpdateSettings).toHaveBeenLastCalledWith({
+      policy: {
+        id: "shared-reviewer",
+        policy: "tracked"
+      },
+      source: {
+        id: "shared-reviewer",
+        sourceType: "local",
+        source: "/tmp/source/shared-reviewer-v2"
+      }
     });
 
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
@@ -752,11 +789,20 @@ describe("SkillLibraryPanel", () => {
     });
     expect(updateCheckSwitch).toHaveAttribute("aria-checked", "true");
     fireEvent.click(updateCheckSwitch);
-    expect(onSetUpdatePolicy).toHaveBeenCalledWith({
-      id: "shared-reviewer",
-      policy: "untracked"
+    expect(onSaveUpdateSettings).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(onSaveUpdateSettings).toHaveBeenLastCalledWith({
+      policy: {
+        id: "shared-reviewer",
+        policy: "untracked"
+      }
+    }));
+    expect(onSaveUpdateSettings).toHaveBeenLastCalledWith({
+      policy: {
+        id: "shared-reviewer",
+        policy: "untracked"
+      }
     });
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Review update shared-reviewer" }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("shared-reviewer");
@@ -1411,8 +1457,7 @@ describe("SkillLibraryPanel", () => {
         onManageTargetSkill={noop}
         onConsolidateSkillGroup={vi.fn().mockResolvedValue(false)}
         onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue(undefined)}
-        onSetUpdateSource={noop}
-        onSetUpdatePolicy={noop}
+        onSaveUpdateSettings={vi.fn().mockResolvedValue(true)}
         onSetAvailability={vi.fn().mockResolvedValue(true)}
         onSetIcon={noop}
         onPreviewLibrarySkillUpdate={noop}
@@ -1600,8 +1645,7 @@ describe("SkillLibraryPanel", () => {
         onManageTargetSkill={noop}
         onConsolidateSkillGroup={vi.fn().mockResolvedValue(false)}
         onAutoConsolidateSkillGroups={vi.fn().mockResolvedValue(undefined)}
-        onSetUpdateSource={noop}
-        onSetUpdatePolicy={noop}
+        onSaveUpdateSettings={vi.fn().mockResolvedValue(true)}
         onSetAvailability={vi.fn().mockResolvedValue(true)}
         onSetIcon={noop}
         onPreviewLibrarySkillUpdate={noop}

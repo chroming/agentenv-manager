@@ -2,11 +2,17 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const budgets = {
-  "src/renderer/App.tsx": 5560,
+  "src/renderer/App.tsx": 5550,
+  "src/renderer/components/SkillLibraryPanel.tsx": 4380,
   "src/main/skillLibraryStore.ts": 3246,
   "src/main/activationService.ts": 2453,
-  "src/renderer/ui/pages/profiles.css": 1943,
-  "src/renderer/ui/pages/skills.css": 1906
+  "src/renderer/ui/pages/profiles.css": 1785,
+  "src/renderer/ui/pages/skills.css": 1855,
+  "src/renderer/ui/pages/settings.css": 1220,
+  "src/renderer/ui/pages/targets.css": 1005,
+  "src/renderer/ui/pages/library-import.css": 795,
+  "src/renderer/ui/pages/skill-sources.css": 715,
+  "src/renderer/ui/pages/apply-preview.css": 660
 };
 
 const failures = [];

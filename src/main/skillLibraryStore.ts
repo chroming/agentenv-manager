@@ -40,6 +40,7 @@ import type {
   SkillUpdatePolicyInput,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult,
+  SkillUpdateSettingsInput,
   SkillUpdateSourceInput,
   SkillRuntimeObservation,
   SkillRuntimeSnapshot,
@@ -258,6 +259,7 @@ export interface SkillLibraryStore {
   checkUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
   setUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
   setUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
+  setUpdateSettings(input: SkillUpdateSettingsInput): Promise<SkillLibraryEntry>;
   setAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
   setIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewUpdate(id: string): Promise<SkillUpdatePlan>;
@@ -2512,18 +2514,12 @@ export const createSkillLibraryStore = (
     return results;
   };
 
-  const setUpdateSource = async ({
-    id,
+  const prepareUpdateSourceMetadata = async ({
     sourceType,
     source,
     ref,
     directory
-  }: SkillUpdateSourceInput): Promise<SkillLibraryEntry> => {
-    const safeId = SafeIdSchema.parse(id);
-    const targetDir = join(await libraryDir(), safeId);
-    if (!(await pathExists(join(targetDir, "SKILL.md")))) {
-      throw new Error(`Library skill does not exist: ${safeId}`);
-    }
+  }: SkillUpdateSourceInput) => {
     if (sourceType === "github") {
       const githubSource = parseGitHubSkillUrl(source);
       const sourceCollection = createSingleSkillSourceCollection(
@@ -2534,12 +2530,11 @@ export const createSkillLibraryStore = (
           directory: githubSource.remotePath
         }
       );
-      await writeMetadata(targetDir, {
+      return {
         sourceType: "github",
         source: githubSource.sourceUrl,
         remoteRef: githubSource.ref,
         remotePath: githubSource.remotePath,
-        updatePolicy: "tracked",
         upstream: {
           kind: "github",
           locator: githubSource.sourceUrl,
@@ -2547,8 +2542,7 @@ export const createSkillLibraryStore = (
           subpath: githubSource.remotePath
         },
         sourceCollection
-      });
-      return entryFor(safeId, targetDir);
+      } as const;
     }
     if (sourceType === "git") {
       const tempDir = await mkdtemp(join(tmpdir(), "agentenv-repository-source-"));
@@ -2561,17 +2555,15 @@ export const createSkillLibraryStore = (
           { repository: source, ref, directory, transport: "system-git" },
           materialized
         );
-        await writeMetadata(targetDir, {
+        return {
           sourceType: "git",
           source: materialized.repository,
           remoteRef: materialized.ref,
           remotePath: materialized.directory,
           remoteRevision: materialized.contentRevision,
-          updatePolicy: "tracked",
           upstream: materialized.upstream,
           sourceCollection
-        });
-        return entryFor(safeId, targetDir);
+        } as const;
       } finally {
         await rm(tempDir, { recursive: true, force: true });
       }
@@ -2583,29 +2575,41 @@ export const createSkillLibraryStore = (
       throw new Error(`Skill source is missing SKILL.md: ${source}`);
     }
     const sourceRevision = await computeContentHash(source);
-    await writeMetadata(targetDir, {
+    return {
       sourceType: "local",
       source,
       remoteRevision: sourceRevision,
-      updatePolicy: "tracked",
       upstream: { kind: "local", locator: source, revision: sourceRevision },
       sourceCollection: createLocalSkillSourceCollection(source, source)
-    });
-    return entryFor(safeId, targetDir);
+    } as const;
   };
 
-  const setUpdatePolicy = async ({
-    id,
+  const setUpdateSettings = async ({
+    source,
     policy
-  }: SkillUpdatePolicyInput): Promise<SkillLibraryEntry> => {
-    const safeId = SafeIdSchema.parse(id);
+  }: SkillUpdateSettingsInput): Promise<SkillLibraryEntry> => {
+    const safeId = SafeIdSchema.parse(policy.id);
+    if (source && SafeIdSchema.parse(source.id) !== safeId) {
+      throw new Error("Skill update source and policy must refer to the same Skill");
+    }
     const targetDir = join(await libraryDir(), safeId);
     if (!(await pathExists(join(targetDir, "SKILL.md")))) {
       throw new Error(`Library skill does not exist: ${safeId}`);
     }
-    const metadata = await readLibraryMetadata(targetDir);
+    const current = await readLibraryMetadata(targetDir);
+    const metadata = source
+      ? await prepareUpdateSourceMetadata(source)
+      : {
+          sourceType: current.sourceType ?? "local",
+          source: current.source,
+          remoteRef: current.remoteRef,
+          remotePath: current.remotePath,
+          remoteRevision: current.remoteRevision,
+          upstream: current.upstream,
+          sourceCollection: current.sourceCollection
+        };
     const sourceType = metadata.sourceType ?? "local";
-    if (policy === "tracked") {
+    if (policy.policy === "tracked") {
       if (!metadata.source) {
         throw new Error(`Add an update source before tracking updates for ${safeId}`);
       }
@@ -2628,10 +2632,25 @@ export const createSkillLibraryStore = (
       remoteRef: metadata.remoteRef,
       remotePath: metadata.remotePath,
       remoteRevision: metadata.remoteRevision,
-      updatePolicy: policy
+      upstream: metadata.upstream,
+      sourceCollection: metadata.sourceCollection,
+      updatePolicy: policy.policy
     });
     return entryFor(safeId, targetDir);
   };
+
+  const setUpdateSource = async (
+    input: SkillUpdateSourceInput
+  ): Promise<SkillLibraryEntry> =>
+    setUpdateSettings({
+      source: input,
+      policy: { id: input.id, policy: "tracked" }
+    });
+
+  const setUpdatePolicy = async (
+    input: SkillUpdatePolicyInput
+  ): Promise<SkillLibraryEntry> =>
+    setUpdateSettings({ policy: input });
 
   const setAvailability = async ({
     id,
@@ -3110,6 +3129,7 @@ export const createSkillLibraryStore = (
     checkUpdates,
     setUpdateSource,
     setUpdatePolicy,
+    setUpdateSettings,
     setAvailability,
     setIcon,
     previewUpdate,

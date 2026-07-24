@@ -1,21 +1,33 @@
 :root {
   --text: #1d1d1f;
   --muted: #6e6e73;
+  --muted-strong: #5c5c61;
   --subtle: #98989d;
+  --text-secondary: var(--muted);
+  --text-tertiary: var(--subtle);
   --border: rgba(60, 60, 67, 0.12);
+  --border-soft: rgba(60, 60, 67, 0.09);
+  --border-subtle: var(--border);
   --border-strong: rgba(60, 60, 67, 0.2);
   --page: #f5f5f7;
   --surface: #ffffff;
   --surface-muted: #f5f5f7;
+  --surface-subtle: #fafbfc;
   --surface-pressed: #e9e9eb;
   --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.1);
   --accent-strong: #0068db;
   --success: #248a3d;
   --success-bg: #eef8f0;
   --warning: #9a6700;
+  --warning-strong: #8a4b08;
+  --warning-text: var(--warning-strong);
   --warning-bg: #fff7e5;
+  --info-bg: #f3f7ff;
   --danger: #d70015;
   --danger-bg: #fff0f1;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --mono: var(--font-mono);
 
   --space-1: 4px;
   --space-2: 8px;

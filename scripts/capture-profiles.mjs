@@ -537,7 +537,11 @@ try {
   } = await prepareFixture(fixtureRoot);
   app = await electron.launch({
     executablePath: electronPath,
-    args: ["--disable-gpu", join(projectRoot, "out", "main", "main.js")],
+    args: [
+      "--disable-gpu",
+      `--user-data-dir=${join(fixtureRoot, "electron-user-data")}`,
+      join(projectRoot, "out", "main", "main.js")
+    ],
     env: {
       ...process.env,
       AGENTENV_AUTOMATION: "1",
@@ -562,7 +566,7 @@ try {
   await capturePage(page, join(outputDir, "skills-1180x728.png"));
   const hiddenAgents = page.getByRole("button", { name: "Show hidden Agent list, 2 items" });
   await hiddenAgents.hover();
-  const hiddenAgentsPopover = page.getByRole("tooltip")
+  const hiddenAgentsPopover = page.getByRole("menu", { name: "Hidden Agents" })
     .filter({ hasText: "Antigravity" })
     .filter({ hasText: "Trae CLI" });
   await hiddenAgentsPopover.waitFor({ state: "visible" });
@@ -931,9 +935,9 @@ try {
   await capturePage(page, join(outputDir, "apply-preview-review-required-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "apply-preview-review-required-920x620.png"));
-  const applyWithBackup = driftPreviewDialog.getByRole("button", { name: "Apply with backup" });
-  if ((await applyWithBackup.count()) > 0) {
-    await applyWithBackup.click();
+  const applyButton = driftPreviewDialog.getByRole("button", { name: "Apply", exact: true });
+  if ((await applyButton.count()) > 0) {
+    await applyButton.click();
   } else {
     await driftPreviewDialog.getByLabel(/Back up and replace protected resources/).check();
     await driftPreviewDialog.getByRole("button", { name: "Back up and replace" }).click();
@@ -942,7 +946,6 @@ try {
 
   await page.reload();
   await page.waitForLoadState("domcontentloaded");
-  await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Profiles", exact: true }).click();
   await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
   await page.getByRole("button", { name: /^Code Review/ }).click();
@@ -989,6 +992,23 @@ try {
     "targets",
     () => page.getByRole("region", { name: "Agents", exact: true })
   );
+  const claudeAgent = page.getByRole("article", { name: "Agent Claude Code" });
+  await claudeAgent.getByRole("button", { name: "Manage Claude Code Skills" }).click();
+  const unmanagedAgentSkillWorkspace = page.getByRole("region", {
+    name: "Manage Claude Code Skills"
+  });
+  await unmanagedAgentSkillWorkspace.waitFor({ state: "visible" });
+  await unmanagedAgentSkillWorkspace.getByText("Skills are not managed yet").waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "target-skills-unmanaged-920x620.png"));
+  await setWindowSize(page, windowHandle, 1180, 728);
+  await capturePage(page, join(outputDir, "target-skills-unmanaged-1180x728.png"));
+  await setWindowSize(page, windowHandle, 920, 620);
+  await unmanagedAgentSkillWorkspace.getByRole("button", { name: "Agents" }).click();
+  await page.getByRole("region", { name: "Agents", exact: true }).waitFor({
+    state: "visible"
+  });
   const openCodeAgent = page.getByRole("article", { name: "Agent OpenCode" });
   await openCodeAgent.getByRole("button", { name: "Manage OpenCode Skills" }).click();
   const agentSkillWorkspace = page.getByRole("region", {
@@ -1075,6 +1095,21 @@ try {
   await page.getByLabel("Interface language").selectOption("zh_CN");
   await page.getByRole("heading", { name: "设置" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-zh-cn-920x620.png"));
+  await page.getByRole("button", { name: "技能", exact: true }).click();
+  await page.getByRole("region", { name: "技能资源库", exact: true }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "skills-zh-cn-920x620.png"));
+  await page.getByRole("button", { name: "配置方案", exact: true }).click();
+  await page.getByRole("region", { name: "配置方案", exact: true }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "profiles-zh-cn-920x620.png"));
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await page.getByRole("region", { name: "设置", exact: true }).waitFor({
+    state: "visible"
+  });
+  await page.getByRole("tab", { name: "通用" }).click();
   await page.getByLabel("界面语言").selectOption("en");
   await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible" });
 

@@ -34,7 +34,7 @@ describe("Workspace Sync desktop flow", () => {
     await mkdir(home, { recursive: true });
     app = await electron.launch({
       executablePath: electronPath as unknown as string,
-      args: ["."],
+      args: [`--user-data-dir=${join(root, "electron-user-data")}`, "."],
       cwd: process.cwd(),
       env: {
         ...process.env,

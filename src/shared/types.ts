@@ -110,8 +110,7 @@ export interface AgentEnvApi {
   setSharedSkillRetention(input: SharedSkillRetentionInput): Promise<void>;
   retireSharedSkill(input: RetireSharedSkillInput): Promise<SkillCleanupResult>;
   checkSkillLibraryUpdates(ids?: string[]): Promise<SkillUpdateInfo[]>;
-  setSkillUpdateSource(input: SkillUpdateSourceInput): Promise<SkillLibraryEntry>;
-  setSkillUpdatePolicy(input: SkillUpdatePolicyInput): Promise<SkillLibraryEntry>;
+  setSkillUpdateSettings(input: SkillUpdateSettingsInput): Promise<SkillLibraryEntry>;
   setSkillAvailability(input: SkillAvailabilityInput): Promise<SkillLibraryEntry>;
   setSkillIcon(input: SkillIconInput): Promise<SkillLibraryEntry>;
   previewLibrarySkillUpdate(id: string): Promise<SkillUpdatePlan>;
@@ -609,6 +608,11 @@ export interface SkillUpdateSourceInput {
 export interface SkillUpdatePolicyInput {
   id: string;
   policy: SkillUpdatePolicy;
+}
+
+export interface SkillUpdateSettingsInput {
+  source?: SkillUpdateSourceInput;
+  policy: SkillUpdatePolicyInput;
 }
 
 export interface SkillAvailabilityInput {

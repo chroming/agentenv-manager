@@ -70,12 +70,10 @@ import type {
   SkillSourceMergeResult,
   SkillMergeInput,
   SkillMergePreview,
-  SkillSourceType,
-  SkillUpdatePolicyInput,
   SkillUpdateInfo,
   SkillUpdatePlan,
   SkillUpdatePreviewBatchResult,
-  SkillUpdateSourceInput
+  SkillUpdateSettingsInput
 } from "../../shared/types";
 import { InfoTip } from "./InfoTip";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
@@ -108,6 +106,9 @@ import { SkillSourceView } from "./SkillSourceView";
 import { ProjectSkillDiscoveryPanel } from "./ProjectSkillDiscoveryPanel";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
+import {
+  SkillUpdateSettingsDialog
+} from "./SkillUpdateSettingsDialog";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -201,8 +202,7 @@ interface SkillLibraryPanelProps {
   onManageTargetSkill(input: ManageTargetSkillInput): void;
   onConsolidateSkillGroup(input: SkillCleanupRequest): Promise<boolean>;
   onAutoConsolidateSkillGroups(inputs: SkillCleanupRequest[]): Promise<void>;
-  onSetUpdateSource(input: SkillUpdateSourceInput): void;
-  onSetUpdatePolicy(input: SkillUpdatePolicyInput): void;
+  onSaveUpdateSettings(change: SkillUpdateSettingsInput): Promise<boolean>;
   onSetAvailability(input: SkillAvailabilityInput): Promise<boolean>;
   onSetIcon(input: SkillIconInput): void;
   onPreviewLibrarySkillUpdate(id: string): Promise<void>;
@@ -252,7 +252,7 @@ const shortRevision = (skill: SkillLibraryEntry) =>
 
 const sourceName = (skill: SkillLibraryEntry) => {
   if (skill.sourceType === "local" && !skill.source) {
-    return "Library copy";
+    return "Local import";
   }
   if (skill.sourceType === "local") {
     return "Local folder";
@@ -448,8 +448,7 @@ export const SkillLibraryPanel = ({
   onManageTargetSkill,
   onConsolidateSkillGroup,
   onAutoConsolidateSkillGroups,
-  onSetUpdateSource,
-  onSetUpdatePolicy,
+  onSaveUpdateSettings,
   onSetAvailability,
   onSetIcon,
   onPreviewLibrarySkillUpdate,
@@ -571,9 +570,6 @@ export const SkillLibraryPanel = ({
       setExternalImport(undefined);
     }
   }, [importConflictOpen]);
-  const [sourceDrafts, setSourceDrafts] = useState<
-    Record<string, { sourceType: SkillSourceType; source: string; ref: string; directory: string }>
-  >({});
   const modalDialogRef = useRef<HTMLElement>(null);
   const importDialogRef = useRef<HTMLElement>(null);
   const importFallbackFocusRef = useRef<HTMLElement>(null);
@@ -1085,14 +1081,6 @@ export const SkillLibraryPanel = ({
                 }
               : undefined;
   const localImportLabel = selectedLocalCanManage ? "Import & manage" : "Import copy";
-  const sourceCandidateDraft = sourceCandidate
-    ? sourceDrafts[sourceCandidate.id] ?? {
-        sourceType: sourceCandidate.sourceType,
-        source: sourceCandidate.source ?? "",
-        ref: sourceCandidate.remoteRef ?? sourceCandidate.upstream?.ref ?? "",
-        directory: sourceCandidate.upstream?.subpath ?? ""
-      }
-    : undefined;
   const cleanupCandidate = cleanupDraft
     ? cleanupGroups.find((group) => group.skillKey === cleanupDraft.skillKey)
     : undefined;
@@ -1977,7 +1965,7 @@ export const SkillLibraryPanel = ({
                 })
               : undefined;
             const sourceMeta = [
-              sourceTypeLabel,
+              skill.sourceType === "local" ? undefined : sourceTypeLabel,
               versionLabel,
               sourceUpdatedLabel ? t("Updated {{date}}", { date: sourceUpdatedLabel }) : undefined
             ].filter(Boolean).join(" · ");
@@ -2015,7 +2003,7 @@ export const SkillLibraryPanel = ({
                           ? t("Tracked source")
                           : hasUpdateSource
                             ? t("Source retained")
-                            : t("No update source");
+                            : t("No monitored source");
             return (
               <div
                 aria-label={t("Library item {{id}}", { id: skill.id })}
@@ -2203,7 +2191,7 @@ export const SkillLibraryPanel = ({
                       ) : isTracked && hasUpdateSource ? (
                         <Circle size={13} strokeWidth={2.2} />
                       ) : (
-                        <CheckCircle2 size={13} strokeWidth={2.2} />
+                        <Circle size={13} strokeWidth={2.2} />
                       )}
                       <span>{t(
                         isTracked && updateInfo
@@ -2211,8 +2199,8 @@ export const SkillLibraryPanel = ({
                           : isTracked && hasUpdateSource
                             ? "Not checked"
                             : hasUpdateSource
-                              ? "Not tracked"
-                              : "Ready"
+                              ? "Monitoring off"
+                              : "Manual"
                       )}</span>
                     </strong>
                   )}
@@ -2443,7 +2431,7 @@ export const SkillLibraryPanel = ({
                           <small>{t("Modified")} · {formatDate(entry.upstream?.updatedAt ?? entry.modifiedAt!)}</small>
                         ) : null}
                       </span>
-                      <em>{t(entry.updatePolicy === "tracked" ? "Tracked" : "Not tracked")}</em>
+                      <em>{t(entry.updatePolicy === "tracked" ? "Tracked" : "Monitoring off")}</em>
                     </label>
                   ))}
                 </div>
@@ -2528,172 +2516,12 @@ export const SkillLibraryPanel = ({
         document.body
       ) : null}
 
-      {sourceCandidate && sourceCandidateDraft ? createPortal(
-        <div className="preview-modal-backdrop" onClick={() => setSourceCandidate(undefined)}>
-          <section
-            ref={modalDialogRef}
-            className="profile-form-dialog skill-update-settings-dialog ui-dialog-shell"
-            role="dialog"
-            aria-label={t("Update settings for {{id}}", { id: sourceCandidate.id })}
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="profile-dialog-header ui-dialog-header">
-              <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Update settings")}</div>
-                <p className="muted ui-dialog-description">{sourceCandidate.name}</p>
-              </div>
-            </header>
-            <div className="skill-update-settings-dialog__body ui-dialog-body">
-              <div className="skill-update-settings-policy">
-                <span>
-                  <strong>{t("Track updates")}</strong>
-                  <small>
-                    {sourceCandidate.globallyEnabled === false
-                      ? t("Checks resume when this skill is enabled.")
-                      : sourceCandidate.updatePolicy === "tracked"
-                        ? t("Include in manual and automatic checks.")
-                        : sourceCandidate.source
-                          ? t("Excluded from all update checks.")
-                          : t("Add an update source before tracking.")}
-                  </small>
-                </span>
-                <Switch
-                  checked={sourceCandidate.updatePolicy === "tracked"}
-                  disabled={!sourceCandidate.source}
-                  label={t("Track updates for {{id}}", { id: sourceCandidate.id })}
-                  onClick={() => {
-                    const policy = sourceCandidate.updatePolicy === "tracked" ? "untracked" : "tracked";
-                    onSetUpdatePolicy({ id: sourceCandidate.id, policy });
-                    setSourceCandidate({ ...sourceCandidate, updatePolicy: policy });
-                  }}
-                >
-                  <strong>{t(sourceCandidate.updatePolicy === "tracked" ? "On" : "Off")}</strong>
-                </Switch>
-              </div>
-              <div className="skill-update-source-fields">
-                <label>
-                  <span>{t("Source type")}</span>
-                  <select
-                    aria-label={t("Update source type for {{id}}", { id: sourceCandidate.id })}
-                    value={sourceCandidateDraft.sourceType}
-                    onChange={(event) =>
-                      setSourceDrafts({
-                        ...sourceDrafts,
-                        [sourceCandidate.id]: {
-                          ...sourceCandidateDraft,
-                          sourceType: event.currentTarget.value as SkillSourceType
-                        }
-                      })
-                    }
-                  >
-                    <option value="local">{t("Local folder")}</option>
-                    <option value="github">{t("GitHub directory")}</option>
-                    <option value="git">{t("Git repository")}</option>
-                  </select>
-                </label>
-                <label>
-                  <span>{t("Update source")}</span>
-                  <input
-                    aria-label={t("Update source for {{id}}", { id: sourceCandidate.id })}
-                    placeholder={
-                      sourceCandidateDraft.sourceType === "github"
-                        ? "https://github.com/owner/repo/tree/main/path/to/skill"
-                        : sourceCandidateDraft.sourceType === "git"
-                          ? "git@host:team/repo.git"
-                        : "/path/to/skill"
-                    }
-                    value={sourceCandidateDraft.source}
-                    onChange={(event) =>
-                      setSourceDrafts({
-                        ...sourceDrafts,
-                        [sourceCandidate.id]: {
-                          ...sourceCandidateDraft,
-                          source: event.currentTarget.value
-                        }
-                      })
-                    }
-                  />
-                </label>
-                {sourceCandidateDraft.sourceType === "git" ? (
-                  <>
-                    <label>
-                      <span>{t("Ref")}</span>
-                      <input
-                        aria-label={t("Update source ref for {{id}}", { id: sourceCandidate.id })}
-                        placeholder={t("Default branch")}
-                        value={sourceCandidateDraft.ref}
-                        onChange={(event) =>
-                          setSourceDrafts({
-                            ...sourceDrafts,
-                            [sourceCandidate.id]: {
-                              ...sourceCandidateDraft,
-                              ref: event.currentTarget.value
-                            }
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      <span>{t("Directory")}</span>
-                      <input
-                        aria-label={t("Update source directory for {{id}}", { id: sourceCandidate.id })}
-                        placeholder="skills/review"
-                        value={sourceCandidateDraft.directory}
-                        onChange={(event) =>
-                          setSourceDrafts({
-                            ...sourceDrafts,
-                            [sourceCandidate.id]: {
-                              ...sourceCandidateDraft,
-                              directory: event.currentTarget.value
-                            }
-                          })
-                        }
-                      />
-                    </label>
-                  </>
-                ) : null}
-              </div>
-              <p className="skill-update-settings-help">
-                <InfoTip label={t("Use a local skill folder, GitHub tree directory, or Git clone address. Repository credentials stay with System Git.")} />
-                {t("Source changes are saved independently from update tracking.")}
-              </p>
-            </div>
-            <footer className="preview-actions ui-dialog-footer">
-              <button
-                ref={modalInitialFocusRef}
-                className="secondary-action"
-                type="button"
-                onClick={() => setSourceCandidate(undefined)}
-              >
-                {t("Close")}
-              </button>
-              <button
-                className="primary-action"
-                type="button"
-                disabled={!sourceCandidateDraft.source.trim()}
-                onClick={() => {
-                  onSetUpdateSource({
-                    id: sourceCandidate.id,
-                    sourceType: sourceCandidateDraft.sourceType,
-                    source: sourceCandidateDraft.source.trim(),
-                    ...(sourceCandidateDraft.sourceType === "git"
-                      ? {
-                          ref: sourceCandidateDraft.ref.trim() || undefined,
-                          directory: sourceCandidateDraft.directory.trim() || undefined
-                        }
-                      : {})
-                  });
-                  setSourceCandidate(undefined);
-                }}
-              >
-                {t("Save source")}
-              </button>
-            </footer>
-          </section>
-        </div>,
-        document.body
-      ) : null}
+      <SkillUpdateSettingsDialog
+        skill={sourceCandidate}
+        busy={isBusy}
+        onDismiss={() => setSourceCandidate(undefined)}
+        onSave={onSaveUpdateSettings}
+      />
 
       {deleteCandidate ? createPortal(
         <div className="preview-modal-backdrop" onClick={() => setDeleteCandidate(undefined)}>
@@ -3892,6 +3720,7 @@ export const SkillLibraryPanel = ({
                         ariaLabel={t("Full cleanup locations {{id}}", { id: group.skillKey })}
                         className="cleanup-group-locations"
                         displayText={cleanupLocationsDisplay}
+                        focusable
                         text={group.items
                           .map((skill) => `${cleanupLocationLabel(skill, targetNames)} · ${skill.path}`)
                           .join("\n")}

@@ -2022,6 +2022,46 @@ description: >
     ).resolves.toContain(updateDir);
   });
 
+  it("saves an update source and its tracking policy in one metadata write", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
+    const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });
+    const originalDir = join(root, "original", "reviewer");
+    const updateDir = join(root, "updates", "reviewer");
+    await mkdir(originalDir, { recursive: true });
+    await mkdir(updateDir, { recursive: true });
+    await writeFile(join(originalDir, "SKILL.md"), "---\nname: reviewer\n---\n# v1\n", "utf8");
+    await writeFile(join(updateDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
+
+    const store = createSkillLibraryStore(paths);
+    await store.importSkill({ sourcePath: originalDir, id: "reviewer", sourceType: "local" });
+
+    const updated = await store.setUpdateSettings({
+      source: {
+        id: "reviewer",
+        sourceType: "local",
+        source: updateDir
+      },
+      policy: {
+        id: "reviewer",
+        policy: "untracked"
+      }
+    });
+
+    expect(updated).toMatchObject({
+      id: "reviewer",
+      source: updateDir,
+      updatePolicy: "untracked"
+    });
+    const metadata = JSON.parse(
+      await readFile(join(paths.skillsLibraryDir, "reviewer", ".agentenv-skill.json"), "utf8")
+    );
+    expect(metadata).toMatchObject({
+      source: updateDir,
+      updatePolicy: "untracked",
+      updateCheckEnabled: false
+    });
+  });
+
   it("persists global availability and excludes disabled skills from update checks", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-library-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

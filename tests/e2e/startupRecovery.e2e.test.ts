@@ -23,7 +23,7 @@ describe("startup recovery desktop flow", () => {
     await writeFile(join(dataRoot, "agentenv-data.json"), '{"formatVersion":99}\n');
     app = await electron.launch({
       executablePath: electronPath as unknown as string,
-      args: ["."],
+      args: [`--user-data-dir=${join(root, "electron-user-data")}`, "."],
       cwd: process.cwd(),
       env: {
         ...process.env,

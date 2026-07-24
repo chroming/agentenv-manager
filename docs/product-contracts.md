@@ -265,14 +265,15 @@ resource model.
   necessary to resolve the exact issue.
 - A missing or malformed active Profile is a recoverable local error, never an unmanaged
   state. The Agent detail shows the failure and Retry instead of offering a new takeover.
-- One detected enabled Agent MAY open directly to its detail after the user enters Agents.
-  Multiple Agents first show the ordered Agent list. Back returns to that list without
-  changing persisted state.
+- On first run with no usable Profile, one detected enabled Agent opens directly to its
+  detail; multiple Agents first show the ordered Agent list. Back returns to that list
+  without changing persisted state. Later launches restore the last stable top-level
+  workspace instead of repeatedly forcing the first-run route.
 
 Status: contextual Agent detail, Skills-only Capture, atomic Profile Skill intent editing,
 shared-Profile guard, Library import return, local load recovery, and guided
-Capture-to-Apply orchestration are `Implemented`. Automatic direct entry when exactly one
-Agent is installed remains optional and is not currently enabled.
+Capture-to-Apply orchestration are `Implemented`, including first-run direct entry for one
+installed Agent and persisted top-level workspace restoration.
 
 ### 4.5 Backup
 
@@ -387,6 +388,7 @@ Rules:
 - Save MUST expose local working feedback immediately. Once persistence succeeds, the editor becomes clean and Apply availability is recalculated from the returned saved Profile without waiting for Target discovery, inventory scanning, update checks, usage aggregation, or a full-page refresh.
 - Save, Apply, and Target selection MUST appear as one compact action group in the selected Profile context. The Profile-scoped destination selector sits immediately before Apply, with Save in the same compact group. Page creation controls MUST NOT separate these lifecycle commands.
 - Save and Apply MUST keep stable labels and positions. A dirty Profile highlights Save and disables Apply; after Save, Save is disabled and Apply becomes the primary action.
+- The commit verb remains `Apply` in Ready, Review, drift, and protected-replacement states. Backup and replacement safeguards are disclosed inside Preview; they MUST NOT rename the commit command to `Apply with backup` or introduce a parallel apply workflow.
 - Readiness text describes the current state; it is not a second workflow. Only a condition that requires another product area exposes an inline remediation link: unavailable Target opens Agents and required recovery opens Recovery. Resource validation stays beside the affected Instructions, Skill, or MCP row. Preview blockers and drift do not expose a separate Review command because Apply already creates the authoritative fresh preview.
 - Readiness remediation links MUST show a visible verb and object. Icon-only arrows and backend phase labels such as `Review preview` are not executable product intents and MUST NOT appear as commands.
 - When no Target is selected, the visible Target selector remains the single selection entry point. When the Profile is dirty, the visible Save button remains the single persistence action.
@@ -400,6 +402,7 @@ Rules:
 - Applying a Profile MUST NOT rewrite Agent-native configuration outside explicitly managed MCP activation fields.
 - When exactly one installed Target is available, Profiles MUST show it as stable context instead of an option menu. When multiple installed Targets are available, Target selection remains available.
 - Target selection is scoped to the selected Profile rather than the Profiles page. During an app session, each Profile remembers its own selected Target; otherwise the most recent active Target for that Profile is preferred, followed by its persisted preferred Target. Choosing a Target for one Profile MUST NOT change another Profile's destination context.
+- A blank Profile is not created as Agent-bound. Its create dialog asks only for portable identity fields; the persisted preferred Target is an initial preview hint and is labelled `Preview Agent` when exposed after creation. `Source Agent` appears only when the user explicitly chooses Capture from Agent, and `createdFromTargetId` records provenance rather than compatibility.
 - An empty managed Instructions value is a valid complete Profile state. Preview MUST describe it as clearing the managed instruction file rather than blocking Apply.
 - On entry, Profiles SHOULD select the chosen Target's active Profile and open its Skills section for the common single-Target workflow. Selection MUST NOT add a redundant `Current` badge or pin and reorder the row; the row's Target deployment badges remain the source of application state.
 - Profile name, description, and icon changes auto-save as identity metadata. They MUST preserve any unsaved environment draft and MUST NOT enable the environment Save button by themselves.
@@ -632,12 +635,12 @@ A drifted Target MUST NOT appear Applied. The user MUST be offered these explici
 | --- | --- |
 | Inspect | Show applied content, live content, and saved Profile content. |
 | Adopt into Profile | Save selected live changes back into the native Profile, then require a new Preview. |
-| Apply with backup | Preserve live drift in a Backup, then deploy the saved Profile. |
+| Apply | Preserve replaceable live drift in a Backup, then deploy the saved Profile through the ordinary Apply transaction. |
 | Restore previous deployment | Restore the most recent known-good AgentEnv deployment. |
 | Stop managing and keep current | Detach ownership while preserving current files. |
 | Ignore for now | Keep the Target visibly Drifted and block ordinary Apply. |
 
-One drifted path MUST produce one ownership problem. If an external tool replaces a previously managed Skill or agent and removes its ownership marker, Preview MUST report the managed drift instead of also reporting a generic unmanaged-destination collision. `Apply with backup` MAY bypass ownership validation only for the exact drifted paths recorded by the fresh Preview; unrelated unmanaged destinations remain blocking conflicts.
+One drifted path MUST produce one ownership problem. If an external tool replaces a previously managed Skill or agent and removes its ownership marker, Preview MUST report the managed drift instead of also reporting a generic unmanaged-destination collision. Ordinary `Apply` MAY replace ownership only for the exact drifted paths recorded by the fresh Preview after its Backup guarantee is disclosed; unrelated unmanaged destinations remain blocking conflicts.
 
 Drift adoption MAY update portable Instructions and the existing sparse MCP selections for that same Target. It MUST NOT adopt arbitrary native configuration, create MCP definitions, or add Target-owned Skills automatically.
 
@@ -719,8 +722,8 @@ Status: Apply and cleanup rollback, stale rollback conflict handling, managed st
 - Scan, Preview, and the immediately following Import MAY reuse the same successful Repository snapshot or GitHub response. Explicit Scan and Check updates bypass completed response caches while still coalescing identical requests that are concurrently in flight. Update Preview reuses a fresh immutable result from the immediately preceding check; when that result is absent or expired, Preview performs a fresh read. Materialization MUST use one repository tree and bounded parallel file reads rather than recursively serializing one remote request per directory and file.
 - A multi-Skill GitHub check groups Skills by repository and ref, reads one complete commit tree per group, and derives each Skill-subtree revision from that shared immutable tree. Per-Skill commit-time requests run only for changed candidates. A just-imported tracked Skill immediately replaces any stale same-ID check result with its persisted revision and MUST NOT display `Update available` until a later fresh check proves a difference.
 - Every Skill has an independent `Tracked` or `Untracked` update policy. `Untracked` excludes that Skill from the global Updates result, update reminders, and batch Update review. An explicit source-level `Check` MAY still read its source to update the source projection without creating a Skill update reminder.
-- A Skill row overflow is a compact command menu. Update source and tracking fields live in a focused `Update settings` dialog and MUST NOT turn the row menu into a scrolling form.
-- The UI status for this durable policy is `Not tracked`; temporary wording such as `Checks off` and source-type wording such as `Fixed copy` MUST NOT substitute for the policy.
+- A Skill row overflow is a compact command menu. Update source and tracking fields live in one focused `Update settings` dialog and MUST NOT turn the row menu into a scrolling form. Source and tracking edits remain staged until one `Save settings` command succeeds; closing the dialog discards both, and a partial visual save MUST NOT imply that only one field was persisted.
+- The UI status for this durable policy is `Monitoring off`; temporary wording such as `Checks off` and source-type wording such as `Fixed copy` MUST NOT substitute for the policy.
 - The global auto-check setting controls scheduling only. Within that schedule, only source groups whose routine-check policy is `Monitored` are read; results are surfaced only for member Skills whose independent policy is `Tracked`.
 - Legacy metadata without an explicit policy defaults to `Untracked` for local sources and `Tracked` for GitHub API and System Git Repository sources.
 - Import validates `SKILL.md` and rejects unsafe or ambiguous directory layouts.
@@ -1065,7 +1068,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Every async dialog command keeps its control geometry stable, sets `aria-busy`, disables duplicate submission, and shows an animated local progress indicator. Navigating away and back MUST restore that operation state until it settles.
 - Peer actions with equal consequence use the same neutral treatment. Accent fill is reserved for the current primary commit or flow-advance action; Target `Capture` and `Profiles` are neutral peers.
 - Settings switches sit beside the setting label they control, with supporting copy on the following line; they MUST NOT float as visually detached controls at the far edge of a wide row.
-- Hover/focus tooltips are mutually exclusive. Long-text tooltips allow pointer entry and native text selection for copying, then close after the pointer leaves both trigger and tooltip.
+- Hover/focus tooltips are mutually exclusive. Long-text tooltips allow pointer entry and native text selection for copying, then close after the pointer leaves both trigger and tooltip. Repeated passive overflow spans MUST NOT each add a Tab stop: an existing row command or identity action owns keyboard focus and its full accessible name, while standalone error or decision details MAY opt into focus explicitly.
 - Modal dialogs trap keyboard focus until they close.
 - Escape closes dismissible layers; safe outside click closes them; focus returns to the trigger or the next logical surviving control.
 - Primary workflows work with keyboard only.
@@ -1165,17 +1168,17 @@ credentials, unknown fields, project sources, plugins, and built-ins remain Agen
 
 ## 23.2 First-Run Workflow
 
-The first useful journey is:
+The first useful journey adapts to user complexity:
 
-1. Detect installed Targets.
-2. Scan existing local Skills.
-3. Consolidate, ignore, or leave discovered Skills unmanaged.
-4. Create or select a Profile.
-5. Choose a deployment Target.
-6. Review the effective payload, conflicts, ownership changes, and takeover impact.
-7. Apply and verify the persisted Target result.
+1. Detect installed Agents without blocking local Library access on background enrichment.
+2. When no usable Profile exists, open Agents as the contextual starting point. If exactly one installed Agent exists, open its Skill detail directly; otherwise show the ordered Agent list.
+3. Preserve that Agent's readable Skills into the canonical Library and an ordinary reusable Profile without changing the Agent.
+4. Review and Apply the saved Profile through the standard Preview, ownership, Backup, verification, and rollback transaction.
+5. Restore the last stable top-level workspace on later launches.
 
-The product MAY use contextual empty states for this journey; it MUST NOT require a marketing-style onboarding page.
+Local Skill Cleanup, By source maintenance, and full Profile composition remain available for advanced migration and reuse, but a user with one Agent MUST NOT be required to understand all three before preserving and managing that Agent's Skills. The product MAY use contextual empty states for this journey; it MUST NOT require a marketing-style onboarding page.
+
+The Local Agents summary is contextual navigation, not decoration. Each visible Agent icon and each Agent inside the overflow list opens that Agent's Skill detail directly; its accessible name MUST describe the same destination.
 
 ## 23.3 Localization Contract
 
@@ -1198,6 +1201,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 ### Profile and Agent
 
 - First launch enables every currently supported Agent and persists the explicit scope.
+- First launch with no usable Profile opens Agents; exactly one installed Agent opens its Skill detail directly, while later launches restore the last stable top-level workspace.
 - Turning one Agent off removes only that Agent from navigation, Profile destinations, discovery, Capture, Apply, lifecycle state, and Agent-specific Skill scans; its files and saved state remain byte-for-byte unchanged.
 - Turning every Agent off leaves Library and Profiles usable while hiding Agent-only navigation and deployment commands.
 - A disabled Agent rejects direct IPC Preview, Apply, Capture, rollback, and stop-management requests.
@@ -1213,6 +1217,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Adding or changing an unrelated local Skill after Preview does not stale Apply; adding a Skill that conflicts with a desired runtime name does.
 - Apply executes only the resource additions, replacements, and removals named by Preview. It never discovers and deletes a new stale resource during execution.
 - Dirty Profile blocks Preview and preserves draft.
+- Blank Profile creation exposes no Agent-binding field; Capture from Agent alone exposes Source Agent, and preferred Target remains a preview hint rather than a compatibility boundary.
 - Active Profile is selected for the chosen Target without changing persisted creation-time ordering; a single installed Target is static context.
 - Disabling a Skill in Library preserves its content and every existing Profile reference, hides it from every Add Skill picker, excludes it from update checks and effective Apply payloads, and leaves it visible but locked in Profiles until globally enabled again.
 - Library status views are mutually exclusive. `Enabled` is the default and contains every globally enabled Skill, `Updates` includes only enabled tracked Skills with a confirmed available update, and globally disabled Skills appear only in `Disabled`. Source, usage, and Agent filters further refine enabled Skills without claiming deployment state. Disabled rows MUST differ from active rows through surface, edge, icon treatment, and state text rather than a badge alone.
@@ -1342,11 +1347,11 @@ Current verdict: **Needs refinement**. Core Skill Library, v2 Profile, Preview, 
 
 ### 25.1 Verification Snapshot
 
-The current machine-readable totals, source commit, dirty state, viewport list, capture count, audit results, and packaged-smoke status are generated by `npm run verify:product` in [`verification-snapshot.json`](verification-snapshot.json). Run `npm run verify:product -- --packaged` for a release candidate so the same snapshot also records the packaged workflow.
+The current machine-readable totals, source commit, deterministic tracked-and-untracked source fingerprint, dirty state, viewport list, capture count, audit results, and packaged-smoke status are generated by `npm run verify:product` in [`verification-snapshot.json`](verification-snapshot.json). The fingerprint excludes the generated snapshot itself, so evidence produced from an uncommitted review candidate remains bound to the exact files that were exercised. Every Electron E2E and screenshot fixture uses an isolated Chromium user-data directory, so persisted UI preferences remain production behavior without leaking between evidence runs or into the developer's real app state. Run `npm run verify:product -- --packaged` for a release candidate so the same snapshot also records the packaged workflow.
 
 - The automated suite covers preferred-Target and cross-Target use, Create from Target, real Electron UI, progressive startup, localization persistence and completeness, stable Profile loading, scoped feedback, stale Preview, rollback, recovery, MCP ownership release, and externally replaced managed-Skill recovery scenarios.
 - The CSS architecture gate passed with named container-query contracts, no numeric `z-index` declarations, and no `!important` outside the reduced-motion contract.
-- Fixed-state visual captures are regenerated through the Electron compositor at the supported default and minimum viewports, including the stable Profile loading state, sidebar Agent overflow, Profile icon selection, Profile Skill selection and applied revisions, native MCP Profile states, available-update rows, disabled, empty, Chinese locale, source-specific Import, shared-Skill management guidance, Agent Diagnostics, and focused update-setting states.
+- Fixed-state visual captures are regenerated through the Electron compositor at the supported default and minimum viewports, including the stable Profile loading state, sidebar Agent overflow, managed and unmanaged Agent Skill detail, Profile icon selection, Profile Skill selection and applied revisions, native MCP Profile states, available-update rows, disabled, empty, Chinese Skills, Profiles, and Settings, source-specific Import, shared-Skill management guidance, Agent Diagnostics, and focused update-setting states.
 - Skills, Profiles, Agents, and Settings passed shared chrome and control-geometry checks at `1180 x 728` and `920 x 620` without document overflow.
 - The macOS inset hidden title bar, native-control safe area, full-width draggable top chrome, draggable page headings, and no-drag interactive controls passed main-process configuration and real Electron geometry assertions.
 - Shared page headers, vertically centered navigation rows, uninterrupted work-surface edges, contained composite search fields, `32px` resource identities, compact/default row heights, Profile commit controls, MCP rows, Cleanup state/action lanes, `220px` context menus, and Apply resource rows passed cross-workspace geometry and overflow assertions.

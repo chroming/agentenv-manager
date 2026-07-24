@@ -9,7 +9,7 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
-import { ModalFrame, Switch } from "./ui";
+import { Button, ModalFrame, Switch } from "./ui";
 
 interface SkillsEditorProps {
   value: ProfileResources;
@@ -137,31 +137,33 @@ export const SkillsEditor = ({
           </span>
         </div>
         <div className="profile-skill-toolbar__actions">
-          <button
+          <Button
             className="secondary-action profile-skill-check"
-            type="button"
+            variant="secondary"
             aria-label={t("Check profile skill updates")}
             disabled={disabled || checkingSkillUpdates || checkableIds.length === 0}
             onClick={() => onCheckSkillUpdates?.(checkableIds)}
+            icon={(
+              <RefreshCw
+                className={checkingSkillUpdates ? "is-spinning" : undefined}
+                size={14}
+                strokeWidth={2.2}
+                aria-hidden="true"
+              />
+            )}
           >
-            <RefreshCw
-              className={checkingSkillUpdates ? "is-spinning" : undefined}
-              size={14}
-              strokeWidth={2.2}
-              aria-hidden="true"
-            />
-            {t(checkingSkillUpdates ? "Checking" : "Check")}
-          </button>
-          <button
+            {t(checkingSkillUpdates ? "Checking" : "Check updates")}
+          </Button>
+          <Button
             className="secondary-action"
             ref={pickerTriggerRef}
-            type="button"
+            variant="secondary"
             disabled={disabled}
             onClick={() => openPicker()}
+            icon={<Plus size={14} strokeWidth={2.2} aria-hidden="true" />}
           >
-            <Plus size={14} strokeWidth={2.2} aria-hidden="true" />
             {t("Add")}
-          </button>
+          </Button>
         </div>
       </header>
 

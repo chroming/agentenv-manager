@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -20,6 +21,37 @@ const run = async (command, args, options = {}) => {
   });
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
+};
+
+const computeSourceFingerprint = async () => {
+  const { stdout } = await execFileAsync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    { cwd: projectRoot, maxBuffer: 40 * 1024 * 1024 }
+  );
+  const files = stdout
+    .split("\0")
+    .filter(Boolean)
+    .filter((file) => file !== "docs/verification-snapshot.json")
+    .sort();
+  const hash = createHash("sha256");
+  for (const file of files) {
+    hash.update(file);
+    hash.update("\0");
+    try {
+      hash.update(await readFile(join(projectRoot, file)));
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
+        throw error;
+      }
+      hash.update("<deleted>");
+    }
+    hash.update("\0");
+  }
+  return {
+    sha256: hash.digest("hex"),
+    files: files.length
+  };
 };
 
 await rm(reportPath, { force: true });
@@ -56,12 +88,15 @@ const { stdout: head } = await execFileAsync("git", ["rev-parse", "HEAD"], {
 const { stdout: worktree } = await execFileAsync("git", ["status", "--porcelain"], {
   cwd: projectRoot
 });
+const sourceFingerprint = await computeSourceFingerprint();
 
 const snapshot = {
   generatedAt: new Date().toISOString(),
   source: {
     commit: head.trim(),
-    dirty: worktree.trim().length > 0
+    dirty: worktree.trim().length > 0,
+    fingerprint: sourceFingerprint.sha256,
+    files: sourceFingerprint.files
   },
   tests: {
     passed: testReport.success === true,

@@ -645,7 +645,10 @@ const launchApp = async (
 
   app = await electron.launch({
     executablePath: electronPath as unknown as string,
-    args: [join(process.cwd(), "out", "main", "main.js")],
+    args: [
+      `--user-data-dir=${join(root, "electron-user-data")}`,
+      join(process.cwd(), "out", "main", "main.js")
+    ],
     env: {
       ...process.env,
       AGENTENV_AUTOMATION: "1",
@@ -926,6 +929,12 @@ describe("Electron UI profile switching e2e", () => {
     await page.keyboard.press("Enter");
     await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({ state: "visible", timeout: 5_000 });
     await page.getByRole("group", { name: "Library item shared-reviewer" }).waitFor({ state: "visible", timeout: 5_000 });
+    expect(
+      await page
+        .getByRole("group", { name: "Library item shared-reviewer" })
+        .locator('[data-ui-overflow-detail="true"][tabindex="0"]')
+        .count()
+    ).toBe(0);
     await expectNoHorizontalOverflow(page, [".editor-panel"]);
   }, 30_000);
 
@@ -1390,6 +1399,8 @@ describe("Electron UI profile switching e2e", () => {
     const newProfileTrigger = page.getByRole("button", { name: "New Profile" });
     await newProfileTrigger.click();
     const newProfileDialog = page.getByRole("dialog", { name: "New profile" });
+    expect(await newProfileDialog.getByLabel("Preferred Agent").count()).toBe(0);
+    expect(await newProfileDialog.getByLabel("Source Agent").count()).toBe(0);
     await expectFocusInside(newProfileDialog);
     await expectFocusTrapped(newProfileDialog);
     await page.keyboard.press("Escape");
@@ -2319,7 +2330,7 @@ describe("Electron UI profile switching e2e", () => {
         return childBox.top >= box.top && childBox.bottom <= box.bottom + 1;
       });
     })).toBe(true);
-    await previewDialog.getByRole("button", { name: "Apply with backup" }).click();
+    await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain("UI ALPHA");
   }, 30_000);
@@ -2355,7 +2366,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await previewDialog.textContent()).not.toContain(
       "Skill target already exists and is not AgentEnv-owned"
     );
-    await previewDialog.getByRole("button", { name: "Apply with backup" }).click();
+    await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(targetSkillDir, "SKILL.md"), "utf8")).resolves.toContain(
       "alpha skill prompt"
@@ -2424,8 +2435,8 @@ describe("Electron UI profile switching e2e", () => {
     await previewDialog.getByLabel("Full issue detail").hover();
     await expect.poll(() => page.locator(".skill-description-tooltip").textContent())
       .toContain(targetSkill);
-    expect(await previewDialog.getByRole("button", { name: "Apply with backup" }).isDisabled()).toBe(false);
-    await previewDialog.getByRole("button", { name: "Apply with backup" }).click();
+    expect(await previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled()).toBe(false);
+    await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
 
     await expect(readFile(join(targetSkill, "SKILL.md"), "utf8")).resolves.toContain(
@@ -2614,7 +2625,7 @@ describe("Electron UI profile switching e2e", () => {
     await shortDescription.hover();
     await page.waitForTimeout(380);
     expect(await page.getByRole("tooltip").count()).toBe(0);
-    await page.getByLabel("Full source for shared-reviewer").focus();
+    await page.getByLabel("Full source for shared-reviewer").hover();
     const descriptionTip = page.getByRole("tooltip");
     await descriptionTip.waitFor({ state: "visible" });
     expect(await descriptionTip.textContent()).toContain("shared-reviewer");
@@ -2632,7 +2643,7 @@ describe("Electron UI profile switching e2e", () => {
       borderTopWidth: "1px",
       userSelect: "text"
     });
-    await page.keyboard.press("Escape");
+    await page.mouse.move(10, 10);
     await descriptionTip.waitFor({ state: "hidden" });
 
     await page.locator(".library-table__head .info-tip").first().hover();
@@ -4399,7 +4410,7 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible" });
     await rm(localSkillDir, { recursive: true, force: true });
     const importedRow = page.getByRole("group", { name: "Library item path-reviewer" });
-    await expect.poll(() => importedRow.textContent()).toContain("Not tracked");
+    await expect.poll(() => importedRow.textContent()).toContain("Monitoring off");
   }, 30_000);
 
   it("reviews same-name Skill differences before keeping another Library copy", async () => {
@@ -5628,7 +5639,7 @@ describe("Electron UI profile switching e2e", () => {
     const { librarySkill, opencodeDir, page } = await launchApp();
 
     await openSettingsCategory(page, "Skills");
-    await page.getByLabel("Global skill sync method").selectOption("copy");
+    await page.getByLabel("Global skill deployment method").selectOption("copy");
     const autoCheck = page.getByRole("switch", { name: "Skill auto update check" });
     await autoCheck.waitFor({ state: "visible" });
     await expect.poll(() => autoCheck.isEnabled()).toBe(true);
@@ -6049,9 +6060,9 @@ describe("Electron UI profile switching e2e", () => {
     const { opencodeDir, page } = await launchApp();
 
     await openSettingsCategory(page, "Skills");
-    await page.getByLabel("Global skill sync method").selectOption("copy");
+    await page.getByLabel("Global skill deployment method").selectOption("copy");
     await expect
-      .poll(() => page.getByLabel("Global skill sync method").inputValue())
+      .poll(() => page.getByLabel("Global skill deployment method").inputValue())
       .toBe("copy");
 
     await selectProfile(page, "UI OpenCode alpha");
@@ -6388,7 +6399,7 @@ describe("Electron UI profile switching e2e", () => {
     await overflow.waitFor({ state: "visible" });
 
     await overflow.hover();
-    const popover = page.getByRole("tooltip");
+    const popover = page.getByRole("menu", { name: "Hidden Agents" });
     await popover.waitFor({ state: "visible" });
     await expect.poll(() => popover.textContent()).toContain("Antigravity");
     await expect.poll(() => popover.textContent()).toContain("Trae CLI");
@@ -6412,7 +6423,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await popover.hover();
     await expect.poll(() => popover.isVisible()).toBe(true);
-    await page.getByRole("heading", { name: "Skills" }).hover();
+    await page.getByRole("button", { name: "Skills", exact: true }).hover();
     await popover.waitFor({ state: "hidden" });
 
     await overflow.focus();
@@ -6423,8 +6434,17 @@ describe("Electron UI profile switching e2e", () => {
 
     await overflow.click();
     await popover.waitFor({ state: "visible" });
-    await page.getByRole("heading", { name: "Skills" }).click();
-    await popover.waitFor({ state: "hidden" });
+    await popover.getByRole("menuitem", { name: /Antigravity/ }).click();
+    const antigravitySkills = page.getByRole("region", {
+      name: "Manage Antigravity CLI Skills"
+    });
+    await antigravitySkills.waitFor({ state: "visible" });
+    await antigravitySkills.getByRole("button", { name: "Agents", exact: true }).click();
+
+    await page.getByRole("button", { name: "Open Codex details" }).click();
+    await page
+      .getByRole("region", { name: "Manage Codex Skills" })
+      .waitFor({ state: "visible" });
   }, 30_000);
 
   it("persists enabled Agents and excludes disabled Agents from operations", async () => {
@@ -6530,9 +6550,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(inventory.some((item) => item.id === "target-only-reviewer")).toBe(false);
 
     await page.reload();
-    await page.getByRole("region", { name: "Skill library", exact: true }).waitFor({
-      state: "visible"
-    });
+    await page.getByRole("heading", { name: "Settings", exact: true }).waitFor({ state: "visible" });
     await openSettingsCategory(page, "Agents");
     await page.getByRole("switch", { name: "Turn on OpenCode" }).click();
     await page.getByRole("switch", { name: "Turn off OpenCode" }).waitFor({ state: "visible" });
@@ -7076,8 +7094,8 @@ describe("Electron UI profile switching e2e", () => {
     });
     await expect.poll(() => updateCheckSwitch.getAttribute("aria-checked")).toBe("true");
     await updateCheckSwitch.click();
-    await page.getByRole("button", { name: "Close" }).click();
-    await expect.poll(() => githubRow.textContent()).toContain("Not tracked");
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect.poll(() => githubRow.textContent()).toContain("Monitoring off");
     await expect
       .poll(async () =>
         (await readJson<{ updateCheckEnabled?: boolean }>(
@@ -7094,7 +7112,7 @@ describe("Electron UI profile switching e2e", () => {
     await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
     await page.getByRole("menuitem", { name: "Update settings" }).click();
     await page.getByRole("switch", { name: "Track updates for github-reviewer" }).click();
-    await page.getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Save settings" }).click();
     await expect
       .poll(async () =>
         (await readJson<{ updateCheckEnabled?: boolean }>(
@@ -7444,7 +7462,7 @@ describe("Electron UI profile switching e2e", () => {
       .click();
     await page.getByRole("menuitem", { name: "Update settings" }).click();
     await page.getByLabel("Update source for shared-reviewer").fill(newSourceDir);
-    await page.getByRole("button", { name: "Save source" }).click();
+    await page.getByRole("button", { name: "Save settings" }).click();
     const sourceLabel = page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByLabel("Full source for shared-reviewer");

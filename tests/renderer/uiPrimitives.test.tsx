@@ -89,6 +89,7 @@ describe("renderer UI primitives", () => {
       <OverflowTooltip
         className="description"
         displayText="Truncated"
+        focusable
         text="A complete long value that the user needs to copy"
       />
     );
@@ -114,7 +115,7 @@ describe("renderer UI primitives", () => {
   });
 
   it("does not open an overflow detail for text that already fits", () => {
-    render(<OverflowTooltip className="description" text="Short value" />);
+    render(<OverflowTooltip className="description" focusable text="Short value" />);
     const trigger = screen.getByText("Short value");
     Object.defineProperties(trigger, {
       clientWidth: { configurable: true, value: 120 },
@@ -132,6 +133,7 @@ describe("renderer UI primitives", () => {
         <OverflowTooltip
           className="description"
           displayText="Truncated"
+          focusable
           text="A complete value"
         />
       </div>
@@ -149,6 +151,18 @@ describe("renderer UI primitives", () => {
 
     expect(scrollBy).toHaveBeenCalledWith({ left: 0, top: 40 });
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("keeps ordinary overflow text out of the desktop tab order", () => {
+    render(
+      <OverflowTooltip
+        className="description"
+        displayText="Truncated"
+        text="A complete long value"
+      />
+    );
+
+    expect(screen.getByText("Truncated")).not.toHaveAttribute("tabindex");
   });
 
   it("uses the same hover detail primitive for contextual information", () => {

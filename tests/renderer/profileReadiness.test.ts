@@ -133,7 +133,7 @@ describe("profile readiness", () => {
         isDirty: false,
         preview: previewWith(driftIssue)
       })
-    ).toBe("Apply with backup to Codex");
+    ).toBe("Preview & apply to Codex");
   });
 
   it("distinguishes saved changes from the version applied to the target", () => {

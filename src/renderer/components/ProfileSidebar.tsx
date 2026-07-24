@@ -17,6 +17,7 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
+import { handleActionMenuKeyDown } from "./ui";
 
 const appIconUrl = new URL("../assets/app-icon.png", import.meta.url).href;
 const antigravityIconUrl = new URL("../assets/target-icons/antigravity.png", import.meta.url).href;
@@ -33,6 +34,7 @@ interface ProfileSidebarProps {
   activeWorkspace: AppWorkspace;
   isLoading: boolean;
   onWorkspaceSelect(workspace: AppWorkspace): void;
+  onAgentSelect(targetId: string): void;
   onQuickOpen(): void;
 }
 
@@ -89,7 +91,13 @@ const targetStatusMessage = (status: TargetHealthStatus) =>
     guarded: "Guarded"
   } satisfies Record<TargetHealthStatus, string>)[status];
 
-const AgentOverflowPopover = ({ targets }: { targets: TargetInfo[] }) => {
+const AgentOverflowPopover = ({
+  targets,
+  onAgentSelect
+}: {
+  targets: TargetInfo[];
+  onAgentSelect(targetId: string): void;
+}) => {
   const { t } = useI18n();
   const popoverId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -176,8 +184,9 @@ const AgentOverflowPopover = ({ targets }: { targets: TargetInfo[] }) => {
         className="agent-chip agent-chip--more"
         type="button"
         aria-label={triggerLabel}
-        aria-describedby={open ? popoverId : undefined}
+        aria-controls={open ? popoverId : undefined}
         aria-expanded={open}
+        aria-haspopup="menu"
         title={label}
         onBlur={scheduleClose}
         onClick={show}
@@ -193,8 +202,10 @@ const AgentOverflowPopover = ({ targets }: { targets: TargetInfo[] }) => {
               ref={popoverRef}
               className="agent-overflow-popover"
               id={popoverId}
-              role="tooltip"
+              role="menu"
+              aria-label={t("Hidden Agents")}
               style={position}
+              onKeyDown={handleActionMenuKeyDown}
               onMouseEnter={cancelClose}
               onMouseLeave={scheduleClose}
             >
@@ -202,7 +213,16 @@ const AgentOverflowPopover = ({ targets }: { targets: TargetInfo[] }) => {
                 const targetIcon = targetIconFor(target);
                 const status = t(targetStatusMessage(target.health.status));
                 return (
-                  <div className="agent-overflow-popover__item" key={target.id}>
+                  <button
+                    className="agent-overflow-popover__item"
+                    type="button"
+                    role="menuitem"
+                    key={target.id}
+                    onClick={() => {
+                      close();
+                      onAgentSelect(target.id);
+                    }}
+                  >
                     <span
                       className={`agent-chip agent-chip--${target.health.status} agent-chip--${targetIcon.flavor}`}
                       aria-hidden="true"
@@ -217,7 +237,7 @@ const AgentOverflowPopover = ({ targets }: { targets: TargetInfo[] }) => {
                       <strong>{target.name}</strong>
                       <small>{status}</small>
                     </span>
-                  </div>
+                  </button>
                 );
               })}
             </div>,
@@ -234,6 +254,7 @@ export const ProfileSidebar = ({
   activeWorkspace,
   isLoading,
   onWorkspaceSelect,
+  onAgentSelect,
   onQuickOpen
 }: ProfileSidebarProps) => {
   const { t } = useI18n();
@@ -340,20 +361,28 @@ export const ProfileSidebar = ({
             const targetIcon = targetIconFor(target);
 
             return (
-              <span
+              <button
                 className={`agent-chip agent-chip--${target.health.status} agent-chip--${targetIcon.flavor}`}
                 title={`${target.name} · ${t(targetStatusMessage(target.health.status))}`}
                 key={target.id}
+                type="button"
+                aria-label={t("Open {{name}} details", { name: target.name })}
+                onClick={() => onAgentSelect(target.id)}
               >
                 {targetIcon.assetUrl ? (
                   <img className="agent-chip__logo" src={targetIcon.assetUrl} alt="" />
                 ) : (
                   targetInitials(target)
                 )}
-              </span>
+              </button>
             );
           })}
-          {hiddenTargets.length > 0 ? <AgentOverflowPopover targets={hiddenTargets} /> : null}
+          {hiddenTargets.length > 0 ? (
+            <AgentOverflowPopover
+              targets={hiddenTargets}
+              onAgentSelect={onAgentSelect}
+            />
+          ) : null}
         </div>
       </section> : null}
     </aside>
