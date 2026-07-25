@@ -129,6 +129,22 @@ describe("conversation history adapters", () => {
     expect(detail.snippet).toBe("Recovered assistant summary");
   });
 
+  it("turns a polite fallback prompt into a compact task title", () => {
+    const detail = parseCodexConversation(candidate(), JSON.stringify({
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "user",
+        content: [{
+          type: "input_text",
+          text: "Please help me review the conversation reader. Keep the source untouched."
+        }]
+      }
+    }));
+
+    expect(detail.title).toBe("Review the conversation reader");
+  });
+
   it("does not use injected runtime context as the conversation identity", () => {
     const detail = parseCodexConversation(candidate({
       title: "<environment_context>temporary runtime metadata</environment_context>",

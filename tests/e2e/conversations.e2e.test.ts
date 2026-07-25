@@ -74,7 +74,10 @@ describe("Conversations desktop workflow", () => {
           id: "assistant-1",
           type: "message",
           role: "assistant",
-          content: [{ type: "output_text", text: "The release workflow is ready." }]
+          content: [{
+            type: "output_text",
+            text: "## Result\n\nThe release workflow is ready.\n\n```ts\nconst ready = true;\n```"
+          }]
         }
       })
     ].join("\n") + "\n";
@@ -115,6 +118,7 @@ describe("Conversations desktop workflow", () => {
       state: "visible",
       timeout: 15_000
     });
+    await page.getByRole("heading", { name: "Result" }).waitFor();
 
     await expectNoHorizontalOverflow(page);
     await expectInViewport(page, page.getByRole("searchbox", {
@@ -127,6 +131,12 @@ describe("Conversations desktop workflow", () => {
     );
     expect(new Set(actionHeights).size).toBe(1);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+    if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
+      await page.screenshot({
+        path: process.env.AGENTENV_CAPTURE_CONVERSATIONS,
+        fullPage: true
+      });
+    }
 
     await page.getByRole("button", { name: "Continue" }).click();
     const targetMenu = page.getByRole("menu");
@@ -166,6 +176,15 @@ describe("Conversations desktop workflow", () => {
       (element) => element.scrollHeight - element.clientHeight
     )).toBeLessThanOrEqual(1);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+    if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
+      await page.screenshot({
+        path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(
+          /(\.[^.]+)$/,
+          "-compact$1"
+        ),
+        fullPage: true
+      });
+    }
     expect(await readFile(sourcePath, "utf8")).toBe(source);
   }, 30_000);
 });

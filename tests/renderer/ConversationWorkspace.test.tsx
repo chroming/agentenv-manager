@@ -84,7 +84,8 @@ const installApi = (
   const api = {
     listConversations: vi.fn().mockResolvedValue({
       items: [{ ...detail, messages: undefined }],
-      total: 1
+      total: 1,
+      workspacePaths: ["/work/project"]
     }),
     readConversation: vi.fn().mockResolvedValue(detail),
     refreshConversations: vi.fn().mockResolvedValue({
@@ -115,6 +116,7 @@ const installApi = (
       mode: "context-file",
       message: "Started a new conversation in OpenCode"
     }),
+    openExternalUrl: vi.fn().mockResolvedValue(undefined),
     copyText: vi.fn().mockResolvedValue(undefined)
   };
   Object.defineProperty(window, "agentEnv", {
@@ -328,5 +330,72 @@ describe("ConversationWorkspace", () => {
 
     await waitFor(() => expect(screen.queryByText("Stale search result")).toBeNull());
     expect(screen.getByText("Latest search result")).toBeInTheDocument();
+  });
+
+  it("filters by Agent and workspace without losing the latest selection", async () => {
+    const api = installApi();
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+    await screen.findByText("Repair release workflow");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by Agent" }), {
+      target: { value: "codex" }
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter by workspace" }), {
+      target: { value: "/work/project" }
+    });
+
+    await waitFor(() => expect(api.listConversations).toHaveBeenLastCalledWith({
+      agentIds: ["codex"],
+      workspacePaths: ["/work/project"],
+      limit: 200
+    }));
+  });
+
+  it("renders Markdown safely and groups consecutive messages by role", async () => {
+    const api = installApi();
+    api.readConversation.mockResolvedValue({
+      ...detail,
+      messageCount: 4,
+      messages: [
+        {
+          id: "u1",
+          role: "user",
+          text: "Review this:\n\n- layout\n- keyboard"
+        },
+        {
+          id: "a1",
+          role: "assistant",
+          text: "## Result\n\n```ts\nconst ready = true;\n```"
+        },
+        {
+          id: "a2",
+          role: "assistant",
+          text: "See [the docs](https://example.com/docs)."
+        },
+        {
+          id: "u2",
+          role: "user",
+          text: "Ship it."
+        }
+      ]
+    });
+    const { container } = render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+
+    expect(await screen.findByRole("heading", { name: "Result" })).toBeInTheDocument();
+    expect(screen.getByText("layout")).toBeInTheDocument();
+    expect(screen.getByText("const ready = true;")).toBeInTheDocument();
+    expect(container.querySelectorAll(".conversation-turn")).toHaveLength(3);
+    expect(container.querySelectorAll(".conversation-turn--assistant")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("link", { name: "the docs" }));
+    await waitFor(() =>
+      expect(api.openExternalUrl).toHaveBeenCalledWith("https://example.com/docs")
+    );
   });
 });

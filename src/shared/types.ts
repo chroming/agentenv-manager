@@ -246,6 +246,7 @@ export interface ConversationSummary {
   sourceId: string;
   title: string;
   snippet: string;
+  matchSnippet?: string;
   workspacePath?: string;
   createdAt: string;
   updatedAt: string;
@@ -268,6 +269,7 @@ export interface ConversationDetail extends ConversationSummary {
 export interface ConversationListInput {
   query?: string;
   agentIds?: string[];
+  workspacePaths?: string[];
   limit?: number;
   offset?: number;
 }
@@ -275,6 +277,7 @@ export interface ConversationListInput {
 export interface ConversationListResult {
   items: ConversationSummary[];
   total: number;
+  workspacePaths?: string[];
 }
 
 export interface ConversationRefreshFailure {

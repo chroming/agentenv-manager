@@ -10,9 +10,19 @@ export interface SyntaxToken {
 export type SyntaxLine = SyntaxToken[];
 type SupportedLanguage =
   | "jsonc"
+  | "json"
   | "toml"
   | "markdown"
   | "yaml"
+  | "javascript"
+  | "typescript"
+  | "tsx"
+  | "jsx"
+  | "python"
+  | "bash"
+  | "diff"
+  | "css"
+  | "html"
   | "text";
 
 const fallbackLine = (line: string): SyntaxLine => [{ content: line }];
@@ -74,6 +84,106 @@ export const languageForPath = (path: string): SupportedLanguage => {
   return "text";
 };
 
+type LanguageRegistration = Parameters<HighlighterCore["loadLanguage"]>[0];
+const loadedLanguages = new Set<SupportedLanguage>([
+  "jsonc",
+  "toml",
+  "markdown",
+  "yaml"
+]);
+const loadingLanguages = new Map<SupportedLanguage, Promise<void>>();
+const additionalLanguageLoaders: Partial<Record<
+  SupportedLanguage,
+  () => Promise<{ default: LanguageRegistration }>
+>> = {
+  json: () => import("shiki/langs/json.mjs"),
+  javascript: () => import("shiki/langs/javascript.mjs"),
+  typescript: () => import("shiki/langs/typescript.mjs"),
+  tsx: () => import("shiki/langs/tsx.mjs"),
+  jsx: () => import("shiki/langs/jsx.mjs"),
+  python: () => import("shiki/langs/python.mjs"),
+  bash: () => import("shiki/langs/bash.mjs"),
+  diff: () => import("shiki/langs/diff.mjs"),
+  css: () => import("shiki/langs/css.mjs"),
+  html: () => import("shiki/langs/html.mjs")
+};
+
+const ensureLanguage = async (
+  highlighter: HighlighterCore,
+  language: SupportedLanguage
+) => {
+  if (language === "text" || loadedLanguages.has(language)) return;
+  let loading = loadingLanguages.get(language);
+  if (!loading) {
+    const loader = additionalLanguageLoaders[language];
+    if (!loader) return;
+    loading = loader()
+      .then((module) => highlighter.loadLanguage(module.default))
+      .then(() => {
+        loadedLanguages.add(language);
+      })
+      .finally(() => {
+        loadingLanguages.delete(language);
+      });
+    loadingLanguages.set(language, loading);
+  }
+  await loading;
+};
+
+const languageAliases: Record<string, SupportedLanguage> = {
+  bash: "bash",
+  css: "css",
+  diff: "diff",
+  html: "html",
+  javascript: "javascript",
+  js: "javascript",
+  json: "json",
+  jsonc: "jsonc",
+  jsx: "jsx",
+  markdown: "markdown",
+  md: "markdown",
+  python: "python",
+  py: "python",
+  shell: "bash",
+  sh: "bash",
+  toml: "toml",
+  ts: "typescript",
+  tsx: "tsx",
+  typescript: "typescript",
+  xml: "html",
+  yaml: "yaml",
+  yml: "yaml"
+};
+
+export const languageForFence = (value: string): SupportedLanguage =>
+  languageAliases[value.trim().toLowerCase()] ?? "text";
+
+export const highlightCodeLanguage = async (
+  code: string,
+  languageName: string
+): Promise<SyntaxLine[]> => {
+  if (code.length === 0) return [[]];
+  const language = languageForFence(languageName);
+  if (language === "text") return fallbackLines(code);
+  try {
+    const highlighter = await getHighlighter();
+    await ensureLanguage(highlighter, language);
+    const result = highlighter.codeToTokens(code, {
+      lang: language,
+      theme: "github-light"
+    });
+    return result.tokens.map((line: ThemedToken[]) =>
+      line.map((token) => ({
+        content: token.content,
+        color: token.color,
+        fontStyle: token.fontStyle
+      }))
+    );
+  } catch {
+    return fallbackLines(code);
+  }
+};
+
 export const highlightCode = async (
   code: string,
   path: string
@@ -86,23 +196,7 @@ export const highlightCode = async (
     return fallbackLines(code);
   }
 
-  try {
-    const highlighter = await getHighlighter();
-    const result = highlighter.codeToTokens(code, {
-      lang: language,
-      theme: "github-light"
-    });
-
-    return result.tokens.map((line: ThemedToken[]) =>
-      line.map((token) => ({
-        content: token.content,
-        color: token.color,
-        fontStyle: token.fontStyle
-      }))
-    );
-  } catch {
-    return fallbackLines(code);
-  }
+  return highlightCodeLanguage(code, language);
 };
 
 export const highlightCodeFallback = (code: string): SyntaxLine[] => fallbackLines(code);

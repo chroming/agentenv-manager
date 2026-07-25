@@ -224,7 +224,7 @@ export const createConversationService = async (options: {
       const enabled = await enabledAgentIds();
       const requested = input.agentIds?.filter((id) => enabled.has(id));
       if (input.agentIds && requested?.length === 0) {
-        return { items: [], total: 0 };
+        return { items: [], total: 0, workspacePaths: [] };
       }
       return index.list({
         ...input,

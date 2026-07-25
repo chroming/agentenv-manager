@@ -22,6 +22,26 @@ export const conversationTitleFrom = (value: string, fallback = "Untitled conver
   return compact ? compact.slice(0, 96) : fallback;
 };
 
+export const conversationTaskTitleFrom = (
+  value: string,
+  fallback = "Untitled conversation"
+) => {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (!compact) return fallback;
+  const withoutLeadIn = compact.replace(
+    /^(?:(?:please|could you|can you|would you)(?:\s+help(?:\s+me)?(?:\s+to)?)?|请(?:你)?(?:帮我|帮忙)?|麻烦(?:你)?(?:帮我)?|帮我|我(?:想要?|希望|需要)(?:你)?(?:帮我)?)[\s,，:：]*/i,
+    ""
+  ).trim();
+  const task = (withoutLeadIn || compact).split(/(?:[。！？]\s*|[.!?]\s+)/, 1)[0].trim();
+  const maxLength = /[\u3400-\u9fff]/u.test(task) ? 44 : 72;
+  const characters = Array.from(task);
+  let title = characters.length > maxLength
+    ? `${characters.slice(0, maxLength - 1).join("").trimEnd()}…`
+    : task;
+  if (/^[a-z]/.test(title)) title = `${title[0].toUpperCase()}${title.slice(1)}`;
+  return title || fallback;
+};
+
 export const conversationSnippetFrom = (value: string) =>
   value.replace(/\s+/g, " ").trim().slice(0, 180);
 
@@ -236,12 +256,8 @@ export const createConversationDetail = (
   const firstAssistant = messages.find((message) => message.role === "assistant")?.text ?? "";
   const firstMeaningful = (...values: Array<string | undefined>) =>
     values.find((value) => value?.trim() && !isConversationScaffolding(value)) ?? "";
-  const titleSource = firstMeaningful(
-    metadata.title,
-    candidate.title,
-    firstUser,
-    firstAssistant
-  );
+  const nativeTitle = firstMeaningful(metadata.title, candidate.title);
+  const fallbackTitle = firstMeaningful(firstUser, firstAssistant);
   const snippetSource = firstMeaningful(
     metadata.snippet,
     candidate.snippet,
@@ -253,7 +269,9 @@ export const createConversationDetail = (
     agentId: agent.id,
     agentName: agent.name,
     sourceId: candidate.providerSession?.id ?? candidate.recordId,
-    title: conversationTitleFrom(titleSource),
+    title: nativeTitle
+      ? conversationTitleFrom(nativeTitle)
+      : conversationTaskTitleFrom(fallbackTitle),
     snippet: conversationSnippetFrom(snippetSource),
     workspacePath: metadata.workspacePath ?? candidate.workspacePath,
     createdAt: metadata.createdAt ?? candidate.createdAt ?? candidate.updatedAt,

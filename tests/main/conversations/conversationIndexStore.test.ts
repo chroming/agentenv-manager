@@ -72,7 +72,15 @@ describe("conversation index store", () => {
     });
 
     expect(index.list({ query: "发布" }).items).toHaveLength(1);
-    expect(index.list({ query: "OLD TOKEN" }).items).toHaveLength(1);
+    expect(index.list({ query: "OLD TOKEN" })).toMatchObject({
+      items: [{
+        id: detail.id,
+        matchSnippet: "The release job used an old token."
+      }],
+      workspacePaths: ["/work/project"]
+    });
+    expect(index.list({ workspacePaths: ["/other/project"] }).items).toEqual([]);
+    expect(index.list({ workspacePaths: ["/work/project"] }).items).toHaveLength(1);
     expect(index.read(detail.id).messages).toEqual(detail.messages);
     expect(index.record(detail.id)).toMatchObject({
       candidate: {
@@ -136,7 +144,7 @@ describe("conversation index store", () => {
 
     store = await createConversationIndexStore(path);
 
-    expect(store.list()).toEqual({ items: [], total: 0 });
+    expect(store.list()).toEqual({ items: [], total: 0, workspacePaths: [] });
     expect((await readFile(path)).subarray(0, 6).toString()).toBe("SQLite");
   });
 });

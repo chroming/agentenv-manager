@@ -167,7 +167,8 @@ describe("conversation service", () => {
     expect((await service.list({ query: "failing step" })).items).toHaveLength(1);
     expect(await service.list({ agentIds: ["disabled-agent"] })).toEqual({
       items: [],
-      total: 0
+      total: 0,
+      workspacePaths: []
     });
     expect(await readFile(history, "utf8")).toBe(before);
     service.dispose();

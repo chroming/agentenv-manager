@@ -332,6 +332,17 @@ an archive, or a native-session database migration tool.
   own their scrolling; page chrome and detail actions remain visible. Refresh, copy, open, preview,
   and continue progress belongs to the initiating control, while completion and failure use the
   same global feedback component as the rest of the application.
+- The list is a task index, not a message feed. Native Agent titles remain authoritative; when a
+  source has no title, the first visible request is normalized into a compact task title without
+  invoking a network service. Rows are grouped by local date and show Agent, workspace, and time.
+  Message snippets appear only while searching and SHOULD identify the visible text that matched.
+- Agent and workspace filters are index queries, not renderer-only hiding. Changing search or a
+  filter invalidates older pending list requests, preserves selection only when the selected task
+  remains in the result, and never mutates source history.
+- The detail reader presents one task header followed by a readable transcript. Consecutive
+  messages from the same role are grouped without changing message order. Visible Markdown,
+  tables, lists, and fenced code MAY be rendered, but raw HTML is never executed, remote images
+  are never loaded from history, and external links open only through the validated desktop API.
 - A stale search or refresh result MUST NOT replace a newer result. Initial cached loading and
   background source refresh are sequential so the workspace does not flash an empty duplicate
   load. Destination menus and review dialogs follow the shared keyboard, Escape, outside-click,

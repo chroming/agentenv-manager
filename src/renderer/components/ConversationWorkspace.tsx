@@ -3,13 +3,16 @@ import {
   Clock3,
   Copy,
   ExternalLink,
+  FolderOpen,
   LoaderCircle,
   MessageSquareText,
   RefreshCw,
   Search,
-  TriangleAlert
+  TriangleAlert,
+  UserRound
 } from "lucide-react";
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -27,6 +30,7 @@ import type {
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { AppFeedback, type AppFeedbackMessage } from "./AppFeedback";
+import { ConversationMarkdown } from "./ConversationMarkdown";
 import { InfoTip } from "./InfoTip";
 import { targetIconFor } from "./ProfileSidebar";
 import { OverflowTooltip } from "./OverflowTooltip";
@@ -73,6 +77,34 @@ const continuationText = (detail: ConversationDetail) => [
 
 const conversationPageSize = 200;
 type ConversationOperation = "copy" | "open-original" | "continue";
+
+const workspaceName = (path?: string) => {
+  const normalized = path?.replace(/[\\/]+$/, "");
+  return normalized?.split(/[\\/]/).filter(Boolean).at(-1) ?? path ?? "";
+};
+
+const conversationDateGroup = (value: string) => {
+  const date = new Date(value);
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const dayDifference = Math.round((startToday - startDate) / 86_400_000);
+  if (dayDifference <= 0) return "Today";
+  if (dayDifference === 1) return "Yesterday";
+  if (dayDifference < 7) return "Previous 7 days";
+  return "Earlier";
+};
+
+const groupMessages = (messages: ConversationDetail["messages"]) =>
+  messages.reduce<Array<{
+    role: ConversationDetail["messages"][number]["role"];
+    entries: ConversationDetail["messages"];
+  }>>((groups, message) => {
+    const previous = groups.at(-1);
+    if (previous?.role === message.role) previous.entries.push(message);
+    else groups.push({ role: message.role, entries: [message] });
+    return groups;
+  }, []);
 
 const TargetMenu = ({
   targets,
@@ -205,10 +237,13 @@ const TargetMenu = ({
 };
 
 export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) => {
-  const { t, formatDate } = useI18n();
+  const { t, formatDate, localeTag } = useI18n();
   const [items, setItems] = useState<ConversationSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
+  const [workspaceFilter, setWorkspaceFilter] = useState("");
+  const [workspacePaths, setWorkspacePaths] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [detail, setDetail] = useState<ConversationDetail>();
   const [loading, setLoading] = useState(true);
@@ -224,9 +259,13 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const reviewCancelRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const queryRef = useRef("");
+  const agentFilterRef = useRef("");
+  const workspaceFilterRef = useRef("");
   const listRequestRef = useRef(0);
   const queryEffectReadyRef = useRef(false);
   queryRef.current = query;
+  agentFilterRef.current = agentFilter;
+  workspaceFilterRef.current = workspaceFilter;
   const busy = Boolean(operation);
 
   useModalDialog({
@@ -238,15 +277,22 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     focusKey: review?.previewId
   });
 
-  const loadList = async (nextQuery = queryRef.current) => {
+  const loadList = async (
+    nextQuery = queryRef.current,
+    nextAgentFilter = agentFilterRef.current,
+    nextWorkspaceFilter = workspaceFilterRef.current
+  ) => {
     const requestId = ++listRequestRef.current;
     const result = await window.agentEnv.listConversations({
       query: nextQuery || undefined,
+      agentIds: nextAgentFilter ? [nextAgentFilter] : undefined,
+      workspacePaths: nextWorkspaceFilter ? [nextWorkspaceFilter] : undefined,
       limit: conversationPageSize
     });
     if (requestId !== listRequestRef.current) return;
     setItems(result.items);
     setTotal(result.total);
+    if (result.workspacePaths) setWorkspacePaths(result.workspacePaths);
     setSelectedId((current) =>
       current && result.items.some((item) => item.id === current)
         ? current
@@ -261,6 +307,10 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     try {
       const result = await window.agentEnv.listConversations({
         query: queryRef.current || undefined,
+        agentIds: agentFilterRef.current ? [agentFilterRef.current] : undefined,
+        workspacePaths: workspaceFilterRef.current
+          ? [workspaceFilterRef.current]
+          : undefined,
         offset: items.length,
         limit: conversationPageSize
       });
@@ -329,7 +379,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
       );
     }, 180);
     return () => window.clearTimeout(timeout);
-  }, [query]);
+  }, [agentFilter, query, workspaceFilter]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -381,6 +431,52 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     ),
     [detail?.agentId, targets]
   );
+  const detailTarget = useMemo(
+    () => targets.find((target) => target.id === detail?.agentId),
+    [detail?.agentId, targets]
+  );
+  const detailIcon = detailTarget ? targetIconFor(detailTarget) : undefined;
+  const messageGroups = useMemo(
+    () => groupMessages(detail?.messages ?? []),
+    [detail?.messages]
+  );
+  const filterTargets = useMemo(
+    () => targets.filter((target) =>
+      items.some((item) => item.agentId === target.id) ||
+      target.conversationCapabilities.history.state !== "unavailable"),
+    [items, targets]
+  );
+  const formatListTime = (value: string) => {
+    const date = new Date(value);
+    const today = new Date();
+    if (date.toDateString() === today.toDateString()) {
+      return new Intl.DateTimeFormat(localeTag, {
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(date);
+    }
+    return new Intl.DateTimeFormat(localeTag, {
+      month: "short",
+      day: "numeric"
+    }).format(date);
+  };
+  const formatDetailTime = (value: string) => {
+    const date = new Date(value);
+    const group = conversationDateGroup(value);
+    const time = new Intl.DateTimeFormat(localeTag, {
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date);
+    if (group === "Today" || group === "Yesterday") {
+      return `${t(group)} · ${time}`;
+    }
+    const day = new Intl.DateTimeFormat(localeTag, {
+      year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+      month: "short",
+      day: "numeric"
+    }).format(date);
+    return `${day} · ${time}`;
+  };
   const sourceCanOpenOriginal = Boolean(
     detail &&
     targets.find((target) => target.id === detail.agentId)
@@ -493,17 +589,47 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
 
         <div className="conversation-layout ui-surface-frame">
           <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
-            <label className="conversation-search ui-composite-field">
-              <Search size={15} aria-hidden="true" />
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={query}
-                placeholder={t("Search conversations…")}
-                aria-label={t("Search conversations")}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
+            <div className="conversation-list-toolbar">
+              <label className="conversation-search ui-composite-field">
+                <Search size={15} aria-hidden="true" />
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  value={query}
+                  placeholder={t("Search conversations…")}
+                  aria-label={t("Search conversations")}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              <div className="conversation-filters" aria-label={t("Conversation filters")}>
+                <label>
+                  <span className="ui-visually-hidden">{t("Agent")}</span>
+                  <select
+                    aria-label={t("Filter by Agent")}
+                    value={agentFilter}
+                    onChange={(event) => setAgentFilter(event.target.value)}
+                  >
+                    <option value="">{t("All Agents")}</option>
+                    {filterTargets.map((target) => (
+                      <option value={target.id} key={target.id}>{target.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="ui-visually-hidden">{t("Workspace")}</span>
+                  <select
+                    aria-label={t("Filter by workspace")}
+                    value={workspaceFilter}
+                    onChange={(event) => setWorkspaceFilter(event.target.value)}
+                  >
+                    <option value="">{t("All workspaces")}</option>
+                    {workspacePaths.map((path) => (
+                      <option value={path} key={path}>{workspaceName(path)}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
             <div className="conversation-list-meta">
               <span>{t("{{count}} conversations", { count: total })}</span>
               {refreshing ? <LoaderCircle className="is-spinning" size={14} aria-hidden="true" /> : null}
@@ -517,57 +643,91 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
               ) : items.length === 0 ? (
                 <div className="conversation-empty">
                   <MessageSquareText size={20} aria-hidden="true" />
-                  <strong>{query ? t("No matching conversations") : t("No conversations indexed")}</strong>
-                  <span>{query ? t("Try another search.") : t("Refresh to scan enabled Agents.")}</span>
+                  <strong>
+                    {query || agentFilter || workspaceFilter
+                      ? t("No matching conversations")
+                      : t("No conversations indexed")}
+                  </strong>
+                  <span>
+                    {query || agentFilter || workspaceFilter
+                      ? t("Try another search.")
+                      : t("Refresh to scan enabled Agents.")}
+                  </span>
                 </div>
               ) : items.map((item, index) => {
                 const target = targets.find((candidate) => candidate.id === item.agentId);
                 const icon = target ? targetIconFor(target) : undefined;
+                const dateGroup = conversationDateGroup(item.updatedAt);
+                const previousDateGroup = index > 0
+                  ? conversationDateGroup(items[index - 1].updatedAt)
+                  : undefined;
                 return (
-                  <button
-                    className={`conversation-list-item${selectedId === item.id ? " is-selected" : ""}`}
-                    type="button"
-                    role="option"
-                    aria-selected={selectedId === item.id}
-                    id={`conversation-option-${index}`}
-                    key={item.id}
-                    onClick={() => setSelectedId(item.id)}
-                    onKeyDown={(event) => {
-                      let nextIndex: number | undefined;
-                      if (event.key === "ArrowDown") {
-                        nextIndex = Math.min(index + 1, items.length - 1);
-                      } else if (event.key === "ArrowUp") {
-                        nextIndex = Math.max(index - 1, 0);
-                      } else if (event.key === "Home") {
-                        nextIndex = 0;
-                      } else if (event.key === "End") {
-                        nextIndex = items.length - 1;
-                      }
-                      if (nextIndex === undefined || nextIndex === index) return;
-                      event.preventDefault();
-                      setSelectedId(items[nextIndex]?.id);
-                      document.getElementById(`conversation-option-${nextIndex}`)?.focus();
-                    }}
-                  >
-                    <span className={`conversation-agent-icon conversation-agent-icon--${icon?.flavor ?? "generic"}`} aria-hidden="true">
-                      {icon?.assetUrl
-                        ? <img src={icon.assetUrl} alt="" />
-                        : item.agentName.slice(0, 1)}
-                    </span>
-                    <span className="conversation-list-item__copy">
-                      <OverflowTooltip
-                        className="conversation-list-item__title"
-                        text={item.title}
-                      />
-                      <OverflowTooltip
-                        className="conversation-list-item__snippet"
-                        text={item.snippet || t("No preview available")}
-                      />
-                      <small>
-                        {item.agentName} · {formatDate(item.updatedAt)}
-                      </small>
-                    </span>
-                  </button>
+                  <Fragment key={item.id}>
+                    {dateGroup !== previousDateGroup ? (
+                      <div className="conversation-date-group" role="presentation">
+                        {t(dateGroup)}
+                      </div>
+                    ) : null}
+                    <button
+                      className={[
+                        "conversation-list-item",
+                        selectedId === item.id ? "is-selected" : "",
+                        query ? "has-search-match" : ""
+                      ].filter(Boolean).join(" ")}
+                      type="button"
+                      role="option"
+                      aria-selected={selectedId === item.id}
+                      id={`conversation-option-${index}`}
+                      onClick={() => setSelectedId(item.id)}
+                      onKeyDown={(event) => {
+                        let nextIndex: number | undefined;
+                        if (event.key === "ArrowDown") {
+                          nextIndex = Math.min(index + 1, items.length - 1);
+                        } else if (event.key === "ArrowUp") {
+                          nextIndex = Math.max(index - 1, 0);
+                        } else if (event.key === "Home") {
+                          nextIndex = 0;
+                        } else if (event.key === "End") {
+                          nextIndex = items.length - 1;
+                        }
+                        if (nextIndex === undefined || nextIndex === index) return;
+                        event.preventDefault();
+                        setSelectedId(items[nextIndex]?.id);
+                        document.getElementById(`conversation-option-${nextIndex}`)?.focus();
+                      }}
+                    >
+                      <span className={`conversation-agent-icon conversation-agent-icon--${icon?.flavor ?? "generic"}`} aria-hidden="true">
+                        {icon?.assetUrl
+                          ? <img src={icon.assetUrl} alt="" />
+                          : item.agentName.slice(0, 1)}
+                      </span>
+                      <span className="conversation-list-item__copy">
+                        <OverflowTooltip
+                          className="conversation-list-item__title"
+                          text={item.title}
+                        />
+                        {query ? (
+                          <OverflowTooltip
+                            className="conversation-list-item__snippet"
+                            text={item.matchSnippet || item.snippet || t("No preview available")}
+                          />
+                        ) : null}
+                        <small>
+                          <span>{item.agentName}</span>
+                          {item.workspacePath ? (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span title={item.workspacePath}>
+                                {workspaceName(item.workspacePath)}
+                              </span>
+                            </>
+                          ) : null}
+                          <span aria-hidden="true">·</span>
+                          <time dateTime={item.updatedAt}>{formatListTime(item.updatedAt)}</time>
+                        </small>
+                      </span>
+                    </button>
+                  </Fragment>
                 );
               })}
             </div>
@@ -602,26 +762,44 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
               <>
                 <header className="conversation-detail-header">
                   <div className="conversation-detail-title">
-                    <span className="conversation-detail-title__agent">{detail.agentName}</span>
-                    {detail.detailState === "summary-only"
-                      ? <Badge tone="warning">{t("Summary only")}</Badge>
-                      : null}
-                    <h3>
-                      <OverflowTooltip
-                        className="conversation-detail-heading"
-                        text={detail.title}
-                      />
-                    </h3>
-                    <p>
-                      <Clock3 size={13} aria-hidden="true" />
-                      <OverflowTooltip
-                        className="conversation-detail-metadata"
-                        text={[
-                          formatDate(detail.updatedAt),
-                          detail.workspacePath
-                        ].filter(Boolean).join(" · ")}
-                      />
-                    </p>
+                    <span
+                      className={`conversation-agent-icon conversation-agent-icon--${detailIcon?.flavor ?? "generic"}`}
+                      aria-hidden="true"
+                    >
+                      {detailIcon?.assetUrl
+                        ? <img src={detailIcon.assetUrl} alt="" />
+                        : detail.agentName.slice(0, 1)}
+                    </span>
+                    <div className="conversation-detail-title__copy">
+                      <h3>
+                        <OverflowTooltip
+                          className="conversation-detail-heading"
+                          text={detail.title}
+                        />
+                      </h3>
+                      <div className="conversation-detail-metadata">
+                        <span>{detail.agentName}</span>
+                        {detail.workspacePath ? (
+                          <span title={detail.workspacePath}>
+                            <FolderOpen size={12} aria-hidden="true" />
+                            {workspaceName(detail.workspacePath)}
+                          </span>
+                        ) : null}
+                        <span>
+                          <Clock3 size={12} aria-hidden="true" />
+                          <time
+                            dateTime={detail.updatedAt}
+                            title={formatDate(detail.updatedAt)}
+                          >
+                            {formatDetailTime(detail.updatedAt)}
+                          </time>
+                        </span>
+                        {detail.archived ? <Badge>{t("Archived")}</Badge> : null}
+                        {detail.detailState === "summary-only"
+                          ? <Badge tone="warning">{t("Summary only")}</Badge>
+                          : null}
+                      </div>
+                    </div>
                   </div>
                   <ControlGroup className="conversation-detail-actions">
                     <IconButton
@@ -669,14 +847,56 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                   </div>
                 ) : (
                   <div className="conversation-transcript">
-                    {detail.messages.map((entry) => (
-                      <section className="conversation-message" key={entry.id}>
-                        <div className={`conversation-message__role conversation-message__role--${entry.role}`}>
-                          {entry.role === "user" ? t("You") : detail.agentName}
-                        </div>
-                        <div className="conversation-message__text">{entry.text}</div>
-                      </section>
-                    ))}
+                    <div className="conversation-transcript__inner">
+                      {messageGroups.map((group) => (
+                        <section
+                          className={`conversation-turn conversation-turn--${group.role}`}
+                          key={group.entries[0].id}
+                        >
+                          <header className="conversation-turn__header">
+                            {group.role === "user" ? (
+                              <span className="conversation-turn__avatar conversation-turn__avatar--user">
+                                <UserRound size={14} aria-hidden="true" />
+                              </span>
+                            ) : (
+                              <span
+                                className={`conversation-turn__avatar conversation-agent-icon--${detailIcon?.flavor ?? "generic"}`}
+                                aria-hidden="true"
+                              >
+                                {detailIcon?.assetUrl
+                                  ? <img src={detailIcon.assetUrl} alt="" />
+                                  : detail.agentName.slice(0, 1)}
+                              </span>
+                            )}
+                            <strong>
+                              {group.role === "user" ? t("You") : detail.agentName}
+                            </strong>
+                            {group.entries[0].createdAt ? (
+                              <time dateTime={group.entries[0].createdAt}>
+                                {formatListTime(group.entries[0].createdAt)}
+                              </time>
+                            ) : null}
+                          </header>
+                          <div className="conversation-turn__messages">
+                            {group.entries.map((entry) => (
+                              <ConversationMarkdown
+                                text={entry.text}
+                                key={entry.id}
+                                onOpenExternal={(href) => {
+                                  void window.agentEnv.openExternalUrl(href).catch(
+                                    (unknownError) => setError(
+                                      unknownError instanceof Error
+                                        ? unknownError.message
+                                        : String(unknownError)
+                                    )
+                                  );
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
                   </div>
                 )}
               </>

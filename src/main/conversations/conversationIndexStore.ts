@@ -29,6 +29,7 @@ interface ConversationRow {
   message_count: number;
   detail_state: "full" | "summary-only";
   archived: number;
+  match_snippet?: string | null;
 }
 
 interface MessageRow {
@@ -60,6 +61,7 @@ const summaryFromRow = (row: ConversationRow): ConversationSummary => ({
   sourceId: row.source_id,
   title: row.title,
   snippet: row.snippet,
+  matchSnippet: row.match_snippet ?? undefined,
   workspacePath: row.workspace_path ?? undefined,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -319,6 +321,11 @@ export const createConversationIndexStore = async (
         conditions.push(`agent_id IN (${agentIds.map(() => "?").join(", ")})`);
         parameters.push(...agentIds);
       }
+      const workspacePaths = [...new Set(input.workspacePaths ?? [])].filter(Boolean);
+      if (workspacePaths.length > 0) {
+        conditions.push(`workspace_path IN (${workspacePaths.map(() => "?").join(", ")})`);
+        parameters.push(...workspacePaths);
+      }
       const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
       const total = Number(
         (database.prepare(`SELECT count(*) AS count FROM conversations ${where}`)
@@ -326,13 +333,43 @@ export const createConversationIndexStore = async (
       );
       const limit = Math.max(1, Math.min(500, Math.trunc(input.limit ?? 200)));
       const offset = Math.max(0, Math.trunc(input.offset ?? 0));
+      const matchProjection = query
+        ? `(
+            SELECT text
+            FROM conversation_messages
+            WHERE conversation_id = conversations.id
+              AND instr(lower(text), lower(?)) > 0
+            ORDER BY ordinal DESC
+            LIMIT 1
+          ) AS match_snippet`
+        : "NULL AS match_snippet";
+      const rowParameters = query ? [query, ...parameters] : parameters;
       const rows = database.prepare(`
-        SELECT * FROM conversations
+        SELECT conversations.*, ${matchProjection}
+        FROM conversations
         ${where}
         ORDER BY updated_at DESC, id ASC
         LIMIT ? OFFSET ?
-      `).all(...parameters, limit, offset) as unknown as ConversationRow[];
-      return { items: rows.map(summaryFromRow), total };
+      `).all(...rowParameters, limit, offset) as unknown as ConversationRow[];
+      const workspaceConditions: string[] = ["workspace_path IS NOT NULL", "workspace_path <> ''"];
+      const workspaceParameters: string[] = [];
+      if (agentIds.length > 0) {
+        workspaceConditions.push(`agent_id IN (${agentIds.map(() => "?").join(", ")})`);
+        workspaceParameters.push(...agentIds);
+      }
+      const availableWorkspacePaths = (
+        database.prepare(`
+          SELECT DISTINCT workspace_path
+          FROM conversations
+          WHERE ${workspaceConditions.join(" AND ")}
+          ORDER BY workspace_path COLLATE NOCASE ASC
+        `).all(...workspaceParameters) as Array<{ workspace_path: string }>
+      ).map((row) => row.workspace_path);
+      return {
+        items: rows.map(summaryFromRow),
+        total,
+        workspacePaths: availableWorkspacePaths
+      };
     },
     read: (id) => {
       const row = rowFor(id);
