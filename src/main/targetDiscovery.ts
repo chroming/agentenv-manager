@@ -170,7 +170,8 @@ const conversationCapabilitiesFor = (
     continue: health.executablePath && conversations?.continueWithContext
       ? {
           state: "available",
-          evidence: executableEvidence
+          evidence: executableEvidence,
+          delivery: "context-file"
         }
       : health.installationFound
         ? {
@@ -178,7 +179,8 @@ const conversationCapabilitiesFor = (
             evidence: [
               ...installationEvidence,
               "Continuation uses reviewed clipboard context"
-            ]
+            ],
+            delivery: "clipboard"
           }
         : {
             state: conversations?.continueWithContext ? "unavailable" : "unsupported",

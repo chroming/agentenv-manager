@@ -305,12 +305,12 @@ an archive, or a native-session database migration tool.
   required only when content exceeds the adapter's safe delivery boundary, referenced content is
   unavailable, sensitive text is detected, or the target cannot receive context automatically.
 - Context MUST NOT be placed in command-line arguments. Adapters MAY use a native import API,
-  stdin, or an app-owned mode-`0600` context file. A clipboard fallback occurs only after the user
-  explicitly invokes `Continue in` and MUST report that paste is still required.
-- Passing only a context-file path in the initial prompt is not automatic delivery: it depends on
-  the new Agent successfully invoking a file tool before it has any conversation context. An
-  adapter MUST expose direct continuation only when the target has a verified native attachment,
-  import, or interactive stdin contract. Otherwise it MUST use the reviewed clipboard path.
+  stdin, or an app-owned mode-`0600` context file. A clipboard-only fallback occurs only after the
+  user explicitly invokes `Continue in` and MUST report that paste is still required.
+- Passing a context-file path in the initial prompt is a best-effort handoff, not native session
+  transfer. The adapter MUST allow access only to the private handoff directory, copy the same
+  reviewed context to the clipboard before launch, and identify the method as `Context file`.
+  A target with no verified file path MUST use the reviewed clipboard path instead.
 - Conversation support is a capability of one Agent integration. Unsupported or metadata-only
   formats remain visible with an honest capability state; the renderer MUST NOT infer support from
   an Agent name or path.

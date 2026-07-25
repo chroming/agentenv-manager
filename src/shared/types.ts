@@ -231,6 +231,7 @@ export type ConversationCapabilityState =
 export interface ConversationCapabilityStatus {
   state: ConversationCapabilityState;
   evidence: string[];
+  delivery?: "context-file" | "clipboard";
 }
 
 export interface TargetConversationCapabilities {

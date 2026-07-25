@@ -411,6 +411,7 @@ export const createConversationService = async (options: {
       if (!entry) throw new Error("Continuation review expired; choose the target again");
       pending.delete(previewId);
       if (entry.launchSpec) {
+        options.clipboard.writeText(entry.context);
         await mkdir(options.paths.conversationHandoffDir, {
           recursive: true,
           mode: 0o700
@@ -428,7 +429,7 @@ export const createConversationService = async (options: {
         }
         return {
           mode: "context-file",
-          message: `Started a new conversation in ${entry.preview.targetName}`
+          message: `Opened ${entry.preview.targetName} with context; paste the fallback copy if needed`
         };
       }
       options.clipboard.writeText(entry.context);

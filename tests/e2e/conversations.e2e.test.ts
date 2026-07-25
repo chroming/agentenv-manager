@@ -275,7 +275,7 @@ describe("Conversations desktop workflow", () => {
     await targetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, targetMenu);
     await expectTopmost(targetMenu);
-    expect(await targetMenu.getByText("Direct", { exact: true }).count())
+    expect(await targetMenu.getByText("File", { exact: true }).count())
       .toBeGreaterThan(0);
     expect(await targetMenu.getByText("Paste", { exact: true }).count())
       .toBeGreaterThan(0);

@@ -206,10 +206,8 @@ describe("target discovery", () => {
     expect(claude?.health.executablePath).toBe(executable);
     expect(claude?.health.canWrite).toBe(true);
     expect(claude?.conversationCapabilities.continue).toMatchObject({
-      state: "degraded",
-      evidence: expect.arrayContaining([
-        "Continuation uses reviewed clipboard context"
-      ])
+      state: "available",
+      delivery: "context-file"
     });
     expect(claude?.health.checks).toEqual(
       expect.arrayContaining([
@@ -239,10 +237,8 @@ describe("target discovery", () => {
     expect(codex?.health.executableFound).toBe(true);
     expect(codex?.health.canWrite).toBe(true);
     expect(codex?.conversationCapabilities.continue).toMatchObject({
-      state: "degraded",
-      evidence: expect.arrayContaining([
-        "Continuation uses reviewed clipboard context"
-      ])
+      state: "available",
+      delivery: "context-file"
     });
   });
 

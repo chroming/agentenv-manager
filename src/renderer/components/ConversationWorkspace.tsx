@@ -224,18 +224,22 @@ const TargetMenu = ({
               </span>
               {targets.map((target) => {
                 const icon = targetIconFor(target);
-                const requiresPaste =
-                  target.conversationCapabilities.continue.state === "degraded";
+                const delivery = target.conversationCapabilities.continue.delivery ??
+                  (target.conversationCapabilities.continue.state === "degraded"
+                    ? "clipboard"
+                    : "context-file");
+                const requiresPaste = delivery === "clipboard";
+                const methodLabel = requiresPaste ? "Paste" : "File";
                 return (
                   <button
                     type="button"
                     role="menuitem"
                     key={target.id}
                     disabled={Boolean(pendingTargetId)}
-                    aria-label={`${target.name}, ${t(requiresPaste ? "Paste" : "Direct")}`}
+                    aria-label={`${target.name}, ${t(methodLabel)}`}
                     title={`${target.name} — ${t(requiresPaste
                       ? "Context will be copied. Paste it into the new conversation."
-                      : "Context will be passed to the new conversation automatically.")}`}
+                      : "The Agent will open with a private context file. A fallback copy is also ready.")}`}
                     onClick={() => void selectTarget(target.id)}
                   >
                     <span className="conversation-target-menu__row">
@@ -258,7 +262,7 @@ const TargetMenu = ({
                       >
                         {pendingTargetId === target.id
                           ? <LoaderCircle className="is-spinning" size={13} />
-                          : t(requiresPaste ? "Paste" : "Direct")}
+                          : t(methodLabel)}
                       </span>
                     </span>
                   </button>
@@ -655,7 +659,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const reviewModeLabel = review?.mode === "clipboard"
     ? t("Copy and paste")
     : review
-      ? t("Automatic handoff")
+      ? t("Context file")
       : "";
   const reviewActionLabel = review?.mode === "clipboard"
     ? t("Copy and open {{name}}", { name: review.targetName })

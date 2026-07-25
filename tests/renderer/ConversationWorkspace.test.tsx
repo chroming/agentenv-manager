@@ -60,7 +60,11 @@ const target = (
   conversationCapabilities: {
     history: { state: "available", evidence: ["test"] },
     openOriginal: { state: "available", evidence: ["test"] },
-    continue: { state: continueState, evidence: ["test"] }
+    continue: {
+      state: continueState,
+      evidence: ["test"],
+      delivery: continueState === "degraded" ? "clipboard" : "context-file"
+    }
   }
 });
 
@@ -167,7 +171,7 @@ describe("ConversationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu");
     expect(within(menu).queryByText("Codex")).toBeNull();
-    expect(within(menu).getByText("Direct")).toBeInTheDocument();
+    expect(within(menu).getByText("File")).toBeInTheDocument();
     fireEvent.click(within(menu).getByRole("menuitem", { name: /^OpenCode/ }));
 
     await waitFor(() => expect(api.continueConversation).toHaveBeenCalledWith("preview-1"));
@@ -196,7 +200,7 @@ describe("ConversationWorkspace", () => {
     expect(within(dialog).getByText(
       "Sensitive-looking values will be redacted before transfer"
     )).toBeInTheDocument();
-    expect(within(dialog).getByText("Automatic handoff")).toBeInTheDocument();
+    expect(within(dialog).getByText("Context file")).toBeInTheDocument();
     expect(within(dialog).getByText("2 of 2 messages")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Open OpenCode" })).toBeEnabled();
     expect(api.continueConversation).not.toHaveBeenCalled();
@@ -239,12 +243,12 @@ describe("ConversationWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu", { name: "Continue in" });
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "OpenCode, Direct" }));
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "OpenCode, File" }));
 
     await waitFor(() => expect(menu).toHaveAttribute("aria-busy", "true"));
     expect(menu.querySelector(".is-spinning")).not.toBeNull();
     expect(within(menu).getByRole("menuitem", {
-      name: "OpenCode, Direct"
+      name: "OpenCode, File"
     })).toBeDisabled();
 
     await act(async () => resolvePreview({

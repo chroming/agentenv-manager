@@ -484,7 +484,7 @@ describe("conversation service", () => {
     service.dispose();
   });
 
-  it("copies context instead of asking Codex to read a handoff path", async () => {
+  it("opens Codex with a private context file and a clipboard fallback", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-conversation-codex-fallback-"));
     const paths = createPaths({
       appDataRoot: join(root, "data"),
@@ -529,30 +529,34 @@ describe("conversation service", () => {
       targetId: "codex"
     });
     expect(preview).toMatchObject({
-      mode: "clipboard",
-      requiresReview: true,
-      warnings: ["Codex cannot receive context automatically; paste will be required"]
+      mode: "context-file",
+      requiresReview: false,
+      warnings: []
     });
 
     const result = await service.continue(preview.previewId);
+    const contextPath = join(
+      paths.conversationHandoffDir,
+      `${preview.previewId}.md`
+    );
 
     expect(result).toEqual({
-      mode: "clipboard",
-      message: "Opened Codex; paste the copied context to continue"
+      mode: "context-file",
+      message: "Opened Codex with context; paste the fallback copy if needed"
     });
     expect(clipboard.writeText).toHaveBeenCalledWith(
       expect.stringContaining("I found the failing step.")
     );
-    expect(launched).toEqual([
-      expect.objectContaining({
-        executablePath: "/usr/local/bin/codex",
-        args: []
-      })
-    ]);
-    await expect(readFile(join(
-      paths.conversationHandoffDir,
-      `${preview.previewId}.md`
-    ), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    expect(launched).toHaveLength(1);
+    expect(launched[0]).toMatchObject({
+      executablePath: "/usr/local/bin/codex",
+      cwd: "/work/project"
+    });
+    expect(launched[0].args.join(" ")).toContain(contextPath);
+    expect(launched[0].args.join(" ")).not.toContain("I found the failing step.");
+    await expect(readFile(contextPath, "utf8")).resolves.toContain(
+      "I found the failing step."
+    );
     service.dispose();
   });
 

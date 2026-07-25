@@ -14,10 +14,10 @@ afterEach(async () => {
 });
 
 describe("Antigravity conversation adapter", () => {
-  it("uses reviewed clipboard continuation without a verified native context import", () => {
+  it("uses a private context file for best-effort continuation", () => {
     expect(
       createAntigravityConversationCapability().continueWithContext
-    ).toBeUndefined();
+    ).toBeTypeOf("function");
   });
 
   it("opens the summaries database read-only and reports metadata-only history", async () => {
