@@ -85,6 +85,9 @@ const mapWithConcurrency = async <T, R>(
   return results;
 };
 
+const yieldToMainLoop = () =>
+  new Promise<void>((resolve) => setImmediate(resolve));
+
 const formatContinuation = (
   detail: ConversationDetail
 ): {
@@ -224,11 +227,16 @@ export const createConversationService = async (options: {
       const enabled = await enabledAgentIds();
       const requested = input.agentIds?.filter((id) => enabled.has(id));
       if (input.agentIds && requested?.length === 0) {
-        return { items: [], total: 0, workspacePaths: [] };
+        return index.list({
+          ...input,
+          agentIds: ["__agentenv_no_agent__"],
+          facetAgentIds: [...enabled]
+        });
       }
       return index.list({
         ...input,
-        agentIds: input.agentIds ? requested : [...enabled]
+        agentIds: input.agentIds ? requested : [...enabled],
+        facetAgentIds: [...enabled]
       });
     },
     read: async (id) => {
@@ -265,13 +273,13 @@ export const createConversationService = async (options: {
           candidates.map((candidate) => candidateId(target.id, candidate.recordId))
         );
         await mapWithConcurrency(candidates, 4, async (candidate) => {
-          const id = candidateId(target.id, candidate.recordId);
-          if (index.sourceVersion(id) === candidate.source.version) {
-            unchanged += 1;
-            return;
-          }
           try {
+            const id = candidateId(target.id, candidate.recordId);
             const previousSourceVersion = index.sourceVersion(id);
+            if (previousSourceVersion === candidate.source.version) {
+              unchanged += 1;
+              return;
+            }
             const parsed = await capability.read(
               context,
               candidate,
@@ -299,11 +307,14 @@ export const createConversationService = async (options: {
                 error instanceof Error ? error.message : String(error)
               }`
             });
+          } finally {
+            await yieldToMainLoop();
           }
         });
         if (discoveryComplete) {
           removed += index.removeMissing(target.id, observed);
         }
+        await yieldToMainLoop();
       });
       return { indexed, unchanged, removed, failures };
     },

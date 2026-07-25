@@ -168,9 +168,71 @@ describe("conversation service", () => {
     expect(await service.list({ agentIds: ["disabled-agent"] })).toEqual({
       items: [],
       total: 0,
-      workspacePaths: []
+      workspacePaths: [],
+      agentCounts: { codex: 1 }
     });
     expect(await readFile(history, "utf8")).toBe(before);
+    service.dispose();
+  });
+
+  it("yields to the Electron event loop while rebuilding a large local index", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-yield-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home"),
+      conversationIndexPath: join(root, "cache", "conversations.sqlite"),
+      conversationHandoffDir: join(root, "cache", "handoffs")
+    });
+    const candidates = Array.from({ length: 24 }, (_, index) => ({
+      ...sourceCandidate(join(root, `history-${index}.jsonl`)),
+      recordId: `session-${index}`,
+      providerSession: {
+        kind: "native" as const,
+        id: `session-${index}`,
+        resumeLocator: `session-${index}`
+      }
+    }));
+    const codex = {
+      ...createCodexTargetAdapter(),
+      conversations: {
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates, complete: true }),
+        read: async (
+          _context: AgentConversationContext,
+          candidate: AgentConversationCandidate
+        ) => ({
+          ...sourceDetail(),
+          id: `codex:${candidate.recordId}`,
+          sourceId: candidate.providerSession?.id ?? candidate.recordId
+        })
+      }
+    };
+    const service = await createConversationService({
+      paths,
+      targetRegistry: createTargetRegistry([codex]),
+      targetDiscoveryService: {
+        listTargets: async () => [makeTarget(codex, paths.homeDir)]
+      },
+      settingsStore: {
+        ...settingsStore,
+        readSettings: async () => ({
+          ...(await settingsStore.readSettings()),
+          enabledTargetIds: ["codex"]
+        })
+      },
+      clipboard: { writeText: vi.fn() },
+      launcher: { launch: vi.fn() }
+    });
+
+    let completed = false;
+    const refresh = service.refresh().then(() => {
+      completed = true;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(completed).toBe(false);
+    await refresh;
+    expect((await service.list()).total).toBe(24);
     service.dispose();
   });
 

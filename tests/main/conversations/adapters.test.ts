@@ -180,6 +180,33 @@ describe("conversation history adapters", () => {
     ]);
   });
 
+  it("tolerates misspelled plugin envelopes and preserves a mixed user request", () => {
+    const detail = parseCodexConversation(candidate({
+      title: "<recommmanded_plugins>temporary plugin metadata</recommmanded_plugins>"
+    }), [
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          id: "runtime-1",
+          type: "message",
+          role: "user",
+          content: [{
+            type: "input_text",
+            text: [
+              "<environment_context>temporary runtime metadata</environment_context>",
+              "Improve the conversation history title"
+            ].join("\n")
+          }]
+        }
+      })
+    ].join("\n"));
+
+    expect(detail.title).toBe("Improve the conversation history title");
+    expect(detail.messages.map((message) => message.text)).toEqual([
+      "Improve the conversation history title"
+    ]);
+  });
+
   it("extracts only visible OpenCode text parts", () => {
     expect(parseOpenCodeExportMessages({
       messages: [

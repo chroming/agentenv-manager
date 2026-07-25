@@ -244,6 +244,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const [agentFilter, setAgentFilter] = useState("");
   const [workspaceFilter, setWorkspaceFilter] = useState("");
   const [workspacePaths, setWorkspacePaths] = useState<string[]>([]);
+  const [agentCounts, setAgentCounts] = useState<Record<string, number>>({});
   const [selectedId, setSelectedId] = useState<string>();
   const [detail, setDetail] = useState<ConversationDetail>();
   const [loading, setLoading] = useState(true);
@@ -293,6 +294,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     setItems(result.items);
     setTotal(result.total);
     if (result.workspacePaths) setWorkspacePaths(result.workspacePaths);
+    if (result.agentCounts) setAgentCounts(result.agentCounts);
     setSelectedId((current) =>
       current && result.items.some((item) => item.id === current)
         ? current
@@ -351,6 +353,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
 
   useEffect(() => {
     let active = true;
+    let refreshTimer: number | undefined;
     void (async () => {
       try {
         await loadList("");
@@ -361,10 +364,15 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
       } finally {
         if (active) setLoading(false);
       }
-      if (active) await refresh(true);
+      if (active) {
+        refreshTimer = window.setTimeout(() => {
+          if (active) void refresh(true);
+        }, 250);
+      }
     })();
     return () => {
       active = false;
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
     };
   }, []);
 
@@ -611,7 +619,9 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                   >
                     <option value="">{t("All Agents")}</option>
                     {filterTargets.map((target) => (
-                      <option value={target.id} key={target.id}>{target.name}</option>
+                      <option value={target.id} key={target.id}>
+                        {target.name} ({agentCounts[target.id] ?? 0})
+                      </option>
                     ))}
                   </select>
                 </label>
@@ -644,12 +654,19 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                 <div className="conversation-empty">
                   <MessageSquareText size={20} aria-hidden="true" />
                   <strong>
-                    {query || agentFilter || workspaceFilter
+                    {agentFilter && !query && !workspaceFilter
+                      ? t("No conversations found for {{name}}", {
+                          name: targets.find((target) => target.id === agentFilter)?.name ??
+                            agentFilter
+                        })
+                      : query || agentFilter || workspaceFilter
                       ? t("No matching conversations")
                       : t("No conversations indexed")}
                   </strong>
                   <span>
-                    {query || agentFilter || workspaceFilter
+                    {agentFilter && !query && !workspaceFilter
+                      ? t("No supported local history was found for this Agent.")
+                      : query || agentFilter || workspaceFilter
                       ? t("Try another search.")
                       : t("Refresh to scan enabled Agents.")}
                   </span>
@@ -838,12 +855,31 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                   </ControlGroup>
                 </header>
                 {detail.detailState === "summary-only" ? (
-                  <div className="conversation-summary-only inline-state">
-                    <TriangleAlert size={17} aria-hidden="true" />
-                    <div>
-                      <strong>{t("Full transcript is unavailable")}</strong>
-                      <p>{t("This Agent currently exposes conversation metadata but not portable message text.")}</p>
+                  <div className="conversation-summary-view">
+                    <div className="conversation-summary-only inline-state">
+                      <TriangleAlert size={17} aria-hidden="true" />
+                      <div>
+                        <strong>{t("Full transcript is unavailable")}</strong>
+                        <p>{t("This Agent currently exposes conversation metadata but not portable message text.")}</p>
+                      </div>
                     </div>
+                    {detail.snippet ? (
+                      <section className="conversation-summary-preview">
+                        <span>{t("Conversation summary")}</span>
+                        <ConversationMarkdown
+                          text={detail.snippet}
+                          onOpenExternal={(href) => {
+                            void window.agentEnv.openExternalUrl(href).catch(
+                              (unknownError) => setError(
+                                unknownError instanceof Error
+                                  ? unknownError.message
+                                  : String(unknownError)
+                              )
+                            );
+                          }}
+                        />
+                      </section>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="conversation-transcript">

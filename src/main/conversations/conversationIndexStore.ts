@@ -44,15 +44,28 @@ export interface IndexedConversationRecord {
   candidate: AgentConversationCandidate;
 }
 
+interface ConversationIndexListInput extends ConversationListInput {
+  facetAgentIds?: string[];
+}
+
 export interface ConversationIndexStore {
   sourceVersion(id: string): string | undefined;
   upsert(detail: ConversationDetail, candidate: AgentConversationCandidate): void;
   removeMissing(agentId: string, observedIds: Set<string>): number;
-  list(input?: ConversationListInput): ConversationListResult;
+  list(input?: ConversationIndexListInput): ConversationListResult;
   read(id: string): ConversationDetail;
   record(id: string): IndexedConversationRecord;
   close(): void;
 }
+
+const parserVersionPrefix = "agentenv-parser:3\n";
+const encodeSourceVersion = (version: string) => `${parserVersionPrefix}${version}`;
+const decodeSourceVersion = (version: string) =>
+  version.startsWith(parserVersionPrefix)
+    ? version.slice(parserVersionPrefix.length)
+    : version;
+const compatibleSourceVersion = (version?: string) =>
+  version?.startsWith(parserVersionPrefix) ? decodeSourceVersion(version) : undefined;
 
 const summaryFromRow = (row: ConversationRow): ConversationSummary => ({
   id: row.id,
@@ -243,7 +256,7 @@ export const createConversationIndexStore = async (
   return {
     sourceVersion: (id) => {
       const row = versionStatement.get(id) as { source_version?: string } | undefined;
-      return row?.source_version;
+      return compatibleSourceVersion(row?.source_version);
     },
     upsert: (detail, candidate) => {
       const searchText = [
@@ -260,7 +273,7 @@ export const createConversationIndexStore = async (
           detail.agentName,
           candidate.recordId,
           detail.sourceId,
-          candidate.source.version,
+          encodeSourceVersion(candidate.source.version),
           candidate.source.locator,
           candidate.source.runtimeHome ?? null,
           candidate.providerSession?.kind ?? null,
@@ -365,10 +378,32 @@ export const createConversationIndexStore = async (
           ORDER BY workspace_path COLLATE NOCASE ASC
         `).all(...workspaceParameters) as Array<{ workspace_path: string }>
       ).map((row) => row.workspace_path);
+      const facetAgentIds = [...new Set(input.facetAgentIds ?? agentIds)].filter(Boolean);
+      const agentCountConditions: string[] = [];
+      const agentCountParameters: string[] = [];
+      if (facetAgentIds.length > 0) {
+        agentCountConditions.push(
+          `agent_id IN (${facetAgentIds.map(() => "?").join(", ")})`
+        );
+        agentCountParameters.push(...facetAgentIds);
+      }
+      const agentCountWhere = agentCountConditions.length > 0
+        ? `WHERE ${agentCountConditions.join(" AND ")}`
+        : "";
+      const agentCounts = Object.fromEntries(
+        (database.prepare(`
+          SELECT agent_id, count(*) AS count
+          FROM conversations
+          ${agentCountWhere}
+          GROUP BY agent_id
+        `).all(...agentCountParameters) as Array<{ agent_id: string; count: number }>)
+          .map((row) => [row.agent_id, Number(row.count)])
+      );
       return {
         items: rows.map(summaryFromRow),
         total,
-        workspacePaths: availableWorkspacePaths
+        workspacePaths: availableWorkspacePaths,
+        agentCounts
       };
     },
     read: (id) => {
@@ -391,7 +426,7 @@ export const createConversationIndexStore = async (
         candidate: {
           recordId: row.record_id,
           source: {
-            version: row.source_version,
+            version: decodeSourceVersion(row.source_version),
             locator: row.source_locator,
             ...(row.source_runtime_home
               ? { runtimeHome: row.source_runtime_home }

@@ -85,7 +85,8 @@ const installApi = (
     listConversations: vi.fn().mockResolvedValue({
       items: [{ ...detail, messages: undefined }],
       total: 1,
-      workspacePaths: ["/work/project"]
+      workspacePaths: ["/work/project"],
+      agentCounts: { codex: 1, opencode: 2 }
     }),
     readConversation: vi.fn().mockResolvedValue(detail),
     refreshConversations: vi.fn().mockResolvedValue({
@@ -339,6 +340,8 @@ describe("ConversationWorkspace", () => {
       target("opencode", "OpenCode")
     ]} />);
     await screen.findByText("Repair release workflow");
+    expect(screen.getByRole("option", { name: "Codex (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "OpenCode (2)" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Filter by Agent" }), {
       target: { value: "codex" }
@@ -352,6 +355,30 @@ describe("ConversationWorkspace", () => {
       workspacePaths: ["/work/project"],
       limit: 200
     }));
+  });
+
+  it("shows metadata-only history as an honest readable summary", async () => {
+    const api = installApi();
+    api.readConversation.mockResolvedValue({
+      ...detail,
+      agentId: "opencode",
+      agentName: "OpenCode",
+      title: "Review desktop shell",
+      snippet: "The source exposes this useful conversation summary.",
+      messageCount: 4,
+      detailState: "summary-only",
+      messages: []
+    });
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+
+    expect(await screen.findByText("Conversation summary")).toBeInTheDocument();
+    expect(screen.getByText(
+      "The source exposes this useful conversation summary."
+    )).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
   });
 
   it("renders Markdown safely and groups consecutive messages by role", async () => {

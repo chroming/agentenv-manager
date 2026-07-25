@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createConversationIndexStore,
@@ -72,6 +73,7 @@ describe("conversation index store", () => {
     });
 
     expect(index.list({ query: "发布" }).items).toHaveLength(1);
+    expect(index.list().agentCounts).toEqual({ codex: 1 });
     expect(index.list({ query: "OLD TOKEN" })).toMatchObject({
       items: [{
         id: detail.id,
@@ -144,7 +146,32 @@ describe("conversation index store", () => {
 
     store = await createConversationIndexStore(path);
 
-    expect(store.list()).toEqual({ items: [], total: 0, workspacePaths: [] });
+    expect(store.list()).toEqual({
+      items: [],
+      total: 0,
+      workspacePaths: [],
+      agentCounts: {}
+    });
     expect((await readFile(path)).subarray(0, 6).toString()).toBe("SQLite");
+  });
+
+  it("reparses legacy cached records without clearing their last-good content", async () => {
+    const { path, store: index } = await setup();
+    index.upsert(detail, candidate);
+    index.close();
+    store = undefined;
+
+    const database = new DatabaseSync(path);
+    database.prepare(
+      "UPDATE conversations SET source_version = ? WHERE id = ?"
+    ).run(candidate.source.version, detail.id);
+    database.close();
+
+    store = await createConversationIndexStore(path);
+    expect(store.sourceVersion(detail.id)).toBeUndefined();
+    expect(store.list().items).toEqual([
+      expect.objectContaining({ id: detail.id, title: detail.title })
+    ]);
+    expect(store.record(detail.id).candidate.source.version).toBe(candidate.source.version);
   });
 });

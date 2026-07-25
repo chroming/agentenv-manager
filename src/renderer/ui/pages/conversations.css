@@ -596,13 +596,33 @@
 
 .conversation-summary-only {
   align-items: flex-start;
-  margin: 16px;
+  margin: 0;
 }
 
 .conversation-summary-only p {
   color: var(--muted);
   font-size: var(--font-size-metadata);
   margin: 3px 0 0;
+}
+
+.conversation-summary-view {
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+  padding: 16px;
+}
+
+.conversation-summary-preview {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  padding: 14px 2px 0;
+}
+
+.conversation-summary-preview > span {
+  color: var(--subtle);
+  font-size: var(--font-size-metadata);
+  font-weight: var(--font-weight-medium);
 }
 
 .conversation-empty {

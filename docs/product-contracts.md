@@ -328,6 +328,10 @@ an archive, or a native-session database migration tool.
   current repository plus the user's new request as authoritative.
 - Conversation discovery starts after the core application is usable and MUST NOT delay startup,
   Profile loading, Library loading, or Agent discovery.
+- Opening Conversations MUST render the last-good cached list before starting source refresh.
+  Refresh parsing MUST yield between records so Electron window input, navigation, and cache reads
+  remain responsive during a large first index. Parser upgrades invalidate record versions without
+  clearing the visible last-good cache.
 - The desktop workspace uses one stable list-and-reader surface. Search and the conversation list
   own their scrolling; page chrome and detail actions remain visible. Refresh, copy, open, preview,
   and continue progress belongs to the initiating control, while completion and failure use the
@@ -339,6 +343,10 @@ an archive, or a native-session database migration tool.
 - Agent and workspace filters are index queries, not renderer-only hiding. Changing search or a
   filter invalidates older pending list requests, preserves selection only when the selected task
   remains in the result, and never mutates source history.
+- Agent filters show indexed counts for every enabled history-capable Agent. A zero count is an
+  honest source state, not an implication that another Agent's records belong to that Agent.
+  Metadata-only histories remain useful by displaying their source summary while clearly disabling
+  transcript-dependent actions.
 - The detail reader presents one task header followed by a readable transcript. Consecutive
   messages from the same role are grouped without changing message order. Visible Markdown,
   tables, lists, and fenced code MAY be rendered, but raw HTML is never executed, remote images

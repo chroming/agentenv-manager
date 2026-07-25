@@ -34,7 +34,7 @@ describe("Antigravity conversation adapter", () => {
       );
       INSERT INTO conversation_summaries VALUES (
         'ag-session',
-        'Review desktop shell',
+        '',
         'Inspect the desktop layout',
         4,
         '2026-07-24T06:00:00.000Z',
@@ -62,16 +62,21 @@ describe("Antigravity conversation adapter", () => {
       expect.objectContaining({
         recordId: "ag-session",
         providerSession: expect.objectContaining({ id: "ag-session" }),
-        title: "Review desktop shell",
+        title: "",
         workspacePath: "/work/project",
         messageCount: 4,
         detailState: "summary-only"
       })
     ]);
-    expect((await capability.read({
+    const detail = await capability.read({
       homeDir: root,
       targetPaths,
       executablePath: "/usr/local/bin/agy"
-    }, candidates[0])).messages).toEqual([]);
+    }, candidates[0]);
+    expect(detail).toMatchObject({
+      title: "Inspect the desktop layout",
+      snippet: "Inspect the desktop layout",
+      messages: []
+    });
   });
 });

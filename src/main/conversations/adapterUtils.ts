@@ -45,25 +45,51 @@ export const conversationTaskTitleFrom = (
 export const conversationSnippetFrom = (value: string) =>
   value.replace(/\s+/g, " ").trim().slice(0, 180);
 
-const conversationScaffoldingPrefixes = [
-  "<app-context",
-  "<apps_instructions",
-  "<collaboration_mode",
-  "<environment_context",
-  "<permissions instructions",
-  "<plugins_instructions",
-  "<recommended_plugins",
-  "<skill>",
-  "<skill ",
-  "<skills_instructions",
-  "<image name=",
-  "# AGENTS.md instructions"
-];
+const normalizedScaffoldingTag = (tag: string) =>
+  tag.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const isScaffoldingTag = (tag: string) => {
+  const normalized = normalizedScaffoldingTag(tag);
+  return (
+    normalized.includes("context") ||
+    normalized.includes("instruction") ||
+    normalized.includes("plugin") ||
+    normalized.includes("permission") ||
+    normalized.includes("collaborationmode") ||
+    normalized === "skill" ||
+    normalized === "skills" ||
+    normalized === "image"
+  );
+};
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export const stripConversationScaffolding = (value: string) => {
+  let remaining = value.trim();
+  if (/^#\s*AGENTS\.md instructions\b/i.test(remaining)) return "";
+
+  for (let index = 0; index < 12; index += 1) {
+    const opening = remaining.match(/^<([a-z][\w:.-]*)(?:\s[^>]*)?>/i);
+    if (!opening || !isScaffoldingTag(opening[1])) break;
+    const openingText = opening[0];
+    if (/\/>$/.test(openingText) || normalizedScaffoldingTag(opening[1]) === "image") {
+      remaining = remaining.slice(openingText.length).trimStart();
+      continue;
+    }
+    const closing = new RegExp(`</${escapeRegExp(opening[1])}\\s*>`, "i");
+    const closingMatch = closing.exec(remaining.slice(openingText.length));
+    if (!closingMatch) return "";
+    remaining = remaining.slice(
+      openingText.length + closingMatch.index + closingMatch[0].length
+    ).trimStart();
+  }
+  return remaining.trim();
+};
 
 export const isConversationScaffolding = (value: string) => {
-  const normalized = value.trimStart().toLowerCase();
-  return conversationScaffoldingPrefixes.some((prefix) =>
-    normalized.startsWith(prefix.toLowerCase()));
+  const trimmed = value.trim();
+  return Boolean(trimmed) && !stripConversationScaffolding(trimmed);
 };
 
 export const isoDate = (value: unknown, fallback: Date): string => {
@@ -254,10 +280,20 @@ export const createConversationDetail = (
     (message) => message.role === "user" && !isConversationScaffolding(message.text)
   )?.text ?? "";
   const firstAssistant = messages.find((message) => message.role === "assistant")?.text ?? "";
-  const firstMeaningful = (...values: Array<string | undefined>) =>
-    values.find((value) => value?.trim() && !isConversationScaffolding(value)) ?? "";
+  const firstMeaningful = (...values: Array<string | undefined>) => {
+    for (const value of values) {
+      const visible = value ? stripConversationScaffolding(value) : "";
+      if (visible) return visible;
+    }
+    return "";
+  };
   const nativeTitle = firstMeaningful(metadata.title, candidate.title);
-  const fallbackTitle = firstMeaningful(firstUser, firstAssistant);
+  const fallbackTitle = firstMeaningful(
+    firstUser,
+    metadata.snippet,
+    candidate.snippet,
+    firstAssistant
+  );
   const snippetSource = firstMeaningful(
     metadata.snippet,
     candidate.snippet,
@@ -289,17 +325,19 @@ export const visibleMessage = (
   text: string,
   createdAt?: string
 ): ConversationMessage | undefined => {
+  const visibleText = role === "user"
+    ? stripConversationScaffolding(text)
+    : text.trim();
   if (
     (role !== "user" && role !== "assistant") ||
-    !text.trim() ||
-    (role === "user" && isConversationScaffolding(text))
+    !visibleText
   ) {
     return undefined;
   }
   return {
     id,
     role: role as ConversationRole,
-    text: text.trim(),
+    text: visibleText,
     createdAt
   };
 };
