@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   expectInViewport,
   expectNoHorizontalOverflow,
+  expectTopmost,
   findVisibleTextLayoutDefects
 } from "./layoutAssertions";
 
@@ -120,7 +121,22 @@ describe("Conversations desktop workflow", () => {
       name: "Search conversations"
     }));
     await expectInViewport(page, page.getByRole("button", { name: "Continue" }));
+    const actionHeights = await page.locator(".conversation-detail-actions > button").evaluateAll(
+      (buttons) => buttons.map((button) =>
+        Math.round(button.getBoundingClientRect().height))
+    );
+    expect(new Set(actionHeights).size).toBe(1);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
+
+    await page.getByRole("button", { name: "Continue" }).click();
+    const targetMenu = page.getByRole("menu");
+    await targetMenu.waitFor({ state: "visible" });
+    await expectInViewport(page, targetMenu);
+    await expectTopmost(targetMenu);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Continue" }).evaluate(
+      (element) => element === document.activeElement
+    )).resolves.toBe(true);
 
     await page.keyboard.press("Meta+F");
     await expect(page.getByRole("searchbox", {
@@ -146,6 +162,9 @@ describe("Conversations desktop workflow", () => {
     await page.setViewportSize({ width: 920, height: 620 });
     await expectNoHorizontalOverflow(page, [".conversation-page", ".conversation-layout"]);
     await expectInViewport(page, page.getByRole("button", { name: "Continue" }));
+    expect(await page.locator(".conversation-page").evaluate(
+      (element) => element.scrollHeight - element.clientHeight
+    )).toBeLessThanOrEqual(1);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
     expect(await readFile(sourcePath, "utf8")).toBe(source);
   }, 30_000);

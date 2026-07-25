@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -146,7 +147,7 @@ describe("ConversationWorkspace", () => {
       limit: 200
     }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy conversation" }));
     await waitFor(() => expect(api.copyText).toHaveBeenCalledWith(
       expect.stringContaining("I found the failing step.")
     ));
@@ -218,5 +219,114 @@ describe("ConversationWorkspace", () => {
       offset: 1,
       limit: 200
     });
+  });
+
+  it("keeps list selection keyboard accessible", async () => {
+    const api = installApi();
+    api.listConversations.mockResolvedValue({
+      items: [
+        { ...detail, messages: undefined },
+        {
+          ...detail,
+          id: "codex:session-2",
+          sourceId: "session-2",
+          title: "Second indexed conversation",
+          messages: undefined
+        }
+      ],
+      total: 2
+    });
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+    const first = await screen.findByRole("option", { name: /Repair release workflow/ });
+    first.focus();
+
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+
+    const second = screen.getByRole("option", { name: /Second indexed conversation/ });
+    expect(second).toHaveAttribute("aria-selected", "true");
+    expect(second).toHaveFocus();
+  });
+
+  it("shows progress only on the action that is running", async () => {
+    let finishCopy: (() => void) | undefined;
+    const api = installApi();
+    api.copyText.mockImplementation(() => new Promise<void>((resolve) => {
+      finishCopy = resolve;
+    }));
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+    await screen.findByText("Please repair the release workflow.");
+
+    const copy = screen.getByRole("button", { name: "Copy conversation" });
+    const refresh = screen.getByRole("button", { name: "Refresh" });
+    fireEvent.click(copy);
+
+    expect(copy.querySelector(".is-spinning")).not.toBeNull();
+    expect(refresh.querySelector(".is-spinning")).toBeNull();
+    finishCopy?.();
+    await waitFor(() => expect(copy.querySelector(".is-spinning")).toBeNull());
+    expect(await screen.findByText("Conversation copied")).toBeInTheDocument();
+  });
+
+  it("does not let an older search response replace a newer query", async () => {
+    const api = installApi();
+    type ListResult = Awaited<ReturnType<AgentEnvApi["listConversations"]>>;
+    let finishSlow: ((result: ListResult) => void) | undefined;
+    let finishLatest: ((result: ListResult) => void) | undefined;
+    api.listConversations.mockImplementation(async (input?: { query?: string }) => {
+      if (input?.query === "slow") {
+        return new Promise<ListResult>((resolve) => {
+          finishSlow = resolve;
+        });
+      }
+      if (input?.query === "latest") {
+        return new Promise<ListResult>((resolve) => {
+          finishLatest = resolve;
+        });
+      }
+      return {
+        items: [{ ...detail, messages: undefined }],
+        total: 1
+      };
+    });
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+    await screen.findByText("Please repair the release workflow.");
+    const search = screen.getByRole("searchbox", { name: "Search conversations" });
+
+    fireEvent.change(search, { target: { value: "slow" } });
+    await waitFor(() => expect(finishSlow).toBeTypeOf("function"));
+    fireEvent.change(search, { target: { value: "latest" } });
+    await waitFor(() => expect(finishLatest).toBeTypeOf("function"));
+
+    await act(async () => finishLatest?.({
+      items: [{
+        ...detail,
+        id: "codex:latest",
+        sourceId: "latest",
+        title: "Latest search result"
+      }],
+      total: 1
+    }));
+    expect(await screen.findByText("Latest search result")).toBeInTheDocument();
+    await act(async () => finishSlow?.({
+      items: [{
+        ...detail,
+        id: "codex:slow",
+        sourceId: "slow",
+        title: "Stale search result"
+      }],
+      total: 1
+    }));
+
+    await waitFor(() => expect(screen.queryByText("Stale search result")).toBeNull());
+    expect(screen.getByText("Latest search result")).toBeInTheDocument();
   });
 });

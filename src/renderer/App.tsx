@@ -111,6 +111,10 @@ import {
 import { AgentsEditor } from "./components/AgentsEditor";
 import { AgentSettingsSection } from "./components/AgentSettingsSection";
 import { AgentSkillWorkspaceRoute } from "./components/AgentSkillWorkspaceRoute";
+import {
+  AppFeedback,
+  type AppFeedbackMessage
+} from "./components/AppFeedback";
 import { DataRootPath } from "./components/DataRootPath";
 import { DiffViewer } from "./components/DiffViewer";
 import { ConversationWorkspace } from "./components/ConversationWorkspace";
@@ -278,102 +282,7 @@ const toSaveInput = (profile: ProfileDetail): SaveProfileInput => ({
   resources: profile.resources
 });
 
-type AppFeedbackKind = "loading" | "success" | "error" | "info";
-
-interface AppFeedbackMessage {
-  kind: AppFeedbackKind;
-  title: string;
-  message?: string;
-  action?: {
-    label: string;
-    onClick(): void;
-  };
-}
-
-export const AppFeedback = ({
-  feedback,
-  onDismiss
-}: {
-  feedback?: AppFeedbackMessage;
-  onDismiss(): void;
-}) => {
-  const { t } = useI18n();
-  const onDismissRef = useRef(onDismiss);
-  const [copied, setCopied] = useState(false);
-  onDismissRef.current = onDismiss;
-  const feedbackKey = feedback
-    ? `${feedback.kind}\u0000${feedback.title}\u0000${feedback.message ?? ""}`
-    : "";
-
-  useEffect(() => {
-    if (!feedback || (feedback.kind !== "success" && feedback.kind !== "info")) {
-      return undefined;
-    }
-    const timeoutId = window.setTimeout(() => onDismissRef.current(), 5000);
-    return () => window.clearTimeout(timeoutId);
-  }, [feedbackKey, feedback?.kind]);
-
-  useEffect(() => {
-    setCopied(false);
-  }, [feedbackKey]);
-
-  if (!feedback) {
-    return null;
-  }
-
-  const Icon =
-    feedback.kind === "error"
-      ? TriangleAlert
-      : feedback.kind === "loading"
-        ? RefreshCw
-        : feedback.kind === "success"
-          ? CheckCircle2
-          : Settings2;
-  const copyFeedback = async () => {
-    const text = [feedback.title, feedback.message].filter(Boolean).join("\n");
-    await window.agentEnv.copyText(text);
-    setCopied(true);
-  };
-
-  return (
-    <div
-      className={`app-feedback app-feedback--${feedback.kind}${
-        feedback.kind === "error" ? " app-feedback--dismissible" : ""
-      }`}
-      role={feedback.kind === "error" ? "alert" : "status"}
-    >
-      <Icon size={15} strokeWidth={2.2} aria-hidden="true" />
-      <div>
-          <strong>{t(feedback.title)}</strong>
-          {feedback.message ? <span>{t(feedback.message)}</span> : null}
-        {feedback.action ? (
-          <button className="app-feedback__action" type="button" onClick={feedback.action.onClick}>
-            {t(feedback.action.label)}
-          </button>
-        ) : null}
-      </div>
-      <div className="app-feedback__controls">
-        <button
-          type="button"
-          aria-label={t(copied ? "Message copied" : "Copy message")}
-          title={t(copied ? "Copied" : "Copy message")}
-          onClick={() => void copyFeedback()}
-        >
-          {copied ? (
-            <CheckCircle2 size={14} strokeWidth={2.2} aria-hidden="true" />
-          ) : (
-            <Copy size={14} strokeWidth={2.2} aria-hidden="true" />
-          )}
-        </button>
-        {feedback.kind === "error" ? (
-          <button type="button" aria-label={t("Dismiss message")} onClick={onDismiss}>
-            <X size={14} strokeWidth={2.2} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-};
+export { AppFeedback };
 
 const isGitHubRateLimitError = (message: string) =>
   /github.*(?:rate limit|api limit)|(?:rate limit|api limit).*github/i.test(message);

@@ -1,5 +1,4 @@
 import {
-  Check,
   ChevronDown,
   Clock3,
   Copy,
@@ -27,9 +26,20 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
+import { AppFeedback, type AppFeedbackMessage } from "./AppFeedback";
+import { InfoTip } from "./InfoTip";
 import { targetIconFor } from "./ProfileSidebar";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Button, PageHeader } from "./ui";
+import {
+  Badge,
+  Button,
+  ControlGroup,
+  focusInitialActionMenuItem,
+  handleActionMenuKeyDown,
+  IconButton,
+  ModalFrame,
+  PageHeader
+} from "./ui";
 
 let backgroundRefresh: Promise<ConversationRefreshResult> | undefined;
 let backgroundRefreshCompletedAt = 0;
@@ -62,14 +72,19 @@ const continuationText = (detail: ConversationDetail) => [
 ].join("\n");
 
 const conversationPageSize = 200;
+type ConversationOperation = "copy" | "open-original" | "continue";
 
 const TargetMenu = ({
   targets,
   disabled,
+  disabledReason,
+  working,
   onSelect
 }: {
   targets: TargetInfo[];
   disabled: boolean;
+  disabledReason?: string;
+  working: boolean;
   onSelect(targetId: string): void;
 }) => {
   const { t } = useI18n();
@@ -89,6 +104,7 @@ const TargetMenu = ({
       });
     }
     setOpen(true);
+    window.setTimeout(() => focusInitialActionMenuItem(menuRef.current));
   };
 
   useEffect(() => {
@@ -109,11 +125,16 @@ const TargetMenu = ({
         buttonRef.current?.focus();
       }
     };
+    const dismissForViewportChange = () => setOpen(false);
     document.addEventListener("mousedown", dismiss);
     document.addEventListener("keydown", escape);
+    window.addEventListener("resize", dismissForViewportChange);
+    window.addEventListener("scroll", dismissForViewportChange, true);
     return () => {
       document.removeEventListener("mousedown", dismiss);
       document.removeEventListener("keydown", escape);
+      window.removeEventListener("resize", dismissForViewportChange);
+      window.removeEventListener("scroll", dismissForViewportChange, true);
     };
   }, [open]);
 
@@ -124,13 +145,15 @@ const TargetMenu = ({
         className="conversation-continue-button"
         variant="primary"
         type="button"
-        disabled={disabled || targets.length === 0}
+        disabled={disabled || working || targets.length === 0}
+        title={disabledReason}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => open ? setOpen(false) : show()}
+        icon={working ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
       >
-        {t("Continue")}
-        <ChevronDown size={14} aria-hidden="true" />
+        {t(working ? "Preparing..." : "Continue")}
+        {!working ? <ChevronDown size={14} aria-hidden="true" /> : null}
       </Button>
       {open
         ? createPortal(
@@ -139,6 +162,7 @@ const TargetMenu = ({
               className="conversation-target-menu action-menu"
               role="menu"
               style={style}
+              onKeyDown={handleActionMenuKeyDown}
             >
               <span className="conversation-target-menu__label">
                 {t("Continue in")}
@@ -191,7 +215,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const [detailLoading, setDetailLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<ConversationOperation>();
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
@@ -200,7 +224,10 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const reviewCancelRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const queryRef = useRef("");
+  const listRequestRef = useRef(0);
+  const queryEffectReadyRef = useRef(false);
   queryRef.current = query;
+  const busy = Boolean(operation);
 
   useModalDialog({
     open: Boolean(review),
@@ -212,10 +239,12 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   });
 
   const loadList = async (nextQuery = queryRef.current) => {
+    const requestId = ++listRequestRef.current;
     const result = await window.agentEnv.listConversations({
       query: nextQuery || undefined,
       limit: conversationPageSize
     });
+    if (requestId !== listRequestRef.current) return;
     setItems(result.items);
     setTotal(result.total);
     setSelectedId((current) =>
@@ -255,14 +284,11 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
       const result = await refreshConversationIndex(!initial);
       await loadList();
       if (result && result.failures.length > 0) {
-        setWarning([
-          t("Some Agent histories could not be refreshed"),
-          ...result.failures.map((failure) => {
-            const name = targets.find((target) => target.id === failure.agentId)?.name ??
-              failure.agentId;
-            return `${name}: ${failure.message}`;
-          })
-        ].join("\n"));
+        setWarning(result.failures.map((failure) => {
+          const name = targets.find((target) => target.id === failure.agentId)?.name ??
+            failure.agentId;
+          return `${name}: ${failure.message}`;
+        }).join("\n"));
       } else if (!initial) {
         setMessage(t("Conversations refreshed"));
       }
@@ -275,26 +301,28 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
 
   useEffect(() => {
     let active = true;
-    void window.agentEnv.listConversations({ limit: conversationPageSize })
-      .then((result) => {
-        if (!active) return;
-        setItems(result.items);
-        setTotal(result.total);
-        setSelectedId(result.items[0]?.id);
-      })
-      .catch((unknownError) => {
+    void (async () => {
+      try {
+        await loadList("");
+      } catch (unknownError) {
         if (active) {
           setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
         }
-      })
-      .finally(() => active && setLoading(false));
-    void refresh(true);
+      } finally {
+        if (active) setLoading(false);
+      }
+      if (active) await refresh(true);
+    })();
     return () => {
       active = false;
     };
   }, []);
 
   useEffect(() => {
+    if (!queryEffectReadyRef.current) {
+      queryEffectReadyRef.current = true;
+      return undefined;
+    }
     const timeout = window.setTimeout(() => {
       void loadList(query).catch((unknownError) =>
         setError(unknownError instanceof Error ? unknownError.message : String(unknownError))
@@ -323,12 +351,6 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
       active = false;
     };
   }, [selectedId]);
-
-  useEffect(() => {
-    if (!message) return undefined;
-    const timeout = window.setTimeout(() => setMessage(""), 5000);
-    return () => window.clearTimeout(timeout);
-  }, [message]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -366,7 +388,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   );
 
   const executeContinuation = async (previewId: string) => {
-    setBusy(true);
+    setOperation("continue");
     setError("");
     try {
       const result = await window.agentEnv.continueConversation(previewId);
@@ -375,13 +397,13 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
-      setBusy(false);
+      setOperation(undefined);
     }
   };
 
   const chooseTarget = async (targetId: string) => {
     if (!detail) return;
-    setBusy(true);
+    setOperation("continue");
     setError("");
     let reviewAfterWork: ConversationContinuationPreview | undefined;
     try {
@@ -390,18 +412,21 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
         targetId
       });
       if (preview.requiresReview) reviewAfterWork = preview;
-      else await executeContinuation(preview.previewId);
+      else {
+        const result = await window.agentEnv.continueConversation(preview.previewId);
+        setMessage(result.message);
+      }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
-      setBusy(false);
+      setOperation(undefined);
     }
     if (reviewAfterWork) setReview(reviewAfterWork);
   };
 
   const openOriginal = async () => {
     if (!detail) return;
-    setBusy(true);
+    setOperation("open-original");
     setError("");
     try {
       const result = await window.agentEnv.openOriginalConversation(detail.id);
@@ -409,224 +434,263 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
-      setBusy(false);
+      setOperation(undefined);
     }
   };
 
-  return (
-    <section className="conversation-page">
-      <PageHeader
-        className="conversation-page-header"
-        title={t("Conversations")}
-        description={t("Find local Agent history and continue it in another Agent.")}
-        actions={
-          <Button
-            icon={
-              <RefreshCw
-                className={refreshing ? "is-spinning" : undefined}
-                size={15}
-              />
-            }
-            disabled={refreshing}
-            onClick={() => void refresh()}
-          >
-            {t("Refresh")}
-          </Button>
+  const copyConversation = async () => {
+    if (!detail) return;
+    setOperation("copy");
+    setError("");
+    try {
+      await window.agentEnv.copyText(continuationText(detail));
+      setMessage(t("Conversation copied"));
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setOperation(undefined);
+    }
+  };
+
+  const feedback: AppFeedbackMessage | undefined = error
+    ? { kind: "error", title: t("Could not complete this step"), message: error }
+    : warning
+      ? {
+          kind: "warning",
+          title: t("Some Agent histories could not be refreshed"),
+          message: warning
         }
-      />
+      : message
+        ? { kind: "success", title: message }
+        : undefined;
 
-      {error ? (
-        <div className="conversation-feedback conversation-feedback--error" role="alert">
-          <TriangleAlert size={15} aria-hidden="true" />
-          <span>{error}</span>
-          <button type="button" onClick={() => setError("")}>{t("Dismiss")}</button>
-        </div>
-      ) : warning ? (
-        <div className="conversation-feedback conversation-feedback--warning" role="status">
-          <TriangleAlert size={15} aria-hidden="true" />
-          <span>{warning}</span>
-          <button type="button" onClick={() => setWarning("")}>{t("Dismiss")}</button>
-        </div>
-      ) : message ? (
-        <div className="conversation-feedback" role="status">
-          <Check size={15} aria-hidden="true" />
-          <span>{message}</span>
-        </div>
-      ) : null}
-
-      <div className="conversation-layout">
-        <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
-          <label className="conversation-search">
-            <Search size={15} aria-hidden="true" />
-            <input
-              ref={searchInputRef}
-              type="search"
-              value={query}
-              placeholder={t("Search conversations…")}
-              aria-label={t("Search conversations")}
-              onChange={(event) => setQuery(event.target.value)}
+  return (
+    <>
+      <section className="conversation-page">
+        <PageHeader
+          className="conversation-page-header"
+          title={t("Conversations")}
+          help={
+            <InfoTip
+              label={t("Find local Agent history and continue it in another Agent.")}
             />
-          </label>
-          <div className="conversation-list-meta">
-            <span>{t("{{count}} conversations", { count: total })}</span>
-            {refreshing ? <LoaderCircle className="is-spinning" size={14} aria-hidden="true" /> : null}
-          </div>
-          <div className="conversation-list" role="listbox" aria-busy={loading}>
-            {loading ? (
-              <div className="conversation-empty">
-                <LoaderCircle className="is-spinning" size={19} aria-hidden="true" />
-                <span>{t("Loading conversations")}</span>
-              </div>
-            ) : items.length === 0 ? (
-              <div className="conversation-empty">
-                <MessageSquareText size={20} aria-hidden="true" />
-                <strong>{query ? t("No matching conversations") : t("No conversations indexed")}</strong>
-                <span>{query ? t("Try another search.") : t("Refresh to scan enabled Agents.")}</span>
-              </div>
-            ) : items.map((item) => {
-              const target = targets.find((candidate) => candidate.id === item.agentId);
-              const icon = target ? targetIconFor(target) : undefined;
-              return (
-                <button
-                  className={`conversation-list-item${selectedId === item.id ? " is-selected" : ""}`}
-                  type="button"
-                  role="option"
-                  aria-selected={selectedId === item.id}
-                  key={item.id}
-                  onClick={() => setSelectedId(item.id)}
-                >
-                  <span className={`conversation-agent-icon conversation-agent-icon--${icon?.flavor ?? "generic"}`} aria-hidden="true">
-                    {icon?.assetUrl
-                      ? <img src={icon.assetUrl} alt="" />
-                      : item.agentName.slice(0, 1)}
-                  </span>
-                  <span className="conversation-list-item__copy">
-                    <OverflowTooltip
-                      className="conversation-list-item__title"
-                      text={item.title}
-                    />
-                    <OverflowTooltip
-                      className="conversation-list-item__snippet"
-                      text={item.snippet || t("No preview available")}
-                    />
-                    <small>
-                      {item.agentName} · {formatDate(item.updatedAt)}
-                    </small>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {items.length < total ? (
-            <div className="conversation-list-footer">
-              <Button
-                size="compact"
-                disabled={loadingMore}
-                icon={loadingMore
-                  ? <LoaderCircle className="is-spinning" size={14} />
-                  : undefined}
-                onClick={() => void loadMore()}
-              >
-                {t(loadingMore ? "Loading more" : "Load more")}
-              </Button>
-            </div>
-          ) : null}
-        </aside>
+          }
+          actions={
+            <Button
+              icon={
+                <RefreshCw
+                  className={refreshing ? "is-spinning" : undefined}
+                  size={15}
+                />
+              }
+              disabled={refreshing}
+              onClick={() => void refresh()}
+            >
+              {t("Refresh")}
+            </Button>
+          }
+        />
 
-        <article className="conversation-detail" aria-busy={detailLoading}>
-          {detailLoading ? (
-            <div className="conversation-empty conversation-empty--detail">
-              <LoaderCircle className="is-spinning" size={20} aria-hidden="true" />
-              <span>{t("Loading conversation")}</span>
+        <div className="conversation-layout ui-surface-frame">
+          <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
+            <label className="conversation-search ui-composite-field">
+              <Search size={15} aria-hidden="true" />
+              <input
+                ref={searchInputRef}
+                type="search"
+                value={query}
+                placeholder={t("Search conversations…")}
+                aria-label={t("Search conversations")}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+            <div className="conversation-list-meta">
+              <span>{t("{{count}} conversations", { count: total })}</span>
+              {refreshing ? <LoaderCircle className="is-spinning" size={14} aria-hidden="true" /> : null}
             </div>
-          ) : !detail ? (
-            <div className="conversation-empty conversation-empty--detail">
-              <MessageSquareText size={22} aria-hidden="true" />
-              <strong>{t("Select a conversation")}</strong>
-            </div>
-          ) : (
-            <>
-              <header className="conversation-detail-header">
-                <div className="conversation-detail-title">
-                  <span>{detail.agentName}</span>
-                  {detail.detailState === "summary-only"
-                    ? <small>{t("Summary only")}</small>
-                    : null}
-                  <h3>{detail.title}</h3>
-                  <p>
-                    <Clock3 size={13} aria-hidden="true" />
-                    {formatDate(detail.updatedAt)}
-                    {detail.workspacePath ? ` · ${detail.workspacePath}` : ""}
-                  </p>
+            <div className="conversation-list" role="listbox" aria-busy={loading}>
+              {loading ? (
+                <div className="conversation-empty">
+                  <LoaderCircle className="is-spinning" size={19} aria-hidden="true" />
+                  <span>{t("Loading conversations")}</span>
                 </div>
-                <div className="conversation-detail-actions">
-                  <Button
-                    size="compact"
-                    icon={<Copy size={14} />}
-                    aria-label={t("Copy")}
-                    disabled={busy}
-                    onClick={() => void window.agentEnv.copyText(continuationText(detail)).then(
-                      () => setMessage(t("Conversation copied"))
-                    )}
+              ) : items.length === 0 ? (
+                <div className="conversation-empty">
+                  <MessageSquareText size={20} aria-hidden="true" />
+                  <strong>{query ? t("No matching conversations") : t("No conversations indexed")}</strong>
+                  <span>{query ? t("Try another search.") : t("Refresh to scan enabled Agents.")}</span>
+                </div>
+              ) : items.map((item, index) => {
+                const target = targets.find((candidate) => candidate.id === item.agentId);
+                const icon = target ? targetIconFor(target) : undefined;
+                return (
+                  <button
+                    className={`conversation-list-item${selectedId === item.id ? " is-selected" : ""}`}
+                    type="button"
+                    role="option"
+                    aria-selected={selectedId === item.id}
+                    id={`conversation-option-${index}`}
+                    key={item.id}
+                    onClick={() => setSelectedId(item.id)}
+                    onKeyDown={(event) => {
+                      let nextIndex: number | undefined;
+                      if (event.key === "ArrowDown") {
+                        nextIndex = Math.min(index + 1, items.length - 1);
+                      } else if (event.key === "ArrowUp") {
+                        nextIndex = Math.max(index - 1, 0);
+                      } else if (event.key === "Home") {
+                        nextIndex = 0;
+                      } else if (event.key === "End") {
+                        nextIndex = items.length - 1;
+                      }
+                      if (nextIndex === undefined || nextIndex === index) return;
+                      event.preventDefault();
+                      setSelectedId(items[nextIndex]?.id);
+                      document.getElementById(`conversation-option-${nextIndex}`)?.focus();
+                    }}
                   >
-                    <span>{t("Copy")}</span>
-                  </Button>
-                  {sourceCanOpenOriginal ? (
-                    <Button
-                      size="compact"
-                      icon={<ExternalLink size={14} />}
-                      aria-label={t("Open original")}
-                      disabled={busy}
-                      onClick={() => void openOriginal()}
-                    >
-                      <span>{t("Open original")}</span>
-                    </Button>
-                  ) : null}
-                  <TargetMenu
-                    targets={continueTargets}
-                    disabled={busy || detail.detailState !== "full"}
-                    onSelect={(targetId) => void chooseTarget(targetId)}
-                  />
-                </div>
-              </header>
-              {detail.detailState === "summary-only" ? (
-                <div className="conversation-summary-only">
-                  <TriangleAlert size={17} aria-hidden="true" />
-                  <div>
-                    <strong>{t("Full transcript is unavailable")}</strong>
-                    <p>{t("This Agent currently exposes conversation metadata but not portable message text.")}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="conversation-transcript">
-                  {detail.messages.map((entry) => (
-                    <section className="conversation-message" key={entry.id}>
-                      <div className={`conversation-message__role conversation-message__role--${entry.role}`}>
-                        {entry.role === "user" ? t("You") : detail.agentName}
-                      </div>
-                      <div className="conversation-message__text">{entry.text}</div>
-                    </section>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </article>
-      </div>
+                    <span className={`conversation-agent-icon conversation-agent-icon--${icon?.flavor ?? "generic"}`} aria-hidden="true">
+                      {icon?.assetUrl
+                        ? <img src={icon.assetUrl} alt="" />
+                        : item.agentName.slice(0, 1)}
+                    </span>
+                    <span className="conversation-list-item__copy">
+                      <OverflowTooltip
+                        className="conversation-list-item__title"
+                        text={item.title}
+                      />
+                      <OverflowTooltip
+                        className="conversation-list-item__snippet"
+                        text={item.snippet || t("No preview available")}
+                      />
+                      <small>
+                        {item.agentName} · {formatDate(item.updatedAt)}
+                      </small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {items.length < total ? (
+              <div className="conversation-list-footer">
+                <Button
+                  size="compact"
+                  disabled={loadingMore}
+                  icon={loadingMore
+                    ? <LoaderCircle className="is-spinning" size={14} />
+                    : undefined}
+                  onClick={() => void loadMore()}
+                >
+                  {t(loadingMore ? "Loading more" : "Load more")}
+                </Button>
+              </div>
+            ) : null}
+          </aside>
 
-      {review ? (
-        <div
-          className="preview-modal-backdrop"
-          onClick={busy ? undefined : () => setReview(undefined)}
-        >
-          <section
-            ref={reviewDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact conversation-review-dialog ui-dialog-shell"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("Review continuation")}
-            tabIndex={-1}
-            onClick={(event) => event.stopPropagation()}
+          <article className="conversation-detail" aria-busy={detailLoading}>
+            {detailLoading ? (
+              <div className="conversation-empty conversation-empty--detail">
+                <LoaderCircle className="is-spinning" size={20} aria-hidden="true" />
+                <span>{t("Loading conversation")}</span>
+              </div>
+            ) : !detail ? (
+              <div className="conversation-empty conversation-empty--detail">
+                <MessageSquareText size={22} aria-hidden="true" />
+                <strong>{t("Select a conversation")}</strong>
+              </div>
+            ) : (
+              <>
+                <header className="conversation-detail-header">
+                  <div className="conversation-detail-title">
+                    <span className="conversation-detail-title__agent">{detail.agentName}</span>
+                    {detail.detailState === "summary-only"
+                      ? <Badge tone="warning">{t("Summary only")}</Badge>
+                      : null}
+                    <h3>
+                      <OverflowTooltip
+                        className="conversation-detail-heading"
+                        text={detail.title}
+                      />
+                    </h3>
+                    <p>
+                      <Clock3 size={13} aria-hidden="true" />
+                      <OverflowTooltip
+                        className="conversation-detail-metadata"
+                        text={[
+                          formatDate(detail.updatedAt),
+                          detail.workspacePath
+                        ].filter(Boolean).join(" · ")}
+                      />
+                    </p>
+                  </div>
+                  <ControlGroup className="conversation-detail-actions">
+                    <IconButton
+                      label={t("Copy conversation")}
+                      disabled={busy}
+                      onClick={() => void copyConversation()}
+                    >
+                      {operation === "copy"
+                        ? <LoaderCircle className="is-spinning" size={14} />
+                        : <Copy size={14} />}
+                    </IconButton>
+                    {sourceCanOpenOriginal ? (
+                      <IconButton
+                        label={t("Open original")}
+                        disabled={busy}
+                        onClick={() => void openOriginal()}
+                      >
+                        {operation === "open-original"
+                          ? <LoaderCircle className="is-spinning" size={14} />
+                          : <ExternalLink size={14} />}
+                      </IconButton>
+                    ) : null}
+                    <TargetMenu
+                      targets={continueTargets}
+                      disabled={detail.detailState !== "full"}
+                      disabledReason={
+                        detail.detailState !== "full"
+                          ? t("Full transcript is unavailable")
+                          : continueTargets.length === 0
+                            ? t("No other Agent can continue this conversation")
+                            : undefined
+                      }
+                      working={operation === "continue"}
+                      onSelect={(targetId) => void chooseTarget(targetId)}
+                    />
+                  </ControlGroup>
+                </header>
+                {detail.detailState === "summary-only" ? (
+                  <div className="conversation-summary-only inline-state">
+                    <TriangleAlert size={17} aria-hidden="true" />
+                    <div>
+                      <strong>{t("Full transcript is unavailable")}</strong>
+                      <p>{t("This Agent currently exposes conversation metadata but not portable message text.")}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="conversation-transcript">
+                    {detail.messages.map((entry) => (
+                      <section className="conversation-message" key={entry.id}>
+                        <div className={`conversation-message__role conversation-message__role--${entry.role}`}>
+                          {entry.role === "user" ? t("You") : detail.agentName}
+                        </div>
+                        <div className="conversation-message__text">{entry.text}</div>
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </article>
+        </div>
+
+        {review ? (
+          <ModalFrame
+            ariaLabel={t("Review continuation")}
+            className="profile-form-dialog--compact conversation-review-dialog ui-dialog-shell"
+            dialogRef={reviewDialogRef}
+            dismissDisabled={busy}
+            onDismiss={() => setReview(undefined)}
           >
             <header className="profile-dialog-header ui-dialog-header">
               <div className="ui-dialog-header__copy">
@@ -669,9 +733,17 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                 {t("Continue")}
               </Button>
             </footer>
-          </section>
-        </div>
-      ) : null}
-    </section>
+          </ModalFrame>
+        ) : null}
+      </section>
+      <AppFeedback
+        feedback={feedback}
+        onDismiss={() => {
+          setError("");
+          setWarning("");
+          setMessage("");
+        }}
+      />
+    </>
   );
 };

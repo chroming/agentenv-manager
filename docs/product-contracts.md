@@ -291,6 +291,10 @@ an archive, or a native-session database migration tool.
 - Only visible user and assistant text is portable. Hidden instructions, reasoning, tool protocol
   identifiers, credentials, environment variables, permission state, and native runtime state
   MUST NOT be indexed as portable messages or sent to another Agent.
+- Agent-injected runtime envelopes such as application context, environment context, permission
+  policy, plugin or Skill inventories, and standalone attachment transport records are not user
+  messages. Adapters MUST exclude recognized pure envelopes while preserving mixed records that
+  contain an actual user request.
 - Sensitive-looking values explicitly present in visible messages MAY remain in the device-local
   index so the original conversation can be found, but Continue MUST require review and redact
   those values before creating a handoff artifact.
@@ -324,6 +328,14 @@ an archive, or a native-session database migration tool.
   current repository plus the user's new request as authoritative.
 - Conversation discovery starts after the core application is usable and MUST NOT delay startup,
   Profile loading, Library loading, or Agent discovery.
+- The desktop workspace uses one stable list-and-reader surface. Search and the conversation list
+  own their scrolling; page chrome and detail actions remain visible. Refresh, copy, open, preview,
+  and continue progress belongs to the initiating control, while completion and failure use the
+  same global feedback component as the rest of the application.
+- A stale search or refresh result MUST NOT replace a newer result. Initial cached loading and
+  background source refresh are sequential so the workspace does not flash an empty duplicate
+  load. Destination menus and review dialogs follow the shared keyboard, Escape, outside-click,
+  focus-return, and viewport-containment contracts.
 
 Source of truth: the original Agent history. AgentEnv owns only the disposable local index and
 short-lived continuation artifacts.

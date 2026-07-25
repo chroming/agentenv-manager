@@ -4642,6 +4642,12 @@ button svg,
   color: #475569;
 }
 
+.app-feedback--warning {
+  background: var(--warning-bg);
+  border-color: #ead9a8;
+  color: var(--warning-text);
+}
+
 .app-feedback--error {
   background: var(--danger-bg);
   border-color: #ffd4cf;

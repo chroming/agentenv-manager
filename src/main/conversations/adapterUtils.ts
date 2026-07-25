@@ -25,6 +25,27 @@ export const conversationTitleFrom = (value: string, fallback = "Untitled conver
 export const conversationSnippetFrom = (value: string) =>
   value.replace(/\s+/g, " ").trim().slice(0, 180);
 
+const conversationScaffoldingPrefixes = [
+  "<app-context",
+  "<apps_instructions",
+  "<collaboration_mode",
+  "<environment_context",
+  "<permissions instructions",
+  "<plugins_instructions",
+  "<recommended_plugins",
+  "<skill>",
+  "<skill ",
+  "<skills_instructions",
+  "<image name=",
+  "# AGENTS.md instructions"
+];
+
+export const isConversationScaffolding = (value: string) => {
+  const normalized = value.trimStart().toLowerCase();
+  return conversationScaffoldingPrefixes.some((prefix) =>
+    normalized.startsWith(prefix.toLowerCase()));
+};
+
 export const isoDate = (value: unknown, fallback: Date): string => {
   const date = typeof value === "number" || typeof value === "string"
     ? new Date(value)
@@ -209,11 +230,24 @@ export const createConversationDetail = (
     createdAt?: string;
   } = {}
 ): ConversationDetail => {
-  const firstUser = messages.find((message) => message.role === "user")?.text ?? "";
+  const firstUser = messages.find(
+    (message) => message.role === "user" && !isConversationScaffolding(message.text)
+  )?.text ?? "";
   const firstAssistant = messages.find((message) => message.role === "assistant")?.text ?? "";
-  const titleSource = metadata.title || candidate.title || firstUser || firstAssistant;
-  const snippetSource =
-    metadata.snippet || candidate.snippet || firstUser || firstAssistant;
+  const firstMeaningful = (...values: Array<string | undefined>) =>
+    values.find((value) => value?.trim() && !isConversationScaffolding(value)) ?? "";
+  const titleSource = firstMeaningful(
+    metadata.title,
+    candidate.title,
+    firstUser,
+    firstAssistant
+  );
+  const snippetSource = firstMeaningful(
+    metadata.snippet,
+    candidate.snippet,
+    firstUser,
+    firstAssistant
+  );
   return {
     id: `${agent.id}:${candidate.recordId}`,
     agentId: agent.id,
@@ -237,7 +271,13 @@ export const visibleMessage = (
   text: string,
   createdAt?: string
 ): ConversationMessage | undefined => {
-  if ((role !== "user" && role !== "assistant") || !text.trim()) return undefined;
+  if (
+    (role !== "user" && role !== "assistant") ||
+    !text.trim() ||
+    (role === "user" && isConversationScaffolding(text))
+  ) {
+    return undefined;
+  }
   return {
     id,
     role: role as ConversationRole,

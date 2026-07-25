@@ -830,7 +830,7 @@ describe("App", () => {
       })
     ]);
   });
-  it("auto-dismisses successful feedback after five seconds but keeps errors visible", () => {
+  it("auto-dismisses successful feedback but keeps warnings and errors visible", () => {
     vi.useFakeTimers();
     const onDismiss = vi.fn();
     const { rerender } = render(
@@ -850,6 +850,18 @@ describe("App", () => {
     rerender(
       <AppFeedback
         feedback={{ kind: "error", title: "Action failed", message: "Try again" }}
+        onDismiss={onDismiss}
+      />
+    );
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss message" }));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+
+    onDismiss.mockClear();
+    rerender(
+      <AppFeedback
+        feedback={{ kind: "warning", title: "Some items could not be refreshed" }}
         onDismiss={onDismiss}
       />
     );

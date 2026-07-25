@@ -129,6 +129,41 @@ describe("conversation history adapters", () => {
     expect(detail.snippet).toBe("Recovered assistant summary");
   });
 
+  it("does not use injected runtime context as the conversation identity", () => {
+    const detail = parseCodexConversation(candidate({
+      title: "<environment_context>temporary runtime metadata</environment_context>",
+      snippet: "<recommended_plugins>temporary plugin metadata</recommended_plugins>"
+    }), [
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          id: "runtime-1",
+          type: "message",
+          role: "user",
+          content: [{
+            type: "input_text",
+            text: "<environment_context>temporary runtime metadata</environment_context>"
+          }]
+        }
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          id: "user-1",
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "Review the conversation interface" }]
+        }
+      })
+    ].join("\n"));
+
+    expect(detail.title).toBe("Review the conversation interface");
+    expect(detail.snippet).toBe("Review the conversation interface");
+    expect(detail.messages.map((message) => message.text)).toEqual([
+      "Review the conversation interface"
+    ]);
+  });
+
   it("extracts only visible OpenCode text parts", () => {
     expect(parseOpenCodeExportMessages({
       messages: [
