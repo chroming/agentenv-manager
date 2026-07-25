@@ -17,7 +17,11 @@ import type {
   TargetInfo
 } from "../../src/shared/types";
 
-const target = (id: "codex" | "opencode", name: string): TargetInfo => ({
+const target = (
+  id: "codex" | "opencode",
+  name: string,
+  continueState: TargetInfo["conversationCapabilities"]["continue"]["state"] = "available"
+): TargetInfo => ({
   id,
   name,
   description: name,
@@ -56,7 +60,7 @@ const target = (id: "codex" | "opencode", name: string): TargetInfo => ({
   conversationCapabilities: {
     history: { state: "available", evidence: ["test"] },
     openOriginal: { state: "available", evidence: ["test"] },
-    continue: { state: "available", evidence: ["test"] }
+    continue: { state: continueState, evidence: ["test"] }
   }
 });
 
@@ -163,7 +167,8 @@ describe("ConversationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu");
     expect(within(menu).queryByText("Codex")).toBeNull();
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "OpenCode" }));
+    expect(within(menu).getByText("Direct")).toBeInTheDocument();
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /^OpenCode/ }));
 
     await waitFor(() => expect(api.continueConversation).toHaveBeenCalledWith("preview-1"));
     expect(await screen.findByText("Started a new conversation in OpenCode"))
@@ -184,19 +189,79 @@ describe("ConversationWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem", {
-      name: "OpenCode"
+      name: /^OpenCode/
     }));
 
     const dialog = await screen.findByRole("dialog", { name: "Review continuation" });
     expect(within(dialog).getByText(
       "Sensitive-looking values will be redacted before transfer"
     )).toBeInTheDocument();
+    expect(within(dialog).getByText("Automatic handoff")).toBeInTheDocument();
+    expect(within(dialog).getByText("2 of 2 messages")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Open OpenCode" })).toBeEnabled();
     expect(api.continueConversation).not.toHaveBeenCalled();
     expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeEnabled();
 
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "Review continuation" })).toBeNull()
+    );
+  });
+
+  it("explains clipboard fallback before choosing a degraded Agent", async () => {
+    installApi();
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode", "degraded")
+    ]} />);
+    await screen.findByText("Please repair the release workflow.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    const menu = await screen.findByRole("menu", { name: "Continue in" });
+    const destination = within(menu).getByRole("menuitem", {
+      name: "OpenCode, Paste"
+    });
+    expect(destination.getAttribute("title"))
+      .toContain("Paste it into the new conversation.");
+  });
+
+  it("keeps progress on the selected destination while continuation is prepared", async () => {
+    const api = installApi();
+    let resolvePreview!: (preview: ConversationContinuationPreview) => void;
+    api.previewConversationContinuation.mockReturnValue(new Promise((resolve) => {
+      resolvePreview = resolve;
+    }));
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+    await screen.findByText("Please repair the release workflow.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    const menu = await screen.findByRole("menu", { name: "Continue in" });
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "OpenCode, Direct" }));
+
+    await waitFor(() => expect(menu).toHaveAttribute("aria-busy", "true"));
+    expect(menu.querySelector(".is-spinning")).not.toBeNull();
+    expect(within(menu).getByRole("menuitem", {
+      name: "OpenCode, Direct"
+    })).toBeDisabled();
+
+    await act(async () => resolvePreview({
+      previewId: "preview-delayed",
+      conversationId: detail.id,
+      targetId: "opencode",
+      targetName: "OpenCode",
+      mode: "context-file",
+      portableMessageCount: 2,
+      totalMessageCount: 2,
+      omittedMessageCount: 0,
+      sensitiveValuesRedacted: false,
+      warnings: [],
+      requiresReview: false
+    }));
+    await waitFor(() =>
+      expect(api.continueConversation).toHaveBeenCalledWith("preview-delayed")
     );
   });
 
@@ -409,7 +474,7 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByText(
       "The source exposes this useful conversation summary."
     )).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Continue/ })).toBeDisabled();
   });
 
   it("renders Markdown safely and groups consecutive messages by role", async () => {

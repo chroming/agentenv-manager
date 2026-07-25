@@ -6,6 +6,7 @@ import {
   FolderOpen,
   LoaderCircle,
   MessageSquareText,
+  MoreHorizontal,
   RefreshCw,
   Search,
   TriangleAlert,
@@ -14,6 +15,7 @@ import {
 import {
   Fragment,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -104,14 +106,184 @@ const TargetMenu = ({
   targets,
   disabled,
   disabledReason,
-  working,
+  busy,
   onSelect
 }: {
   targets: TargetInfo[];
   disabled: boolean;
   disabledReason?: string;
-  working: boolean;
-  onSelect(targetId: string): void;
+  busy: boolean;
+  onSelect(targetId: string): Promise<boolean>;
+}) => {
+  const { t } = useI18n();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const labelId = useId();
+  const [open, setOpen] = useState(false);
+  const [style, setStyle] = useState<CSSProperties>();
+  const [pendingTargetId, setPendingTargetId] = useState<string>();
+
+  const positionMenu = () => {
+    const bounds = buttonRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const width = 292;
+    const estimatedHeight = Math.min(320, 43 + targets.length * 44);
+    const fitsBelow = bounds.bottom + 6 + estimatedHeight <= window.innerHeight - 12;
+    setStyle({
+      width,
+      left: Math.max(12, Math.min(bounds.right - width, window.innerWidth - width - 12)),
+      top: fitsBelow
+        ? bounds.bottom + 6
+        : Math.max(12, bounds.top - estimatedHeight - 6)
+    });
+  };
+
+  const show = () => {
+    positionMenu();
+    setOpen(true);
+    window.setTimeout(() => focusInitialActionMenuItem(menuRef.current));
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const dismiss = (event: MouseEvent) => {
+      if (pendingTargetId) return;
+      if (
+        event.target instanceof Node &&
+        !buttonRef.current?.contains(event.target) &&
+        !menuRef.current?.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !pendingTargetId) {
+        event.preventDefault();
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    const dismissForViewportChange = () => setOpen(false);
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", escape);
+    window.addEventListener("resize", dismissForViewportChange);
+    window.addEventListener("scroll", dismissForViewportChange, true);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", escape);
+      window.removeEventListener("resize", dismissForViewportChange);
+      window.removeEventListener("scroll", dismissForViewportChange, true);
+    };
+  }, [open, pendingTargetId]);
+
+  const selectTarget = async (targetId: string) => {
+    setPendingTargetId(targetId);
+    const completed = await onSelect(targetId);
+    setPendingTargetId(undefined);
+    if (completed) {
+      setOpen(false);
+      buttonRef.current?.focus();
+    }
+  };
+
+  return (
+    <>
+      <Button
+        ref={buttonRef}
+        className="conversation-continue-button"
+        variant="primary"
+        type="button"
+        disabled={disabled || busy || targets.length === 0}
+        title={disabledReason}
+        aria-label={disabledReason
+          ? `${t("Continue")}. ${disabledReason}`
+          : t("Continue")}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => open ? setOpen(false) : show()}
+        icon={pendingTargetId
+          ? <LoaderCircle className="is-spinning" size={14} />
+          : undefined}
+      >
+        {t("Continue")}
+        <ChevronDown size={14} aria-hidden="true" />
+      </Button>
+      {open
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="conversation-target-menu ui-action-menu"
+              role="menu"
+              aria-labelledby={labelId}
+              aria-busy={Boolean(pendingTargetId)}
+              style={style}
+              onKeyDown={handleActionMenuKeyDown}
+            >
+              <span className="conversation-target-menu__label" id={labelId}>
+                {t("Continue in")}
+              </span>
+              {targets.map((target) => {
+                const icon = targetIconFor(target);
+                const requiresPaste =
+                  target.conversationCapabilities.continue.state === "degraded";
+                return (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    key={target.id}
+                    disabled={Boolean(pendingTargetId)}
+                    aria-label={`${target.name}, ${t(requiresPaste ? "Paste" : "Direct")}`}
+                    title={`${target.name} — ${t(requiresPaste
+                      ? "Context will be copied. Paste it into the new conversation."
+                      : "Context will be passed to the new conversation automatically.")}`}
+                    onClick={() => void selectTarget(target.id)}
+                  >
+                    <span className="conversation-target-menu__row">
+                      <span
+                        className={`conversation-agent-icon conversation-agent-icon--${icon.flavor}`}
+                        aria-hidden="true"
+                      >
+                        {icon.assetUrl
+                          ? <img src={icon.assetUrl} alt="" />
+                          : target.name.slice(0, 1)}
+                      </span>
+                      <span className="conversation-target-menu__copy">
+                        <span>{target.name}</span>
+                      </span>
+                      <span
+                        className={[
+                          "conversation-target-menu__mode",
+                          requiresPaste ? "is-degraded" : ""
+                        ].filter(Boolean).join(" ")}
+                      >
+                        {pendingTargetId === target.id
+                          ? <LoaderCircle className="is-spinning" size={13} />
+                          : t(requiresPaste ? "Paste" : "Direct")}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>,
+            document.body
+          )
+        : null}
+    </>
+  );
+};
+
+const ConversationActionsMenu = ({
+  busy,
+  operation,
+  canOpenOriginal,
+  onCopy,
+  onOpenOriginal
+}: {
+  busy: boolean;
+  operation?: ConversationOperation;
+  canOpenOriginal: boolean;
+  onCopy(): Promise<void>;
+  onOpenOriginal(): Promise<void>;
 }) => {
   const { t } = useI18n();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -122,11 +294,13 @@ const TargetMenu = ({
   const show = () => {
     const bounds = buttonRef.current?.getBoundingClientRect();
     if (bounds) {
-      const width = 220;
+      const width = 210;
+      const height = canOpenOriginal ? 86 : 45;
+      const fitsBelow = bounds.bottom + 6 + height <= window.innerHeight - 12;
       setStyle({
         width,
         left: Math.max(12, Math.min(bounds.right - width, window.innerWidth - width - 12)),
-        top: bounds.bottom + 6
+        top: fitsBelow ? bounds.bottom + 6 : Math.max(12, bounds.top - height - 6)
       });
     }
     setOpen(true);
@@ -145,11 +319,10 @@ const TargetMenu = ({
       }
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setOpen(false);
-        buttonRef.current?.focus();
-      }
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+      buttonRef.current?.focus();
     };
     const dismissForViewportChange = () => setOpen(false);
     document.addEventListener("mousedown", dismiss);
@@ -164,68 +337,53 @@ const TargetMenu = ({
     };
   }, [open]);
 
+  const run = (action: () => Promise<void>) => {
+    setOpen(false);
+    buttonRef.current?.focus();
+    void action();
+  };
+
   return (
     <>
-      <Button
+      <IconButton
         ref={buttonRef}
-        className="conversation-continue-button"
-        variant="primary"
-        type="button"
-        disabled={disabled || working || targets.length === 0}
-        title={disabledReason}
+        className="conversation-detail-more-button"
+        label={t("Conversation actions")}
+        disabled={busy}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => open ? setOpen(false) : show()}
-        icon={working ? <LoaderCircle className="is-spinning" size={14} /> : undefined}
       >
-        {t(working ? "Preparing..." : "Continue")}
-        {!working ? <ChevronDown size={14} aria-hidden="true" /> : null}
-      </Button>
-      {open
-        ? createPortal(
-            <div
-              ref={menuRef}
-              className="conversation-target-menu action-menu"
-              role="menu"
-              style={style}
-              onKeyDown={handleActionMenuKeyDown}
+        {operation === "copy" || operation === "open-original"
+          ? <LoaderCircle className="is-spinning" size={14} />
+          : <MoreHorizontal size={15} />}
+      </IconButton>
+      {open ? createPortal(
+        <div
+          ref={menuRef}
+          className="conversation-detail-overflow-menu ui-action-menu"
+          role="menu"
+          aria-label={t("Conversation actions")}
+          style={style}
+          onKeyDown={handleActionMenuKeyDown}
+        >
+          <button type="button" role="menuitem" onClick={() => run(onCopy)}>
+            <Copy size={15} aria-hidden="true" />
+            <span>{t("Copy conversation")}</span>
+          </button>
+          {canOpenOriginal ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => run(onOpenOriginal)}
             >
-              <span className="conversation-target-menu__label">
-                {t("Continue in")}
-              </span>
-              {targets.map((target) => {
-                const icon = targetIconFor(target);
-                return (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    key={target.id}
-                    onClick={() => {
-                      setOpen(false);
-                      onSelect(target.id);
-                    }}
-                  >
-                    <span
-                      className={`conversation-agent-icon conversation-agent-icon--${icon.flavor}`}
-                      aria-hidden="true"
-                    >
-                      {icon.assetUrl
-                        ? <img src={icon.assetUrl} alt="" />
-                        : target.name.slice(0, 1)}
-                    </span>
-                    <span className="conversation-target-menu__copy">
-                      <span>{target.name}</span>
-                      {target.conversationCapabilities.continue.state === "degraded"
-                        ? <small>{t("Paste required")}</small>
-                        : null}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>,
-            document.body
-          )
-        : null}
+              <ExternalLink size={15} aria-hidden="true" />
+              <span>{t("Open original")}</span>
+            </button>
+          ) : null}
+        </div>,
+        document.body
+      ) : null}
     </>
   );
 };
@@ -490,6 +648,20 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
         name: detail.agentName
       })
     : undefined;
+  const reviewTarget = review
+    ? targets.find((target) => target.id === review.targetId)
+    : undefined;
+  const reviewTargetIcon = reviewTarget ? targetIconFor(reviewTarget) : undefined;
+  const reviewModeLabel = review?.mode === "clipboard"
+    ? t("Copy and paste")
+    : review
+      ? t("Automatic handoff")
+      : "";
+  const reviewActionLabel = review?.mode === "clipboard"
+    ? t("Copy and open {{name}}", { name: review.targetName })
+    : review
+      ? t("Open {{name}}", { name: review.targetName })
+      : "";
   const messageGroups = useMemo(
     () => groupMessages(detail?.messages ?? []),
     [detail?.messages]
@@ -551,27 +723,27 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     }
   };
 
-  const chooseTarget = async (targetId: string) => {
-    if (!detail) return;
+  const chooseTarget = async (targetId: string): Promise<boolean> => {
+    if (!detail) return false;
     setOperation("continue");
     setError("");
-    let reviewAfterWork: ConversationContinuationPreview | undefined;
     try {
       const preview = await window.agentEnv.previewConversationContinuation({
         conversationId: detail.id,
         targetId
       });
-      if (preview.requiresReview) reviewAfterWork = preview;
+      if (preview.requiresReview) setReview(preview);
       else {
         const result = await window.agentEnv.continueConversation(preview.previewId);
         setMessage(result.message);
       }
+      return true;
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      return false;
     } finally {
       setOperation(undefined);
     }
-    if (reviewAfterWork) setReview(reviewAfterWork);
   };
 
   const openOriginal = async () => {
@@ -870,14 +1042,19 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                         />
                       </h3>
                       <div className="conversation-detail-metadata">
-                        <span>{detail.agentName}</span>
+                        <span className="conversation-detail-metadata__agent">
+                          {detail.agentName}
+                        </span>
                         {detail.workspacePath ? (
-                          <span title={detail.workspacePath}>
+                          <span
+                            className="conversation-detail-metadata__workspace"
+                            title={detail.workspacePath}
+                          >
                             <FolderOpen size={12} aria-hidden="true" />
                             {workspaceName(detail.workspacePath)}
                           </span>
                         ) : null}
-                        <span>
+                        <span className="conversation-detail-metadata__time">
                           <Clock3 size={12} aria-hidden="true" />
                           <time
                             dateTime={detail.updatedAt}
@@ -894,26 +1071,35 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                     </div>
                   </div>
                   <ControlGroup className="conversation-detail-actions">
-                    <IconButton
-                      label={t("Copy conversation")}
-                      disabled={busy}
-                      onClick={() => void copyConversation()}
-                    >
-                      {operation === "copy"
-                        ? <LoaderCircle className="is-spinning" size={14} />
-                        : <Copy size={14} />}
-                    </IconButton>
-                    {sourceCanOpenOriginal ? (
+                    <span className="conversation-detail-secondary-actions">
                       <IconButton
-                        label={t("Open original")}
+                        label={t("Copy conversation")}
                         disabled={busy}
-                        onClick={() => void openOriginal()}
+                        onClick={() => void copyConversation()}
                       >
-                        {operation === "open-original"
+                        {operation === "copy"
                           ? <LoaderCircle className="is-spinning" size={14} />
-                          : <ExternalLink size={14} />}
+                          : <Copy size={14} />}
                       </IconButton>
-                    ) : null}
+                      {sourceCanOpenOriginal ? (
+                        <IconButton
+                          label={t("Open original")}
+                          disabled={busy}
+                          onClick={() => void openOriginal()}
+                        >
+                          {operation === "open-original"
+                            ? <LoaderCircle className="is-spinning" size={14} />
+                            : <ExternalLink size={14} />}
+                        </IconButton>
+                      ) : null}
+                    </span>
+                    <ConversationActionsMenu
+                      busy={busy}
+                      operation={operation}
+                      canOpenOriginal={sourceCanOpenOriginal}
+                      onCopy={copyConversation}
+                      onOpenOriginal={openOriginal}
+                    />
                     <TargetMenu
                       targets={continueTargets}
                       disabled={detail.detailState !== "full"}
@@ -924,8 +1110,8 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                             ? t("No other Agent can continue this conversation")
                             : undefined
                       }
-                      working={operation === "continue"}
-                      onSelect={(targetId) => void chooseTarget(targetId)}
+                      busy={busy}
+                      onSelect={chooseTarget}
                     />
                   </ControlGroup>
                 </header>
@@ -1049,30 +1235,51 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
             dialogRef={reviewDialogRef}
             dismissDisabled={busy}
             onDismiss={() => setReview(undefined)}
-          >
-            <header className="profile-dialog-header ui-dialog-header">
-              <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">
-                  {t("Continue in {{name}}", { name: review.targetName })}
+            >
+              <header className="profile-dialog-header ui-dialog-header">
+                <div className="ui-dialog-header__copy">
+                  <div className="section-title ui-dialog-title">
+                    {t("Continue in {{name}}", { name: review.targetName })}
+                  </div>
+                  <p className="muted ui-dialog-description">
+                    {t("Review how this conversation will be transferred.")}
+                  </p>
                 </div>
-                <p className="muted ui-dialog-description">
-                  {t("Review what needs attention before opening the new conversation.")}
-                </p>
-              </div>
-            </header>
+              </header>
             <div className="conversation-review-body ui-dialog-body">
-              {review.warnings.map((warning) => (
-                <div className="conversation-review-warning" key={warning}>
-                  <TriangleAlert size={15} aria-hidden="true" />
-                  <span>{warning}</span>
+              <div className="conversation-review-destination">
+                <span
+                  className={`conversation-agent-icon conversation-agent-icon--${reviewTargetIcon?.flavor ?? "generic"}`}
+                  aria-hidden="true"
+                >
+                  {reviewTargetIcon?.assetUrl
+                    ? <img src={reviewTargetIcon.assetUrl} alt="" />
+                    : review.targetName.slice(0, 1)}
+                </span>
+                <span className="conversation-review-destination__copy">
+                  <strong>{review.targetName}</strong>
+                  <small>{reviewModeLabel}</small>
+                </span>
+                <span className="conversation-review-count">
+                  {t("{{portable}} of {{total}} messages", {
+                    portable: review.portableMessageCount,
+                    total: review.totalMessageCount
+                  })}
+                </span>
+              </div>
+              {review.warnings.length > 0 ? (
+                <div className="conversation-review-warning">
+                  <TriangleAlert size={16} aria-hidden="true" />
+                  <div>
+                    <strong>{t("Needs attention")}</strong>
+                    <ul>
+                      {review.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-              ))}
-              <p>
-                {t("{{portable}} of {{total}} visible messages will be transferred.", {
-                  portable: review.portableMessageCount,
-                  total: review.totalMessageCount
-                })}
-              </p>
+              ) : null}
             </div>
             <footer className="preview-actions ui-dialog-footer">
               <Button
@@ -1088,7 +1295,9 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                 disabled={busy}
                 onClick={() => void executeContinuation(review.previewId)}
               >
-                {t("Continue")}
+                {busy
+                  ? t("Opening…")
+                  : reviewActionLabel}
               </Button>
             </footer>
           </ModalFrame>

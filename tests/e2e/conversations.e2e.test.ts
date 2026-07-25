@@ -177,6 +177,7 @@ describe("Conversations desktop workflow", () => {
       'if [[ "$1" == "session" ]]; then print "[]"; fi'
     );
     await executable(join(binDir, "agy"), "exit 0");
+    await executable(join(binDir, "traecli"), "exit 0");
 
     app = await electron.launch({
       executablePath: electronPath as unknown as string,
@@ -254,9 +255,11 @@ describe("Conversations desktop workflow", () => {
       name: "Search conversations"
     }));
     await expectInViewport(page, page.getByRole("button", { name: "Continue" }));
-    const actionHeights = await page.locator(".conversation-detail-actions > button").evaluateAll(
-      (buttons) => buttons.map((button) =>
-        Math.round(button.getBoundingClientRect().height))
+    const actionHeights = await page.locator(".conversation-detail-actions button").evaluateAll(
+      (buttons) => buttons
+        .map((button) => button.getBoundingClientRect())
+        .filter((bounds) => bounds.width > 0 && bounds.height > 0)
+        .map((bounds) => Math.round(bounds.height))
     );
     expect(new Set(actionHeights).size).toBe(1);
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
@@ -268,14 +271,63 @@ describe("Conversations desktop workflow", () => {
     }
 
     await page.getByRole("button", { name: "Continue" }).click();
-    const targetMenu = page.getByRole("menu");
+    const targetMenu = page.getByRole("menu", { name: "Continue in" });
     await targetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, targetMenu);
     await expectTopmost(targetMenu);
+    expect(await targetMenu.getByText("Direct", { exact: true }).count())
+      .toBeGreaterThan(0);
+    expect(await targetMenu.getByText("Paste", { exact: true }).count())
+      .toBeGreaterThan(0);
+    const targetMenuGeometry = await targetMenu.evaluate((menu) => ({
+      width: Math.round(menu.getBoundingClientRect().width),
+      itemBorders: [...menu.querySelectorAll("button")].map(
+        (button) => getComputedStyle(button).borderTopWidth
+      ),
+      modeRightEdges: [...menu.querySelectorAll(".conversation-target-menu__mode")]
+        .map((mode) => Math.round(mode.getBoundingClientRect().right))
+    }));
+    expect(targetMenuGeometry.width).toBeGreaterThanOrEqual(280);
+    expect(new Set(targetMenuGeometry.itemBorders)).toEqual(new Set(["0px"]));
+    expect(new Set(targetMenuGeometry.modeRightEdges).size).toBe(1);
+    if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
+      await page.screenshot({
+        path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(
+          /(\.[^.]+)$/,
+          "-continue-menu$1"
+        ),
+        fullPage: true
+      });
+    }
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: "Continue" }).evaluate(
       (element) => element === document.activeElement
     )).resolves.toBe(true);
+
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByRole("menuitem", { name: "Trae CLI, Paste" }).click();
+    const continuationReview = page.getByRole("dialog", {
+      name: "Review continuation"
+    });
+    await continuationReview.waitFor({ state: "visible" });
+    await expectTopmost(continuationReview);
+    await continuationReview.getByText("Copy and paste", { exact: true }).waitFor();
+    await continuationReview.getByText("Needs attention", { exact: true }).waitFor();
+    await expectInViewport(
+      page,
+      continuationReview.getByRole("button", { name: "Copy and open Trae CLI" })
+    );
+    if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
+      await page.screenshot({
+        path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(
+          /(\.[^.]+)$/,
+          "-continue-review$1"
+        ),
+        fullPage: true
+      });
+    }
+    await page.keyboard.press("Escape");
+    await continuationReview.waitFor({ state: "hidden" });
 
     await page.keyboard.press("Meta+F");
     await expect(page.getByRole("searchbox", {
@@ -375,6 +427,54 @@ describe("Conversations desktop workflow", () => {
     await page.setViewportSize({ width: 920, height: 620 });
     await expectNoHorizontalOverflow(page, [".conversation-page", ".conversation-layout"]);
     await expectInViewport(page, page.getByRole("button", { name: "Continue" }));
+    const compactHeaderGeometry = await page.locator(".conversation-detail-header").evaluate(
+      (header) => {
+        const title = header.querySelector(".conversation-detail-title__copy")!
+          .getBoundingClientRect();
+        const workspace = header.querySelector(
+          ".conversation-detail-metadata__workspace"
+        );
+        const more = header.querySelector(".conversation-detail-more-button")!
+          .getBoundingClientRect();
+        const secondary = header.querySelector(".conversation-detail-secondary-actions")!
+          .getBoundingClientRect();
+        return {
+          height: Math.round(header.getBoundingClientRect().height),
+          titleWidth: Math.round(title.width),
+          workspaceDisplay: workspace ? getComputedStyle(workspace).display : "missing",
+          moreWidth: Math.round(more.width),
+          secondaryWidth: Math.round(secondary.width)
+        };
+      }
+    );
+    expect(compactHeaderGeometry.height).toBeLessThanOrEqual(96);
+    expect(compactHeaderGeometry.titleWidth).toBeGreaterThanOrEqual(180);
+    expect(compactHeaderGeometry.workspaceDisplay).toBe("none");
+    expect(compactHeaderGeometry.moreWidth).toBeGreaterThan(0);
+    expect(compactHeaderGeometry.secondaryWidth).toBe(0);
+    await page.getByRole("button", { name: "Conversation actions" }).click();
+    const compactActions = page.getByRole("menu", { name: "Conversation actions" });
+    await compactActions.waitFor({ state: "visible" });
+    await compactActions.getByRole("menuitem", { name: "Copy conversation" }).waitFor();
+    await expectInViewport(page, compactActions);
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Conversation actions" }).evaluate(
+      (element) => element === document.activeElement
+    )).resolves.toBe(true);
+    await page.getByRole("button", { name: "Continue" }).click();
+    const compactTargetMenu = page.getByRole("menu", { name: "Continue in" });
+    await compactTargetMenu.waitFor({ state: "visible" });
+    await expectInViewport(page, compactTargetMenu);
+    if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
+      await page.screenshot({
+        path: process.env.AGENTENV_CAPTURE_CONVERSATIONS.replace(
+          /(\.[^.]+)$/,
+          "-compact-continue-menu$1"
+        ),
+        fullPage: true
+      });
+    }
+    await page.keyboard.press("Escape");
     expect(await page.locator(".conversation-page").evaluate(
       (element) => element.scrollHeight - element.clientHeight
     )).toBeLessThanOrEqual(1);
