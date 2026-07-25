@@ -147,16 +147,16 @@ A Profile is a saved environment recipe. It owns:
 
 - Instructions.
 - References to Library Skills, each with an install name and enabled state.
-- An independent MCP policy for each Target: `Leave unchanged` or a sparse set of `On` and `Off` choices for MCP servers already defined by that Agent.
+- An independent MCP policy for each Target: `Keep Agent` or a sparse set of `On` and `Off` choices for MCP servers already defined by that Agent.
 
 Instructions, Skills, and MCPs each have an independent application policy for every Target. The policy is part of the saved Profile recipe, not a global application preference.
 
-- `Apply Profile` includes that resource category in Save, Preview, Apply, drift detection, Backup, and verification for the selected Target.
-- `Leave unchanged` preserves the saved Profile content and visible resource count but excludes that category from the selected Target's effective payload. In steady state, Apply MUST NOT inspect, fingerprint, validate, write, remove, or claim new ownership over the Target's corresponding resources.
-- Changing a category to `Leave unchanged` is a Profile edit and does not mutate the Target until Save, Preview, and Apply. Returning it to `Apply Profile` uses the same fresh Preview and explicit drift confirmation as any other managed replacement.
-- The transition to `Leave unchanged` MAY touch only resources already owned by AgentEnv when detachment is required. An already AgentEnv-managed Skill live link MUST first be materialized as a standalone copy of its current content. Preview names that transition and Backup protects it. This prevents later Library updates from changing an opted-out Target without Apply while retaining enough paused ownership evidence for safe drift review when management resumes.
+- `Use Profile` includes that resource category in Save, Preview, Apply, drift detection, Backup, and verification for the selected Target.
+- `Keep Agent` preserves the saved Profile content and visible resource count but excludes that category from the selected Target's effective payload. In steady state, Apply MUST NOT inspect, fingerprint, validate, write, remove, or claim new ownership over the Target's corresponding resources.
+- Changing a category to `Keep Agent` is a Profile edit and does not mutate the Target until Save, Preview, and Apply. Returning it to `Use Profile` uses the same fresh Preview and explicit drift confirmation as any other managed replacement.
+- The transition to `Keep Agent` MAY touch only resources already owned by AgentEnv when detachment is required. An already AgentEnv-managed Skill live link MUST first be materialized as a standalone copy of its current content. Preview names that transition and Backup protects it. This prevents later Library updates from changing an opted-out Target without Apply while retaining enough paused ownership evidence for safe drift review when management resumes.
 - Paused ownership evidence MUST NOT contribute to ordinary managed-resource counts or drift status. It is consulted only when management resumes, and a refreshed managed snapshot replaces it after a successful Apply.
-- Missing legacy Instructions and Skills policies default to `Apply Profile`; a missing MCP policy defaults to `Leave unchanged`.
+- Missing legacy Instructions and Skills policies default to `Use Profile`; a missing MCP policy defaults to `Keep Agent`.
 
 A Profile MAY record a preferred Target for default UI context and the Target it was created from for provenance. Neither field binds deployment: the same Profile MAY be applied to every compatible Target, and each Target still has at most one active Profile.
 
@@ -182,11 +182,11 @@ Each Library Skill reference has a Profile-scoped enabled state. Missing legacy 
 
 Each Target MCP policy follows these rules:
 
-- `Leave unchanged` means Apply MUST NOT inspect, parse, hash, diff, back up, write, or retain ownership of that Target's MCP configuration. Retained inactive selections are editor convenience only and MUST NOT affect the Target-specific Profile hash.
-- `Apply Profile` is sparse. A connection absent from the selections remains Agent-owned.
+- `Keep Agent` means Apply MUST NOT inspect, parse, hash, diff, back up, write, or retain ownership of that Target's MCP configuration. Retained inactive selections are editor convenience only and MUST NOT affect the Target-specific Profile hash.
+- `Use Profile` is sparse. A connection absent from the selections remains Agent-owned.
 - `On` plus an existing native definition updates only the adapter's verified activation field. `On` plus a missing definition blocks Apply and tells the user to configure it in the Agent or turn it Off.
 - `Off` plus an existing native definition updates only the verified activation field. `Off` plus a missing definition is a no-op.
-- A Target without a verified activation mechanism is Agent-controlled. Its Profile policy MUST remain `Leave unchanged`, and Apply MUST NOT write its MCP configuration.
+- A Target without a verified activation mechanism is Agent-controlled. Its Profile policy MUST remain `Keep Agent`, and Apply MUST NOT write its MCP configuration.
 
 ### 4.4 Agent (internal Target)
 
@@ -684,7 +684,7 @@ Apply means complete replacement of the AgentEnv-managed portion of one Target w
 
 Instructions and dedicated Skill deployments may be fully AgentEnv-owned paths. Agent native configuration remains shared and Agent-owned except for explicit sparse MCP activation fields. OpenCode may patch only `mcp.<name>.enabled`; Codex may patch only `mcp_servers.<name>.enabled`; Trae CLI may patch only an existing user MCP's `disabled` field in its current user YAML or JSON source. Claude Code, Antigravity, and any adapter without a verified activation field MUST NOT write MCP configuration.
 
-When the selected Target's MCP policy is `Leave unchanged`, Apply MUST preserve its configuration byte-for-byte, omit the path from Preview freshness and Backup, and clear prior MCP ownership metadata. When the policy is managed, the adapter parses the current file, patches only named existing activation fields, preserves every definition and unknown field, and includes that file in freshness and Backup only when a semantic change is planned. Configuration files MUST NOT be recorded as whole-file AgentEnv-managed resources.
+When the selected Target's MCP policy is `Keep Agent`, Apply MUST preserve its configuration byte-for-byte, omit the path from Preview freshness and Backup, and clear prior MCP ownership metadata. When the policy is managed, the adapter parses the current file, patches only named existing activation fields, preserves every definition and unknown field, and includes that file in freshness and Backup only when a semantic change is planned. Configuration files MUST NOT be recorded as whole-file AgentEnv-managed resources.
 
 It MUST:
 
@@ -1002,13 +1002,13 @@ Status: local, read-only Project, recursive GitHub, and System Git Repository im
 - Each Agent is the source of truth for MCP definitions, installation, sign-in, authentication, and credentials.
 - AgentEnv discovers only user/global MCP names, activation state, transport hint, source path, and control capability. Project, plugin, workspace, and policy-managed MCPs MAY be observed but MUST NOT be adopted or mutated.
 - Discovery MUST include credential-bearing definitions such as `computer-use` and `node_repl`; secret values MUST NOT enter Profile data, renderer payloads, logs, or diagnostics.
-- A Profile stores a policy per Target. `Leave unchanged` opts that Target entirely out of MCP activation changes. `Apply Profile` stores sparse three-state rows: an absent row is shown as `Agent setting` and performs no mutation, while explicit `On` and `Off` choices update only a verified native activation field. Selecting `Apply Profile` MUST NOT synthesize overrides for discovered MCPs; returning a row to `Agent setting` removes its saved selection.
+- A Profile stores a policy per Target. `Keep Agent` opts that Target entirely out of MCP activation changes. `Use Profile` stores sparse three-state rows: an absent row is shown as `Agent setting` and performs no mutation, while explicit `On` and `Off` choices update only a verified native activation field. Selecting `Use Profile` MUST NOT synthesize overrides for discovered MCPs; returning a row to `Agent setting` removes its saved selection.
 - Codex, OpenCode, and Trae CLI activation control are `Implemented`. Claude Code and Antigravity are read-only until an official, reliable user-scope activation mechanism is verified.
 - Apply MUST preserve command, URL, arguments, headers, environment, OAuth state, and every unknown definition field byte-for-byte or semantically unchanged.
 - A managed `On` selection missing from the Target is `Setup required` and blocks Apply because AgentEnv cannot create definitions. A managed `Off` selection missing from the Target is equivalent to Off and is a no-op.
 - A new native MCP added outside AgentEnv remains valid. Whole-file drift MUST NOT block it or remove it.
 - If activation already matches the saved Profile, Preview is a no-op: no write, Backup, history event, or timestamp update.
-- Create from Target captures discovered connections as Target-specific activation selections only when that adapter supports safe activation. Read-only Targets capture `Leave unchanged` and import no MCP definition into Library.
+- Create from Target captures discovered connections as Target-specific activation selections only when that adapter supports safe activation. Read-only Targets capture `Keep Agent` and import no MCP definition into Library.
 - Profile v2 has no MCP Library store or IPC. Legacy MCP definitions survive only inside the external one-time migration backup and report; runtime MUST NOT read, mutate, or delete that old file.
 - MCP interaction exists only inside a selected Profile as native Agent discovery and activation choice.
 
@@ -1124,8 +1124,9 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Skills Library uses one stable five-lane reading order at every supported width: `Skill -> Source -> Usage -> Status -> Actions`. Source includes version metadata, Usage combines Profile references with Agent installs, and Status exposes only the highest-priority current maintenance action while retaining complete details in selectable overflow help.
 - Skill-list quick tabs are limited to `Enabled`, `Updates`, and `Disabled`. `Enabled` is the default and excludes globally disabled Skills; Source, Usage, and Agent-install filters live in one on-demand filter region, while `Review updates` is rendered only when one or more updates can actually be reviewed. Source-view quick tabs are limited to `Monitored`, `Manual only`, and `All`, with `Monitored` as the default. Applying reviewed candidates remains a distinct confirmation command inside the dialog.
 - Disabled Skills remain readable and use one neutral row treatment plus the explicit `Disabled` status. They MUST NOT accumulate decorative grayscale, inset rules, badges, and opacity effects, and they are excluded from Enabled, Updates, and non-All Usage filters.
-- Every Profile Composer resource row owns a Target-specific application policy beside the row summary. The policy uses the explicit choices `Apply Profile` and `Leave unchanged`; it MUST NOT use a generic on/off switch because the Profile can retain and edit its resource content while the selected Target is left untouched. A shared `When applied to <Agent>` context label makes the Target scope visible without repeating it in every value. The policy lane has stable geometry, remains visible while collapsed, MUST NOT expand the editor when changed, and MUST NOT be duplicated inside the expanded panel. Unsupported categories show `Agent controlled` in the same stable lane.
-- Resource editors remain available when their selected Target policy is `Leave unchanged`, because the saved Profile recipe can still be used by another Target. The expanded panel MUST state that the content remains saved but will not be applied to the selected Target. Target-specific child choices, such as individual MCP activation policies, become observational rather than editable until the category returns to `Apply Profile`; their saved choices are retained.
+- Every Profile Composer resource row owns a Target-specific application policy beside the row summary. The policy uses the explicit choices `Use Profile` and `Keep Agent`; it MUST NOT use a generic on/off switch because the Profile can retain and edit its resource content while the selected Target is left untouched. The selected Target in the Profile action area provides scope without adding a detached table header above the resource rows. The policy lane has a persistent neutral control surface, stable geometry, and remains visible while collapsed. Unsupported categories show `Agent controlled` in the same stable lane.
+- The resource disclosure occupies the leading edge and uses the platform-standard right/down direction. The policy selector occupies the trailing edge. Disclosure, row body, and policy selector are distinct click zones: the first two only expand or collapse the editor, while the policy selector only opens its option menu. Different effects MUST NOT use adjacent identical chevrons.
+- Resource editors remain available when their selected Target policy is `Keep Agent`, because the saved Profile recipe can still be used by another Target. The expanded panel MUST state that the content remains saved but will not be applied to the selected Target. Target-specific child choices, such as individual MCP activation policies, become observational rather than editable until the category returns to `Use Profile`; their saved choices are retained.
 - Counts and saved summaries describe the Profile recipe and MUST remain visible when a category is not managed for the selected Target. Composer rows show `enabled / total` for resources explicitly retained by the Profile. Discovered Agent MCPs that remain on `Agent setting` are candidates, not Profile resources, and MUST NOT contribute to either MCP count. The management state is not represented by replacing the count with zero.
 - Profile MCP rows use `name -> native source/status -> activation choice`. Definition editing and deletion are intentionally absent because those actions belong to the source Agent. The expanded editor uses compact content-sized rows and labels the sparse no-op state `Agent setting`.
 - Profile Composer resource triggers remain `52px` high before, during, and after expansion. Expanding one resource MUST NOT compress, hide metadata from, or reposition its sibling triggers. The expanded trigger and editor surface MUST be visually distinguishable from ordinary collapsed rows without turning the editor into a nested card.
@@ -1350,7 +1351,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - Preferred Target and created-from provenance never restrict compatible deployment.
 - Empty Instructions and all-Off resource choices remain valid complete replacement states and Preview their removals or disable operations explicitly.
 - Unsupported portable resources block with remediation.
-- `Leave unchanged` performs no MCP read, hash, diff, Backup, write, or ownership retention and ignores retained editor selections in the Profile hash.
+- `Keep Agent` performs no MCP read, hash, diff, Backup, write, or ownership retention and ignores retained editor selections in the Profile hash.
 - Native MCP discovery includes credential-bearing entries without copying secrets; Codex, OpenCode, and Trae CLI change only verified activation state; Claude Code and Antigravity remain Agent-controlled.
 - Managed MCP On/present, On/missing, Off/present, Off/missing, and absent-selection cases follow the sparse policy matrix.
 - Codex native disabled Skill detection accepts both runtime-name and manifest-path entries; either form blocks a Profile that expects the disabled Skill to run.

@@ -239,8 +239,8 @@ const zhCN: Record<string, string> = {
     "仅管理下方选中的 MCP 开关；定义和凭据仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":
     "此 Agent 的 MCP 设置仍由 Agent 自行控制。",
-  "When applied to {{name}}": "应用到 {{name}} 时",
-  "Apply Profile": "应用 Profile 内容",
+  "Use Profile": "使用 Profile",
+  "Keep Agent": "保留 Agent",
   "Instructions application policy for {{name}}": "{{name}} 的指令应用策略",
   "Skills application policy for {{name}}": "{{name}} 的技能应用策略",
   "MCPs application policy for {{name}}": "{{name}} 的 MCP 应用策略",
@@ -2115,8 +2115,8 @@ const zhTW: Record<string, string> = {
     "僅管理下方選取的 MCP 開關；定義與憑證仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":
     "此 Agent 的 MCP 設定仍由 Agent 自行控制。",
-  "When applied to {{name}}": "套用到 {{name}} 時",
-  "Apply Profile": "套用 Profile 內容",
+  "Use Profile": "使用 Profile",
+  "Keep Agent": "保留 Agent",
   "Instructions application policy for {{name}}": "{{name}} 的指令套用策略",
   "Skills application policy for {{name}}": "{{name}} 的技能套用策略",
   "MCPs application policy for {{name}}": "{{name}} 的 MCP 套用策略",

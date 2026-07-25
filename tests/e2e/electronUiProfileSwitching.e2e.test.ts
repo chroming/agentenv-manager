@@ -735,7 +735,7 @@ const expandComposerSection = async (page: Page, name: ComposerSectionName) => {
 };
 
 type ComposerResourceName = "Instructions" | "Skills" | "MCPs";
-type ComposerPolicyName = "Apply Profile" | "Leave unchanged";
+type ComposerPolicyName = "Use Profile" | "Keep Agent";
 
 const setComposerResourcePolicy = async (
   page: Page,
@@ -747,6 +747,9 @@ const setComposerResourcePolicy = async (
   const trigger = page.getByRole("button", { name: label });
   await trigger.click();
   const menu = page.getByRole("menu", { name: label });
+  await menu.waitFor({ state: "visible" });
+  await expectInViewport(page, menu);
+  await expectTopmost(menu);
   await menu.getByRole("menuitemradio", { name: new RegExp(`^${policy}`) }).click();
   await menu.waitFor({ state: "hidden" });
 };
@@ -4094,7 +4097,7 @@ describe("Electron UI profile switching e2e", () => {
       await page
         .getByRole("button", { name: "MCPs application policy for OpenCode" })
         .textContent()
-    ).toContain("Apply Profile");
+    ).toContain("Use Profile");
     expect(await editor.getByRole("button", { name: /Add|Remove|Delete/ }).count()).toBe(0);
     expect(await page.getByLabel("ui-alpha-mcp Profile behavior").inputValue()).toBe("on");
     expect(await page.getByLabel("ui-beta-mcp Profile behavior").inputValue()).toBe("off");
@@ -4124,29 +4127,49 @@ describe("Electron UI profile switching e2e", () => {
       name: "MCPs application policy for OpenCode"
     });
 
-    expect(await instructionsPolicy.textContent()).toContain("Apply Profile");
-    expect(await skillsPolicy.textContent()).toContain("Apply Profile");
-    expect(await mcpPolicy.textContent()).toContain("Apply Profile");
-    const policyContext = composer.getByText("When applied to OpenCode", { exact: true });
-    expect(await policyContext.count()).toBe(1);
-    const contextGeometry = await policyContext.evaluate((element) => ({
-      clientWidth: element.clientWidth,
-      scrollWidth: element.scrollWidth
-    }));
-    expect(contextGeometry.scrollWidth).toBeLessThanOrEqual(contextGeometry.clientWidth);
+    expect(await instructionsPolicy.textContent()).toContain("Use Profile");
+    expect(await skillsPolicy.textContent()).toContain("Use Profile");
+    expect(await mcpPolicy.textContent()).toContain("Use Profile");
+    const instructionsSection = composer.locator(
+      '[data-profile-composer-id="instructions"]'
+    );
+    const instructionsDisclosure = instructionsSection.getByRole("button", {
+      name: "Expand Instructions"
+    });
+    const [disclosureBox, rowBox, policyBox] = await Promise.all([
+      instructionsDisclosure.boundingBox(),
+      instructionsRow.boundingBox(),
+      instructionsPolicy.boundingBox()
+    ]);
+    expect(disclosureBox).not.toBeNull();
+    expect(rowBox).not.toBeNull();
+    expect(policyBox).not.toBeNull();
+    expect(disclosureBox!.x + disclosureBox!.width).toBeLessThanOrEqual(rowBox!.x);
+    expect(rowBox!.x + rowBox!.width).toBeLessThanOrEqual(policyBox!.x);
+    const policySurface = await instructionsPolicy.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        borderStyle: style.borderStyle,
+        borderWidth: Number.parseFloat(style.borderWidth),
+        backgroundColor: style.backgroundColor
+      };
+    });
+    expect(policySurface.borderStyle).not.toBe("none");
+    expect(policySurface.borderWidth).toBeGreaterThan(0);
+    expect(policySurface.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
     expect(await instructionsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
     expect(await skillsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
     expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
 
-    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Leave unchanged");
-    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Leave unchanged");
-    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Leave unchanged");
+    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Keep Agent");
+    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Keep Agent");
+    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Keep Agent");
 
     expect(await instructionsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await skillsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
-    expect(await composer.getByText("Leave unchanged", { exact: true }).count()).toBe(3);
+    expect(await composer.getByText("Keep Agent", { exact: true }).count()).toBe(3);
 
     await saveProfile(page);
     const resources = await readJson<{

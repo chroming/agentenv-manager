@@ -5200,7 +5200,7 @@ button svg,
   align-items: center;
   background: #fff;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 34px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
   min-height: 52px;
 }
 
@@ -5316,7 +5316,7 @@ button svg,
 }
 
 .profile-composer-section.is-expanded .profile-composer-section__chevron {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 
 .profile-composer-section__panel {

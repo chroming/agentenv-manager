@@ -123,7 +123,7 @@ export const ProfileResourcePolicyMenu = ({
 
   const visibleLabel =
     status ??
-    (value === "apply-profile" ? t("Apply Profile") : t("Leave unchanged"));
+    (value === "apply-profile" ? t("Use Profile") : t("Keep Agent"));
 
   return (
     <>
@@ -163,7 +163,7 @@ export const ProfileResourcePolicyMenu = ({
                   {value === "apply-profile" ? <Check size={14} strokeWidth={2.4} /> : null}
                 </span>
                 <span className="profile-resource-policy__copy">
-                  <span>{t("Apply Profile")}</span>
+                  <span>{t("Use Profile")}</span>
                   <small>
                     {t("Apply this Profile's {{resource}} to {{name}}.", {
                       resource: resourceName,
@@ -183,7 +183,7 @@ export const ProfileResourcePolicyMenu = ({
                   {value === "leave-unchanged" ? <Check size={14} strokeWidth={2.4} /> : null}
                 </span>
                 <span className="profile-resource-policy__copy">
-                  <span>{t("Leave unchanged")}</span>
+                  <span>{t("Keep Agent")}</span>
                   <small>
                     {t("Keep {{name}}'s current {{resource}} unchanged.", {
                       resource: resourceName,

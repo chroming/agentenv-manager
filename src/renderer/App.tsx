@@ -4396,13 +4396,6 @@ const AppContent = ({
                       className="profile-composer"
                       aria-label={t("Profile composer")}
                     >
-                      <div className="profile-composer__policy-context">
-                        <span>
-                          {t("When applied to {{name}}", {
-                            name: activeTargetName
-                          })}
-                        </span>
-                      </div>
                       <ProfileComposerSection
                         id="instructions"
                         icon={<BookOpenText size={18} strokeWidth={2.2} />}

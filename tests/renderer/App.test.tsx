@@ -927,7 +927,7 @@ describe("App", () => {
       within(composer).getByRole("button", {
         name: "MCPs application policy for OpenCode"
       })
-    ).toHaveTextContent("Leave unchanged");
+    ).toHaveTextContent("Keep Agent");
     expect(screen.getByText("0 in OpenCode")).toBeInTheDocument();
   });
 
@@ -1721,7 +1721,7 @@ describe("App", () => {
       })
     );
     fireEvent.click(
-      await screen.findByRole("menuitemradio", { name: /Apply Profile/ })
+      await screen.findByRole("menuitemradio", { name: /Use Profile/ })
     );
     const behavior = await screen.findByLabelText("context7 Profile behavior");
     expect(behavior).toHaveValue("agent");

@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Fragment, useId, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
@@ -67,6 +67,21 @@ export const ProfileComposerSection = ({
       data-profile-composer-id={id}
     >
       <div className="profile-composer-section__header">
+        <button
+          className="profile-composer-section__disclosure"
+          type="button"
+          aria-controls={panelId}
+          aria-expanded={expanded}
+          aria-label={t(expanded ? "Collapse {{name}}" : "Expand {{name}}", { name: title })}
+          onClick={onToggle}
+        >
+          <ChevronRight
+            className="profile-composer-section__chevron"
+            size={18}
+            strokeWidth={2.2}
+            aria-hidden="true"
+          />
+        </button>
         <button
           className="profile-composer-section__trigger"
           id={triggerId}
@@ -139,21 +154,6 @@ export const ProfileComposerSection = ({
           value={policy}
           onChange={onPolicyChange}
         />
-        <button
-          className="profile-composer-section__disclosure"
-          type="button"
-          aria-controls={panelId}
-          aria-expanded={expanded}
-          aria-label={t(expanded ? "Collapse {{name}}" : "Expand {{name}}", { name: title })}
-          onClick={onToggle}
-        >
-          <ChevronDown
-            className="profile-composer-section__chevron"
-            size={18}
-            strokeWidth={2.2}
-            aria-hidden="true"
-          />
-        </button>
       </div>
       {expanded ? (
         <div

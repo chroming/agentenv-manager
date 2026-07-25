@@ -889,6 +889,19 @@ try {
   await page.getByRole("menu", { name: "Icons for Code Review" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-icon-picker-920x620.png"));
   await page.keyboard.press("Escape");
+  const skillsPolicy = page.getByRole("button", {
+    name: "Skills application policy for OpenCode"
+  });
+  await skillsPolicy.click();
+  const skillsPolicyMenu = page.getByRole("menu", {
+    name: "Skills application policy for OpenCode"
+  });
+  await skillsPolicyMenu.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "profile-policy-menu-920x620.png"), {
+    preserveFocus: true
+  });
+  await page.keyboard.press("Escape");
+  await skillsPolicyMenu.waitFor({ state: "hidden" });
   for (const sectionName of ["Instructions", "Skills", "MCPs"]) {
     await page
       .locator(`[data-profile-composer-id="${sectionName === "MCPs" ? "mcp" : sectionName.toLowerCase()}"]`)

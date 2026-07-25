@@ -220,16 +220,20 @@ describe("ProfileComposerSection", () => {
     const policy = screen.getByRole("button", {
       name: "Skills application policy for OpenCode"
     });
-    expect(policy).toHaveTextContent("Leave unchanged");
+    expect(policy).toHaveTextContent("Keep Agent");
     const count = document.querySelector(".profile-composer-section__count");
     expect(count).toHaveAttribute("title", "2 of 3 enabled");
     expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("2/3");
+    const header = policy.closest(".profile-composer-section__header");
+    expect(header?.children[0]).toBe(screen.getByRole("button", { name: "Expand Skills" }));
+    expect(header?.children[1]).toBe(screen.getByRole("button", { name: "Skills" }));
+    expect(header?.children[2]).toBe(policy);
 
     fireEvent.click(policy);
     const menu = screen.getByRole("menu", {
       name: "Skills application policy for OpenCode"
     });
-    fireEvent.click(within(menu).getByRole("menuitemradio", { name: /Apply Profile/ }));
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: /Use Profile/ }));
 
     expect(onPolicyChange).toHaveBeenCalledWith("apply-profile");
     expect(onToggle).not.toHaveBeenCalled();
