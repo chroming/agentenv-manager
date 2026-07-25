@@ -76,7 +76,7 @@ export interface AgentEnvApi {
   listTargets(forceRefresh?: boolean): Promise<TargetInfo[]>;
   listTargetStates(): Promise<TargetManagementState[]>;
   listConversations(input?: ConversationListInput): Promise<ConversationListResult>;
-  readConversation(id: string): Promise<ConversationDetail>;
+  readConversation(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
   refreshConversations(): Promise<ConversationRefreshResult>;
   openOriginalConversation(id: string): Promise<ConversationLaunchResult>;
   previewConversationContinuation(
@@ -263,7 +263,14 @@ export interface ConversationMessage {
 }
 
 export interface ConversationDetail extends ConversationSummary {
+  loadedMessageOffset?: number;
   messages: ConversationMessage[];
+}
+
+export interface ConversationReadInput {
+  limit?: number;
+  offset?: number;
+  tail?: boolean;
 }
 
 export interface ConversationListInput {

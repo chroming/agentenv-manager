@@ -287,6 +287,79 @@ describe("Conversations desktop workflow", () => {
     }).count()).resolves.toBe(1);
     await expect(page.locator(".conversation-list-item__snippet").count()).resolves.toBe(0);
 
+    const longSessionPath = join(
+      sessionDir,
+      "rollout-2026-07-25T07-00-00-000Z-22222222-2222-4222-8222-222222222222.jsonl"
+    );
+    const longSession = [
+      JSON.stringify({
+        type: "session_meta",
+        payload: {
+          id: "22222222-2222-4222-8222-222222222222",
+          cwd: "/work/performance",
+          timestamp: "2026-07-25T07:00:00.000Z"
+        }
+      }),
+      ...Array.from({ length: 65 }, (_, index) => JSON.stringify({
+        type: "response_item",
+        payload: {
+          id: `long-message-${index}`,
+          type: "message",
+          role: index % 2 === 0 ? "user" : "assistant",
+          content: [{
+            type: index % 2 === 0 ? "input_text" : "output_text",
+            text: index === 0 ? "Long conversation performance test" : `Message ${index}`
+          }]
+        }
+      }))
+    ].join("\n") + "\n";
+    await writeFile(longSessionPath, longSession, "utf8");
+
+    await page
+      .getByRole("complementary", { name: "Global navigation" })
+      .getByRole("button", { name: "Skills" })
+      .click();
+    await page
+      .getByRole("complementary", { name: "Global navigation" })
+      .getByRole("button", { name: "Conversations" })
+      .click();
+    await page.getByRole("option", {
+      name: /Repair the desktop release workflow/
+    }).waitFor();
+    await page.waitForTimeout(450);
+    await expect(page.getByRole("option", {
+      name: /Long conversation performance test/
+    }).count()).resolves.toBe(0);
+
+    await page.getByRole("button", { name: "Refresh" }).click();
+    await page.locator(".conversation-refresh-overlay").waitFor({ state: "visible" });
+    await page.getByRole("option", {
+      name: /Long conversation performance test/
+    }).waitFor({ state: "visible", timeout: 15_000 });
+    const pagedLongDetail = await page.evaluate(async () => {
+      const value = await window.agentEnv.readConversation(
+        "codex:22222222-2222-4222-8222-222222222222",
+        { limit: 60, tail: true }
+      );
+      return {
+        loadedMessageOffset: value.loadedMessageOffset,
+        loaded: value.messages.length,
+        total: value.messageCount
+      };
+    });
+    expect(pagedLongDetail).toEqual({
+      loadedMessageOffset: 5,
+      loaded: 60,
+      total: 65
+    });
+    await page.getByRole("option", {
+      name: /Long conversation performance test/
+    }).click();
+    await page.getByText("Message 64", { exact: true }).waitFor();
+    await expect(page.getByText("Message 1", { exact: true }).count()).resolves.toBe(0);
+    await page.getByRole("button", { name: "Load earlier messages" }).click();
+    await page.getByText("Message 1", { exact: true }).waitFor();
+
     const preview = await page.evaluate(async () =>
       window.agentEnv.previewConversationContinuation({
         conversationId: "codex:11111111-1111-4111-8111-111111111111",
@@ -316,6 +389,7 @@ describe("Conversations desktop workflow", () => {
       });
     }
     expect(await readFile(sourcePath, "utf8")).toBe(source);
+    expect(await readFile(longSessionPath, "utf8")).toBe(longSession);
     expect(await readFile(openCodeDatabasePath)).toEqual(openCodeSource);
     expect(await readFile(antigravityTranscriptPath)).toEqual(antigravitySource);
   }, 30_000);

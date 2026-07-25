@@ -5,10 +5,11 @@ import type {
   ConversationDetail,
   ConversationListInput,
   ConversationListResult,
-  ConversationMessage,
+  ConversationReadInput,
   ConversationSummary
 } from "../../shared/types";
 import type { AgentConversationCandidate } from "../targets/types";
+import { createConversationIndexReader } from "./conversationIndexReaderWorker";
 
 interface ConversationRow {
   id: string;
@@ -32,13 +33,6 @@ interface ConversationRow {
   match_snippet?: string | null;
 }
 
-interface MessageRow {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  created_at: string | null;
-}
-
 export interface IndexedConversationRecord {
   summary: ConversationSummary;
   candidate: AgentConversationCandidate;
@@ -52,8 +46,8 @@ export interface ConversationIndexStore {
   sourceVersion(id: string): string | undefined;
   upsert(detail: ConversationDetail, candidate: AgentConversationCandidate): void;
   removeMissing(agentId: string, observedIds: Set<string>): number;
-  list(input?: ConversationIndexListInput): ConversationListResult;
-  read(id: string): ConversationDetail;
+  list(input?: ConversationIndexListInput): Promise<ConversationListResult>;
+  read(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
   record(id: string): IndexedConversationRecord;
   close(): void;
 }
@@ -198,19 +192,20 @@ export const createConversationIndexStore = async (
 ): Promise<ConversationIndexStore> => {
   const database = await openRecoverableDatabase(path);
   await chmod(path, 0o600).catch(() => undefined);
+  const reader = createConversationIndexReader(path);
 
   const versionStatement = database.prepare(
     "SELECT source_version FROM conversations WHERE id = ?"
   );
   const recordStatement = database.prepare(
-    "SELECT * FROM conversations WHERE id = ?"
+    `SELECT
+      id, agent_id, agent_name, record_id, source_id, source_version, source_locator,
+      source_runtime_home, provider_session_kind, provider_resume_locator,
+      title, snippet, workspace_path, created_at, updated_at, message_count,
+      detail_state, archived
+    FROM conversations
+    WHERE id = ?`
   );
-  const messageStatement = database.prepare(`
-    SELECT id, role, text, created_at
-    FROM conversation_messages
-    WHERE conversation_id = ?
-    ORDER BY ordinal ASC
-  `);
   const upsertStatement = database.prepare(`
     INSERT INTO conversations (
       id, agent_id, agent_name, record_id, source_id, source_version, source_locator,
@@ -321,104 +316,8 @@ export const createConversationIndexStore = async (
       }
       return stale.length;
     },
-    list: (input = {}) => {
-      const conditions: string[] = [];
-      const parameters: Array<string | number> = [];
-      const query = input.query?.trim().slice(0, 500);
-      if (query) {
-        conditions.push("instr(lower(search_text), lower(?)) > 0");
-        parameters.push(query);
-      }
-      const agentIds = [...new Set(input.agentIds ?? [])].filter(Boolean);
-      if (agentIds.length > 0) {
-        conditions.push(`agent_id IN (${agentIds.map(() => "?").join(", ")})`);
-        parameters.push(...agentIds);
-      }
-      const workspacePaths = [...new Set(input.workspacePaths ?? [])].filter(Boolean);
-      if (workspacePaths.length > 0) {
-        conditions.push(`workspace_path IN (${workspacePaths.map(() => "?").join(", ")})`);
-        parameters.push(...workspacePaths);
-      }
-      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-      const total = Number(
-        (database.prepare(`SELECT count(*) AS count FROM conversations ${where}`)
-          .get(...parameters) as { count: number }).count
-      );
-      const limit = Math.max(1, Math.min(500, Math.trunc(input.limit ?? 200)));
-      const offset = Math.max(0, Math.trunc(input.offset ?? 0));
-      const matchProjection = query
-        ? `(
-            SELECT text
-            FROM conversation_messages
-            WHERE conversation_id = conversations.id
-              AND instr(lower(text), lower(?)) > 0
-            ORDER BY ordinal DESC
-            LIMIT 1
-          ) AS match_snippet`
-        : "NULL AS match_snippet";
-      const rowParameters = query ? [query, ...parameters] : parameters;
-      const rows = database.prepare(`
-        SELECT conversations.*, ${matchProjection}
-        FROM conversations
-        ${where}
-        ORDER BY updated_at DESC, id ASC
-        LIMIT ? OFFSET ?
-      `).all(...rowParameters, limit, offset) as unknown as ConversationRow[];
-      const workspaceConditions: string[] = ["workspace_path IS NOT NULL", "workspace_path <> ''"];
-      const workspaceParameters: string[] = [];
-      if (agentIds.length > 0) {
-        workspaceConditions.push(`agent_id IN (${agentIds.map(() => "?").join(", ")})`);
-        workspaceParameters.push(...agentIds);
-      }
-      const availableWorkspacePaths = (
-        database.prepare(`
-          SELECT DISTINCT workspace_path
-          FROM conversations
-          WHERE ${workspaceConditions.join(" AND ")}
-          ORDER BY workspace_path COLLATE NOCASE ASC
-        `).all(...workspaceParameters) as Array<{ workspace_path: string }>
-      ).map((row) => row.workspace_path);
-      const facetAgentIds = [...new Set(input.facetAgentIds ?? agentIds)].filter(Boolean);
-      const agentCountConditions: string[] = [];
-      const agentCountParameters: string[] = [];
-      if (facetAgentIds.length > 0) {
-        agentCountConditions.push(
-          `agent_id IN (${facetAgentIds.map(() => "?").join(", ")})`
-        );
-        agentCountParameters.push(...facetAgentIds);
-      }
-      const agentCountWhere = agentCountConditions.length > 0
-        ? `WHERE ${agentCountConditions.join(" AND ")}`
-        : "";
-      const agentCounts = Object.fromEntries(
-        (database.prepare(`
-          SELECT agent_id, count(*) AS count
-          FROM conversations
-          ${agentCountWhere}
-          GROUP BY agent_id
-        `).all(...agentCountParameters) as Array<{ agent_id: string; count: number }>)
-          .map((row) => [row.agent_id, Number(row.count)])
-      );
-      return {
-        items: rows.map(summaryFromRow),
-        total,
-        workspacePaths: availableWorkspacePaths,
-        agentCounts
-      };
-    },
-    read: (id) => {
-      const row = rowFor(id);
-      const messages = messageStatement.all(id) as unknown as MessageRow[];
-      return {
-        ...summaryFromRow(row),
-        messages: messages.map((message): ConversationMessage => ({
-          id: message.id,
-          role: message.role,
-          text: message.text,
-          createdAt: message.created_at ?? undefined
-        }))
-      };
-    },
+    list: (input = {}) => reader.list(input),
+    read: (id, input = {}) => reader.read(id, input),
     record: (id) => {
       const row = rowFor(id);
       return {
@@ -448,6 +347,9 @@ export const createConversationIndexStore = async (
         }
       };
     },
-    close: () => database.close()
+    close: () => {
+      reader.close();
+      database.close();
+    }
   };
 };

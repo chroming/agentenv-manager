@@ -142,6 +142,11 @@ describe("ConversationWorkspace", () => {
 
     expect(await screen.findByText("Please repair the release workflow."))
       .toBeInTheDocument();
+    expect(api.refreshConversations).not.toHaveBeenCalled();
+    expect(api.readConversation).toHaveBeenCalledWith(detail.id, {
+      limit: 60,
+      tail: true
+    });
     fireEvent.change(screen.getByRole("searchbox", { name: "Search conversations" }), {
       target: { value: "release" }
     });
@@ -276,7 +281,7 @@ describe("ConversationWorkspace", () => {
     expect(await screen.findByText("Conversation copied")).toBeInTheDocument();
   });
 
-  it("keeps cached Agent identity visible while history refresh is running", async () => {
+  it("keeps cached history visible behind an honest refresh overlay", async () => {
     let finishRefresh: (() => void) | undefined;
     const api = installApi();
     api.refreshConversations.mockImplementation(() => new Promise((resolve) => {
@@ -292,17 +297,14 @@ describe("ConversationWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
 
-    expect(await screen.findByText("Refreshing history…")).toBeInTheDocument();
+    expect(await screen.findByText("Refreshing conversations")).toBeInTheDocument();
     expect(
       container.querySelector(".conversation-list-item__agent img")
     ).not.toBeNull();
-    expect(screen.getByRole("listbox", { name: "" })).toHaveAttribute(
-      "aria-busy",
-      "true"
-    );
+    expect(container.querySelector(".conversation-layout")).toHaveAttribute("inert");
     finishRefresh?.();
     await waitFor(() =>
-      expect(screen.queryByText("Refreshing history…")).toBeNull()
+      expect(screen.queryByText("Refreshing conversations")).toBeNull()
     );
   });
 
@@ -337,6 +339,16 @@ describe("ConversationWorkspace", () => {
     fireEvent.change(search, { target: { value: "slow" } });
     await waitFor(() => expect(finishSlow).toBeTypeOf("function"));
     fireEvent.change(search, { target: { value: "latest" } });
+    await act(async () => finishSlow?.({
+      items: [{
+        ...detail,
+        id: "codex:slow",
+        sourceId: "slow",
+        title: "Stale search result"
+      }],
+      total: 1
+    }));
+    expect(screen.queryByText("Stale search result")).toBeNull();
     await waitFor(() => expect(finishLatest).toBeTypeOf("function"));
 
     await act(async () => finishLatest?.({
@@ -349,17 +361,6 @@ describe("ConversationWorkspace", () => {
       total: 1
     }));
     expect(await screen.findByText("Latest search result")).toBeInTheDocument();
-    await act(async () => finishSlow?.({
-      items: [{
-        ...detail,
-        id: "codex:slow",
-        sourceId: "slow",
-        title: "Stale search result"
-      }],
-      total: 1
-    }));
-
-    await waitFor(() => expect(screen.queryByText("Stale search result")).toBeNull());
     expect(screen.getByText("Latest search result")).toBeInTheDocument();
   });
 
@@ -454,5 +455,60 @@ describe("ConversationWorkspace", () => {
     await waitFor(() =>
       expect(api.openExternalUrl).toHaveBeenCalledWith("https://example.com/docs")
     );
+  });
+
+  it("loads long conversations from the tail and reveals earlier messages in pages", async () => {
+    const api = installApi();
+    api.readConversation.mockImplementation(async (
+      _id: string,
+      input?: { offset?: number; limit?: number; tail?: boolean }
+    ) => input?.tail
+      ? {
+          ...detail,
+          messageCount: 62,
+          loadedMessageOffset: 2,
+          messages: [
+            { id: "u3", role: "user", text: "Latest question" },
+            { id: "a3", role: "assistant", text: "Latest answer" }
+          ]
+        }
+      : input
+        ? {
+          ...detail,
+          messageCount: 62,
+          loadedMessageOffset: 0,
+          messages: [
+            { id: "u1", role: "user", text: "First question" },
+            { id: "a1", role: "assistant", text: "First answer" }
+          ]
+        }
+        : {
+          ...detail,
+          messageCount: 62,
+          messages: [
+            { id: "all", role: "assistant", text: "Complete archived transcript" }
+          ]
+        });
+    render(<ConversationWorkspace targets={[
+      target("codex", "Codex"),
+      target("opencode", "OpenCode")
+    ]} />);
+
+    expect(await screen.findByText("Latest answer")).toBeInTheDocument();
+    expect(screen.queryByText("First question")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Load earlier messages" }));
+
+    expect(await screen.findByText("First question")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load earlier messages" })).toBeNull();
+    expect(api.readConversation).toHaveBeenLastCalledWith(detail.id, {
+      offset: 0,
+      limit: 2
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy conversation" }));
+    await waitFor(() => expect(api.copyText).toHaveBeenCalledWith(
+      expect.stringContaining("Complete archived transcript")
+    ));
+    expect(api.readConversation).toHaveBeenLastCalledWith(detail.id);
   });
 });

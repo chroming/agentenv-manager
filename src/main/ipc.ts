@@ -226,8 +226,11 @@ export const registerIpcHandlers = ({
   ipcMain.handle("conversations:list", (_event, input: unknown) =>
     conversationService.list(input && typeof input === "object" ? input : undefined)
   );
-  ipcMain.handle("conversations:read", (_event, id: unknown) =>
-    conversationService.read(String(id ?? ""))
+  ipcMain.handle("conversations:read", (_event, id: unknown, input: unknown) =>
+    conversationService.read(
+      String(id ?? ""),
+      input && typeof input === "object" ? input : undefined
+    )
   );
   ipcMain.handle("conversations:refresh", () => conversationService.refresh());
   ipcMain.handle("conversations:open-original", (_event, id: unknown) =>

@@ -519,7 +519,8 @@ const createServices = async () => {
   };
   const conversationService: ConversationService = {
     list: (input) => loadConversationService().then((service) => service.list(input)),
-    read: (id) => loadConversationService().then((service) => service.read(id)),
+    read: (id, input) =>
+      loadConversationService().then((service) => service.read(id, input)),
     refresh: () => loadConversationService().then((service) => service.refresh()),
     openOriginal: (id) =>
       loadConversationService().then((service) => service.openOriginal(id)),

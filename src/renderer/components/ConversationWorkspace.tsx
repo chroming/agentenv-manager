@@ -45,23 +45,16 @@ import {
   PageHeader
 } from "./ui";
 
-let backgroundRefresh: Promise<ConversationRefreshResult> | undefined;
-let backgroundRefreshCompletedAt = 0;
+let conversationRefreshOperation: Promise<ConversationRefreshResult> | undefined;
+let emptyIndexRefreshAttempted = false;
 
-const refreshConversationIndex = (force: boolean) => {
-  if (backgroundRefresh) return backgroundRefresh;
-  if (!force && Date.now() - backgroundRefreshCompletedAt < 60_000) {
-    return Promise.resolve(undefined);
-  }
-  backgroundRefresh = window.agentEnv.refreshConversations()
-    .then((result) => {
-      backgroundRefreshCompletedAt = Date.now();
-      return result;
-    })
+const refreshConversationIndex = () => {
+  if (conversationRefreshOperation) return conversationRefreshOperation;
+  conversationRefreshOperation = window.agentEnv.refreshConversations()
     .finally(() => {
-      backgroundRefresh = undefined;
+      conversationRefreshOperation = undefined;
     });
-  return backgroundRefresh;
+  return conversationRefreshOperation;
 };
 
 const continuationText = (detail: ConversationDetail) => [
@@ -76,6 +69,7 @@ const continuationText = (detail: ConversationDetail) => [
 ].join("\n");
 
 const conversationPageSize = 200;
+const conversationMessagePageSize = 60;
 type ConversationOperation = "copy" | "open-original" | "continue";
 
 const workspaceName = (path?: string) => {
@@ -248,7 +242,10 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const [selectedId, setSelectedId] = useState<string>();
   const [detail, setDetail] = useState<ConversationDetail>();
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailReloadNonce, setDetailReloadNonce] = useState(0);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [operation, setOperation] = useState<ConversationOperation>();
@@ -281,25 +278,31 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
   const loadList = async (
     nextQuery = queryRef.current,
     nextAgentFilter = agentFilterRef.current,
-    nextWorkspaceFilter = workspaceFilterRef.current
+    nextWorkspaceFilter = workspaceFilterRef.current,
+    trackSearch = false
   ) => {
     const requestId = ++listRequestRef.current;
-    const result = await window.agentEnv.listConversations({
-      query: nextQuery || undefined,
-      agentIds: nextAgentFilter ? [nextAgentFilter] : undefined,
-      workspacePaths: nextWorkspaceFilter ? [nextWorkspaceFilter] : undefined,
-      limit: conversationPageSize
-    });
-    if (requestId !== listRequestRef.current) return;
-    setItems(result.items);
-    setTotal(result.total);
-    if (result.workspacePaths) setWorkspacePaths(result.workspacePaths);
-    if (result.agentCounts) setAgentCounts(result.agentCounts);
-    setSelectedId((current) =>
-      current && result.items.some((item) => item.id === current)
-        ? current
-        : result.items[0]?.id
-    );
+    try {
+      const result = await window.agentEnv.listConversations({
+        query: nextQuery || undefined,
+        agentIds: nextAgentFilter ? [nextAgentFilter] : undefined,
+        workspacePaths: nextWorkspaceFilter ? [nextWorkspaceFilter] : undefined,
+        limit: conversationPageSize
+      });
+      if (requestId !== listRequestRef.current) return undefined;
+      setItems(result.items);
+      setTotal(result.total);
+      if (result.workspacePaths) setWorkspacePaths(result.workspacePaths);
+      if (result.agentCounts) setAgentCounts(result.agentCounts);
+      setSelectedId((current) =>
+        current && result.items.some((item) => item.id === current)
+          ? current
+          : result.items[0]?.id
+      );
+      return result;
+    } finally {
+      if (trackSearch && requestId === listRequestRef.current) setSearching(false);
+    }
   };
 
   const loadMore = async () => {
@@ -333,9 +336,10 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     setError("");
     setWarning("");
     try {
-      const result = await refreshConversationIndex(!initial);
+      const result = await refreshConversationIndex();
       await loadList();
-      if (result && result.failures.length > 0) {
+      setDetailReloadNonce((current) => current + 1);
+      if (result.failures.length > 0) {
         setWarning(result.failures.map((failure) => {
           const name = targets.find((target) => target.id === failure.agentId)?.name ??
             failure.agentId;
@@ -353,10 +357,10 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
 
   useEffect(() => {
     let active = true;
-    let refreshTimer: number | undefined;
     void (async () => {
+      let result;
       try {
-        await loadList("");
+        result = await loadList("");
       } catch (unknownError) {
         if (active) {
           setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -364,15 +368,13 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
       } finally {
         if (active) setLoading(false);
       }
-      if (active) {
-        refreshTimer = window.setTimeout(() => {
-          if (active) void refresh(true);
-        }, 250);
+      if (active && result?.total === 0 && !emptyIndexRefreshAttempted) {
+        emptyIndexRefreshAttempted = true;
+        void refresh(true);
       }
     })();
     return () => {
       active = false;
-      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
     };
   }, []);
 
@@ -381,11 +383,16 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
       queryEffectReadyRef.current = true;
       return undefined;
     }
+    listRequestRef.current += 1;
+    setSearching(false);
     const timeout = window.setTimeout(() => {
-      void loadList(query).catch((unknownError) =>
-        setError(unknownError instanceof Error ? unknownError.message : String(unknownError))
-      );
-    }, 180);
+      setSearching(true);
+      void loadList(query, agentFilter, workspaceFilter, true)
+        .catch((unknownError) => {
+          setSearching(false);
+          setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+        });
+    }, 220);
     return () => window.clearTimeout(timeout);
   }, [agentFilter, query, workspaceFilter]);
 
@@ -396,7 +403,11 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     }
     let active = true;
     setDetailLoading(true);
-    void window.agentEnv.readConversation(selectedId)
+    setLoadingEarlier(false);
+    void window.agentEnv.readConversation(selectedId, {
+      limit: conversationMessagePageSize,
+      tail: true
+    })
       .then((next) => active && setDetail(next))
       .catch((unknownError) => {
         if (active) {
@@ -408,7 +419,37 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     return () => {
       active = false;
     };
-  }, [selectedId]);
+  }, [detailReloadNonce, selectedId]);
+
+  const loadEarlierMessages = async () => {
+    if (!detail || loadingEarlier || !detail.loadedMessageOffset) return;
+    const nextOffset = Math.max(0, detail.loadedMessageOffset - conversationMessagePageSize);
+    const limit = detail.loadedMessageOffset - nextOffset;
+    setLoadingEarlier(true);
+    setError("");
+    try {
+      const earlier = await window.agentEnv.readConversation(detail.id, {
+        offset: nextOffset,
+        limit
+      });
+      setDetail((current) => {
+        if (!current || current.id !== earlier.id) return current;
+        const existing = new Set(current.messages.map((entry) => entry.id));
+        return {
+          ...current,
+          loadedMessageOffset: earlier.loadedMessageOffset,
+          messages: [
+            ...earlier.messages.filter((entry) => !existing.has(entry.id)),
+            ...current.messages
+          ]
+        };
+      });
+    } catch (unknownError) {
+      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -552,7 +593,10 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     setOperation("copy");
     setError("");
     try {
-      await window.agentEnv.copyText(continuationText(detail));
+      const completeDetail = detail.messages.length < detail.messageCount
+        ? await window.agentEnv.readConversation(detail.id)
+        : detail;
+      await window.agentEnv.copyText(continuationText(completeDetail));
       setMessage(t("Conversation copied"));
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -600,11 +644,18 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
           }
         />
 
-        <div className="conversation-layout ui-surface-frame">
+        <div className="conversation-layout-shell">
+          <div
+            className="conversation-layout ui-surface-frame"
+            inert={refreshing}
+            aria-hidden={refreshing || undefined}
+          >
           <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
             <div className="conversation-list-toolbar">
               <label className="conversation-search ui-composite-field">
-                <Search size={15} aria-hidden="true" />
+                {searching
+                  ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+                  : <Search size={15} aria-hidden="true" />}
                 <input
                   ref={searchInputRef}
                   type="search"
@@ -647,17 +698,11 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
             </div>
             <div className="conversation-list-meta">
               <span>{t("{{count}} conversations", { count: total })}</span>
-              {refreshing ? (
-                <span className="conversation-refresh-status">
-                  <LoaderCircle className="is-spinning" size={13} aria-hidden="true" />
-                  {t("Refreshing history…")}
-                </span>
-              ) : null}
             </div>
             <div
               className="conversation-list"
               role="listbox"
-              aria-busy={loading || refreshing}
+              aria-busy={loading || searching}
             >
               {loading ? (
                 <div className="conversation-empty">
@@ -914,6 +959,25 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                 ) : (
                   <div className="conversation-transcript">
                     <div className="conversation-transcript__inner">
+                      {detail.loadedMessageOffset ? (
+                        <div className="conversation-transcript__history">
+                          <Button
+                            size="compact"
+                            disabled={loadingEarlier}
+                            icon={loadingEarlier
+                              ? <LoaderCircle className="is-spinning" size={14} />
+                              : undefined}
+                            onClick={() => void loadEarlierMessages()}
+                          >
+                            {t(loadingEarlier ? "Loading earlier messages" : "Load earlier messages")}
+                          </Button>
+                          <span>
+                            {t("{{count}} earlier messages", {
+                              count: detail.loadedMessageOffset
+                            })}
+                          </span>
+                        </div>
+                      ) : null}
                       {messageGroups.map((group) => (
                         <section
                           className={`conversation-turn conversation-turn--${group.role}`}
@@ -968,6 +1032,14 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
               </>
             )}
           </article>
+          </div>
+          {refreshing ? (
+            <div className="conversation-refresh-overlay" role="status" aria-live="polite">
+              <LoaderCircle className="is-spinning" size={22} aria-hidden="true" />
+              <strong>{t("Refreshing conversations")}</strong>
+              <span>{t("Scanning enabled Agents and updating the local index.")}</span>
+            </div>
+          ) : null}
         </div>
 
         {review ? (

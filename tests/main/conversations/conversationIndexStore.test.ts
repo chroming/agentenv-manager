@@ -72,18 +72,18 @@ describe("conversation index store", () => {
       source: { ...candidate.source, locator: source }
     });
 
-    expect(index.list({ query: "发布" }).items).toHaveLength(1);
-    expect(index.list().agentCounts).toEqual({ codex: 1 });
-    expect(index.list({ query: "OLD TOKEN" })).toMatchObject({
+    expect((await index.list({ query: "发布" })).items).toHaveLength(1);
+    expect((await index.list({ query: "%" })).items).toEqual([]);
+    expect((await index.list()).agentCounts).toEqual({ codex: 1 });
+    expect(await index.list({ query: "OLD TOKEN" })).toMatchObject({
       items: [{
-        id: detail.id,
-        matchSnippet: "The release job used an old token."
+        id: detail.id
       }],
       workspacePaths: ["/work/project"]
     });
-    expect(index.list({ workspacePaths: ["/other/project"] }).items).toEqual([]);
-    expect(index.list({ workspacePaths: ["/work/project"] }).items).toHaveLength(1);
-    expect(index.read(detail.id).messages).toEqual(detail.messages);
+    expect((await index.list({ workspacePaths: ["/other/project"] })).items).toEqual([]);
+    expect((await index.list({ workspacePaths: ["/work/project"] })).items).toHaveLength(1);
+    expect((await index.read(detail.id)).messages).toEqual(detail.messages);
     expect(index.record(detail.id)).toMatchObject({
       candidate: {
         recordId: "file-record",
@@ -130,11 +130,11 @@ describe("conversation index store", () => {
       source: { ...candidate.source, version: "101:124" }
     });
 
-    expect(index.read(detail.id).messages).toEqual([
+    expect((await index.read(detail.id)).messages).toEqual([
       { id: "u2", role: "user", text: "replacement" }
     ]);
     expect(index.removeMissing("codex", new Set())).toBe(1);
-    expect(index.list().items.map((item) => item.agentId)).toEqual(["claude-code"]);
+    expect((await index.list()).items.map((item) => item.agentId)).toEqual(["claude-code"]);
   });
 
   it("rebuilds a corrupt disposable cache", async () => {
@@ -146,7 +146,7 @@ describe("conversation index store", () => {
 
     store = await createConversationIndexStore(path);
 
-    expect(store.list()).toEqual({
+    expect(await store.list()).toEqual({
       items: [],
       total: 0,
       workspacePaths: [],
@@ -169,9 +169,34 @@ describe("conversation index store", () => {
 
     store = await createConversationIndexStore(path);
     expect(store.sourceVersion(detail.id)).toBeUndefined();
-    expect(store.list().items).toEqual([
+    expect((await store.list()).items).toEqual([
       expect.objectContaining({ id: detail.id, title: detail.title })
     ]);
     expect(store.record(detail.id).candidate.source.version).toBe(candidate.source.version);
+  });
+
+  it("reads the newest messages in bounded pages", async () => {
+    const { store: index } = await setup();
+    const messages = Array.from({ length: 125 }, (_, index) => ({
+      id: `message-${index}`,
+      role: index % 2 === 0 ? "user" as const : "assistant" as const,
+      text: `message ${index}`
+    }));
+    index.upsert({
+      ...detail,
+      messageCount: messages.length,
+      messages
+    }, candidate);
+
+    const latest = await index.read(detail.id, { limit: 60, tail: true });
+    expect(latest.loadedMessageOffset).toBe(65);
+    expect(latest.messages).toHaveLength(60);
+    expect(latest.messages[0]?.id).toBe("message-65");
+    expect(latest.messages.at(-1)?.id).toBe("message-124");
+
+    const earlier = await index.read(detail.id, { offset: 5, limit: 60 });
+    expect(earlier.loadedMessageOffset).toBe(5);
+    expect(earlier.messages[0]?.id).toBe("message-5");
+    expect(earlier.messages.at(-1)?.id).toBe("message-64");
   });
 });

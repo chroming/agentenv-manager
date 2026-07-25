@@ -8,6 +8,7 @@ import type {
   ConversationLaunchResult,
   ConversationListInput,
   ConversationListResult,
+  ConversationReadInput,
   ConversationRefreshResult
 } from "../../shared/types";
 import type { AgentEnvPaths } from "../paths";
@@ -48,7 +49,7 @@ export interface ConversationClipboard {
 
 export interface ConversationService {
   list(input?: ConversationListInput): Promise<ConversationListResult>;
-  read(id: string): Promise<ConversationDetail>;
+  read(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
   refresh(): Promise<ConversationRefreshResult>;
   openOriginal(id: string): Promise<ConversationLaunchResult>;
   previewContinuation(input: ConversationContinueInput): Promise<ConversationContinuationPreview>;
@@ -239,8 +240,8 @@ export const createConversationService = async (options: {
         facetAgentIds: [...enabled]
       });
     },
-    read: async (id) => {
-      const detail = index.read(id);
+    read: async (id, input) => {
+      const detail = await index.read(id, input);
       await assertEnabled(detail.agentId);
       return detail;
     },
@@ -285,7 +286,7 @@ export const createConversationService = async (options: {
               candidate,
               previousSourceVersion
                 ? {
-                    detail: index.read(id),
+                    detail: await index.read(id),
                     sourceVersion: previousSourceVersion
                   }
                 : undefined
@@ -339,7 +340,7 @@ export const createConversationService = async (options: {
     },
     previewContinuation: async (input) => {
       cleanupPending();
-      const conversation = index.read(input.conversationId);
+      const conversation = await index.read(input.conversationId);
       await assertEnabled(conversation.agentId);
       if (conversation.agentId === input.targetId) {
         throw new Error("Choose a different Agent to continue this conversation");

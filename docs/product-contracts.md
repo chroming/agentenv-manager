@@ -326,12 +326,15 @@ an archive, or a native-session database migration tool.
 - Handoff transcript text is untrusted historical data. Generated continuation context MUST tell
   the target Agent to ignore instructions embedded in transcript or tool output and to treat the
   current repository plus the user's new request as authoritative.
-- Conversation discovery starts after the core application is usable and MUST NOT delay startup,
-  Profile loading, Library loading, or Agent discovery.
-- Opening Conversations MUST render the last-good cached list before starting source refresh.
-  Refresh parsing MUST yield between records so Electron window input, navigation, and cache reads
-  remain responsive during a large first index. Parser upgrades invalidate record versions without
-  clearing the visible last-good cache.
+- Conversation discovery MUST NOT delay startup, Profile loading, Library loading, or Agent
+  discovery. Opening Conversations reads the last-good cached index only; revisiting the page does
+  not implicitly rescan every Agent. An empty cache MAY start one first-use refresh per application
+  session after the empty cached read has completed. Later refreshes require the explicit Refresh
+  command.
+- Index list, search, and transcript reads MUST run outside the Electron main thread. Refresh
+  parsing MUST yield between records so window navigation and clean shutdown remain responsive
+  during a large first index. Parser upgrades invalidate record versions without clearing the
+  visible last-good cache.
 - The desktop workspace uses one stable list-and-reader surface. Search and the conversation list
   own their scrolling; page chrome and detail actions remain visible. Refresh, copy, open, preview,
   and continue progress belongs to the initiating control, while completion and failure use the
@@ -340,9 +343,9 @@ an archive, or a native-session database migration tool.
   source has no title or exposes a generic placeholder such as `New session - <timestamp>`, the
   first visible request is normalized into a compact task title without invoking a network service.
   Rows give the title the full identity lane; Agent icon/name, workspace, and time share a compact
-  context lane. Message snippets appear only while searching and SHOULD identify the visible text
-  that matched. A snippet identical to the visible title is omitted rather than consuming a
-  duplicate row.
+  context lane. A compact source snippet MAY appear while searching; an exact matching excerpt is
+  optional and MUST NOT require loading full transcripts on the Electron main thread. A snippet
+  identical to the visible title is omitted rather than consuming a duplicate row.
 - Antigravity CLI transcript files are the preferred source for recent full conversations because
   its summary database may update later or omit a newly completed CLI session. Summary database
   rows remain a read-only fallback for older metadata-only history.
@@ -353,17 +356,23 @@ an archive, or a native-session database migration tool.
   honest source state, not an implication that another Agent's records belong to that Agent.
   Metadata-only histories remain useful by displaying their source summary while clearly disabling
   transcript-dependent actions.
-- During background refresh the last-good rows, inferred Agent icons, selection, and detail remain
-  stable. The list region exposes an explicit refreshing state and MUST NOT depend on the current
-  Target discovery array to identify already indexed Agent rows.
+- During explicit or first-use refresh the last-good rows, inferred Agent icons, selection, and
+  detail remain stable behind a region-scoped progress overlay. The overlay blocks only the
+  Conversation workspace, not application navigation, and MUST NOT depend on the current Target
+  discovery array to identify already indexed Agent rows.
 - The detail reader presents one task header followed by a readable transcript. Consecutive
   messages from the same role are grouped without changing message order. Visible Markdown,
   tables, lists, and fenced code MAY be rendered, but raw HTML is never executed, remote images
   are never loaded from history, and external links open only through the validated desktop API.
+- Opening a full conversation initially reads only a bounded tail page so a very long transcript
+  cannot saturate IPC or Markdown rendering. Earlier messages load in explicit bounded pages while
+  preserving chronological order. Copy and Continue remain whole-conversation commands and fetch
+  the complete indexed transcript only after the user invokes them.
 - A stale search or refresh result MUST NOT replace a newer result. Initial cached loading and
-  background source refresh are sequential so the workspace does not flash an empty duplicate
-  load. Destination menus and review dialogs follow the shared keyboard, Escape, outside-click,
-  focus-return, and viewport-containment contracts.
+  first-use source refresh are sequential so the workspace does not flash an empty duplicate load.
+  Search input is debounced, query work is asynchronous, and older pending results cannot replace
+  a newer query. Destination menus and review dialogs follow the shared keyboard, Escape,
+  outside-click, focus-return, and viewport-containment contracts.
 
 Source of truth: the original Agent history. AgentEnv owns only the disposable local index and
 short-lived continuation artifacts.
