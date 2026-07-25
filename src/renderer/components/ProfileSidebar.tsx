@@ -64,21 +64,29 @@ const targetInitials = (target: Pick<TargetDescriptor, "id" | "name">) => {
 };
 
 export const targetIconFor = (
-  target: Pick<TargetDescriptor, "id" | "name" | "iconKey">
+  target: Pick<TargetDescriptor, "id" | "name"> &
+    Partial<Pick<TargetDescriptor, "iconKey">>
 ): { flavor: TargetIconFlavor; assetUrl?: string } => {
-  if (target.iconKey === "opencode") {
+  const iconKey = target.iconKey ?? ({
+    opencode: "opencode",
+    codex: "codex",
+    "claude-code": "claude",
+    antigravity: "antigravity",
+    "trae-cli": "trae"
+  } as Record<string, string>)[target.id];
+  if (iconKey === "opencode") {
     return { flavor: "opencode", assetUrl: openCodeIconUrl };
   }
-  if (target.iconKey === "claude") {
+  if (iconKey === "claude") {
     return { flavor: "claude", assetUrl: claudeIconUrl };
   }
-  if (target.iconKey === "codex") {
+  if (iconKey === "codex") {
     return { flavor: "codex", assetUrl: openAiIconUrl };
   }
-  if (target.iconKey === "antigravity") {
+  if (iconKey === "antigravity") {
     return { flavor: "antigravity", assetUrl: antigravityIconUrl };
   }
-  if (target.iconKey === "trae") {
+  if (iconKey === "trae") {
     return { flavor: "trae", assetUrl: traeIconUrl };
   }
 

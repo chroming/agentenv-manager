@@ -276,6 +276,36 @@ describe("ConversationWorkspace", () => {
     expect(await screen.findByText("Conversation copied")).toBeInTheDocument();
   });
 
+  it("keeps cached Agent identity visible while history refresh is running", async () => {
+    let finishRefresh: (() => void) | undefined;
+    const api = installApi();
+    api.refreshConversations.mockImplementation(() => new Promise((resolve) => {
+      finishRefresh = () => resolve({
+        indexed: 1,
+        unchanged: 0,
+        removed: 0,
+        failures: []
+      });
+    }));
+    const { container } = render(<ConversationWorkspace targets={[]} />);
+    await screen.findByText("Repair release workflow");
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(await screen.findByText("Refreshing history…")).toBeInTheDocument();
+    expect(
+      container.querySelector(".conversation-list-item__agent img")
+    ).not.toBeNull();
+    expect(screen.getByRole("listbox", { name: "" })).toHaveAttribute(
+      "aria-busy",
+      "true"
+    );
+    finishRefresh?.();
+    await waitFor(() =>
+      expect(screen.queryByText("Refreshing history…")).toBeNull()
+    );
+  });
+
   it("does not let an older search response replace a newer query", async () => {
     const api = installApi();
     type ListResult = Awaited<ReturnType<AgentEnvApi["listConversations"]>>;

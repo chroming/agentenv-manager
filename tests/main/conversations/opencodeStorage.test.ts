@@ -57,7 +57,15 @@ describe("OpenCode local conversation storage", () => {
     `);
     database.prepare(
       "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run("session-1", null, "SQLite conversation", "/work/sqlite", 1000, 3000, null);
+    ).run(
+      "session-1",
+      null,
+      "New session - 2026-07-25T05:09:39.092Z",
+      "/work/sqlite",
+      1000,
+      3000,
+      null
+    );
     database.prepare(
       "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?)"
     ).run("child-1", "session-1", "Child agent", "/work/sqlite", 1500, 2500, null);
@@ -91,6 +99,7 @@ describe("OpenCode local conversation storage", () => {
     expect(detail).toMatchObject({
       id: "opencode:session-1",
       sourceId: "session-1",
+      title: "Continue the SQLite-backed task",
       messageCount: 1
     });
     expect(detail.messages[0]).toMatchObject({

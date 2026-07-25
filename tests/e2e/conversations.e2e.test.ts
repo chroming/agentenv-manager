@@ -8,6 +8,7 @@ import {
 } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
+import { DatabaseSync } from "node:sqlite";
 import electronPath from "electron";
 import {
   _electron as electron,
@@ -82,11 +83,100 @@ describe("Conversations desktop workflow", () => {
       })
     ].join("\n") + "\n";
     await writeFile(sourcePath, source, "utf8");
+    const openCodeDataDir = join(home, ".local", "share", "opencode");
+    const openCodeDatabasePath = join(openCodeDataDir, "opencode.db");
+    await mkdir(openCodeDataDir, { recursive: true });
+    const openCodeDatabase = new DatabaseSync(openCodeDatabasePath);
+    openCodeDatabase.exec(`
+      CREATE TABLE session (
+        id TEXT PRIMARY KEY,
+        parent_id TEXT,
+        title TEXT NOT NULL,
+        directory TEXT NOT NULL,
+        time_created INTEGER NOT NULL,
+        time_updated INTEGER NOT NULL,
+        time_archived INTEGER
+      );
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        time_created INTEGER NOT NULL,
+        data TEXT NOT NULL
+      );
+      CREATE TABLE part (
+        id TEXT PRIMARY KEY,
+        message_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        time_created INTEGER NOT NULL,
+        data TEXT NOT NULL
+      );
+      INSERT INTO session VALUES (
+        'opencode-session',
+        NULL,
+        'New session - 2026-07-25T05:09:39.092Z',
+        '/work/release',
+        1784956179000,
+        1784956187000,
+        NULL
+      );
+      INSERT INTO message VALUES (
+        'opencode-user',
+        'opencode-session',
+        1784956179111,
+        '{"role":"user","time":{"created":1784956179111}}'
+      );
+      INSERT INTO part VALUES (
+        'opencode-part',
+        'opencode-user',
+        'opencode-session',
+        1784956179116,
+        '{"type":"text","text":"测试111"}'
+      );
+    `);
+    openCodeDatabase.close();
+    const antigravityId = "8897ec06-6029-441b-a55c-f9283d9198a8";
+    const antigravityDataDir = join(home, ".gemini", "antigravity-cli");
+    const antigravityTranscriptDir = join(
+      antigravityDataDir,
+      "brain",
+      antigravityId,
+      ".system_generated",
+      "logs"
+    );
+    await mkdir(antigravityTranscriptDir, { recursive: true });
+    await mkdir(join(antigravityDataDir, "cache"), { recursive: true });
+    await writeFile(
+      join(antigravityDataDir, "cache", "last_conversations.json"),
+      JSON.stringify({ "/work/release": antigravityId })
+    );
+    const antigravityTranscriptPath = join(
+      antigravityTranscriptDir,
+      "transcript.jsonl"
+    );
+    await writeFile(antigravityTranscriptPath, [
+      JSON.stringify({
+        step_index: 0,
+        source: "USER_EXPLICIT",
+        type: "USER_INPUT",
+        created_at: "2026-07-25T05:10:03Z",
+        content: "<USER_REQUEST>\n测试222\n</USER_REQUEST>"
+      }),
+      JSON.stringify({
+        step_index: 2,
+        source: "MODEL",
+        type: "PLANNER_RESPONSE",
+        created_at: "2026-07-25T05:10:04Z",
+        content: "收到，测试正常。"
+      })
+    ].join("\n"));
+    const openCodeSource = await readFile(openCodeDatabasePath);
+    const antigravitySource = await readFile(antigravityTranscriptPath);
     await executable(join(binDir, "codex"), "exit 0");
     await executable(
       join(binDir, "opencode"),
       'if [[ "$1" == "session" ]]; then print "[]"; fi'
     );
+    await executable(join(binDir, "agy"), "exit 0");
 
     app = await electron.launch({
       executablePath: electronPath as unknown as string,
@@ -114,6 +204,45 @@ describe("Conversations desktop workflow", () => {
       .getByRole("complementary", { name: "Global navigation" })
       .getByRole("button", { name: "Conversations" })
       .click();
+    await page.getByRole("option", { name: /测试111/ }).waitFor({
+      state: "visible",
+      timeout: 15_000
+    });
+    await page.getByRole("option", { name: /测试222/ }).waitFor({
+      state: "visible",
+      timeout: 15_000
+    });
+    expect(await page.locator(".conversation-list-item__agent img").count())
+      .toBeGreaterThanOrEqual(3);
+    await page.getByRole("option", {
+      name: /Repair the desktop release workflow/
+    }).click();
+    const selectedRowGeometry = await page.getByRole("option", {
+      name: /Repair the desktop release workflow/
+    }).evaluate((row) => {
+      const rowBounds = row.getBoundingClientRect();
+      const titleBounds = row
+        .querySelector(".conversation-list-item__title")!
+        .getBoundingClientRect();
+      const agent = row.querySelector(".conversation-list-item__agent")!;
+      const iconBounds = agent
+        .querySelector(".conversation-agent-icon")!
+        .getBoundingClientRect();
+      const agentBounds = agent.getBoundingClientRect();
+      return {
+        titleInset: Math.round(titleBounds.left - rowBounds.left),
+        titleRightInset: Math.round(rowBounds.right - titleBounds.right),
+        agentIconCenterDelta: Math.round(
+          Math.abs(
+            iconBounds.top + iconBounds.height / 2 -
+            (agentBounds.top + agentBounds.height / 2)
+          )
+        )
+      };
+    });
+    expect(selectedRowGeometry.titleInset).toBeLessThanOrEqual(10);
+    expect(selectedRowGeometry.titleRightInset).toBeLessThanOrEqual(10);
+    expect(selectedRowGeometry.agentIconCenterDelta).toBeLessThanOrEqual(1);
     await page.getByText("The release workflow is ready.").waitFor({
       state: "visible",
       timeout: 15_000
@@ -156,6 +285,7 @@ describe("Conversations desktop workflow", () => {
     await expect(page.getByRole("option", {
       name: /Repair the desktop release workflow/
     }).count()).resolves.toBe(1);
+    await expect(page.locator(".conversation-list-item__snippet").count()).resolves.toBe(0);
 
     const preview = await page.evaluate(async () =>
       window.agentEnv.previewConversationContinuation({
@@ -186,5 +316,7 @@ describe("Conversations desktop workflow", () => {
       });
     }
     expect(await readFile(sourcePath, "utf8")).toBe(source);
+    expect(await readFile(openCodeDatabasePath)).toEqual(openCodeSource);
+    expect(await readFile(antigravityTranscriptPath)).toEqual(antigravitySource);
   }, 30_000);
 });

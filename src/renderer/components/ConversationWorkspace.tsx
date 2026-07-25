@@ -443,7 +443,12 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
     () => targets.find((target) => target.id === detail?.agentId),
     [detail?.agentId, targets]
   );
-  const detailIcon = detailTarget ? targetIconFor(detailTarget) : undefined;
+  const detailIcon = detail
+    ? targetIconFor(detailTarget ?? {
+        id: detail.agentId,
+        name: detail.agentName
+      })
+    : undefined;
   const messageGroups = useMemo(
     () => groupMessages(detail?.messages ?? []),
     [detail?.messages]
@@ -642,9 +647,18 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
             </div>
             <div className="conversation-list-meta">
               <span>{t("{{count}} conversations", { count: total })}</span>
-              {refreshing ? <LoaderCircle className="is-spinning" size={14} aria-hidden="true" /> : null}
+              {refreshing ? (
+                <span className="conversation-refresh-status">
+                  <LoaderCircle className="is-spinning" size={13} aria-hidden="true" />
+                  {t("Refreshing history…")}
+                </span>
+              ) : null}
             </div>
-            <div className="conversation-list" role="listbox" aria-busy={loading}>
+            <div
+              className="conversation-list"
+              role="listbox"
+              aria-busy={loading || refreshing}
+            >
               {loading ? (
                 <div className="conversation-empty">
                   <LoaderCircle className="is-spinning" size={19} aria-hidden="true" />
@@ -673,11 +687,22 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                 </div>
               ) : items.map((item, index) => {
                 const target = targets.find((candidate) => candidate.id === item.agentId);
-                const icon = target ? targetIconFor(target) : undefined;
+                const icon = targetIconFor(target ?? {
+                  id: item.agentId,
+                  name: item.agentName
+                });
                 const dateGroup = conversationDateGroup(item.updatedAt);
                 const previousDateGroup = index > 0
                   ? conversationDateGroup(items[index - 1].updatedAt)
                   : undefined;
+                const searchPreview = item.matchSnippet ||
+                  item.snippet ||
+                  t("No preview available");
+                const showSearchPreview = Boolean(
+                  query &&
+                  searchPreview.replace(/\s+/g, " ").trim().toLowerCase() !==
+                    item.title.replace(/\s+/g, " ").trim().toLowerCase()
+                );
                 return (
                   <Fragment key={item.id}>
                     {dateGroup !== previousDateGroup ? (
@@ -689,7 +714,7 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                       className={[
                         "conversation-list-item",
                         selectedId === item.id ? "is-selected" : "",
-                        query ? "has-search-match" : ""
+                        showSearchPreview ? "has-search-preview" : ""
                       ].filter(Boolean).join(" ")}
                       type="button"
                       role="option"
@@ -713,24 +738,29 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                         document.getElementById(`conversation-option-${nextIndex}`)?.focus();
                       }}
                     >
-                      <span className={`conversation-agent-icon conversation-agent-icon--${icon?.flavor ?? "generic"}`} aria-hidden="true">
-                        {icon?.assetUrl
-                          ? <img src={icon.assetUrl} alt="" />
-                          : item.agentName.slice(0, 1)}
-                      </span>
                       <span className="conversation-list-item__copy">
                         <OverflowTooltip
                           className="conversation-list-item__title"
                           text={item.title}
                         />
-                        {query ? (
+                        {showSearchPreview ? (
                           <OverflowTooltip
                             className="conversation-list-item__snippet"
-                            text={item.matchSnippet || item.snippet || t("No preview available")}
+                            text={searchPreview}
                           />
                         ) : null}
                         <small>
-                          <span>{item.agentName}</span>
+                          <span className="conversation-list-item__agent">
+                            <span
+                              className={`conversation-agent-icon conversation-agent-icon--${icon.flavor}`}
+                              aria-hidden="true"
+                            >
+                              {icon.assetUrl
+                                ? <img src={icon.assetUrl} alt="" />
+                                : item.agentName.slice(0, 1)}
+                            </span>
+                            {item.agentName}
+                          </span>
                           {item.workspacePath ? (
                             <>
                               <span aria-hidden="true">·</span>

@@ -45,6 +45,11 @@ export const conversationTaskTitleFrom = (
 export const conversationSnippetFrom = (value: string) =>
   value.replace(/\s+/g, " ").trim().slice(0, 180);
 
+const isGenericConversationTitle = (value: string) =>
+  /^(?:new session(?:\s*[-–—:].*)?|untitled(?: conversation)?)$/i.test(
+    value.replace(/\s+/g, " ").trim()
+  );
+
 const normalizedScaffoldingTag = (tag: string) =>
   tag.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -287,7 +292,10 @@ export const createConversationDetail = (
     }
     return "";
   };
-  const nativeTitle = firstMeaningful(metadata.title, candidate.title);
+  const nativeTitleCandidate = firstMeaningful(metadata.title, candidate.title);
+  const nativeTitle = isGenericConversationTitle(nativeTitleCandidate)
+    ? ""
+    : nativeTitleCandidate;
   const fallbackTitle = firstMeaningful(
     firstUser,
     metadata.snippet,
@@ -295,9 +303,9 @@ export const createConversationDetail = (
     firstAssistant
   );
   const snippetSource = firstMeaningful(
+    firstUser,
     metadata.snippet,
     candidate.snippet,
-    firstUser,
     firstAssistant
   );
   return {

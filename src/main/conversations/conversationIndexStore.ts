@@ -58,7 +58,7 @@ export interface ConversationIndexStore {
   close(): void;
 }
 
-const parserVersionPrefix = "agentenv-parser:3\n";
+const parserVersionPrefix = "agentenv-parser:4\n";
 const encodeSourceVersion = (version: string) => `${parserVersionPrefix}${version}`;
 const decodeSourceVersion = (version: string) =>
   version.startsWith(parserVersionPrefix)

@@ -19,7 +19,7 @@
   background: var(--surface);
   border-radius: var(--radius-surface);
   display: grid;
-  grid-template-columns: clamp(270px, 31%, 340px) minmax(0, 1fr);
+  grid-template-columns: clamp(300px, 34%, 380px) minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -104,6 +104,14 @@
   padding: 0 12px 6px;
 }
 
+.conversation-refresh-status {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
 .conversation-list {
   border-top: 1px solid var(--border);
   min-height: 0;
@@ -118,7 +126,7 @@
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-medium);
   line-height: 18px;
-  padding: 7px 12px 4px;
+  padding: 5px 10px 3px;
   position: sticky;
   top: 0;
   z-index: var(--z-raised);
@@ -135,17 +143,14 @@
 }
 
 .conversation-list-item {
-  align-items: start;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--border);
   color: var(--text);
   cursor: pointer;
-  display: grid;
-  gap: 9px;
-  grid-template-columns: 26px minmax(0, 1fr);
-  min-height: 62px;
-  padding: 9px 10px;
+  display: block;
+  min-height: 52px;
+  padding: 7px 9px;
   text-align: left;
   width: 100%;
 }
@@ -166,7 +171,7 @@
 
 .conversation-list-item__copy {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -209,16 +214,16 @@
   white-space: nowrap;
 }
 
-.conversation-list-item__copy small span:not([aria-hidden="true"]) {
+.conversation-list-item__copy small > span:not([aria-hidden="true"]) {
   flex: 0 1 auto;
-  max-width: 38%;
+  max-width: 42%;
 }
 
-.conversation-list-item.has-search-match {
-  min-height: 78px;
+.conversation-list-item.has-search-preview {
+  min-height: 70px;
 }
 
-.conversation-list-item.has-search-match .conversation-list-item__title {
+.conversation-list-item.has-search-preview .conversation-list-item__title {
   display: block;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -243,6 +248,24 @@
   height: 19px;
   object-fit: contain;
   width: 19px;
+}
+
+.conversation-list-item__copy small .conversation-list-item__agent {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.conversation-list-item__agent .conversation-agent-icon {
+  flex-basis: 16px;
+  font-size: 9px;
+  height: 16px;
+  width: 16px;
+}
+
+.conversation-list-item__agent .conversation-agent-icon img {
+  height: 13px;
+  width: 13px;
 }
 
 .conversation-detail {
@@ -679,7 +702,7 @@
 
 @media (max-width: 1040px) {
   .conversation-layout {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 280px minmax(0, 1fr);
   }
 
   .conversation-detail-header {

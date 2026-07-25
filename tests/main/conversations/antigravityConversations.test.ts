@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -78,5 +78,93 @@ describe("Antigravity conversation adapter", () => {
       snippet: "Inspect the desktop layout",
       messages: []
     });
+  });
+
+  it("prefers a readable CLI transcript over delayed summary metadata", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-transcript-"));
+    const configDir = join(root, ".gemini", "config");
+    const appDataDir = join(root, ".gemini", "antigravity-cli");
+    const conversationId = "8897ec06-6029-441b-a55c-f9283d9198a8";
+    const transcriptDir = join(
+      appDataDir,
+      "brain",
+      conversationId,
+      ".system_generated",
+      "logs"
+    );
+    await mkdir(configDir, { recursive: true });
+    await mkdir(transcriptDir, { recursive: true });
+    await mkdir(join(appDataDir, "cache"), { recursive: true });
+    await writeFile(
+      join(appDataDir, "cache", "last_conversations.json"),
+      JSON.stringify({ "/work/project": conversationId })
+    );
+    await writeFile(join(transcriptDir, "transcript.jsonl"), [
+      JSON.stringify({
+        step_index: 0,
+        source: "USER_EXPLICIT",
+        type: "USER_INPUT",
+        status: "DONE",
+        created_at: "2026-07-25T05:10:03Z",
+        content: [
+          "<USER_REQUEST>",
+          "测试222",
+          "</USER_REQUEST>",
+          "<ADDITIONAL_METADATA>hidden runtime metadata</ADDITIONAL_METADATA>"
+        ].join("\n")
+      }),
+      JSON.stringify({
+        step_index: 2,
+        source: "MODEL",
+        type: "PLANNER_RESPONSE",
+        status: "DONE",
+        created_at: "2026-07-25T05:10:04Z",
+        content: "收到，测试正常。"
+      })
+    ].join("\n"));
+    const targetPaths: TargetPaths = {
+      targetId: "antigravity",
+      configDir,
+      instructionsPath: join(configDir, "GEMINI.md"),
+      configPath: join(configDir, "settings.json")
+    };
+    const capability = createAntigravityConversationCapability();
+    const context = {
+      homeDir: root,
+      targetPaths,
+      executablePath: "/usr/local/bin/agy"
+    };
+
+    const discovery = await capability.discover(context);
+    expect(discovery).toMatchObject({
+      complete: true,
+      candidates: [{
+        recordId: conversationId,
+        workspacePath: "/work/project",
+        detailState: "full"
+      }]
+    });
+    expect(await capability.read(context, discovery.candidates[0])).toMatchObject({
+      title: "测试222",
+      workspacePath: "/work/project",
+      messageCount: 2,
+      messages: [
+        { role: "user", text: "测试222" },
+        { role: "assistant", text: "收到，测试正常。" }
+      ]
+    });
+
+    await writeFile(
+      join(appDataDir, "conversation_summaries.db"),
+      "not a sqlite database"
+    );
+    const degradedDiscovery = await capability.discover(context);
+    expect(degradedDiscovery.complete).toBe(false);
+    expect(degradedDiscovery.candidates).toEqual([
+      expect.objectContaining({
+        recordId: conversationId,
+        detailState: "full"
+      })
+    ]);
   });
 });

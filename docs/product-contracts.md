@@ -337,9 +337,15 @@ an archive, or a native-session database migration tool.
   and continue progress belongs to the initiating control, while completion and failure use the
   same global feedback component as the rest of the application.
 - The list is a task index, not a message feed. Native Agent titles remain authoritative; when a
-  source has no title, the first visible request is normalized into a compact task title without
-  invoking a network service. Rows are grouped by local date and show Agent, workspace, and time.
-  Message snippets appear only while searching and SHOULD identify the visible text that matched.
+  source has no title or exposes a generic placeholder such as `New session - <timestamp>`, the
+  first visible request is normalized into a compact task title without invoking a network service.
+  Rows give the title the full identity lane; Agent icon/name, workspace, and time share a compact
+  context lane. Message snippets appear only while searching and SHOULD identify the visible text
+  that matched. A snippet identical to the visible title is omitted rather than consuming a
+  duplicate row.
+- Antigravity CLI transcript files are the preferred source for recent full conversations because
+  its summary database may update later or omit a newly completed CLI session. Summary database
+  rows remain a read-only fallback for older metadata-only history.
 - Agent and workspace filters are index queries, not renderer-only hiding. Changing search or a
   filter invalidates older pending list requests, preserves selection only when the selected task
   remains in the result, and never mutates source history.
@@ -347,6 +353,9 @@ an archive, or a native-session database migration tool.
   honest source state, not an implication that another Agent's records belong to that Agent.
   Metadata-only histories remain useful by displaying their source summary while clearly disabling
   transcript-dependent actions.
+- During background refresh the last-good rows, inferred Agent icons, selection, and detail remain
+  stable. The list region exposes an explicit refreshing state and MUST NOT depend on the current
+  Target discovery array to identify already indexed Agent rows.
 - The detail reader presents one task header followed by a readable transcript. Consecutive
   messages from the same role are grouped without changing message order. Visible Markdown,
   tables, lists, and fenced code MAY be rendered, but raw HTML is never executed, remote images
