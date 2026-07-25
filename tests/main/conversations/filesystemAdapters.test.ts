@@ -35,6 +35,11 @@ const contextFor = (configDir: string): AgentConversationContext => ({
 const dirnameForConfig = (configDir: string) => join(configDir, "..");
 
 describe("filesystem conversation adapters", () => {
+  it("uses reviewed clipboard continuation without a verified native context import", () => {
+    expect(createCodexConversationCapability().continueWithContext).toBeUndefined();
+    expect(createClaudeConversationCapability().continueWithContext).toBeUndefined();
+  });
+
   it("keeps large Claude transcripts and excludes subagent logs from top-level history", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-claude-history-"));
     const configDir = join(root, ".claude");

@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type {
   ConversationDetail,
   ConversationMessage
@@ -170,18 +170,6 @@ export const createCodexConversationCapability = (): AgentConversationCapability
         ...(candidate.source.runtimeHome
           ? { env: { CODEX_HOME: candidate.source.runtimeHome } }
           : {})
-      }
-    : undefined,
-  continueWithContext: ({ executablePath, conversation, contextFilePath }) => executablePath
-    ? {
-        executablePath,
-        args: [
-          ...(conversation.workspacePath ? ["-C", conversation.workspacePath] : []),
-          "--add-dir",
-          dirname(contextFilePath),
-          `Read the continuation context at ${contextFilePath}, then continue the user's work.`
-        ],
-        cwd: conversation.workspacePath
       }
     : undefined
 });

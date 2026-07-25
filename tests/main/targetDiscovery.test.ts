@@ -205,6 +205,12 @@ describe("target discovery", () => {
     expect(claude?.health.status).toBe("ready");
     expect(claude?.health.executablePath).toBe(executable);
     expect(claude?.health.canWrite).toBe(true);
+    expect(claude?.conversationCapabilities.continue).toMatchObject({
+      state: "degraded",
+      evidence: expect.arrayContaining([
+        "Continuation uses reviewed clipboard context"
+      ])
+    });
     expect(claude?.health.checks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -232,6 +238,12 @@ describe("target discovery", () => {
     expect(codex?.health.status).toBe("ready");
     expect(codex?.health.executableFound).toBe(true);
     expect(codex?.health.canWrite).toBe(true);
+    expect(codex?.conversationCapabilities.continue).toMatchObject({
+      state: "degraded",
+      evidence: expect.arrayContaining([
+        "Continuation uses reviewed clipboard context"
+      ])
+    });
   });
 
   it("marks desktop-capable Agents ready without a command in PATH", async () => {

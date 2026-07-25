@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type {
   ConversationDetail,
   ConversationMessage
@@ -171,17 +171,6 @@ export const createClaudeConversationCapability = (): AgentConversationCapabilit
             candidate.recordId
         ],
         cwd: candidate.workspacePath
-      }
-    : undefined,
-  continueWithContext: ({ executablePath, conversation, contextFilePath }) => executablePath
-    ? {
-        executablePath,
-        args: [
-          "--add-dir",
-          dirname(contextFilePath),
-          `Read the continuation context at ${contextFilePath}, then continue the user's work.`
-        ],
-        cwd: conversation.workspacePath
       }
     : undefined
 });

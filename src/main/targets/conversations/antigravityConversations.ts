@@ -210,17 +210,5 @@ export const createAntigravityConversationCapability = (): AgentConversationCapa
         ],
         cwd: candidate.workspacePath
       }
-    : undefined,
-  continueWithContext: ({ executablePath, conversation, contextFilePath }) => executablePath
-    ? {
-        executablePath,
-        args: [
-          "--add-dir",
-          dirname(contextFilePath),
-          "--prompt-interactive",
-          `Read the continuation context at ${contextFilePath}, then continue the user's work.`
-        ],
-        cwd: conversation.workspacePath
-      }
     : undefined
 });

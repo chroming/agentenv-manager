@@ -14,6 +14,12 @@ afterEach(async () => {
 });
 
 describe("Antigravity conversation adapter", () => {
+  it("uses reviewed clipboard continuation without a verified native context import", () => {
+    expect(
+      createAntigravityConversationCapability().continueWithContext
+    ).toBeUndefined();
+  });
+
   it("opens the summaries database read-only and reports metadata-only history", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-antigravity-history-"));
     const configDir = join(root, ".gemini", "config");

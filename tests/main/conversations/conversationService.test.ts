@@ -484,6 +484,78 @@ describe("conversation service", () => {
     service.dispose();
   });
 
+  it("copies context instead of asking Codex to read a handoff path", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-codex-fallback-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home"),
+      conversationIndexPath: join(root, "cache", "conversations.sqlite"),
+      conversationHandoffDir: join(root, "cache", "handoffs")
+    });
+    const candidate = sourceCandidate(join(root, "history.jsonl"));
+    const opencode = {
+      ...createOpenCodeTargetAdapter(),
+      conversations: {
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate], complete: true }),
+        read: async () => ({
+          ...sourceDetail(),
+          id: "opencode:session-1",
+          agentId: "opencode",
+          agentName: "OpenCode"
+        })
+      }
+    };
+    const codex = createCodexTargetAdapter();
+    const clipboard = { writeText: vi.fn() };
+    const launched: ConversationLaunchSpec[] = [];
+    const service = await createConversationService({
+      paths,
+      targetRegistry: createTargetRegistry([codex, opencode]),
+      targetDiscoveryService: {
+        listTargets: async () => [
+          makeTarget(codex, paths.homeDir),
+          makeTarget(opencode, paths.homeDir)
+        ]
+      },
+      settingsStore,
+      clipboard,
+      launcher: { launch: async (spec) => { launched.push(spec); } }
+    });
+    await service.refresh();
+
+    const preview = await service.previewContinuation({
+      conversationId: "opencode:session-1",
+      targetId: "codex"
+    });
+    expect(preview).toMatchObject({
+      mode: "clipboard",
+      requiresReview: true,
+      warnings: ["Codex cannot receive context automatically; paste will be required"]
+    });
+
+    const result = await service.continue(preview.previewId);
+
+    expect(result).toEqual({
+      mode: "clipboard",
+      message: "Opened Codex; paste the copied context to continue"
+    });
+    expect(clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining("I found the failing step.")
+    );
+    expect(launched).toEqual([
+      expect.objectContaining({
+        executablePath: "/usr/local/bin/codex",
+        args: []
+      })
+    ]);
+    await expect(readFile(join(
+      paths.conversationHandoffDir,
+      `${preview.previewId}.md`
+    ), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    service.dispose();
+  });
+
   it("removes private context when the target cannot be launched", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-conversation-launch-failure-"));
     const paths = createPaths({
