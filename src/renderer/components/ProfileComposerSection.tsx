@@ -63,7 +63,11 @@ export const ProfileComposerSection = ({
 
   return (
     <section
-      className={`profile-composer-section${expanded ? " is-expanded" : ""}`}
+      className={[
+        "profile-composer-section",
+        expanded ? "is-expanded" : "",
+        policy === "leave-unchanged" ? "is-keep-agent" : ""
+      ].filter(Boolean).join(" ")}
       data-profile-composer-id={id}
     >
       <div className="profile-composer-section__header">

@@ -129,7 +129,11 @@ export const ProfileResourcePolicyMenu = ({
     <>
       <button
         ref={triggerRef}
-        className={`profile-resource-policy__trigger${open ? " is-open" : ""}`}
+        className={[
+          "profile-resource-policy__trigger",
+          open ? "is-open" : "",
+          value === "leave-unchanged" ? "is-keep-agent" : ""
+        ].filter(Boolean).join(" ")}
         type="button"
         aria-controls={open ? menuId : undefined}
         aria-expanded={open}

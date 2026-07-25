@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-25T16:02:46.643Z",
+  "generatedAt": "2026-07-25T16:29:37.447Z",
   "source": {
-    "commit": "347b02bebc6e6e1b228537086199a871b029f37c",
+    "commit": "38aa65d81c14377b5f2968de10cb2c72e43cc601",
     "dirty": true,
-    "fingerprint": "8d138dadc8a9541bd67f47bf76f27d9d20dee7366c9bacfc573b77cb8043262e",
+    "fingerprint": "e8035e7580a685ba8db9dd241fb10621bb386933a70b29fe50b2c446ec5a7baa",
     "files": 427
   },
   "tests": {
@@ -23,7 +23,7 @@
   },
   "captures": {
     "directory": "/var/folders/c4/vw8cxnvd7rv46sv4kq0lkg0h0000gn/T/agentenv-ui-captures/verification",
-    "files": 86,
+    "files": 87,
     "viewports": [
       "1180x728",
       "920x620"

@@ -221,6 +221,8 @@ describe("ProfileComposerSection", () => {
       name: "Skills application policy for OpenCode"
     });
     expect(policy).toHaveTextContent("Keep Agent");
+    expect(policy).toHaveClass("is-keep-agent");
+    expect(policy.closest(".profile-composer-section")).toHaveClass("is-keep-agent");
     const count = document.querySelector(".profile-composer-section__count");
     expect(count).toHaveAttribute("title", "2 of 3 enabled");
     expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("2/3");

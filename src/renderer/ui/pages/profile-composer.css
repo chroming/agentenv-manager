@@ -42,6 +42,19 @@
   opacity: 1;
 }
 
+.profile-resource-policy__trigger.is-keep-agent {
+  background: #f1f3f6;
+  border-color: #d9dee7;
+  color: var(--muted-strong);
+}
+
+.profile-resource-policy__trigger.is-keep-agent:hover:not(:disabled),
+.profile-resource-policy__trigger.is-keep-agent.is-open {
+  background: #e9ecf1;
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+
 .profile-resource-policy__menu.ui-action-menu {
   position: fixed;
 }
@@ -110,6 +123,51 @@
 .profile-composer-section.is-expanded > .profile-composer-section__header
   .profile-composer-section__chevron {
   color: #356fca;
+}
+
+.profile-composer-section.is-keep-agent > .profile-composer-section__header,
+.profile-composer-section.is-keep-agent.is-expanded > .profile-composer-section__header {
+  background: #f5f6f8;
+  box-shadow: inset 2px 0 0 #c8ced8;
+}
+
+.profile-composer-section.is-keep-agent
+  > .profile-composer-section__header
+  .profile-composer-section__trigger:hover {
+  background: #eef0f3;
+}
+
+.profile-composer-section.is-keep-agent
+  > .profile-composer-section__header
+  .profile-composer-section__icon,
+.profile-composer-section.is-keep-agent
+  > .profile-composer-section__header
+  .profile-composer-section__chevron,
+.profile-composer-section.is-keep-agent
+  > .profile-composer-section__header
+  .profile-composer-section__title,
+.profile-composer-section.is-keep-agent
+  > .profile-composer-section__header
+  .profile-composer-section__count-visual strong {
+  color: #7d8797;
+}
+
+.profile-composer-section.is-keep-agent
+  > .profile-composer-section__header
+  .profile-composer-section__description,
+.profile-composer-section.is-keep-agent
+  > .profile-composer-section__header
+  .profile-composer-section__count,
+.profile-composer-section.is-keep-agent
+  > .profile-composer-section__header
+  .profile-composer-section__summary {
+  color: #9199a6;
+}
+
+.profile-composer-section.is-keep-agent
+  > .profile-composer-section__header
+  .profile-composer-section__summary {
+  opacity: 0.68;
 }
 
 .profile-loading-surface {

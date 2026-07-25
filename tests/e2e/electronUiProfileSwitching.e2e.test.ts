@@ -4170,6 +4170,24 @@ describe("Electron UI profile switching e2e", () => {
     expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
     expect(await composer.getByText("Keep Agent", { exact: true }).count()).toBe(3);
+    const keptSectionSurface = await instructionsSection.evaluate((section) => {
+      const header = section.querySelector<HTMLElement>(".profile-composer-section__header");
+      const title = section.querySelector<HTMLElement>(".profile-composer-section__title");
+      const policy = section.querySelector<HTMLElement>(".profile-resource-policy__trigger");
+      if (!header || !title || !policy) throw new Error("Profile resource row is incomplete");
+      return {
+        sectionClass: section.className,
+        headerBackground: getComputedStyle(header).backgroundColor,
+        titleColor: getComputedStyle(title).color,
+        policyOpacity: getComputedStyle(policy).opacity,
+        policyDisabled: policy.matches(":disabled")
+      };
+    });
+    expect(keptSectionSurface.sectionClass).toContain("is-keep-agent");
+    expect(keptSectionSurface.headerBackground).toBe("rgb(245, 246, 248)");
+    expect(keptSectionSurface.titleColor).toBe("rgb(125, 135, 151)");
+    expect(keptSectionSurface.policyOpacity).toBe("1");
+    expect(keptSectionSurface.policyDisabled).toBe(false);
 
     await saveProfile(page);
     const resources = await readJson<{

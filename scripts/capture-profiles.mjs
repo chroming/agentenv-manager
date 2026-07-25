@@ -902,6 +902,27 @@ try {
   });
   await page.keyboard.press("Escape");
   await skillsPolicyMenu.waitFor({ state: "hidden" });
+  await skillsPolicy.click();
+  await page
+    .getByRole("menu", { name: "Skills application policy for OpenCode" })
+    .getByRole("menuitemradio", { name: /^Keep Agent/ })
+    .click();
+  await capturePage(page, join(outputDir, "profile-policy-keep-agent-920x620.png"));
+  await skillsPolicy.click();
+  await page
+    .getByRole("menu", { name: "Skills application policy for OpenCode" })
+    .getByRole("menuitemradio", { name: /^Use Profile/ })
+    .click();
+  const policySaveButton = page.getByRole("button", { name: "Save", exact: true });
+  if (await policySaveButton.isEnabled()) {
+    await policySaveButton.click();
+    await page.waitForFunction(() => {
+      const save = [...document.querySelectorAll("button")].find(
+        (button) => button.textContent?.trim() === "Save"
+      );
+      return save instanceof HTMLButtonElement && save.disabled;
+    });
+  }
   for (const sectionName of ["Instructions", "Skills", "MCPs"]) {
     await page
       .locator(`[data-profile-composer-id="${sectionName === "MCPs" ? "mcp" : sectionName.toLowerCase()}"]`)
