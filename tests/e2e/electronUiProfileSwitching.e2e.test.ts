@@ -734,6 +734,23 @@ const expandComposerSection = async (page: Page, name: ComposerSectionName) => {
   await expect.poll(() => trigger.getAttribute("aria-expanded")).toBe("true");
 };
 
+type ComposerResourceName = "Instructions" | "Skills" | "MCPs";
+type ComposerPolicyName = "Apply Profile" | "Leave unchanged";
+
+const setComposerResourcePolicy = async (
+  page: Page,
+  resource: ComposerResourceName,
+  target: string,
+  policy: ComposerPolicyName
+) => {
+  const label = `${resource} application policy for ${target}`;
+  const trigger = page.getByRole("button", { name: label });
+  await trigger.click();
+  const menu = page.getByRole("menu", { name: label });
+  await menu.getByRole("menuitemradio", { name: new RegExp(`^${policy}`) }).click();
+  await menu.waitFor({ state: "hidden" });
+};
+
 const openSkillLibrary = async (page: Page) => {
   await page
     .getByRole("complementary", { name: "Global navigation" })
@@ -4075,9 +4092,9 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, sharedDocsControl);
     expect(
       await page
-        .getByRole("switch", { name: "Manage MCPs for OpenCode" })
-        .getAttribute("aria-checked")
-    ).toBe("true");
+        .getByRole("button", { name: "MCPs application policy for OpenCode" })
+        .textContent()
+    ).toContain("Apply Profile");
     expect(await editor.getByRole("button", { name: /Add|Remove|Delete/ }).count()).toBe(0);
     expect(await page.getByLabel("ui-alpha-mcp Profile behavior").inputValue()).toBe("on");
     expect(await page.getByLabel("ui-beta-mcp Profile behavior").inputValue()).toBe("off");
@@ -4088,38 +4105,48 @@ describe("Electron UI profile switching e2e", () => {
       .toBe("Use Agent setting");
   }, 30_000);
 
-  it("keeps resource management on the Composer rows and persists it per Agent", async () => {
+  it("keeps Target application policies on Composer rows and persists them per Agent", async () => {
     const { appDataRoot, page } = await launchApp();
+    await resizeAppWindow(page, 920, 620);
     await selectProfile(page, "UI OpenCode alpha");
 
     const composer = page.getByRole("region", { name: "Profile composer" });
     const instructionsRow = composer.getByRole("button", { name: "Instructions", exact: true });
     const skillsRow = composer.getByRole("button", { name: "Skills", exact: true });
     const mcpRow = composer.getByRole("button", { name: "MCPs", exact: true });
-    const instructionsSwitch = composer.getByRole("switch", {
-      name: "Manage Instructions for OpenCode"
+    const instructionsPolicy = composer.getByRole("button", {
+      name: "Instructions application policy for OpenCode"
     });
-    const skillsSwitch = composer.getByRole("switch", {
-      name: "Manage Skills for OpenCode"
+    const skillsPolicy = composer.getByRole("button", {
+      name: "Skills application policy for OpenCode"
     });
-    const mcpSwitch = composer.getByRole("switch", { name: "Manage MCPs for OpenCode" });
+    const mcpPolicy = composer.getByRole("button", {
+      name: "MCPs application policy for OpenCode"
+    });
 
-    expect(await instructionsSwitch.getAttribute("aria-checked")).toBe("true");
-    expect(await skillsSwitch.getAttribute("aria-checked")).toBe("true");
-    expect(await mcpSwitch.getAttribute("aria-checked")).toBe("true");
+    expect(await instructionsPolicy.textContent()).toContain("Apply Profile");
+    expect(await skillsPolicy.textContent()).toContain("Apply Profile");
+    expect(await mcpPolicy.textContent()).toContain("Apply Profile");
+    const policyContext = composer.getByText("When applied to OpenCode", { exact: true });
+    expect(await policyContext.count()).toBe(1);
+    const contextGeometry = await policyContext.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth
+    }));
+    expect(contextGeometry.scrollWidth).toBeLessThanOrEqual(contextGeometry.clientWidth);
     expect(await instructionsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
     expect(await skillsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
     expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
 
-    await instructionsSwitch.click();
-    await skillsSwitch.click();
-    await mcpSwitch.click();
+    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Leave unchanged");
+    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Leave unchanged");
+    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Leave unchanged");
 
     expect(await instructionsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await skillsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
-    expect(await composer.getByText("Manage", { exact: true }).count()).toBe(3);
+    expect(await composer.getByText("Leave unchanged", { exact: true }).count()).toBe(3);
 
     await saveProfile(page);
     const resources = await readJson<{
@@ -4153,7 +4180,15 @@ describe("Electron UI profile switching e2e", () => {
 
     await expandComposerSection(page, "MCPs");
     expect(
-      await composer.getByRole("switch", { name: "Manage MCPs for OpenCode" }).count()
+      await composer.getByRole("button", {
+        name: "MCPs application policy for OpenCode"
+      }).count()
+    ).toBe(1);
+    expect(
+      await composer.getByText(
+        "Saved in this Profile. Applying to OpenCode leaves this section unchanged.",
+        { exact: true }
+      ).count()
     ).toBe(1);
     expect(await page.getByLabel("shared-docs Profile behavior").count()).toBe(0);
   }, 30_000);
@@ -5589,13 +5624,13 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "MCPs");
     const editor = page.locator(".profile-mcp-editor");
     await editor.waitFor({ state: "visible" });
-    const managementSwitch = page.getByRole("switch", {
-      name: "Manage MCPs for Claude Code"
+    const policyButton = page.getByRole("button", {
+      name: "MCPs application policy for Claude Code"
     });
-    expect(await managementSwitch.isDisabled()).toBe(true);
-    expect(await managementSwitch.textContent()).toContain("Agent controlled");
-    const managementGeometry = await managementSwitch.evaluate((element) => {
-      const label = element.querySelector<HTMLElement>(".ui-switch__label");
+    expect(await policyButton.isDisabled()).toBe(true);
+    expect(await policyButton.textContent()).toContain("Agent controlled");
+    const policyGeometry = await policyButton.evaluate((element) => {
+      const label = element.querySelector<HTMLElement>("span");
       const control = element.getBoundingClientRect();
       const labelRect = label?.getBoundingClientRect();
       return {
@@ -5605,8 +5640,8 @@ describe("Electron UI profile switching e2e", () => {
         clientWidth: element.clientWidth
       };
     });
-    expect(managementGeometry.scrollWidth).toBeLessThanOrEqual(managementGeometry.clientWidth);
-    expect(managementGeometry.labelRight).toBeLessThanOrEqual(managementGeometry.controlRight + 0.5);
+    expect(policyGeometry.scrollWidth).toBeLessThanOrEqual(policyGeometry.clientWidth);
+    expect(policyGeometry.labelRight).toBeLessThanOrEqual(policyGeometry.controlRight + 0.5);
     expect(await editor.locator("select").count()).toBe(0);
 
     await previewAndApply(page, "Claude Code");

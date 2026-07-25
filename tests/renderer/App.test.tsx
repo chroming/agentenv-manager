@@ -923,8 +923,11 @@ describe("App", () => {
     fireEvent.click(within(composer).getByRole("button", { name: "Instructions" }));
     expect(screen.getByLabelText("AGENTS.md")).toHaveValue("# Agent\n");
     fireEvent.click(within(composer).getByRole("button", { name: "MCPs" }));
-    expect(within(composer).getByRole("switch", { name: "Manage MCPs for OpenCode" }))
-      .toHaveTextContent("Manage");
+    expect(
+      within(composer).getByRole("button", {
+        name: "MCPs application policy for OpenCode"
+      })
+    ).toHaveTextContent("Leave unchanged");
     expect(screen.getByText("0 in OpenCode")).toBeInTheDocument();
   });
 
@@ -1712,7 +1715,14 @@ describe("App", () => {
         screen.getByRole("region", { name: "Profile composer" })
       ).getByRole("button", { name: "MCPs" })
     );
-    fireEvent.click(await screen.findByRole("switch", { name: "Manage MCPs for OpenCode" }));
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "MCPs application policy for OpenCode"
+      })
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitemradio", { name: /Apply Profile/ })
+    );
     const behavior = await screen.findByLabelText("context7 Profile behavior");
     expect(behavior).toHaveValue("agent");
     expect(within(behavior).getByRole("option", { name: "Use Agent setting" })).toBeInTheDocument();

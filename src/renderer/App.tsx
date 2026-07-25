@@ -4396,6 +4396,13 @@ const AppContent = ({
                       className="profile-composer"
                       aria-label={t("Profile composer")}
                     >
+                      <div className="profile-composer__policy-context">
+                        <span>
+                          {t("When applied to {{name}}", {
+                            name: activeTargetName
+                          })}
+                        </span>
+                      </div>
                       <ProfileComposerSection
                         id="instructions"
                         icon={<BookOpenText size={18} strokeWidth={2.2} />}
@@ -4411,23 +4418,27 @@ const AppContent = ({
                               ]
                             : []
                         }
-                        managed={Boolean(
+                        policy={Boolean(
                           profileTarget?.capabilities.instructions &&
                           resourceSummary?.instructions.managed
-                        )}
-                        managementDisabled={!profileTarget?.capabilities.instructions}
-                        managementLabel={t("Manage Instructions for {{name}}", {
+                        ) ? "apply-profile" : "leave-unchanged"}
+                        policyDisabled={!profileTarget?.capabilities.instructions}
+                        policyLabel={t("Instructions application policy for {{name}}", {
                           name: activeTargetName
                         })}
-                        managementStatus={
+                        policyStatus={
                           profileTarget?.capabilities.instructions
                             ? undefined
                             : t("Agent controlled")
                         }
+                        targetName={activeTargetName}
                         expanded={activeComposerSection === "instructions"}
                         onToggle={() => toggleComposerSection("instructions")}
-                        onManagementChange={(managed) =>
-                          updateSelectedResourceManagement("instructions", managed)
+                        onPolicyChange={(policy) =>
+                          updateSelectedResourceManagement(
+                            "instructions",
+                            policy === "apply-profile"
+                          )
                         }
                       >
                         <AgentsEditor
@@ -4452,22 +4463,26 @@ const AppContent = ({
                         count={resourceSummary?.skills.total ?? 0}
                         enabledCount={resourceSummary?.skills.count ?? 0}
                         chipNames={resourceSummary?.skills.names ?? []}
-                        managed={Boolean(
+                        policy={Boolean(
                           profileTarget?.capabilities.skills && resourceSummary?.skills.managed
-                        )}
-                        managementDisabled={!profileTarget?.capabilities.skills}
-                        managementLabel={t("Manage Skills for {{name}}", {
+                        ) ? "apply-profile" : "leave-unchanged"}
+                        policyDisabled={!profileTarget?.capabilities.skills}
+                        policyLabel={t("Skills application policy for {{name}}", {
                           name: activeTargetName
                         })}
-                        managementStatus={
+                        policyStatus={
                           profileTarget?.capabilities.skills
                             ? undefined
                             : t("Agent controlled")
                         }
+                        targetName={activeTargetName}
                         expanded={activeComposerSection === "skills"}
                         onToggle={() => toggleComposerSection("skills")}
-                        onManagementChange={(managed) =>
-                          updateSelectedResourceManagement("skills", managed)
+                        onPolicyChange={(policy) =>
+                          updateSelectedResourceManagement(
+                            "skills",
+                            policy === "apply-profile"
+                          )
                         }
                       >
                         <SkillsEditor
@@ -4507,22 +4522,26 @@ const AppContent = ({
                         count={resourceSummary?.mcp.total ?? 0}
                         enabledCount={resourceSummary?.mcp.count ?? 0}
                         chipNames={resourceSummary?.mcp.names ?? []}
-                        managed={Boolean(
+                        policy={Boolean(
                           profileTarget?.capabilities.mcpActivation && resourceSummary?.mcp.managed
-                        )}
-                        managementDisabled={!profileTarget?.capabilities.mcpActivation}
-                        managementLabel={t("Manage MCPs for {{name}}", {
+                        ) ? "apply-profile" : "leave-unchanged"}
+                        policyDisabled={!profileTarget?.capabilities.mcpActivation}
+                        policyLabel={t("MCPs application policy for {{name}}", {
                           name: activeTargetName
                         })}
-                        managementStatus={
+                        policyStatus={
                           profileTarget?.capabilities.mcpActivation
                             ? undefined
                             : t("Agent controlled")
                         }
+                        targetName={activeTargetName}
                         expanded={activeComposerSection === "mcp"}
                         onToggle={() => toggleComposerSection("mcp")}
-                        onManagementChange={(managed) =>
-                          updateSelectedResourceManagement("mcp", managed)
+                        onPolicyChange={(policy) =>
+                          updateSelectedResourceManagement(
+                            "mcp",
+                            policy === "apply-profile"
+                          )
                         }
                       >
                         <ProfileMcpEditor

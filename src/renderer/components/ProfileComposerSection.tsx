@@ -2,7 +2,10 @@ import { ChevronDown } from "lucide-react";
 import { Fragment, useId, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Switch } from "./ui";
+import {
+  ProfileResourcePolicyMenu,
+  type ProfileResourcePolicy
+} from "./ProfileResourcePolicyMenu";
 
 export interface ProfileComposerSectionProps {
   id: string;
@@ -12,13 +15,14 @@ export interface ProfileComposerSectionProps {
   count: number;
   enabledCount: number;
   chipNames: string[];
-  managed: boolean;
-  managementDisabled?: boolean;
-  managementLabel: string;
-  managementStatus?: string;
+  policy: ProfileResourcePolicy;
+  policyDisabled?: boolean;
+  policyLabel: string;
+  policyStatus?: string;
+  targetName: string;
   expanded: boolean;
   onToggle(): void;
-  onManagementChange(managed: boolean): void;
+  onPolicyChange(policy: ProfileResourcePolicy): void;
   children: ReactNode;
 }
 
@@ -30,13 +34,14 @@ export const ProfileComposerSection = ({
   count,
   enabledCount,
   chipNames,
-  managed,
-  managementDisabled = false,
-  managementLabel,
-  managementStatus,
+  policy,
+  policyDisabled = false,
+  policyLabel,
+  policyStatus,
+  targetName,
   expanded,
   onToggle,
-  onManagementChange,
+  onPolicyChange,
   children
 }: ProfileComposerSectionProps) => {
   const { t } = useI18n();
@@ -125,15 +130,15 @@ export const ProfileComposerSection = ({
             ) : null}
           </span>
         </button>
-        <Switch
-          checked={managed}
-          className="profile-composer-section__management"
-          disabled={managementDisabled}
-          label={managementLabel}
-          onClick={() => onManagementChange(!managed)}
-        >
-          {managementStatus ?? t("Manage")}
-        </Switch>
+        <ProfileResourcePolicyMenu
+          disabled={policyDisabled}
+          label={policyLabel}
+          resourceName={title}
+          status={policyStatus}
+          targetName={targetName}
+          value={policy}
+          onChange={onPolicyChange}
+        />
         <button
           className="profile-composer-section__disclosure"
           type="button"
@@ -157,6 +162,14 @@ export const ProfileComposerSection = ({
           role="region"
           aria-labelledby={triggerId}
         >
+          {!policyDisabled && policy === "leave-unchanged" ? (
+            <p className="profile-composer-section__policy-note">
+              {t(
+                "Saved in this Profile. Applying to {{name}} leaves this section unchanged.",
+                { name: targetName }
+              )}
+            </p>
+          ) : null}
           {children}
         </div>
       ) : null}

@@ -802,37 +802,6 @@
   min-height: var(--profile-composer-row-height);
 }
 
-.profile-composer-section__management {
-  box-sizing: border-box;
-  display: grid;
-  gap: 9px;
-  grid-template-columns: 34px minmax(0, 92px);
-  justify-content: start;
-  min-width: 140px;
-  padding-inline: 0;
-  width: 140px;
-}
-
-.profile-composer-section__management .ui-switch__label {
-  overflow: visible;
-  white-space: nowrap;
-}
-
-.profile-composer-section__management .ui-switch__track {
-  box-sizing: border-box;
-  height: 20px;
-  width: 34px;
-}
-
-.profile-composer-section__management .ui-switch__thumb {
-  height: 14px;
-  width: 14px;
-}
-
-.profile-composer-section__management.is-on .ui-switch__thumb {
-  transform: translateX(14px);
-}
-
 .profile-composer-section.is-expanded > .profile-composer-section__panel {
   background: var(--profile-expanded-surface);
   border-top-color: var(--profile-expanded-border);
@@ -1359,11 +1328,6 @@
     grid-template-columns: 32px minmax(0, 1fr) 54px;
     min-height: 52px;
     padding-block: 6px;
-  }
-
-  .profile-composer-section__management {
-    min-width: 132px;
-    width: 132px;
   }
 
   .profile-composer-section__icon {

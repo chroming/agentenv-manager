@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within
+} from "@testing-library/react";
 import { BookOpen } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProfileComposerSection } from "../../src/renderer/components/ProfileComposerSection";
@@ -22,17 +29,18 @@ describe("ProfileComposerSection", () => {
         count={2}
         enabledCount={1}
         chipNames={["Reviewer", "Planner"]}
-        managed
-        managementLabel="Manage Skills for OpenCode"
+        policy="apply-profile"
+        policyLabel="Skills application policy for OpenCode"
+        targetName="OpenCode"
         expanded
         onToggle={onToggle}
-        onManagementChange={() => undefined}
+        onPolicyChange={() => undefined}
       >
         <button type="button">Edit skills</button>
       </ProfileComposerSection>
     );
 
-    const trigger = screen.getByRole("button", { name: /^Skills\b/i });
+    const trigger = screen.getByRole("button", { name: /^Skills$/ });
     const panel = screen.getByRole("region");
     const panelId = trigger.getAttribute("aria-controls");
 
@@ -60,11 +68,12 @@ describe("ProfileComposerSection", () => {
         count={6}
         enabledCount={4}
         chipNames={["Context7", "Filesystem", "Context7", "GitHub", "Figma", "Slack"]}
-        managed={false}
-        managementLabel="Manage MCPs for OpenCode"
+        policy="leave-unchanged"
+        policyLabel="MCPs application policy for OpenCode"
+        targetName="OpenCode"
         expanded={false}
         onToggle={() => undefined}
-        onManagementChange={() => undefined}
+        onPolicyChange={() => undefined}
       >
         <div>Server editor</div>
       </ProfileComposerSection>
@@ -98,11 +107,12 @@ describe("ProfileComposerSection", () => {
           count={1}
           enabledCount={1}
           chipNames={["Reviewer"]}
-          managed
-          managementLabel="Manage Skills for OpenCode"
+          policy="apply-profile"
+          policyLabel="Skills application policy for OpenCode"
+          targetName="OpenCode"
           expanded
           onToggle={() => undefined}
-          onManagementChange={() => undefined}
+          onPolicyChange={() => undefined}
         >
           <div>Skills panel</div>
         </ProfileComposerSection>
@@ -114,11 +124,12 @@ describe("ProfileComposerSection", () => {
           count={1}
           enabledCount={0}
           chipNames={["Context7"]}
-          managed
-          managementLabel="Manage MCPs for OpenCode"
+          policy="apply-profile"
+          policyLabel="MCPs application policy for OpenCode"
+          targetName="OpenCode"
           expanded
           onToggle={() => undefined}
-          onManagementChange={() => undefined}
+          onPolicyChange={() => undefined}
         >
           <div>MCP panel</div>
         </ProfileComposerSection>
@@ -159,11 +170,12 @@ describe("ProfileComposerSection", () => {
         count={1}
         enabledCount={1}
         chipNames={["AGENTS.md"]}
-        managed
-        managementLabel="Manage Instructions for OpenCode"
+        policy="apply-profile"
+        policyLabel="Instructions application policy for OpenCode"
+        targetName="OpenCode"
         expanded={false}
         onToggle={() => undefined}
-        onManagementChange={() => undefined}
+        onPolicyChange={() => undefined}
       >
         <textarea aria-label="Instructions editor" />
       </ProfileComposerSection>
@@ -182,9 +194,9 @@ describe("ProfileComposerSection", () => {
     ).toBeNull();
   });
 
-  it("changes resource management without expanding the section", () => {
+  it("changes the Target application policy without expanding the section", () => {
     const onToggle = vi.fn();
-    const onManagementChange = vi.fn();
+    const onPolicyChange = vi.fn();
     render(
       <ProfileComposerSection
         id="profile-skills"
@@ -194,28 +206,95 @@ describe("ProfileComposerSection", () => {
         count={3}
         enabledCount={2}
         chipNames={["Reviewer"]}
-        managed={false}
-        managementLabel="Manage Skills for OpenCode"
+        policy="leave-unchanged"
+        policyLabel="Skills application policy for OpenCode"
+        targetName="OpenCode"
         expanded={false}
         onToggle={onToggle}
-        onManagementChange={onManagementChange}
+        onPolicyChange={onPolicyChange}
       >
         <div>Skills panel</div>
       </ProfileComposerSection>
     );
 
-    const management = screen.getByRole("switch", { name: "Manage Skills for OpenCode" });
-    expect(management).toHaveAttribute("aria-checked", "false");
-    expect(management).toHaveTextContent("Manage");
+    const policy = screen.getByRole("button", {
+      name: "Skills application policy for OpenCode"
+    });
+    expect(policy).toHaveTextContent("Leave unchanged");
     const count = document.querySelector(".profile-composer-section__count");
     expect(count).toHaveAttribute("title", "2 of 3 enabled");
     expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("2/3");
 
-    fireEvent.click(management);
+    fireEvent.click(policy);
+    const menu = screen.getByRole("menu", {
+      name: "Skills application policy for OpenCode"
+    });
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: /Apply Profile/ }));
 
-    expect(onManagementChange).toHaveBeenCalledWith(true);
-    expect(management).toHaveTextContent("Manage");
+    expect(onPolicyChange).toHaveBeenCalledWith("apply-profile");
     expect(onToggle).not.toHaveBeenCalled();
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
+  });
+
+  it("keeps Profile content editable and explains a leave-unchanged policy", () => {
+    render(
+      <ProfileComposerSection
+        id="profile-instructions"
+        icon={<BookOpen />}
+        title="Instructions"
+        description="Set the operating guidance"
+        count={1}
+        enabledCount={1}
+        chipNames={["AGENTS.md"]}
+        policy="leave-unchanged"
+        policyLabel="Instructions application policy for OpenCode"
+        targetName="OpenCode"
+        expanded
+        onToggle={() => undefined}
+        onPolicyChange={() => undefined}
+      >
+        <textarea aria-label="Instructions editor" defaultValue="# Saved Profile content" />
+      </ProfileComposerSection>
+    );
+
+    expect(screen.getByText(/Saved in this Profile/)).toHaveTextContent(
+      "Applying to OpenCode leaves this section unchanged."
+    );
+    expect(screen.getByRole("textbox", { name: "Instructions editor" })).toHaveValue(
+      "# Saved Profile content"
+    );
+  });
+
+  it("dismisses the policy menu with Escape and restores trigger focus", async () => {
+    render(
+      <ProfileComposerSection
+        id="profile-skills"
+        icon={<BookOpen />}
+        title="Skills"
+        description="Choose skills"
+        count={1}
+        enabledCount={1}
+        chipNames={["Reviewer"]}
+        policy="apply-profile"
+        policyLabel="Skills application policy for OpenCode"
+        targetName="OpenCode"
+        expanded={false}
+        onToggle={() => undefined}
+        onPolicyChange={() => undefined}
+      >
+        <div>Skills panel</div>
+      </ProfileComposerSection>
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "Skills application policy for OpenCode"
+    });
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });
