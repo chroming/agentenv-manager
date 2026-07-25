@@ -4,7 +4,6 @@ import {
   fireEvent,
   render,
   screen,
-  waitFor,
   within
 } from "@testing-library/react";
 import { BookOpen } from "lucide-react";
@@ -217,10 +216,15 @@ describe("ProfileComposerSection", () => {
       </ProfileComposerSection>
     );
 
-    const policy = screen.getByRole("button", {
+    const policy = screen.getByRole("radiogroup", {
       name: "Skills application policy for OpenCode"
     });
-    expect(policy).toHaveTextContent("Keep Agent");
+    expect(
+      within(policy).getByRole("radio", { name: "Keep Agent" })
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      within(policy).getByRole("radio", { name: "Use Profile" })
+    ).toHaveAttribute("aria-checked", "false");
     expect(policy).toHaveClass("is-keep-agent");
     expect(policy.closest(".profile-composer-section")).toHaveClass("is-keep-agent");
     const count = document.querySelector(".profile-composer-section__count");
@@ -231,11 +235,7 @@ describe("ProfileComposerSection", () => {
     expect(header?.children[1]).toBe(screen.getByRole("button", { name: "Skills" }));
     expect(header?.children[2]).toBe(policy);
 
-    fireEvent.click(policy);
-    const menu = screen.getByRole("menu", {
-      name: "Skills application policy for OpenCode"
-    });
-    fireEvent.click(within(menu).getByRole("menuitemradio", { name: /Use Profile/ }));
+    fireEvent.click(within(policy).getByRole("radio", { name: "Use Profile" }));
 
     expect(onPolicyChange).toHaveBeenCalledWith("apply-profile");
     expect(onToggle).not.toHaveBeenCalled();
@@ -271,7 +271,8 @@ describe("ProfileComposerSection", () => {
     );
   });
 
-  it("dismisses the policy menu with Escape and restores trigger focus", async () => {
+  it("uses arrow keys to move directly between policy choices", () => {
+    const onPolicyChange = vi.fn();
     render(
       <ProfileComposerSection
         id="profile-skills"
@@ -286,21 +287,22 @@ describe("ProfileComposerSection", () => {
         targetName="OpenCode"
         expanded={false}
         onToggle={() => undefined}
-        onPolicyChange={() => undefined}
+        onPolicyChange={onPolicyChange}
       >
         <div>Skills panel</div>
       </ProfileComposerSection>
     );
 
-    const trigger = screen.getByRole("button", {
+    const policy = screen.getByRole("radiogroup", {
       name: "Skills application policy for OpenCode"
     });
-    fireEvent.click(trigger);
-    expect(screen.getByRole("menu")).toBeInTheDocument();
+    const useProfile = within(policy).getByRole("radio", { name: "Use Profile" });
+    const keepAgent = within(policy).getByRole("radio", { name: "Keep Agent" });
+    useProfile.focus();
 
-    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.keyDown(policy, { key: "ArrowRight" });
 
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(onPolicyChange).toHaveBeenCalledWith("leave-unchanged");
+    expect(keepAgent).toHaveFocus();
   });
 });

@@ -889,30 +889,13 @@ try {
   await page.getByRole("menu", { name: "Icons for Code Review" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "profile-icon-picker-920x620.png"));
   await page.keyboard.press("Escape");
-  const skillsPolicy = page.getByRole("button", {
+  const skillsPolicy = page.getByRole("radiogroup", {
     name: "Skills application policy for OpenCode"
   });
-  await skillsPolicy.click();
-  const skillsPolicyMenu = page.getByRole("menu", {
-    name: "Skills application policy for OpenCode"
-  });
-  await skillsPolicyMenu.waitFor({ state: "visible" });
-  await capturePage(page, join(outputDir, "profile-policy-menu-920x620.png"), {
-    preserveFocus: true
-  });
-  await page.keyboard.press("Escape");
-  await skillsPolicyMenu.waitFor({ state: "hidden" });
-  await skillsPolicy.click();
-  await page
-    .getByRole("menu", { name: "Skills application policy for OpenCode" })
-    .getByRole("menuitemradio", { name: /^Keep Agent/ })
-    .click();
+  await capturePage(page, join(outputDir, "profile-policy-use-profile-920x620.png"));
+  await skillsPolicy.getByRole("radio", { name: "Keep Agent" }).click();
   await capturePage(page, join(outputDir, "profile-policy-keep-agent-920x620.png"));
-  await skillsPolicy.click();
-  await page
-    .getByRole("menu", { name: "Skills application policy for OpenCode" })
-    .getByRole("menuitemradio", { name: /^Use Profile/ })
-    .click();
+  await skillsPolicy.getByRole("radio", { name: "Use Profile" }).click();
   const policySaveButton = page.getByRole("button", { name: "Save", exact: true });
   if (await policySaveButton.isEnabled()) {
     await policySaveButton.click();

@@ -744,14 +744,13 @@ const setComposerResourcePolicy = async (
   policy: ComposerPolicyName
 ) => {
   const label = `${resource} application policy for ${target}`;
-  const trigger = page.getByRole("button", { name: label });
-  await trigger.click();
-  const menu = page.getByRole("menu", { name: label });
-  await menu.waitFor({ state: "visible" });
-  await expectInViewport(page, menu);
-  await expectTopmost(menu);
-  await menu.getByRole("menuitemradio", { name: new RegExp(`^${policy}`) }).click();
-  await menu.waitFor({ state: "hidden" });
+  const control = page.getByRole("radiogroup", { name: label });
+  await expectInViewport(page, control);
+  await expectTopmost(control);
+  const option = control.getByRole("radio", { name: policy, exact: true });
+  if ((await option.getAttribute("aria-checked")) !== "true") {
+    await option.click();
+  }
 };
 
 const openSkillLibrary = async (page: Page) => {
@@ -4095,9 +4094,10 @@ describe("Electron UI profile switching e2e", () => {
     await expectInViewport(page, sharedDocsControl);
     expect(
       await page
-        .getByRole("button", { name: "MCPs application policy for OpenCode" })
-        .textContent()
-    ).toContain("Use Profile");
+        .getByRole("radiogroup", { name: "MCPs application policy for OpenCode" })
+        .getByRole("radio", { name: "Use Profile" })
+        .getAttribute("aria-checked")
+    ).toBe("true");
     expect(await editor.getByRole("button", { name: /Add|Remove|Delete/ }).count()).toBe(0);
     expect(await page.getByLabel("ui-alpha-mcp Profile behavior").inputValue()).toBe("on");
     expect(await page.getByLabel("ui-beta-mcp Profile behavior").inputValue()).toBe("off");
@@ -4117,19 +4117,30 @@ describe("Electron UI profile switching e2e", () => {
     const instructionsRow = composer.getByRole("button", { name: "Instructions", exact: true });
     const skillsRow = composer.getByRole("button", { name: "Skills", exact: true });
     const mcpRow = composer.getByRole("button", { name: "MCPs", exact: true });
-    const instructionsPolicy = composer.getByRole("button", {
+    const instructionsPolicy = composer.getByRole("radiogroup", {
       name: "Instructions application policy for OpenCode"
     });
-    const skillsPolicy = composer.getByRole("button", {
+    const skillsPolicy = composer.getByRole("radiogroup", {
       name: "Skills application policy for OpenCode"
     });
-    const mcpPolicy = composer.getByRole("button", {
+    const mcpPolicy = composer.getByRole("radiogroup", {
       name: "MCPs application policy for OpenCode"
     });
 
-    expect(await instructionsPolicy.textContent()).toContain("Use Profile");
-    expect(await skillsPolicy.textContent()).toContain("Use Profile");
-    expect(await mcpPolicy.textContent()).toContain("Use Profile");
+    for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
+      expect(
+        await policy
+          .getByRole("radio", { name: "Use Profile" })
+          .getAttribute("aria-checked")
+      ).toBe("true");
+      const options = policy.getByRole("radio");
+      await expectTextFits(options.nth(0));
+      await expectTextFits(options.nth(1));
+      const optionWidths = await options.evaluateAll((elements) =>
+        elements.map((element) => element.getBoundingClientRect().width)
+      );
+      expect(Math.abs(optionWidths[0] - optionWidths[1])).toBeLessThanOrEqual(1);
+    }
     const instructionsSection = composer.locator(
       '[data-profile-composer-id="instructions"]'
     );
@@ -4169,11 +4180,17 @@ describe("Electron UI profile switching e2e", () => {
     expect(await skillsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
-    expect(await composer.getByText("Keep Agent", { exact: true }).count()).toBe(3);
+    for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
+      expect(
+        await policy
+          .getByRole("radio", { name: "Keep Agent" })
+          .getAttribute("aria-checked")
+      ).toBe("true");
+    }
     const keptSectionSurface = await instructionsSection.evaluate((section) => {
       const header = section.querySelector<HTMLElement>(".profile-composer-section__header");
       const title = section.querySelector<HTMLElement>(".profile-composer-section__title");
-      const policy = section.querySelector<HTMLElement>(".profile-resource-policy__trigger");
+      const policy = section.querySelector<HTMLElement>(".profile-resource-policy");
       if (!header || !title || !policy) throw new Error("Profile resource row is incomplete");
       return {
         sectionClass: section.className,
@@ -4221,7 +4238,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await expandComposerSection(page, "MCPs");
     expect(
-      await composer.getByRole("button", {
+      await composer.getByRole("radiogroup", {
         name: "MCPs application policy for OpenCode"
       }).count()
     ).toBe(1);
@@ -5665,24 +5682,18 @@ describe("Electron UI profile switching e2e", () => {
     await expandComposerSection(page, "MCPs");
     const editor = page.locator(".profile-mcp-editor");
     await editor.waitFor({ state: "visible" });
-    const policyButton = page.getByRole("button", {
+    const policyStatus = page.getByRole("status", {
       name: "MCPs application policy for Claude Code"
     });
-    expect(await policyButton.isDisabled()).toBe(true);
-    expect(await policyButton.textContent()).toContain("Agent controlled");
-    const policyGeometry = await policyButton.evaluate((element) => {
-      const label = element.querySelector<HTMLElement>("span");
-      const control = element.getBoundingClientRect();
-      const labelRect = label?.getBoundingClientRect();
+    expect(await policyStatus.textContent()).toContain("Agent controlled");
+    await expectTextFits(policyStatus);
+    const policyGeometry = await policyStatus.evaluate((element) => {
       return {
-        controlRight: control.right,
-        labelRight: labelRect?.right ?? control.right,
         scrollWidth: element.scrollWidth,
         clientWidth: element.clientWidth
       };
     });
     expect(policyGeometry.scrollWidth).toBeLessThanOrEqual(policyGeometry.clientWidth);
-    expect(policyGeometry.labelRight).toBeLessThanOrEqual(policyGeometry.controlRight + 0.5);
     expect(await editor.locator("select").count()).toBe(0);
 
     await previewAndApply(page, "Claude Code");

@@ -244,10 +244,6 @@ const zhCN: Record<string, string> = {
   "Instructions application policy for {{name}}": "{{name}} 的指令应用策略",
   "Skills application policy for {{name}}": "{{name}} 的技能应用策略",
   "MCPs application policy for {{name}}": "{{name}} 的 MCP 应用策略",
-  "Apply this Profile's {{resource}} to {{name}}.":
-    "将此 Profile 的{{resource}}应用到 {{name}}。",
-  "Keep {{name}}'s current {{resource}} unchanged.":
-    "保留 {{name}} 当前的{{resource}}，不做更改。",
   "Saved in this Profile. Applying to {{name}} leaves this section unchanged.":
     "内容仍保存在此 Profile 中；应用到 {{name}} 时不会更改这一类资源。",
   "Managed by Profile": "由配置方案管理",
@@ -2120,10 +2116,6 @@ const zhTW: Record<string, string> = {
   "Instructions application policy for {{name}}": "{{name}} 的指令套用策略",
   "Skills application policy for {{name}}": "{{name}} 的技能套用策略",
   "MCPs application policy for {{name}}": "{{name}} 的 MCP 套用策略",
-  "Apply this Profile's {{resource}} to {{name}}.":
-    "將此 Profile 的{{resource}}套用到 {{name}}。",
-  "Keep {{name}}'s current {{resource}} unchanged.":
-    "保留 {{name}} 目前的{{resource}}，不做變更。",
   "Saved in this Profile. Applying to {{name}} leaves this section unchanged.":
     "內容仍儲存在此 Profile 中；套用到 {{name}} 時不會變更這類資源。",
   "Managed by Profile": "由設定檔管理",

@@ -3,9 +3,9 @@ import { Fragment, useId, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
 import {
-  ProfileResourcePolicyMenu,
+  ProfileResourcePolicyControl,
   type ProfileResourcePolicy
-} from "./ProfileResourcePolicyMenu";
+} from "./ProfileResourcePolicyControl";
 
 export interface ProfileComposerSectionProps {
   id: string;
@@ -149,12 +149,10 @@ export const ProfileComposerSection = ({
             ) : null}
           </span>
         </button>
-        <ProfileResourcePolicyMenu
+        <ProfileResourcePolicyControl
           disabled={policyDisabled}
           label={policyLabel}
-          resourceName={title}
           status={policyStatus}
-          targetName={targetName}
           value={policy}
           onChange={onPolicyChange}
         />
