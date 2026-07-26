@@ -154,7 +154,7 @@
 
 .profile-hero--loading {
   align-items: center;
-  min-height: 100px;
+  min-height: var(--profile-hero-height);
 }
 
 .profile-loading-indicator {
@@ -212,6 +212,6 @@
 
   .profile-hero--loading {
     align-items: start;
-    min-height: 178px;
+    min-height: var(--profile-hero-height-compact);
   }
 }

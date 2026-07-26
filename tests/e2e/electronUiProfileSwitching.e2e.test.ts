@@ -2854,6 +2854,82 @@ describe("Electron UI profile switching e2e", () => {
     expect(defaultContainerMetrics.containerName).toBe("profile-workspace");
     expect(defaultContainerMetrics.workbenchColumns.startsWith("260px ")).toBe(true);
 
+    const workbenchEdgeGeometry = await workbench.evaluate((frame) => {
+      const frameBox = frame.getBoundingClientRect();
+      const frameEdge = getComputedStyle(frame, "::after");
+      const index = frame.querySelector<HTMLElement>(".profile-index")!;
+      const indexBox = index.getBoundingClientRect();
+      const toolbar = frame.querySelector<HTMLElement>(".profile-list-toolbar")!;
+      const toolbarBox = toolbar.getBoundingClientRect();
+      const search = frame.querySelector<HTMLElement>(".profile-search")!;
+      const searchBox = search.getBoundingClientRect();
+      const list = frame.querySelector<HTMLElement>(".profile-list")!;
+      const listBox = list.getBoundingClientRect();
+      const editor = frame.querySelector<HTMLElement>(".profile-editor-surface")!;
+      const editorBox = editor.getBoundingClientRect();
+      const hero = frame.querySelector<HTMLElement>(".profile-hero")!;
+      const heroBox = hero.getBoundingClientRect();
+      const composer = frame.querySelector<HTMLElement>(".profile-composer")!;
+      const composerBox = composer.getBoundingClientRect();
+      const composerStyle = getComputedStyle(composer);
+      const rows = Array.from(frame.querySelectorAll<HTMLElement>(".profile-row"));
+      return {
+        composerBorderWidths: [
+          composerStyle.borderTopWidth,
+          composerStyle.borderRightWidth,
+          composerStyle.borderBottomWidth,
+          composerStyle.borderLeftWidth
+        ],
+        composerMeetsHeader: Math.abs(composerBox.top - heroBox.bottom) <= 1,
+        composerRadius: composerStyle.borderRadius,
+        frameEdges: [
+          frameEdge.borderTopWidth,
+          frameEdge.borderRightWidth,
+          frameEdge.borderBottomWidth,
+          frameEdge.borderLeftWidth
+        ],
+        listIsFlush: (
+          Math.abs(listBox.left - indexBox.left) <= 1 &&
+          Math.abs(listBox.right - indexBox.right) <= 1
+        ),
+        searchContainedByToolbar: (
+          searchBox.top >= toolbarBox.top &&
+          searchBox.bottom <= toolbarBox.bottom
+        ),
+        toolbarPrecedesList: toolbarBox.bottom <= listBox.top,
+        paneDividerIsSingle: (
+          getComputedStyle(index).borderRightWidth === "1px" &&
+          Math.abs(indexBox.right - editorBox.left) <= 1
+        ),
+        rowDividersAreContinuous: (
+          rows.every((row) => getComputedStyle(row).borderBottomWidth === "1px") &&
+          rows.slice(1).every((row, index) => {
+            const previousBox = rows[index].getBoundingClientRect();
+            return Math.abs(row.getBoundingClientRect().top - previousBox.bottom) <= 1;
+          })
+        ),
+        workbenchContainsChildren: [indexBox, editorBox].every(
+          (box) =>
+            box.left >= frameBox.left &&
+            box.right <= frameBox.right &&
+            box.top >= frameBox.top &&
+            box.bottom <= frameBox.bottom
+        )
+      };
+    });
+    expect(workbenchEdgeGeometry).toEqual({
+      composerBorderWidths: ["0px", "0px", "0px", "0px"],
+      composerMeetsHeader: true,
+      composerRadius: "0px",
+      frameEdges: ["1px", "1px", "1px", "1px"],
+      listIsFlush: true,
+      paneDividerIsSingle: true,
+      rowDividersAreContinuous: true,
+      searchContainedByToolbar: true,
+      toolbarPrecedesList: true,
+      workbenchContainsChildren: true
+    });
+
     const initialOverflow = await Promise.all(
       [profileIndex, profileList, editor].map((locator) =>
         locator.evaluate((element) => ({
@@ -2939,6 +3015,38 @@ describe("Electron UI profile switching e2e", () => {
 
     await resizeAppWindow(page, 920, 620);
     await expectInViewport(page, page.locator(".profile-hero"));
+    const minimumWorkbenchEdges = await workbench.evaluate((frame) => {
+      const index = frame.querySelector<HTMLElement>(".profile-index")!;
+      const indexBox = index.getBoundingClientRect();
+      const toolbarBox = frame.querySelector<HTMLElement>(".profile-list-toolbar")!
+        .getBoundingClientRect();
+      const searchBox = frame.querySelector<HTMLElement>(".profile-search")!
+        .getBoundingClientRect();
+      const listBox = frame.querySelector<HTMLElement>(".profile-list")!
+        .getBoundingClientRect();
+      const heroBox = frame.querySelector<HTMLElement>(".profile-hero")!
+        .getBoundingClientRect();
+      const composerBox = frame.querySelector<HTMLElement>(".profile-composer")!
+        .getBoundingClientRect();
+      return {
+        composerMeetsHeader: Math.abs(composerBox.top - heroBox.bottom) <= 1,
+        listIsFlush: (
+          Math.abs(listBox.left - indexBox.left) <= 1 &&
+          Math.abs(listBox.right - indexBox.right) <= 1
+        ),
+        searchContainedByToolbar: (
+          searchBox.top >= toolbarBox.top &&
+          searchBox.bottom <= toolbarBox.bottom
+        ),
+        toolbarPrecedesList: toolbarBox.bottom <= listBox.top
+      };
+    });
+    expect(minimumWorkbenchEdges).toEqual({
+      composerMeetsHeader: true,
+      listIsFlush: true,
+      searchContainedByToolbar: true,
+      toolbarPrecedesList: true
+    });
     const minimumCommitGeometry = await commitActions.evaluate((group) => {
       const groupBox = group.getBoundingClientRect();
       const target = group.querySelector<HTMLElement>(".profile-target-workspace-button")!;

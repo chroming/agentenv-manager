@@ -4858,28 +4858,6 @@ button svg,
   max-width: 34ch;
 }
 
-.profile-empty-surface {
-  align-items: start;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 132px;
-  padding: 18px;
-}
-
-.profile-empty-surface .empty-state {
-  align-content: center;
-  border: 0;
-  box-shadow: none;
-  justify-items: start;
-  min-height: 92px;
-  padding: 0;
-  text-align: left;
-}
-
 /* Profiles P0 composer */
 .app-shell--profiles .editor-panel {
   display: grid;

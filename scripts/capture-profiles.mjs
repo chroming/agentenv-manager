@@ -859,9 +859,10 @@ try {
     .waitFor({ state: "visible", timeout: 5_000 });
   await page.getByRole("button", { name: "Close library tool" }).click();
 
-  const captureWorkspace = async (buttonName, filePrefix, readyLocator) => {
+  const captureWorkspace = async (buttonName, filePrefix, readyLocator, prepare) => {
     await page.getByRole("button", { name: buttonName, exact: true }).click();
     await readyLocator().waitFor({ state: "visible" });
+    await prepare?.();
     await setWindowSize(page, windowHandle, 1180, 728);
     await capturePage(page, join(outputDir, `${filePrefix}-1180x728.png`));
     await setWindowSize(page, windowHandle, 920, 620);
@@ -871,7 +872,13 @@ try {
   await captureWorkspace(
     "Profiles",
     "profiles",
-    () => page.getByRole("region", { name: "Profiles", exact: true })
+    () => page.getByRole("region", { name: "Profiles", exact: true }),
+    async () => {
+      await page.getByRole("button", { name: /^Code Review/ }).click();
+      await page.getByRole("heading", { name: "Code Review" }).waitFor({
+        state: "visible"
+      });
+    }
   );
 
   await page.getByRole("button", { name: /^Daily Coding/ }).click();
@@ -1223,6 +1230,9 @@ try {
   await page.getByRole("region", { name: "配置方案", exact: true }).waitFor({
     state: "visible"
   });
+  await page.getByRole("heading", { name: "Code Review" }).waitFor({
+    state: "visible"
+  });
   await capturePage(page, join(outputDir, "profiles-zh-cn-920x620.png"));
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await page.getByRole("region", { name: "设置", exact: true }).waitFor({
@@ -1239,6 +1249,9 @@ try {
   await capturePage(page, join(outputDir, "skills-zh-tw-920x620.png"));
   await page.getByRole("button", { name: "設定檔", exact: true }).click();
   await page.getByRole("region", { name: "設定檔", exact: true }).waitFor({
+    state: "visible"
+  });
+  await page.getByRole("heading", { name: "Code Review" }).waitFor({
     state: "visible"
   });
   await capturePage(page, join(outputDir, "profiles-zh-tw-920x620.png"));
