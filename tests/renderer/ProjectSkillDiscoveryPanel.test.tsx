@@ -66,7 +66,7 @@ describe("ProjectSkillDiscoveryPanel", () => {
     );
 
     await waitFor(() => expect(onScan).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole("button", { name: "Scan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Scan" }));
     await waitFor(() => expect(onScan).toHaveBeenCalledTimes(2));
   });
 

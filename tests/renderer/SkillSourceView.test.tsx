@@ -124,13 +124,15 @@ describe("SkillSourceView", () => {
       />
     );
 
-    expect(screen.getByLabelText("Source summary")).toHaveTextContent("4Total1Updates1New1Removed");
+    expect(screen.getByLabelText("Source summary")).toHaveTextContent("Total4Changes 3");
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Merge selected/ })).not.toBeInTheDocument();
-    expect(document.querySelector(".skill-source-counts .is-update")).toHaveClass("has-value");
-    fireEvent.click(screen.getByRole("button", { name: "Review 1" }));
+    expect(document.querySelector(".skill-source-counts .is-change")).toHaveClass("has-value");
+    fireEvent.click(screen.getByRole("button", { name: "Review 1 source updates" }));
     expect(onReviewUpdates).toHaveBeenCalledWith(["review"]);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Review 1" })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Review 1 source updates" })).toBeEnabled()
+    );
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
 
     const candidates = document.querySelector<HTMLElement>(".skill-source-candidates");
@@ -143,6 +145,9 @@ describe("SkillSourceView", () => {
     fireEvent.click(within(candidates!).getByRole("button", { name: "Add" }));
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(group, group.candidates[0]));
     fireEvent.click(within(candidates!).getByRole("button", { name: "Review update review" }));
+    expect(
+      within(candidates!).queryByRole("button", { name: /^Review$/ })
+    ).not.toBeInTheDocument();
     expect(onUpdate).toHaveBeenCalledWith("review");
     await waitFor(() =>
       expect(within(candidates!).getByRole("button", { name: "Review update review" })).toBeEnabled()
@@ -435,7 +440,10 @@ describe("SkillSourceView", () => {
       />
     );
 
-    const checkMonitored = screen.getByRole("button", { name: "Check monitored" });
+    const checkMonitored = screen.getByRole("button", { name: "Check for updates" });
+    expect(
+      screen.queryByRole("button", { name: /^Check monitored$/ })
+    ).not.toBeInTheDocument();
     fireEvent.click(checkMonitored);
     expect(checkMonitored).toHaveAttribute("aria-busy", "true");
     expect(checkMonitored.querySelector(".is-spinning")).not.toBeNull();
@@ -504,11 +512,11 @@ describe("SkillSourceView", () => {
       name: "Source actions for acme/skills · /engineering"
     }));
     expect(screen.getByRole("menuitem", { name: "Check source" })).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByRole("button", { name: "Check monitored" })).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("button", { name: "Check for updates" })).toHaveAttribute("aria-busy", "false");
 
     rerender(<SkillSourceView {...props} updateActivity={{ kind: "check-sources" }} />);
     expect(screen.getByRole("menuitem", { name: "Check source" })).toHaveAttribute("aria-busy", "false");
-    expect(screen.getByRole("button", { name: "Check monitored" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Check for updates" })).toHaveAttribute("aria-busy", "true");
   });
 
   it("requires an explicit preview before merging selected source scopes", async () => {

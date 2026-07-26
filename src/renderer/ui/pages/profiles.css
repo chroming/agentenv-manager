@@ -494,10 +494,10 @@
 .profile-row__footer {
   align-items: center;
   display: grid;
-  gap: 8px;
+  gap: 1px;
   grid-area: footer;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 17px;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 35px;
   min-width: 0;
 }
 
@@ -520,65 +520,6 @@
   color: #b2bdcc;
   content: "·";
   margin: 0 6px;
-}
-
-.profile-row__deployments {
-  align-items: center;
-  display: flex;
-  flex-wrap: nowrap;
-  font-size: 10px;
-  gap: 4px;
-  line-height: 17px;
-  max-height: 18px;
-  min-height: 17px;
-  overflow: hidden;
-  justify-self: end;
-  max-width: 72px;
-  min-width: 0;
-}
-
-.profile-row__deployments--empty {
-  color: #94a3b8;
-  justify-content: center;
-  width: 18px;
-}
-
-.profile-target-chip {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  color: var(--muted);
-  display: inline-flex;
-  flex: 0 0 auto;
-  font-size: 9px;
-  font-weight: var(--font-weight-regular);
-  gap: 0;
-  height: 18px;
-  justify-content: center;
-  min-width: 0;
-  padding: 0;
-  width: 18px;
-}
-
-.profile-target-chip .profile-target-logo {
-  height: 11px;
-  width: 11px;
-}
-
-.profile-target-chip--current {
-  background: transparent;
-  color: #177a52;
-}
-
-.profile-target-chip--pending {
-  background: transparent;
-  color: #9a6518;
-}
-
-.profile-target-chip--attention {
-  background: transparent;
-  color: #b83a31;
 }
 
 .profile-editor-surface {
@@ -870,6 +811,30 @@
   line-height: 22px;
   min-width: 54px;
   width: 54px;
+  white-space: nowrap;
+}
+
+.profile-composer-section.has-scope-summary
+  .profile-composer-section__trigger,
+.profile-composer:not(:has(.profile-composer-section.is-expanded))
+  .profile-composer-section.has-scope-summary
+  .profile-composer-section__trigger {
+  grid-template-columns: 30px minmax(110px, 1fr) minmax(118px, auto);
+}
+
+.profile-composer-section.has-scope-summary
+  .profile-composer-section__count {
+  justify-content: flex-end;
+  max-width: 160px;
+  min-width: 118px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: auto;
+}
+
+.profile-composer-section__count-scope {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1367,6 +1332,14 @@
     grid-template-columns: 32px minmax(0, 1fr) 54px;
     min-height: 52px;
     padding-block: 6px;
+  }
+
+  .profile-composer-section.has-scope-summary
+    .profile-composer-section__trigger,
+  .profile-composer:not(:has(.profile-composer-section.is-expanded))
+    .profile-composer-section.has-scope-summary
+    .profile-composer-section__trigger {
+    grid-template-columns: 32px minmax(0, 1fr) minmax(118px, auto);
   }
 
   .profile-composer-section__icon {

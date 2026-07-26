@@ -108,9 +108,38 @@ describe("Repository Skill source", () => {
     expect(await page.getByRole("tab", { name: /^Manual only 0$/ }).count()).toBe(1);
     expect(await page.getByRole("button", { name: "Refresh skills" }).count()).toBe(0);
     expect(await page.getByRole("button", { name: "Refresh sources" }).count()).toBe(1);
-    expect(await page.getByRole("button", { name: "Check monitored" }).count()).toBe(1);
+    expect(await page.getByRole("button", { name: "Check for updates" }).count()).toBe(1);
     const sourceGroup = page.locator(".skill-source-group");
     await expect.poll(() => sourceGroup.count()).toBe(1);
+    const expectSourceLaneGeometry = async (width: number, height: number) => {
+      await page.setViewportSize({ width, height });
+      const geometry = await page.locator(".skill-source-group-row").evaluate((row) => {
+        const header = document.querySelector<HTMLElement>(".skill-source-table-head")!;
+        const headerCells = Array.from(header.children) as HTMLElement[];
+        const rowCells = [
+          row.querySelector<HTMLElement>(".skill-source-counts"),
+          row.querySelector<HTMLElement>(".skill-source-last-checked"),
+          row.querySelector<HTMLElement>(".skill-source-status"),
+          row.querySelector<HTMLElement>(".skill-source-current-action"),
+          row.querySelector<HTMLElement>(".skill-source-more")
+        ];
+        return {
+          documentWidth: document.documentElement.scrollWidth,
+          headerLefts: headerCells.slice(1).map((cell) => cell.getBoundingClientRect().left),
+          rowLefts: rowCells.map((cell) => cell!.getBoundingClientRect().left),
+          rowRight: row.getBoundingClientRect().right,
+          moreRight: rowCells[4]!.getBoundingClientRect().right,
+          viewportWidth: document.documentElement.clientWidth
+        };
+      });
+      expect(geometry.documentWidth).toBe(geometry.viewportWidth);
+      geometry.rowLefts.forEach((left, index) => {
+        expect(Math.abs(left - geometry.headerLefts[index]!)).toBeLessThanOrEqual(1);
+      });
+      expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
+    };
+    await expectSourceLaneGeometry(1180, 760);
+    await expectSourceLaneGeometry(920, 620);
     await page.getByRole("button", { name: "Filters", exact: true }).click();
     const sourceFilterPanel = page.getByRole("group", { name: "Source filters" });
     expect(await sourceFilterPanel.evaluate((panel) => {
@@ -150,13 +179,15 @@ describe("Repository Skill source", () => {
     const staleMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
     staleMetadata.remoteRevision = "stale-transport-revision";
     await writeFile(metadataPath, `${JSON.stringify(staleMetadata, null, 2)}\n`, "utf8");
-    await sourceGroup.getByRole("button", { name: "Check", exact: true }).click();
-    await sourceGroup.getByRole("button", { name: "Review 1", exact: true })
+    await sourceGroup.getByRole("button", { name: "Check now", exact: true }).click();
+    await sourceGroup.getByRole("button", { name: "Review 1 source updates", exact: true })
       .waitFor({ state: "visible" });
     await sourceGroup.getByRole("button", { name: "Review update api-design-internal" }).click();
     await page.getByText("api-design-internal source is current", { exact: true })
       .waitFor({ state: "visible" });
-    await expect.poll(() => sourceGroup.getByRole("button", { name: "Review 1" }).count()).toBe(0);
+    await expect.poll(() =>
+      sourceGroup.getByRole("button", { name: "Review 1 source updates" }).count()
+    ).toBe(0);
     const reconciledMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
       remoteRevision?: string;
     };
@@ -179,8 +210,11 @@ describe("Repository Skill source", () => {
     );
     await repository.commit("update api design skill");
     await page.getByRole("tab", { name: "By source" }).click();
-    await sourceGroup.getByRole("button", { name: "Check", exact: true }).click();
-    const reviewSourceUpdates = sourceGroup.getByRole("button", { name: "Review 1", exact: true });
+    await sourceGroup.getByRole("button", { name: "Check now", exact: true }).click();
+    const reviewSourceUpdates = sourceGroup.getByRole("button", {
+      name: "Review 1 source updates",
+      exact: true
+    });
     await reviewSourceUpdates.waitFor({ state: "visible" });
 
     await page.getByRole("tab", { name: "Skill list" }).click();
@@ -194,13 +228,15 @@ describe("Repository Skill source", () => {
     await expect.poll(() => preview.textContent()).toContain("SKILL.md");
     await expect.poll(() => readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .not.toContain("Review compatibility");
-    await preview.getByRole("button", { name: "Apply 1 updates" }).click();
+    await preview.getByRole("button", { name: "Apply 1 update" }).click();
     await preview.waitFor({ state: "hidden" });
     await page.getByText(
       "Updated 1 skill · All tracked skills are up to date",
       { exact: true }
     ).waitFor({ state: "visible" });
-    await expect.poll(() => sourceGroup.getByRole("button", { name: "Review 1" }).count()).toBe(0);
+    await expect.poll(() =>
+      sourceGroup.getByRole("button", { name: "Review 1 source updates" }).count()
+    ).toBe(0);
     await expect(readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .resolves.toContain("Review compatibility");
     const backupRoot = join(appDataRoot, "backups", "skill-cleanup");
@@ -220,7 +256,7 @@ describe("Repository Skill source", () => {
     );
     await repository.commit("remove release check skill");
     await page.getByRole("tab", { name: "By source" }).click();
-    await sourceGroup.getByRole("button", { name: "Check", exact: true }).click();
+    await sourceGroup.getByRole("button", { name: "Check now", exact: true }).click();
     await sourceGroup.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
     expect(await sourceGroup.getByRole("button", { name: "Delete", exact: true }).count()).toBe(1);
   }, 90_000);
@@ -317,7 +353,7 @@ describe("Repository Skill source", () => {
     };
     expect(registry.sources).toHaveLength(1);
     expect(registry.sources[0]?.displayName).toBe("Engineering Skills");
-    await page.getByRole("button", { name: "Check", exact: true }).click();
+    await page.getByRole("button", { name: "Check now", exact: true }).click();
     await page.getByText("Engineering Skills", { exact: true }).waitFor({ state: "visible" });
     await page.reload();
     await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });

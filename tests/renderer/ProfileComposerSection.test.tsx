@@ -66,6 +66,7 @@ describe("ProfileComposerSection", () => {
         description="Connect shared tools"
         count={6}
         enabledCount={4}
+        countSummary="1 Profile override · 6 in OpenCode"
         chipNames={["Context7", "Filesystem", "Context7", "GitHub", "Figma", "Slack"]}
         policy="ignore"
         policyLabel="MCPs application policy for OpenCode"
@@ -80,13 +81,14 @@ describe("ProfileComposerSection", () => {
 
     const trigger = screen.getByRole("button", { name: "MCP Servers" });
     expect(trigger).toHaveAccessibleDescription(
-      "Connect shared tools 4 of 6 enabled Context7, Filesystem, GitHub, Figma, Slack"
+      "Connect shared tools 1 Profile override · 6 in OpenCode Context7, Filesystem, GitHub, Figma, Slack"
     );
     expect(screen.queryByTestId("profile-composer-chip")).toBeNull();
     expect(screen.queryByText("+3")).toBeNull();
     const count = document.querySelector(".profile-composer-section__count");
-    expect(count).toHaveAttribute("title", "4 of 6 enabled");
-    expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("4/6");
+    expect(count).toHaveAttribute("title", "1 Profile override · 6 in OpenCode");
+    expect(count?.querySelector(".profile-composer-section__count-scope"))
+      .toHaveTextContent("1 Profile override · 6 in OpenCode");
   });
 
   it("keeps duplicate caller ids from cross-wiring relationships", () => {

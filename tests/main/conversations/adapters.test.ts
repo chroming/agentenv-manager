@@ -207,6 +207,48 @@ describe("conversation history adapters", () => {
     ]);
   });
 
+  it("removes dangling closing scaffolding tags without losing the user request", () => {
+    const detail = parseCodexConversation(candidate(), [
+      JSON.stringify({
+        type: "event_msg",
+        payload: { type: "token_count", info: { total_token_usage: 100_000 } }
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          id: "user-1",
+          type: "message",
+          role: "user",
+          content: [{
+            type: "input_text",
+            text: "</image> Use the provided skill to review the interface"
+          }]
+        }
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          id: "assistant-1",
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "I reviewed it." }]
+        }
+      }),
+      JSON.stringify({
+        type: "event_msg",
+        payload: { type: "agent_reasoning", text: "must stay hidden" }
+      })
+    ].join("\n"));
+
+    expect(detail.title).toBe("Use the provided skill to review the interface");
+    expect(detail.snippet).toBe("Use the provided skill to review the interface");
+    expect(detail.messageCount).toBe(2);
+    expect(detail.messages.map((message) => message.text)).toEqual([
+      "Use the provided skill to review the interface",
+      "I reviewed it."
+    ]);
+  });
+
   it("extracts only visible OpenCode text parts", () => {
     expect(parseOpenCodeExportMessages({
       messages: [

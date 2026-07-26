@@ -914,7 +914,7 @@ describe("App", () => {
     const emptyMcpRow = within(composer).getByRole("button", { name: "MCPs" });
     expect(emptyMcpRow).toBeInTheDocument();
     expect(emptyMcpRow.querySelector('.profile-composer-section__count'))
-      .toHaveAttribute("title", "0 of 0 enabled");
+      .toHaveAttribute("title", "Profile 0 · Agent 0");
     expect(within(composer).queryByRole("button", { name: "Advanced" })).not.toBeInTheDocument();
     for (const oldTab of ["Overview", "Instructions", "Config", "Resources", "Validation"]) {
       expect(screen.queryByRole("tab", { name: oldTab })).not.toBeInTheDocument();
@@ -930,7 +930,7 @@ describe("App", () => {
         })
       ).getByRole("radio", { name: "Keep current" })
     ).toHaveAttribute("aria-checked", "true");
-    expect(screen.getByText("0 in OpenCode")).toBeInTheDocument();
+    expect(screen.getByTitle("Profile 0 · Agent 0")).toBeInTheDocument();
   });
 
   it("renders Library Skills before startup discovery and update checks finish", async () => {
@@ -1056,7 +1056,7 @@ describe("App", () => {
     expect(
       within(screen.getByRole("group", { name: "Library item github-reviewer" }))
         .getByRole("button", { name: "Review update github-reviewer" })
-    ).toHaveTextContent("Review");
+    ).toHaveTextContent("Review update");
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
@@ -1276,7 +1276,7 @@ describe("App", () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("tab", { name: "By source" }));
-    const checkButton = await screen.findByRole("button", { name: "Check monitored" });
+    const checkButton = await screen.findByRole("button", { name: "Check for updates" });
     fireEvent.click(checkButton);
 
     await waitFor(() => expect(checkMonitored).toHaveBeenCalledTimes(1));
@@ -1969,7 +1969,7 @@ describe("App", () => {
       /2.*library-testing.*library-docs/
     );
     expect(mcp).toHaveAccessibleDescription(
-      /3.*library-docs.*shared-mcp.*raw-browser/
+      /Profile 4 · Agent 0.*library-docs.*shared-mcp.*raw-browser/
     );
     expect(skills).toHaveAttribute("aria-expanded", "false");
     expect(instructions).toHaveAttribute("aria-expanded", "false");
@@ -2132,8 +2132,8 @@ describe("App", () => {
     expect(row).toHaveTextContent("3 MCP");
     expect(row).toHaveTextContent("1 file");
     expect(within(row).getByLabelText("Active on: Codex, OpenCode")).toBeInTheDocument();
-    expect(within(row).getByTitle("Codex is up to date")).toBeInTheDocument();
-    expect(within(row).getByTitle("OpenCode is up to date")).toBeInTheDocument();
+    expect(row).toHaveTextContent("Codex active");
+    expect(row).toHaveTextContent("+1");
     expect(document.querySelector(".profile-hero")).not.toHaveTextContent("Applied Jul 9");
 
     fireEvent.click(screen.getByRole("button", { name: "Instructions" }));
@@ -3733,7 +3733,7 @@ describe("App", () => {
     const guard = await screen.findByRole("dialog", { name: "Unsaved profile changes" });
     expect(guard).toHaveTextContent("close AgentEnv Manager");
     fireEvent.click(within(guard).getByRole("button", { name: "Discard changes" }));
-    expect(api.confirmWindowClose).toHaveBeenCalledOnce();
+    await waitFor(() => expect(api.confirmWindowClose).toHaveBeenCalledOnce());
   });
 
   it("cancels an operating-system quit request when the dirty guard is dismissed", async () => {

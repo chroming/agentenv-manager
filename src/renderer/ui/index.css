@@ -19,5 +19,6 @@
 @import "./pages/profile-mcp.css" layer(pages);
 @import "./pages/profile-composer.css" layer(pages);
 @import "./pages/apply-preview.css" layer(pages);
+@import "./pages/catalog-contract.css" layer(pages);
 @import "./pages/responsive.css" layer(pages);
 @import "./overlays.css" layer(overlays);

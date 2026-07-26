@@ -14,6 +14,7 @@ export interface ProfileComposerSectionProps {
   description: string;
   count: number;
   enabledCount: number;
+  countSummary?: string;
   chipNames: string[];
   policy: ProfileResourcePolicy;
   policyDisabled?: boolean;
@@ -33,6 +34,7 @@ export const ProfileComposerSection = ({
   description,
   count,
   enabledCount,
+  countSummary,
   chipNames,
   policy,
   policyDisabled = false,
@@ -53,15 +55,16 @@ export const ProfileComposerSection = ({
   const summaryId = `${generatedId}-summary`;
   const panelId = `${generatedId}-panel`;
   const uniqueChipNames = [...new Set(chipNames)];
-  const countLabel = t("{{enabled}} of {{total}} enabled", {
-    enabled: enabledCount,
-    total: count
-  });
+  const countLabel = countSummary ?? t("{{enabled}} of {{total}} enabled", {
+      enabled: enabledCount,
+      total: count
+    });
 
   return (
     <section
       className={[
         "profile-composer-section",
+        countSummary ? "has-scope-summary" : "",
         expanded ? "is-expanded" : "",
         policy === "disable" ? "is-resource-disabled" : "",
         policy === "ignore" ? "is-unmanaged" : ""
@@ -116,11 +119,17 @@ export const ProfileComposerSection = ({
             <span className="profile-composer-section__count-label ui-visually-hidden">
               {countLabel}
             </span>
-            <span className="profile-composer-section__count-visual" aria-hidden="true">
-              <strong>{enabledCount}</strong>
-              <span>/</span>
-              <span>{count}</span>
-            </span>
+            {countSummary ? (
+              <span className="profile-composer-section__count-scope" aria-hidden="true">
+                {countSummary}
+              </span>
+            ) : (
+              <span className="profile-composer-section__count-visual" aria-hidden="true">
+                <strong>{enabledCount}</strong>
+                <span>/</span>
+                <span>{count}</span>
+              </span>
+            )}
           </span>
           <span className="ui-visually-hidden" id={summaryId}>
             {uniqueChipNames.join(", ")}

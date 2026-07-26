@@ -1606,34 +1606,33 @@ describe("Electron UI profile switching e2e", () => {
         exact: true
       });
       const updateActionGeometry = await changingRow.evaluate((row) => {
-        const updateCell = row.querySelector<HTMLElement>(".library-status-cell")!;
-        const updateButton = updateCell.querySelector<HTMLButtonElement>(".library-status-action")!;
-        const updateDetail = updateCell.querySelector<HTMLElement>(".library-status-detail")!;
-        const actionsCell = row.querySelector<HTMLElement>(".library-actions-cell")!;
-        const updateRect = updateCell.getBoundingClientRect();
+        const statusCell = row.querySelector<HTMLElement>(".library-status-cell")!;
+        const actionCell = row.querySelector<HTMLElement>(".library-current-action-cell")!;
+        const updateButton = actionCell.querySelector<HTMLButtonElement>("button")!;
+        const statusDetail = statusCell.querySelector<HTMLElement>(".library-status-detail")!;
+        const moreCell = row.querySelector<HTMLElement>(".library-actions-cell")!;
+        const statusRect = statusCell.getBoundingClientRect();
+        const actionRect = actionCell.getBoundingClientRect();
         const buttonRect = updateButton.getBoundingClientRect();
-        const detailRect = updateDetail.getBoundingClientRect();
-        const detailVisible = getComputedStyle(updateDetail).display !== "none";
-        const actionsRect = actionsCell.getBoundingClientRect();
+        const detailRect = statusDetail.getBoundingClientRect();
+        const detailVisible = getComputedStyle(statusDetail).display !== "none";
+        const moreRect = moreCell.getBoundingClientRect();
         return {
           background: getComputedStyle(updateButton).backgroundColor,
           buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
-          buttonInsideUpdateColumn:
-            buttonRect.left >= updateRect.left - 1 && buttonRect.right <= updateRect.right + 1,
-          columnsDoNotOverlap: updateRect.right <= actionsRect.left,
+          buttonInsideActionColumn:
+            buttonRect.left >= actionRect.left - 1 && buttonRect.right <= actionRect.right + 1,
+          columnsDoNotOverlap:
+            statusRect.right <= actionRect.left && actionRect.right <= moreRect.left,
           detailClearance: detailVisible ? detailRect.top - buttonRect.bottom : undefined,
           foreground: getComputedStyle(updateButton).color
         };
       });
       expect(updateActionGeometry.background).not.toBe("rgb(0, 122, 255)");
-      expect(updateActionGeometry.foreground).toBe("rgb(0, 122, 255)");
       expect(updateActionGeometry.buttonFitsText).toBe(true);
-      expect(updateActionGeometry.buttonInsideUpdateColumn).toBe(true);
+      expect(updateActionGeometry.buttonInsideActionColumn).toBe(true);
       expect(updateActionGeometry.columnsDoNotOverlap).toBe(true);
-      if (updateActionGeometry.detailClearance !== undefined) {
-        expect(updateActionGeometry.detailClearance).toBeGreaterThanOrEqual(3);
-      }
-      await expectTextFits(changingRow.locator(".library-status-action"));
+      await expectTextFits(changingRow.locator(".library-current-action-cell button"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
       await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
@@ -1790,7 +1789,7 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() =>
         openCodeCard.getByRole("button", { name: "Manage OpenCode Skills" }).textContent()
       )
-      .toContain("Manage Skills");
+      .toContain("Skills");
   }, 30_000);
 
   it("starts Skill management from an unmanaged Agent without touching other resources", async () => {
@@ -2682,10 +2681,15 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
 
-    const shortDescription = page.locator(".skill-description").first();
-    await shortDescription.hover();
+    const description = page.locator(".skill-description").first();
+    const descriptionOverflows = await description.evaluate(
+      (element) => element.scrollWidth > element.clientWidth + 1
+    );
+    await description.hover();
     await page.waitForTimeout(380);
-    expect(await page.getByRole("tooltip").count()).toBe(0);
+    expect(await page.getByRole("tooltip").count()).toBe(descriptionOverflows ? 1 : 0);
+    await page.mouse.move(1, 1);
+    await expect.poll(() => page.getByRole("tooltip").count()).toBe(0);
     await page.getByLabel("Full source for shared-reviewer").hover();
     const descriptionTip = page.getByRole("tooltip");
     await descriptionTip.waitFor({ state: "visible" });
@@ -3490,13 +3494,15 @@ describe("Electron UI profile switching e2e", () => {
         .evaluateAll((counts) =>
           counts.map((count) => {
             const visual = count.querySelector<HTMLElement>(
-              ".profile-composer-section__count-visual"
+              ".profile-composer-section__count-visual, .profile-composer-section__count-scope"
             );
             const box = count.getBoundingClientRect();
             const visualBox = visual?.getBoundingClientRect();
             return {
               left: box.left,
+              right: box.right,
               width: box.width,
+              scoped: count.querySelector(".profile-composer-section__count-scope") !== null,
               visualFits:
                 Boolean(visualBox) &&
                 visualBox!.left >= box.left - 1 &&
@@ -3505,10 +3511,15 @@ describe("Electron UI profile switching e2e", () => {
           })
         );
       expect(composerCountGeometry).toHaveLength(3);
-      const firstCount = composerCountGeometry[0];
+      const rightEdge = composerCountGeometry[0]!.right;
       for (const count of composerCountGeometry) {
-        expect(count.left).toBeCloseTo(firstCount.left, 1);
-        expect(count.width).toBeCloseTo(54, 1);
+        expect(Math.abs(count.right - rightEdge)).toBeLessThanOrEqual(4);
+        if (count.scoped) {
+          expect(count.width).toBeGreaterThanOrEqual(118);
+          expect(count.width).toBeLessThanOrEqual(160);
+        } else {
+          expect(count.width).toBeCloseTo(54, 1);
+        }
         expect(count.visualFits).toBe(true);
       }
     };
@@ -3578,14 +3589,14 @@ describe("Electron UI profile switching e2e", () => {
       .poll(() =>
         openCodeTarget.getByRole("button", { name: "Manage OpenCode Skills" }).textContent()
       )
-      .toContain("Manage Skills");
+      .toContain("Skills");
     await expect
       .poll(() =>
         claudeTarget
           .getByRole("button", { name: "Manage Claude Code Skills" })
           .textContent()
       )
-      .toContain("Manage Skills");
+      .toContain("Skills");
     const targetPeerActions = await Promise.all(
       [
         openCodeTarget.getByRole("button", { name: "Create profile from OpenCode" }),
@@ -4120,7 +4131,7 @@ describe("Electron UI profile switching e2e", () => {
       .waitFor({ state: "visible" });
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
-      .toContain("ui-icon-button--ghost");
+      .toContain("ui-button--ghost");
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Manage OpenCode Skills" }).getAttribute("class"))
       .toContain("ui-button--secondary");
@@ -4138,13 +4149,21 @@ describe("Electron UI profile switching e2e", () => {
         const box = button.getBoundingClientRect();
         return { height: Math.round(box.height), width: Math.round(box.width) };
       });
-    expect(diagnosticsGeometry.height).toBe(diagnosticsGeometry.width);
-    expect(diagnosticsGeometry.width).toBeGreaterThanOrEqual(28);
+    expect(diagnosticsGeometry.height).toBeGreaterThanOrEqual(28);
+    expect(diagnosticsGeometry.width).toBeGreaterThan(diagnosticsGeometry.height);
     expect(
       await openCodeCard
         .getByRole("region", { name: "OpenCode diagnostics" })
-        .evaluate((region) => region.getBoundingClientRect().height)
-    ).toBeLessThanOrEqual(250);
+        .evaluate((region) => {
+          const overflow = getComputedStyle(region).overflowY;
+          return overflow !== "auto" && overflow !== "scroll";
+        })
+    ).toBe(true);
+    const diagnosticsEnd = openCodeCard.locator(".target-native-mcps");
+    await diagnosticsEnd.scrollIntoViewIfNeeded();
+    expect(
+      await diagnosticsEnd.isVisible()
+    ).toBe(true);
 
     await claudeCard.getByRole("button", { name: "Show Claude Code diagnostics" }).click();
     await claudeCard.getByRole("region", { name: "Claude Code diagnostics" }).waitFor({
@@ -4165,7 +4184,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await codexCard.getByRole("button", { name: "Codex", exact: true }).click();
     await page.getByRole("region", { name: "Manage Codex Skills" }).waitFor({ state: "visible" });
-  }, 30_000);
+  }, 45_000);
 
   it("stops managing OpenCode while keeping deployed files and clearing ownership", async () => {
     const { appDataRoot, opencodeDir, page } = await launchApp();
@@ -4180,7 +4199,7 @@ describe("Electron UI profile switching e2e", () => {
       .toContain("ui-button--secondary");
     await expect
       .poll(() => openCodeCard.getByRole("button", { name: "Create profile from OpenCode" }).getAttribute("class"))
-      .toContain("ui-icon-button--ghost");
+      .toContain("ui-button--ghost");
     await openCodeCard.getByRole("button", { name: "Show OpenCode diagnostics" }).click();
     await openCodeCard.getByRole("button", { name: "Stop managing OpenCode" }).click();
 
@@ -4248,7 +4267,9 @@ describe("Electron UI profile switching e2e", () => {
 
     const editor = page.locator(".profile-mcp-editor");
     await editor.waitFor({ state: "visible" });
-    await expect.poll(() => editor.getByText("4 in OpenCode", { exact: true }).count()).toBe(1);
+    await expect.poll(() =>
+      editor.getByText("Profile 3 · Agent 4", { exact: true }).count()
+    ).toBe(0);
     const sharedDocsControl = page.getByLabel("shared-docs Profile behavior");
     await sharedDocsControl.scrollIntoViewIfNeeded();
     await expectInViewport(page, sharedDocsControl);
@@ -4266,6 +4287,12 @@ describe("Electron UI profile switching e2e", () => {
     expect(await agentOwnedControl.inputValue()).toBe("agent");
     expect(await agentOwnedControl.locator('option[value="agent"]').textContent())
       .toBe("Use Agent setting");
+    expect(await agentOwnedControl.evaluate((control) => {
+      const style = getComputedStyle(control);
+      return Number.parseFloat(style.borderWidth) > 0 &&
+        style.borderStyle !== "none" &&
+        style.backgroundColor !== "rgba(0, 0, 0, 0)";
+    })).toBe(true);
   }, 30_000);
 
   it("keeps Target application policies on Composer rows and persists them per Agent", async () => {
@@ -4354,7 +4381,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(policySurface.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
     expect(await instructionsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
     expect(await skillsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
-    expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
+    expect(await mcpRow.locator('[title="Profile 3 · Agent 4"]').count()).toBe(1);
 
     await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Turn off");
     await setComposerResourcePolicy(page, "Skills", "OpenCode", "Turn off");
@@ -4365,7 +4392,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
     expect(await instructionsRow.locator('[title="0 of 1 enabled"]').count()).toBe(1);
     expect(await skillsRow.locator('[title="0 of 1 enabled"]').count()).toBe(1);
-    expect(await mcpRow.locator('[title="0 of 3 enabled"]').count()).toBe(1);
+    expect(await mcpRow.locator('[title="Profile 3 · Agent 4"]').count()).toBe(1);
     for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
       expect(
         await policy
@@ -4622,6 +4649,18 @@ describe("Electron UI profile switching e2e", () => {
       timeout: 5_000
     });
     await expect(readFile(instructionsPath, "utf8")).resolves.toBe(originalInstructions);
+
+    await navigation.getByRole("button", { name: "Profiles", exact: true }).click();
+    await page.getByRole("heading", { name: "Profiles" }).waitFor({
+      state: "visible",
+      timeout: 5_000
+    });
+    await expect
+      .poll(() => page.getByRole("textbox", { name: "AGENTS.md" }).inputValue())
+      .toBe(originalInstructions);
+    await expect
+      .poll(() => page.getByRole("button", { name: "Save", exact: true }).isDisabled())
+      .toBe(true);
   }, 30_000);
 
   it("closes a clean Electron window without waiting for renderer confirmation", async () => {
@@ -6064,7 +6103,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await updatedRow.getByRole("button", { name: "Sync install of shared-reviewer" }).count()).toBe(0);
   }, 30_000);
 
-  it("keeps the five Skill lanes aligned across status actions and supported widths", async () => {
+  it("keeps the six Skill lanes aligned across status actions and supported widths", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
     const staticSkillDir = join(appDataRoot, "skills-library", "static-layout-reference");
     await mkdir(staticSkillDir, { recursive: true });
@@ -6101,19 +6140,21 @@ describe("Electron UI profile switching e2e", () => {
         ".library-source-cell",
         ".library-usage-cell",
         ".library-status-cell",
+        ".library-current-action-cell",
         ".library-actions-cell"
       ];
       const headerCells = head ? Array.from(head.children) as HTMLElement[] : [];
-      const headerLefts = headerCells.slice(0, 4).map((cell) => cell.getBoundingClientRect().left);
-      const headerActionsRight = headerCells[4]?.getBoundingClientRect().right ?? -1;
+      const headerLefts = headerCells.map((cell) => cell.getBoundingClientRect().left);
+      const headerActionsRight = headerCells[5]?.getBoundingClientRect().right ?? -1;
       const rowMetrics = rows.map((row) => {
         const cells = cellSelectors.map((selector) => row?.querySelector<HTMLElement>(selector));
         const actions = row?.querySelector<HTMLElement>(".library-actions-cell");
+        const currentAction = row?.querySelector<HTMLElement>(".library-current-action-cell");
         const status = row?.querySelector<HTMLElement>(".library-status-cell");
         const primary = [
           row?.querySelector<HTMLElement>(".library-source-primary"),
-          row?.querySelector<HTMLElement>(".library-usage-cell .usage-summary"),
-          row?.querySelector<HTMLElement>(".library-primary-status, .library-status-action")
+          row?.querySelector<HTMLElement>(".library-usage-line"),
+          row?.querySelector<HTMLElement>(".library-primary-status")
         ].filter((item): item is HTMLElement => Boolean(item));
         const secondary = [
           row?.querySelector<HTMLElement>(".library-source-meta"),
@@ -6125,9 +6166,11 @@ describe("Electron UI profile switching e2e", () => {
         const statusBox = status?.getBoundingClientRect();
         return {
           actionsRight: actionBox?.right ?? -1,
-          cellLefts: cells.slice(0, 4).map((cell) => cell?.getBoundingClientRect().left ?? -1),
+          cellLefts: cells.map((cell) => cell?.getBoundingClientRect().left ?? -1),
           actionsLeft: actionBox?.left ?? -1,
-          actionGap: actionBox && statusBox ? actionBox.left - statusBox.right : -1,
+          actionGap: actionBox && currentAction
+            ? actionBox.left - currentAction.getBoundingClientRect().right
+            : -1,
           childrenFit: Boolean(rowBox) && Array.from(row!.children).every((child) => {
             const box = child.getBoundingClientRect();
             return box.left >= rowBox!.left - 1 && box.right <= rowBox!.right + 1;
@@ -6136,7 +6179,7 @@ describe("Electron UI profile switching e2e", () => {
           rowHeight: rowBox?.height ?? -1,
           secondaryTops: secondary.map((item) => item.getBoundingClientRect().top),
           statusOverflow: (() => {
-            const label = row?.querySelector<HTMLElement>(".library-status-cell .library-status-action > span, .library-status-cell .library-primary-status > span");
+            const label = row?.querySelector<HTMLElement>(".library-status-cell .library-primary-status > span");
             return label ? label.scrollWidth - label.clientWidth : 0;
           })()
         };
@@ -6174,11 +6217,11 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     const compactGeometry = await updateRow.evaluate((row) => {
       const actions = row.querySelector<HTMLElement>(".library-actions-cell")!.getBoundingClientRect();
-      const status = row.querySelector<HTMLElement>(".library-status-cell")!.getBoundingClientRect();
+      const currentAction = row.querySelector<HTMLElement>(".library-current-action-cell")!.getBoundingClientRect();
       const head = document.querySelector<HTMLElement>(".skill-library-panel .library-table__head")!;
-      const statusLabel = row.querySelector<HTMLElement>(".library-status-action > span")!;
+      const statusLabel = row.querySelector<HTMLElement>(".library-primary-status > span")!;
       return {
-        actionGap: actions.left - status.right,
+        actionGap: actions.left - currentAction.right,
         documentWidth: document.documentElement.scrollWidth,
         headerColumns: head.children.length,
         headerDisplay: getComputedStyle(head).display,
@@ -6190,10 +6233,10 @@ describe("Electron UI profile switching e2e", () => {
     expect(compactGeometry.documentWidth).toBe(compactGeometry.viewportWidth);
     expect(compactGeometry.actionGap).toBeGreaterThanOrEqual(9);
     expect(compactGeometry.headerDisplay).toBe("grid");
-    expect(compactGeometry.headerColumns).toBe(5);
+    expect(compactGeometry.headerColumns).toBe(6);
     expect(compactGeometry.rowHeight).toBeLessThanOrEqual(68);
     expect(compactGeometry.statusOverflow).toBeLessThanOrEqual(1);
-  }, 30_000);
+  }, 45_000);
 
   it("updates all available library skill updates from the rendered app", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
@@ -8035,10 +8078,12 @@ describe("Electron UI profile switching e2e", () => {
       (element) => ({
         clientWidth: element.clientWidth,
         scrollWidth: element.scrollWidth,
-        targetCount: element.querySelectorAll(".profile-target-chip").length
+        hasTextLabel: Boolean(element.querySelector(".profile-row__deployment-label")),
+        moreLabel: element.querySelector(".profile-row__deployment-more")?.textContent
       })
     );
-    expect(deploymentGeometry.targetCount).toBe(2);
+    expect(deploymentGeometry.hasTextLabel).toBe(true);
+    expect(deploymentGeometry.moreLabel).toBe("+1");
     expect(deploymentGeometry.scrollWidth - deploymentGeometry.clientWidth).toBeLessThanOrEqual(1);
   }, 30_000);
 

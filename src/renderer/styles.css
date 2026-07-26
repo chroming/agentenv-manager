@@ -5094,13 +5094,6 @@ button svg,
   min-height: 18px;
 }
 
-.profile-target-chip {
-  align-items: center;
-  display: inline-flex;
-  gap: 3px;
-  min-width: 0;
-}
-
 .profile-editor-surface {
   align-content: start;
   gap: 10px;

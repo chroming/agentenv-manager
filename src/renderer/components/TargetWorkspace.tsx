@@ -24,7 +24,7 @@ import { PreviewDialog } from "./PreviewDialog";
 import { targetIconFor } from "./ProfileSidebar";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, ControlGroup, IconButton, ModalFrame, PageHeader } from "./ui";
+import { Button, ControlGroup, ModalFrame, PageHeader } from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
 
 interface TargetWorkspaceProps {
@@ -219,36 +219,39 @@ export const TargetWorkspace = ({
                   {formatLastApplied(state?.lastAppliedAt, localeTag, t("Never applied"))}
                 </span>
                 <ControlGroup className="target-workflow-actions" aria-label={t("Agent actions")}>
-                  <IconButton
+                  <Button
                     className="target-capture-action"
                     size="compact"
                     variant="ghost"
-                    label={t("Create profile from {{name}}", { name: target.name })}
+                    aria-label={t("Create profile from {{name}}", { name: target.name })}
                     disabled={busy || !isTargetInstalled(target.health)}
                     title={isTargetInstalled(target.health) ? t("Capture") : t("{{name}} is not detected", { name: target.name })}
+                    icon={<CopyPlus size={15} strokeWidth={2.2} />}
                     onClick={() => onCreateProfileFromTarget(target.id)}
                   >
-                    <CopyPlus size={15} strokeWidth={2.2} />
-                  </IconButton>
+                    {t("Capture")}
+                  </Button>
                   <Button
                     className="target-profile-action"
                     size="compact"
                     aria-label={t("Manage {{name}} Skills", { name: target.name })}
                     onClick={() => onManageSkills(target.id)}
                   >
-                    <span>{t("Manage Skills")}</span>
+                    <span>{t("Skills")}</span>
                     <ArrowRight size={14} strokeWidth={2.2} />
                   </Button>
-                  <IconButton
+                  <Button
                     className="target-diagnostics-toggle"
                     size="compact"
+                    variant="ghost"
                     aria-expanded={isExpanded}
-                    label={t(isExpanded ? "Hide {{name}} diagnostics" : "Show {{name}} diagnostics", { name: target.name })}
+                    aria-label={t(isExpanded ? "Hide {{name}} diagnostics" : "Show {{name}} diagnostics", { name: target.name })}
                     title={t("Diagnostics")}
+                    icon={<Activity size={15} strokeWidth={2.2} />}
                     onClick={() => setExpandedTargetId(isExpanded ? undefined : target.id)}
                   >
-                    <Activity size={15} strokeWidth={2.2} />
-                  </IconButton>
+                    {t("Diagnostics")}
+                  </Button>
                 </ControlGroup>
               </header>
               {isExpanded ? (

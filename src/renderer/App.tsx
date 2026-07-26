@@ -1766,8 +1766,18 @@ const AppContent = ({
       if (saveFirst) {
         await saveDraft();
       } else {
+        if (draftProfile) {
+          try {
+            setDraftProfile(await window.agentEnv.readProfile(draftProfile.id));
+          } catch {
+            setDraftProfile(undefined);
+            setSelectedProfileId(undefined);
+          }
+        }
         setIsProfileDirty(false);
         setProfileSaveStatus("");
+        setPreview(undefined);
+        setRollbackPreview(undefined);
       }
       pendingProfileActionRef.current = null;
       pendingWindowCloseRef.current = false;
@@ -4505,6 +4515,12 @@ const AppContent = ({
                         )}
                         count={resourceSummary?.mcp.total ?? 0}
                         enabledCount={resourceSummary?.mcp.count ?? 0}
+                        countSummary={t("Profile {{profile}} · Agent {{agent}}", {
+                          profile: resourceSummary?.mcp.total ?? 0,
+                          agent: (nativeMcpConnections ?? []).filter(
+                            (connection) => connection.targetId === selectedTarget?.id
+                          ).length
+                        })}
                         chipNames={resourceSummary?.mcp.names ?? []}
                         policy={resourceSummary?.mcp.mode ?? "ignore"}
                         policyDisabled={!profileTarget?.capabilities.mcpActivation}

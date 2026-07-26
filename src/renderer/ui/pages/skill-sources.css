@@ -50,7 +50,7 @@
 
 .skill-source-view {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -77,7 +77,12 @@
 }
 
 .skill-source-filter-panel {
-  grid-template-columns: repeat(2, minmax(120px, 1fr)) auto;
+  grid-template-columns: repeat(2, minmax(120px, 1fr)) 84px;
+}
+
+.skill-source-filter-panel .library-filter-reset {
+  justify-self: stretch;
+  width: 84px;
 }
 
 .skill-source-exit-selection {
@@ -262,29 +267,8 @@
   background: color-mix(in srgb, var(--accent) 6%, var(--surface));
 }
 
-.skill-source-group-row {
-  align-items: center;
-  cursor: pointer;
-  display: grid;
-  gap: 6px 10px;
-  grid-template-areas:
-    "disclosure artwork identity check"
-    ". . counts error";
-  grid-template-columns: 24px 28px minmax(0, 1fr) auto;
-  min-height: 70px;
-  padding: 9px 12px;
-  transition: background-color 120ms ease;
-}
-
 .skill-source-group-row:hover {
   background: color-mix(in srgb, var(--accent) 3%, var(--surface));
-}
-
-.skill-source-list.can-merge .skill-source-group-row {
-  grid-template-areas:
-    "select disclosure artwork identity check"
-    ". . . counts error";
-  grid-template-columns: 20px 24px 28px minmax(0, 1fr) auto;
 }
 
 .skill-source-select {
@@ -429,69 +413,8 @@
   white-space: nowrap;
 }
 
-.skill-source-counts {
-  align-items: center;
-  display: flex;
-  gap: 18px;
-  grid-area: counts;
-  min-width: 0;
-}
-
-.skill-source-counts > span {
-  align-items: baseline;
-  color: var(--muted);
-  display: inline-flex;
-  font-size: var(--font-size-metadata);
-  gap: 4px;
-  white-space: nowrap;
-}
-
-.skill-source-counts strong {
-  color: var(--text);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-}
-
-.skill-source-counts .is-update.has-value strong {
-  color: var(--warning);
-}
-
-.skill-source-counts .is-new.has-value strong {
-  color: var(--accent);
-}
-
-.skill-source-counts .is-removed.has-value strong {
-  color: var(--danger);
-}
-
-.skill-source-error {
-  color: var(--danger);
-  font-size: var(--font-size-metadata);
-  grid-area: error;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.skill-source-group-actions {
-  align-items: center;
-  display: flex;
-  gap: 6px;
-  grid-area: check;
-  justify-content: flex-end;
-}
-
-.skill-source-group-actions .secondary-action {
-  white-space: nowrap;
-}
-
 .skill-source-action-menu {
   position: fixed;
-}
-
-.skill-source-check {
-  min-width: 78px;
 }
 
 .skill-source-candidates {
@@ -632,18 +555,6 @@
   color: var(--danger);
 }
 
-@container skill-library (min-width: 920px) {
-  .skill-source-group-row {
-    grid-template-areas: "disclosure artwork identity counts error check";
-    grid-template-columns: 24px 28px minmax(240px, 1fr) auto auto auto;
-  }
-
-  .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-areas: "select disclosure artwork identity counts error check";
-    grid-template-columns: 20px 24px 28px minmax(240px, 1fr) auto auto auto;
-  }
-}
-
 @container skill-library (max-width: 760px) {
   .skill-source-toolbar {
     grid-template-columns: minmax(0, 1fr) auto auto auto;
@@ -654,7 +565,7 @@
   }
 
   .skill-source-filter-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 84px;
   }
 
   .skill-source-counts {

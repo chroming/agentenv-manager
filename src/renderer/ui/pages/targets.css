@@ -58,7 +58,7 @@
   gap: 8px;
   grid-template-columns:
     32px minmax(128px, 1.1fr) 76px minmax(84px, 0.65fr)
-    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 198px;
+    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 258px;
   min-height: 32px;
   padding: 0 12px;
   width: 100%;
@@ -98,7 +98,7 @@
   gap: 8px;
   grid-template-columns:
     32px minmax(128px, 1.1fr) 76px minmax(84px, 0.65fr)
-    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 198px;
+    minmax(110px, 0.9fr) minmax(100px, 0.8fr) 240px;
   min-height: 60px;
   min-width: 0;
 }
@@ -107,13 +107,12 @@
   align-items: center;
   display: grid;
   gap: 5px;
-  grid-template-columns: 30px 128px 30px;
+  grid-template-columns: 74px 78px 96px;
   justify-self: end;
-  width: 198px;
+  width: 258px;
 }
 
-.target-workflow-actions .ui-button,
-.target-workflow-actions .ui-icon-button {
+.target-workflow-actions .ui-button {
   height: var(--control-height-compact);
   min-height: var(--control-height-compact);
   min-width: 0;
@@ -259,7 +258,7 @@
   .target-list__header,
   .target-workflow-header {
     grid-template-columns:
-      32px minmax(120px, 1fr) 68px 84px minmax(100px, 0.8fr) 198px;
+      32px minmax(100px, 1fr) 58px 80px minmax(74px, 0.8fr) 258px;
   }
 
   .target-list__header > span:nth-child(6),
@@ -278,9 +277,6 @@
   border-top: 1px solid var(--border);
   display: grid;
   gap: 8px;
-  max-height: 250px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   margin: 0 -12px;
   padding: 10px 18px 12px 52px;
 }

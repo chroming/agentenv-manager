@@ -75,6 +75,11 @@ export const stripConversationScaffolding = (value: string) => {
   if (/^#\s*AGENTS\.md instructions\b/i.test(remaining)) return "";
 
   for (let index = 0; index < 12; index += 1) {
+    const danglingClosing = remaining.match(/^<\/([a-z][\w:.-]*)\s*>/i);
+    if (danglingClosing && isScaffoldingTag(danglingClosing[1])) {
+      remaining = remaining.slice(danglingClosing[0].length).trimStart();
+      continue;
+    }
     const opening = remaining.match(/^<([a-z][\w:.-]*)(?:\s[^>]*)?>/i);
     if (!opening || !isScaffoldingTag(opening[1])) break;
     const openingText = opening[0];

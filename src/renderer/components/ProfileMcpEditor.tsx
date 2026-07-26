@@ -82,10 +82,6 @@ export const ProfileMcpEditor = ({
   return (
     <div className="profile-mcp-editor">
       <div className="profile-mcp-toolbar">
-        <span>{t("{{count}} in {{name}}", {
-          count: targetConnections.length,
-          name: target.name
-        })}</span>
         <span className="profile-mcp-toolbar__actions">
           {!canManage && policy.mode !== "ignore" ? (
             <button
@@ -154,7 +150,7 @@ export const ProfileMcpEditor = ({
                 </span>
                 {!managing ? null : canManage && connection.controllable ? (
                   <select
-                    className={`profile-mcp-mode${mode === "agent" ? " is-agent-setting" : " is-profile-override"}`}
+                    className={`profile-mcp-mode${mode === "agent" ? "" : " is-profile-override"}`}
                     aria-label={t("{{name}} Profile behavior", { name: connection.name })}
                     value={mode}
                     disabled={!managing}

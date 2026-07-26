@@ -628,8 +628,8 @@ describe("SkillLibraryPanel", () => {
     expect(screen.queryByRole("region", { name: "Environment skills" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Library storage settings" })).not.toBeInTheDocument();
     const sharedRow = screen.getByRole("group", { name: "Library item shared-reviewer" });
-    expect(sharedRow).toHaveTextContent("1 profile");
-    expect(sharedRow).toHaveTextContent("2 Agents");
+    expect(sharedRow).toHaveTextContent("Profiles1");
+    expect(sharedRow).toHaveTextContent("Agents2");
     fireEvent.click(within(sharedRow).getByText("Shared Reviewer"));
     const filesDialog = await screen.findByRole("dialog", { name: "Files in Shared Reviewer" });
     expect(onListSkillFiles).toHaveBeenCalledWith("shared-reviewer");
@@ -665,7 +665,11 @@ describe("SkillLibraryPanel", () => {
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
     expect(
       within(githubRow).getByRole("button", { name: "Review update github-reviewer" })
-    ).toHaveTextContent("Review");
+    ).toHaveTextContent("Review update");
+    expect(
+      within(githubRow).queryByRole("button", { name: /^Review$/ })
+    ).not.toBeInTheDocument();
+    expect(githubRow).toHaveTextContent("Update available");
     const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
     expect(githubSource).not.toHaveAttribute("title");
     fireEvent.mouseEnter(githubSource);
@@ -759,7 +763,7 @@ describe("SkillLibraryPanel", () => {
       "shared-reviewer"
     ]);
 
-    expect(sharedRow).toHaveTextContent("2 Agents");
+    expect(sharedRow).toHaveTextContent("Agents2");
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.mouseDown(document.body);
     expect(screen.queryByLabelText("Update source for shared-reviewer")).not.toBeInTheDocument();
@@ -1323,13 +1327,14 @@ describe("SkillLibraryPanel", () => {
     expect(bulkDialog).toHaveTextContent("1 update previews could not be prepared");
     expect(bulkDialog).toHaveTextContent("missing-reviewer");
     expect(bulkDialog).toHaveTextContent("Source directory is unavailable");
+    expect(bulkDialog.querySelectorAll(".bulk-update-disclosure")).toHaveLength(2);
     fireEvent.click(within(bulkDialog).getByRole("button", { name: "Retry failed previews" }));
     expect(onPreviewAllLibrarySkillUpdates).toHaveBeenCalledWith([
       "shared-reviewer",
       "broken-reviewer",
       "missing-reviewer"
     ]);
-    const partialApply = within(bulkDialog).getByRole("button", { name: "Apply 1 updates" });
+    const partialApply = within(bulkDialog).getByRole("button", { name: "Apply 1 update" });
     expect(partialApply).toBeEnabled();
     fireEvent.click(partialApply);
     expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith([
