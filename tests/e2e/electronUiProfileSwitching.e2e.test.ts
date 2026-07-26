@@ -1607,12 +1607,10 @@ describe("Electron UI profile switching e2e", () => {
       });
       const updateActionGeometry = await changingRow.evaluate((row) => {
         const statusCell = row.querySelector<HTMLElement>(".library-status-cell")!;
-        const actionCell = row.querySelector<HTMLElement>(".library-current-action-cell")!;
-        const updateButton = actionCell.querySelector<HTMLButtonElement>("button")!;
+        const updateButton = statusCell.querySelector<HTMLButtonElement>("button")!;
         const statusDetail = statusCell.querySelector<HTMLElement>(".library-status-detail")!;
         const moreCell = row.querySelector<HTMLElement>(".library-actions-cell")!;
         const statusRect = statusCell.getBoundingClientRect();
-        const actionRect = actionCell.getBoundingClientRect();
         const buttonRect = updateButton.getBoundingClientRect();
         const detailRect = statusDetail.getBoundingClientRect();
         const detailVisible = getComputedStyle(statusDetail).display !== "none";
@@ -1620,19 +1618,19 @@ describe("Electron UI profile switching e2e", () => {
         return {
           background: getComputedStyle(updateButton).backgroundColor,
           buttonFitsText: updateButton.scrollWidth <= updateButton.clientWidth,
-          buttonInsideActionColumn:
-            buttonRect.left >= actionRect.left - 1 && buttonRect.right <= actionRect.right + 1,
+          buttonInsideStatusColumn:
+            buttonRect.left >= statusRect.left - 1 && buttonRect.right <= statusRect.right + 1,
           columnsDoNotOverlap:
-            statusRect.right <= actionRect.left && actionRect.right <= moreRect.left,
+            statusRect.right <= moreRect.left,
           detailClearance: detailVisible ? detailRect.top - buttonRect.bottom : undefined,
           foreground: getComputedStyle(updateButton).color
         };
       });
       expect(updateActionGeometry.background).not.toBe("rgb(0, 122, 255)");
       expect(updateActionGeometry.buttonFitsText).toBe(true);
-      expect(updateActionGeometry.buttonInsideActionColumn).toBe(true);
+      expect(updateActionGeometry.buttonInsideStatusColumn).toBe(true);
       expect(updateActionGeometry.columnsDoNotOverlap).toBe(true);
-      await expectTextFits(changingRow.locator(".library-current-action-cell button"));
+      await expectTextFits(changingRow.locator(".library-status-cell .library-primary-status"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
       await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
@@ -6103,7 +6101,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await updatedRow.getByRole("button", { name: "Sync install of shared-reviewer" }).count()).toBe(0);
   }, 30_000);
 
-  it("keeps the six Skill lanes aligned across status actions and supported widths", async () => {
+  it("keeps the five Skill lanes aligned with actionable status at supported widths", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
     const staticSkillDir = join(appDataRoot, "skills-library", "static-layout-reference");
     await mkdir(staticSkillDir, { recursive: true });
@@ -6140,16 +6138,14 @@ describe("Electron UI profile switching e2e", () => {
         ".library-source-cell",
         ".library-usage-cell",
         ".library-status-cell",
-        ".library-current-action-cell",
         ".library-actions-cell"
       ];
       const headerCells = head ? Array.from(head.children) as HTMLElement[] : [];
       const headerLefts = headerCells.map((cell) => cell.getBoundingClientRect().left);
-      const headerActionsRight = headerCells[5]?.getBoundingClientRect().right ?? -1;
+      const headerActionsRight = headerCells[4]?.getBoundingClientRect().right ?? -1;
       const rowMetrics = rows.map((row) => {
         const cells = cellSelectors.map((selector) => row?.querySelector<HTMLElement>(selector));
         const actions = row?.querySelector<HTMLElement>(".library-actions-cell");
-        const currentAction = row?.querySelector<HTMLElement>(".library-current-action-cell");
         const status = row?.querySelector<HTMLElement>(".library-status-cell");
         const primary = [
           row?.querySelector<HTMLElement>(".library-source-primary"),
@@ -6168,8 +6164,8 @@ describe("Electron UI profile switching e2e", () => {
           actionsRight: actionBox?.right ?? -1,
           cellLefts: cells.map((cell) => cell?.getBoundingClientRect().left ?? -1),
           actionsLeft: actionBox?.left ?? -1,
-          actionGap: actionBox && currentAction
-            ? actionBox.left - currentAction.getBoundingClientRect().right
+          statusToMoreGap: actionBox && statusBox
+            ? actionBox.left - statusBox.right
             : -1,
           childrenFit: Boolean(rowBox) && Array.from(row!.children).every((child) => {
             const box = child.getBoundingClientRect();
@@ -6204,7 +6200,7 @@ describe("Electron UI profile switching e2e", () => {
       });
       expect(row.childrenFit).toBe(true);
       expect(Math.abs(row.actionsRight - defaultGeometry.headerActionsRight)).toBeLessThanOrEqual(1);
-      expect(row.actionGap).toBeGreaterThanOrEqual(9);
+      expect(row.statusToMoreGap).toBeGreaterThanOrEqual(9);
       expect(row.statusOverflow).toBeLessThanOrEqual(1);
       expect(Math.max(...row.primaryTops) - Math.min(...row.primaryTops)).toBeLessThanOrEqual(1);
       expect(Math.max(...row.secondaryTops) - Math.min(...row.secondaryTops)).toBeLessThanOrEqual(1);
@@ -6217,11 +6213,11 @@ describe("Electron UI profile switching e2e", () => {
     await resizeAppWindow(page, 920, 620);
     const compactGeometry = await updateRow.evaluate((row) => {
       const actions = row.querySelector<HTMLElement>(".library-actions-cell")!.getBoundingClientRect();
-      const currentAction = row.querySelector<HTMLElement>(".library-current-action-cell")!.getBoundingClientRect();
+      const status = row.querySelector<HTMLElement>(".library-status-cell")!.getBoundingClientRect();
       const head = document.querySelector<HTMLElement>(".skill-library-panel .library-table__head")!;
       const statusLabel = row.querySelector<HTMLElement>(".library-primary-status > span")!;
       return {
-        actionGap: actions.left - currentAction.right,
+        statusToMoreGap: actions.left - status.right,
         documentWidth: document.documentElement.scrollWidth,
         headerColumns: head.children.length,
         headerDisplay: getComputedStyle(head).display,
@@ -6231,9 +6227,9 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(compactGeometry.documentWidth).toBe(compactGeometry.viewportWidth);
-    expect(compactGeometry.actionGap).toBeGreaterThanOrEqual(9);
+    expect(compactGeometry.statusToMoreGap).toBeGreaterThanOrEqual(9);
     expect(compactGeometry.headerDisplay).toBe("grid");
-    expect(compactGeometry.headerColumns).toBe(6);
+    expect(compactGeometry.headerColumns).toBe(5);
     expect(compactGeometry.rowHeight).toBeLessThanOrEqual(68);
     expect(compactGeometry.statusOverflow).toBeLessThanOrEqual(1);
   }, 45_000);

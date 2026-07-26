@@ -164,11 +164,10 @@
   overflow: visible;
   column-gap: 10px;
   grid-template-columns:
-    minmax(200px, 1.42fr)
-    minmax(150px, 0.95fr)
-    minmax(100px, 0.64fr)
-    minmax(120px, 0.72fr)
-    122px
+    minmax(220px, 1.5fr)
+    minmax(160px, 0.95fr)
+    minmax(104px, 0.64fr)
+    minmax(150px, 0.9fr)
     34px;
 }
 
@@ -251,7 +250,6 @@
 .skill-library-panel .library-source-cell,
 .skill-library-panel .library-usage-cell,
 .skill-library-panel .library-status-cell,
-.skill-library-panel .library-current-action-cell,
 .skill-library-panel .library-actions-cell {
   align-content: center;
   grid-area: auto;
@@ -413,24 +411,28 @@
   white-space: nowrap;
 }
 
-.skill-library-panel .library-current-action-cell {
-  align-items: center;
-  display: flex;
-  justify-content: stretch;
-  overflow: hidden;
+.skill-library-panel button.library-primary-status.is-actionable {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-tight);
+  cursor: pointer;
+  padding: 0;
+  width: fit-content;
 }
 
-.skill-library-panel .catalog-current-action {
-  justify-content: flex-start;
-  max-width: 100%;
-  min-width: 0;
-  width: 100%;
+.skill-library-panel button.library-primary-status.is-actionable:hover:not(:disabled) > span {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.skill-library-panel .catalog-current-action > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.skill-library-panel button.library-primary-status.is-actionable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skill-library-panel button.library-primary-status.is-actionable:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .skill-library-panel .library-actions-cell {
@@ -514,11 +516,10 @@
   .skill-library-panel .library-table-row {
     column-gap: 10px;
     grid-template-columns:
-      minmax(152px, 1.2fr)
-      minmax(98px, 0.75fr)
-      78px
-      120px
-      108px
+      minmax(164px, 1.25fr)
+      minmax(110px, 0.8fr)
+      82px
+      minmax(134px, 0.85fr)
       32px;
   }
 

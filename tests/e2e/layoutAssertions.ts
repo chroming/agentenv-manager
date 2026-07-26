@@ -74,7 +74,6 @@ export const findVisibleTextLayoutDefects = async (page: Page) =>
       ".ui-badge",
       ".change-kind",
       ".library-primary-status",
-      ".library-current-action-cell",
       ".profile-skill-state",
       ".capture-resource__status",
       ".profile-composer-section__count",

@@ -1056,7 +1056,7 @@ describe("App", () => {
     expect(
       within(screen.getByRole("group", { name: "Library item github-reviewer" }))
         .getByRole("button", { name: "Review update github-reviewer" })
-    ).toHaveTextContent("Review update");
+    ).toHaveTextContent("Update available");
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
