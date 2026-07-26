@@ -241,6 +241,7 @@ describe("Conversations desktop workflow", () => {
             (agentBounds.top + agentBounds.height / 2)
           )
         ),
+        borderRadius: style.borderRadius,
         boxShadow: style.boxShadow,
         className: row.className
       };
@@ -248,6 +249,7 @@ describe("Conversations desktop workflow", () => {
     expect(selectedRowGeometry.titleInset).toBeLessThanOrEqual(10);
     expect(selectedRowGeometry.titleRightInset).toBeLessThanOrEqual(10);
     expect(selectedRowGeometry.agentIconCenterDelta).toBeLessThanOrEqual(1);
+    expect(selectedRowGeometry.borderRadius).toBe("0px");
     expect(selectedRowGeometry.boxShadow).toBe("none");
     expect(selectedRowGeometry.className).toContain("is-selected");
     await expect.poll(() => selectedConversation.evaluate((row) =>
