@@ -325,7 +325,9 @@ const resolveStartupDataRoot = () => {
   return resolveAppDataRoot({ homeDir, userDataDir: app.getPath("userData") });
 };
 
-const createServices = async () => {
+const createServices = async (
+  reportPhase: (phase: Extract<StartupStatus, { state: "initializing" }>["phase"]) => void
+) => {
   const homeDir = process.env.AGENTENV_HOME ?? app.getPath("home");
   const operatingSystemCacheRoot =
     process.platform === "darwin"
@@ -335,6 +337,7 @@ const createServices = async () => {
         : process.env.XDG_CACHE_HOME ?? join(homeDir, ".cache");
   const appDataRoot = startupDataRoot ?? resolveStartupDataRoot();
   const mutationCoordinator = createMutationCoordinator(appDataRoot);
+  reportPhase("preparing-data");
   await mutationCoordinator.runExclusive("Initialize AgentEnv data", async () => {
     await recoverPendingReplacementsInDirectory(join(appDataRoot, ".."));
     if (!process.env.AGENTENV_DATA_ROOT) {
@@ -360,6 +363,7 @@ const createServices = async () => {
     fakeHomeRoot: process.env.AGENTENV_FAKE_HOME ?? join(appDataRoot, "fake-home")
   });
   const targetRegistry = createTargetRegistry();
+  reportPhase("migrating-data");
   await mutationCoordinator.runExclusive("Migrate AgentEnv data", async () => {
     await migrateAppDataToV2(paths, targetRegistry);
     await ensureAppDataFormat(paths);
@@ -370,6 +374,7 @@ const createServices = async () => {
   const settings = await mutationCoordinator.runExclusive("Initialize Settings", () =>
     settingsStore.readSettings()
   );
+  reportPhase("upgrading-skills");
   await mutationCoordinator.runExclusive("Upgrade Skill content hashes", () =>
     migrateSkillContentHashes(paths, {
       onWarning: (message) => startupDiagnostics?.record("skill-content-hash-upgrade-warning", message)
@@ -418,6 +423,7 @@ const createServices = async () => {
     for (const scanDir of targetPaths.skillScanDirs ?? []) replacementRoots.add(scanDir);
     for (const location of targetPaths.skillLocations ?? []) replacementRoots.add(location.path);
   }
+  reportPhase("recovering-writes");
   await mutationCoordinator.runExclusive("Recover interrupted writes", async () => {
     for (const root of replacementRoots) {
       await recoverPendingReplacementsInDirectory(root);
@@ -437,6 +443,7 @@ const createServices = async () => {
   }, targetRegistry);
   const backupStore = createBackupStore(paths);
   const workspaceSyncTransaction = createWorkspaceSyncTransaction({ paths, backupStore });
+  reportPhase("recovering-sync");
   await mutationCoordinator.runExclusive("Recover Workspace Sync", async () => {
     try {
       await workspaceSyncTransaction.recover();
@@ -564,6 +571,7 @@ const createServices = async () => {
     findManagedInstallPaths: skillLibraryStore.findManagedInstallPaths
   });
 
+  reportPhase("preparing-workspace");
   if (!(await pathEntryExists(paths.workspaceSyncJournalPath))) {
     await mutationCoordinator.runExclusive("Initialize Profiles", () =>
       seedDefaultProfiles(paths, targetRegistry)
@@ -604,7 +612,10 @@ const initializeServices = () => {
   startupAttempt = (async () => {
     await startupDiagnostics?.record("startup-begin", { dataRoot: startupDataRoot });
     try {
-      const services = await createServices();
+      const services = await createServices((phase) => {
+        startupStatus = { state: "initializing", phase };
+        broadcastStartupStatus();
+      });
       let removeWorkspaceSyncFocusListener: () => void = () => undefined;
       registerIpcHandlers(services);
       if (process.env.AGENTENV_AUTOMATION !== "1") {

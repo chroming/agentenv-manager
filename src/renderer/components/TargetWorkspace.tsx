@@ -20,12 +20,11 @@ import type {
 } from "../../shared/types";
 import { HistoryView } from "./HistoryView";
 import { InfoTip } from "./InfoTip";
-import { OverflowTooltip } from "./OverflowTooltip";
 import { PreviewDialog } from "./PreviewDialog";
 import { targetIconFor } from "./ProfileSidebar";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
-import { Button, ControlGroup, IconButton, PageHeader } from "./ui";
+import { Button, ControlGroup, IconButton, ModalFrame, PageHeader } from "./ui";
 import { isTargetInstalled } from "../../shared/targetHealth";
 
 interface TargetWorkspaceProps {
@@ -154,11 +153,12 @@ export const TargetWorkspace = ({
             <Button
               className="secondary-action"
               size="prominent"
+              busy={busy}
               disabled={busy}
               icon={<RefreshCw size={15} strokeWidth={2.2} />}
               onClick={() => { void onRefresh(); }}
             >
-              {busy ? t("Refreshing...") : t("Refresh")}
+              {t("Refresh")}
             </Button>
           </ControlGroup>
         )}
@@ -204,11 +204,6 @@ export const TargetWorkspace = ({
                       <strong>{target.name}</strong>
                     </button>
                   </span>
-                  <OverflowTooltip
-                    className="target-workflow-description"
-                    focusable={false}
-                    text={t(target.description)}
-                  />
                 </span>
                 <span className={`target-health-status target-health-status--${target.health.status}`}>
                   {t(targetStatusLabel[target.health.status])}
@@ -340,15 +335,13 @@ export const TargetWorkspace = ({
       </div>
 
       {isRecoveryOpen ? (
-        <div className="preview-modal-backdrop" onClick={busy ? undefined : () => setIsRecoveryOpen(false)}>
-          <section
-            ref={recoveryDialogRef}
-            className="profile-form-dialog target-recovery-dialog ui-dialog-shell"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t("Recovery")}
-            onClick={(event) => event.stopPropagation()}
-          >
+        <ModalFrame
+          ariaLabel={t("Recovery")}
+          className="target-recovery-dialog ui-dialog-shell"
+          dialogRef={recoveryDialogRef}
+          dismissDisabled={busy}
+          onDismiss={() => setIsRecoveryOpen(false)}
+        >
             <header className="profile-dialog-header target-recovery-dialog__header ui-dialog-header">
               <div className="ui-dialog-header__copy">
                 <div className="section-title ui-dialog-title">{t("Recovery")}</div>
@@ -369,18 +362,16 @@ export const TargetWorkspace = ({
               />
             </div>
             <footer className="preview-actions ui-dialog-footer">
-              <button
+              <Button
                 ref={recoveryCloseRef}
                 className="secondary-action"
-                type="button"
                 disabled={busy}
                 onClick={() => setIsRecoveryOpen(false)}
               >
                 {t("Close")}
-              </button>
+              </Button>
             </footer>
-          </section>
-        </div>
+        </ModalFrame>
       ) : null}
       {rollbackPreview ? (
         <PreviewDialog
@@ -395,8 +386,13 @@ export const TargetWorkspace = ({
         />
       ) : null}
       {stopManagingTargetId ? (
-        <div className="preview-modal-backdrop" onClick={() => setStopManagingTargetId(undefined)}>
-          <section ref={stopManagingDialogRef} className="profile-form-dialog stop-managing-dialog ui-dialog-shell" role="dialog" aria-modal="true" aria-label={t("Stop managing Agent")} onClick={(event) => event.stopPropagation()}>
+        <ModalFrame
+          ariaLabel={t("Stop managing Agent")}
+          className="stop-managing-dialog ui-dialog-shell"
+          dialogRef={stopManagingDialogRef}
+          dismissDisabled={busy}
+          onDismiss={() => setStopManagingTargetId(undefined)}
+        >
             <header className="profile-dialog-header ui-dialog-header">
               <div className="ui-dialog-header__copy">
                 <div className="section-title ui-dialog-title">{t("Stop managing {{name}}", { name: targets.find((target) => target.id === stopManagingTargetId)?.name ?? "" })}</div>
@@ -414,14 +410,13 @@ export const TargetWorkspace = ({
               </label>
             </div>
             <footer className="preview-actions ui-dialog-footer">
-              <button ref={stopManagingCancelRef} className="secondary-action" type="button" onClick={() => setStopManagingTargetId(undefined)}>{t("Cancel")}</button>
-              <button className="danger-action" type="button" disabled={busy} onClick={() => {
+              <Button ref={stopManagingCancelRef} className="secondary-action" onClick={() => setStopManagingTargetId(undefined)}>{t("Cancel")}</Button>
+              <Button variant="danger" className="danger-action" disabled={busy} onClick={() => {
                 onPreviewStopManaging(stopManagingTargetId, stopManagingMode);
                 setStopManagingTargetId(undefined);
-              }}>{t("Review changes")}</button>
+              }}>{t("Review changes")}</Button>
             </footer>
-          </section>
-        </div>
+        </ModalFrame>
       ) : null}
       {stopManagingPreview ? (
         <PreviewDialog

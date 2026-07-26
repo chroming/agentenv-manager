@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { RefreshCw } from "lucide-react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ActionMenu,
   Badge,
   Button,
   ControlGroup,
@@ -32,6 +33,35 @@ describe("renderer UI primitives", () => {
     );
     expect(screen.getByRole("button", { name: "Refresh" })).toHaveAttribute("title", "Refresh");
     expect(screen.getByRole("group", { name: "Actions" })).toHaveClass("ui-control-group");
+  });
+
+  it("keeps async button geometry local while preventing duplicate submission", () => {
+    const { rerender } = render(<Button icon={<RefreshCw />}>Check</Button>);
+    const button = screen.getByRole("button", { name: "Check" });
+    expect(button).toHaveAttribute("aria-busy", "false");
+    expect(button.querySelector(".ui-button__icon")).not.toBeNull();
+
+    rerender(<Button busy icon={<RefreshCw />}>Check</Button>);
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button).toBeDisabled();
+    expect(button.querySelector(".is-spinning")).not.toBeNull();
+    expect(button.querySelector(".ui-button__icon")).not.toBeNull();
+  });
+
+  it("uses one keyboard menu surface for contextual actions", () => {
+    render(
+      <ActionMenu ariaLabel="Resource actions">
+        <button type="button" role="menuitem">First</button>
+        <button type="button" role="menuitem">Second</button>
+      </ActionMenu>
+    );
+
+    const menu = screen.getByRole("menu", { name: "Resource actions" });
+    expect(menu).toHaveClass("ui-action-menu");
+    fireEvent.keyDown(screen.getByRole("menuitem", { name: "First" }), {
+      key: "ArrowDown"
+    });
+    expect(screen.getByRole("menuitem", { name: "Second" })).toHaveFocus();
   });
 
   it("exposes badge tone as a visual class while preserving its content", () => {

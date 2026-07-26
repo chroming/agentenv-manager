@@ -74,5 +74,41 @@ describe("Workspace Sync desktop flow", () => {
     expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
     const remoteHead = (await execFileAsync("/usr/bin/git", ["--git-dir", remote, "rev-parse", "refs/heads/main"])).stdout.trim();
     expect(remoteHead).toMatch(/^[a-f0-9]{40}$/);
+
+    await app.close();
+    app = undefined;
+    app = await electron.launch({
+      executablePath: electronPath as unknown as string,
+      args: [`--user-data-dir=${join(root, "electron-user-data-restart")}`, "."],
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        AGENTENV_AUTOMATION: "1",
+        AGENTENV_DATA_ROOT: join(root, "data"),
+        AGENTENV_CACHE_ROOT: join(root, "cache"),
+        AGENTENV_HOME: home
+      }
+    });
+    const restartedPage = await app.firstWindow();
+    await restartedPage.setViewportSize({ width: 920, height: 620 });
+    await expect.poll(() => restartedPage.evaluate(
+      () => window.agentEnv.readStartupStatus()
+    )).toEqual({ state: "ready" });
+    await restartedPage.getByRole("button", { name: "Settings", exact: true }).click();
+    await restartedPage.getByRole("tab", { name: "Connections" }).click();
+    const restartedSection = restartedPage.getByRole("region", { name: "Workspace Sync" });
+    await expect.poll(() => restartedPage.evaluate(
+      () => window.agentEnv.readWorkspaceSyncStatus()
+    )).toMatchObject({
+      connection: {
+        repository: remote,
+        branch: "main"
+      }
+    });
+    await expect.poll(
+      () => restartedSection.getByRole("button", { name: "Set up" }).count(),
+      { timeout: 15_000 }
+    ).toBe(0);
+    await expectNoHorizontalOverflow(restartedPage);
   }, 30_000);
 });

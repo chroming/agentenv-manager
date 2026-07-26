@@ -171,7 +171,7 @@ describe("ConversationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu");
     expect(within(menu).queryByText("Codex")).toBeNull();
-    expect(within(menu).getByText("File")).toBeInTheDocument();
+    expect(within(menu).getByText("Continue automatically")).toBeInTheDocument();
     fireEvent.click(within(menu).getByRole("menuitem", { name: /^OpenCode/ }));
 
     await waitFor(() => expect(api.continueConversation).toHaveBeenCalledWith("preview-1"));
@@ -223,7 +223,7 @@ describe("ConversationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu", { name: "Continue in" });
     const destination = within(menu).getByRole("menuitem", {
-      name: "OpenCode, Paste"
+      name: "OpenCode, Copy and paste"
     });
     expect(destination.getAttribute("title"))
       .toContain("Paste it into the new conversation.");
@@ -243,12 +243,14 @@ describe("ConversationWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     const menu = await screen.findByRole("menu", { name: "Continue in" });
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "OpenCode, File" }));
+    fireEvent.click(within(menu).getByRole("menuitem", {
+      name: "OpenCode, Continue automatically"
+    }));
 
     await waitFor(() => expect(menu).toHaveAttribute("aria-busy", "true"));
     expect(menu.querySelector(".is-spinning")).not.toBeNull();
     expect(within(menu).getByRole("menuitem", {
-      name: "OpenCode, File"
+      name: "OpenCode, Continue automatically"
     })).toBeDisabled();
 
     await act(async () => resolvePreview({

@@ -486,6 +486,10 @@
   white-space: nowrap;
 }
 
+.skill-source-action-menu {
+  position: fixed;
+}
+
 .skill-source-check {
   min-width: 78px;
 }

@@ -275,9 +275,9 @@ describe("Conversations desktop workflow", () => {
     await targetMenu.waitFor({ state: "visible" });
     await expectInViewport(page, targetMenu);
     await expectTopmost(targetMenu);
-    expect(await targetMenu.getByText("File", { exact: true }).count())
+    expect(await targetMenu.getByText("Continue automatically", { exact: true }).count())
       .toBeGreaterThan(0);
-    expect(await targetMenu.getByText("Paste", { exact: true }).count())
+    expect(await targetMenu.getByText("Copy and paste", { exact: true }).count())
       .toBeGreaterThan(0);
     const targetMenuGeometry = await targetMenu.evaluate((menu) => ({
       width: Math.round(menu.getBoundingClientRect().width),
@@ -305,7 +305,7 @@ describe("Conversations desktop workflow", () => {
     )).resolves.toBe(true);
 
     await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("menuitem", { name: "Trae CLI, Paste" }).click();
+    await page.getByRole("menuitem", { name: "Trae CLI, Copy and paste" }).click();
     const continuationReview = page.getByRole("dialog", {
       name: "Review continuation"
     });

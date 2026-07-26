@@ -37,11 +37,11 @@ import { InfoTip } from "./InfoTip";
 import { targetIconFor } from "./ProfileSidebar";
 import { OverflowTooltip } from "./OverflowTooltip";
 import {
+  ActionMenu,
   Badge,
   Button,
   ControlGroup,
   focusInitialActionMenuItem,
-  handleActionMenuKeyDown,
   IconButton,
   ModalFrame,
   PageHeader
@@ -210,14 +210,12 @@ const TargetMenu = ({
       </Button>
       {open
         ? createPortal(
-            <div
-              ref={menuRef}
-              className="conversation-target-menu ui-action-menu"
-              role="menu"
-              aria-labelledby={labelId}
+            <ActionMenu
+              ariaLabel={t("Continue in")}
+              menuRef={menuRef}
+              className="conversation-target-menu"
               aria-busy={Boolean(pendingTargetId)}
               style={style}
-              onKeyDown={handleActionMenuKeyDown}
             >
               <span className="conversation-target-menu__label" id={labelId}>
                 {t("Continue in")}
@@ -229,7 +227,9 @@ const TargetMenu = ({
                     ? "clipboard"
                     : "context-file");
                 const requiresPaste = delivery === "clipboard";
-                const methodLabel = requiresPaste ? "Paste" : "File";
+                const methodLabel = requiresPaste
+                  ? "Copy and paste"
+                  : "Continue automatically";
                 return (
                   <button
                     type="button"
@@ -268,7 +268,7 @@ const TargetMenu = ({
                   </button>
                 );
               })}
-            </div>,
+            </ActionMenu>,
             document.body
           )
         : null}
@@ -363,13 +363,11 @@ const ConversationActionsMenu = ({
           : <MoreHorizontal size={15} />}
       </IconButton>
       {open ? createPortal(
-        <div
-          ref={menuRef}
-          className="conversation-detail-overflow-menu ui-action-menu"
-          role="menu"
-          aria-label={t("Conversation actions")}
+        <ActionMenu
+          ariaLabel={t("Conversation actions")}
+          menuRef={menuRef}
+          className="conversation-detail-overflow-menu"
           style={style}
-          onKeyDown={handleActionMenuKeyDown}
         >
           <button type="button" role="menuitem" onClick={() => run(onCopy)}>
             <Copy size={15} aria-hidden="true" />
@@ -385,7 +383,7 @@ const ConversationActionsMenu = ({
               <span>{t("Open original")}</span>
             </button>
           ) : null}
-        </div>,
+        </ActionMenu>,
         document.body
       ) : null}
     </>

@@ -1219,7 +1219,10 @@ describe("App", () => {
     await screen.findByText("Source Reviewer", { exact: true });
     const sourceGroupRow = document.querySelector<HTMLElement>(".skill-source-group");
     if (!sourceGroupRow) throw new Error("Source group did not render");
-    const checkButton = within(sourceGroupRow).getByRole("button", { name: "Check" });
+    fireEvent.click(within(sourceGroupRow).getByRole("button", {
+      name: "Source actions for acme/skills"
+    }));
+    const checkButton = screen.getByRole("menuitem", { name: "Check source" });
     await waitFor(() => expect(checkButton).toBeEnabled());
     fireEvent.click(checkButton);
     await waitFor(() => expect(api.checkSkillSourceGroup).toHaveBeenCalledWith("source-acme"));
@@ -1966,7 +1969,7 @@ describe("App", () => {
       /2.*library-testing.*library-docs/
     );
     expect(mcp).toHaveAccessibleDescription(
-      /3.*library-docs.*shared-mcp.*\+1/
+      /3.*library-docs.*shared-mcp.*raw-browser/
     );
     expect(skills).toHaveAttribute("aria-expanded", "false");
     expect(instructions).toHaveAttribute("aria-expanded", "false");

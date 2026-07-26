@@ -19,7 +19,12 @@ export const handleActionMenuKeyDown = (event: KeyboardEvent<HTMLElement>) => {
   );
   if (items.length === 0) return;
 
-  const currentIndex = items.findIndex((item) => item === document.activeElement);
+  const eventItem = event.target instanceof HTMLElement
+    ? event.target.closest<HTMLElement>(actionMenuItemSelector)
+    : null;
+  const currentIndex = items.findIndex(
+    (item) => item === document.activeElement || item === eventItem
+  );
   let nextIndex: number | undefined;
   if (event.key === "ArrowDown" || event.key === "ArrowRight") {
     nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;

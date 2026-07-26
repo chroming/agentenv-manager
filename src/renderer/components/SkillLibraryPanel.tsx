@@ -97,7 +97,7 @@ import {
   type SkillCleanupRecommendedAction
 } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
-import { Button, handleActionMenuKeyDown, IconButton, ModalFrame, Switch } from "./ui";
+import { ActionMenu, Button, IconButton, ModalFrame, Switch } from "./ui";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { isExternalSkillImportable } from "../../shared/skillIdentity";
 import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
@@ -2012,15 +2012,9 @@ export const SkillLibraryPanel = ({
                     ].filter(Boolean).join(" · ")
                   : hasError
                     ? t("Source check failed")
-                    : staleCopies.length > 0
+                  : staleCopies.length > 0
                       ? staleInstallDetail
-                      : isTracked && updateInfo
-                        ? `${(updateInfo.latestRevision ?? revisionLabel).slice(0, 7)} ${t("current")}`
-                        : isTracked && hasUpdateSource
-                          ? t("Tracked source")
-                          : hasUpdateSource
-                            ? t("Source retained")
-                            : t("No monitored source");
+                      : undefined;
             return (
               <div
                 aria-label={t("Library item {{id}}", { id: skill.id })}
@@ -2245,13 +2239,11 @@ export const SkillLibraryPanel = ({
                   </div>
                   {openActionId === skill.id && openAction
                     ? createPortal(
-                        <div
-                          className="row-action-popover ui-action-menu"
+                        <ActionMenu
+                          ariaLabel={t("Actions for {{id}}", { id: skill.id })}
+                          className="row-action-popover"
                           data-skill-action-popover={skill.id}
-                          role="menu"
-                          aria-label={t("Actions for {{id}}", { id: skill.id })}
                           style={{ left: openAction.left, top: openAction.top }}
-                          onKeyDown={handleActionMenuKeyDown}
                         >
                           {globallyEnabled && hasUpdateSource && isTracked ? (
                             <button
@@ -2313,7 +2305,7 @@ export const SkillLibraryPanel = ({
                             <Trash2 size={14} strokeWidth={2.2} />
                             <span>{t("Remove from library")}</span>
                           </button>
-                        </div>,
+                        </ActionMenu>,
                         document.body
                       )
                     : null}
@@ -3762,13 +3754,11 @@ export const SkillLibraryPanel = ({
                       </button>
                       {openActionId === cleanupActionId && openAction
                         ? createPortal(
-                            <div
-                              className="row-action-popover cleanup-action-popover ui-action-menu"
+                            <ActionMenu
+                              ariaLabel={t("Cleanup actions for {{id}}", { id: group.skillKey })}
+                              className="row-action-popover cleanup-action-popover"
                               data-skill-action-popover={cleanupActionId}
-                              role="menu"
-                              aria-label={t("Cleanup actions for {{id}}", { id: group.skillKey })}
                               style={{ left: openAction.left, top: openAction.top }}
-                              onKeyDown={handleActionMenuKeyDown}
                             >
                               <button
                                 className="row-action-item"
@@ -3837,7 +3827,7 @@ export const SkillLibraryPanel = ({
                                   <span><strong>{t(allKeptOutside ? "Review again" : "Review kept paths")}</strong></span>
                                 </button>
                               ) : null}
-                            </div>,
+                            </ActionMenu>,
                             document.body
                           )
                         : null}

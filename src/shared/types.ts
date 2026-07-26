@@ -208,8 +208,16 @@ export type StartupFailureKind =
   | "recovery"
   | "unknown";
 
+export type StartupPhase =
+  | "preparing-data"
+  | "migrating-data"
+  | "upgrading-skills"
+  | "recovering-writes"
+  | "recovering-sync"
+  | "preparing-workspace";
+
 export type StartupStatus =
-  | { state: "initializing" }
+  | { state: "initializing"; phase?: StartupPhase }
   | { state: "ready" }
   | {
       state: "failed";

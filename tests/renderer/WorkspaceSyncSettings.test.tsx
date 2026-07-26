@@ -52,7 +52,7 @@ describe("Workspace Sync settings", () => {
 
     render(<WorkspaceSyncSettings />);
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Recovery required");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Recovery required"));
     expect(screen.getByRole("button", { name: "Recover Workspace" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Disconnect" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Check" })).toBeNull();

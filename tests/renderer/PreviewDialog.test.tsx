@@ -170,7 +170,7 @@ describe("PreviewDialog", () => {
       />
     );
 
-    expect(screen.getByText("Existing Skill will be brought under AgentEnv")).toBeInTheDocument();
+    expect(screen.getByText('Bring Skill "bytedcli" under AgentEnv')).toBeInTheDocument();
     const issueLocation = screen.getByLabelText("Full issue detail");
     fireEvent.focus(issueLocation);
     expect(screen.getByText(path)).toBeInTheDocument();

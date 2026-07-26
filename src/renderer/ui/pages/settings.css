@@ -591,6 +591,10 @@
   min-width: 0;
 }
 
+.settings-preference-heading { align-items: center; display: flex; gap: 10px; }
+.settings-preference-heading > .ui-switch { min-height: var(--control-height-compact); }
+.settings-preference-row--inline-control { grid-template-columns: minmax(0, 1fr); }
+
 .settings-preference-copy strong {
   color: var(--text);
   font-size: 13px;

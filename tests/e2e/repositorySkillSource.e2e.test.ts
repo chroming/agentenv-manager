@@ -305,7 +305,8 @@ describe("Repository Skill source", () => {
     await mergeDialog.waitFor({ state: "hidden" });
     await expect.poll(() => page.locator(".skill-source-group").count()).toBe(1);
 
-    await page.locator(".skill-source-rename").click();
+    await page.getByRole("button", { name: /Source actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Rename source" }).click();
     const renameDialog = page.getByRole("dialog", { name: "Rename source" });
     await renameDialog.getByLabel("Source name").fill("Engineering Skills");
     await renameDialog.getByRole("button", { name: "Save", exact: true }).click();

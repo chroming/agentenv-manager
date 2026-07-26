@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, FileDown, FolderOpen, LoaderCircle, RefreshCw } from "lucide-react";
-import type { StartupStatus } from "../shared/types";
+import type { StartupPhase, StartupStatus } from "../shared/types";
 import { App } from "./App";
 import { Button } from "./components/ui";
 import { resolveAppLocale, translate } from "./i18n";
@@ -12,6 +12,14 @@ export const StartupGate = () => {
   const [actionError, setActionError] = useState("");
   const locale = resolveAppLocale("system");
   const t = (message: string) => translate(locale, message);
+  const startupPhaseCopy: Record<StartupPhase, string> = {
+    "preparing-data": "Preparing local data…",
+    "migrating-data": "Checking data format…",
+    "upgrading-skills": "Updating Skill metadata…",
+    "recovering-writes": "Recovering interrupted changes…",
+    "recovering-sync": "Checking Workspace recovery…",
+    "preparing-workspace": "Preparing Profiles and Library…"
+  };
 
   useEffect(() => {
     let active = true;
@@ -82,7 +90,7 @@ export const StartupGate = () => {
       <main className="startup-screen" aria-busy="true">
         <LoaderCircle className="is-spinning" size={24} aria-hidden="true" />
         <strong>{t("Preparing your local environment")}</strong>
-        <span>{t("Checking data and recovering interrupted operations…")}</span>
+        <span>{t(status.phase ? startupPhaseCopy[status.phase] : "Checking data and recovering interrupted operations…")}</span>
       </main>
     );
   }
@@ -100,22 +108,25 @@ export const StartupGate = () => {
         <div className="startup-failure-actions">
           <Button
             variant="primary"
+            busy={retrying}
             disabled={retrying || !status.canRetry}
-            icon={<RefreshCw className={retrying ? "is-spinning" : undefined} size={15} />}
+            icon={<RefreshCw size={15} />}
             onClick={() => void retryStartup()}
           >
             {t("Retry")}
           </Button>
           <Button
+            busy={pendingAction === "folder"}
             disabled={Boolean(pendingAction)}
-            icon={pendingAction === "folder" ? <LoaderCircle className="is-spinning" size={15} /> : <FolderOpen size={15} />}
+            icon={<FolderOpen size={15} />}
             onClick={() => void runSupportAction("folder", () => window.agentEnv.openStartupDataFolder())}
           >
             {t("Open data folder")}
           </Button>
           <Button
+            busy={pendingAction === "export"}
             disabled={Boolean(pendingAction)}
-            icon={pendingAction === "export" ? <LoaderCircle className="is-spinning" size={15} /> : <FileDown size={15} />}
+            icon={<FileDown size={15} />}
             onClick={() => void runSupportAction("export", () => window.agentEnv.exportStartupDiagnostics())}
           >
             {t("Export diagnostics")}

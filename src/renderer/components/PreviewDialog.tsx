@@ -6,8 +6,6 @@ import {
   ChevronDown,
   CircleAlert,
   FileText,
-  LoaderCircle,
-  MapPin,
   Network,
   Puzzle,
   ShieldCheck
@@ -22,6 +20,7 @@ import { useI18n, type TranslationValues } from "../i18n";
 import { targetNameFor, type TargetNameIndex } from "../targetPresentation";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { PreviewChangeList } from "./PreviewChangeList";
+import { Button } from "./ui";
 
 interface PreviewDialogProps {
   preview?: ActivationPreview | RollbackPreview | StopManagingPreview;
@@ -66,15 +65,17 @@ const presentIssue = (
   }
 
   if (issue.code === "outside-skill-replacement") {
+    const identity = issue.resourceId ?? t("unnamed Skill");
     return {
-      title: t("Existing Skill will be brought under AgentEnv"),
+      title: t('Bring Skill "{{name}}" under AgentEnv', { name: identity }),
       detail: issue.detail ?? issue.path
     };
   }
 
   if (issue.code === "outside-skill-removal") {
+    const identity = issue.resourceId ?? t("unnamed Skill");
     return {
-      title: t("Skill outside AgentEnv will be removed"),
+      title: t('Remove external Skill "{{name}}"', { name: identity }),
       detail: issue.detail ?? issue.path
     };
   }
@@ -286,11 +287,11 @@ export const PreviewDialog = ({
             onKeepSkillOutside &&
             (item.issue.code === "outside-skill-replacement" ||
               item.issue.code === "outside-skill-removal") ? (
-              <button
+              <Button
                 className="apply-preview-issue-action secondary-action"
-                type="button"
                 disabled={Boolean(resolvingIssueId)}
-                aria-busy={resolvingIssueId === item.id}
+                busy={resolvingIssueId === item.id}
+                size="compact"
                 onClick={() => {
                   setResolvingIssueId(item.id);
                   void Promise.resolve(onKeepSkillOutside(item.issue)).finally(() => {
@@ -298,17 +299,14 @@ export const PreviewDialog = ({
                   });
                 }}
               >
-                {resolvingIssueId === item.id ? (
-                  <LoaderCircle className="is-spinning" size={14} aria-hidden="true" />
-                ) : null}
                 {t("Keep outside")}
-              </button>
+              </Button>
             ) : null}
             {item.detail ? (
               <OverflowTooltip
                 ariaLabel={t("Full issue detail")}
-                className="apply-preview-location apply-preview-issue-location"
-                displayContent={<MapPin size={15} strokeWidth={2} aria-hidden="true" />}
+                className="apply-preview-issue-detail apply-preview-issue-location"
+                displayText={item.detail}
                 text={item.detail}
                 tooltipClassName="apply-preview-path-tooltip"
               />
@@ -494,27 +492,24 @@ export const PreviewDialog = ({
                     : t("Review the changes below before continuing.")}
             </span>
           </p>
-          <button
+          <Button
             ref={cancelButtonRef}
             className="secondary-action"
-            type="button"
             disabled={cancelDisabled}
+            variant="secondary"
             onClick={onCancel}
           >
             {t(cancelLabel)}
-          </button>
-          <button
+          </Button>
+          <Button
             className="primary-action"
-            type="button"
             disabled={confirmDisabled}
-            aria-busy={confirmBusy}
+            busy={confirmBusy}
+            variant="primary"
             onClick={onConfirm}
           >
-            {confirmBusy ? (
-              <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
-            ) : null}
             {t(confirmLabel)}
-          </button>
+          </Button>
         </footer>
       ) : null}
     </section>

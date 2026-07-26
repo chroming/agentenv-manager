@@ -56,20 +56,22 @@ export const SkillSettingsSection = ({
             <option value="auto">{t("Auto (live link when possible)")}</option>
           </select>
         </label>
-        <div className="settings-preference-row">
+        <div className="settings-preference-row settings-preference-row--inline-control">
           <span className="settings-preference-copy">
-            <strong>{t("Auto-check")}</strong>
+            <span className="settings-preference-heading">
+              <strong>{t("Auto-check")}</strong>
+              <Switch
+                checked={settings.skillAutoCheckEnabled}
+                label={t("Skill auto update check")}
+                disabled={busy}
+                onClick={() =>
+                  onChange({
+                    skillAutoCheckEnabled: !settings.skillAutoCheckEnabled
+                  })}
+              />
+            </span>
             <small>{t("Checks monitored sources, then reports tracked Skills.")}</small>
           </span>
-          <Switch
-            checked={settings.skillAutoCheckEnabled}
-            label={t("Skill auto update check")}
-            disabled={busy}
-            onClick={() =>
-              onChange({
-                skillAutoCheckEnabled: !settings.skillAutoCheckEnabled
-              })}
-          />
         </div>
         <label
           className={`settings-preference-row settings-dependent-row${

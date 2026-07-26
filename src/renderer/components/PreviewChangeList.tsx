@@ -126,10 +126,12 @@ export const PreviewChangeList = ({
       <header className="apply-preview-section-heading">
         <div>
           <strong>{t("Planned changes")}</strong>
-          <span>
-            {totalChanges === 1
+          <span className="apply-preview-count" aria-label={
+            totalChanges === 1
               ? t("1 change")
-              : t("{{count}} changes", { count: totalChanges })}
+              : t("{{count}} changes", { count: totalChanges })
+          }>
+            {totalChanges}
           </span>
         </div>
       </header>

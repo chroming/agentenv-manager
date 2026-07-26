@@ -156,10 +156,10 @@ import {
 import { runSkillImportQueue } from "./skillImportQueue";
 import { useScheduledSkillUpdateChecks, useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
 import {
+  ActionMenu,
   Button,
   ControlGroup,
   focusInitialActionMenuItem,
-  handleActionMenuKeyDown,
   PageHeader
 } from "./components/ui";
 import {
@@ -3926,12 +3926,10 @@ const AppContent = ({
         <ChevronDown size={14} strokeWidth={2.2} aria-hidden="true" />
       </button>
       {isTargetMenuOpen ? (
-        <div
-          className="profile-target-menu ui-action-menu"
-          ref={targetMenuRef}
-          role="menu"
-          aria-label={t("Apply Agents")}
-          onKeyDown={handleActionMenuKeyDown}
+        <ActionMenu
+          ariaLabel={t("Apply Agents")}
+          className="profile-target-menu"
+          menuRef={targetMenuRef}
         >
           {targets.map((target) => {
             const targetIcon = targetIconFor(target);
@@ -3960,7 +3958,7 @@ const AppContent = ({
               </button>
             );
           })}
-        </div>
+        </ActionMenu>
       ) : null}
     </div>
   );

@@ -50,6 +50,20 @@ afterEach(() => {
 });
 
 describe("StartupGate", () => {
+  it("names the current startup phase instead of presenting a generic wait", async () => {
+    installApi({
+      readStartupStatus: vi.fn().mockResolvedValue({
+        state: "initializing",
+        phase: "recovering-writes"
+      }),
+      onStatus: () => vi.fn()
+    });
+
+    render(<StartupGate />);
+    expect(await screen.findByText("Recovering interrupted changes…")).toBeInTheDocument();
+    expect(screen.getByRole("main")).toHaveAttribute("aria-busy", "true");
+  });
+
   it("does not let an older status response overwrite a newer startup event", async () => {
     const initial = deferred<StartupStatus>();
     let listener: ((status: StartupStatus) => void) | undefined;

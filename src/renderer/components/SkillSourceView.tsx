@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent
+} from "react";
+import { createPortal } from "react-dom";
 import {
   CheckCircle2,
   ChevronDown,
@@ -9,6 +17,7 @@ import {
   GitMerge,
   ListFilter,
   LoaderCircle,
+  MoreHorizontal,
   Pencil,
   RefreshCw,
   RotateCcw,
@@ -34,7 +43,7 @@ import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
-import { Button, IconButton, ModalFrame, Switch } from "./ui";
+import { ActionMenu, Button, IconButton, ModalFrame } from "./ui";
 
 interface SkillSourceViewProps {
   active: boolean;
@@ -145,8 +154,14 @@ export const SkillSourceView = ({
   const [renameValue, setRenameValue] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameError, setRenameError] = useState<string>();
+  const [sourceMenu, setSourceMenu] = useState<{
+    sourceId: string;
+    style: CSSProperties;
+  }>();
   const mergeDialogRef = useRef<HTMLElement>(null);
   const renameDialogRef = useRef<HTMLElement>(null);
+  const sourceMenuRef = useRef<HTMLDivElement>(null);
+  const sourceMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
   const filterPanelRef = useRef<HTMLDivElement>(null);
   const selectionDragRef = useRef<{ selected: boolean; visited: Set<string> } | undefined>(undefined);
@@ -276,6 +291,36 @@ export const SkillSourceView = ({
   }, [filtersOpen]);
 
   useEffect(() => {
+    if (!sourceMenu) return;
+    const dismiss = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !sourceMenuRef.current?.contains(event.target) &&
+        !sourceMenuTriggerRef.current?.contains(event.target)
+      ) {
+        setSourceMenu(undefined);
+      }
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setSourceMenu(undefined);
+      sourceMenuTriggerRef.current?.focus();
+    };
+    const dismissForViewportChange = () => setSourceMenu(undefined);
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", dismissOnEscape);
+    window.addEventListener("resize", dismissForViewportChange);
+    window.addEventListener("scroll", dismissForViewportChange, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", dismissOnEscape);
+      window.removeEventListener("resize", dismissForViewportChange);
+      window.removeEventListener("scroll", dismissForViewportChange, true);
+    };
+  }, [sourceMenu]);
+
+  useEffect(() => {
     if (!mergeSelectionMode || mergeOpen || renameSource) return;
     const exitOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -367,6 +412,7 @@ export const SkillSourceView = ({
   });
 
   const openRename = (group: SkillSourceGroupView) => {
+    setSourceMenu(undefined);
     setRenameSource(group);
     setRenameValue(group.displayName ?? "");
     setRenameError(undefined);
@@ -405,12 +451,33 @@ export const SkillSourceView = ({
 
   const toggleMonitoring = async (group: SkillSourceGroupView) => {
     if (!onSetMonitored) return;
+    setSourceMenu(undefined);
     setMonitoringOperation(group.sourceId);
     try {
       await onSetMonitored(group.sourceId, group.automaticChecks === false);
     } finally {
       setMonitoringOperation(undefined);
     }
+  };
+
+  const toggleSourceMenu = (sourceId: string, trigger: HTMLButtonElement) => {
+    if (sourceMenu?.sourceId === sourceId) {
+      setSourceMenu(undefined);
+      return;
+    }
+    sourceMenuTriggerRef.current = trigger;
+    const bounds = trigger.getBoundingClientRect();
+    const width = 220;
+    const height = 116;
+    setSourceMenu({
+      sourceId,
+      style: {
+        left: Math.max(10, Math.min(bounds.right - width, window.innerWidth - width - 10)),
+        top: bounds.bottom + height + 8 <= window.innerHeight
+          ? bounds.bottom + 6
+          : Math.max(10, bounds.top - height - 6)
+      }
+    });
   };
 
   const previewMerge = async (directory: string) => {
@@ -549,22 +616,17 @@ export const SkillSourceView = ({
             </strong>
           ) : null}
         </button>
-        <button
-          aria-busy={activeCheckingAll}
+        <Button
           aria-label={t("Check monitored")}
+          busy={activeCheckingAll}
           className="secondary-action library-toolbar-action"
           title={t("Check monitored")}
-          type="button"
           disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || monitoredSourceCount === 0}
           onClick={() => void runCheckMonitored()}
         >
-          {activeCheckingAll ? (
-            <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
-          ) : (
-            <RefreshCw size={15} strokeWidth={2.2} />
-          )}
+          {!activeCheckingAll ? <RefreshCw size={15} strokeWidth={2.2} /> : null}
           <span>{t("Check monitored")}</span>
-        </button>
+        </Button>
         {canMergeSources ? (
           <button
             className="secondary-action"
@@ -759,16 +821,6 @@ export const SkillSourceView = ({
                         <Copy size={12} strokeWidth={2.2} />
                       )}
                     </button>
-                    <button
-                      className="skill-source-rename"
-                      type="button"
-                      aria-label={t("Rename source {{name}}", {
-                        name: groupName
-                      })}
-                      onClick={() => openRename(group)}
-                    >
-                      <Pencil size={13} strokeWidth={2.1} />
-                    </button>
                   </div>
                   <span className="skill-source-checked">
                     {group.displayName
@@ -782,9 +834,15 @@ export const SkillSourceView = ({
                 </div>
                 <div className="skill-source-counts" aria-label={t("Source summary")}>
                   <span className="is-total"><strong>{group.counts.total}</strong>{t("Total")}</span>
-                  <span className={`is-update${group.counts.updates > 0 ? " has-value" : ""}`}><strong>{group.counts.updates}</strong>{t("Updates")}</span>
-                  <span className={`is-new${group.counts.new > 0 ? " has-value" : ""}`}><strong>{group.counts.new}</strong>{t("New")}</span>
-                  <span className={`is-removed${group.counts.removed > 0 ? " has-value" : ""}`}><strong>{group.counts.removed}</strong>{t("Removed")}</span>
+                  {group.counts.updates > 0 ? (
+                    <span className="is-update has-value"><strong>{group.counts.updates}</strong>{t("Updates")}</span>
+                  ) : null}
+                  {group.counts.new > 0 ? (
+                    <span className="is-new has-value"><strong>{group.counts.new}</strong>{t("New")}</span>
+                  ) : null}
+                  {group.counts.removed > 0 ? (
+                    <span className="is-removed has-value"><strong>{group.counts.removed}</strong>{t("Removed")}</span>
+                  ) : null}
                 </div>
                 {group.error ? (
                   <OverflowTooltip
@@ -794,49 +852,90 @@ export const SkillSourceView = ({
                   />
                 ) : null}
                 <div className="skill-source-group-actions">
-                  <Switch
-                    checked={group.automaticChecks !== false}
-                    hidden={!onSetMonitored}
-                    disabled={monitoringOperation === group.sourceId || isChecking || activeCheckingAll}
-                    label={t("Monitor {{name}} in routine checks", { name: groupName })}
-                    onClick={() => void toggleMonitoring(group)}
-                  >
-                    {monitoringOperation === group.sourceId ? (
-                      <LoaderCircle className="is-spinning" size={13} />
-                    ) : null}
-                    <span>{t("Monitor")}</span>
-                  </Switch>
                   {reviewableUpdateIds.length > 0 ? (
-                    <button
+                    <Button
                       aria-label={`${t("Review")} ${reviewableUpdateIds.length}`}
-                      aria-busy={reviewingGroup}
+                      busy={reviewingGroup}
                       className="secondary-action skill-source-review"
-                      type="button"
+                      size="compact"
                       disabled={isChecking || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
                       onClick={() => void runReviewUpdates(reviewableUpdateIds)}
                     >
-                      {reviewingGroup ? (
-                        <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
-                      ) : (
-                        <RefreshCw size={14} strokeWidth={2.2} />
-                      )}
+                      {!reviewingGroup ? <RefreshCw size={14} strokeWidth={2.2} /> : null}
                       <span>{t("Review")} {reviewableUpdateIds.length}</span>
-                    </button>
+                    </Button>
                   ) : null}
-                  <button
-                    aria-busy={isChecking}
-                    className="secondary-action skill-source-check"
-                    type="button"
-                    disabled={isChecking || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
-                    onClick={() => void runCheck(group.sourceId)}
+                  {reviewableUpdateIds.length === 0 ? (
+                    <Button
+                      busy={isChecking}
+                      className="secondary-action skill-source-check"
+                      size="compact"
+                      disabled={isChecking || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
+                      onClick={() => void runCheck(group.sourceId)}
+                    >
+                      {!isChecking ? <RefreshCw size={14} strokeWidth={2.2} /> : null}
+                      <span>{t(group.error ? "Retry" : "Check")}</span>
+                    </Button>
+                  ) : null}
+                  <IconButton
+                    label={t("Source actions for {{name}}", { name: groupName })}
+                    size="compact"
+                    variant="ghost"
+                    aria-expanded={sourceMenu?.sourceId === group.sourceId}
+                    aria-haspopup="menu"
+                    onClick={(event) => toggleSourceMenu(group.sourceId, event.currentTarget)}
                   >
-                    {isChecking ? (
-                      <LoaderCircle className="is-spinning" size={14} strokeWidth={2.2} />
+                    {monitoringOperation === group.sourceId ? (
+                      <LoaderCircle className="is-spinning" />
                     ) : (
-                      <RefreshCw size={14} strokeWidth={2.2} />
+                      <MoreHorizontal />
                     )}
-                    <span>{t(group.error ? "Retry" : "Check")}</span>
-                  </button>
+                  </IconButton>
+                  {sourceMenu?.sourceId === group.sourceId ? createPortal(
+                    <ActionMenu
+                      ariaLabel={t("Source actions for {{name}}", { name: groupName })}
+                      className="skill-source-action-menu"
+                      menuRef={sourceMenuRef}
+                      style={sourceMenu.style}
+                    >
+                      {reviewableUpdateIds.length > 0 ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          aria-busy={isChecking}
+                          disabled={isChecking || activeCheckingAll || Boolean(updateActivity) || Boolean(operation)}
+                          onClick={() => void runCheck(group.sourceId)}
+                        >
+                          {isChecking ? (
+                            <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+                          ) : (
+                            <RefreshCw size={15} strokeWidth={2.1} aria-hidden="true" />
+                          )}
+                          <span>{t("Check source")}</span>
+                        </button>
+                      ) : null}
+                      {onSetMonitored ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={monitoringOperation === group.sourceId || isChecking || activeCheckingAll}
+                          onClick={() => void toggleMonitoring(group)}
+                        >
+                          <RefreshCw size={15} strokeWidth={2.1} aria-hidden="true" />
+                          <span>
+                            {t(group.automaticChecks === false
+                              ? "Include in routine checks"
+                              : "Exclude from routine checks")}
+                          </span>
+                        </button>
+                      ) : null}
+                      <button type="button" role="menuitem" onClick={() => openRename(group)}>
+                        <Pencil size={15} strokeWidth={2.1} aria-hidden="true" />
+                        <span>{t("Rename source")}</span>
+                      </button>
+                    </ActionMenu>,
+                    document.body
+                  ) : null}
                 </div>
               </div>
 

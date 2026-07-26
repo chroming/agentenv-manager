@@ -89,8 +89,11 @@ describe("SkillSourceView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("switch", {
-      name: "Monitor acme/skills · /engineering in routine checks"
+    fireEvent.click(screen.getByRole("button", {
+      name: "Source actions for acme/skills · /engineering"
+    }));
+    fireEvent.click(screen.getByRole("menuitem", {
+      name: "Exclude from routine checks"
     }));
     await waitFor(() => expect(onSetMonitored).toHaveBeenCalledWith("source-engineering", false));
     expect(onCheckGroup).not.toHaveBeenCalled();
@@ -147,7 +150,11 @@ describe("SkillSourceView", () => {
     fireEvent.click(within(candidates!).getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledWith("docs");
 
-    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    expect(screen.queryByRole("button", { name: "Check" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {
+      name: "Source actions for acme/skills · /engineering"
+    }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Check source" }));
     await waitFor(() => expect(onCheckGroup).toHaveBeenCalledWith(group.sourceId));
   });
 
@@ -493,11 +500,14 @@ describe("SkillSourceView", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: "Check" })).toHaveAttribute("aria-busy", "true");
+    fireEvent.click(screen.getByRole("button", {
+      name: "Source actions for acme/skills · /engineering"
+    }));
+    expect(screen.getByRole("menuitem", { name: "Check source" })).toHaveAttribute("aria-busy", "true");
     expect(screen.getByRole("button", { name: "Check monitored" })).toHaveAttribute("aria-busy", "false");
 
     rerender(<SkillSourceView {...props} updateActivity={{ kind: "check-sources" }} />);
-    expect(screen.getByRole("button", { name: "Check" })).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("menuitem", { name: "Check source" })).toHaveAttribute("aria-busy", "false");
     expect(screen.getByRole("button", { name: "Check monitored" })).toHaveAttribute("aria-busy", "true");
   });
 
@@ -591,7 +601,10 @@ describe("SkillSourceView", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Rename source acme/skills · /engineering" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Source actions for acme/skills · /engineering"
+    }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Rename source" }));
     const dialog = screen.getByRole("dialog", { name: "Rename source" });
     expect(dialog.querySelector(".profile-dialog-header")).not.toBeNull();
     expect(dialog.querySelector(".preview-actions")).not.toBeNull();
@@ -626,9 +639,9 @@ describe("SkillSourceView", () => {
       />
     );
 
-    expect(document.querySelector(".skill-source-counts .is-update")).not.toHaveClass("has-value");
-    expect(document.querySelector(".skill-source-counts .is-new")).not.toHaveClass("has-value");
-    expect(document.querySelector(".skill-source-counts .is-removed")).not.toHaveClass("has-value");
+    expect(document.querySelector(".skill-source-counts .is-update")).toBeNull();
+    expect(document.querySelector(".skill-source-counts .is-new")).toBeNull();
+    expect(document.querySelector(".skill-source-counts .is-removed")).toBeNull();
   });
 
   it("summarizes repository merge failures while retaining the full error", async () => {

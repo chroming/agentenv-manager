@@ -206,6 +206,55 @@ const prepareFixture = async (root) => {
   await mkdir(binDir, { recursive: true });
   await mkdir(opencodeDir, { recursive: true });
   await mkdir(codexDir, { recursive: true });
+  const conversationSessionDir = join(
+    codexDir,
+    "sessions",
+    "2026",
+    "07",
+    "25"
+  );
+  await mkdir(conversationSessionDir, { recursive: true });
+  await writeFile(
+    join(
+      conversationSessionDir,
+      "rollout-2026-07-25T09-00-00-000Z-11111111-1111-4111-8111-111111111111.jsonl"
+    ),
+    [
+      JSON.stringify({
+        type: "session_meta",
+        payload: {
+          id: "11111111-1111-4111-8111-111111111111",
+          cwd: "/work/agentenv-manager",
+          timestamp: "2026-07-25T09:00:00.000Z"
+        }
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          id: "conversation-user-1",
+          type: "message",
+          role: "user",
+          content: [{
+            type: "input_text",
+            text: "Review the Agent environment before release"
+          }]
+        }
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          id: "conversation-assistant-1",
+          type: "message",
+          role: "assistant",
+          content: [{
+            type: "output_text",
+            text: "## Release review\n\nThe Profile is saved and ready for a final Apply preview.\n\n```text\nPreview -> backup -> apply -> verify\n```"
+          }]
+        }
+      })
+    ].map((entry) => `${entry}\n`).join(""),
+    "utf8"
+  );
 
   for (const command of ["opencode", "codex", "claude", "traecli"]) {
     const executable = join(binDir, command);
@@ -361,6 +410,8 @@ const prepareFixture = async (root) => {
   await execFile("git", ["config", "user.email", "visual-test@agentenv.local"], { cwd: gitFixtureRepo });
   await execFile("git", ["add", "."], { cwd: gitFixtureRepo });
   await execFile("git", ["commit", "-m", "visual fixture"], { cwd: gitFixtureRepo });
+  const workspaceSyncRemote = join(root, "workspace-sync.git");
+  await execFile("/usr/bin/git", ["init", "--bare", workspaceSyncRemote]);
 
   return {
     appDataRoot,
@@ -368,7 +419,8 @@ const prepareFixture = async (root) => {
     gitFixtureRepo,
     githubFixtureRoot,
     homeDir,
-    projectSkillRoot
+    projectSkillRoot,
+    workspaceSyncRemote
   };
 };
 
@@ -541,7 +593,8 @@ try {
     gitFixtureRepo,
     githubFixtureRoot,
     homeDir,
-    projectSkillRoot
+    projectSkillRoot,
+    workspaceSyncRemote
   } = await prepareFixture(fixtureRoot);
   app = await electron.launch({
     executablePath: electronPath,
@@ -619,7 +672,8 @@ try {
   await setWindowSize(page, windowHandle, 920, 620);
   await page.getByRole("button", { name: "Expand source" }).first().click();
   await capturePage(page, join(outputDir, "skills-sources-expanded-920x620.png"));
-  await page.getByRole("button", { name: /Rename source/ }).first().click();
+  await page.getByRole("button", { name: /Source actions for/ }).first().click();
+  await page.getByRole("menuitem", { name: "Rename source" }).click();
   await page.getByRole("dialog", { name: "Rename source" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-source-rename-920x620.png"));
   await page.keyboard.press("Escape");
@@ -1088,6 +1142,22 @@ try {
   await page.keyboard.press("Escape");
   await targetCaptureReview.waitFor({ state: "hidden" });
   await captureWorkspace(
+    "Conversations",
+    "conversations",
+    () => page.getByRole("option", { name: /Review the Agent environment before release/ })
+  );
+  await page.getByRole("option", {
+    name: /Review the Agent environment before release/
+  }).click();
+  await page.getByText("The Profile is saved and ready for a final Apply preview.").waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "conversations-detail-920x620.png"));
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("menu", { name: "Continue in" }).waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "conversations-continue-menu-920x620.png"));
+  await page.keyboard.press("Escape");
+  await captureWorkspace(
     "Settings",
     "settings",
     () => page.getByRole("region", { name: "Settings", exact: true })
@@ -1112,6 +1182,21 @@ try {
   await capturePage(page, join(outputDir, "settings-connections-920x620.png"));
   await page.getByRole("button", { name: "Set up" }).click();
   await capturePage(page, join(outputDir, "settings-connections-setup-920x620.png"));
+  const workspaceSyncSection = page.getByRole("region", { name: "Workspace Sync" });
+  await workspaceSyncSection.getByLabel("Private Git repository").fill(workspaceSyncRemote);
+  await workspaceSyncSection.getByLabel("Branch").fill("main");
+  await workspaceSyncSection.getByRole("button", { name: "Connect repository" }).click();
+  await workspaceSyncSection.getByText("Changes to publish").waitFor({
+    state: "visible",
+    timeout: 15_000
+  });
+  await capturePage(page, join(outputDir, "settings-sync-local-changes-920x620.png"));
+  await workspaceSyncSection.getByRole("button", { name: "Review changes" }).click();
+  const workspaceSyncReview = page.getByRole("dialog", { name: "Review Workspace changes" });
+  await workspaceSyncReview.waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "settings-sync-review-920x620.png"));
+  await page.keyboard.press("Escape");
+  await workspaceSyncReview.waitFor({ state: "hidden" });
   await page.getByRole("tab", { name: "Data" }).click();
   await capturePage(page, join(outputDir, "settings-data-920x620.png"));
   await setWindowSize(page, windowHandle, 1180, 728);
@@ -1136,7 +1221,22 @@ try {
     state: "visible"
   });
   await page.getByRole("tab", { name: "通用" }).click();
-  await page.getByLabel("界面语言").selectOption("en");
+  await page.getByLabel("界面语言").selectOption("zh_TW");
+  await page.getByRole("heading", { name: "設定" }).waitFor({ state: "visible" });
+  await capturePage(page, join(outputDir, "settings-zh-tw-920x620.png"));
+  await page.getByRole("button", { name: "技能", exact: true }).click();
+  await page.getByRole("region", { name: "技能資源庫", exact: true }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "skills-zh-tw-920x620.png"));
+  await page.getByRole("button", { name: "設定檔", exact: true }).click();
+  await page.getByRole("region", { name: "設定檔", exact: true }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "profiles-zh-tw-920x620.png"));
+  await page.getByRole("button", { name: "設定", exact: true }).click();
+  await page.getByRole("tab", { name: "一般" }).click();
+  await page.getByLabel("介面語言").selectOption("en");
   await page.getByRole("heading", { name: "Settings" }).waitFor({ state: "visible" });
 
   await setWindowSize(page, windowHandle, 1536, 1024);
@@ -1156,6 +1256,42 @@ try {
     await captureComparison(page, windowHandle, htmlPath, "full", "comparison.png", 570);
     await captureComparison(page, windowHandle, htmlPath, "header", "header-comparison.png", 250);
     await captureComparison(page, windowHandle, htmlPath, "composer", "composer-comparison.png", 420);
+  }
+  const startupFailureRoot = join(fixtureRoot, "startup-failure-data");
+  await mkdir(startupFailureRoot, { recursive: true });
+  await writeFile(
+    join(startupFailureRoot, "agentenv-data.json"),
+    '{"formatVersion":99}\n',
+    "utf8"
+  );
+  const startupFailureApp = await electron.launch({
+    executablePath: electronPath,
+    args: [
+      "--disable-gpu",
+      `--user-data-dir=${join(fixtureRoot, "startup-failure-user-data")}`,
+      join(projectRoot, "out", "main", "main.js")
+    ],
+    env: {
+      ...process.env,
+      AGENTENV_AUTOMATION: "1",
+      AGENTENV_DATA_ROOT: startupFailureRoot,
+      AGENTENV_HOME: homeDir,
+      PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`
+    }
+  });
+  try {
+    const startupFailurePage = await startupFailureApp.firstWindow();
+    const startupFailureWindow = await startupFailureApp.browserWindow(startupFailurePage);
+    await setWindowSize(startupFailurePage, startupFailureWindow, 920, 620);
+    await startupFailurePage
+      .getByRole("heading", { name: "This data needs a newer AgentEnv Manager" })
+      .waitFor({ state: "visible", timeout: 15_000 });
+    await startupFailurePage.screenshot({
+      path: join(outputDir, "startup-failure-920x620.png"),
+      animations: "disabled"
+    });
+  } finally {
+    await startupFailureApp.close();
   }
   await writeCaptureManifest();
 } finally {

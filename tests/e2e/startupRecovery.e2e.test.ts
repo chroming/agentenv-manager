@@ -4,6 +4,11 @@ import { join } from "node:path";
 import electronPath from "electron";
 import { _electron as electron, type ElectronApplication } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  expectInViewport,
+  expectNoHorizontalOverflow,
+  findVisibleTextLayoutDefects
+} from "./layoutAssertions";
 
 let root = "";
 let app: ElectronApplication | undefined;
@@ -33,14 +38,20 @@ describe("startup recovery desktop flow", () => {
       }
     });
     const page = await app.firstWindow();
+    await page.setViewportSize({ width: 920, height: 620 });
 
-    await page.getByRole("heading", { name: "This data needs a newer AgentEnv Manager" })
-      .waitFor({ state: "visible", timeout: 15_000 });
+    const heading = page.getByRole("heading", {
+      name: "This data needs a newer AgentEnv Manager"
+    });
+    await heading.waitFor({ state: "visible", timeout: 15_000 });
     await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus()))
       .toMatchObject({ state: "failed", kind: "newer-data-format" });
     await expect(page.getByRole("button", { name: "Retry" }).isEnabled()).resolves.toBe(true);
     await expect(page.getByRole("button", { name: "Open data folder" }).count()).resolves.toBe(1);
     await expect(page.getByRole("button", { name: "Export diagnostics" }).count()).resolves.toBe(1);
     await expect(writeFile(join(dataRoot, "probe"), "still writable")).resolves.toBeUndefined();
+    await expectInViewport(page, heading);
+    await expectNoHorizontalOverflow(page);
+    expect(await findVisibleTextLayoutDefects(page)).toEqual([]);
   }, 20_000);
 });

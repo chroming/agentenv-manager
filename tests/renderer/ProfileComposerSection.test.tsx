@@ -49,7 +49,7 @@ describe("ProfileComposerSection", () => {
     expect(panel).toHaveAttribute("id", panelId);
     expect(panel).toHaveAttribute("aria-labelledby", trigger.id);
     expect(trigger).toHaveAccessibleDescription(
-      "Choose reusable capabilities 1 of 2 enabled Reviewer Planner"
+      "Choose reusable capabilities 1 of 2 enabled Reviewer, Planner"
     );
     expect(screen.getByTestId("section-icon")).toBeInTheDocument();
 
@@ -57,7 +57,7 @@ describe("ProfileComposerSection", () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
-  it("renders collapsed resource chips with overflow count", () => {
+  it("keeps collapsed resource names accessible without visible chip noise", () => {
     render(
       <ProfileComposerSection
         id="profile-mcp"
@@ -79,20 +79,14 @@ describe("ProfileComposerSection", () => {
     );
 
     const trigger = screen.getByRole("button", { name: "MCP Servers" });
-    const summary = screen.getByText("+3").parentElement;
-
-    expect(summary).not.toBeNull();
-    const chips = within(summary!).getAllByTestId("profile-composer-chip");
-
-    expect(chips.map((chip) => chip.textContent)).toEqual(["Context7", "Filesystem"]);
-    expect(chips.every((chip) => chip.getAttribute("data-ui-overflow-detail") === "true")).toBe(true);
-    expect(within(summary!).getByText("+3")).toBeInTheDocument();
+    expect(trigger).toHaveAccessibleDescription(
+      "Connect shared tools 4 of 6 enabled Context7, Filesystem, GitHub, Figma, Slack"
+    );
+    expect(screen.queryByTestId("profile-composer-chip")).toBeNull();
+    expect(screen.queryByText("+3")).toBeNull();
     const count = document.querySelector(".profile-composer-section__count");
     expect(count).toHaveAttribute("title", "4 of 6 enabled");
     expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("4/6");
-    expect(trigger).toHaveAccessibleDescription(
-      "Connect shared tools 4 of 6 enabled Context7 Filesystem +3"
-    );
   });
 
   it("keeps duplicate caller ids from cross-wiring relationships", () => {

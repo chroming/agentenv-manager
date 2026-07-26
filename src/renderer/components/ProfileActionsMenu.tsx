@@ -1,7 +1,7 @@
 import type { CSSProperties, Ref } from "react";
 import { Copy, Trash2 } from "lucide-react";
 import { useI18n } from "../i18n";
-import { handleActionMenuKeyDown } from "./ui";
+import { ActionMenu } from "./ui";
 
 interface ProfileActionsMenuProps {
   className?: string;
@@ -22,13 +22,11 @@ export const ProfileActionsMenu = ({
 }: ProfileActionsMenuProps) => {
   const { t } = useI18n();
   return (
-    <div
-      className={`profile-actions-menu ui-action-menu${className ? ` ${className}` : ""}`}
-      ref={menuRef}
-      role="menu"
-      aria-label={t("Profile actions")}
+    <ActionMenu
+      ariaLabel={t("Profile actions")}
+      className={`profile-actions-menu${className ? ` ${className}` : ""}`}
+      menuRef={menuRef}
       style={style}
-      onKeyDown={handleActionMenuKeyDown}
     >
       <button disabled={disabled} type="button" role="menuitem" onClick={onDuplicate}>
         <Copy size={15} strokeWidth={2.2} aria-hidden="true" />
@@ -44,6 +42,6 @@ export const ProfileActionsMenu = ({
         <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
         <span>{t("Delete profile")}</span>
       </button>
-    </div>
+    </ActionMenu>
   );
 };

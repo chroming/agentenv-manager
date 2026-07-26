@@ -991,18 +991,18 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("tab", { name: "By source" }).click();
     await expectNoHorizontalOverflow(page, [".editor-panel", ".skill-source-view"]);
     await page.getByRole("tab", { name: /Manual only/ }).click();
-    const routineChecks = page.getByRole("switch", {
-      name: /Monitor.*project-skills.*routine checks/i
+    const sourceRow = page.locator(".skill-source-group").filter({
+      hasText: "project-skills"
     });
-    await routineChecks.waitFor({ state: "visible" });
-    await expect.poll(() => routineChecks.getAttribute("aria-checked")).toBe("false");
-    await routineChecks.click();
+    await sourceRow.waitFor({ state: "visible" });
+    await sourceRow.getByRole("button", { name: /Source actions/ }).click();
+    await page.getByRole("menuitem", { name: "Include in routine checks" }).click();
     await page.getByRole("tab", { name: /Monitored/ }).click();
-    await expect.poll(() =>
-      page.getByRole("switch", {
-        name: /Monitor.*project-skills.*routine checks/i
-      }).getAttribute("aria-checked")
-    ).toBe("true");
+    await sourceRow.waitFor({ state: "visible" });
+    await sourceRow.getByRole("button", { name: /Source actions/ }).click();
+    await page.getByRole("menuitem", { name: "Exclude from routine checks" })
+      .waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
     const registry = await readJson<{
       sources: Array<{ kind?: string; automaticChecks?: boolean }>;
     }>(join(appDataRoot, "skill-sources.json"));
@@ -2355,6 +2355,11 @@ describe("Electron UI profile switching e2e", () => {
         return childBox.top >= box.top && childBox.bottom <= box.bottom + 1;
       });
     })).toBe(true);
+    await expect.poll(() => reviewIssues.locator("article").first().evaluate((issue) => {
+      const title = issue.querySelector("strong")?.getBoundingClientRect();
+      const detail = issue.querySelector(".apply-preview-issue-detail")?.getBoundingClientRect();
+      return Boolean(title && detail && title.bottom <= detail.top + 1);
+    })).toBe(true);
     await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
     await expect(readFile(join(opencodeDir, "AGENTS.md"), "utf8")).resolves.toContain("UI ALPHA");
@@ -2455,11 +2460,10 @@ describe("Electron UI profile switching e2e", () => {
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
     await expect.poll(() => previewDialog.textContent()).toContain(
-      "Existing Skill will be brought under AgentEnv"
+      'Bring Skill "bytedcli" under AgentEnv'
     );
-    await previewDialog.getByLabel("Full issue detail").hover();
-    await expect.poll(() => page.locator(".skill-description-tooltip").textContent())
-      .toContain(targetSkill);
+    await expect.poll(() => previewDialog.getByText(targetSkill, { exact: true }).count())
+      .toBe(1);
     expect(await previewDialog.getByRole("button", { name: "Apply", exact: true }).isDisabled()).toBe(false);
     await previewDialog.getByRole("button", { name: "Apply", exact: true }).click();
     await previewDialog.waitFor({ state: "hidden" });
@@ -6465,7 +6469,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(geometry.switchLeft).toBeGreaterThanOrEqual(geometry.titleRight + 8);
       expect(geometry.switchRight).toBeLessThanOrEqual(geometry.autoRowRight);
       expect(geometry.intervalRight).toBeLessThanOrEqual(geometry.intervalRowRight);
-      expect(Math.abs(geometry.switchRight - geometry.intervalRight)).toBeLessThanOrEqual(1);
+      expect(geometry.switchLeft - geometry.titleRight).toBeLessThanOrEqual(16);
       expect(geometry.switchTop).toBeGreaterThanOrEqual(geometry.autoRowTop);
       expect(geometry.switchBottom).toBeLessThanOrEqual(geometry.autoRowBottom);
       expect(geometry.intervalLeft).toBeGreaterThan(geometry.titleRight);
@@ -8035,17 +8039,19 @@ describe("Electron UI profile switching e2e", () => {
       profileLanesAligned: true
     });
     const targetTypography = await page.locator(".target-card--workflow").first().evaluate((row) => ({
-      description: getComputedStyle(row.querySelector<HTMLElement>(".target-workflow-description")!).fontWeight,
       name: getComputedStyle(row.querySelector<HTMLElement>(".target-workflow-name-line strong")!).fontWeight,
       status: getComputedStyle(row.querySelector<HTMLElement>(".target-health-status")!).fontWeight
     }));
-    expect(targetTypography).toEqual({ description: "400", name: "500", status: "400" });
+    expect(targetTypography).toEqual({ name: "500", status: "400" });
 
     await openSettingsCategory(page, "Skills");
     const preferenceGeometry = await page.locator(".settings-preference-row").evaluateAll((rows) =>
       rows.map((row) => {
         const copy = row.querySelector<HTMLElement>(".settings-preference-copy")!;
-        const control = row.querySelector<HTMLElement>(":scope > select, :scope > .ui-switch, :scope > .settings-readonly-value, :scope > .settings-interval-control")!;
+        const control = row.querySelector<HTMLElement>(
+          ":scope > select, :scope > .settings-readonly-value, :scope > .settings-interval-control, .settings-preference-copy .ui-switch"
+        )!;
+        const nestedSwitch = control.matches(".settings-preference-copy .ui-switch");
         const rowBox = row.getBoundingClientRect();
         const copyBox = copy.getBoundingClientRect();
         const controlBox = control.getBoundingClientRect();
@@ -8054,8 +8060,9 @@ describe("Electron UI profile switching e2e", () => {
             copyBox.left >= rowBox.left &&
             controlBox.right <= rowBox.right + 1 &&
             row.scrollWidth <= row.clientWidth + 1,
+          expectedHeight: nestedSwitch ? 30 : 34,
           height: controlBox.height,
-          overlaps: !(
+          overlaps: !nestedSwitch && !(
             copyBox.right <= controlBox.left ||
             controlBox.right <= copyBox.left ||
             copyBox.bottom <= controlBox.top ||
@@ -8066,7 +8073,12 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(preferenceGeometry.length).toBeGreaterThanOrEqual(3);
     expect(preferenceGeometry.every((row) => row.contained && !row.overlaps)).toBe(true);
-    expect(preferenceGeometry.every((row) => Math.abs(row.height - 34) <= 1)).toBe(true);
+    for (const row of preferenceGeometry) {
+      expect(
+        Math.abs(row.height - row.expectedHeight),
+        JSON.stringify(row)
+      ).toBeLessThanOrEqual(1);
+    }
     const preferenceTypography = await page.locator(".settings-preference-copy").first().evaluate((copy) => ({
       description: getComputedStyle(copy.querySelector<HTMLElement>("small")!).fontWeight,
       label: getComputedStyle(copy.querySelector<HTMLElement>("strong")!).fontWeight

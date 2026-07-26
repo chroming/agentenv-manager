@@ -68,6 +68,7 @@ export const groupWorkspaceSyncChanges = (changes: WorkspaceSyncChange[]): Works
 export const WorkspaceSyncSettings = () => {
   const { t } = useI18n();
   const [status, setStatus] = useState(emptyStatus);
+  const [loading, setLoading] = useState(true);
   const [repository, setRepository] = useState("");
   const [branch, setBranch] = useState("main");
   const [isSetupOpen, setIsSetupOpen] = useState(false);
@@ -104,6 +105,7 @@ export const WorkspaceSyncSettings = () => {
         const next = await window.agentEnv.readWorkspaceSyncStatus();
         if (!active) return;
         setStatus(next);
+        setLoading(false);
         if (next.connection) {
           setRepository(next.connection.repository);
           setBranch(next.connection.branch);
@@ -112,7 +114,10 @@ export const WorkspaceSyncSettings = () => {
           if (active) setStatus(checked);
         }
       } catch (unknownError) {
-        if (active) setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+        if (active) {
+          setLoading(false);
+          setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+        }
       }
     };
     void load();
@@ -253,7 +258,12 @@ export const WorkspaceSyncSettings = () => {
           </span>
         ) : null}
       </div>
-      {!connected ? (
+      {loading ? (
+        <div className="inline-state inline-state--loading workspace-sync-loading" role="status">
+          <span className="inline-state__icon" aria-hidden="true" />
+          <span>{t("Loading")}</span>
+        </div>
+      ) : !connected ? (
         <>
           <div className="workspace-sync-disconnected">
             <span className="settings-service-icon" aria-hidden="true">
@@ -277,7 +287,7 @@ export const WorkspaceSyncSettings = () => {
                 <span>{t("Branch")}</span>
                 <input value={branch} onChange={(event) => setBranch(event.currentTarget.value)} />
               </label>
-              <Button variant="primary" icon={working === "connect" ? <LoaderCircle className="spin" /> : <GitBranch />} disabled={!repository.trim() || !branch.trim() || Boolean(working)} onClick={() => void connect()}>
+              <Button variant="primary" busy={working === "connect"} icon={<GitBranch />} disabled={!repository.trim() || !branch.trim() || Boolean(working)} onClick={() => void connect()}>
                 {t("Connect repository")}
               </Button>
             </div>
@@ -301,15 +311,15 @@ export const WorkspaceSyncSettings = () => {
           </div>
           <div className="workspace-sync-actions">
             {status.kind === "recovery-required" ? (
-              <Button variant="primary" icon={working === "recover" ? <LoaderCircle className="spin" /> : <RefreshCw />} disabled={Boolean(working)} onClick={() => void recover()}>
+              <Button variant="primary" busy={working === "recover"} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void recover()}>
                 {t("Recover Workspace")}
               </Button>
             ) : null}
-            {status.kind !== "recovery-required" ? <Button variant="secondary" icon={<RefreshCw className={working === "check" ? "spin" : undefined} />} disabled={Boolean(working)} onClick={() => void check()}>
+            {status.kind !== "recovery-required" ? <Button variant="secondary" busy={working === "check"} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void check()}>
               {t("Check")}
             </Button> : null}
             {status.kind !== "up-to-date" && status.kind !== "error" && status.kind !== "recovery-required" ? (
-              <Button ref={reviewButtonRef} variant="primary" icon={working === "review" ? <LoaderCircle className="spin" /> : undefined} disabled={Boolean(working)} onClick={() => void openReview()}>
+              <Button ref={reviewButtonRef} variant="primary" busy={working === "review"} disabled={Boolean(working)} onClick={() => void openReview()}>
                 {t("Review changes")}
               </Button>
             ) : null}
@@ -366,8 +376,8 @@ export const WorkspaceSyncSettings = () => {
             </div>
             <footer className="preview-actions workspace-sync-review-actions ui-dialog-footer">
               <Button variant="secondary" disabled={Boolean(working)} onClick={() => setReview(undefined)}>{t("Cancel")}</Button>
-              {review.canPublish && !review.canUpdate ? <Button variant="primary" icon={working === "publish" ? <LoaderCircle className="spin" /> : undefined} disabled={Boolean(working)} onClick={() => void publish()}>{t("Publish")}</Button> : null}
-              {review.canUpdate ? <Button variant="primary" icon={working === "update" ? <LoaderCircle className="spin" /> : undefined} disabled={Boolean(working) || !choicesComplete || (review.liveSkillIds.length > 0 && !acceptLive)} onClick={() => void update()}>{t("Update this Mac")}</Button> : null}
+              {review.canPublish && !review.canUpdate ? <Button variant="primary" busy={working === "publish"} disabled={Boolean(working)} onClick={() => void publish()}>{t("Publish")}</Button> : null}
+              {review.canUpdate ? <Button variant="primary" busy={working === "update"} disabled={Boolean(working) || !choicesComplete || (review.liveSkillIds.length > 0 && !acceptLive)} onClick={() => void update()}>{t("Update this Mac")}</Button> : null}
             </footer>
         </ModalFrame>
       ) : null}

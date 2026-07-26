@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { Fragment, useId, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
 import {
@@ -53,9 +53,6 @@ export const ProfileComposerSection = ({
   const summaryId = `${generatedId}-summary`;
   const panelId = `${generatedId}-panel`;
   const uniqueChipNames = [...new Set(chipNames)];
-  const visibleChipNames = uniqueChipNames.slice(0, 2);
-  const hiddenChipNames = uniqueChipNames.slice(visibleChipNames.length);
-  const overflowCount = Math.max(0, uniqueChipNames.length - visibleChipNames.length);
   const countLabel = t("{{enabled}} of {{total}} enabled", {
     enabled: enabledCount,
     total: count
@@ -124,29 +121,8 @@ export const ProfileComposerSection = ({
               <span>{count}</span>
             </span>
           </span>
-          <span className="profile-composer-section__summary" id={summaryId}>
-            {visibleChipNames.map((chipName, index) => (
-              <Fragment key={chipName}>
-                {index > 0 ? " " : null}
-                <OverflowTooltip
-                  className="resource-chip"
-                  focusable={false}
-                  testId="profile-composer-chip"
-                  text={chipName}
-                />
-              </Fragment>
-            ))}
-            {overflowCount > 0 ? (
-              <>
-                {visibleChipNames.length > 0 ? " " : null}
-                <OverflowTooltip
-                  className="resource-chip resource-chip--muted"
-                  displayText={`+${overflowCount}`}
-                  focusable={false}
-                  text={hiddenChipNames.join(", ")}
-                />
-              </>
-            ) : null}
+          <span className="ui-visually-hidden" id={summaryId}>
+            {uniqueChipNames.join(", ")}
           </span>
         </button>
         <ProfileResourcePolicyControl
