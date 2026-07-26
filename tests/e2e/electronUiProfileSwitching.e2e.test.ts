@@ -2872,8 +2872,13 @@ describe("Electron UI profile switching e2e", () => {
       const composer = frame.querySelector<HTMLElement>(".profile-composer")!;
       const composerBox = composer.getBoundingClientRect();
       const composerStyle = getComputedStyle(composer);
+      const heroStyle = getComputedStyle(hero);
+      const activeRowStyle = getComputedStyle(
+        frame.querySelector<HTMLElement>(".profile-row.is-active")!
+      );
       const rows = Array.from(frame.querySelectorAll<HTMLElement>(".profile-row"));
       return {
+        activeRowBoxShadow: activeRowStyle.boxShadow,
         composerBorderWidths: [
           composerStyle.borderTopWidth,
           composerStyle.borderRightWidth,
@@ -2888,6 +2893,11 @@ describe("Electron UI profile switching e2e", () => {
           frameEdge.borderBottomWidth,
           frameEdge.borderLeftWidth
         ],
+        heroLayer: {
+          position: heroStyle.position,
+          top: heroStyle.top,
+          zIndex: heroStyle.zIndex
+        },
         listIsFlush: (
           Math.abs(listBox.left - indexBox.left) <= 1 &&
           Math.abs(listBox.right - indexBox.right) <= 1
@@ -2918,10 +2928,16 @@ describe("Electron UI profile switching e2e", () => {
       };
     });
     expect(workbenchEdgeGeometry).toEqual({
+      activeRowBoxShadow: "none",
       composerBorderWidths: ["0px", "0px", "0px", "0px"],
       composerMeetsHeader: true,
       composerRadius: "0px",
       frameEdges: ["1px", "1px", "1px", "1px"],
+      heroLayer: {
+        position: "static",
+        top: "auto",
+        zIndex: "auto"
+      },
       listIsFlush: true,
       paneDividerIsSingle: true,
       rowDividersAreContinuous: true,

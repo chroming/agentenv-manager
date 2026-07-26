@@ -215,12 +215,13 @@ describe("Conversations desktop workflow", () => {
     });
     expect(await page.locator(".conversation-list-item__agent img").count())
       .toBeGreaterThanOrEqual(3);
-    await page.getByRole("option", {
+    const selectedConversation = page.getByRole("option", {
       name: /Repair the desktop release workflow/
-    }).click();
-    const selectedRowGeometry = await page.getByRole("option", {
-      name: /Repair the desktop release workflow/
-    }).evaluate((row) => {
+    });
+    await selectedConversation.click();
+    await expect.poll(() => selectedConversation.getAttribute("aria-selected"))
+      .toBe("true");
+    const selectedRowGeometry = await selectedConversation.evaluate((row) => {
       const rowBounds = row.getBoundingClientRect();
       const titleBounds = row
         .querySelector(".conversation-list-item__title")!
@@ -230,6 +231,7 @@ describe("Conversations desktop workflow", () => {
         .querySelector(".conversation-agent-icon")!
         .getBoundingClientRect();
       const agentBounds = agent.getBoundingClientRect();
+      const style = getComputedStyle(row);
       return {
         titleInset: Math.round(titleBounds.left - rowBounds.left),
         titleRightInset: Math.round(rowBounds.right - titleBounds.right),
@@ -238,12 +240,19 @@ describe("Conversations desktop workflow", () => {
             iconBounds.top + iconBounds.height / 2 -
             (agentBounds.top + agentBounds.height / 2)
           )
-        )
+        ),
+        boxShadow: style.boxShadow,
+        className: row.className
       };
     });
     expect(selectedRowGeometry.titleInset).toBeLessThanOrEqual(10);
     expect(selectedRowGeometry.titleRightInset).toBeLessThanOrEqual(10);
     expect(selectedRowGeometry.agentIconCenterDelta).toBeLessThanOrEqual(1);
+    expect(selectedRowGeometry.boxShadow).toBe("none");
+    expect(selectedRowGeometry.className).toContain("is-selected");
+    await expect.poll(() => selectedConversation.evaluate((row) =>
+      getComputedStyle(row).backgroundColor
+    )).toBe("rgba(0, 122, 255, 0.1)");
     await page.getByText("The release workflow is ready.").waitFor({
       state: "visible",
       timeout: 15_000

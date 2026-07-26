@@ -159,7 +159,7 @@
 
 .conversation-list-item.is-selected {
   background: var(--accent-soft);
-  box-shadow: inset 2px 0 var(--accent);
+  box-shadow: none;
 }
 
 .conversation-list-item:focus-visible {

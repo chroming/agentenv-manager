@@ -421,7 +421,7 @@
 .profile-row.is-active {
   background: rgba(23, 105, 245, 0.065);
   border-radius: 0;
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: none;
   margin: 0;
 }
 
@@ -632,6 +632,9 @@
   border-radius: 0;
   min-height: var(--profile-hero-height);
   padding: 12px 14px;
+  position: static;
+  top: auto;
+  z-index: auto;
 }
 
 .profile-hero__icon {
