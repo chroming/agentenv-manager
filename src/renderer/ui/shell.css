@@ -34,6 +34,12 @@ html[data-platform="darwin"] {
   font-weight: var(--font-weight-regular);
 }
 
+.page-header.ui-page-header .ui-page-header__actions > .ui-button,
+.page-header.ui-page-header .ui-page-header__actions > .ui-icon-button {
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
+}
+
 .global-sidebar {
   background: rgba(243, 244, 246, 0.94);
   border: 0;

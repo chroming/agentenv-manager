@@ -14,15 +14,21 @@ export const PageHeader = ({
   description,
   help,
   title
-}: PageHeaderProps) => (
-  <header className={`ui-page-header ${className}`.trim()}>
-    <div className="ui-page-header__copy">
-      <h2 aria-label={title}>
-        <span>{title}</span>
-        {help}
-      </h2>
-      {description ? <p>{description}</p> : null}
-    </div>
-    {actions ? <div className="ui-page-header__actions">{actions}</div> : null}
-  </header>
-);
+}: PageHeaderProps) => {
+  const classes = Array.from(
+    new Set(["ui-page-header", "page-header", ...className.split(/\s+/).filter(Boolean)])
+  ).join(" ");
+
+  return (
+    <header className={classes}>
+      <div className="ui-page-header__copy">
+        <h2 aria-label={title}>
+          <span>{title}</span>
+          {help}
+        </h2>
+        {description ? <p>{description}</p> : null}
+      </div>
+      {actions ? <div className="ui-page-header__actions">{actions}</div> : null}
+    </header>
+  );
+};

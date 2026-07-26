@@ -21,6 +21,7 @@ describe("renderer i18n", () => {
     expect(translate("zh_CN", "Profiles")).toBe("配置方案");
     expect(translate("zh_CN", "{{count}} skills", { count: 3 })).toBe("3 个技能");
     expect(translate("zh_TW", "Profiles")).toBe("設定檔");
+    expect(translate("zh_TW", "Conversations")).toBe("對話");
     expect(translate("zh_TW", "Import skills")).toBe("匯入技能");
     expect(translate("zh_TW", "Apply preview for {{name}}", { name: "OpenCode" })).toBe(
       "套用至 OpenCode 的預覽"

@@ -350,6 +350,11 @@
   padding: 14px 18px;
 }
 
+.library-drawer {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-soft);
+}
+
 .profile-dialog-header {
   align-items: flex-start;
   gap: var(--space-3);

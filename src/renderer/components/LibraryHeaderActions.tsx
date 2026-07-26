@@ -5,6 +5,7 @@ import { Button, ControlGroup } from "./ui";
 interface LibraryHeaderActionsProps {
   mode: "skills" | "sources";
   refreshing: boolean;
+  toolOpen?: boolean;
   returnTargetName?: string;
   onReturn?(): void;
   onImport(): void;
@@ -15,6 +16,7 @@ interface LibraryHeaderActionsProps {
 export const LibraryHeaderActions = ({
   mode,
   refreshing,
+  toolOpen = false,
   returnTargetName,
   onReturn,
   onImport,
@@ -36,8 +38,9 @@ export const LibraryHeaderActions = ({
       <Button
         className="primary-inline-action"
         size="prominent"
-        variant="primary"
+        variant={toolOpen ? "secondary" : "primary"}
         aria-label={t("Import skills")}
+        disabled={toolOpen}
         icon={<Plus size={16} strokeWidth={2.4} />}
         onClick={onImport}
       >
@@ -47,6 +50,7 @@ export const LibraryHeaderActions = ({
         <Button
           className="secondary-action"
           size="prominent"
+          disabled={toolOpen}
           icon={<ScanLine size={15} strokeWidth={2.2} />}
           onClick={onScanLocal}
         >
@@ -57,7 +61,7 @@ export const LibraryHeaderActions = ({
         className="secondary-action"
         size="prominent"
         aria-label={t(mode === "sources" ? "Refresh sources" : "Refresh skills")}
-        disabled={refreshing}
+        disabled={refreshing || toolOpen}
         icon={(
           <RefreshCw
             className={refreshing ? "is-spinning" : ""}

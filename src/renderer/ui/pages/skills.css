@@ -702,8 +702,8 @@
 }
 
 .skill-library-panel .library-drawer__refresh {
-  height: 36px;
-  min-height: 36px;
+  height: var(--control-height-default);
+  min-height: var(--control-height-default);
 }
 
 .cleanup-resolution {

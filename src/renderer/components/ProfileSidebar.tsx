@@ -328,6 +328,7 @@ export const ProfileSidebar = ({
         <button
           aria-label={t("Skills")}
           className={`workspace-button${activeWorkspace === "library" ? " is-active" : ""}`}
+          data-workspace="library"
           type="button"
           onClick={() => onWorkspaceSelect("library")}
         >
@@ -344,6 +345,7 @@ export const ProfileSidebar = ({
             <button
               aria-label={item.label}
               className={`workspace-button${activeWorkspace === item.id ? " is-active" : ""}`}
+              data-workspace={item.id}
               type="button"
               key={item.id}
               onClick={() => onWorkspaceSelect(item.id)}
@@ -360,6 +362,7 @@ export const ProfileSidebar = ({
         <button
           aria-label={t("Settings")}
           className={`workspace-button${activeWorkspace === "settings" ? " is-active" : ""}`}
+          data-workspace="settings"
           type="button"
           onClick={() => onWorkspaceSelect("settings")}
         >

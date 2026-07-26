@@ -4419,6 +4419,29 @@ describe("Electron UI profile switching e2e", () => {
         applyButton.evaluate((element) => getComputedStyle(element).backgroundColor)
       )
       .toBe("rgb(0, 122, 255)");
+    await expect
+      .poll(() =>
+        newProfileButton.evaluate((element) => getComputedStyle(element).backgroundColor)
+      )
+      .not.toBe("rgb(0, 122, 255)");
+    const commitControlGeometry = await page
+      .locator(
+        ".profile-new-button, .profile-commit-actions .save-button, .profile-commit-actions .profile-apply-button, .profile-commit-actions .profile-target-workspace-button, .profile-commit-actions > .icon-action"
+      )
+      .evaluateAll((controls) =>
+        controls.map((control) => ({
+          radius: getComputedStyle(control).borderRadius,
+          height: Math.round(control.getBoundingClientRect().height)
+        }))
+      );
+    expect(commitControlGeometry.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(commitControlGeometry.map((control) => control.radius))).toEqual(
+      new Set(["6px"])
+    );
+    expect(
+      commitControlGeometry.every((control) => Math.abs(control.height - 34) <= 1),
+      JSON.stringify(commitControlGeometry)
+    ).toBe(true);
 
     await expect(
       readFile(join(appDataRoot, "profiles", "ui-opencode-alpha", "INSTRUCTIONS.md"), "utf8")
@@ -6877,8 +6900,22 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.locator("html").getAttribute("lang")).toBe("zh-TW");
 
     await resizeAppWindow(page, 920, 620);
-    for (const workspace of ["技能", "設定檔", "Agents", "設定"]) {
-      await page.getByRole("button", { name: workspace, exact: true }).click();
+    const localizedWorkspaces: Record<string, string> = {
+      library: "技能",
+      profiles: "設定檔",
+      conversations: "對話",
+      targets: "Agents",
+      settings: "設定"
+    };
+    for (const [workspace, heading] of Object.entries(localizedWorkspaces)) {
+      await page.locator(`[data-workspace="${workspace}"]`).click();
+      const workspaceHeading = page.locator(".ui-page-header h2").first();
+      await expect
+        .poll(async () => (await workspaceHeading.textContent())?.trim(), {
+          message: workspace
+        })
+        .toBe(heading);
+      expect(await page.locator("html").getAttribute("lang"), workspace).toBe("zh-TW");
       const containment = await page.evaluate(() => ({
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: document.documentElement.clientWidth,
@@ -6894,7 +6931,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
       .toMatchObject({ locale: "en" });
-  }, 30_000);
+  }, 45_000);
 
   it("routes a rate-limited GitHub update check to account connection", async () => {
     const { app: electronApp, page } = await launchApp();
@@ -6926,6 +6963,13 @@ describe("Electron UI profile switching e2e", () => {
     await githubSettings.getByRole("button", { name: "Sign in with GitHub" }).waitFor({
       state: "visible"
     });
+    await expect
+      .poll(() =>
+        githubSettings
+          .getByRole("button", { name: "Sign in with GitHub" })
+          .evaluate((button) => getComputedStyle(button).backgroundColor)
+      )
+      .not.toBe("rgb(0, 122, 255)");
   }, 30_000);
 
   it("reports an offline GitHub update check without offering sign-in as the fix", async () => {
@@ -7910,7 +7954,14 @@ describe("Electron UI profile switching e2e", () => {
     const sidebar = page.locator(".global-sidebar");
 
     const headerMetrics: Array<{ fontSize: string; left: number; top: number }> = [];
-    for (const workspace of ["Skills", "Profiles", "Agents", "Settings"]) {
+    const workspaceSurfaceSelectors: Record<string, string> = {
+      Skills: ".skill-library-panel",
+      Profiles: ".profile-workbench",
+      Conversations: ".conversation-layout",
+      Agents: ".target-list",
+      Settings: ".settings-category-panel"
+    };
+    for (const workspace of ["Skills", "Profiles", "Conversations", "Agents", "Settings"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
       const header = page.locator(".ui-page-header").first();
       await header.waitFor({ state: "visible" });
@@ -7929,8 +7980,21 @@ describe("Electron UI profile switching e2e", () => {
         };
       });
       expect(metrics.contained).toBe(true);
-      expect(metrics.actionHeights.every((height) => Math.abs(height - 34) <= 1)).toBe(true);
+      expect(
+        metrics.actionHeights.every((height) => Math.abs(height - 34) <= 1),
+        JSON.stringify({ workspace, metrics })
+      ).toBe(true);
       headerMetrics.push({ fontSize: metrics.fontSize, left: metrics.left, top: metrics.top });
+      const surface = page.locator(workspaceSurfaceSelectors[workspace]);
+      await surface.waitFor({ state: "visible" });
+      const surfaceGeometry = await surface.evaluate((element) => ({
+        contained:
+          element.scrollWidth <= element.clientWidth + 1 &&
+          element.scrollHeight <= element.clientHeight + 1,
+        radius: getComputedStyle(element).borderRadius
+      }));
+      expect(surfaceGeometry.radius, workspace).toBe("8px");
+      expect(surfaceGeometry.contained, workspace).toBe(true);
     }
     expect(new Set(headerMetrics.map((metric) => metric.fontSize))).toEqual(new Set(["23px"]));
     expect(Math.max(...headerMetrics.map((metric) => metric.left)) - Math.min(...headerMetrics.map((metric) => metric.left))).toBeLessThanOrEqual(1);
@@ -8224,6 +8288,37 @@ describe("Electron UI profile switching e2e", () => {
     expect(
       await page.locator(".library-drawer__header strong").evaluate((title) => getComputedStyle(title).fontWeight)
     ).toBe("500");
+    const cleanupDrawerGeometry = await page.locator(".library-drawer").evaluate((drawer) => {
+      const rootStyles = getComputedStyle(document.documentElement);
+      const drawerStyles = getComputedStyle(drawer);
+      const shadowProbe = document.createElement("div");
+      shadowProbe.style.boxShadow = "var(--shadow-soft)";
+      document.body.append(shadowProbe);
+      const expectedShadow = getComputedStyle(shadowProbe).boxShadow;
+      shadowProbe.remove();
+      const actionHeights = Array.from(
+        drawer.querySelectorAll<HTMLElement>(".library-drawer__actions button")
+      ).map((button) => Math.round(button.getBoundingClientRect().height));
+      const pageActionStates = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".library-page-header button")
+      ).map((button) => button.disabled);
+      return {
+        actionHeights,
+        borderMatches:
+          drawerStyles.borderTopColor ===
+          rootStyles.getPropertyValue("--border-strong").trim(),
+        pageActionsDisabled: pageActionStates.every(Boolean),
+        radius: drawerStyles.borderRadius,
+        shadowMatches: drawerStyles.boxShadow === expectedShadow
+      };
+    });
+    expect(cleanupDrawerGeometry).toEqual({
+      actionHeights: [34, 34],
+      borderMatches: true,
+      pageActionsDisabled: true,
+      radius: "10px",
+      shadowMatches: true
+    });
     const cleanupRow = page.locator(".cleanup-group-row").first();
     await cleanupRow.waitFor({ state: "visible" });
     const cleanupGeometry = await cleanupRow.evaluate((row) => {

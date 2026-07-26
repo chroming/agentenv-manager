@@ -80,7 +80,7 @@
 .profile-apply-button {
   background: var(--accent);
   border: 1px solid var(--accent);
-  border-radius: var(--radius-surface);
+  border-radius: var(--radius-control);
   color: #fff;
   justify-content: center;
   min-width: 184px;
@@ -95,7 +95,7 @@
   align-items: center;
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
+  border-radius: var(--radius-control);
   color: var(--text);
   display: inline-flex;
   font-size: 12px;

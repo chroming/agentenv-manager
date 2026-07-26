@@ -2058,6 +2058,8 @@ const AppContent = ({
     profileMetadataSavingId === draftProfile.id ||
     isProfileDirty ||
     readiness.status === "applied";
+  const isNewProfilePrimary =
+    !draftProfile || readiness.status === "applied";
   const applyDescription = !draftProfile
     ? t("Select a profile before previewing changes")
     : !selectedTarget
@@ -4040,6 +4042,7 @@ const AppContent = ({
               actions={
                 <LibraryHeaderActions
                   mode={skillLibraryMode}
+                  toolOpen={Boolean(skillLibraryTool)}
                   refreshing={
                     skillRefreshStatus === "refreshing" ||
                     skillSourceGroupsLoading
@@ -4189,9 +4192,9 @@ const AppContent = ({
               actions={(
                 <div className="profile-page-actions" ref={profilePageActionsRef}>
                   <Button
-                    className={`profile-new-button${isProfileDirty ? "" : " is-primary"}`}
+                    className={`profile-new-button${isNewProfilePrimary ? " is-primary" : ""}`}
                     size="prominent"
-                    variant={isProfileDirty ? "secondary" : "primary"}
+                    variant={isNewProfilePrimary ? "primary" : "secondary"}
                     icon={<Plus size={15} strokeWidth={2.3} />}
                     onClick={openCreateProfileDialog}
                   >
@@ -4854,7 +4857,7 @@ const AppContent = ({
                         </button>
                       ) : !githubDeviceLogin ? (
                         <button
-                          className="primary-button"
+                          className="secondary-action"
                           disabled={busy || githubLoginChecking}
                           onClick={startGitHubLogin}
                           type="button"

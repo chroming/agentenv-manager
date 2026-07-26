@@ -3521,15 +3521,14 @@ export const SkillLibraryPanel = ({
                 />
                 <span>{t(isRefreshingInventory ? "Refreshing" : "Refresh")}</span>
               </button>
-              <button
-                className="icon-action"
-                type="button"
-                aria-label={t("Close library tool")}
+              <IconButton
+                label={t("Close library tool")}
                 disabled={Boolean(automaticCleanupKey) || isRefreshingInventory}
                 onClick={onCloseTool}
+                variant="ghost"
               >
                 <X size={16} strokeWidth={2.2} />
-              </button>
+              </IconButton>
             </div>
           </div>
           <section className="resource-section target-discovery-section">
