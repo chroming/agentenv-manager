@@ -452,8 +452,8 @@ Rules:
 - [ ] Icon, name, description, resource summary, and application state align for
   short and long names.
 - [ ] Composer resource rows share one trigger height and one policy lane.
-- [ ] Instructions, Skills, and MCPs expose `Apply`, `Disable`, and
-  `Don't manage` consistently where supported.
+- [ ] Instructions, Skills, and MCPs expose `Use Profile`, `Turn off`, and
+  `Keep current` consistently where supported.
 - [ ] Expanding one resource does not resize sibling triggers.
 - [ ] Zero and one-item editors fit content without empty vertical space.
 - [ ] Skill rows show path, version, enabled state, and effective Agent result.
@@ -479,7 +479,7 @@ Rules:
 ### 6.4 MCP activation
 
 - [ ] Agent definitions, credentials, and installation remain Agent-owned.
-- [ ] `Don't manage` performs no MCP read, diff, backup, write, or ownership
+- [ ] `Keep current` performs no MCP read, diff, backup, write, or ownership
   claim.
 - [ ] Managed choices mutate only allowlisted activation fields.
 - [ ] Missing managed `On` entries explain setup requirements.

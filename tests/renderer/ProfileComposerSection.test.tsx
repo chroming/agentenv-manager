@@ -214,10 +214,10 @@ describe("ProfileComposerSection", () => {
       name: "Skills application policy for OpenCode"
     });
     expect(
-      within(policy).getByRole("radio", { name: "Don't manage" })
+      within(policy).getByRole("radio", { name: "Keep current" })
     ).toHaveAttribute("aria-checked", "true");
     expect(
-      within(policy).getByRole("radio", { name: "Apply" })
+      within(policy).getByRole("radio", { name: "Use Profile" })
     ).toHaveAttribute("aria-checked", "false");
     expect(policy).toHaveClass("is-ignore");
     expect(policy.closest(".profile-composer-section")).toHaveClass("is-unmanaged");
@@ -229,7 +229,7 @@ describe("ProfileComposerSection", () => {
     expect(header?.children[1]).toBe(screen.getByRole("button", { name: "Skills" }));
     expect(header?.children[2]).toBe(policy);
 
-    fireEvent.click(within(policy).getByRole("radio", { name: "Apply" }));
+    fireEvent.click(within(policy).getByRole("radio", { name: "Use Profile" }));
 
     expect(onPolicyChange).toHaveBeenCalledWith("manage");
     expect(onToggle).not.toHaveBeenCalled();
@@ -322,8 +322,8 @@ describe("ProfileComposerSection", () => {
     const policy = screen.getByRole("radiogroup", {
       name: "Skills application policy for OpenCode"
     });
-    const apply = within(policy).getByRole("radio", { name: "Apply" });
-    const disable = within(policy).getByRole("radio", { name: "Disable" });
+    const apply = within(policy).getByRole("radio", { name: "Use Profile" });
+    const disable = within(policy).getByRole("radio", { name: "Turn off" });
     apply.focus();
 
     fireEvent.keyDown(policy, { key: "ArrowRight" });

@@ -953,12 +953,12 @@ try {
   const skillsPolicy = page.getByRole("radiogroup", {
     name: "Skills application policy for OpenCode"
   });
-  await capturePage(page, join(outputDir, "profile-policy-apply-920x620.png"));
-  await skillsPolicy.getByRole("radio", { name: "Disable" }).click();
-  await capturePage(page, join(outputDir, "profile-policy-disable-920x620.png"));
-  await skillsPolicy.getByRole("radio", { name: "Don't manage" }).click();
-  await capturePage(page, join(outputDir, "profile-policy-unmanaged-920x620.png"));
-  await skillsPolicy.getByRole("radio", { name: "Apply" }).click();
+  await capturePage(page, join(outputDir, "profile-policy-use-profile-920x620.png"));
+  await skillsPolicy.getByRole("radio", { name: "Turn off" }).click();
+  await capturePage(page, join(outputDir, "profile-policy-turn-off-920x620.png"));
+  await skillsPolicy.getByRole("radio", { name: "Keep current" }).click();
+  await capturePage(page, join(outputDir, "profile-policy-keep-current-920x620.png"));
+  await skillsPolicy.getByRole("radio", { name: "Use Profile" }).click();
   const policySaveButton = page.getByRole("button", { name: "Save", exact: true });
   if (await policySaveButton.isEnabled()) {
     await policySaveButton.click();

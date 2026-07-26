@@ -140,6 +140,7 @@ export const SkillsEditor = ({
           <Button
             className="secondary-action profile-skill-check"
             variant="secondary"
+            size="compact"
             aria-label={t("Check profile skill updates")}
             disabled={disabled || checkingSkillUpdates || checkableIds.length === 0}
             onClick={() => onCheckSkillUpdates?.(checkableIds)}
@@ -158,6 +159,7 @@ export const SkillsEditor = ({
             className="secondary-action"
             ref={pickerTriggerRef}
             variant="secondary"
+            size="compact"
             disabled={disabled}
             onClick={() => openPicker()}
             icon={<Plus size={14} strokeWidth={2.2} aria-hidden="true" />}

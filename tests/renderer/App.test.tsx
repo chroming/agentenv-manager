@@ -928,7 +928,7 @@ describe("App", () => {
         within(composer).getByRole("radiogroup", {
           name: "MCPs application policy for OpenCode"
         })
-      ).getByRole("radio", { name: "Don't manage" })
+      ).getByRole("radio", { name: "Keep current" })
     ).toHaveAttribute("aria-checked", "true");
     expect(screen.getByText("0 in OpenCode")).toBeInTheDocument();
   });
@@ -1725,7 +1725,7 @@ describe("App", () => {
         await screen.findByRole("radiogroup", {
           name: "MCPs application policy for OpenCode"
         })
-      ).getByRole("radio", { name: "Apply" })
+      ).getByRole("radio", { name: "Use Profile" })
     );
     const behavior = await screen.findByLabelText("context7 Profile behavior");
     expect(behavior).toHaveValue("agent");

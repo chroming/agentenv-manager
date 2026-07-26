@@ -13,12 +13,28 @@ interface ProfileResourcePolicyControlProps {
 }
 
 const policyOptions: Array<{
-  label: "Apply" | "Disable" | "Don't manage";
+  description:
+    | "Use this Profile's saved resources"
+    | "Turn off this Profile's resources in the Agent"
+    | "Keep the Agent's current resources unchanged";
+  label: "Use Profile" | "Turn off" | "Keep current";
   value: ProfileResourcePolicy;
 }> = [
-  { label: "Apply", value: "manage" },
-  { label: "Disable", value: "disable" },
-  { label: "Don't manage", value: "ignore" }
+  {
+    description: "Use this Profile's saved resources",
+    label: "Use Profile",
+    value: "manage"
+  },
+  {
+    description: "Turn off this Profile's resources in the Agent",
+    label: "Turn off",
+    value: "disable"
+  },
+  {
+    description: "Keep the Agent's current resources unchanged",
+    label: "Keep current",
+    value: "ignore"
+  }
 ];
 
 export const ProfileResourcePolicyControl = ({
@@ -92,6 +108,7 @@ export const ProfileResourcePolicyControl = ({
             data-policy-value={option.value}
             key={option.value}
             tabIndex={selected ? 0 : -1}
+            title={t(option.description)}
             onClick={() => {
               if (!selected) onChange(option.value);
             }}

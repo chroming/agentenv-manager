@@ -1466,11 +1466,6 @@
   gap: 8px;
 }
 
-.profile-skill-toolbar__actions .secondary-action {
-  min-height: 34px;
-  padding-inline: 11px;
-}
-
 .profile-skill-check .is-spinning {
   animation: spin 0.9s linear infinite;
 }

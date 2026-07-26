@@ -735,7 +735,7 @@ const expandComposerSection = async (page: Page, name: ComposerSectionName) => {
 };
 
 type ComposerResourceName = "Instructions" | "Skills" | "MCPs";
-type ComposerPolicyName = "Apply" | "Disable" | "Don't manage";
+type ComposerPolicyName = "Use Profile" | "Turn off" | "Keep current";
 
 const setComposerResourcePolicy = async (
   page: Page,
@@ -4255,7 +4255,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(
       await page
         .getByRole("radiogroup", { name: "MCPs application policy for OpenCode" })
-        .getByRole("radio", { name: "Apply" })
+        .getByRole("radio", { name: "Use Profile" })
         .getAttribute("aria-checked")
     ).toBe("true");
     expect(await editor.getByRole("button", { name: /Add|Remove|Delete/ }).count()).toBe(0);
@@ -4290,7 +4290,7 @@ describe("Electron UI profile switching e2e", () => {
     for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
       expect(
         await policy
-          .getByRole("radio", { name: "Apply" })
+          .getByRole("radio", { name: "Use Profile" })
           .getAttribute("aria-checked")
       ).toBe("true");
       const options = policy.getByRole("radio");
@@ -4308,6 +4308,23 @@ describe("Electron UI profile switching e2e", () => {
       new Set(policyBoxes.map((box) => Math.round(box!.x + box!.width))).size
     ).toBe(1);
     expect(new Set(policyBoxes.map((box) => Math.round(box!.height))).size).toBe(1);
+    await expandComposerSection(page, "Skills");
+    const skillManager = composer.getByRole("region", { name: "Profile skills" });
+    const checkSkillUpdates = skillManager.getByRole("button", {
+      name: "Check profile skill updates"
+    });
+    const addSkill = skillManager.getByRole("button", { name: "Add", exact: true });
+    await expectTextFits(checkSkillUpdates);
+    await expectTextFits(addSkill);
+    const compactControlBoxes = await Promise.all(
+      [skillsPolicy, checkSkillUpdates, addSkill].map((control) => control.boundingBox())
+    );
+    expect(compactControlBoxes.every(Boolean)).toBe(true);
+    expect(
+      new Set(compactControlBoxes.map((box) => Math.round(box!.height))).size
+    ).toBe(1);
+    await skillsRow.click();
+    await expect.poll(() => skillsRow.getAttribute("aria-expanded")).toBe("false");
     const instructionsSection = composer.locator(
       '[data-profile-composer-id="instructions"]'
     );
@@ -4339,9 +4356,9 @@ describe("Electron UI profile switching e2e", () => {
     expect(await skillsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
     expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
 
-    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Disable");
-    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Disable");
-    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Disable");
+    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Turn off");
+    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Turn off");
+    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Turn off");
 
     expect(await instructionsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await skillsRow.getAttribute("aria-expanded")).toBe("false");
@@ -4352,7 +4369,7 @@ describe("Electron UI profile switching e2e", () => {
     for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
       expect(
         await policy
-          .getByRole("radio", { name: "Disable" })
+          .getByRole("radio", { name: "Turn off" })
           .getAttribute("aria-checked")
       ).toBe("true");
       await expectSegmentedControlGeometry(policy);
@@ -4408,9 +4425,9 @@ describe("Electron UI profile switching e2e", () => {
       { name: "shared-docs", enabled: true }
     ]);
 
-    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Don't manage");
-    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Don't manage");
-    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Don't manage");
+    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Keep current");
+    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Keep current");
+    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Keep current");
     await saveProfile(page);
     const unmanagedResources = await readJson<{
       managementByTarget: Record<
@@ -6970,7 +6987,7 @@ describe("Electron UI profile switching e2e", () => {
       page.getByRole("radiogroup", { name: "OpenCode 的 MCP 应用策略" })
     ];
     for (const policy of localizedPolicies) {
-      for (const label of ["应用", "停用", "不接管"]) {
+      for (const label of ["使用方案", "停用", "保持现状"]) {
         await expectTextFits(policy.getByRole("radio", { name: label }));
       }
       await expectSegmentedControlGeometry(policy);
