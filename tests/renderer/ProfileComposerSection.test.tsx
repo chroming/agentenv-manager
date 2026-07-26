@@ -28,7 +28,7 @@ describe("ProfileComposerSection", () => {
         count={2}
         enabledCount={1}
         chipNames={["Reviewer", "Planner"]}
-        policy="apply-profile"
+        policy="manage"
         policyLabel="Skills application policy for OpenCode"
         targetName="OpenCode"
         expanded
@@ -67,7 +67,7 @@ describe("ProfileComposerSection", () => {
         count={6}
         enabledCount={4}
         chipNames={["Context7", "Filesystem", "Context7", "GitHub", "Figma", "Slack"]}
-        policy="leave-unchanged"
+        policy="ignore"
         policyLabel="MCPs application policy for OpenCode"
         targetName="OpenCode"
         expanded={false}
@@ -100,7 +100,7 @@ describe("ProfileComposerSection", () => {
           count={1}
           enabledCount={1}
           chipNames={["Reviewer"]}
-          policy="apply-profile"
+          policy="manage"
           policyLabel="Skills application policy for OpenCode"
           targetName="OpenCode"
           expanded
@@ -117,7 +117,7 @@ describe("ProfileComposerSection", () => {
           count={1}
           enabledCount={0}
           chipNames={["Context7"]}
-          policy="apply-profile"
+          policy="manage"
           policyLabel="MCPs application policy for OpenCode"
           targetName="OpenCode"
           expanded
@@ -163,7 +163,7 @@ describe("ProfileComposerSection", () => {
         count={1}
         enabledCount={1}
         chipNames={["AGENTS.md"]}
-        policy="apply-profile"
+        policy="manage"
         policyLabel="Instructions application policy for OpenCode"
         targetName="OpenCode"
         expanded={false}
@@ -199,7 +199,7 @@ describe("ProfileComposerSection", () => {
         count={3}
         enabledCount={2}
         chipNames={["Reviewer"]}
-        policy="leave-unchanged"
+        policy="ignore"
         policyLabel="Skills application policy for OpenCode"
         targetName="OpenCode"
         expanded={false}
@@ -214,13 +214,13 @@ describe("ProfileComposerSection", () => {
       name: "Skills application policy for OpenCode"
     });
     expect(
-      within(policy).getByRole("radio", { name: "Keep Agent" })
+      within(policy).getByRole("radio", { name: "Don't manage" })
     ).toHaveAttribute("aria-checked", "true");
     expect(
-      within(policy).getByRole("radio", { name: "Use Profile" })
+      within(policy).getByRole("radio", { name: "Apply" })
     ).toHaveAttribute("aria-checked", "false");
-    expect(policy).toHaveClass("is-keep-agent");
-    expect(policy.closest(".profile-composer-section")).toHaveClass("is-keep-agent");
+    expect(policy).toHaveClass("is-ignore");
+    expect(policy.closest(".profile-composer-section")).toHaveClass("is-unmanaged");
     const count = document.querySelector(".profile-composer-section__count");
     expect(count).toHaveAttribute("title", "2 of 3 enabled");
     expect(count?.querySelector(".profile-composer-section__count-visual")).toHaveTextContent("2/3");
@@ -229,14 +229,14 @@ describe("ProfileComposerSection", () => {
     expect(header?.children[1]).toBe(screen.getByRole("button", { name: "Skills" }));
     expect(header?.children[2]).toBe(policy);
 
-    fireEvent.click(within(policy).getByRole("radio", { name: "Use Profile" }));
+    fireEvent.click(within(policy).getByRole("radio", { name: "Apply" }));
 
-    expect(onPolicyChange).toHaveBeenCalledWith("apply-profile");
+    expect(onPolicyChange).toHaveBeenCalledWith("manage");
     expect(onToggle).not.toHaveBeenCalled();
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });
 
-  it("keeps Profile content editable and explains a leave-unchanged policy", () => {
+  it("keeps Profile content editable and explains an unmanaged policy", () => {
     render(
       <ProfileComposerSection
         id="profile-instructions"
@@ -246,7 +246,7 @@ describe("ProfileComposerSection", () => {
         count={1}
         enabledCount={1}
         chipNames={["AGENTS.md"]}
-        policy="leave-unchanged"
+        policy="ignore"
         policyLabel="Instructions application policy for OpenCode"
         targetName="OpenCode"
         expanded
@@ -265,6 +265,38 @@ describe("ProfileComposerSection", () => {
     );
   });
 
+  it("keeps saved content editable while explaining a disabled policy", () => {
+    render(
+      <ProfileComposerSection
+        id="profile-instructions"
+        icon={<BookOpen />}
+        title="Instructions"
+        description="Set the operating guidance"
+        count={1}
+        enabledCount={0}
+        chipNames={["AGENTS.md"]}
+        policy="disable"
+        policyLabel="Instructions application policy for OpenCode"
+        targetName="OpenCode"
+        expanded
+        onToggle={() => undefined}
+        onPolicyChange={() => undefined}
+      >
+        <textarea aria-label="Instructions editor" defaultValue="# Saved Profile content" />
+      </ProfileComposerSection>
+    );
+
+    expect(screen.getByText(/Saved in this Profile/)).toHaveTextContent(
+      "Applying to OpenCode disables this section's Profile resources."
+    );
+    expect(screen.getByRole("textbox", { name: "Instructions editor" })).toHaveValue(
+      "# Saved Profile content"
+    );
+    expect(document.querySelector(".profile-composer-section")).toHaveClass(
+      "is-resource-disabled"
+    );
+  });
+
   it("uses arrow keys to move directly between policy choices", () => {
     const onPolicyChange = vi.fn();
     render(
@@ -276,7 +308,7 @@ describe("ProfileComposerSection", () => {
         count={1}
         enabledCount={1}
         chipNames={["Reviewer"]}
-        policy="apply-profile"
+        policy="manage"
         policyLabel="Skills application policy for OpenCode"
         targetName="OpenCode"
         expanded={false}
@@ -290,13 +322,13 @@ describe("ProfileComposerSection", () => {
     const policy = screen.getByRole("radiogroup", {
       name: "Skills application policy for OpenCode"
     });
-    const useProfile = within(policy).getByRole("radio", { name: "Use Profile" });
-    const keepAgent = within(policy).getByRole("radio", { name: "Keep Agent" });
-    useProfile.focus();
+    const apply = within(policy).getByRole("radio", { name: "Apply" });
+    const disable = within(policy).getByRole("radio", { name: "Disable" });
+    apply.focus();
 
     fireEvent.keyDown(policy, { key: "ArrowRight" });
 
-    expect(onPolicyChange).toHaveBeenCalledWith("leave-unchanged");
-    expect(keepAgent).toHaveFocus();
+    expect(onPolicyChange).toHaveBeenCalledWith("disable");
+    expect(disable).toHaveFocus();
   });
 });

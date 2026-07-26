@@ -8,13 +8,13 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   height: 30px;
   margin: 0 8px 0 0;
   min-height: 30px;
-  min-width: 160px;
+  min-width: 0;
   padding: 2px;
-  width: 160px;
+  width: auto;
 }
 
 .profile-resource-policy__option {
@@ -30,7 +30,7 @@
   justify-content: center;
   min-width: 0;
   overflow: hidden;
-  padding: 0 6px;
+  padding: 0 2px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -51,8 +51,12 @@
   outline-offset: 1px;
 }
 
-.profile-resource-policy.is-keep-agent {
+.profile-resource-policy.is-ignore {
   background: #e9ecf1;
+}
+
+.profile-resource-policy.is-disable {
+  background: #f0eee9;
 }
 
 .profile-resource-policy__status {
@@ -66,12 +70,12 @@
   font-weight: var(--font-weight-regular);
   height: 30px;
   margin: 0 8px 0 0;
-  min-width: 160px;
+  min-width: 0;
   overflow: hidden;
   padding: 0 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
-  width: 160px;
+  width: auto;
 }
 
 .profile-composer-section__policy-note {
@@ -101,49 +105,62 @@
   color: #356fca;
 }
 
-.profile-composer-section.is-keep-agent > .profile-composer-section__header,
-.profile-composer-section.is-keep-agent.is-expanded > .profile-composer-section__header {
+.profile-composer-section.is-unmanaged > .profile-composer-section__header,
+.profile-composer-section.is-unmanaged.is-expanded > .profile-composer-section__header {
   background: #f5f6f8;
   box-shadow: inset 2px 0 0 #c8ced8;
 }
 
-.profile-composer-section.is-keep-agent
+.profile-composer-section.is-unmanaged
   > .profile-composer-section__header
   .profile-composer-section__trigger:hover {
   background: #eef0f3;
 }
 
-.profile-composer-section.is-keep-agent
+.profile-composer-section.is-unmanaged
   > .profile-composer-section__header
   .profile-composer-section__icon,
-.profile-composer-section.is-keep-agent
+.profile-composer-section.is-unmanaged
   > .profile-composer-section__header
   .profile-composer-section__chevron,
-.profile-composer-section.is-keep-agent
+.profile-composer-section.is-unmanaged
   > .profile-composer-section__header
   .profile-composer-section__title,
-.profile-composer-section.is-keep-agent
+.profile-composer-section.is-unmanaged
   > .profile-composer-section__header
   .profile-composer-section__count-visual strong {
   color: #7d8797;
 }
 
-.profile-composer-section.is-keep-agent
+.profile-composer-section.is-unmanaged
   > .profile-composer-section__header
   .profile-composer-section__description,
-.profile-composer-section.is-keep-agent
+.profile-composer-section.is-unmanaged
   > .profile-composer-section__header
   .profile-composer-section__count,
-.profile-composer-section.is-keep-agent
+.profile-composer-section.is-unmanaged
   > .profile-composer-section__header
   .profile-composer-section__summary {
   color: #9199a6;
 }
 
-.profile-composer-section.is-keep-agent
+.profile-composer-section.is-unmanaged
   > .profile-composer-section__header
   .profile-composer-section__summary {
   opacity: 0.68;
+}
+
+.profile-composer-section.is-resource-disabled > .profile-composer-section__header,
+.profile-composer-section.is-resource-disabled.is-expanded
+  > .profile-composer-section__header {
+  background: #f8f7f5;
+  box-shadow: inset 2px 0 0 #c9b995;
+}
+
+.profile-composer-section.is-resource-disabled
+  > .profile-composer-section__header
+  .profile-composer-section__count-visual strong {
+  color: var(--muted);
 }
 
 .profile-loading-surface {
@@ -204,12 +221,6 @@
 }
 
 @container profile-workspace (max-width: 760px) {
-  .profile-resource-policy,
-  .profile-resource-policy__status {
-    min-width: 148px;
-    width: 148px;
-  }
-
   .profile-hero--loading {
     align-items: start;
     min-height: var(--profile-hero-height-compact);

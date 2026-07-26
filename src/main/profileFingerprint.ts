@@ -27,12 +27,18 @@ export const createProfileContentHash = (
       mcp: mcpPolicy?.mode ?? "ignore"
     },
     instructions: instructionsMode === "manage" ? profile.instructions : null,
-    skills: skillsMode === "manage"
-      ? [...profile.resources.skills].sort(
-          (left, right) =>
-            left.targetName.localeCompare(right.targetName) ||
-            left.libraryId.localeCompare(right.libraryId)
-        )
+    skills: skillsMode !== "ignore"
+      ? [...profile.resources.skills]
+          .map((reference) => ({
+            ...reference,
+            enabled:
+              skillsMode === "disable" ? false : reference.enabled
+          }))
+          .sort(
+            (left, right) =>
+              left.targetName.localeCompare(right.targetName) ||
+              left.libraryId.localeCompare(right.libraryId)
+          )
       : [],
     mcp: mcpPolicy?.mode === "manage"
       ? {
@@ -41,7 +47,14 @@ export const createProfileContentHash = (
             left.name.localeCompare(right.name)
           )
         }
-      : { mode: "ignore", selections: [] }
+      : mcpPolicy?.mode === "disable"
+        ? {
+            mode: mcpPolicy.mode,
+            selections: [...mcpPolicy.selections]
+              .map((selection) => ({ ...selection, enabled: false }))
+              .sort((left, right) => left.name.localeCompare(right.name))
+          }
+        : { mode: "ignore", selections: [] }
   };
   return createHash("sha256").update(JSON.stringify(deployment)).digest("hex");
 };

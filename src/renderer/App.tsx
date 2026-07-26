@@ -38,6 +38,7 @@ import type {
   BackupSummary,
   DataRestorePreview,
   ProfileDetail,
+  ProfileResourceMode,
   ProfileResources,
   ProfileSummary,
   ResourceIconKey,
@@ -1967,7 +1968,7 @@ const AppContent = ({
       : undefined;
   const updateSelectedResourceManagement = (
     resource: ManagedProfileResource,
-    managed: boolean
+    mode: ProfileResourceMode
   ) => {
     if (!draftProfile || !selectedTargetId) return;
     updateDraftProfile({
@@ -1976,7 +1977,7 @@ const AppContent = ({
         draftProfile.resources ?? emptyProfileResources,
         selectedTargetId,
         resource,
-        managed ? "manage" : "ignore"
+        mode
       )
     });
   };
@@ -4412,10 +4413,7 @@ const AppContent = ({
                               ]
                             : []
                         }
-                        policy={Boolean(
-                          profileTarget?.capabilities.instructions &&
-                          resourceSummary?.instructions.managed
-                        ) ? "apply-profile" : "leave-unchanged"}
+                        policy={resourceSummary?.instructions.mode ?? "manage"}
                         policyDisabled={!profileTarget?.capabilities.instructions}
                         policyLabel={t("Instructions application policy for {{name}}", {
                           name: activeTargetName
@@ -4429,10 +4427,7 @@ const AppContent = ({
                         expanded={activeComposerSection === "instructions"}
                         onToggle={() => toggleComposerSection("instructions")}
                         onPolicyChange={(policy) =>
-                          updateSelectedResourceManagement(
-                            "instructions",
-                            policy === "apply-profile"
-                          )
+                          updateSelectedResourceManagement("instructions", policy)
                         }
                       >
                         <AgentsEditor
@@ -4457,9 +4452,7 @@ const AppContent = ({
                         count={resourceSummary?.skills.total ?? 0}
                         enabledCount={resourceSummary?.skills.count ?? 0}
                         chipNames={resourceSummary?.skills.names ?? []}
-                        policy={Boolean(
-                          profileTarget?.capabilities.skills && resourceSummary?.skills.managed
-                        ) ? "apply-profile" : "leave-unchanged"}
+                        policy={resourceSummary?.skills.mode ?? "manage"}
                         policyDisabled={!profileTarget?.capabilities.skills}
                         policyLabel={t("Skills application policy for {{name}}", {
                           name: activeTargetName
@@ -4473,10 +4466,7 @@ const AppContent = ({
                         expanded={activeComposerSection === "skills"}
                         onToggle={() => toggleComposerSection("skills")}
                         onPolicyChange={(policy) =>
-                          updateSelectedResourceManagement(
-                            "skills",
-                            policy === "apply-profile"
-                          )
+                          updateSelectedResourceManagement("skills", policy)
                         }
                       >
                         <SkillsEditor
@@ -4516,9 +4506,7 @@ const AppContent = ({
                         count={resourceSummary?.mcp.total ?? 0}
                         enabledCount={resourceSummary?.mcp.count ?? 0}
                         chipNames={resourceSummary?.mcp.names ?? []}
-                        policy={Boolean(
-                          profileTarget?.capabilities.mcpActivation && resourceSummary?.mcp.managed
-                        ) ? "apply-profile" : "leave-unchanged"}
+                        policy={resourceSummary?.mcp.mode ?? "ignore"}
                         policyDisabled={!profileTarget?.capabilities.mcpActivation}
                         policyLabel={t("MCPs application policy for {{name}}", {
                           name: activeTargetName
@@ -4532,10 +4520,7 @@ const AppContent = ({
                         expanded={activeComposerSection === "mcp"}
                         onToggle={() => toggleComposerSection("mcp")}
                         onPolicyChange={(policy) =>
-                          updateSelectedResourceManagement(
-                            "mcp",
-                            policy === "apply-profile"
-                          )
+                          updateSelectedResourceManagement("mcp", policy)
                         }
                       >
                         <ProfileMcpEditor

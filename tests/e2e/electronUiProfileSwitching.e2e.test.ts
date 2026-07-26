@@ -735,7 +735,7 @@ const expandComposerSection = async (page: Page, name: ComposerSectionName) => {
 };
 
 type ComposerResourceName = "Instructions" | "Skills" | "MCPs";
-type ComposerPolicyName = "Use Profile" | "Keep Agent";
+type ComposerPolicyName = "Apply" | "Disable" | "Don't manage";
 
 const setComposerResourcePolicy = async (
   page: Page,
@@ -4223,7 +4223,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(
       await page
         .getByRole("radiogroup", { name: "MCPs application policy for OpenCode" })
-        .getByRole("radio", { name: "Use Profile" })
+        .getByRole("radio", { name: "Apply" })
         .getAttribute("aria-checked")
     ).toBe("true");
     expect(await editor.getByRole("button", { name: /Add|Remove|Delete/ }).count()).toBe(0);
@@ -4258,17 +4258,28 @@ describe("Electron UI profile switching e2e", () => {
     for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
       expect(
         await policy
-          .getByRole("radio", { name: "Use Profile" })
+          .getByRole("radio", { name: "Apply" })
           .getAttribute("aria-checked")
       ).toBe("true");
       const options = policy.getByRole("radio");
       await expectTextFits(options.nth(0));
       await expectTextFits(options.nth(1));
+      await expectTextFits(options.nth(2));
       const optionWidths = await options.evaluateAll((elements) =>
         elements.map((element) => element.getBoundingClientRect().width)
       );
       expect(Math.abs(optionWidths[0] - optionWidths[1])).toBeLessThanOrEqual(1);
+      expect(Math.abs(optionWidths[1] - optionWidths[2])).toBeLessThanOrEqual(1);
     }
+    const policyBoxes = await Promise.all(
+      [instructionsPolicy, skillsPolicy, mcpPolicy].map((policy) => policy.boundingBox())
+    );
+    expect(policyBoxes.every(Boolean)).toBe(true);
+    expect(new Set(policyBoxes.map((box) => Math.round(box!.x))).size).toBe(1);
+    expect(
+      new Set(policyBoxes.map((box) => Math.round(box!.x + box!.width))).size
+    ).toBe(1);
+    expect(new Set(policyBoxes.map((box) => Math.round(box!.height))).size).toBe(1);
     const instructionsSection = composer.locator(
       '[data-profile-composer-id="instructions"]'
     );
@@ -4300,22 +4311,24 @@ describe("Electron UI profile switching e2e", () => {
     expect(await skillsRow.locator('[title="1 of 1 enabled"]').count()).toBe(1);
     expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
 
-    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Keep Agent");
-    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Keep Agent");
-    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Keep Agent");
+    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Disable");
+    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Disable");
+    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Disable");
 
     expect(await instructionsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await skillsRow.getAttribute("aria-expanded")).toBe("false");
     expect(await mcpRow.getAttribute("aria-expanded")).toBe("false");
-    expect(await mcpRow.locator('[title="2 of 3 enabled"]').count()).toBe(1);
+    expect(await instructionsRow.locator('[title="0 of 1 enabled"]').count()).toBe(1);
+    expect(await skillsRow.locator('[title="0 of 1 enabled"]').count()).toBe(1);
+    expect(await mcpRow.locator('[title="0 of 3 enabled"]').count()).toBe(1);
     for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
       expect(
         await policy
-          .getByRole("radio", { name: "Keep Agent" })
+          .getByRole("radio", { name: "Disable" })
           .getAttribute("aria-checked")
       ).toBe("true");
     }
-    const keptSectionSurface = await instructionsSection.evaluate((section) => {
+    const disabledSectionSurface = await instructionsSection.evaluate((section) => {
       const header = section.querySelector<HTMLElement>(".profile-composer-section__header");
       const title = section.querySelector<HTMLElement>(".profile-composer-section__title");
       const policy = section.querySelector<HTMLElement>(".profile-resource-policy");
@@ -4328,41 +4341,78 @@ describe("Electron UI profile switching e2e", () => {
         policyDisabled: policy.matches(":disabled")
       };
     });
-    expect(keptSectionSurface.sectionClass).toContain("is-keep-agent");
-    expect(keptSectionSurface.headerBackground).toBe("rgb(245, 246, 248)");
-    expect(keptSectionSurface.titleColor).toBe("rgb(125, 135, 151)");
-    expect(keptSectionSurface.policyOpacity).toBe("1");
-    expect(keptSectionSurface.policyDisabled).toBe(false);
+    expect(disabledSectionSurface.sectionClass).toContain("is-resource-disabled");
+    expect(disabledSectionSurface.headerBackground).toBe("rgb(248, 247, 245)");
+    expect(disabledSectionSurface.policyOpacity).toBe("1");
+    expect(disabledSectionSurface.policyDisabled).toBe(false);
 
     await saveProfile(page);
     const resources = await readJson<{
       skills: Array<{ libraryId: string; targetName: string; enabled: boolean }>;
       managementByTarget: Record<
         string,
-        { instructions: "ignore" | "manage"; skills: "ignore" | "manage" }
+        {
+          instructions: "ignore" | "manage" | "disable";
+          skills: "ignore" | "manage" | "disable";
+        }
       >;
       mcpByTarget: Record<
         string,
         {
-          mode: "ignore" | "manage";
+          mode: "ignore" | "manage" | "disable";
           selections: Array<{ name: string; enabled: boolean }>;
         }
       >;
     }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
 
     expect(resources.managementByTarget.opencode).toEqual({
-      instructions: "ignore",
-      skills: "ignore"
+      instructions: "disable",
+      skills: "disable"
     });
     expect(resources.skills).toEqual([
       { libraryId: "ui-alpha-skill", targetName: "ui-alpha-skill", enabled: true }
     ]);
-    expect(resources.mcpByTarget.opencode.mode).toBe("ignore");
+    expect(resources.mcpByTarget.opencode.mode).toBe("disable");
     expect(resources.mcpByTarget.opencode.selections).toEqual([
       { name: "ui-alpha-mcp", enabled: true },
       { name: "ui-beta-mcp", enabled: false },
       { name: "shared-docs", enabled: true }
     ]);
+
+    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Don't manage");
+    await setComposerResourcePolicy(page, "Skills", "OpenCode", "Don't manage");
+    await setComposerResourcePolicy(page, "MCPs", "OpenCode", "Don't manage");
+    await saveProfile(page);
+    const unmanagedResources = await readJson<{
+      managementByTarget: Record<
+        string,
+        {
+          instructions: "ignore" | "manage" | "disable";
+          skills: "ignore" | "manage" | "disable";
+        }
+      >;
+      mcpByTarget: Record<
+        string,
+        {
+          mode: "ignore" | "manage" | "disable";
+          selections: Array<{ name: string; enabled: boolean }>;
+        }
+      >;
+    }>(join(appDataRoot, "profiles", "ui-opencode-alpha", "resources.json"));
+    expect(unmanagedResources.managementByTarget.opencode).toEqual({
+      instructions: "ignore",
+      skills: "ignore"
+    });
+    expect(unmanagedResources.mcpByTarget.opencode.mode).toBe("ignore");
+    const unmanagedPolicyBoxes = await Promise.all(
+      [instructionsPolicy, skillsPolicy, mcpPolicy].map((policy) => policy.boundingBox())
+    );
+    expect(new Set(unmanagedPolicyBoxes.map((box) => Math.round(box!.x))).size).toBe(1);
+    expect(
+      new Set(
+        unmanagedPolicyBoxes.map((box) => Math.round(box!.x + box!.width))
+      ).size
+    ).toBe(1);
 
     await expandComposerSection(page, "MCPs");
     expect(
@@ -4377,7 +4427,7 @@ describe("Electron UI profile switching e2e", () => {
       ).count()
     ).toBe(1);
     expect(await page.getByLabel("shared-docs Profile behavior").count()).toBe(0);
-  }, 30_000);
+  }, 45_000);
 
   it("edits and persists Instructions from the default-collapsed Composer", async () => {
     const { app: electronApp, appDataRoot, page } = await launchApp();
@@ -6881,6 +6931,26 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => page.locator(".app-feedback").count()).toBe(0);
     await page.getByRole("button", { name: /^UI OpenCode alpha/ }).click();
     await page.getByRole("heading", { name: "UI OpenCode alpha" }).waitFor();
+    await resizeAppWindow(page, 920, 620);
+    const localizedPolicies = [
+      page.getByRole("radiogroup", { name: "OpenCode 的指令应用策略" }),
+      page.getByRole("radiogroup", { name: "OpenCode 的技能应用策略" }),
+      page.getByRole("radiogroup", { name: "OpenCode 的 MCP 应用策略" })
+    ];
+    for (const policy of localizedPolicies) {
+      for (const label of ["应用", "停用", "不接管"]) {
+        await expectTextFits(policy.getByRole("radio", { name: label }));
+      }
+    }
+    const localizedPolicyBoxes = await Promise.all(
+      localizedPolicies.map((policy) => policy.boundingBox())
+    );
+    expect(localizedPolicyBoxes.every(Boolean)).toBe(true);
+    expect(new Set(localizedPolicyBoxes.map((box) => Math.round(box!.x))).size).toBe(1);
+    expect(
+      new Set(localizedPolicyBoxes.map((box) => Math.round(box!.x + box!.width))).size
+    ).toBe(1);
+    expect(new Set(localizedPolicyBoxes.map((box) => Math.round(box!.height))).size).toBe(1);
     await electronApp.evaluate(() => {
       process.env.AGENTENV_TEST_PROFILE_READ_DELAY_ID = "ui-opencode-beta";
       process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS = "250";

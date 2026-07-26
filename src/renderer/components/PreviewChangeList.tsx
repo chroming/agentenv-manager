@@ -33,6 +33,7 @@ const basename = (path: string) => {
 };
 
 const fileAction = (change: PlannedFileChange) => {
+  if (change.action === "remove") return "Remove";
   if (change.before.length === 0 && change.after.length > 0) return "Add";
   if (change.before.length > 0 && change.after.length === 0) return "Remove";
   return "Replace";

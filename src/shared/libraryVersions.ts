@@ -3,7 +3,7 @@ import type {
   ProfileDetail,
   SkillLibraryEntry
 } from "./types";
-import { profileManagesResource } from "./profileResources";
+import { profileUsesResource } from "./profileResources";
 
 export const collectLibraryResourceVersions = (
   profile: Pick<ProfileDetail, "resources">,
@@ -11,11 +11,11 @@ export const collectLibraryResourceVersions = (
   targetId?: string
 ): LibraryResourceVersions => {
   const skillById = new Map(skills.map((skill) => [skill.id, skill]));
-  const managesSkills = !targetId || profileManagesResource(profile.resources, targetId, "skills");
+  const usesSkills = !targetId || profileUsesResource(profile.resources, targetId, "skills");
   return {
     skills: Object.fromEntries(
       [...new Set(
-        (managesSkills ? profile.resources.skills : [])
+        (usesSkills ? profile.resources.skills : [])
           .filter(
             (reference) =>
               reference.enabled &&

@@ -3,6 +3,7 @@ import type {
   ProfileResources,
   ProfileTargetResourcePolicy
 } from "./schemas";
+import type { ProfileDetail } from "./types";
 
 export type ManagedProfileResource = "instructions" | "skills" | "mcp";
 
@@ -27,7 +28,19 @@ export const profileManagesResource = (
   resources: ProfileResources,
   targetId: string,
   resource: ManagedProfileResource
+) => profileResourceMode(resources, targetId, resource) !== "ignore";
+
+export const profileUsesResource = (
+  resources: ProfileResources,
+  targetId: string,
+  resource: ManagedProfileResource
 ) => profileResourceMode(resources, targetId, resource) === "manage";
+
+export const profileDisablesResource = (
+  resources: ProfileResources,
+  targetId: string,
+  resource: ManagedProfileResource
+) => profileResourceMode(resources, targetId, resource) === "disable";
 
 export const setProfileResourceMode = (
   resources: ProfileResources,
@@ -51,6 +64,52 @@ export const setProfileResourceMode = (
     managementByTarget: {
       ...resources.managementByTarget,
       [targetId]: { ...current, [resource]: mode }
+    }
+  };
+};
+
+export const materializeTargetResourcePolicy = (
+  profile: ProfileDetail,
+  targetId: string
+): ProfileDetail => {
+  const instructionsDisabled = profileDisablesResource(
+    profile.resources,
+    targetId,
+    "instructions"
+  );
+  const skillsDisabled = profileDisablesResource(
+    profile.resources,
+    targetId,
+    "skills"
+  );
+  const mcpDisabled = profileDisablesResource(profile.resources, targetId, "mcp");
+  if (!instructionsDisabled && !skillsDisabled && !mcpDisabled) return profile;
+
+  const mcpPolicy = profile.resources.mcpByTarget[targetId];
+  return {
+    ...profile,
+    instructions: instructionsDisabled ? "" : profile.instructions,
+    resources: {
+      ...profile.resources,
+      skills: skillsDisabled
+        ? profile.resources.skills.map((reference) => ({
+            ...reference,
+            enabled: false
+          }))
+        : profile.resources.skills,
+      mcpByTarget:
+        mcpDisabled && mcpPolicy
+          ? {
+              ...profile.resources.mcpByTarget,
+              [targetId]: {
+                mode: "manage",
+                selections: mcpPolicy.selections.map((selection) => ({
+                  ...selection,
+                  enabled: false
+                }))
+              }
+            }
+          : profile.resources.mcpByTarget
     }
   };
 };

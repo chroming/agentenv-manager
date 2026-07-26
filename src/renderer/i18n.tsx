@@ -249,13 +249,15 @@ const zhCN: Record<string, string> = {
     "仅管理下方选中的 MCP 开关；定义和凭据仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":
     "此 Agent 的 MCP 设置仍由 Agent 自行控制。",
-  "Use Profile": "使用 Profile",
-  "Keep Agent": "保留 Agent",
+  "Disable": "停用",
+  "Don't manage": "不接管",
   "Instructions application policy for {{name}}": "{{name}} 的指令应用策略",
   "Skills application policy for {{name}}": "{{name}} 的技能应用策略",
   "MCPs application policy for {{name}}": "{{name}} 的 MCP 应用策略",
   "Saved in this Profile. Applying to {{name}} leaves this section unchanged.":
     "内容仍保存在此 Profile 中；应用到 {{name}} 时不会更改这一类资源。",
+  "Saved in this Profile. Applying to {{name}} disables this section's Profile resources.":
+    "内容仍保存在此 Profile 中；应用到 {{name}} 时会停用这一类 Profile 资源。",
   "Managed by Profile": "由配置方案管理",
   "Leave unchanged": "保持不变",
   "Unchanged": "保持不变",
@@ -2132,13 +2134,16 @@ const zhTW: Record<string, string> = {
     "僅管理下方選取的 MCP 開關；定義與憑證仍保留在 Agent 中。",
   "MCP settings stay Agent-controlled for this Agent.":
     "此 Agent 的 MCP 設定仍由 Agent 自行控制。",
-  "Use Profile": "使用 Profile",
-  "Keep Agent": "保留 Agent",
+  "Apply": "套用",
+  "Disable": "停用",
+  "Don't manage": "不接管",
   "Instructions application policy for {{name}}": "{{name}} 的指令套用策略",
   "Skills application policy for {{name}}": "{{name}} 的技能套用策略",
   "MCPs application policy for {{name}}": "{{name}} 的 MCP 套用策略",
   "Saved in this Profile. Applying to {{name}} leaves this section unchanged.":
     "內容仍儲存在此 Profile 中；套用到 {{name}} 時不會變更這類資源。",
+  "Saved in this Profile. Applying to {{name}} disables this section's Profile resources.":
+    "內容仍儲存在此 Profile 中；套用到 {{name}} 時會停用這類 Profile 資源。",
   "Managed by Profile": "由設定檔管理",
   "Leave unchanged": "保持不變",
   "Unchanged": "保持不變",

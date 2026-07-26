@@ -34,7 +34,7 @@ export const ProfileMcpEditor = ({
 
   const canManage = target.capabilities.mcpActivation === true;
   const policy = value.mcpByTarget[target.id] ?? { mode: "ignore" as const, selections: [] };
-  const managing = canManage && policy.mode === "manage";
+  const managing = canManage && policy.mode !== "ignore";
   const targetConnections = (connections ?? []).filter(
     (connection) => connection.targetId === target.id
   );
@@ -72,7 +72,7 @@ export const ProfileMcpEditor = ({
   const updateMode = (name: string, mode: McpSelectionMode) => {
     const otherSelections = policy.selections.filter((selection) => selection.name !== name);
     updatePolicy({
-      mode: "manage",
+      mode: policy.mode === "ignore" ? "manage" : policy.mode,
       selections: mode === "agent"
         ? otherSelections
         : [...otherSelections, { name, enabled: mode === "on" }]
@@ -87,7 +87,7 @@ export const ProfileMcpEditor = ({
           name: target.name
         })}</span>
         <span className="profile-mcp-toolbar__actions">
-          {!canManage && policy.mode === "manage" ? (
+          {!canManage && policy.mode !== "ignore" ? (
             <button
               className="secondary-action"
               type="button"

@@ -1,7 +1,8 @@
 import type { KeyboardEvent } from "react";
+import type { ProfileResourceMode } from "../../shared/types";
 import { useI18n } from "../i18n";
 
-export type ProfileResourcePolicy = "apply-profile" | "leave-unchanged";
+export type ProfileResourcePolicy = ProfileResourceMode;
 
 interface ProfileResourcePolicyControlProps {
   disabled?: boolean;
@@ -12,11 +13,12 @@ interface ProfileResourcePolicyControlProps {
 }
 
 const policyOptions: Array<{
-  label: "Use Profile" | "Keep Agent";
+  label: "Apply" | "Disable" | "Don't manage";
   value: ProfileResourcePolicy;
 }> = [
-  { label: "Use Profile", value: "apply-profile" },
-  { label: "Keep Agent", value: "leave-unchanged" }
+  { label: "Apply", value: "manage" },
+  { label: "Disable", value: "disable" },
+  { label: "Don't manage", value: "ignore" }
 ];
 
 export const ProfileResourcePolicyControl = ({
@@ -40,11 +42,20 @@ export const ProfileResourcePolicyControl = ({
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     let nextValue: ProfileResourcePolicy | undefined;
-    if (event.key === "ArrowLeft" || event.key === "ArrowUp" || event.key === "Home") {
-      nextValue = "apply-profile";
+    const currentIndex = policyOptions.findIndex((option) => option.value === value);
+    if (event.key === "Home") {
+      nextValue = policyOptions[0].value;
     }
-    if (event.key === "ArrowRight" || event.key === "ArrowDown" || event.key === "End") {
-      nextValue = "leave-unchanged";
+    if (event.key === "End") {
+      nextValue = policyOptions.at(-1)?.value;
+    }
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      nextValue =
+        policyOptions[(currentIndex - 1 + policyOptions.length) % policyOptions.length]
+          .value;
+    }
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      nextValue = policyOptions[(currentIndex + 1) % policyOptions.length].value;
     }
     if (!nextValue) return;
     event.preventDefault();
@@ -65,9 +76,7 @@ export const ProfileResourcePolicyControl = ({
 
   return (
     <div
-      className={`profile-resource-policy${
-        value === "leave-unchanged" ? " is-keep-agent" : ""
-      }`}
+      className={`profile-resource-policy is-${value}`}
       role="radiogroup"
       aria-label={label}
       onKeyDown={handleKeyDown}

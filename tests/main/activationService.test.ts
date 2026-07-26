@@ -525,6 +525,85 @@ describe("activation service v2", () => {
     await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toBe("[invalid");
   });
 
+  it("disables saved Profile resources without discarding their configuration", async () => {
+    const { paths, service, profileStore, profile } = await makeEnv();
+    await writeCodexLiveFiles(paths);
+    const enabledPreview = await service.previewProfile(profile.id, "codex");
+    expect((await service.applyProfile(profile.id, enabledPreview.id)).ok).toBe(true);
+    const installedSkill = join(paths.codexHome, "skills", "review");
+
+    await profileStore.saveProfile({
+      manifest: profile.manifest,
+      instructions: profile.instructions,
+      resources: {
+        ...profile.resources,
+        managementByTarget: {
+          codex: { instructions: "disable", skills: "disable" }
+        },
+        mcpByTarget: {
+          codex: {
+            mode: "disable",
+            selections: [{ name: "docs", enabled: true }]
+          }
+        }
+      }
+    });
+
+    const disabledPreview = await service.previewProfile(profile.id, "codex");
+
+    expect(blockingMessages(disabledPreview.issues)).toEqual([]);
+    expect(disabledPreview.effectivePayload).toEqual({
+      instructions: 0,
+      skills: 0,
+      mcpServers: 0,
+      total: 0
+    });
+    expect(disabledPreview.changes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: paths.globalAgentsPath,
+        category: "instructions",
+        action: "remove"
+      }),
+      expect.objectContaining({
+        path: paths.codexConfigPath,
+        category: "mcp"
+      })
+    ]));
+    expect(disabledPreview.resourceChanges).toContainEqual(
+      expect.objectContaining({
+        action: "remove",
+        name: "review",
+        path: installedSkill
+      })
+    );
+
+    const disabledResult = await service.applyProfile(profile.id, disabledPreview.id);
+    expect(disabledResult).toEqual(expect.objectContaining({ ok: true }));
+    await expect(lstat(paths.globalAgentsPath)).rejects.toThrow();
+    await expect(lstat(installedSkill)).rejects.toThrow();
+    await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toContain(
+      "enabled = false"
+    );
+
+    const saved = await profileStore.readProfile(profile.id);
+    expect(saved.instructions).toBe("# New guidance\n");
+    expect(saved.resources.skills).toEqual([
+      { libraryId: "review", targetName: "review", enabled: true }
+    ]);
+    expect(saved.resources.managementByTarget?.codex).toEqual({
+      instructions: "disable",
+      skills: "disable"
+    });
+    expect(saved.resources.mcpByTarget.codex).toEqual({
+      mode: "disable",
+      selections: [{ name: "docs", enabled: true }]
+    });
+
+    const noOp = await service.previewProfile(profile.id, "codex");
+    expect(noOp.changes).toEqual([]);
+    expect(noOp.resourceChanges).toEqual([]);
+  });
+
   it("counts empty Instructions and an Off MCP choice as explicit managed states", async () => {
     const { paths, service, profileStore, profile } = await makeEnv();
     await mkdir(paths.codexHome, { recursive: true });

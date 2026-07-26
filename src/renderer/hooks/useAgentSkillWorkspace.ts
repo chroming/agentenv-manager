@@ -10,6 +10,7 @@ import type {
   BackupSummary,
   LibraryResourceVersions,
   ProfileDetail,
+  ProfileResourceMode,
   ProfileResources,
   ProfileSummary,
   SkillInventoryEntry,
@@ -253,7 +254,7 @@ export const useAgentSkillWorkspace = ({
   const saveProfileSkills = async (
     resources: ProfileResources,
     strategy: ProfileEditStrategy,
-    managementMode?: "ignore" | "manage"
+    managementMode?: ProfileResourceMode
   ) => {
     const targetId = selectedTargetId;
     const currentProfile = profile;

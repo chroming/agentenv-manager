@@ -69,12 +69,12 @@ export const ProfileMcpSelectionSchema = z.object({
   enabled: z.boolean()
 });
 
+export const ProfileResourceModeSchema = z.enum(["ignore", "manage", "disable"]);
+
 export const ProfileMcpPolicySchema = z.object({
-  mode: z.enum(["ignore", "manage"]),
+  mode: ProfileResourceModeSchema,
   selections: z.array(ProfileMcpSelectionSchema).default([])
 });
-
-export const ProfileResourceModeSchema = z.enum(["ignore", "manage"]);
 
 export const ProfileTargetResourcePolicySchema = z.object({
   instructions: ProfileResourceModeSchema.default("manage"),

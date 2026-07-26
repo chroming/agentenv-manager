@@ -25,7 +25,8 @@ describe("Profile v2 schemas", () => {
             { name: "optional", enabled: false }
           ]
         },
-        opencode: { mode: "ignore", selections: [] }
+        opencode: { mode: "ignore", selections: [] },
+        trae: { mode: "disable", selections: [{ name: "docs", enabled: true }] }
       }
     })).toMatchObject({ skills: [{ enabled: true }, { enabled: false }] });
   });

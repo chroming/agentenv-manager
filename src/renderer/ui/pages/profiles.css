@@ -259,6 +259,7 @@
   --profile-hero-height: 149px;
   --profile-hero-height-compact: 172px;
   --profile-icon-slot: 24px;
+  --profile-policy-column-width: 246px;
 }
 
 .app-shell--profiles .editor-panel {
@@ -828,7 +829,10 @@
 }
 
 .profile-composer-section__header {
-  grid-template-columns: 34px minmax(0, 1fr) auto;
+  grid-template-columns:
+    34px
+    minmax(0, 1fr)
+    var(--profile-policy-column-width);
   min-height: var(--profile-composer-row-height);
 }
 
@@ -1243,6 +1247,7 @@
 @container profile-workspace (max-width: 760px) {
   .profile-workbench {
     --profile-icon-slot: 28px;
+    --profile-policy-column-width: 246px;
     gap: 0;
     grid-template-columns: 220px minmax(0, 1fr);
   }

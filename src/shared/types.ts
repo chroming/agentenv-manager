@@ -1385,6 +1385,7 @@ export interface PlannedFileChange {
   before: string;
   after: string;
   diff: string;
+  action?: "write" | "remove";
   category?: "instructions" | "mcp" | "configuration";
 }
 

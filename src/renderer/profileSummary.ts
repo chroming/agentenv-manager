@@ -34,12 +34,13 @@ export const reconcileProfileUsage = (
   return next;
 };
 import { isTargetInstalled } from "../shared/targetHealth";
-import { profileManagesResource } from "../shared/profileResources";
+import { profileResourceMode } from "../shared/profileResources";
+import type { ProfileResourceMode } from "../shared/types";
 
 export interface ProfileResourceSummary {
-  instructions: { count: 0 | 1; total: 0 | 1; managed: boolean };
-  skills: { count: number; total: number; names: string[]; managed: boolean };
-  mcp: { count: number; total: number; names: string[]; managed: boolean };
+  instructions: { count: 0 | 1; total: 0 | 1; mode: ProfileResourceMode };
+  skills: { count: number; total: number; names: string[]; mode: ProfileResourceMode };
+  mcp: { count: number; total: number; names: string[]; mode: ProfileResourceMode };
 }
 
 export interface RecentProfileApplication {
@@ -134,24 +135,31 @@ export const summarizeProfile = (
   );
   const allMcpNames = unique(mcpPolicy?.selections.map((selection) => selection.name) ?? []);
   const hasInstructions = profile.instructions.trim().length > 0;
+  const instructionsMode = profileResourceMode(
+    profile.resources,
+    target.id,
+    "instructions"
+  );
+  const skillsMode = profileResourceMode(profile.resources, target.id, "skills");
+  const mcpMode = profileResourceMode(profile.resources, target.id, "mcp");
 
   return {
     instructions: {
-      count: hasInstructions ? 1 : 0,
+      count: hasInstructions && instructionsMode !== "disable" ? 1 : 0,
       total: hasInstructions ? 1 : 0,
-      managed: profileManagesResource(profile.resources, target.id, "instructions")
+      mode: instructionsMode
     },
     skills: {
-      count: skillNames.length,
+      count: skillsMode === "disable" ? 0 : skillNames.length,
       total: allSkillNames.length,
       names: skillNames,
-      managed: profileManagesResource(profile.resources, target.id, "skills")
+      mode: skillsMode
     },
     mcp: {
-      count: mcpNames.length,
+      count: mcpMode === "disable" ? 0 : mcpNames.length,
       total: allMcpNames.length,
       names: mcpNames,
-      managed: profileManagesResource(profile.resources, target.id, "mcp")
+      mode: mcpMode
     }
   };
 };

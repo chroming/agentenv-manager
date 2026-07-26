@@ -63,7 +63,8 @@ export const ProfileComposerSection = ({
       className={[
         "profile-composer-section",
         expanded ? "is-expanded" : "",
-        policy === "leave-unchanged" ? "is-keep-agent" : ""
+        policy === "disable" ? "is-resource-disabled" : "",
+        policy === "ignore" ? "is-unmanaged" : ""
       ].filter(Boolean).join(" ")}
       data-profile-composer-id={id}
     >
@@ -140,10 +141,18 @@ export const ProfileComposerSection = ({
           role="region"
           aria-labelledby={triggerId}
         >
-          {!policyDisabled && policy === "leave-unchanged" ? (
+          {!policyDisabled && policy === "ignore" ? (
             <p className="profile-composer-section__policy-note">
               {t(
                 "Saved in this Profile. Applying to {{name}} leaves this section unchanged.",
+                { name: targetName }
+              )}
+            </p>
+          ) : null}
+          {!policyDisabled && policy === "disable" ? (
+            <p className="profile-composer-section__policy-note">
+              {t(
+                "Saved in this Profile. Applying to {{name}} disables this section's Profile resources.",
                 { name: targetName }
               )}
             </p>

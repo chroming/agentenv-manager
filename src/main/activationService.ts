@@ -24,7 +24,12 @@ import {
   type SkillLibraryStore
 } from "./skillLibraryStore";
 import { normalizeSkillKey } from "../shared/skillIdentity";
-import { profileManagesResource } from "../shared/profileResources";
+import {
+  materializeTargetResourcePolicy,
+  profileManagesResource,
+  profileResourceMode,
+  profileUsesResource
+} from "../shared/profileResources";
 import { profileWithoutLocalSkillExceptions } from "../shared/effectiveProfile";
 import {
   createTargetRegistry,
@@ -426,10 +431,12 @@ const effectivePayloadFor = (
   targetId: string,
   mcpActivationSupported: boolean
 ): EffectiveProfilePayload => {
-  const instructions = profileManagesResource(profile.resources, targetId, "instructions")
-    ? 1
-    : 0;
-  const skills = profileManagesResource(profile.resources, targetId, "skills")
+  const instructions = profileUsesResource(
+    profile.resources,
+    targetId,
+    "instructions"
+  ) ? 1 : 0;
+  const skills = profileUsesResource(profile.resources, targetId, "skills")
     ? profile.resources.skills.filter((reference) => reference.enabled).length
     : 0;
   const policy = profile.resources.mcpByTarget[targetId];
@@ -881,14 +888,28 @@ export const createActivationService = ({
     await targetScope.assertEnabled(targetId);
     const skillLibrary = await skillLibraryStore.listSkills();
     const adapter = targetRegistry.get(targetId);
-    const profile = applyLibrarySkillAvailability(sourceProfile, skillLibrary);
+    const availableProfile = applyLibrarySkillAvailability(sourceProfile, skillLibrary);
     const managesInstructions = profileManagesResource(
-      profile.resources,
+      availableProfile.resources,
       targetId,
       "instructions"
     );
-    const managesSkills = profileManagesResource(profile.resources, targetId, "skills");
-    const disabledLibrarySkills = (managesSkills ? sourceProfile.resources.skills : [])
+    const managesSkills = profileManagesResource(
+      availableProfile.resources,
+      targetId,
+      "skills"
+    );
+    const usesSkills = profileUsesResource(
+      availableProfile.resources,
+      targetId,
+      "skills"
+    );
+    const instructionsMode = profileResourceMode(
+      availableProfile.resources,
+      targetId,
+      "instructions"
+    );
+    const disabledLibrarySkills = (usesSkills ? sourceProfile.resources.skills : [])
       .filter(
         (reference) =>
           reference.enabled &&
@@ -896,10 +917,11 @@ export const createActivationService = ({
       )
       .map((reference) => reference.libraryId);
     const effectivePayload = effectivePayloadFor(
-      profile,
+      availableProfile,
       targetId,
       adapter.descriptor.capabilities.mcpActivation === true
     );
+    const profile = materializeTargetResourcePolicy(availableProfile, targetId);
     const targetPaths = await targetPathsFor(targetId);
     const skillRootInspection = managesSkills
       ? await inspectSkillRoot(targetPaths.skillsDir)
@@ -971,7 +993,7 @@ export const createActivationService = ({
       : [];
     const settings = await settingsStore.readSettings();
     const skillLibraryDir = resolveSkillsLibraryDir(paths, settings);
-    const targetPreview = await adapter.createPreview({
+    const adapterPreview = await adapter.createPreview({
       profile: materializedProfile,
       targetPaths,
       skillLibraryDir,
@@ -980,6 +1002,37 @@ export const createActivationService = ({
       approvedUnmanagedSkillHashes,
       isolateSkillRoot: Boolean(skillRootTransition)
     });
+    const instructionRemovalBefore =
+      instructionsMode === "disable" &&
+      (await pathEntryExists(targetPaths.instructionsPath))
+        ? await readTextIfExists(targetPaths.instructionsPath)
+        : undefined;
+    const instructionRemoval =
+      instructionRemovalBefore !== undefined
+        ? {
+            path: targetPaths.instructionsPath,
+            before: instructionRemovalBefore,
+            after: "",
+            diff: createUnifiedDiff(
+              targetPaths.instructionsPath,
+              instructionRemovalBefore,
+              ""
+            ),
+            action: "remove" as const
+          }
+        : undefined;
+    const targetPreview = {
+      ...adapterPreview,
+      changes:
+        instructionsMode === "disable"
+          ? [
+              ...adapterPreview.changes.filter(
+                (change) => change.path !== targetPaths.instructionsPath
+              ),
+              ...(instructionRemoval ? [instructionRemoval] : [])
+            ]
+          : adapterPreview.changes
+    };
     const profileIssues: ApplyIssue[] =
       skillRootInspection?.kind === "invalid"
         ? [createApplyIssue({
@@ -1190,7 +1243,7 @@ export const createActivationService = ({
       skillDeployment: {
         plan: skillDeploymentPlan,
         profile: materializedProfile,
-        sourceSkills: profile.resources.skills,
+        sourceSkills: availableProfile.resources.skills,
         inventoryPreconditionFingerprint: fingerprintSkillDeploymentFacts({
           inventory,
           profile: materializedProfile,
@@ -1454,7 +1507,11 @@ export const createActivationService = ({
 
       try {
         for (const change of preview.changes) {
-          await writeAtomic(change.path, change.after);
+          if (change.action === "remove") {
+            await rm(change.path, { force: true });
+          } else {
+            await writeAtomic(change.path, change.after);
+          }
         }
 
         if (preview.skillRootTransition) {

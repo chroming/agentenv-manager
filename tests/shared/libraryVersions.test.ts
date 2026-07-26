@@ -43,4 +43,23 @@ describe("library resource versions", () => {
       skills: {}
     });
   });
+
+  it("does not make a disabled Skill category stale when Library content changes", () => {
+    const profile = {
+      resources: {
+        skills: [{ libraryId: "enabled", targetName: "enabled", enabled: true }],
+        managementByTarget: {
+          opencode: { instructions: "manage", skills: "disable" }
+        },
+        mcpByTarget: {}
+      }
+    } as Pick<ProfileDetail, "resources">;
+    const skills = [
+      { id: "enabled", contentHash: "enabled-hash" }
+    ] as SkillLibraryEntry[];
+
+    expect(collectLibraryResourceVersions(profile, skills, "opencode")).toEqual({
+      skills: {}
+    });
+  });
 });

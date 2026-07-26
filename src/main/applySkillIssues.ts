@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { normalizeSkillKey } from "../shared/skillIdentity";
-import { profileManagesResource } from "../shared/profileResources";
+import {
+  profileManagesResource,
+  profileUsesResource
+} from "../shared/profileResources";
 import type {
   ApplyIssue,
   ManagedResourceKind,
@@ -169,7 +172,7 @@ export const validateRuntimeSkills = async (
 
 const desiredManagedPaths = (profile: ProfileDetail, targetPaths: TargetPaths) => {
   const desired = new Set<string>();
-  if (profileManagesResource(profile.resources, targetPaths.targetId, "instructions")) {
+  if (profileUsesResource(profile.resources, targetPaths.targetId, "instructions")) {
     desired.add(targetPaths.instructionsPath);
   }
   if (

@@ -48,16 +48,16 @@ describe("Profile summaries", () => {
       { id: "paused", globallyEnabled: true },
       { id: "hidden", globallyEnabled: false }
     ] as never[])).toEqual({
-      instructions: { count: 1, total: 1, managed: true },
-      skills: { count: 1, total: 3, names: ["review"], managed: true },
-      mcp: { count: 1, total: 2, names: ["docs"], managed: true }
+      instructions: { count: 1, total: 1, mode: "manage" },
+      skills: { count: 1, total: 3, names: ["review"], mode: "manage" },
+      mcp: { count: 1, total: 2, names: ["docs"], mode: "manage" }
     });
 
     expect(summarizeProfile(profile, { id: "codex" }).mcp).toEqual({
       count: 0,
       total: 0,
       names: [],
-      managed: false
+      mode: "ignore"
     });
   });
 
@@ -84,9 +84,41 @@ describe("Profile summaries", () => {
       { id: "paused", globallyEnabled: true },
       { id: "hidden", globallyEnabled: false }
     ] as never[])).toEqual({
-      instructions: { count: 1, total: 1, managed: false },
-      skills: { count: 1, total: 3, names: ["review"], managed: false },
-      mcp: { count: 1, total: 2, names: ["docs"], managed: false }
+      instructions: { count: 1, total: 1, mode: "ignore" },
+      skills: { count: 1, total: 3, names: ["review"], mode: "ignore" },
+      mcp: { count: 1, total: 2, names: ["docs"], mode: "ignore" }
+    });
+  });
+
+  it("shows saved totals but zero active resources for disabled categories", () => {
+    const disabled = {
+      ...profile,
+      resources: {
+        ...profile.resources,
+        managementByTarget: {
+          opencode: {
+            instructions: "disable" as const,
+            skills: "disable" as const
+          }
+        },
+        mcpByTarget: {
+          ...profile.resources.mcpByTarget,
+          opencode: {
+            ...profile.resources.mcpByTarget.opencode,
+            mode: "disable" as const
+          }
+        }
+      }
+    };
+
+    expect(summarizeProfile(disabled, { id: "opencode" }, [
+      { id: "review", globallyEnabled: true },
+      { id: "paused", globallyEnabled: true },
+      { id: "hidden", globallyEnabled: false }
+    ] as never[])).toEqual({
+      instructions: { count: 0, total: 1, mode: "disable" },
+      skills: { count: 0, total: 3, names: ["review"], mode: "disable" },
+      mcp: { count: 0, total: 2, names: ["docs"], mode: "disable" }
     });
   });
 
