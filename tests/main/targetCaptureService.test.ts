@@ -200,19 +200,19 @@ describe("target capture service v2", () => {
     const codexDir = join(homeDir, ".codex");
     const existingSource = join(root, "existing");
     const matchingSource = join(root, "matching");
-    const targetConflict = join(codexDir, "skills", "bytedcli");
+    const targetConflict = join(codexDir, "skills", "internal-cli");
     const targetMatching = join(codexDir, "skills", "matching");
     for (const path of [existingSource, matchingSource, targetConflict, targetMatching]) {
       await mkdir(path, { recursive: true });
     }
     await writeFile(join(codexDir, "AGENTS.md"), "# Codex\n");
     await writeFile(join(codexDir, "config.toml"), "");
-    await writeFile(join(existingSource, "SKILL.md"), "---\nname: bytedcli\n---\n# Library\n");
-    await writeFile(join(targetConflict, "SKILL.md"), "---\nname: bytedcli\n---\n# Target\n");
+    await writeFile(join(existingSource, "SKILL.md"), "---\nname: internal-cli\n---\n# Library\n");
+    await writeFile(join(targetConflict, "SKILL.md"), "---\nname: internal-cli\n---\n# Target\n");
     const matching = "---\nname: matching\n---\n# Same\n";
     await writeFile(join(matchingSource, "SKILL.md"), matching);
     await writeFile(join(targetMatching, "SKILL.md"), matching);
-    await skillLibraryStore.importSkill({ sourcePath: existingSource, id: "bytedcli" });
+    await skillLibraryStore.importSkill({ sourcePath: existingSource, id: "internal-cli" });
     await skillLibraryStore.importSkill({ sourcePath: matchingSource, id: "matching" });
 
     const preview = await service.previewTarget("codex");
@@ -220,17 +220,17 @@ describe("target capture service v2", () => {
       id: "matching", libraryId: "matching", action: "reuse"
     }));
     expect(preview.resources).toContainEqual(expect.objectContaining({
-      id: "bytedcli", libraryId: "codex-bytedcli", action: "import"
+      id: "internal-cli", libraryId: "codex-internal-cli", action: "import"
     }));
 
     const result = await service.createFromTarget({ previewId: preview.id, name: "Codex Existing" });
     expect(result.profile.resources.skills).toEqual(expect.arrayContaining([
       { libraryId: "matching", targetName: "matching", enabled: true },
-      { libraryId: "codex-bytedcli", targetName: "bytedcli", enabled: true }
+      { libraryId: "codex-internal-cli", targetName: "internal-cli", enabled: true }
     ]));
-    await expect(readFile(join(paths.skillsLibraryDir, "bytedcli", "SKILL.md"), "utf8"))
+    await expect(readFile(join(paths.skillsLibraryDir, "internal-cli", "SKILL.md"), "utf8"))
       .resolves.toContain("# Library");
-    await expect(readFile(join(paths.skillsLibraryDir, "codex-bytedcli", "SKILL.md"), "utf8"))
+    await expect(readFile(join(paths.skillsLibraryDir, "codex-internal-cli", "SKILL.md"), "utf8"))
       .resolves.toContain("# Target");
   });
 

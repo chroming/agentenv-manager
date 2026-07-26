@@ -9,7 +9,7 @@ import type {
   GitHubRateLimit
 } from "../shared/types";
 import type { AgentEnvPaths } from "./paths";
-import { DEFAULT_GITHUB_OAUTH_CLIENT_ID } from "./githubConfig";
+import { resolveGitHubOAuthClientId } from "./githubConfig";
 import { writeAtomic } from "./fileUtils";
 
 interface TokenFile {
@@ -79,6 +79,7 @@ export interface GitHubAuthService {
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 interface GitHubAuthServiceOptions {
+  clientId?: string;
   fetch?: FetchLike;
   tokenStore: GitHubTokenStore;
 }
@@ -186,6 +187,7 @@ export const createFileGitHubTokenStore = (
 };
 
 export const createGitHubAuthService = ({
+  clientId = resolveGitHubOAuthClientId(),
   fetch: fetchImpl = fetch,
   tokenStore
 }: GitHubAuthServiceOptions): GitHubAuthService => {
@@ -212,12 +214,12 @@ export const createGitHubAuthService = ({
       await tokenStore.clearToken().catch(() => undefined);
       return {
         state: "configured",
-        clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
+        clientId,
         error: "Saved GitHub sign-in was invalid and has been cleared. Sign in again to reconnect."
       };
     }
     if (!token) {
-      return { state: "configured", clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID };
+      return { state: "configured", clientId };
     }
 
     try {
@@ -230,7 +232,7 @@ export const createGitHubAuthService = ({
       return {
         state: "signed-in",
         verification: "verified",
-        clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
+        clientId,
         user,
         rateLimit
       };
@@ -239,14 +241,14 @@ export const createGitHubAuthService = ({
         await tokenStore.clearToken().catch(() => undefined);
         return {
           state: "configured",
-          clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
+          clientId,
           error: "Saved GitHub sign-in was invalid and has been cleared. Sign in again to reconnect."
         };
       }
       return {
         state: "signed-in",
         verification: "unavailable",
-        clientId: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
+        clientId,
         error: `GitHub sign-in is saved, but its status could not be verified: ${
           error instanceof Error ? error.message : String(error)
         }`
@@ -256,7 +258,7 @@ export const createGitHubAuthService = ({
 
   const startDeviceLogin = async (): Promise<GitHubDeviceLogin> => {
     const response = await fetchImpl("https://github.com/login/device/code", {
-      body: new URLSearchParams({ client_id: DEFAULT_GITHUB_OAUTH_CLIENT_ID }),
+      body: new URLSearchParams({ client_id: clientId }),
       headers: jsonHeaders,
       method: "POST"
     });
@@ -317,7 +319,7 @@ export const createGitHubAuthService = ({
 
     const response = await fetchImpl("https://github.com/login/oauth/access_token", {
       body: new URLSearchParams({
-        client_id: DEFAULT_GITHUB_OAUTH_CLIENT_ID,
+        client_id: clientId,
         device_code: pending.deviceCode,
         grant_type: "urn:ietf:params:oauth:grant-type:device_code"
       }),

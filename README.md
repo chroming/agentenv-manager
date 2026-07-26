@@ -1,14 +1,25 @@
 # AgentEnv Manager
 
+[English](README.en.md) | 简体中文
+
 AgentEnv Manager 是一个本地桌面客户端，用来管理和切换本机 agent 工具的工作环境。
 
 这里的“环境”指一组可复用配置：指令文件、工具配置、Skills，以及目标 Agent 已安装 MCP 的启停选择。MCP 定义、登录和凭据继续由各 Agent 自己管理。目标是让你在不同开发阶段切换不同 agent 环境时，不需要手动改一堆散落在本机目录里的文件。
 
+![AgentEnv Manager Profiles](docs/images/profiles.png)
+
 ## 当前状态
 
-这是一个本地优先的 Electron 客户端，目前已经可以用于真实测试 OpenCode、Claude Code、Codex、Antigravity 和 Trae CLI 的 profile 切换流程。
+这是一个本地优先的 Electron 客户端，目前处于 `0.1.0` 预发布阶段，已经可以用于真实测试 OpenCode、Claude Code、Codex、Antigravity 和 Trae CLI 的 profile 切换流程。首次接管真实 Agent 前仍应仔细检查 Preview，并保留自己的重要配置备份。
 
 项目使用 `electron-builder` 生成本地应用和安装包。`npm run build` 生成 Electron/Vite 运行产物，`npm run pack` / `npm run dist` 生成本地可运行程序或安装包。
+
+当前支持边界：
+
+- macOS arm64：开发、打包和 packaged e2e 已验证。
+- macOS x64：源码支持构建，但尚未进入持续发布验证。
+- Windows / Linux：当前不支持。
+- 正式签名和 notarization 的公开安装包尚未发布。
 
 ## 功能
 
@@ -101,10 +112,17 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 
 ## 开发运行
 
+要求：
+
+- macOS
+- Node.js 22.12 或更高版本
+- npm 10 或更高版本
+- Git；打包图标还需要系统自带的 Swift 与 `iconutil`
+
 安装依赖：
 
 ```bash
-npm install
+npm ci
 ```
 
 启动开发版 Electron app：
@@ -129,6 +147,12 @@ npm run test:e2e
 
 ```bash
 npm run verify:product
+```
+
+发布前运行包含 packaged smoke 的门禁：
+
+```bash
+npm run verify:release
 ```
 
 ## 构建
@@ -224,7 +248,12 @@ AGENTENV_HOME               覆盖目标 home 目录
 AGENTENV_FAKE_HOME          覆盖 fake home 目录
 AGENTENV_CACHE_ROOT         覆盖可删除重建的 Repository cache 目录
 AGENTENV_GITHUB_FIXTURE_ROOT e2e 中用于 GitHub fixture
+AGENTENV_GITHUB_OAUTH_CLIENT_ID 源码构建使用自己的 GitHub OAuth App
 ```
+
+官方构建使用项目维护者注册的 GitHub OAuth App。Fork 维护者应注册并启用
+GitHub Device Flow，然后通过 `AGENTENV_GITHUB_OAUTH_CLIENT_ID` 使用自己的
+Client ID；普通用户无需手动填写 Client ID。
 
 ## 安全模型
 
@@ -244,6 +273,9 @@ AgentEnv Manager 的核心原则是：先预览，再应用。
 Repository 扫描只写入操作系统缓存目录中的 bare cache，不会修改用户现有 checkout。缓存不属于 AgentEnv 数据备份，可以随时删除并在下次检查时重建。Repository 更新先进入 Library 的预览与备份流程，不会直接绕过 Profile Apply 修改 Target。
 
 对 Codex 这类敏感目标，真实 home 写入默认有额外保护。开发和 e2e 中可以通过 fake home 隔离测试。
+
+完整的本地数据、网络访问和删除说明见 [PRIVACY.md](PRIVACY.md)，漏洞报告方式见
+[SECURITY.md](SECURITY.md)。
 
 ## 项目结构
 
@@ -293,3 +325,13 @@ AGENTENV_DATA_ROOT=.agentenv-runtime npm run dev
 - 使用真实 Apple Developer 账号完成签名和 notarization，并在干净 Mac 上复测。
 - 将持久化 Profile 字段 `targetId` 平滑迁移为语义更准确的 `nativeTargetId`。
 - 继续补充少见但内容确实不同的同名 Skill 冲突样例。
+
+## 参与和许可
+
+- 开发和提交约定：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 行为准则：[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- 第三方软件与商标说明：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+- 变更记录：[CHANGELOG.md](CHANGELOG.md)
+
+AgentEnv Manager 使用 [Apache License 2.0](LICENSE) 开源。项目独立开发，与
+OpenAI、Anthropic、OpenCode、Google 或 ByteDance 没有隶属、赞助或背书关系。

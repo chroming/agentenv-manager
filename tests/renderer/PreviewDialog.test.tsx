@@ -144,7 +144,7 @@ describe("PreviewDialog", () => {
   });
 
   it("presents a Skill outside AgentEnv as an explicit backup replacement", () => {
-    const path = "/Users/test/.claude/skills/bytedcli";
+    const path = "/Users/test/.claude/skills/internal-cli";
     render(
       <PreviewDialog
         targetNames={{ "claude-code": "Claude Code" }}
@@ -157,12 +157,12 @@ describe("PreviewDialog", () => {
             disposition: "review",
             resolution: "backup-replace",
             resourceKind: "skill",
-            resourceId: "bytedcli",
+            resourceId: "internal-cli",
             path,
-            message: "Existing unmanaged Skill bytedcli will be backed up and replaced"
+            message: "Existing unmanaged Skill internal-cli will be backed up and replaced"
           }],
           resourceChanges: [
-            { kind: "skill", action: "replace", name: "bytedcli", path }
+            { kind: "skill", action: "replace", name: "internal-cli", path }
           ]
         }}
         onCancel={vi.fn()}
@@ -170,7 +170,7 @@ describe("PreviewDialog", () => {
       />
     );
 
-    expect(screen.getByText('Bring Skill "bytedcli" under AgentEnv')).toBeInTheDocument();
+    expect(screen.getByText('Bring Skill "internal-cli" under AgentEnv')).toBeInTheDocument();
     const issueLocation = screen.getByLabelText("Full issue detail");
     fireEvent.focus(issueLocation);
     expect(screen.getByText(path)).toBeInTheDocument();
@@ -181,7 +181,7 @@ describe("PreviewDialog", () => {
   });
 
   it("lets the user keep a reviewed Skill path outside AgentEnv with local progress", async () => {
-    const path = "/Users/test/.claude/skills/bytedcli";
+    const path = "/Users/test/.claude/skills/internal-cli";
     let finish!: () => void;
     const onKeepSkillOutside = vi.fn().mockImplementation(
       () => new Promise<void>((resolve) => {
@@ -194,9 +194,9 @@ describe("PreviewDialog", () => {
       disposition: "review" as const,
       resolution: "backup-replace" as const,
       resourceKind: "skill" as const,
-      resourceId: "bytedcli",
+      resourceId: "internal-cli",
       path,
-      message: "Existing Skill bytedcli will be backed up and brought under AgentEnv"
+      message: "Existing Skill internal-cli will be backed up and brought under AgentEnv"
     };
     render(
       <PreviewDialog

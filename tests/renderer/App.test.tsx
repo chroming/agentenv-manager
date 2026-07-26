@@ -3363,7 +3363,9 @@ describe("App", () => {
     fireEvent.click(restoreTrigger);
     const dialog = await screen.findByRole("dialog", { name: "Restore AgentEnv data" });
     expect(dialog).toHaveTextContent("6 top-level items");
-    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus();
+    await waitFor(() =>
+      expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveFocus()
+    );
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Restore AgentEnv data" })).not.toBeInTheDocument();

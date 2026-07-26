@@ -96,13 +96,13 @@ describe("repository location", () => {
 
   it("infers repository, ref, directory, and SSH fallback for Git web tree URLs", () => {
     const location = parseRepositoryLocation(
-      "https://git.example.test/ep/Skills/tree/main/internal"
+      "https://git.example.com/ep/Skills/tree/main/internal"
     );
     expect(location).toMatchObject({
-      transportLocator: "https://git.example.test/ep/Skills.git",
-      displayLocator: "https://git.example.test/ep/Skills",
-      cacheKeyLocator: "https://git.example.test/ep/Skills",
-      sshFallbackLocator: "git@git.example.test:ep/Skills.git",
+      transportLocator: "https://git.example.com/ep/Skills.git",
+      displayLocator: "https://git.example.com/ep/Skills",
+      cacheKeyLocator: "https://git.example.com/ep/Skills",
+      sshFallbackLocator: "git@git.example.com:ep/Skills.git",
       inferredRef: "main",
       inferredDirectory: "internal"
     });

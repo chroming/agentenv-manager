@@ -13,14 +13,22 @@ const includePackaged = process.argv.includes("--packaged");
 
 const run = async (command, args, options = {}) => {
   process.stdout.write(`\n> ${command} ${args.join(" ")}\n`);
-  const result = await execFileAsync(command, args, {
-    cwd: projectRoot,
-    env: process.env,
-    maxBuffer: 40 * 1024 * 1024,
-    ...options
-  });
-  if (result.stdout) process.stdout.write(result.stdout);
-  if (result.stderr) process.stderr.write(result.stderr);
+  try {
+    const result = await execFileAsync(command, args, {
+      cwd: projectRoot,
+      env: process.env,
+      maxBuffer: 40 * 1024 * 1024,
+      ...options
+    });
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+  } catch (error) {
+    if (error && typeof error === "object") {
+      if ("stdout" in error && error.stdout) process.stdout.write(String(error.stdout));
+      if ("stderr" in error && error.stderr) process.stderr.write(String(error.stderr));
+    }
+    throw error;
+  }
 };
 
 const computeSourceFingerprint = async () => {

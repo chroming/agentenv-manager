@@ -177,7 +177,7 @@ const writeClaudeProfile = async (appDataRoot: string) => {
     "utf8"
   );
   await writeJson(join(profileDir, "resources.json"), {
-    skills: [{ libraryId: "shared-reviewer", targetName: "bytedcli", enabled: true }],
+    skills: [{ libraryId: "shared-reviewer", targetName: "internal-cli", enabled: true }],
     mcpByTarget: {
       "claude-code": {
         mode: "ignore",
@@ -2474,11 +2474,11 @@ describe("Electron UI profile switching e2e", () => {
 
   it("backs up and replaces an unmanaged Claude Code Skill after explicit review", async () => {
     const { appDataRoot, claudeDir, page } = await launchApp({ includeClaudeTarget: true });
-    const targetSkill = join(claudeDir, "skills", "bytedcli");
+    const targetSkill = join(claudeDir, "skills", "internal-cli");
     await mkdir(targetSkill, { recursive: true });
     await writeFile(
       join(targetSkill, "SKILL.md"),
-      "---\nname: bytedcli\ndescription: Existing Claude copy.\n---\n\n# Existing Claude copy\n",
+      "---\nname: internal-cli\ndescription: Existing Claude copy.\n---\n\n# Existing Claude copy\n",
       "utf8"
     );
 
@@ -2489,7 +2489,7 @@ describe("Electron UI profile switching e2e", () => {
     const previewDialog = page.getByRole("dialog", { name: "Preview" });
     await previewDialog.waitFor({ state: "visible" });
     await expect.poll(() => previewDialog.textContent()).toContain(
-      'Bring Skill "bytedcli" under AgentEnv'
+      'Bring Skill "internal-cli" under AgentEnv'
     );
     await expect.poll(() => previewDialog.getByText(targetSkill, { exact: true }).count())
       .toBe(1);
