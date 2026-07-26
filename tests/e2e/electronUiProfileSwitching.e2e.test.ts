@@ -753,6 +753,38 @@ const setComposerResourcePolicy = async (
   }
 };
 
+const expectSegmentedControlGeometry = async (control: Locator) => {
+  const box = await control.boundingBox();
+  const options = control.getByRole("radio");
+  const optionBoxes = await options.evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        right: rect.right,
+        bottom: rect.bottom
+      };
+    })
+  );
+  expect(box).not.toBeNull();
+  expect(optionBoxes).toHaveLength(3);
+  const centerY = box!.y + box!.height / 2;
+  for (const optionBox of optionBoxes) {
+    expect(optionBox.x).toBeGreaterThanOrEqual(box!.x);
+    expect(optionBox.right).toBeLessThanOrEqual(box!.x + box!.width);
+    expect(optionBox.y).toBeGreaterThanOrEqual(box!.y);
+    expect(optionBox.bottom).toBeLessThanOrEqual(box!.y + box!.height);
+    expect(Math.abs(optionBox.y + optionBox.height / 2 - centerY)).toBeLessThanOrEqual(1);
+  }
+  expect(Math.max(...optionBoxes.map((option) => option.width)) -
+    Math.min(...optionBoxes.map((option) => option.width))).toBeLessThanOrEqual(1);
+  expect(Math.max(...optionBoxes.map((option) => option.height)) -
+    Math.min(...optionBoxes.map((option) => option.height))).toBeLessThanOrEqual(1);
+};
+
 const openSkillLibrary = async (page: Page) => {
   await page
     .getByRole("complementary", { name: "Global navigation" })
@@ -4265,11 +4297,7 @@ describe("Electron UI profile switching e2e", () => {
       await expectTextFits(options.nth(0));
       await expectTextFits(options.nth(1));
       await expectTextFits(options.nth(2));
-      const optionWidths = await options.evaluateAll((elements) =>
-        elements.map((element) => element.getBoundingClientRect().width)
-      );
-      expect(Math.abs(optionWidths[0] - optionWidths[1])).toBeLessThanOrEqual(1);
-      expect(Math.abs(optionWidths[1] - optionWidths[2])).toBeLessThanOrEqual(1);
+      await expectSegmentedControlGeometry(policy);
     }
     const policyBoxes = await Promise.all(
       [instructionsPolicy, skillsPolicy, mcpPolicy].map((policy) => policy.boundingBox())
@@ -4327,6 +4355,7 @@ describe("Electron UI profile switching e2e", () => {
           .getByRole("radio", { name: "Disable" })
           .getAttribute("aria-checked")
       ).toBe("true");
+      await expectSegmentedControlGeometry(policy);
     }
     const disabledSectionSurface = await instructionsSection.evaluate((section) => {
       const header = section.querySelector<HTMLElement>(".profile-composer-section__header");
@@ -4404,6 +4433,9 @@ describe("Electron UI profile switching e2e", () => {
       skills: "ignore"
     });
     expect(unmanagedResources.mcpByTarget.opencode.mode).toBe("ignore");
+    for (const policy of [instructionsPolicy, skillsPolicy, mcpPolicy]) {
+      await expectSegmentedControlGeometry(policy);
+    }
     const unmanagedPolicyBoxes = await Promise.all(
       [instructionsPolicy, skillsPolicy, mcpPolicy].map((policy) => policy.boundingBox())
     );
@@ -6941,6 +6973,7 @@ describe("Electron UI profile switching e2e", () => {
       for (const label of ["应用", "停用", "不接管"]) {
         await expectTextFits(policy.getByRole("radio", { name: label }));
       }
+      await expectSegmentedControlGeometry(policy);
     }
     const localizedPolicyBoxes = await Promise.all(
       localizedPolicies.map((policy) => policy.boundingBox())
