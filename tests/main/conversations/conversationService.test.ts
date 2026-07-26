@@ -560,6 +560,69 @@ describe("conversation service", () => {
     service.dispose();
   });
 
+  it("preserves the source working directory in a generic clipboard fallback", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-generic-fallback-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home"),
+      conversationIndexPath: join(root, "cache", "conversations.sqlite"),
+      conversationHandoffDir: join(root, "cache", "handoffs")
+    });
+    const candidate = sourceCandidate(join(root, "history.jsonl"));
+    const codex = {
+      ...createCodexTargetAdapter(),
+      conversations: {
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: [candidate], complete: true }),
+        read: async () => sourceDetail()
+      }
+    };
+    const opencode = {
+      ...createOpenCodeTargetAdapter(),
+      conversations: undefined
+    };
+    const launched: ConversationLaunchSpec[] = [];
+    const clipboard = { writeText: vi.fn() };
+    const service = await createConversationService({
+      paths,
+      targetRegistry: createTargetRegistry([codex, opencode]),
+      targetDiscoveryService: {
+        listTargets: async () => [
+          makeTarget(codex, paths.homeDir),
+          makeTarget(opencode, paths.homeDir)
+        ]
+      },
+      settingsStore,
+      clipboard,
+      launcher: { launch: async (spec) => { launched.push(spec); } }
+    });
+    await service.refresh();
+
+    const preview = await service.previewContinuation({
+      conversationId: "codex:session-1",
+      targetId: "opencode"
+    });
+    expect(preview).toMatchObject({
+      mode: "clipboard",
+      workspacePath: "/work/project",
+      workspacePreservation: "preserved",
+      requiresReview: true
+    });
+
+    await service.continue(preview.previewId);
+    expect(launched).toEqual([
+      expect.objectContaining({
+        executablePath: "/usr/local/bin/opencode",
+        args: [],
+        cwd: "/work/project"
+      })
+    ]);
+    expect(clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringContaining("Workspace: /work/project")
+    );
+    service.dispose();
+  });
+
   it("removes private context when the target cannot be launched", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-conversation-launch-failure-"));
     const paths = createPaths({

@@ -322,6 +322,8 @@ export interface ConversationContinuationPreview {
   targetId: string;
   targetName: string;
   mode: ConversationLaunchMode;
+  workspacePath?: string;
+  workspacePreservation?: "preserved" | "best-effort";
   portableMessageCount: number;
   totalMessageCount: number;
   omittedMessageCount: number;

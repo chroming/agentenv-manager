@@ -313,6 +313,8 @@ describe("Conversations desktop workflow", () => {
     await expectTopmost(continuationReview);
     await continuationReview.getByText("Copy and paste", { exact: true }).waitFor();
     await continuationReview.getByText("Needs attention", { exact: true }).waitFor();
+    await continuationReview.getByText("/work/release", { exact: true }).waitFor();
+    await continuationReview.getByText("Preserved", { exact: true }).waitFor();
     await expectInViewport(
       page,
       continuationReview.getByRole("button", { name: "Copy and open Trae CLI" })

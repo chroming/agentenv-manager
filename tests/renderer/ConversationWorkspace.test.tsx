@@ -183,6 +183,8 @@ describe("ConversationWorkspace", () => {
     const api = installApi({
       warnings: ["Sensitive-looking values will be redacted before transfer"],
       sensitiveValuesRedacted: true,
+      workspacePath: "/work/project",
+      workspacePreservation: "preserved",
       requiresReview: true
     });
     render(<ConversationWorkspace targets={[
@@ -201,6 +203,9 @@ describe("ConversationWorkspace", () => {
       "Sensitive-looking values will be redacted before transfer"
     )).toBeInTheDocument();
     expect(within(dialog).getByText("Context file")).toBeInTheDocument();
+    expect(within(dialog).getByText("Working directory")).toBeInTheDocument();
+    expect(within(dialog).getByText("/work/project")).toBeInTheDocument();
+    expect(within(dialog).getByText("Preserved")).toBeInTheDocument();
     expect(within(dialog).getByText("2 of 2 messages")).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Open OpenCode" })).toBeEnabled();
     expect(api.continueConversation).not.toHaveBeenCalled();

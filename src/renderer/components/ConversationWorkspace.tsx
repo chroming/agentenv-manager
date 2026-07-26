@@ -1269,6 +1269,23 @@ export const ConversationWorkspace = ({ targets }: { targets: TargetInfo[] }) =>
                   })}
                 </span>
               </div>
+              {review.workspacePath ? (
+                <div className="conversation-review-workspace">
+                  <FolderOpen size={16} aria-hidden="true" />
+                  <span>
+                    <small>{t("Working directory")}</small>
+                    <OverflowTooltip
+                      className="conversation-review-workspace__path"
+                      text={review.workspacePath}
+                    />
+                  </span>
+                  <Badge tone={review.workspacePreservation === "preserved" ? "success" : "warning"}>
+                    {review.workspacePreservation === "preserved"
+                      ? t("Preserved")
+                      : t("Best effort")}
+                  </Badge>
+                </div>
+              ) : null}
               {review.warnings.length > 0 ? (
                 <div className="conversation-review-warning">
                   <TriangleAlert size={16} aria-hidden="true" />

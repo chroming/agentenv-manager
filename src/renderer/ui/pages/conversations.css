@@ -809,6 +809,30 @@
   white-space: nowrap;
 }
 
+.conversation-review-workspace {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+}
+
+.conversation-review-workspace > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.conversation-review-workspace small {
+  color: var(--subtle);
+  font-size: var(--font-size-caption);
+  line-height: 16px;
+}
+
+.conversation-review-workspace [data-ui-overflow-detail] {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-metadata);
+}
+
 .conversation-review-warning {
   align-items: flex-start;
   background: var(--warning-bg);

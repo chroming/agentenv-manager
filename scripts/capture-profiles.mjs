@@ -1156,7 +1156,15 @@ try {
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("menu", { name: "Continue in" }).waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "conversations-continue-menu-920x620.png"));
+  await page.getByRole("menuitem", { name: "Trae CLI, Copy and paste" }).click();
+  const continuationReview = page.getByRole("dialog", { name: "Review continuation" });
+  await continuationReview.waitFor({ state: "visible" });
+  await continuationReview.getByText("/work/agentenv-manager", { exact: true }).waitFor({
+    state: "visible"
+  });
+  await capturePage(page, join(outputDir, "conversations-continue-review-920x620.png"));
   await page.keyboard.press("Escape");
+  await continuationReview.waitFor({ state: "hidden" });
   await captureWorkspace(
     "Settings",
     "settings",

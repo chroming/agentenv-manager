@@ -301,6 +301,10 @@ an archive, or a native-session database migration tool.
 - `Continue in` normally creates a new target conversation initialized from the selected visible
   context. It MUST NOT claim that a native session ID, hidden model state, or running tools moved
   between Agents.
+- When the source history exposes a working directory, Continue MUST carry it into every CLI
+  launch, including the generic clipboard fallback. The review surface names the complete
+  directory and whether preservation is guaranteed or best effort. A desktop-only launch MUST NOT
+  claim guaranteed preservation because LaunchServices may reuse an already-running application.
 - The ordinary path is one explicit destination choice followed by direct launch. Review is
   required only when content exceeds the adapter's safe delivery boundary, referenced content is
   unavailable, sensitive text is detected, or the target cannot receive context automatically.

@@ -144,16 +144,25 @@ const contextFor = (
 });
 
 const fallbackLaunchSpec = (
-  target: Awaited<ReturnType<TargetDiscoveryService["listTargets"]>>[number]
+  target: Awaited<ReturnType<TargetDiscoveryService["listTargets"]>>[number],
+  workspacePath?: string
 ): ConversationLaunchSpec | undefined => {
   if (target.health.executablePath) {
-    return { executablePath: target.health.executablePath, args: [] };
+    return {
+      executablePath: target.health.executablePath,
+      args: [],
+      cwd: workspacePath
+    };
   }
   const application = target.health.installationEvidence.find(
     (evidence) => evidence.kind === "desktop-app"
   );
   return application
-    ? { executablePath: "/usr/bin/open", args: [application.path] }
+    ? {
+        executablePath: "/usr/bin/open",
+        args: [application.path],
+        cwd: workspacePath
+      }
     : undefined;
 };
 
@@ -367,7 +376,21 @@ export const createConversationService = async (options: {
         conversation,
         contextFilePath: contextPath
       });
+      const fallbackSpec = fallbackLaunchSpec(target, conversation.workspacePath);
       const mode = launchSpec ? "context-file" : "clipboard";
+      const preservesWorkspace = Boolean(
+        conversation.workspacePath &&
+        (
+          launchSpec?.cwd === conversation.workspacePath ||
+          (
+            target.health.executablePath &&
+            fallbackSpec?.cwd === conversation.workspacePath
+          )
+        )
+      );
+      const workspacePreservation = conversation.workspacePath
+        ? preservesWorkspace ? "preserved" : "best-effort"
+        : undefined;
       const warnings = [
         ...(rendered.omittedMessageCount > 0
           ? [`${rendered.omittedMessageCount} older messages will not be sent`]
@@ -380,6 +403,9 @@ export const createConversationService = async (options: {
           : []),
         ...(mode === "clipboard"
           ? [`${target.name} cannot receive context automatically; paste will be required`]
+          : []),
+        ...(conversation.workspacePath && workspacePreservation === "best-effort"
+          ? [`${target.name} may not open the original working directory automatically`]
           : [])
       ];
       const preview: ConversationContinuationPreview = {
@@ -388,6 +414,8 @@ export const createConversationService = async (options: {
         targetId: target.id,
         targetName: target.name,
         mode,
+        workspacePath: conversation.workspacePath,
+        workspacePreservation,
         portableMessageCount: rendered.portableMessageCount,
         totalMessageCount: conversation.messages.length,
         omittedMessageCount: rendered.omittedMessageCount,
@@ -400,7 +428,7 @@ export const createConversationService = async (options: {
         context,
         contextPath,
         launchSpec,
-        fallbackSpec: fallbackLaunchSpec(target),
+        fallbackSpec,
         createdAt: now()
       });
       return preview;
