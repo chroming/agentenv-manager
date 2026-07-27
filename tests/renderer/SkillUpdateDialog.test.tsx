@@ -55,6 +55,8 @@ describe("SkillUpdateDialog", () => {
     expect(details).toHaveLength(50);
     expect(details[0]?.open).toBe(true);
     expect(details.slice(1).every((detail) => !detail.open)).toBe(true);
+    expect(details[0]?.querySelector("summary")).toHaveTextContent("SKILL.md");
+    expect(details[0]).toHaveTextContent("old 0");
     expect(document.querySelectorAll(".skill-update-dialog .diff-viewer")).toHaveLength(1);
 
     details[49]!.open = true;

@@ -6145,6 +6145,87 @@ describe("Electron UI profile switching e2e", () => {
     expect(await updatedRow.getByRole("button", { name: "Sync install of shared-reviewer" }).count()).toBe(0);
   }, 30_000);
 
+  it("keeps large Skill update previews readable instead of compressing file rows", async () => {
+    const { librarySkill, page } = await launchApp();
+    const referencesDir = join(librarySkill.sourceDir, "references");
+    await mkdir(referencesDir, { recursive: true });
+    await writeFile(
+      join(librarySkill.sourceDir, "SKILL.md"),
+      [
+        "---",
+        "name: Shared Reviewer",
+        "description: A substantially expanded update preview fixture.",
+        "---",
+        "",
+        "# Shared Reviewer",
+        "",
+        "This changed file must remain visible when many additional files are present.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    await Promise.all(
+      Array.from({ length: 50 }, (_, index) =>
+        writeFile(
+          join(referencesDir, `reference-${String(index + 1).padStart(2, "0")}.md`),
+          [
+            `# Reference ${index + 1}`,
+            "",
+            "This is a realistic Markdown update with enough content to render a visible diff row.",
+            `Revision fixture ${index + 1}.`,
+            ""
+          ].join("\n"),
+          "utf8"
+        )
+      )
+    );
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Check updates" }).click();
+    await page
+      .getByRole("group", { name: "Library item shared-reviewer" })
+      .getByRole("button", { name: "Update shared-reviewer" })
+      .waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Update shared-reviewer" }).click();
+
+    const updateDialog = page.getByRole("dialog", {
+      name: "Update preview for shared-reviewer"
+    });
+    await updateDialog.waitFor({ state: "visible" });
+    await updateDialog.getByText("51 file changes").waitFor({ state: "visible" });
+    const details = updateDialog.locator(".update-change-list > details");
+    await expect.poll(() => details.count()).toBe(51);
+    await details.first().locator("summary").getByText("SKILL.md").waitFor({
+      state: "visible"
+    });
+    await details
+      .first()
+      .locator(".diff-code code")
+      .first()
+      .getByText("Index: SKILL.md")
+      .waitFor({ state: "visible" });
+
+    const geometry = await updateDialog.evaluate((dialog) => {
+      const body = dialog.querySelector<HTMLElement>(".update-change-list");
+      const firstDetails = body?.querySelector<HTMLElement>("details");
+      const firstSummary = firstDetails?.querySelector<HTMLElement>("summary");
+      const firstDiff = firstDetails?.querySelector<HTMLElement>(".diff-table-wrap");
+      const detailsBox = firstDetails?.getBoundingClientRect();
+      const summaryBox = firstSummary?.getBoundingClientRect();
+      const diffBox = firstDiff?.getBoundingClientRect();
+      return {
+        bodyScrolls: Boolean(body && body.scrollHeight > body.clientHeight),
+        detailsHeight: detailsBox?.height ?? 0,
+        summaryHeight: summaryBox?.height ?? 0,
+        diffHeight: diffBox?.height ?? 0
+      };
+    });
+    expect(geometry.bodyScrolls).toBe(true);
+    expect(geometry.detailsHeight).toBeGreaterThan(180);
+    expect(geometry.summaryHeight).toBeGreaterThan(20);
+    expect(geometry.diffHeight).toBeGreaterThan(100);
+  }, 30_000);
+
   it("keeps the five Skill lanes aligned with actionable status at supported widths", async () => {
     const { appDataRoot, librarySkill, page } = await launchApp();
     const staticSkillDir = join(appDataRoot, "skills-library", "static-layout-reference");

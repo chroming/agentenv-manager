@@ -1,19 +1,19 @@
 {
-  "generatedAt": "2026-07-27T06:47:40.970Z",
+  "generatedAt": "2026-07-27T09:19:00.064Z",
   "source": {
-    "commit": "549938a68a1746a3a29ed80162d2fc5a951e1042",
+    "commit": "30da6ecf4f08e5e117a50bda114c707a6446c920",
     "dirty": true,
-    "fingerprint": "6deb8f7dcf7d499a1fa7587fd19db401039c1da9a72650fe0cddf15e29b68eb7",
+    "fingerprint": "ec4983e33484528dfdda82f7013d10f9adbf6715bbfd9cccb26c628afd207987",
     "files": 466
   },
   "tests": {
     "passed": true,
     "files": 120,
-    "assertions": 823,
+    "assertions": 824,
     "e2eFiles": 11,
-    "e2eAssertions": 120,
+    "e2eAssertions": 121,
     "electronUiFiles": 1,
-    "electronUiAssertions": 107
+    "electronUiAssertions": 108
   },
   "audits": {
     "styles": "passed",

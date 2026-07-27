@@ -483,34 +483,6 @@
   flex: 0 0 18px;
 }
 
-.skill-update-dialog {
-  max-height: min(760px, calc(100vh - 48px));
-  max-width: min(900px, calc(100vw - 48px));
-  overflow: hidden;
-  width: 100%;
-}
-
-.skill-update-dialog .update-change-list {
-  display: grid;
-  gap: 10px;
-  min-height: 0;
-}
-
-.skill-update-dialog .update-change-list details {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
-  overflow: hidden;
-}
-
-.skill-update-dialog .update-change-list summary {
-  background: #f8fafc;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: var(--font-weight-regular);
-  padding: 10px 12px;
-}
-
 @container skill-library (max-width: 820px) {
   .skill-library-panel .library-table__head,
   .skill-library-panel .library-table-row {
