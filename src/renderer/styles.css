@@ -5200,14 +5200,21 @@ button svg,
   align-self: stretch;
   background: transparent;
   border: 0;
+  border-radius: 0;
   color: var(--muted);
   display: inline-flex;
   justify-content: center;
   padding: 0;
 }
 
-.profile-composer-section__disclosure:hover:not(:disabled) {
-  background: var(--surface-muted);
+.profile-composer-section__disclosure:hover:not(:disabled),
+.profile-composer-section__disclosure:active:not(:disabled) {
+  background: transparent;
+  color: var(--accent);
+}
+
+.profile-composer-section__disclosure:focus-visible {
+  outline-offset: -4px;
 }
 
 .profile-composer-section__icon {

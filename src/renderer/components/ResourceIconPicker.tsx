@@ -40,6 +40,10 @@ import {
 } from "lucide-react";
 import type { ResourceIconKey } from "../../shared/types";
 import { useI18n } from "../i18n";
+import {
+  agentIconUrlFor,
+  supportedAgentIconOptions
+} from "./ProfileSidebar";
 import { focusInitialActionMenuItem, handleActionMenuKeyDown } from "./ui";
 
 interface IconOption {
@@ -49,6 +53,14 @@ interface IconOption {
 }
 
 const iconGroups: Array<{ label: string; options: IconOption[] }> = [
+  {
+    label: "Agents",
+    options: supportedAgentIconOptions.map(({ key, label }) => ({
+      key,
+      label,
+      icon: Bot
+    }))
+  },
   {
     label: "Development",
     options: [
@@ -129,6 +141,19 @@ export const ResourceIcon = ({
   iconKey: ResourceIconKey;
   size?: number;
 }) => {
+  const agentIconUrl = agentIconUrlFor(iconKey);
+  if (agentIconUrl) {
+    return (
+      <img
+        alt=""
+        aria-hidden="true"
+        className="resource-agent-icon"
+        height={size}
+        src={agentIconUrl}
+        width={size}
+      />
+    );
+  }
   const Icon = iconByKey.get(iconKey) ?? Folder;
   return <Icon size={size} strokeWidth={2.1} aria-hidden="true" />;
 };
@@ -171,6 +196,7 @@ export const ResourceIconPicker = ({
   onChange,
   sourceUrl,
   fallbackIconKey = "folder",
+  showAgentIcons = false,
   triggerLabel,
   className = ""
 }: {
@@ -179,6 +205,7 @@ export const ResourceIconPicker = ({
   onChange: (iconKey: ResourceIconKey | undefined) => void;
   sourceUrl?: string;
   fallbackIconKey?: ResourceIconKey;
+  showAgentIcons?: boolean;
   triggerLabel?: string;
   className?: string;
 }) => {
@@ -293,29 +320,31 @@ export const ResourceIconPicker = ({
                   </button>
                 </div>
               ) : null}
-              {iconGroups.map((group) => (
-                <div className="resource-icon-group" key={group.label}>
-                  <span>{t(group.label)}</span>
-                  <div className="resource-icon-grid">
-                    {group.options.map((option) => (
-                      <button
-                        className="resource-icon-option"
-                        data-icon={option.key}
-                        data-icon-key={option.key}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={option.key === iconKey}
-                        aria-label={t(option.label)}
-                        title={t(option.label)}
-                        key={option.key}
-                        onClick={() => choose(option.key)}
-                      >
-                        <ResourceIcon iconKey={option.key} size={17} />
-                      </button>
-                    ))}
+              {iconGroups
+                .filter((group) => showAgentIcons || group.label !== "Agents")
+                .map((group) => (
+                  <div className="resource-icon-group" key={group.label}>
+                    <span>{t(group.label)}</span>
+                    <div className="resource-icon-grid">
+                      {group.options.map((option) => (
+                        <button
+                          className="resource-icon-option"
+                          data-icon={option.key}
+                          data-icon-key={option.key}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={option.key === iconKey}
+                          aria-label={t(option.label)}
+                          title={t(option.label)}
+                          key={option.key}
+                          onClick={() => choose(option.key)}
+                        >
+                          <ResourceIcon iconKey={option.key} size={17} />
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>,
             document.body
           )

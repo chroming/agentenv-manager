@@ -725,7 +725,7 @@ try {
   await page.getByRole("button", { name: "Check updates" }).click();
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
-    .getByRole("button", { name: "Review update react-best-practices" })
+    .getByRole("button", { name: "Update react-best-practices" })
     .waitFor({ state: "visible", timeout: 5_000 });
   await page.waitForTimeout(5_200);
   await capturePage(page, join(outputDir, "skills-update-920x620.png"));
@@ -734,7 +734,7 @@ try {
   await setWindowSize(page, windowHandle, 920, 620);
   await page
     .getByRole("group", { name: "Library item react-best-practices" })
-    .getByRole("button", { name: "Review update react-best-practices" })
+    .getByRole("button", { name: "Update react-best-practices" })
     .click();
   const skillUpdateDialog = page.getByRole("dialog", {
     name: "Update preview for react-best-practices"

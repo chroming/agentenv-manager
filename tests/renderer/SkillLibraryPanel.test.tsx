@@ -664,7 +664,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(within(settingsDialog).getByRole("button", { name: "Close" }));
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
     expect(
-      within(githubRow).getByRole("button", { name: "Review update github-reviewer" })
+      within(githubRow).getByRole("button", { name: "Update github-reviewer" })
     ).toHaveTextContent("Update available");
     expect(
       within(githubRow).queryByRole("button", { name: /^Review$/ })
@@ -759,7 +759,7 @@ describe("SkillLibraryPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Check updates" }));
     expect(onCheckUpdates).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Review all updates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update all skills" }));
     expect(onPreviewAllLibrarySkillUpdates).toHaveBeenCalledWith([
       "github-reviewer",
       "shared-reviewer"
@@ -823,13 +823,13 @@ describe("SkillLibraryPanel", () => {
       }
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Review update shared-reviewer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update shared-reviewer" }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledWith("shared-reviewer");
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Review update shared-reviewer" })).toBeEnabled()
+      expect(screen.getByRole("button", { name: "Update shared-reviewer" })).toBeEnabled()
     );
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /Review update/ }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Update$/ }));
     expect(onPreviewLibrarySkillUpdate).toHaveBeenCalledTimes(2);
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Disable globally/ }));
@@ -1325,7 +1325,7 @@ describe("SkillLibraryPanel", () => {
         }
       ], false, [{ id: "missing-reviewer", error: "Source directory is unavailable" }])
     );
-    const bulkDialog = screen.getByRole("dialog", { name: "Review all skill updates" });
+    const bulkDialog = screen.getByRole("dialog", { name: "Update all skills" });
     expect(bulkDialog).toHaveTextContent("1 update previews could not be prepared");
     expect(bulkDialog).toHaveTextContent("missing-reviewer");
     expect(bulkDialog).toHaveTextContent("Source directory is unavailable");
@@ -1336,7 +1336,7 @@ describe("SkillLibraryPanel", () => {
       "broken-reviewer",
       "missing-reviewer"
     ]);
-    const partialApply = within(bulkDialog).getByRole("button", { name: "Apply 1 update" });
+    const partialApply = within(bulkDialog).getByRole("button", { name: "Update 1 skill" });
     expect(partialApply).toBeEnabled();
     fireEvent.click(partialApply);
     expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith([

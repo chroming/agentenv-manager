@@ -2645,7 +2645,7 @@ const AppContent = ({
     const activity: SkillUpdateActivity = { kind: "preview-skills", skillIds: ids };
     if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
-    setSkillUpdateCheckStatus({ state: "checking", message: "Preparing update review..." });
+    setSkillUpdateCheckStatus({ state: "checking", message: "Preparing updates..." });
     try {
       const result = await window.agentEnv.previewLibrarySkillUpdates(ids);
       setBulkSkillUpdatePlans(result.plans);
@@ -4282,6 +4282,7 @@ const AppContent = ({
                         className="profile-hero__icon"
                         iconKey={draftProfile.manifest.iconKey ?? "folder"}
                         label={draftProfile.manifest.name}
+                        showAgentIcons
                         triggerLabel={t("Change icon for profile {{id}}", { id: draftProfile.id })}
                         onChange={(iconKey) => {
                           if (iconKey) changeProfileIcon(draftProfile.id, iconKey);

@@ -1,6 +1,6 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
-import type { SkillUpdatePlan } from "../../shared/types";
+import type { PlannedFileChange, SkillUpdatePlan } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffViewer } from "./DiffViewer";
 import { Button, ModalFrame } from "./ui";
@@ -13,6 +13,26 @@ interface SkillUpdateDialogProps {
   onClose(): void;
   onConfirm(plan: SkillUpdatePlan): void;
 }
+
+const SkillUpdateChange = ({
+  change,
+  initiallyOpen
+}: {
+  change: PlannedFileChange;
+  initiallyOpen: boolean;
+}) => {
+  const [open, setOpen] = useState(initiallyOpen);
+
+  return (
+    <details
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>{change.path}</summary>
+      {open ? <DiffViewer path={change.path} diff={change.diff} /> : null}
+    </details>
+  );
+};
 
 export const SkillUpdateDialog = ({
   plan,
@@ -86,11 +106,12 @@ export const SkillUpdateDialog = ({
           </div>
         </header>
         <div className="update-change-list ui-dialog-body">
-          {plan.changes.map((change) => (
-            <details key={change.path} open>
-              <summary>{change.path}</summary>
-              <DiffViewer path={change.path} diff={change.diff} />
-            </details>
+          {plan.changes.map((change, index) => (
+            <SkillUpdateChange
+              change={change}
+              initiallyOpen={index === 0}
+              key={change.path}
+            />
           ))}
         </div>
         <footer className="preview-actions ui-dialog-footer">

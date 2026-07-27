@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type {
   ProfileSummary,
+  ResourceIconKey,
   TargetDescriptor,
   TargetHealthStatus,
   TargetInfo
@@ -26,6 +27,25 @@ const claudeIconUrl = new URL("../assets/target-icons/claude.svg", import.meta.u
 const openAiIconUrl = new URL("../assets/target-icons/openai.svg", import.meta.url).href;
 const openCodeIconUrl = new URL("../assets/target-icons/opencode.svg", import.meta.url).href;
 const traeIconUrl = new URL("../assets/target-icons/trae.png", import.meta.url).href;
+
+export const supportedAgentIconOptions: ReadonlyArray<{
+  key: ResourceIconKey;
+  label: string;
+  assetUrl: string;
+}> = [
+  { key: "opencode", label: "OpenCode", assetUrl: openCodeIconUrl },
+  { key: "codex", label: "Codex CLI", assetUrl: openAiIconUrl },
+  { key: "claude", label: "Claude Code", assetUrl: claudeIconUrl },
+  { key: "antigravity", label: "Antigravity CLI", assetUrl: antigravityIconUrl },
+  { key: "trae", label: "Trae CLI", assetUrl: traeIconUrl }
+];
+
+const agentIconUrlByKey = new Map(
+  supportedAgentIconOptions.map((option) => [option.key, option.assetUrl])
+);
+
+export const agentIconUrlFor = (iconKey: ResourceIconKey) =>
+  agentIconUrlByKey.get(iconKey);
 
 export type AppWorkspace =
   | "library"

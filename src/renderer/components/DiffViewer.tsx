@@ -40,9 +40,10 @@ const parseDiff = (diff: string): ParsedDiffLine[] => {
   const rows: ParsedDiffLine[] = [];
   let oldLine = 0;
   let newLine = 0;
+  const lines = diff.split("\n");
 
-  diff.split("\n").forEach((line, index) => {
-    if (line.length === 0 && index === diff.split("\n").length - 1) {
+  lines.forEach((line, index) => {
+    if (line.length === 0 && index === lines.length - 1) {
       return;
     }
 

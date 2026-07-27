@@ -104,7 +104,8 @@
 }
 
 .resource-icon-trigger > svg,
-.resource-icon-trigger > .resource-favicon {
+.resource-icon-trigger > .resource-favicon,
+.resource-icon-trigger > .resource-agent-icon {
   height: var(--resource-icon-artwork-size);
   width: var(--resource-icon-artwork-size);
 }
@@ -221,6 +222,12 @@
 
 .resource-favicon {
   border-radius: var(--radius-tight);
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+.resource-agent-icon {
   display: block;
   flex: 0 0 auto;
   object-fit: contain;

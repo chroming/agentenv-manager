@@ -1,7 +1,7 @@
 .skill-source-table-head,
 .skill-source-group-row {
   column-gap: 10px;
-  grid-template-columns: 24px 28px minmax(125px, 1fr) 70px minmax(80px, 0.7fr) 92px 108px 32px;
+  grid-template-columns: 24px 28px minmax(125px, 1fr) 70px minmax(80px, 0.7fr) 116px 32px;
 }
 
 .skill-source-table-head {
@@ -13,6 +13,9 @@
   font-size: var(--font-size-caption);
   min-height: 32px;
   padding: 0 12px;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-raised);
 }
 
 .skill-source-table-head > span:first-child {
@@ -21,7 +24,7 @@
 
 .skill-source-table-head.can-merge,
 .skill-source-list.can-merge .skill-source-group-row {
-  grid-template-columns: 20px 24px 28px minmax(110px, 1fr) 64px minmax(74px, 0.65fr) 88px 102px 32px;
+  grid-template-columns: 20px 24px 28px minmax(110px, 1fr) 64px minmax(74px, 0.65fr) 116px 32px;
 }
 
 .skill-source-table-head.can-merge > span:first-child {
@@ -36,14 +39,14 @@
   align-items: center;
   cursor: pointer;
   display: grid;
-  grid-template-areas: "disclosure artwork identity counts checked status action more";
+  grid-template-areas: "disclosure artwork identity counts checked status more";
   min-height: 62px;
   padding: 9px 12px;
   transition: background-color 120ms ease;
 }
 
 .skill-source-list.can-merge .skill-source-group-row {
-  grid-template-areas: "select disclosure artwork identity counts checked status action more";
+  grid-template-areas: "select disclosure artwork identity counts checked status more";
 }
 
 .skill-source-counts {
@@ -105,29 +108,31 @@
 .skill-source-status.is-error { color: var(--danger); }
 .skill-source-status > svg { flex: 0 0 auto; }
 
+.skill-source-status-action {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  display: inline-flex;
+  font: inherit;
+  gap: 5px;
+  justify-content: flex-start;
+  min-height: 24px;
+  min-width: 0;
+  padding: 0;
+}
+
+.skill-source-status-action:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .skill-source-status-label {
   font-size: var(--font-size-metadata);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.skill-source-current-action {
-  align-items: center;
-  display: flex;
-  grid-area: action;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.skill-source-current-action .catalog-current-action {
-  justify-content: flex-start;
-  min-width: 0;
-  width: 100%;
-}
-
-.skill-source-current-action .catalog-current-action > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -189,12 +194,12 @@
 @container skill-library (min-width: 920px) {
   .skill-source-table-head,
   .skill-source-group-row {
-    grid-template-columns: 24px 28px minmax(220px, 1fr) 82px minmax(120px, 0.7fr) 112px 116px 32px;
+    grid-template-columns: 24px 28px minmax(220px, 1fr) 82px minmax(120px, 0.7fr) 116px 32px;
   }
 
   .skill-source-table-head.can-merge,
   .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-columns: 20px 24px 28px minmax(196px, 1fr) 78px minmax(112px, 0.65fr) 106px 112px 32px;
+    grid-template-columns: 20px 24px 28px minmax(196px, 1fr) 78px minmax(112px, 0.65fr) 116px 32px;
   }
 }
 
@@ -202,11 +207,11 @@
   .skill-source-table-head,
   .skill-source-group-row {
     column-gap: 8px;
-    grid-template-columns: 20px 24px minmax(110px, 1fr) 62px minmax(72px, 0.62fr) 84px 100px 28px;
+    grid-template-columns: 20px 24px minmax(110px, 1fr) 62px minmax(72px, 0.62fr) 116px 28px;
   }
 
   .skill-source-table-head.can-merge,
   .skill-source-list.can-merge .skill-source-group-row {
-    grid-template-columns: 18px 20px 22px minmax(96px, 1fr) 58px minmax(66px, 0.6fr) 80px 94px 28px;
+    grid-template-columns: 18px 20px 22px minmax(96px, 1fr) 58px minmax(66px, 0.6fr) 116px 28px;
   }
 }

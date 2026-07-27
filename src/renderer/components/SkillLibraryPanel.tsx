@@ -1836,8 +1836,8 @@ export const SkillLibraryPanel = ({
             <button
               className="secondary-action library-toolbar-action"
               type="button"
-              aria-label={t("Review all updates")}
-              title={t("Review all updates")}
+              aria-label={t("Update all skills")}
+              title={t("Update all skills")}
               aria-busy={previewingAllUpdates}
               disabled={updateActivityBusy}
               onClick={() => onPreviewAllLibrarySkillUpdates(updateableSkillIds)}
@@ -1847,7 +1847,7 @@ export const SkillLibraryPanel = ({
               ) : (
                 <Sparkles size={15} strokeWidth={2.2} />
               )}
-              <span>{t("Review updates")}</span>
+              <span>{t("Update all")}</span>
             </button>
           ) : null}
           {filtersOpen ? (
@@ -2142,7 +2142,7 @@ export const SkillLibraryPanel = ({
                     </strong>
                   ) : hasUpdate ? (
                     <button
-                      aria-label={t("Review update {{id}}", { id: skill.id })}
+                      aria-label={t("Update {{name}}", { name: skill.id })}
                       aria-busy={previewingSkillId === skill.id}
                       className="library-primary-status is-actionable is-update"
                       type="button"
@@ -2258,7 +2258,7 @@ export const SkillLibraryPanel = ({
                               ) : (
                                 <RefreshCw size={14} strokeWidth={2.2} />
                               )}
-                              <span>{t(hasUpdate ? "Review update" : "Check update")}</span>
+                              <span>{t(hasUpdate ? "Update" : "Check update")}</span>
                             </button>
                           ) : null}
                           <button
@@ -2911,13 +2911,13 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog bulk-update-dialog ui-dialog-shell"
             role="dialog"
-            aria-label={t("Review all skill updates")}
+            aria-label={t("Update all skills")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header ui-dialog-header">
               <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Review all skill updates")}</div>
+                <div className="section-title ui-dialog-title">{t("Update all skills")}</div>
                 <p className="muted ui-dialog-description">{t("Review every tracked change before updating the shared library.")}</p>
               </div>
             </header>
@@ -2986,8 +2986,12 @@ export const SkillLibraryPanel = ({
                 disabled={isBusy || updateActivityBusy || applicableBulkUpdateCount === 0}
                 onClick={() => onUpdateAllLibrarySkills(bulkUpdatePlans.filter((plan) =>
                   plan.changes.length > 0 && plan.errors.length === 0))}>
-                {t(applicableBulkUpdateCount === 1 ? "Apply {{count}} update" : "Apply {{count}} updates",
-                  { count: applicableBulkUpdateCount })}
+                {t(
+                  applicableBulkUpdateCount === 1
+                    ? "Update {{count}} skill"
+                    : "Update {{count}} skills",
+                  { count: applicableBulkUpdateCount }
+                )}
               </button>
             </footer>
           </section>

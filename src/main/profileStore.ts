@@ -5,6 +5,7 @@ import {
   ProfileResourceModeSchema,
   ProfileResourcesSchema,
   ProfileSkillSchema,
+  ResourceIconKeySchema,
   SafeIdSchema
 } from "../shared/schemas";
 import type {
@@ -251,6 +252,7 @@ export const createProfileStore = (
       : targetRegistry.list()[0]?.id;
     if (preferredTargetId) targetRegistry.get(preferredTargetId);
     const target = preferredTargetId ? targetRegistry.get(preferredTargetId).descriptor : undefined;
+    const iconKey = ResourceIconKeySchema.safeParse(target?.iconKey).data;
     const name = input.name?.trim() || `${target?.name ?? "Agent"} Profile`;
     const id = `${slugProfileName(name)}-${Date.now()}`;
     return saveProfile({
@@ -260,6 +262,7 @@ export const createProfileStore = (
         description: input.description?.trim() ?? "",
         createdAt: new Date().toISOString(),
         preferredTargetId,
+        iconKey,
         version: 2
       },
       instructions: "",

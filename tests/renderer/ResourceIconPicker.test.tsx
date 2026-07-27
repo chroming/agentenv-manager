@@ -45,4 +45,20 @@ describe("ResourceIconPicker", () => {
     fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Use source icon" }));
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
+
+  it("offers every supported Agent artwork only when requested by a Profile", () => {
+    render(
+      <ResourceIconPicker
+        iconKey="opencode"
+        label="Daily Coding"
+        onChange={() => undefined}
+        showAgentIcons
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Change icon for Daily Coding" }));
+    const menu = screen.getByRole("menu", { name: "Icons for Daily Coding" });
+    for (const name of ["OpenCode", "Codex CLI", "Claude Code", "Antigravity CLI", "Trae CLI"]) {
+      expect(within(menu).getByRole("menuitemradio", { name })).toBeInTheDocument();
+    }
+  });
 });

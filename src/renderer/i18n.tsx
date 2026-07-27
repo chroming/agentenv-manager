@@ -108,6 +108,7 @@ const zhCN: Record<string, string> = {
   "Use default": "使用默认位置",
   "Quit": "退出",
   "Preparing...": "正在准备...",
+  "Preparing updates...": "正在准备更新...",
   "Preparing your local environment": "正在准备本地环境",
   "Checking data and recovering interrupted operations…": "正在验证数据并恢复未完成的操作…",
   "Preparing local data…": "正在准备本地数据…",
@@ -672,6 +673,8 @@ Object.assign(zhCN, {
   "Checking...": "正在检查...",
   "Update all skills": "更新全部技能",
   "Update all": "全部更新",
+  "Update {{count}} skill": "更新 {{count}} 个技能",
+  "Update {{count}} skills": "更新 {{count}} 个技能",
   "Review all updates": "查看全部更新",
   "Review updates": "查看更新",
   "Library skills": "资源库技能",
@@ -1873,6 +1876,9 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "Preparing updates...": "正在準備更新...",
+  "Update {{count}} skill": "更新 {{count}} 個技能",
+  "Update {{count}} skills": "更新 {{count}} 個技能",
   "Apply {{count}} update": "套用 {{count}} 個更新",
   "Apply {{count}} updates": "套用 {{count}} 個更新",
   "Shows the current maintenance state for this skill.": "顯示此技能目前的維護狀態。",

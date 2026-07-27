@@ -1,15 +1,15 @@
 {
-  "generatedAt": "2026-07-27T05:05:11.218Z",
+  "generatedAt": "2026-07-27T06:47:40.970Z",
   "source": {
-    "commit": "73c6c91669346e762928d6949f441391fcda20b5",
-    "dirty": false,
-    "fingerprint": "91b52cad396aaf70b7af4e70980978b3947180de9b8cc2fdd076eeff33c285d5",
-    "files": 465
+    "commit": "549938a68a1746a3a29ed80162d2fc5a951e1042",
+    "dirty": true,
+    "fingerprint": "6deb8f7dcf7d499a1fa7587fd19db401039c1da9a72650fe0cddf15e29b68eb7",
+    "files": 466
   },
   "tests": {
     "passed": true,
-    "files": 119,
-    "assertions": 821,
+    "files": 120,
+    "assertions": 823,
     "e2eFiles": 11,
     "e2eAssertions": 120,
     "electronUiFiles": 1,
@@ -30,5 +30,5 @@
     ],
     "includesProfileLoadingState": true
   },
-  "packagedSmoke": "passed"
+  "packagedSmoke": "not-run"
 }

@@ -111,6 +111,10 @@ describe("Repository Skill source", () => {
     expect(await page.getByRole("button", { name: "Check for updates" }).count()).toBe(1);
     const sourceGroup = page.locator(".skill-source-group");
     await expect.poll(() => sourceGroup.count()).toBe(1);
+    const checkSource = async () => {
+      await sourceGroup.getByRole("button", { name: /Source actions for/ }).click();
+      await page.getByRole("menuitem", { name: "Check source" }).click();
+    };
     const expectSourceLaneGeometry = async (width: number, height: number) => {
       await page.setViewportSize({ width, height });
       const geometry = await page.locator(".skill-source-group-row").evaluate((row) => {
@@ -120,7 +124,6 @@ describe("Repository Skill source", () => {
           row.querySelector<HTMLElement>(".skill-source-counts"),
           row.querySelector<HTMLElement>(".skill-source-last-checked"),
           row.querySelector<HTMLElement>(".skill-source-status"),
-          row.querySelector<HTMLElement>(".skill-source-current-action"),
           row.querySelector<HTMLElement>(".skill-source-more")
         ];
         return {
@@ -128,13 +131,16 @@ describe("Repository Skill source", () => {
           headerLefts: headerCells.slice(1).map((cell) => cell.getBoundingClientRect().left),
           rowLefts: rowCells.map((cell) => cell!.getBoundingClientRect().left),
           rowRight: row.getBoundingClientRect().right,
-          moreRight: rowCells[4]!.getBoundingClientRect().right,
+          moreRight: rowCells[3]!.getBoundingClientRect().right,
           viewportWidth: document.documentElement.clientWidth
         };
       });
       expect(geometry.documentWidth).toBe(geometry.viewportWidth);
       geometry.rowLefts.forEach((left, index) => {
-        expect(Math.abs(left - geometry.headerLefts[index]!)).toBeLessThanOrEqual(1);
+        expect(
+          Math.abs(left - geometry.headerLefts[index]!),
+          JSON.stringify(geometry)
+        ).toBeLessThanOrEqual(1);
       });
       expect(Math.abs(geometry.moreRight - geometry.rowRight + 12)).toBeLessThanOrEqual(1);
     };
@@ -179,14 +185,14 @@ describe("Repository Skill source", () => {
     const staleMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
     staleMetadata.remoteRevision = "stale-transport-revision";
     await writeFile(metadataPath, `${JSON.stringify(staleMetadata, null, 2)}\n`, "utf8");
-    await sourceGroup.getByRole("button", { name: "Check now", exact: true }).click();
-    await sourceGroup.getByRole("button", { name: "Review 1 source updates", exact: true })
+    await checkSource();
+    await sourceGroup.getByRole("button", { name: "Update all skills", exact: true })
       .waitFor({ state: "visible" });
-    await sourceGroup.getByRole("button", { name: "Review update api-design-internal" }).click();
+    await sourceGroup.getByRole("button", { name: "Update api-design-internal" }).click();
     await page.getByText("api-design-internal source is current", { exact: true })
       .waitFor({ state: "visible" });
     await expect.poll(() =>
-      sourceGroup.getByRole("button", { name: "Review 1 source updates" }).count()
+      sourceGroup.getByRole("button", { name: "Update all skills" }).count()
     ).toBe(0);
     const reconciledMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as {
       remoteRevision?: string;
@@ -201,7 +207,7 @@ describe("Repository Skill source", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page.getByText("All tracked skills are up to date", { exact: true })
       .waitFor({ state: "visible" });
-    expect(await row.getByRole("button", { name: "Review update api-design-internal" }).count())
+    expect(await row.getByRole("button", { name: "Update api-design-internal" }).count())
       .toBe(0);
 
     await repository.write(
@@ -210,32 +216,32 @@ describe("Repository Skill source", () => {
     );
     await repository.commit("update api design skill");
     await page.getByRole("tab", { name: "By source" }).click();
-    await sourceGroup.getByRole("button", { name: "Check now", exact: true }).click();
+    await checkSource();
     const reviewSourceUpdates = sourceGroup.getByRole("button", {
-      name: "Review 1 source updates",
+      name: "Update all skills",
       exact: true
     });
     await reviewSourceUpdates.waitFor({ state: "visible" });
 
     await page.getByRole("tab", { name: "Skill list" }).click();
-    const updateButton = row.getByRole("button", { name: "Review update api-design-internal" });
+    const updateButton = row.getByRole("button", { name: "Update api-design-internal" });
     await updateButton.waitFor({ state: "visible" });
     await page.getByRole("tab", { name: "By source" }).click();
     await reviewSourceUpdates.click();
 
-    const preview = page.getByRole("dialog", { name: "Review all skill updates" });
+    const preview = page.getByRole("dialog", { name: "Update all skills" });
     await preview.waitFor({ state: "visible" });
     await expect.poll(() => preview.textContent()).toContain("SKILL.md");
     await expect.poll(() => readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .not.toContain("Review compatibility");
-    await preview.getByRole("button", { name: "Apply 1 update" }).click();
+    await preview.getByRole("button", { name: "Update 1 skill" }).click();
     await preview.waitFor({ state: "hidden" });
     await page.getByText(
       "Updated 1 skill · All tracked skills are up to date",
       { exact: true }
     ).waitFor({ state: "visible" });
     await expect.poll(() =>
-      sourceGroup.getByRole("button", { name: "Review 1 source updates" }).count()
+      sourceGroup.getByRole("button", { name: "Update all skills" }).count()
     ).toBe(0);
     await expect(readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .resolves.toContain("Review compatibility");
@@ -256,7 +262,7 @@ describe("Repository Skill source", () => {
     );
     await repository.commit("remove release check skill");
     await page.getByRole("tab", { name: "By source" }).click();
-    await sourceGroup.getByRole("button", { name: "Check now", exact: true }).click();
+    await checkSource();
     await sourceGroup.getByText("Removed upstream", { exact: true }).waitFor({ state: "visible" });
     expect(await sourceGroup.getByRole("button", { name: "Delete", exact: true }).count()).toBe(1);
   }, 90_000);
@@ -353,7 +359,8 @@ describe("Repository Skill source", () => {
     };
     expect(registry.sources).toHaveLength(1);
     expect(registry.sources[0]?.displayName).toBe("Engineering Skills");
-    await page.getByRole("button", { name: "Check now", exact: true }).click();
+    await page.getByRole("button", { name: /Source actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Check source" }).click();
     await page.getByText("Engineering Skills", { exact: true }).waitFor({ state: "visible" });
     await page.reload();
     await page.getByRole("heading", { name: "Skills" }).waitFor({ state: "visible" });

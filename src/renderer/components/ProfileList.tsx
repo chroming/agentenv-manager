@@ -260,6 +260,7 @@ export const ProfileList = ({
                   className="profile-row__icon"
                   iconKey={iconKey}
                   label={profile.name}
+                  showAgentIcons
                   triggerLabel={t("Change icon for profile {{id}}", { id: profile.id })}
                   onChange={(nextIconKey) => {
                     if (nextIconKey) onIconChange(profile.id, nextIconKey);

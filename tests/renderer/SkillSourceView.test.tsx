@@ -128,10 +128,10 @@ describe("SkillSourceView", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Merge selected/ })).not.toBeInTheDocument();
     expect(document.querySelector(".skill-source-counts .is-change")).toHaveClass("has-value");
-    fireEvent.click(screen.getByRole("button", { name: "Review 1 source updates" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update all skills" }));
     expect(onReviewUpdates).toHaveBeenCalledWith(["review"]);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Review 1 source updates" })).toBeEnabled()
+      expect(screen.getByRole("button", { name: "Update all skills" })).toBeEnabled()
     );
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
 
@@ -144,13 +144,13 @@ describe("SkillSourceView", () => {
     expect(candidates).toHaveTextContent("2026");
     fireEvent.click(within(candidates!).getByRole("button", { name: "Add" }));
     await waitFor(() => expect(onAdd).toHaveBeenCalledWith(group, group.candidates[0]));
-    fireEvent.click(within(candidates!).getByRole("button", { name: "Review update review" }));
+    fireEvent.click(within(candidates!).getByRole("button", { name: "Update review" }));
     expect(
       within(candidates!).queryByRole("button", { name: /^Review$/ })
     ).not.toBeInTheDocument();
     expect(onUpdate).toHaveBeenCalledWith("review");
     await waitFor(() =>
-      expect(within(candidates!).getByRole("button", { name: "Review update review" })).toBeEnabled()
+      expect(within(candidates!).getByRole("button", { name: "Update review" })).toBeEnabled()
     );
     fireEvent.click(within(candidates!).getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledWith("docs");
@@ -476,7 +476,7 @@ describe("SkillSourceView", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
-    const review = screen.getByRole("button", { name: "Review update review" });
+    const review = screen.getByRole("button", { name: "Update review" });
     fireEvent.click(review);
     expect(review.querySelector(".is-spinning")).not.toBeNull();
 

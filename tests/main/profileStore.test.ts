@@ -48,6 +48,7 @@ describe("profile store v2", () => {
 
     expect(created.instructions).toBe("");
     expect(created.resources).toEqual({ skills: [], mcpByTarget: {} });
+    expect(created.manifest.iconKey).toBe("opencode");
   });
 
   it("lists valid profiles with per-target hashes", async () => {

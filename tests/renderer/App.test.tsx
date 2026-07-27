@@ -1057,7 +1057,7 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Skills" })).toBeInTheDocument();
     expect(
       within(screen.getByRole("group", { name: "Library item github-reviewer" }))
-        .getByRole("button", { name: "Review update github-reviewer" })
+        .getByRole("button", { name: "Update github-reviewer" })
     ).toHaveTextContent("Update available");
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
@@ -1215,7 +1215,7 @@ describe("App", () => {
 
     const row = await screen.findByRole("group", { name: "Library item source-reviewer" });
     await waitFor(() => expect(
-      within(row).getByRole("button", { name: "Review update source-reviewer" })
+      within(row).getByRole("button", { name: "Update source-reviewer" })
     ).toBeInTheDocument());
     fireEvent.click(screen.getByRole("tab", { name: "By source" }));
     await screen.findByText("Source Reviewer", { exact: true });
@@ -1230,7 +1230,7 @@ describe("App", () => {
     await waitFor(() => expect(api.checkSkillSourceGroup).toHaveBeenCalledWith("source-acme"));
     fireEvent.click(screen.getByRole("tab", { name: "Skill list" }));
     await waitFor(() => expect(
-      within(row).queryByRole("button", { name: "Review update source-reviewer" })
+      within(row).queryByRole("button", { name: "Update source-reviewer" })
     ).toBeNull());
   });
 

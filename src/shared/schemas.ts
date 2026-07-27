@@ -5,6 +5,11 @@ export const SafeIdSchema = z
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/);
 
 export const ResourceIconKeySchema = z.enum([
+  "opencode",
+  "codex",
+  "claude",
+  "antigravity",
+  "trae",
   "github",
   "folder",
   "code",

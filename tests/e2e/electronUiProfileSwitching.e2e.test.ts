@@ -1632,7 +1632,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(updateActionGeometry.columnsDoNotOverlap).toBe(true);
       await expectTextFits(changingRow.locator(".library-status-cell .library-primary-status"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
-      await changingRow.getByRole("button", { name: "Review update layout-skill-1" }).click();
+      await changingRow.getByRole("button", { name: "Update layout-skill-1" }).click();
       await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
       await changingRow.getByText("Up to date").waitFor({ state: "visible" });
       await expect
@@ -2013,7 +2013,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(newProfileGeometry).toEqual({ iconSize: 24, contentGap: 4 });
     expect(await findProfileByName(appDataRoot, "Docs Writing")).toMatchObject({
       name: "Docs Writing",
-      description: "Writing workspace"
+      description: "Writing workspace",
+      iconKey: "opencode"
     });
 
     await resizeAppWindow(page, 920, 620);
@@ -2569,7 +2570,7 @@ describe("Electron UI profile switching e2e", () => {
     const popover = page.getByRole("menu", { name: "Actions for shared-reviewer" });
     await popover.waitFor({ state: "visible" });
     const checkUpdateItem = popover.getByRole("menuitem", {
-      name: /Check update|Review update/
+      name: /^(Check update|Update)$/
     });
     await checkUpdateItem.waitFor({ state: "visible" });
 
@@ -2623,7 +2624,7 @@ describe("Electron UI profile switching e2e", () => {
 
     const review = page
       .getByRole("group", { name: "Library item shared-reviewer" })
-      .getByRole("button", { name: "Review update shared-reviewer" });
+      .getByRole("button", { name: "Update shared-reviewer" });
     await review.waitFor({ state: "visible" });
     await review.click();
     await expect.poll(() => review.getAttribute("aria-busy")).toBe("true");
@@ -2635,7 +2636,7 @@ describe("Electron UI profile switching e2e", () => {
     await navigation.getByRole("button", { name: "Skills", exact: true }).click();
     const restoredReview = page
       .getByRole("group", { name: "Library item shared-reviewer" })
-      .getByRole("button", { name: "Review update shared-reviewer" });
+      .getByRole("button", { name: "Update shared-reviewer" });
     await expect.poll(() => restoredReview.getAttribute("aria-busy")).toBe("true");
     const updateDialog = page.getByRole("dialog", {
       name: "Update preview for shared-reviewer"
@@ -4354,7 +4355,7 @@ describe("Electron UI profile switching e2e", () => {
       '[data-profile-composer-id="instructions"]'
     );
     const instructionsDisclosure = instructionsSection.getByRole("button", {
-      name: "Expand Instructions"
+      name: /^(Expand|Collapse) Instructions$/
     });
     const [disclosureBox, rowBox, policyBox] = await Promise.all([
       instructionsDisclosure.boundingBox(),
@@ -4366,6 +4367,30 @@ describe("Electron UI profile switching e2e", () => {
     expect(policyBox).not.toBeNull();
     expect(disclosureBox!.x + disclosureBox!.width).toBeLessThanOrEqual(rowBox!.x);
     expect(rowBox!.x + rowBox!.width).toBeLessThanOrEqual(policyBox!.x);
+    await instructionsDisclosure.hover();
+    const hoveredDisclosureStyle = await instructionsDisclosure.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        backgroundColor: style.backgroundColor,
+        borderRadius: style.borderRadius
+      };
+    });
+    expect(hoveredDisclosureStyle).toEqual({
+      backgroundColor: "rgba(0, 0, 0, 0)",
+      borderRadius: "0px"
+    });
+    await instructionsDisclosure.click();
+    await expect.poll(() => instructionsDisclosure.getAttribute("aria-expanded")).toBe("true");
+    const pressedDisclosureStyle = await instructionsDisclosure.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        backgroundColor: style.backgroundColor,
+        borderRadius: style.borderRadius
+      };
+    });
+    expect(pressedDisclosureStyle).toEqual(hoveredDisclosureStyle);
+    await instructionsDisclosure.click();
+    await expect.poll(() => instructionsDisclosure.getAttribute("aria-expanded")).toBe("false");
     const policySurface = await instructionsPolicy.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -5949,14 +5974,14 @@ describe("Electron UI profile switching e2e", () => {
       .click();
     await page
       .getByRole("menu", { name: "Icons for UI OpenCode alpha" })
-      .getByRole("menuitemradio", { name: "Design" })
+      .getByRole("menuitemradio", { name: "Claude Code" })
       .click();
     expect(await page.getByRole("button", { name: "Save", exact: true }).isDisabled()).toBe(true);
     await expect.poll(async () =>
       (await readJson<{ iconKey?: string }>(
         join(appDataRoot, "profiles", "ui-opencode-alpha", "profile.json")
       )).iconKey
-    ).toBe("palette");
+    ).toBe("claude");
   }, 30_000);
 
   it("shows Claude Code MCP definitions read-only and never rewrites them", async () => {
@@ -6094,9 +6119,9 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
-      .getByRole("button", { name: "Review update shared-reviewer" })
+      .getByRole("button", { name: "Update shared-reviewer" })
       .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
+    await page.getByRole("button", { name: "Update shared-reviewer" }).click();
     const updateDialog = page.getByRole("dialog", {
       name: "Update preview for shared-reviewer"
     });
@@ -6141,7 +6166,7 @@ describe("Electron UI profile switching e2e", () => {
     const updateRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     const staticRow = page.getByRole("group", { name: "Library item static-layout-reference" });
     await updateRow
-      .getByRole("button", { name: "Review update shared-reviewer" })
+      .getByRole("button", { name: "Update shared-reviewer" })
       .waitFor({ state: "visible" });
     await staticRow.waitFor({ state: "visible" });
     await resizeAppWindow(page, 1180, 728);
@@ -6275,17 +6300,17 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
-      .getByRole("button", { name: "Review update shared-reviewer" })
+      .getByRole("button", { name: "Update shared-reviewer" })
       .waitFor({ state: "visible" });
     await page
       .getByRole("group", { name: "Library item batch-helper" })
-      .getByRole("button", { name: "Review update batch-helper" })
+      .getByRole("button", { name: "Update batch-helper" })
       .waitFor({ state: "visible" });
 
-    await page.getByRole("button", { name: "Review all updates" }).click();
-    const bulkUpdateDialog = page.getByRole("dialog", { name: "Review all skill updates" });
+    await page.getByRole("button", { name: "Update all skills" }).click();
+    const bulkUpdateDialog = page.getByRole("dialog", { name: "Update all skills" });
     await bulkUpdateDialog.waitFor({ state: "visible" });
-    await bulkUpdateDialog.getByRole("button", { name: "Apply 2 updates" }).click();
+    await bulkUpdateDialog.getByRole("button", { name: "Update 2 skills" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByText("Batch shared v2.")
@@ -6323,12 +6348,12 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("group", { name: "Library item missing-source-helper" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Check updates" }).click();
-    await page.getByRole("button", { name: "Review all updates" }).click();
-    const bulkUpdateDialog = page.getByRole("dialog", { name: "Review all skill updates" });
+    await page.getByRole("button", { name: "Update all skills" }).click();
+    const bulkUpdateDialog = page.getByRole("dialog", { name: "Update all skills" });
     await bulkUpdateDialog.waitFor({ state: "visible" });
 
     await rm(missingSourceSkill.sourceDir, { recursive: true, force: true });
-    await bulkUpdateDialog.getByRole("button", { name: "Apply 2 updates" }).click();
+    await bulkUpdateDialog.getByRole("button", { name: "Update 2 skills" }).click();
 
     await expect.poll(() => page.getByRole("status").textContent()).toContain(
       "Updated 2 skills"
@@ -7626,7 +7651,7 @@ describe("Electron UI profile switching e2e", () => {
     await writeGitHubFixtureSkill(githubFixtureRoot, "v2");
     await page.getByRole("button", { name: "Check updates" }).click();
     await expect
-      .poll(() => githubRow.getByRole("button", { name: "Review update github-reviewer" }).count())
+      .poll(() => githubRow.getByRole("button", { name: "Update github-reviewer" }).count())
       .toBe(0);
     await githubRow.getByRole("button", { name: "More actions for github-reviewer" }).click();
     await page.getByRole("menuitem", { name: "Update settings" }).click();
@@ -7642,9 +7667,9 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("button", { name: "Check updates" }).click();
     await page
       .getByRole("group", { name: "Library item github-reviewer" })
-      .getByRole("button", { name: "Review update github-reviewer" })
+      .getByRole("button", { name: "Update github-reviewer" })
       .waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Review update github-reviewer" }).click();
+    await page.getByRole("button", { name: "Update github-reviewer" }).click();
     await page
       .getByRole("dialog", { name: "Update preview for github-reviewer" })
       .waitFor({ state: "visible" });
@@ -7937,7 +7962,7 @@ describe("Electron UI profile switching e2e", () => {
       .click();
     await page
       .getByRole("menu", { name: "Actions for shared-reviewer" })
-      .getByRole("menuitem", { name: /Check update|Review update/ })
+      .getByRole("menuitem", { name: /^(Check update|Update)$/ })
       .click();
     await page
       .getByRole("dialog", { name: "Update preview for shared-reviewer" })
@@ -7990,7 +8015,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("tooltip").filter({ hasText: newSourceDir }).waitFor({ state: "visible" });
     await page.mouse.move(2, 2);
 
-    await page.getByRole("button", { name: "Review update shared-reviewer" }).click();
+    await page.getByRole("button", { name: "Update shared-reviewer" }).click();
     await page
       .getByRole("dialog", { name: "Update preview for shared-reviewer" })
       .waitFor({ state: "visible" });
