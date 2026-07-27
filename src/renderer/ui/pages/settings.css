@@ -618,7 +618,7 @@
 }
 
 .settings-preference-row > .ui-switch,
-.settings-preference-row > .settings-interval-control {
+.settings-preference-row > .settings-interval-field {
   justify-self: end;
 }
 
@@ -743,6 +743,12 @@
 
 .metric-strip--compact .metric-tile strong {
   font-size: 20px;
+}
+
+.settings-interval-field {
+  display: grid;
+  gap: 4px;
+  width: 138px;
 }
 
 .settings-interval-control {
@@ -965,6 +971,11 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 17px;
+}
+
+.workspace-sync-disconnected.is-error .settings-service-icon,
+.workspace-sync-disconnected.is-error strong {
+  color: var(--danger);
 }
 
 .workspace-sync-status {

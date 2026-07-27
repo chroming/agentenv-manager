@@ -231,3 +231,9 @@ button:disabled {
   gap: 8px;
   grid-column: 2;
 }
+
+.field-error {
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.4;
+}

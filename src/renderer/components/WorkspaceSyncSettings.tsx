@@ -77,6 +77,7 @@ export const WorkspaceSyncSettings = () => {
   const [acceptLive, setAcceptLive] = useState(false);
   const [working, setWorking] = useState<"connect" | "check" | "review" | "update" | "publish" | "recover" | "disconnect">();
   const [error, setError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const dialogRef = useRef<HTMLElement>(null);
   const reviewButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -101,6 +102,8 @@ export const WorkspaceSyncSettings = () => {
   useEffect(() => {
     let active = true;
     const load = async () => {
+      setLoading(true);
+      setError("");
       try {
         const next = await window.agentEnv.readWorkspaceSyncStatus();
         if (!active) return;
@@ -110,19 +113,32 @@ export const WorkspaceSyncSettings = () => {
           setRepository(next.connection.repository);
           setBranch(next.connection.branch);
           setStatus({ ...next, working: "checking" });
-          const checked = await window.agentEnv.checkWorkspaceSync();
-          if (active) setStatus(checked);
+          try {
+            const checked = await window.agentEnv.checkWorkspaceSync();
+            if (active) setStatus(checked);
+          } catch (unknownError) {
+            if (!active) return;
+            setStatus({
+              ...next,
+              kind: next.kind === "recovery-required" ? "recovery-required" : "error",
+              message: undefined,
+              working: undefined
+            });
+            setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+          }
         }
       } catch (unknownError) {
         if (active) {
+          const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+          setStatus({ ...emptyStatus, kind: "error", message });
           setLoading(false);
-          setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+          setError(message);
         }
       }
     };
     void load();
     return () => { active = false; };
-  }, []);
+  }, [loadAttempt]);
 
   useModalDialog({
     open: Boolean(review),
@@ -203,7 +219,13 @@ export const WorkspaceSyncSettings = () => {
   };
   const check = async () => {
     const next = await run("check", () => window.agentEnv.checkWorkspaceSync());
-    if (next) setStatus(next);
+    if (next) {
+      setStatus(next);
+    } else {
+      setStatus((current) => current.kind === "recovery-required"
+        ? current
+        : { ...current, kind: "error", message: undefined, working: undefined });
+    }
   };
   const openReview = async () => {
     const next = await run("review", () => window.agentEnv.reviewWorkspaceSync());
@@ -262,6 +284,23 @@ export const WorkspaceSyncSettings = () => {
         <div className="inline-state inline-state--loading workspace-sync-loading" role="status">
           <span className="inline-state__icon" aria-hidden="true" />
           <span>{t("Loading")}</span>
+        </div>
+      ) : !connected && status.kind === "error" ? (
+        <div className="workspace-sync-disconnected is-error" role="alert">
+          <span className="settings-service-icon" aria-hidden="true">
+            <TriangleAlert size={19} />
+          </span>
+          <span>
+            <strong>{t("Could not check")}</strong>
+            <small>{error || status.message}</small>
+          </span>
+          <Button
+            variant="secondary"
+            icon={<RefreshCw />}
+            onClick={() => setLoadAttempt((current) => current + 1)}
+          >
+            {t("Retry")}
+          </Button>
         </div>
       ) : !connected ? (
         <>
@@ -329,7 +368,9 @@ export const WorkspaceSyncSettings = () => {
           </div>
         </>
       )}
-      {error || status.message ? <div className="workspace-sync-error" role="alert">{error || status.message}</div> : null}
+      {connected && (error || status.message) ? (
+        <div className="workspace-sync-error" role="alert">{error || status.message}</div>
+      ) : null}
 
       {review ? (
         <ModalFrame

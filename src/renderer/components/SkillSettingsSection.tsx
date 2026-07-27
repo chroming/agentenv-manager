@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { AgentEnvSettings } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { Switch } from "./ui";
@@ -14,6 +15,32 @@ export const SkillSettingsSection = ({
   onChange
 }: SkillSettingsSectionProps) => {
   const { t } = useI18n();
+  const [intervalDraft, setIntervalDraft] = useState(
+    String(settings.skillAutoCheckIntervalMinutes)
+  );
+  const [intervalError, setIntervalError] = useState(false);
+
+  useEffect(() => {
+    setIntervalDraft(String(settings.skillAutoCheckIntervalMinutes));
+    setIntervalError(false);
+  }, [settings.skillAutoCheckIntervalMinutes]);
+
+  const commitInterval = () => {
+    const interval = Number(intervalDraft);
+    const valid =
+      intervalDraft.trim().length > 0 &&
+      Number.isInteger(interval) &&
+      interval >= 5 &&
+      interval <= 1440;
+    if (!valid) {
+      setIntervalError(true);
+      return;
+    }
+    setIntervalError(false);
+    if (interval !== settings.skillAutoCheckIntervalMinutes) {
+      onChange({ skillAutoCheckIntervalMinutes: interval });
+    }
+  };
 
   return (
     <section
@@ -82,21 +109,40 @@ export const SkillSettingsSection = ({
             <strong>{t("Check interval")}</strong>
             <small>{t("Used only while automatic checks are enabled.")}</small>
           </span>
-          <span className="settings-interval-control">
-            <input
-              aria-label={t("Skill auto check interval minutes")}
-              min={5}
-              max={1440}
-              step={5}
-              type="number"
-              disabled={!settings.skillAutoCheckEnabled || busy}
-              value={settings.skillAutoCheckIntervalMinutes}
-              onChange={(event) =>
-                onChange({
-                  skillAutoCheckIntervalMinutes: Number(event.currentTarget.value)
-                })}
-            />
-            <span aria-hidden="true">{t("min")}</span>
+          <span className="settings-interval-field">
+            <span className="settings-interval-control">
+              <input
+                aria-describedby={intervalError ? "skill-check-interval-error" : undefined}
+                aria-invalid={intervalError}
+                aria-label={t("Skill auto check interval minutes")}
+                min={5}
+                max={1440}
+                step={5}
+                type="number"
+                disabled={!settings.skillAutoCheckEnabled || busy}
+                value={intervalDraft}
+                onBlur={commitInterval}
+                onChange={(event) => {
+                  setIntervalDraft(event.currentTarget.value);
+                  setIntervalError(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  } else if (event.key === "Escape") {
+                    setIntervalDraft(String(settings.skillAutoCheckIntervalMinutes));
+                    setIntervalError(false);
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+              <span aria-hidden="true">{t("min")}</span>
+            </span>
+            {intervalError ? (
+              <small className="field-error" id="skill-check-interval-error">
+                {t("Enter a value from 5 to 1440.")}
+              </small>
+            ) : null}
           </span>
         </label>
       </div>

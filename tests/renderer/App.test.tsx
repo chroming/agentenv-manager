@@ -1674,7 +1674,9 @@ describe("App", () => {
     render(<App />);
 
     await openSettingsCategory("Agents");
-    fireEvent.click(screen.getByRole("switch", { name: "Turn off OpenCode" }));
+    const agentSwitch = screen.getByRole("switch", { name: "Turn off OpenCode" });
+    agentSwitch.focus();
+    fireEvent.click(agentSwitch);
 
     const dialog = screen.getByRole("dialog", { name: "Turn off OpenCode?" });
     expect(dialog).toHaveTextContent("Existing managed files stay in place");
@@ -1694,6 +1696,7 @@ describe("App", () => {
       enabledTargetIds
     }));
     await waitFor(() => expect(screen.queryByText("Saving...")).not.toBeInTheDocument());
+    await waitFor(() => expect(agentSwitch).toHaveFocus());
   });
 
   it("keeps an Agent enabled while recovery is required", async () => {

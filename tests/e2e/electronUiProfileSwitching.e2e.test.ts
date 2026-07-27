@@ -6956,7 +6956,11 @@ describe("Electron UI profile switching e2e", () => {
     await autoCheck.click();
     await expect.poll(() => autoCheck.getAttribute("aria-checked")).toBe("true");
     await expect.poll(() => interval.isEnabled()).toBe(true);
-    await interval.fill("15");
+    await interval.click();
+    await interval.press("Meta+A");
+    await interval.pressSequentially("15");
+    await expect.poll(() => interval.inputValue()).toBe("15");
+    await interval.press("Tab");
     await expect
       .poll(async () =>
         JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8"))
@@ -8623,7 +8627,7 @@ describe("Electron UI profile switching e2e", () => {
       rows.map((row) => {
         const copy = row.querySelector<HTMLElement>(".settings-preference-copy")!;
         const control = row.querySelector<HTMLElement>(
-          ":scope > select, :scope > .settings-readonly-value, :scope > .settings-interval-control, .settings-preference-copy .ui-switch"
+          ":scope > select, :scope > .settings-readonly-value, :scope > .settings-interval-field, .settings-preference-copy .ui-switch"
         )!;
         const nestedSwitch = control.matches(".settings-preference-copy .ui-switch");
         const rowBox = row.getBoundingClientRect();

@@ -872,7 +872,7 @@ export const SkillSourceView = ({
                   <span className="skill-source-checked">
                     {group.displayName
                       ? `${sourceRepositoryLabel(group.repository)} · ${sourceScopeLabel(group)}`
-                      : group.ref}
+                      : sourceScopeLabel(group)}
                   </span>
                 </div>
                 <div className="skill-source-counts" aria-label={t("Source summary")}>

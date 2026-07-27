@@ -1,5 +1,5 @@
 import { LoaderCircle, Monitor, TriangleAlert } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   TargetDescriptor,
   TargetInfo,
@@ -53,9 +53,22 @@ export const AgentSettingsSection = ({
   const dialogRef = useRef<HTMLElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const pendingReturnFocusRef = useRef<HTMLElement | null>(null);
   const enabledIds = new Set(enabledAgentIds);
   const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
   const statesById = new Map(agentStates.map((state) => [state.targetId, state]));
+
+  useEffect(() => {
+    const returnTarget = pendingReturnFocusRef.current;
+    if (pendingAgentId || !returnTarget) return undefined;
+    pendingReturnFocusRef.current = null;
+    const frame = window.requestAnimationFrame(() => {
+      if (returnTarget.isConnected && !returnTarget.matches(":disabled")) {
+        returnTarget.focus({ preventScroll: true });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingAgentId]);
 
   useModalDialog({
     open: Boolean(disableCandidate),
@@ -246,6 +259,7 @@ export const AgentSettingsSection = ({
                 disabled={busy}
                 onClick={() => {
                   const agentId = disableCandidate.id;
+                  pendingReturnFocusRef.current = returnFocusRef.current;
                   setDisableCandidate(undefined);
                   void commitChange(agentId, false);
                 }}

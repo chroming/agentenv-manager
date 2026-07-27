@@ -211,6 +211,38 @@ describe("SkillSourceView", () => {
       .toHaveValue("testing");
   });
 
+  it("keeps repository scopes visibly distinct when source names share a prefix", () => {
+    const secondGroup: SkillSourceGroupView = {
+      ...group,
+      sourceId: "source-product",
+      canonicalLink: "https://github.com/acme/skills/tree/main/product",
+      directory: "product",
+      counts: { total: 1, updates: 0, new: 0, removed: 0 },
+      candidates: []
+    };
+    render(
+      <SkillSourceView
+        active
+        groups={[group, secondGroup]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={vi.fn().mockResolvedValue(true)}
+        onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("main · /engineering")).toBeInTheDocument();
+    expect(screen.getByText("main · /product")).toBeInTheDocument();
+  });
+
   it("keeps routine-check scope separate from source type and result filters", () => {
     const manualLocalGroup: SkillSourceGroupView = {
       ...group,
