@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createConversationLauncher,
+  terminalOpenArgumentsFor,
   terminalScriptFor
 } from "../../../src/main/conversations/conversationLauncher";
 
@@ -41,13 +42,16 @@ describe("conversation launcher", () => {
     })).toThrow("Invalid launch environment name");
   });
 
-  it("passes only a temporary script path to Terminal", async () => {
+  it("passes only a temporary script path to the selected terminal", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-conversation-launch-"));
     let openedPath = "";
+    let openedTerminal = "";
     const launcher = createConversationLauncher({
       artifactDir: root,
-      openTerminal: async (path) => {
+      terminalPreference: async () => "ghostty",
+      openTerminal: async (path, terminal) => {
         openedPath = path;
+        openedTerminal = terminal;
       }
     });
     const privateContext = "private transcript content";
@@ -58,7 +62,19 @@ describe("conversation launcher", () => {
     });
 
     expect(openedPath).toMatch(/\.command$/);
+    expect(openedTerminal).toBe("ghostty");
     expect(openedPath).not.toContain(privateContext);
     expect(await readFile(openedPath, "utf8")).not.toContain(privateContext);
+  });
+
+  it("delegates to the macOS default handler or explicitly opens Ghostty", () => {
+    expect(terminalOpenArgumentsFor("default", "/tmp/launch.command")).toEqual([
+      "/tmp/launch.command"
+    ]);
+    expect(terminalOpenArgumentsFor("ghostty", "/tmp/launch.command")).toEqual([
+      "-a",
+      "Ghostty",
+      "/tmp/launch.command"
+    ]);
   });
 });

@@ -32,6 +32,7 @@ describe("settings store", () => {
 
     expect(await store.readSettings()).toEqual({
       locale: "system",
+      conversationTerminal: "default",
       skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
@@ -41,6 +42,7 @@ describe("settings store", () => {
 
     await store.updateSettings({
       locale: "zh_TW",
+      conversationTerminal: "ghostty",
       skillSyncMethod: "copy",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,
@@ -50,6 +52,7 @@ describe("settings store", () => {
 
     expect(await store.readSettings()).toEqual({
       locale: "zh_TW",
+      conversationTerminal: "ghostty",
       skillSyncMethod: "copy",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: false,

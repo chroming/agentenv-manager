@@ -1,3 +1,4 @@
+import { LockKeyhole } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import type { ProfileResourceMode } from "../../shared/types";
 import { useI18n } from "../i18n";
@@ -84,7 +85,9 @@ export const ProfileResourcePolicyControl = ({
         className="profile-resource-policy__status"
         role="status"
         aria-label={label}
+        title={status ?? t("Agent controlled")}
       >
+        <LockKeyhole size={13} strokeWidth={2} aria-hidden="true" />
         {status ?? t("Agent controlled")}
       </span>
     );

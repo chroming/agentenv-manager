@@ -236,6 +236,15 @@ const sqliteLocation = (locator: string) => {
   };
 };
 
+const readCliMessages = async (
+  executablePath: string,
+  candidate: AgentConversationCandidate
+) => parseOpenCodeExportMessages(await runJsonCommand(executablePath, [
+  "export",
+  candidate.providerSession?.id ?? candidate.recordId,
+  "--sanitize"
+]));
+
 const readLegacyMessages = async (
   candidate: AgentConversationCandidate
 ): Promise<ConversationMessage[]> => {
@@ -333,29 +342,40 @@ export const createOpenCodeConversationCapability = (): AgentConversationCapabil
   read: async ({ executablePath }, candidate) => {
     if (candidate.source.locator.startsWith(SQLITE_PREFIX)) {
       const location = sqliteLocation(candidate.source.locator);
-      const messages = (await readOpenCodeSqliteMessages(
-        location.dbPath,
-        location.sessionId
-      )).map((message): ConversationMessage => ({
-        id: message.id,
-        role: message.role,
-        text: message.text,
-        createdAt: message.created
-          ? isoDate(message.created, new Date(candidate.updatedAt))
-          : undefined
-      }));
+      let messages: ConversationMessage[];
+      try {
+        messages = (await readOpenCodeSqliteMessages(
+          location.dbPath,
+          location.sessionId
+        )).map((message): ConversationMessage => ({
+          id: message.id,
+          role: message.role,
+          text: message.text,
+          createdAt: message.created
+            ? isoDate(message.created, new Date(candidate.updatedAt))
+            : undefined
+        }));
+      } catch (databaseError) {
+        if (!executablePath) throw databaseError;
+        try {
+          messages = await readCliMessages(executablePath, candidate);
+        } catch (cliError) {
+          throw new Error(
+            `OpenCode history database could not be read (${
+              databaseError instanceof Error ? databaseError.message : String(databaseError)
+            }); command fallback also failed (${
+              cliError instanceof Error ? cliError.message : String(cliError)
+            })`
+          );
+        }
+      }
       return createConversationDetail(agent, candidate, messages);
     }
     if (!candidate.source.locator.startsWith(CLI_PREFIX)) {
       return createConversationDetail(agent, candidate, await readLegacyMessages(candidate));
     }
     if (!executablePath) throw new Error("OpenCode command is unavailable");
-    const exported = await runJsonCommand(executablePath, [
-      "export",
-      candidate.providerSession?.id ?? candidate.recordId,
-      "--sanitize"
-    ]);
-    return createConversationDetail(agent, candidate, parseOpenCodeExportMessages(exported));
+    return createConversationDetail(agent, candidate, await readCliMessages(executablePath, candidate));
   },
   openOriginal: ({ executablePath }, candidate) => executablePath
     ? {

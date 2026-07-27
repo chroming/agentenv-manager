@@ -43,8 +43,9 @@ const parseRecord = (value) => {
 };
 
 const openDatabase = (path) => {
-  const db = new DatabaseSync(path, { readOnly: true });
+  const db = new DatabaseSync(path, { readOnly: true, timeout: 5000 });
   db.exec("PRAGMA query_only = ON");
+  db.exec("PRAGMA busy_timeout = 5000");
   if (!hasTable(db, "session")) {
     db.close();
     throw new Error("OpenCode database has no session table");
@@ -163,7 +164,7 @@ const runWorker = <T>(request: WorkerRequest): Promise<T> =>
     const timeout = setTimeout(() => {
       void worker.terminate();
       settle(() => reject(new Error("OpenCode history read timed out")));
-    }, 15_000);
+    }, 20_000);
     worker.once("message", (result: { ok: boolean; value?: T; error?: string }) => {
       void worker.terminate();
       settle(() => {
@@ -182,8 +183,42 @@ const runWorker = <T>(request: WorkerRequest): Promise<T> =>
     worker.postMessage(request);
   });
 
+const databaseQueues = new Map<string, Promise<unknown>>();
+const databaseBusyUntil = new Map<string, number>();
+
+const runWorkerWithBusyCooldown = async <T>(request: WorkerRequest): Promise<T> => {
+  if ((databaseBusyUntil.get(request.dbPath) ?? 0) > Date.now()) {
+    throw new Error("OpenCode history database is locked");
+  }
+  try {
+    const value = await runWorker<T>(request);
+    databaseBusyUntil.delete(request.dbPath);
+    return value;
+  } catch (error) {
+    if (/database is (?:locked|busy)|SQLITE_BUSY/i.test(
+      error instanceof Error ? error.message : String(error)
+    )) {
+      databaseBusyUntil.set(request.dbPath, Date.now() + 5_000);
+    }
+    throw error;
+  }
+};
+
+const runDatabaseWorker = <T>(request: WorkerRequest): Promise<T> => {
+  const previous = databaseQueues.get(request.dbPath) ?? Promise.resolve();
+  const operation = previous
+    .catch(() => undefined)
+    .then(() => runWorkerWithBusyCooldown<T>(request));
+  databaseQueues.set(request.dbPath, operation);
+  return operation.finally(() => {
+    if (databaseQueues.get(request.dbPath) === operation) {
+      databaseQueues.delete(request.dbPath);
+    }
+  });
+};
+
 export const listOpenCodeSqliteSessions = (dbPath: string) =>
-  runWorker<OpenCodeSqliteSession[]>({ type: "list", dbPath });
+  runDatabaseWorker<OpenCodeSqliteSession[]>({ type: "list", dbPath });
 
 export const readOpenCodeSqliteMessages = (dbPath: string, sessionId: string) =>
-  runWorker<OpenCodeSqliteMessage[]>({ type: "read", dbPath, sessionId });
+  runDatabaseWorker<OpenCodeSqliteMessage[]>({ type: "read", dbPath, sessionId });

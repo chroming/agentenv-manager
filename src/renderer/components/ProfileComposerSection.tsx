@@ -66,8 +66,9 @@ export const ProfileComposerSection = ({
         "profile-composer-section",
         countSummary ? "has-scope-summary" : "",
         expanded ? "is-expanded" : "",
-        policy === "disable" ? "is-resource-disabled" : "",
-        policy === "ignore" ? "is-unmanaged" : ""
+        !policyDisabled && policy === "disable" ? "is-resource-disabled" : "",
+        policyDisabled ? "is-agent-controlled" : "",
+        !policyDisabled && policy === "ignore" ? "is-unmanaged" : ""
       ].filter(Boolean).join(" ")}
       data-profile-composer-id={id}
     >

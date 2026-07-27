@@ -569,6 +569,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     }),
     readSettings: vi.fn().mockResolvedValue({
       locale: "system",
+      conversationTerminal: "default",
       skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
@@ -577,6 +578,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     }),
     updateSettings: vi.fn().mockImplementation(async (input) => ({
       locale: input.locale ?? "system",
+      conversationTerminal: input.conversationTerminal ?? "default",
       skillSyncMethod: input.skillSyncMethod ?? "symlink",
       skillStorageLocation: input.skillStorageLocation ?? "appData",
       skillAutoCheckEnabled: input.skillAutoCheckEnabled ?? true,
@@ -1555,6 +1557,21 @@ describe("App", () => {
     expect(screen.getByTestId("locale-select")).toBeInTheDocument();
   });
 
+  it("persists the terminal used to open conversations", async () => {
+    const api = installApi();
+    render(<App />);
+
+    await openSettingsCategory("General");
+    fireEvent.change(screen.getByTestId("conversation-terminal-select"), {
+      target: { value: "ghostty" }
+    });
+
+    await waitFor(() =>
+      expect(api.updateSettings).toHaveBeenCalledWith({ conversationTerminal: "ghostty" })
+    );
+    expect(screen.getByTestId("conversation-terminal-select")).toHaveValue("ghostty");
+  });
+
   it("turns Agents off and removes their operational UI", async () => {
     let enabledTargetIds = ["opencode", "codex"];
     const allTargets = [target, codexTarget];
@@ -1565,6 +1582,7 @@ describe("App", () => {
       enabledTargetIds = input.enabledTargetIds ?? enabledTargetIds;
       return {
         locale: "system" as const,
+        conversationTerminal: "default" as const,
         skillSyncMethod: "symlink" as const,
         skillStorageLocation: "appData" as const,
         skillAutoCheckEnabled: true,
@@ -1578,6 +1596,7 @@ describe("App", () => {
       listTargets,
       readSettings: vi.fn().mockResolvedValue({
         locale: "system",
+        conversationTerminal: "default",
         skillSyncMethod: "symlink",
         skillStorageLocation: "appData",
         skillAutoCheckEnabled: true,
@@ -1651,6 +1670,7 @@ describe("App", () => {
     expect(screen.getByText("Saving...")).toBeInTheDocument();
     act(() => settingsUpdate.resolve({
       locale: "system",
+      conversationTerminal: "default",
       skillSyncMethod: "symlink",
       skillStorageLocation: "appData",
       skillAutoCheckEnabled: true,
@@ -1828,7 +1848,11 @@ describe("App", () => {
         screen.getByRole("region", { name: "Profile composer" })
       ).getByRole("button", { name: "MCPs" })
     );
-    expect(await screen.findByText("Agent controlled")).toBeInTheDocument();
+    const agentControlled = await screen.findByText("Agent controlled");
+    expect(agentControlled).toBeInTheDocument();
+    const section = agentControlled.closest(".profile-composer-section");
+    expect(section).toHaveClass("is-agent-controlled");
+    expect(section).not.toHaveClass("is-unmanaged");
     expect(
       screen.queryByLabelText("docs Profile behavior")
     ).not.toBeInTheDocument();

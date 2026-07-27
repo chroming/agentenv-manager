@@ -306,6 +306,7 @@ const RECENT_UPDATE_CHECK_TTL_MS = 2 * 60 * 1000;
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
+  conversationTerminal: "default",
   skillSyncMethod: "symlink",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,

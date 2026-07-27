@@ -89,6 +89,26 @@ const mapWithConcurrency = async <T, R>(
 const yieldToMainLoop = () =>
   new Promise<void>((resolve) => setImmediate(resolve));
 
+const compactRefreshFailures = (
+  failures: ConversationRefreshResult["failures"]
+): ConversationRefreshResult["failures"] => {
+  const busyByAgent = new Map<string, number>();
+  const remaining = failures.filter((failure) => {
+    if (!/database is (?:locked|busy)|SQLITE_BUSY/i.test(failure.message)) return true;
+    busyByAgent.set(failure.agentId, (busyByAgent.get(failure.agentId) ?? 0) + 1);
+    return false;
+  });
+  return [
+    ...remaining,
+    ...[...busyByAgent].map(([agentId, count]) => ({
+      agentId,
+      message: count === 1
+        ? "History database is busy. The last indexed conversation was kept; try Refresh again shortly."
+        : `${count} conversations could not be refreshed because the history database is busy. Their last indexed content was kept; try Refresh again shortly.`
+    }))
+  ];
+};
+
 const formatContinuation = (
   detail: ConversationDetail
 ): {
@@ -179,7 +199,9 @@ export const createConversationService = async (options: {
   const index = options.indexStore ??
     await createConversationIndexStore(options.paths.conversationIndexPath);
   const launcher = options.launcher ?? createConversationLauncher({
-    artifactDir: options.paths.conversationHandoffDir
+    artifactDir: options.paths.conversationHandoffDir,
+    terminalPreference: async () =>
+      (await options.settingsStore.readSettings()).conversationTerminal
   });
   const pending = new Map<string, PendingContinuation>();
   const now = options.now ?? Date.now;
@@ -326,7 +348,7 @@ export const createConversationService = async (options: {
         }
         await yieldToMainLoop();
       });
-      return { indexed, unchanged, removed, failures };
+      return { indexed, unchanged, removed, failures: compactRefreshFailures(failures) };
     },
     openOriginal: async (id) => {
       const record = index.record(id);

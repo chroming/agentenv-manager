@@ -65,21 +65,24 @@
 
 .profile-resource-policy__status {
   align-items: center;
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
   color: var(--muted);
   display: inline-flex;
   font-size: 11px;
   font-weight: var(--font-weight-regular);
+  gap: 6px;
   height: 30px;
+  justify-self: end;
   margin: 0 8px 0 0;
   min-width: 0;
   overflow: hidden;
-  padding: 0 8px;
+  padding: 0 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
   width: auto;
+}
+
+.profile-resource-policy__status svg {
+  flex: 0 0 auto;
 }
 
 .profile-composer-section__policy-note {
@@ -152,6 +155,26 @@
   > .profile-composer-section__header
   .profile-composer-section__summary {
   opacity: 0.68;
+}
+
+.profile-composer-section.is-agent-controlled > .profile-composer-section__header {
+  background: transparent;
+  box-shadow: none;
+}
+
+.profile-composer-section.is-agent-controlled.is-expanded
+  > .profile-composer-section__header {
+  background: var(--profile-expanded-trigger);
+  box-shadow: inset 2px 0 0 #9aa8bb;
+}
+
+.profile-composer-section.is-agent-controlled
+  > .profile-composer-section__header
+  .profile-composer-section__icon,
+.profile-composer-section.is-agent-controlled
+  > .profile-composer-section__header
+  .profile-composer-section__chevron {
+  color: #6f7f94;
 }
 
 .profile-composer-section.is-resource-disabled > .profile-composer-section__header,

@@ -982,6 +982,7 @@ export interface NativeMcpInspection {
 
 export interface AgentEnvSettings {
   locale: AppLocale;
+  conversationTerminal: "default" | "ghostty";
   skillSyncMethod: SkillSyncMethod;
   skillStorageLocation: SkillStorageLocation;
   skillAutoCheckEnabled: boolean;

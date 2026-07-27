@@ -1,4 +1,4 @@
-import type { AppLocale } from "../../shared/types";
+import type { AgentEnvSettings, AppLocale } from "../../shared/types";
 import { useI18n } from "../i18n";
 
 export type SettingsCategory = "general" | "agents" | "skills" | "connections" | "data";
@@ -60,10 +60,16 @@ export const SettingsCategoryTabs = ({
 
 export const GeneralSettingsSection = ({
   locale,
-  onLocaleChange
+  onLocaleChange,
+  conversationTerminal,
+  onConversationTerminalChange
 }: {
   locale: AppLocale;
   onLocaleChange(locale: AppLocale): void;
+  conversationTerminal: AgentEnvSettings["conversationTerminal"];
+  onConversationTerminalChange(
+    terminal: AgentEnvSettings["conversationTerminal"]
+  ): void;
 }) => {
   const { t } = useI18n();
   return (
@@ -87,6 +93,23 @@ export const GeneralSettingsSection = ({
             <option value="en">{t("English")}</option>
             <option value="zh_CN">{t("Simplified Chinese")}</option>
             <option value="zh_TW">{t("Traditional Chinese")}</option>
+          </select>
+        </label>
+        <label className="settings-preference-row">
+          <span className="settings-preference-copy">
+            <strong>{t("Conversation terminal")}</strong>
+            <small>{t("Used when opening or continuing CLI conversations.")}</small>
+          </span>
+          <select
+            data-testid="conversation-terminal-select"
+            aria-label={t("Conversation terminal")}
+            value={conversationTerminal}
+            onChange={(event) => onConversationTerminalChange(
+              event.currentTarget.value as AgentEnvSettings["conversationTerminal"]
+            )}
+          >
+            <option value="default">{t("Default terminal")}</option>
+            <option value="ghostty">{t("Ghostty")}</option>
           </select>
         </label>
       </div>

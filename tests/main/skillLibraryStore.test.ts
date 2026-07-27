@@ -2313,6 +2313,7 @@ description: >
     const settingsStore = {
       readSettings: vi.fn(async () => ({
         locale: "system" as const,
+        conversationTerminal: "default" as const,
         skillSyncMethod: syncMethod,
         skillStorageLocation: "appData" as const,
         skillAutoCheckEnabled: true,

@@ -8,6 +8,7 @@ import { pathEntryExists, replacePathAtomically, writeAtomic } from "./fileUtils
 
 export const SettingsSchema = z.object({
   locale: z.enum(["system", "en", "zh_CN", "zh_TW"]).default("system"),
+  conversationTerminal: z.enum(["default", "ghostty"]).default("default"),
   skillSyncMethod: z.enum(["symlink", "copy", "auto"]).default("symlink"),
   skillStorageLocation: z.enum(["appData", "agents"]).default("appData"),
   skillAutoCheckEnabled: z.boolean().default(true),
@@ -22,6 +23,7 @@ export const parseSettingsData = (value: unknown): AgentEnvSettings =>
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
+  conversationTerminal: "default",
   skillSyncMethod: "symlink",
   skillStorageLocation: "appData",
   skillAutoCheckEnabled: true,

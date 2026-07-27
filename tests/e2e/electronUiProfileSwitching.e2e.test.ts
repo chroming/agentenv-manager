@@ -5973,14 +5973,33 @@ describe("Electron UI profile switching e2e", () => {
       name: "MCPs application policy for Claude Code"
     });
     expect(await policyStatus.textContent()).toContain("Agent controlled");
-    await expectTextFits(policyStatus);
-    const policyGeometry = await policyStatus.evaluate((element) => {
-      return {
-        scrollWidth: element.scrollWidth,
-        clientWidth: element.clientWidth
-      };
-    });
-    expect(policyGeometry.scrollWidth).toBeLessThanOrEqual(policyGeometry.clientWidth);
+    for (const viewport of [
+      { width: 1180, height: 728 },
+      { width: 920, height: 620 }
+    ]) {
+      await resizeAppWindow(page, viewport.width, viewport.height);
+      await expectTextFits(policyStatus);
+      const policyGeometry = await policyStatus.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          borderWidth: style.borderTopWidth,
+          backgroundColor: style.backgroundColor
+        };
+      });
+      expect(policyGeometry.scrollWidth).toBeLessThanOrEqual(policyGeometry.clientWidth);
+      expect(policyGeometry.borderWidth).toBe("0px");
+      expect(policyGeometry.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+      const policyBox = await policyStatus.boundingBox();
+      const sectionBox = await page.locator(
+        '[data-profile-composer-id="mcp"] > .profile-composer-section__header'
+      ).boundingBox();
+      expect(policyBox).not.toBeNull();
+      expect(sectionBox).not.toBeNull();
+      expect(Math.abs(sectionBox!.x + sectionBox!.width - 8 - (policyBox!.x + policyBox!.width)))
+        .toBeLessThanOrEqual(1);
+    }
     expect(await editor.locator("select").count()).toBe(0);
 
     await previewAndApply(page, "Claude Code");
@@ -7129,6 +7148,22 @@ describe("Electron UI profile switching e2e", () => {
           .evaluate((button) => getComputedStyle(button).backgroundColor)
       )
       .not.toBe("rgb(0, 122, 255)");
+  }, 30_000);
+
+  it("persists the preferred conversation terminal", async () => {
+    const { appDataRoot, page } = await launchApp();
+
+    await openSettingsCategory(page, "General");
+    const terminalSelect = page.getByTestId("conversation-terminal-select");
+    await terminalSelect.selectOption("ghostty");
+    await page.getByRole("status").filter({ hasText: "Settings saved" }).waitFor();
+    await expect
+      .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
+      .toMatchObject({ conversationTerminal: "ghostty" });
+
+    await page.reload();
+    await openSettingsCategory(page, "General");
+    await expect.poll(() => terminalSelect.inputValue()).toBe("ghostty");
   }, 30_000);
 
   it("reports an offline GitHub update check without offering sign-in as the fix", async () => {

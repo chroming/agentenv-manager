@@ -96,6 +96,7 @@ const sourceDetail = (
 const settingsStore: SettingsStore = {
   readSettings: async () => ({
     locale: "system",
+    conversationTerminal: "default",
     skillSyncMethod: "symlink",
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: true,
@@ -172,6 +173,69 @@ describe("conversation service", () => {
       agentCounts: { codex: 1 }
     });
     expect(await readFile(history, "utf8")).toBe(before);
+    service.dispose();
+  });
+
+  it("coalesces repeated database lock failures and keeps the last-good index", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-conversation-lock-"));
+    const paths = createPaths({
+      appDataRoot: join(root, "data"),
+      homeDir: join(root, "home"),
+      conversationIndexPath: join(root, "cache", "conversations.sqlite"),
+      conversationHandoffDir: join(root, "cache", "handoffs")
+    });
+    let locked = false;
+    const candidates = () => ["session-1", "session-2"].map((recordId) => ({
+      ...sourceCandidate(join(root, `${recordId}.db`)),
+      recordId,
+      source: {
+        version: locked ? "v2" : "v1",
+        locator: join(root, `${recordId}.db`)
+      },
+      providerSession: {
+        kind: "database" as const,
+        id: recordId,
+        resumeLocator: recordId
+      }
+    }));
+    const opencode = {
+      ...createOpenCodeTargetAdapter(),
+      conversations: {
+        historyDetail: "full" as const,
+        discover: async () => ({ candidates: candidates(), complete: true }),
+        read: async (
+          _context: AgentConversationContext,
+          candidate: AgentConversationCandidate
+        ) => {
+          if (locked) throw new Error("database is locked");
+          return {
+            ...sourceDetail(),
+            sourceId: candidate.recordId
+          };
+        }
+      }
+    };
+    const service = await createConversationService({
+      paths,
+      targetRegistry: createTargetRegistry([opencode]),
+      targetDiscoveryService: {
+        listTargets: async () => [makeTarget(opencode, paths.homeDir)]
+      },
+      settingsStore,
+      clipboard: { writeText: vi.fn() },
+      launcher: { launch: vi.fn() }
+    });
+
+    await expect(service.refresh()).resolves.toMatchObject({ indexed: 2, failures: [] });
+    locked = true;
+    const refresh = await service.refresh();
+
+    expect(refresh).toMatchObject({ indexed: 0, removed: 0 });
+    expect(refresh.failures).toEqual([{
+      agentId: "opencode",
+      message: expect.stringContaining("2 conversations")
+    }]);
+    expect((await service.list()).items).toHaveLength(2);
     service.dispose();
   });
 

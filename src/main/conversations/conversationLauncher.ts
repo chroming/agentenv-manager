@@ -4,12 +4,15 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import type { ConversationLaunchSpec } from "../targets/types";
+import type { AgentEnvSettings } from "../../shared/types";
 
 const execFileAsync = promisify(execFile);
 
 export interface ConversationLauncher {
   launch(spec: ConversationLaunchSpec): Promise<void>;
 }
+
+type ConversationTerminal = AgentEnvSettings["conversationTerminal"];
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 const environmentName = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -41,19 +44,44 @@ export const terminalScriptFor = (
   `exec ${[spec.executablePath, ...spec.args].map(shellQuote).join(" ")}`
 ].join("\n") + "\n";
 
+export const terminalOpenArgumentsFor = (
+  terminal: ConversationTerminal,
+  scriptPath: string
+) => terminal === "ghostty"
+  ? ["-a", "Ghostty", scriptPath]
+  : [scriptPath];
+
 export const createConversationLauncher = (options: {
   artifactDir: string;
   platform?: NodeJS.Platform;
-  openTerminal?: (scriptPath: string) => Promise<void>;
+  terminalPreference?: () => Promise<ConversationTerminal>;
+  openTerminal?: (scriptPath: string, terminal: ConversationTerminal) => Promise<void>;
 }): ConversationLauncher => {
   const platform = options.platform ?? process.platform;
-  const openTerminal = options.openTerminal ?? (async (scriptPath: string) => {
+  const terminalPreference = options.terminalPreference ?? (async () => "default" as const);
+  const openTerminal = options.openTerminal ?? (async (
+    scriptPath: string,
+    terminal: ConversationTerminal
+  ) => {
     if (platform !== "darwin") {
       throw new Error("Direct conversation launch is currently available on macOS");
     }
-    await execFileAsync("/usr/bin/open", ["-a", "Terminal", scriptPath], {
-      timeout: 10_000
-    });
+    try {
+      await execFileAsync(
+        "/usr/bin/open",
+        terminalOpenArgumentsFor(terminal, scriptPath),
+        { timeout: 10_000 }
+      );
+    } catch (error) {
+      if (terminal === "ghostty") {
+        throw new Error(
+          `Ghostty is not installed or could not open this conversation: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+      throw error;
+    }
   });
   return {
     launch: async (spec) => {
@@ -65,7 +93,7 @@ export const createConversationLauncher = (options: {
       });
       await chmod(scriptPath, 0o700);
       try {
-        await openTerminal(scriptPath);
+        await openTerminal(scriptPath, await terminalPreference());
       } catch (error) {
         await import("node:fs/promises").then(({ rm }) => rm(scriptPath, { force: true }));
         throw error;

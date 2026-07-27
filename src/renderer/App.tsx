@@ -334,6 +334,7 @@ const AppContent = ({
   >({});
   const [skillSettings, setSkillSettings] = useState<AgentEnvSettings>({
     locale: "system",
+    conversationTerminal: "default",
     skillSyncMethod: "symlink",
     skillStorageLocation: "appData",
     skillAutoCheckEnabled: true,
@@ -4800,6 +4801,9 @@ const AppContent = ({
               <GeneralSettingsSection
                 locale={skillSettings.locale}
                 onLocaleChange={(locale) => updateSkillSettings({ locale })}
+                conversationTerminal={skillSettings.conversationTerminal}
+                onConversationTerminalChange={(conversationTerminal) =>
+                  updateSkillSettings({ conversationTerminal })}
               />
             ) : null}
             {settingsCategory === "agents" ? (
