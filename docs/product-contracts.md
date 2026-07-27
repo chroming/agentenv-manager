@@ -675,7 +675,7 @@ A Preview becomes stale when any of these changes:
 - Referenced enabled Library Skill content or a native MCP definition inspected by the selected Target's managed policy.
 - Any live file or resource included in the plan.
 - Deployment state.
-- Selected Target.
+- Selected Target or the adapter-resolved configuration, runtime, Instructions, MCP, Agent, or Skill paths for that Target.
 
 Skill inventory freshness is a semantic projection, not a fingerprint of every discovered Skill. It includes exact Profile destinations, relevant runtime-name conflicts, Profile-referenced resources, AgentEnv-owned cleanup candidates, and shared compatibility facts used by the plan. An unrelated local Skill that cannot change the reviewed result MUST NOT stale Apply.
 
@@ -694,7 +694,7 @@ Status: stale checks and no-op detection are `Implemented`.
 
 Apply means complete replacement of the AgentEnv-managed portion of one Target with one saved Profile.
 
-Instructions and dedicated Skill deployments may be fully AgentEnv-owned paths. Agent native configuration remains shared and Agent-owned except for explicit sparse MCP activation fields. OpenCode may patch only `mcp.<name>.enabled`; Codex may patch only `mcp_servers.<name>.enabled`; Trae CLI may patch only an existing user MCP's `disabled` field in its current user YAML or JSON source. Claude Code, Antigravity, and any adapter without a verified activation field MUST NOT write MCP configuration.
+Instructions and dedicated Skill deployments may be fully AgentEnv-owned paths. Agent native configuration remains shared and Agent-owned except for explicit sparse MCP activation fields. OpenCode may patch only `mcp.<name>.enabled`; Codex may patch only `mcp_servers.<name>.enabled`; Trae CLI V2 may patch only `mcp_servers.<name>.enabled` in `traecli.toml`, while its Legacy layout may patch only an existing MCP's `disabled` field in `traecli.yaml`. Claude Code, Antigravity, and any adapter without a verified activation field MUST NOT write MCP configuration.
 
 When the selected Target's MCP policy is `Keep current`, Apply MUST preserve its configuration byte-for-byte, omit the path from Preview freshness and Backup, and clear prior MCP ownership metadata. When the policy is `Use Profile` or `Turn off`, the adapter parses the current file, patches only named existing activation fields, preserves every definition and unknown field, and includes that file in freshness and Backup only when a semantic change is planned. Configuration files MUST NOT be recorded as whole-file AgentEnv-managed resources.
 
@@ -1266,18 +1266,33 @@ the Antigravity desktop application is a separate product and is not sufficient.
 MCP names from `~/.gemini/config/mcp_config.json` without mutating that file. Secret-bearing headers, OAuth configuration, literal
 environment values, and all other MCP definition fields remain Agent-owned.
 
-Trae CLI's implemented global scope manages `~/.trae/AGENTS.md` and
-`~/.trae/skills`. It observes the documented user aliases `~/.coco/skills` and
-`~/.trae-cn/skills` without deploying into them; additional `AGENTS.md` aliases under
-`~/.coco`, `~/.trae-cn`, and `~/.agents` remain Agent-owned and are disclosed during
-Capture and Preview. Readiness accepts the unambiguous official command aliases `traecli`,
-`trae-cli`, and `trae-agent`; the short `ta` alias is not authoritative because of collision risk.
-AgentEnv discovers user MCP definitions from the current CLI file `~/.trae/trae_cli.yaml`
-and `~/.trae/mcp.json`. A unique selected server MAY change only its `disabled` scalar.
-The documented alternate `~/.trae/traecli.yaml` is read-only. A same-name server in more
-than one user source is Agent-controlled and blocks a persisted Profile switch until the user
-keeps one definition or chooses `Unchanged`. MCP command, URL, headers, environment,
-credentials, unknown fields, project sources, plugins, and built-ins remain Agent-owned.
+Trae CLI uses one internal integration with V2-first layout resolution. `TRAE_HOME`, when
+available to the application, selects the configuration and shared-resource root; otherwise it
+defaults to `~/.trae`. `TRAECLI_HOME` selects the V2 runtime root; otherwise that root is
+`<TRAE_HOME>/cli`. The integration resolves V2 first when `traecli.toml`, a V2 runtime history or
+state marker, or either explicit Home variable is present. Only when no V2 evidence exists and
+`traecli.yaml` is present does it resolve the Legacy layout; an otherwise fresh installation
+defaults to V2. If both layouts exist, V2 is active and the Legacy config remains Agent-owned.
+
+Both layouts manage the isolated instruction file `~/.trae/rules/agentenv-manager.md` and
+dedicated Skills under `~/.trae/skills`. Existing `~/.trae/AGENTS.md`, the inactive version config,
+and the obsolete `~/.trae/trae_cli.yaml` path are capture fallbacks or disclosed outside resources;
+they are never startup evidence or silent mutation targets. Readiness accepts the unambiguous
+official command aliases `traecli`, `trae-cli`, and `trae-agent`; the short `ta` alias is not
+authoritative because of collision risk.
+
+V2 discovers MCP names only from `~/.trae/traecli.toml` and may patch only an existing
+`mcp_servers.<name>.enabled` Boolean. Legacy discovers MCP names only from
+`~/.trae/traecli.yaml` and may patch only an existing server's `disabled` Boolean. Definitions,
+commands, URLs, headers, environment, credentials, unknown fields, native named config files,
+project sources, plugins, and built-ins remain Agent-owned.
+
+V2 Conversations reads only `rollout-*.jsonl` from
+`~/.trae/cli/sessions` and `~/.trae/cli/archived_sessions`. It ignores input history, databases,
+logs, memories, plans, tool protocol records, and per-session `.artifacts`. Native resume uses the
+provider session ID, captured working directory, and the exact `TRAE_HOME` and `TRAECLI_HOME`.
+Legacy exposes no Trae CLI conversation history rather than attributing another product's runtime
+files to Trae.
 
 ## 23.1 AgentEnv Data Lifecycle
 
@@ -1505,9 +1520,9 @@ The current machine-readable totals, source commit, deterministic tracked-and-un
 - Target-local import now creates an independent Library copy without changing the source path; shared managed paths deduplicate across Target scans, and auto-ready cleanup groups pass single, bulk, conflict-exclusion, persistence, backup, and responsive-layout coverage.
 - Codex Capture now reuses identical Library Skills and previews a stable alternate ID for different same-name content instead of failing during Save. Same-name writable OpenCode and Claude Code destinations become explicit Preview review items and pass Backup, atomic replacement, ownership, and recovery assertions; Skills CLI and plugin metadata remain read-only evidence.
 - Local Skill cleanup distinguishes Library-managed, outside, kept, and conflict states; consolidation remains transactional, preserves backup history, and never treats a cleanup choice as a Profile Apply omission.
-- Native MCP discovery includes all configured names without copying credential values. OpenCode, Codex, and Trae CLI Apply change only native activation fields, preserve definitions added outside AgentEnv, block an enabled missing definition, treat a disabled missing definition as a no-op, and produce a real no-op when states already match. Trae CLI additionally blocks ambiguous same-name definitions across its user files.
+- Native MCP discovery includes all configured names without copying credential values. OpenCode, Codex, and Trae CLI Apply change only native activation fields, preserve definitions added outside AgentEnv, block an enabled missing definition, treat a disabled missing definition as a no-op, and produce a real no-op when states already match. Trae CLI tests cover V2 TOML and Legacy YAML independently and prove that inactive or obsolete version files remain untouched.
 - Claude Code and Antigravity expose Agent-owned MCPs read-only. Antigravity CLI requires `agy`, applies and rolls back `GEMINI.md` and dedicated CLI Skills, transactionally migrates AgentEnv-owned legacy Skill copies, and leaves `mcp_config.json` unchanged.
-- All five built-in adapters expose the same read-only Skill runtime contract. Tests cover direct and recursive discovery, symlink-cycle safety, frontmatter runtime identity, duplicate declarations, Claude plugin ownership, duplicate desired runtime names, Antigravity legacy migration with rollback, and Trae CLI primary and alias runtime locations. Profile Skill On/Off is represented only by managed install presence, never by an Agent configuration switch.
+- All five built-in adapters expose the same read-only Skill runtime contract. Tests cover direct and recursive discovery, symlink-cycle safety, frontmatter runtime identity, duplicate declarations, Claude plugin ownership, duplicate desired runtime names, Antigravity legacy migration with rollback, and Trae CLI's version-neutral shared Skill location. Profile Skill On/Off is represented only by managed install presence, never by an Agent configuration switch.
 - GitHub Device Flow respects server polling intervals, absorbs `slow_down` as a longer pending interval, blocks overlapping token requests, and refreshes connected account state after browser authorization.
 - Apply Preview puts readiness or blocking state first, separates final payload from actual mutations, groups changes by resource meaning, keeps full paths in selectable detail, and opens each file diff on its owning row without widening the dialog. Replaceable drift is shown once as an explicit review requirement.
 - Profile list icon and content columns remain aligned at the minimum viewport, and a deliberately long truncated Profile name keeps the same text origin before and after selection.

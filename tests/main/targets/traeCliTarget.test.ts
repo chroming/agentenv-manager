@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTraeCliTargetAdapter } from "../../../src/main/targets/integrations/trae-cli";
 import { blockingMessages } from "../../helpers/applyIssues";
@@ -12,16 +12,21 @@ afterEach(async () => {
   root = "";
 });
 
-const setup = async () => {
-  root = await mkdtemp(join(tmpdir(), "agentenv-trae-cli-v2-"));
+const setup = async (layout: "v2" | "legacy" = "v2") => {
+  root = await mkdtemp(join(tmpdir(), "agentenv-trae-cli-"));
+  const configDir = join(root, ".trae");
+  await mkdir(configDir, { recursive: true });
+  if (layout === "legacy") {
+    await writeFile(join(configDir, "traecli.yaml"), "");
+  }
   const adapter = createTraeCliTargetAdapter();
   const paths = adapter.createTargetPaths({ homeDir: root });
-  await mkdir(paths.configDir, { recursive: true });
+  await mkdir(dirname(paths.instructionsPath), { recursive: true });
   return { adapter, paths, profile: adapter.createDefaultProfile("daily") };
 };
 
-describe("Trae CLI Profile v2 adapter", () => {
-  it("declares the verified user paths and isolated runtime Skill locations", async () => {
+describe("Trae CLI adapter", () => {
+  it("defaults to the current layout and keeps shared resources version-neutral", async () => {
     const { adapter, paths } = await setup();
 
     expect(adapter.descriptor).toMatchObject({
@@ -29,6 +34,9 @@ describe("Trae CLI Profile v2 adapter", () => {
       name: "Trae CLI",
       executableName: "traecli",
       iconKey: "trae",
+      instructionsLabel: "agentenv-manager.md",
+      configLabel: "traecli.toml",
+      configLanguage: "toml",
       capabilities: {
         instructions: true,
         skills: true,
@@ -37,33 +45,33 @@ describe("Trae CLI Profile v2 adapter", () => {
       }
     });
     expect(paths).toMatchObject({
-      instructionsPath: join(root, ".trae", "AGENTS.md"),
-      configPath: join(root, ".trae", "trae_cli.yaml"),
-      mcpConfigPath: join(root, ".trae", "mcp.json"),
+      configDir: join(root, ".trae"),
+      runtimeDir: join(root, ".trae", "cli"),
+      instructionsPath: join(root, ".trae", "rules", "agentenv-manager.md"),
+      configPath: join(root, ".trae", "traecli.toml"),
       skillsDir: join(root, ".trae", "skills"),
-      skillScanDirs: [
-        join(root, ".trae", "skills"),
-        join(root, ".coco", "skills"),
-        join(root, ".trae-cn", "skills")
-      ]
+      skillScanDirs: [join(root, ".trae", "skills")]
     });
+    expect(paths).not.toHaveProperty("mcpConfigPath");
     expect(paths.skillLocations).toEqual([
       expect.objectContaining({
         path: join(root, ".trae", "skills"),
         role: "preferred-runtime",
         management: "managed"
-      }),
-      expect.objectContaining({
-        path: join(root, ".coco", "skills"),
-        role: "alternate-runtime",
-        management: "observed"
-      }),
-      expect.objectContaining({
-        path: join(root, ".trae-cn", "skills"),
-        role: "alternate-runtime",
-        management: "observed"
       })
     ]);
+    expect(adapter.conversations).toBeDefined();
+  });
+
+  it("uses the legacy YAML config only after V2 evidence is absent", async () => {
+    const { paths } = await setup("legacy");
+
+    expect(paths).toMatchObject({
+      runtimeDir: undefined,
+      configPath: join(root, ".trae", "traecli.yaml"),
+      instructionsPath: join(root, ".trae", "rules", "agentenv-manager.md"),
+      skillsDir: join(root, ".trae", "skills")
+    });
   });
 
   it.each(["traecli", "trae-cli", "trae-agent"])(
@@ -109,10 +117,9 @@ describe("Trae CLI Profile v2 adapter", () => {
     expect(findExecutable).not.toHaveBeenCalledWith("ta");
   });
 
-  it("ignores malformed MCP configuration without reading or fingerprinting it", async () => {
+  it("does not parse or fingerprint malformed native config when MCPs are unmanaged", async () => {
     const { adapter, paths, profile } = await setup();
-    await writeFile(paths.configPath, "mcp_servers: [ broken");
-    await writeFile(paths.mcpConfigPath!, "{ broken");
+    await writeFile(paths.configPath, "[mcp_servers.broken");
 
     const preview = await adapter.createPreview({
       profile: {
@@ -129,25 +136,24 @@ describe("Trae CLI Profile v2 adapter", () => {
     expect(blockingMessages(preview.issues)).toEqual([]);
     expect(preview.changes.map(({ path }) => path)).toEqual([paths.instructionsPath]);
     expect(preview.liveFingerprints).not.toHaveProperty(paths.configPath);
-    expect(preview.liveFingerprints).not.toHaveProperty(paths.mcpConfigPath!);
     expect(preview.targetState.managedMcpNames).toEqual([]);
   });
 
-  it("patches only selected YAML disabled fields and preserves native settings", async () => {
+  it("patches only selected V2 TOML enabled fields and preserves native settings", async () => {
     const { adapter, paths, profile } = await setup();
     const live = [
-      "model: fast",
+      'model = "fast"',
       "# keep this comment",
-      "mcp_servers:",
-      "  - name: docs",
-      "    command: docs",
-      "    disabled: true",
-      "    env:",
-      "      TOKEN: private-token",
-      "  - name: browser",
-      "    url: https://example.test/mcp",
-      "credentials:",
-      "  api_key: private-key",
+      "",
+      "[mcp_servers.docs]",
+      'command = "docs"',
+      "enabled = false",
+      "",
+      "[mcp_servers.docs.env]",
+      'TOKEN = "private-token"',
+      "",
+      "[mcp_servers.browser]",
+      'url = "https://example.test/mcp"',
       ""
     ].join("\n");
     await writeFile(paths.configPath, live);
@@ -174,40 +180,27 @@ describe("Trae CLI Profile v2 adapter", () => {
 
     expect(blockingMessages(preview.issues)).toEqual([]);
     const change = preview.changes.find(({ path }) => path === paths.configPath);
-    expect(change?.after).toBe([
+    expect(change?.after).toContain("# keep this comment");
+    expect(change?.after).toContain('TOKEN = "private-token"');
+    expect(change?.after).toContain("[mcp_servers.docs]\ncommand = \"docs\"\nenabled = true");
+    expect(change?.after).toContain("[mcp_servers.browser]\nenabled = false");
+    expect(preview.targetState.managedMcpNames).toEqual(["browser", "docs"]);
+  });
+
+  it("patches only selected Legacy YAML disabled fields", async () => {
+    const { adapter, paths, profile } = await setup("legacy");
+    const live = [
       "model: fast",
       "# keep this comment",
       "mcp_servers:",
       "  - name: docs",
       "    command: docs",
-      "    disabled: false",
-      "    env:",
-      "      TOKEN: private-token",
+      "    disabled: true",
       "  - name: browser",
       "    url: https://example.test/mcp",
-      "    disabled: true",
-      "credentials:",
-      "  api_key: private-key",
       ""
-    ].join("\n"));
-    expect(preview.targetState.managedMcpNames).toEqual(["browser", "docs"]);
-  });
-
-  it("patches only selected JSON disabled fields and preserves credentials", async () => {
-    const { adapter, paths, profile } = await setup();
-    const live = `{
-  // preserve this comment
-  "theme": "dark",
-  "mcpServers": {
-    "docs": {
-      "type": "http",
-      "url": "https://example.test/mcp",
-      "headers": { "Authorization": "Bearer private" },
-      "disabled": true
-    }
-  }
-}\n`;
-    await writeFile(paths.mcpConfigPath!, live);
+    ].join("\n");
+    await writeFile(paths.configPath, live);
 
     const preview = await adapter.createPreview({
       profile: {
@@ -217,7 +210,10 @@ describe("Trae CLI Profile v2 adapter", () => {
           mcpByTarget: {
             "trae-cli": {
               mode: "manage",
-              selections: [{ name: "docs", enabled: true }]
+              selections: [
+                { name: "docs", enabled: true },
+                { name: "browser", enabled: false }
+              ]
             }
           }
         }
@@ -227,11 +223,10 @@ describe("Trae CLI Profile v2 adapter", () => {
     });
 
     expect(blockingMessages(preview.issues)).toEqual([]);
-    const change = preview.changes.find(({ path }) => path === paths.mcpConfigPath);
-    expect(change?.after).toContain("// preserve this comment");
-    expect(change?.after).toContain('"theme": "dark"');
-    expect(change?.after).toContain('"Authorization": "Bearer private"');
-    expect(change?.after).toContain('"disabled": false');
+    const change = preview.changes.find(({ path }) => path === paths.configPath);
+    expect(change?.after).toContain("# keep this comment");
+    expect(change?.after).toContain("disabled: false");
+    expect(change?.after).toContain("url: https://example.test/mcp\n    disabled: true");
   });
 
   it("blocks enabled missing MCPs and treats disabled missing MCPs as no-op", async () => {
@@ -259,128 +254,59 @@ describe("Trae CLI Profile v2 adapter", () => {
     const disabled = await previewFor(false);
     expect(blockingMessages(disabled.issues)).toEqual([]);
     expect(disabled.changes.map(({ path }) => path)).not.toContain(paths.configPath);
-    expect(disabled.changes.map(({ path }) => path)).not.toContain(paths.mcpConfigPath);
   });
 
-  it("captures both user MCP sources without exposing credentials", async () => {
+  it("captures V2 MCPs without exposing credentials", async () => {
     const { adapter, paths } = await setup();
     await writeFile(paths.instructionsPath, "# Live Trae\n");
     await writeFile(paths.configPath, [
-      "model: fast",
-      "mcp_servers:",
-      "  - name: docs",
-      "    command: docs",
-      "    disabled: true",
-      "    env:",
-      "      TOKEN: yaml-private",
+      'model = "fast"',
+      "[mcp_servers.docs]",
+      'command = "docs"',
+      "enabled = false",
+      "[mcp_servers.docs.env]",
+      'TOKEN = "toml-private"',
       ""
     ].join("\n"));
-    await writeFile(paths.mcpConfigPath!, JSON.stringify({
-      mcpServers: {
-        browser: {
-          type: "http",
-          url: "https://example.test/mcp",
-          headers: { Authorization: "json-private" }
-        }
-      }
-    }));
-    await mkdir(join(root, ".coco"), { recursive: true });
-    await writeFile(join(root, ".coco", "AGENTS.md"), "# Extra guidance\n");
 
     const captured = await adapter.captureProfile(paths);
 
     expect(captured.instructions).toBe("# Live Trae\n");
     expect(captured.mcpConnections).toEqual([
-      expect.objectContaining({ name: "browser", enabled: true, controllable: true }),
       expect.objectContaining({ name: "docs", enabled: false, controllable: true })
     ]);
-    expect(JSON.stringify(captured)).not.toContain("yaml-private");
-    expect(JSON.stringify(captured)).not.toContain("json-private");
-    expect(captured.warnings).toContain(
-      "Additional Trae CLI user instructions remain Agent-owned"
-    );
-    expect(captured.excluded).toContain(join(root, ".coco", "AGENTS.md"));
+    expect(JSON.stringify(captured)).not.toContain("toml-private");
     expect(captured.excluded).toContain(`${paths.configPath}.model`);
   });
 
-  it("marks duplicate user definitions read-only and blocks persisted management", async () => {
-    const { adapter, paths, profile } = await setup();
-    await writeFile(paths.configPath, [
-      "mcp_servers:",
-      "  - name: docs",
-      "    command: docs",
-      ""
-    ].join("\n"));
-    await writeFile(paths.mcpConfigPath!, JSON.stringify({
-      mcpServers: { docs: { url: "https://example.test/mcp" } }
-    }));
+  it("uses legacy AGENTS.md as a non-mutating capture fallback", async () => {
+    const { adapter, paths } = await setup();
+    const legacyInstructions = join(paths.configDir, "AGENTS.md");
+    await writeFile(legacyInstructions, "# Existing Trae guidance\n");
 
     const captured = await adapter.captureProfile(paths);
-    expect(captured.mcpConnections).toEqual([
-      expect.objectContaining({
-        name: "docs",
-        controllable: false,
-        detail: "duplicate-user-sources"
-      })
-    ]);
 
-    const preview = await adapter.createPreview({
-      profile: {
-        ...profile,
-        resources: {
-          skills: [],
-          mcpByTarget: {
-            "trae-cli": {
-              mode: "manage",
-              selections: [{ name: "docs", enabled: false }]
-            }
-          }
-        }
-      },
-      targetPaths: paths,
-      state: { managedMcpNames: [] }
-    });
-    expect(blockingMessages(preview.issues)).toEqual([
-      expect.stringContaining("defined in multiple Trae CLI user files")
-    ]);
-    expect(preview.changes.map(({ path }) => path)).not.toContain(paths.configPath);
-    expect(preview.changes.map(({ path }) => path)).not.toContain(paths.mcpConfigPath);
+    expect(captured.instructions).toBe("# Existing Trae guidance\n");
+    expect(captured.warnings).toContain(
+      "Legacy Trae CLI instructions remain Agent-owned"
+    );
+    expect(captured.excluded).toContain(legacyInstructions);
   });
 
-  it("keeps the documented legacy traecli.yaml source read-only", async () => {
-    const { adapter, paths, profile } = await setup();
-    const legacyPath = join(paths.configDir, "traecli.yaml");
-    await writeFile(legacyPath, [
-      "mcp_servers:",
-      "  - name: legacy-docs",
-      "    command: docs",
-      ""
-    ].join("\n"));
+  it("keeps inactive and obsolete version configs outside management", async () => {
+    const { adapter, paths } = await setup();
+    const inactive = join(paths.configDir, "traecli.yaml");
+    const obsolete = join(paths.configDir, "trae_cli.yaml");
+    await writeFile(inactive, "model: legacy\n");
+    await writeFile(obsolete, "model: obsolete\n");
 
     const captured = await adapter.captureProfile(paths);
-    expect(captured.mcpConnections).toEqual([
-      expect.objectContaining({ name: "legacy-docs", controllable: false })
-    ]);
 
-    const preview = await adapter.createPreview({
-      profile: {
-        ...profile,
-        resources: {
-          skills: [],
-          mcpByTarget: {
-            "trae-cli": {
-              mode: "manage",
-              selections: [{ name: "legacy-docs", enabled: false }]
-            }
-          }
-        }
-      },
-      targetPaths: paths,
-      state: { managedMcpNames: [] }
-    });
-    expect(blockingMessages(preview.issues)).toEqual([
-      expect.stringContaining("Agent-owned traecli.yaml")
-    ]);
-    expect(preview.liveFingerprints).toHaveProperty(legacyPath);
+    expect(captured.mcpConnections).toEqual([]);
+    expect(captured.excluded).toEqual(expect.arrayContaining([inactive, obsolete]));
+    expect(captured.warnings).toEqual(expect.arrayContaining([
+      "An inactive Trae CLI version config remains Agent-owned",
+      "The obsolete trae_cli.yaml file remains Agent-owned"
+    ]));
   });
 });

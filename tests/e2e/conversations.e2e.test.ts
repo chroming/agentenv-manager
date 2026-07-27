@@ -169,8 +169,50 @@ describe("Conversations desktop workflow", () => {
         content: "收到，测试正常。"
       })
     ].join("\n"));
+    const traeSessionDir = join(
+      home,
+      ".trae",
+      "cli",
+      "sessions",
+      "2026",
+      "07",
+      "27"
+    );
+    const traeSessionPath = join(
+      traeSessionDir,
+      "rollout-2026-07-27T12-11-26-019fa1c5-3f8c-7fe0-bfd7-1d4cdf9361a3.jsonl"
+    );
+    await mkdir(traeSessionDir, { recursive: true });
+    await writeFile(traeSessionPath, [
+      JSON.stringify({
+        timestamp: "2026-07-27T04:11:52.981Z",
+        type: "session_meta",
+        payload: {
+          id: "019fa1c5-3f8c-7fe0-bfd7-1d4cdf9361a3",
+          cwd: "/work/trae-v2",
+          model_provider: "trae"
+        }
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text: "Verify the Trae V2 conversation reader" }]
+        }
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: "Trae V2 history is available." }]
+        }
+      })
+    ].join("\n"));
     const openCodeSource = await readFile(openCodeDatabasePath);
     const antigravitySource = await readFile(antigravityTranscriptPath);
+    const traeSource = await readFile(traeSessionPath);
     await executable(join(binDir, "codex"), "exit 0");
     await executable(
       join(binDir, "opencode"),
@@ -213,8 +255,12 @@ describe("Conversations desktop workflow", () => {
       state: "visible",
       timeout: 15_000
     });
+    await page.getByRole("option", { name: /Verify the Trae V2 conversation reader/ }).waitFor({
+      state: "visible",
+      timeout: 15_000
+    });
     expect(await page.locator(".conversation-list-item__agent img").count())
-      .toBeGreaterThanOrEqual(3);
+      .toBeGreaterThanOrEqual(4);
     const selectedConversation = page.getByRole("option", {
       name: /Repair the desktop release workflow/
     });
@@ -501,9 +547,17 @@ describe("Conversations desktop workflow", () => {
         fullPage: true
       });
     }
+    await page
+      .getByRole("option", { name: /Verify the Trae V2 conversation reader/ })
+      .click();
+    await page.getByText("Trae V2 history is available.").waitFor({
+      state: "visible",
+      timeout: 15_000
+    });
     expect(await readFile(sourcePath, "utf8")).toBe(source);
     expect(await readFile(longSessionPath, "utf8")).toBe(longSession);
     expect(await readFile(openCodeDatabasePath)).toEqual(openCodeSource);
     expect(await readFile(antigravityTranscriptPath)).toEqual(antigravitySource);
+    expect(await readFile(traeSessionPath)).toEqual(traeSource);
   }, 30_000);
 });

@@ -74,7 +74,7 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 
 - 自动发现各 Agent 已配置的 MCP，不复制定义或凭据。
 - Profile 按 Target 保存 `Use Agent setting`、`On` 或 `Off` 三态选择。
-- Codex 和 OpenCode 通过原生 `enabled` 字段切换；Trae CLI 只修改已有用户 MCP 的 `disabled` 字段；Claude Code 和 Antigravity 当前只读展示。
+- Codex 和 OpenCode 通过原生 `enabled` 字段切换；Trae CLI 2.0 修改 `traecli.toml` 中已有 MCP 的 `enabled` 字段，Legacy 布局修改 `traecli.yaml` 中已有 MCP 的 `disabled` 字段；Claude Code 和 Antigravity 当前只读展示。
 - Profile 要求开启但 Agent 中缺少的 MCP 会阻止 Apply；要求关闭但已不存在的 MCP 是 no-op。
 
 ### Target 支持
@@ -86,6 +86,8 @@ Profile、Library、Target、Apply、漂移与恢复的规范语义见 [`docs/pr
 - Codex
 - Antigravity CLI (`agy`)
 - Trae CLI (`traecli` / `trae-cli` / `trae-agent`)
+
+Trae CLI 会优先识别 2.0 布局：配置和共享资源位于 `~/.trae`，会话等运行时状态位于 `~/.trae/cli`。仅在没有新版证据且存在 `traecli.yaml` 时使用 Legacy 布局。两版共用 `~/.trae/skills` 和 AgentEnv 自有的 `~/.trae/rules/agentenv-manager.md`；版本差异不会出现在 Profile 操作中。
 
 新增 agent 的理想方式是写一个独立 integration 模块，然后注册到 `src/main/targets/integrations/index.ts`。安装检测、路径、Profile、Skill 运行时扫描规则、原生 MCP 发现与启停能力和资源部署都由该模块声明。适配器只报告 Agent 特有事实，Preview、备份、原子 Apply、校验和回滚仍由统一核心完成。
 

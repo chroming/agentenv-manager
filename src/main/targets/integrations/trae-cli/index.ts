@@ -1,12 +1,6 @@
 import { createHash } from "node:crypto";
-import { join } from "node:path";
-import {
-  applyEdits,
-  modify,
-  parse,
-  printParseErrorCode,
-  type ParseError
-} from "jsonc-parser";
+import { extname, join } from "node:path";
+import * as TOML from "@iarna/toml";
 import {
   isMap,
   isScalar,
@@ -19,6 +13,7 @@ import type {
   NativeMcpConnection,
   PlannedFileChange,
   TargetActivationPreview,
+  TargetPaths,
   TargetState
 } from "../../../../shared/types";
 import { profileManagesResource } from "../../../../shared/profileResources";
@@ -26,10 +21,13 @@ import { createApplyIssue } from "../../../applyIssues";
 import { createUnifiedDiff } from "../../../diff";
 import { readTextIfExists } from "../../../fileUtils";
 import { findSecretWarnings } from "../../../secretWarnings";
+import { setMcpServerEnabled, validateToml } from "../../../tomlConfig";
+import { createTraeCliConversationCapability } from "../../conversations/traeCliConversations";
 import type { AgentTargetIntegration } from "../../contract";
 import { defineTargetIntegration } from "../../defineTargetIntegration";
 import { createDirectoryAssetDriver } from "../../shared/assetDeployment";
 import { createFilesystemSkillDriver } from "../../shared/skillRuntime";
+import { resolveTraeLayout } from "./layout";
 
 const DEFAULT_STATE: TargetState = {
   formatVersion: 2,
@@ -37,14 +35,7 @@ const DEFAULT_STATE: TargetState = {
 };
 
 const COMMAND_ALIASES = ["traecli", "trae-cli", "trae-agent"] as const;
-const YAML_MCP_KEY = "mcp_servers";
-const JSON_MCP_KEY = "mcpServers";
-
-const formattingOptions = {
-  insertSpaces: true,
-  tabSize: 2,
-  eol: "\n"
-};
+const MCP_KEY = "mcp_servers";
 
 const hashText = (content: string) =>
   createHash("sha256").update(content).digest("hex");
@@ -71,9 +62,15 @@ const addChange = (
   changes.push({ path, before, after, diff: createUnifiedDiff(path, before, after) });
 };
 
+interface ParsedMcpServer {
+  enabled: boolean;
+  raw: Record<string, unknown>;
+  yamlNode?: YAMLMap;
+}
+
 interface ParsedMcpSource {
   connections: NativeMcpConnection[];
-  byName: Map<string, { enabled: boolean; raw: Record<string, unknown>; node?: YAMLMap }>;
+  byName: Map<string, ParsedMcpServer>;
   excluded: string[];
 }
 
@@ -81,64 +78,64 @@ type ParseResult =
   | { ok: true; value: ParsedMcpSource }
   | { ok: false; message: string };
 
-const parseJsoncObject = (
+const connectionsFor = (
+  byName: Map<string, ParsedMcpServer>,
+  sourcePath: string
+): NativeMcpConnection[] =>
+  [...byName.entries()]
+    .map(([name, server]) => ({
+      targetId: "trae-cli",
+      name,
+      scope: "user" as const,
+      transport: nativeMcpTransport(server.raw),
+      enabled: server.enabled,
+      controllable: true,
+      sourcePath
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+const parseTomlMcpSource = (
   content: string,
-  label: string
-): { ok: true; value: Record<string, unknown> } | { ok: false; message: string } => {
-  if (content.trim().length === 0) return { ok: true, value: {} };
-  const errors: ParseError[] = [];
-  const parsed = parse(content, errors, { allowTrailingComma: true });
-  if (errors.length > 0) {
+  sourcePath: string
+): ParseResult => {
+  const validation = validateToml(content);
+  if (!validation.ok) {
     return {
       ok: false,
-      message: `${label}: ${errors.map((error) => printParseErrorCode(error.error)).join(", ")}`
+      message: `Invalid Trae CLI config ${sourcePath}: ${validation.message}`
     };
   }
-  return isRecord(parsed)
-    ? { ok: true, value: parsed }
-    : { ok: false, message: `${label}: expected a JSON object` };
-};
-
-const parseJsonMcpSource = (
-  content: string,
-  sourcePath: string,
-  controllable: boolean
-): ParseResult => {
-  const parsed = parseJsoncObject(content, `Invalid Trae CLI MCP config ${sourcePath}`);
-  if (!parsed.ok) return parsed;
-  const rawServers = parsed.value[JSON_MCP_KEY];
+  const parsed = TOML.parse(content || "") as Record<string, unknown>;
+  const rawServers = parsed[MCP_KEY];
   if (rawServers !== undefined && !isRecord(rawServers)) {
     return {
       ok: false,
-      message: `Invalid Trae CLI MCP config ${sourcePath}: ${JSON_MCP_KEY} must be an object`
+      message: `Invalid Trae CLI config ${sourcePath}: ${MCP_KEY} must be a table`
     };
   }
-  const byName = new Map<string, { enabled: boolean; raw: Record<string, unknown> }>();
+  const byName = new Map<string, ParsedMcpServer>();
   for (const [name, raw] of Object.entries(isRecord(rawServers) ? rawServers : {})) {
     if (!isRecord(raw)) {
       return {
         ok: false,
-        message: `Invalid Trae CLI MCP config ${sourcePath}: ${name} must be an object`
+        message: `Invalid Trae CLI config ${sourcePath}: ${name} must be a table`
       };
     }
-    byName.set(name, { enabled: raw.disabled !== true, raw });
+    if (raw.enabled !== undefined && typeof raw.enabled !== "boolean") {
+      return {
+        ok: false,
+        message: `Invalid Trae CLI config ${sourcePath}: ${name}.enabled must be boolean`
+      };
+    }
+    byName.set(name, { enabled: raw.enabled !== false, raw });
   }
-  const connections = [...byName.entries()].map(([name, server]) => ({
-    targetId: "trae-cli",
-    name,
-    scope: "user" as const,
-    transport: nativeMcpTransport(server.raw),
-    enabled: server.enabled,
-    controllable,
-    sourcePath
-  }));
   return {
     ok: true,
     value: {
-      connections,
+      connections: connectionsFor(byName, sourcePath),
       byName,
-      excluded: Object.keys(parsed.value)
-        .filter((key) => key !== JSON_MCP_KEY)
+      excluded: Object.keys(parsed)
+        .filter((key) => key !== MCP_KEY)
         .map((key) => `${sourcePath}.${key}`)
     }
   };
@@ -151,8 +148,7 @@ const yamlMapToRecord = (map: YAMLMap): Record<string, unknown> => {
 
 const parseYamlMcpSource = (
   content: string,
-  sourcePath: string,
-  controllable: boolean
+  sourcePath: string
 ): ParseResult => {
   const document = parseDocument(content, {
     keepSourceTokens: true,
@@ -179,7 +175,7 @@ const parseYamlMcpSource = (
       message: `Invalid Trae CLI config ${sourcePath}: expected a YAML mapping`
     };
   }
-  const serverNodes = document.contents.get(YAML_MCP_KEY, true);
+  const serverNodes = document.contents.get(MCP_KEY, true);
   if (serverNodes === undefined || serverNodes === null) {
     return {
       ok: true,
@@ -196,14 +192,11 @@ const parseYamlMcpSource = (
   if (!isSeq(serverNodes)) {
     return {
       ok: false,
-      message: `Invalid Trae CLI config ${sourcePath}: ${YAML_MCP_KEY} must be a sequence`
+      message: `Invalid Trae CLI config ${sourcePath}: ${MCP_KEY} must be a sequence`
     };
   }
 
-  const byName = new Map<
-    string,
-    { enabled: boolean; raw: Record<string, unknown>; node: YAMLMap }
-  >();
+  const byName = new Map<string, ParsedMcpServer>();
   for (const node of serverNodes.items) {
     if (!isMap(node)) {
       return {
@@ -236,57 +229,45 @@ const parseYamlMcpSource = (
       };
     }
     const raw = yamlMapToRecord(node);
-    byName.set(name, { enabled: raw.disabled !== true, raw, node });
+    byName.set(name, {
+      enabled: raw.disabled !== true,
+      raw,
+      yamlNode: node
+    });
   }
 
-  const connections = [...byName.entries()].map(([name, server]) => ({
-    targetId: "trae-cli",
-    name,
-    scope: "user" as const,
-    transport: nativeMcpTransport(server.raw),
-    enabled: server.enabled,
-    controllable,
-    sourcePath
-  }));
   return {
     ok: true,
     value: {
-      connections,
+      connections: connectionsFor(byName, sourcePath),
       byName,
       excluded: document.contents.items
         .map((pair) => isScalar(pair.key) ? String(pair.key.value) : "")
-        .filter((key) => key && key !== YAML_MCP_KEY)
+        .filter((key) => key && key !== MCP_KEY)
         .map((key) => `${sourcePath}.${key}`)
     }
   };
 };
 
-const setJsonDisabled = (
+const parseNativeMcpSource = (
   content: string,
-  name: string,
-  disabled: boolean,
-  server: Record<string, unknown>
-) => {
-  if (server.disabled === disabled || (!disabled && server.disabled === undefined)) {
-    return content;
-  }
-  const source = content.trim().length === 0 ? "{}\n" : content;
-  return applyEdits(
-    source,
-    modify(source, [JSON_MCP_KEY, name, "disabled"], disabled, {
-      formattingOptions,
-      getInsertionIndex: (properties) => properties.length
-    })
-  );
-};
+  sourcePath: string
+): ParseResult =>
+  extname(sourcePath).toLowerCase() === ".toml"
+    ? parseTomlMcpSource(content, sourcePath)
+    : parseYamlMcpSource(content, sourcePath);
 
 const setYamlDisabled = (
   content: string,
   name: string,
   disabled: boolean,
-  server: { enabled: boolean; node: YAMLMap }
+  server: ParsedMcpServer
 ): { ok: true; content: string } | { ok: false; message: string } => {
-  const disabledNode = server.node.get("disabled", true);
+  const node = server.yamlNode;
+  if (!node) {
+    return { ok: false, message: `Cannot safely update Trae CLI MCP server ${name}` };
+  }
+  const disabledNode = node.get("disabled", true);
   if (disabledNode !== undefined) {
     if (!isScalar(disabledNode) || typeof disabledNode.value !== "boolean" || !disabledNode.range) {
       return { ok: false, message: `Cannot safely update Trae CLI MCP server ${name}` };
@@ -299,8 +280,8 @@ const setYamlDisabled = (
   }
   if (!disabled) return { ok: true, content };
 
-  const sourceToken = server.node.srcToken;
-  const insertionOffset = server.node.range?.[2];
+  const sourceToken = node.srcToken;
+  const insertionOffset = node.range?.[2];
   if (
     !sourceToken ||
     sourceToken.type !== "block-map" ||
@@ -320,25 +301,16 @@ const setYamlDisabled = (
   };
 };
 
-const mergeMcpConnections = (
-  sources: ParsedMcpSource[]
-): NativeMcpConnection[] => {
-  const grouped = new Map<string, NativeMcpConnection[]>();
-  for (const connection of sources.flatMap((source) => source.connections)) {
-    grouped.set(connection.name, [...(grouped.get(connection.name) ?? []), connection]);
-  }
-  return [...grouped.entries()]
-    .map(([name, connections]) => connections.length === 1
-      ? connections[0]
-      : {
-          ...connections[0],
-          name,
-          controllable: false,
-          sourcePath: connections.map((connection) => connection.sourcePath).join(" · "),
-          detail: "duplicate-user-sources"
-        })
-    .sort((left, right) => left.name.localeCompare(right.name));
-};
+const inactiveConfigPathFor = (targetPaths: TargetPaths) =>
+  extname(targetPaths.configPath).toLowerCase() === ".toml"
+    ? join(targetPaths.configDir, "traecli.yaml")
+    : join(targetPaths.configDir, "traecli.toml");
+
+const obsoleteConfigPathFor = (targetPaths: TargetPaths) =>
+  join(targetPaths.configDir, "trae_cli.yaml");
+
+const legacyInstructionsPathFor = (targetPaths: TargetPaths) =>
+  join(targetPaths.configDir, "AGENTS.md");
 
 const assets = createDirectoryAssetDriver({ targetName: "Trae CLI" });
 const skills = createFilesystemSkillDriver({ targetId: "trae-cli" });
@@ -350,10 +322,10 @@ export const traeCliIntegration: AgentTargetIntegration = {
     description: "Manage Trae CLI instructions, Skills, and MCP activation.",
     iconKey: "trae",
     displayOrder: 4,
-    instructionsLabel: "AGENTS.md",
-    configLabel: "trae_cli.yaml",
-    configLanguage: "yaml",
-    mcpConfigKey: YAML_MCP_KEY,
+    instructionsLabel: "agentenv-manager.md",
+    configLabel: "traecli.toml",
+    configLanguage: "toml",
+    mcpConfigKey: MCP_KEY,
     realWritesEnabled: true,
     executableName: "traecli",
     capabilities: {
@@ -381,48 +353,28 @@ export const traeCliIntegration: AgentTargetIntegration = {
   },
   paths: {
     createTargetPaths: ({ homeDir, rootDirOverride }) => {
-      const configDir = rootDirOverride ?? join(homeDir, ".trae");
-      const primarySkillsDir = join(configDir, "skills");
-      const cocoSkillsDir = join(homeDir, ".coco", "skills");
-      const cnSkillsDir = join(homeDir, ".trae-cn", "skills");
+      const layout = resolveTraeLayout({ homeDir, rootDirOverride });
       return {
         targetId: "trae-cli",
-        configDir,
-        instructionsPath: join(configDir, "AGENTS.md"),
-        configPath: join(configDir, "trae_cli.yaml"),
-        mcpConfigPath: join(configDir, "mcp.json"),
-        skillsDir: primarySkillsDir,
-        skillLocations: [
-          {
-            path: primarySkillsDir,
-            role: "preferred-runtime",
-            shared: false,
-            scope: "user",
-            scanDepth: "direct",
-            management: "managed"
-          },
-          {
-            path: cocoSkillsDir,
-            role: "alternate-runtime",
-            shared: false,
-            scope: "user",
-            scanDepth: "direct",
-            management: "observed"
-          },
-          {
-            path: cnSkillsDir,
-            role: "alternate-runtime",
-            shared: false,
-            scope: "user",
-            scanDepth: "direct",
-            management: "observed"
-          }
-        ],
-        skillScanDirs: [primarySkillsDir, cocoSkillsDir, cnSkillsDir]
+        configDir: layout.configRoot,
+        runtimeDir: layout.runtimeRoot,
+        instructionsPath: layout.instructionsPath,
+        configPath: layout.configPath,
+        skillsDir: layout.skillsDir,
+        skillLocations: [{
+          path: layout.skillsDir,
+          role: "preferred-runtime",
+          shared: false,
+          scope: "user",
+          scanDepth: "direct",
+          management: "managed"
+        }],
+        skillScanDirs: [layout.skillsDir]
       };
     }
   },
   skills,
+  conversations: createTraeCliConversationCapability(),
   profile: {
     createDefaultProfile: (id) => ({
       id,
@@ -437,54 +389,49 @@ export const traeCliIntegration: AgentTargetIntegration = {
       resources: { skills: [], mcpByTarget: {} }
     }),
     captureProfile: async (targetPaths) => {
-      const legacyYamlPath = join(targetPaths.configDir, "traecli.yaml");
-      const instructionAliases = [
-        join(targetPaths.configDir, "..", ".coco", "AGENTS.md"),
-        join(targetPaths.configDir, "..", ".trae-cn", "AGENTS.md"),
-        join(targetPaths.configDir, "..", ".agents", "AGENTS.md")
-      ];
-      const [instructions, yamlText, jsonText, legacyYamlText, ...aliasInstructions] =
-        await Promise.all([
-          readTextIfExists(targetPaths.instructionsPath),
-          readTextIfExists(targetPaths.configPath),
-          readTextIfExists(targetPaths.mcpConfigPath ?? ""),
-          readTextIfExists(legacyYamlPath),
-          ...instructionAliases.map((path) => readTextIfExists(path))
-        ]);
-      const yaml = parseYamlMcpSource(yamlText, targetPaths.configPath, true);
-      const json = parseJsonMcpSource(
-        jsonText,
-        targetPaths.mcpConfigPath ?? targetPaths.configPath,
-        true
-      );
-      const legacyYaml = parseYamlMcpSource(legacyYamlText, legacyYamlPath, false);
-      if (!yaml.ok) throw new Error(yaml.message);
-      if (!json.ok) throw new Error(json.message);
-      if (!legacyYaml.ok) throw new Error(legacyYaml.message);
-      const aliasesInUse = instructionAliases.filter((_, index) =>
-        aliasInstructions[index]?.trim()
-      );
-      const sources = [yaml.value, json.value, legacyYaml.value];
+      const inactiveConfigPath = inactiveConfigPathFor(targetPaths);
+      const obsoleteConfigPath = obsoleteConfigPathFor(targetPaths);
+      const legacyInstructionsPath = legacyInstructionsPathFor(targetPaths);
+      const [
+        managedInstructions,
+        legacyInstructions,
+        configText,
+        inactiveConfig,
+        obsoleteConfig
+      ] = await Promise.all([
+        readTextIfExists(targetPaths.instructionsPath),
+        readTextIfExists(legacyInstructionsPath),
+        readTextIfExists(targetPaths.configPath),
+        readTextIfExists(inactiveConfigPath),
+        readTextIfExists(obsoleteConfigPath)
+      ]);
+      const parsed = parseNativeMcpSource(configText, targetPaths.configPath);
+      if (!parsed.ok) throw new Error(parsed.message);
       const excluded = [
-        ...sources.flatMap((source) => source.excluded),
-        ...aliasesInUse
+        ...parsed.value.excluded,
+        ...(legacyInstructions.trim() ? [legacyInstructionsPath] : []),
+        ...(inactiveConfig.trim() ? [inactiveConfigPath] : []),
+        ...(obsoleteConfig.trim() ? [obsoleteConfigPath] : [])
       ];
       const warnings = [
-        ...(aliasesInUse.length > 0
-          ? ["Additional Trae CLI user instructions remain Agent-owned"]
+        ...(legacyInstructions.trim()
+          ? ["Legacy Trae CLI instructions remain Agent-owned"]
           : []),
-        ...(legacyYaml.value.connections.length > 0
-          ? ["MCPs in traecli.yaml are visible but remain Agent-controlled"]
+        ...(inactiveConfig.trim()
+          ? ["An inactive Trae CLI version config remains Agent-owned"]
           : []),
-        ...(excluded.length > 0
+        ...(obsoleteConfig.trim()
+          ? ["The obsolete trae_cli.yaml file remains Agent-owned"]
+          : []),
+        ...(parsed.value.excluded.length > 0
           ? ["Trae CLI native settings outside selected MCP switches remain Agent-owned"]
           : [])
       ];
       return {
-        instructions,
-        mcpConnections: mergeMcpConnections(sources),
-        warnings: [...new Set(warnings)],
-        excluded: [...new Set(excluded)]
+        instructions: managedInstructions || legacyInstructions,
+        mcpConnections: parsed.value.connections,
+        warnings,
+        excluded
       };
     }
   },
@@ -508,23 +455,19 @@ export const traeCliIntegration: AgentTargetIntegration = {
           })
       );
       const changes: PlannedFileChange[] = [];
-      const instructionAliases = [
-        join(targetPaths.configDir, "..", ".coco", "AGENTS.md"),
-        join(targetPaths.configDir, "..", ".trae-cn", "AGENTS.md"),
-        join(targetPaths.configDir, "..", ".agents", "AGENTS.md")
-      ];
-      const legacyYamlPath = join(targetPaths.configDir, "traecli.yaml");
-      const [liveInstructions, ...aliasInstructions] = managesInstructions
+      const legacyInstructionsPath = legacyInstructionsPathFor(targetPaths);
+      const [liveInstructions, legacyInstructions] = managesInstructions
         ? await Promise.all([
             readTextIfExists(targetPaths.instructionsPath),
-            ...instructionAliases.map((path) => readTextIfExists(path))
+            readTextIfExists(legacyInstructionsPath)
           ])
-        : [""];
-      if (managesInstructions && aliasInstructions.some((content) => content.trim())) {
+        : ["", ""];
+      if (managesInstructions && legacyInstructions.trim()) {
         issues.push(createApplyIssue({
           code: "instruction-alias",
           resourceKind: "instructions",
-          message: "Trae CLI also has user instruction aliases outside AgentEnv management; they may add guidance."
+          path: legacyInstructionsPath,
+          message: "Legacy Trae CLI instructions remain Agent-owned and may add guidance."
         }));
       }
       if (managesInstructions) {
@@ -541,110 +484,68 @@ export const traeCliIntegration: AgentTargetIntegration = {
         selections: []
       };
       let managedMcpNames: string[] = [];
-      let yamlText = "";
-      let jsonText = "";
-      let legacyYamlText = "";
+      let configText = "";
       if (policy.mode === "manage" && policy.selections.length > 0) {
-        [yamlText, jsonText, legacyYamlText] = await Promise.all([
-          readTextIfExists(targetPaths.configPath),
-          readTextIfExists(targetPaths.mcpConfigPath ?? ""),
-          readTextIfExists(legacyYamlPath)
-        ]);
-        const yaml = parseYamlMcpSource(yamlText, targetPaths.configPath, true);
-        const json = parseJsonMcpSource(
-          jsonText,
-          targetPaths.mcpConfigPath ?? targetPaths.configPath,
-          true
-        );
-        const legacyYaml = parseYamlMcpSource(legacyYamlText, legacyYamlPath, false);
-        if (!yaml.ok) {
+        configText = await readTextIfExists(targetPaths.configPath);
+        const parsed = parseNativeMcpSource(configText, targetPaths.configPath);
+        if (!parsed.ok) {
           issues.push(createApplyIssue({
             code: "invalid-native-config",
             resourceKind: "configuration",
             path: targetPaths.configPath,
-            message: yaml.message
+            message: parsed.message
           }));
-        }
-        if (!json.ok) {
-          issues.push(createApplyIssue({
-            code: "invalid-native-config",
-            resourceKind: "configuration",
-            path: targetPaths.mcpConfigPath ?? targetPaths.configPath,
-            message: json.message
-          }));
-        }
-        if (!legacyYaml.ok) {
-          issues.push(createApplyIssue({
-            code: "invalid-native-config",
-            resourceKind: "configuration",
-            path: legacyYamlPath,
-            message: legacyYaml.message
-          }));
-        }
-        if (yaml.ok && json.ok && legacyYaml.ok) {
-          let nextYaml = yamlText;
-          let nextJson = jsonText;
+        } else {
+          let nextConfig = configText;
           const controlled = new Set<string>();
           for (const selection of policy.selections) {
-            const yamlServer = yaml.value.byName.get(selection.name);
-            const jsonServer = json.value.byName.get(selection.name);
-            const legacyYamlServer = legacyYaml.value.byName.get(selection.name);
-            const occurrenceCount =
-              Number(Boolean(yamlServer)) +
-              Number(Boolean(jsonServer)) +
-              Number(Boolean(legacyYamlServer));
-            if (occurrenceCount > 1) {
+            const currentParsed = parseNativeMcpSource(nextConfig, targetPaths.configPath);
+            if (!currentParsed.ok) {
               issues.push(createApplyIssue({
-                code: "duplicate-native-mcp",
+                code: "unsafe-native-mcp-update",
                 resourceKind: "mcp",
                 resourceId: selection.name,
-                message: `MCP server ${selection.name} is defined in multiple Trae CLI user files. Keep one definition or use the Agent setting.`
+                path: targetPaths.configPath,
+                message: currentParsed.message
               }));
               continue;
             }
-            if (legacyYamlServer) {
-              issues.push(createApplyIssue({
-                code: "agent-owned-native-mcp",
-                resourceKind: "mcp",
-                resourceId: selection.name,
-                path: legacyYamlPath,
-                message: `MCP server ${selection.name} is defined in Agent-owned traecli.yaml. Move it to trae_cli.yaml or mcp.json, or use the Agent setting.`
-              }));
-              continue;
-            }
-            if (occurrenceCount === 0) {
+            const server = currentParsed.value.byName.get(selection.name);
+            if (!server) {
               if (selection.enabled) {
                 issues.push(createApplyIssue({
                   code: "missing-native-mcp",
                   resourceKind: "mcp",
                   resourceId: selection.name,
+                  path: targetPaths.configPath,
                   message: `MCP server ${selection.name} is not configured in Trae CLI. Turn it off in this Profile or configure it in Trae CLI.`
                 }));
               }
               continue;
             }
-            if (yamlServer) {
-              const currentYaml = parseYamlMcpSource(nextYaml, targetPaths.configPath, true);
-              const currentServer = currentYaml.ok
-                ? currentYaml.value.byName.get(selection.name)
-                : undefined;
-              if (!currentYaml.ok || !currentServer?.node) {
+            if (extname(targetPaths.configPath).toLowerCase() === ".toml") {
+              try {
+                nextConfig = setMcpServerEnabled(
+                  nextConfig,
+                  selection.name,
+                  selection.enabled
+                ).content;
+              } catch (error) {
                 issues.push(createApplyIssue({
                   code: "unsafe-native-mcp-update",
                   resourceKind: "mcp",
                   resourceId: selection.name,
                   path: targetPaths.configPath,
-                  message: currentYaml.ok
-                    ? `Cannot safely update Trae CLI MCP server ${selection.name}`
-                    : currentYaml.message
+                  message: error instanceof Error ? error.message : String(error)
                 }));
                 continue;
               }
+            } else {
               const updated = setYamlDisabled(
-                nextYaml,
+                nextConfig,
                 selection.name,
                 !selection.enabled,
-                currentServer as { enabled: boolean; node: YAMLMap }
+                server
               );
               if (!updated.ok) {
                 issues.push(createApplyIssue({
@@ -656,26 +557,13 @@ export const traeCliIntegration: AgentTargetIntegration = {
                 }));
                 continue;
               }
-              nextYaml = updated.content;
-            } else if (jsonServer) {
-              nextJson = setJsonDisabled(
-                nextJson,
-                selection.name,
-                !selection.enabled,
-                jsonServer.raw
-              );
+              nextConfig = updated.content;
             }
             controlled.add(selection.name);
           }
           if (!issues.some((issue) => issue.disposition === "block")) {
             managedMcpNames = [...controlled].sort();
-            addChange(changes, targetPaths.configPath, yamlText, nextYaml);
-            addChange(
-              changes,
-              targetPaths.mcpConfigPath ?? targetPaths.configPath,
-              jsonText,
-              nextJson
-            );
+            addChange(changes, targetPaths.configPath, configText, nextConfig);
           }
         }
       }
@@ -685,14 +573,15 @@ export const traeCliIntegration: AgentTargetIntegration = {
         changes,
         liveFingerprints: {
           ...(managesInstructions
-            ? { [targetPaths.instructionsPath]: hashText(liveInstructions) }
+            ? {
+                [targetPaths.instructionsPath]: hashText(liveInstructions),
+                ...(legacyInstructions.trim()
+                  ? { [legacyInstructionsPath]: hashText(legacyInstructions) }
+                  : {})
+              }
             : {}),
           ...(policy.mode === "manage" && policy.selections.length > 0
-            ? {
-                [targetPaths.configPath]: hashText(yamlText),
-                [targetPaths.mcpConfigPath ?? targetPaths.configPath]: hashText(jsonText),
-                [legacyYamlPath]: hashText(legacyYamlText)
-              }
+            ? { [targetPaths.configPath]: hashText(configText) }
             : {})
         },
         targetState: {

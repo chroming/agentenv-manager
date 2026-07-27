@@ -257,26 +257,26 @@ describe("target capture service v2", () => {
     });
   });
 
-  it("shows ambiguous Trae MCPs for review without capturing them as Profile switches", async () => {
+  it("captures recognized Trae V2 MCP activation without owning definitions", async () => {
     const { homeDir, service } = await setup("trae-cli");
     const traeDir = join(homeDir, ".trae");
-    await mkdir(traeDir, { recursive: true });
-    await writeFile(join(traeDir, "AGENTS.md"), "# Trae\n");
-    await writeFile(join(traeDir, "trae_cli.yaml"), [
-      "mcp_servers:",
-      "  - name: docs",
-      "    command: docs",
+    await mkdir(join(traeDir, "rules"), { recursive: true });
+    await writeFile(
+      join(traeDir, "rules", "agentenv-manager.md"),
+      "# Trae\n"
+    );
+    await writeFile(join(traeDir, "traecli.toml"), [
+      "[mcp_servers.docs]",
+      'command = "docs"',
+      "enabled = true",
       ""
     ].join("\n"));
-    await writeFile(join(traeDir, "mcp.json"), JSON.stringify({
-      mcpServers: { docs: { url: "https://example.test/mcp" } }
-    }));
 
     const preview = await service.previewTarget("trae-cli");
     expect(preview.resources).toContainEqual(expect.objectContaining({
       kind: "mcp",
       id: "docs",
-      detail: "Enabled; remains Agent-controlled"
+      detail: "Enabled; Profile can control activation"
     }));
 
     const result = await service.createFromTarget({
@@ -284,8 +284,8 @@ describe("target capture service v2", () => {
       name: "Trae Existing"
     });
     expect(result.profile.resources.mcpByTarget["trae-cli"]).toEqual({
-      mode: "ignore",
-      selections: []
+      mode: "manage",
+      selections: [{ name: "docs", enabled: true }]
     });
   });
 

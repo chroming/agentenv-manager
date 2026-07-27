@@ -1188,6 +1188,7 @@ export interface TargetCapabilities {
 export interface TargetPaths {
   targetId: string;
   configDir: string;
+  runtimeDir?: string;
   instructionsPath: string;
   instructionsOverridePath?: string;
   configPath: string;
@@ -1307,6 +1308,7 @@ export type TargetHealthStatus = "ready" | "needs-setup" | "missing" | "guarded"
 export interface TargetPathCheck {
   id:
     | "configDir"
+    | "runtimeDir"
     | "instructions"
     | "config"
     | "mcpConfig"

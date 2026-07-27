@@ -579,27 +579,26 @@ const launchApp = async (
   }
   if (options.includeTraeTarget) {
     await writeTraeProfile(appDataRoot);
+    await mkdir(join(traeDir, "rules"), { recursive: true });
     await writeFile(join(traeDir, "AGENTS.md"), "# Existing UI Trae\n", "utf8");
-    await writeFile(join(traeDir, "trae_cli.yaml"), [
-      "model: fast",
-      "mcp_servers:",
-      "  - name: docs",
-      "    command: docs",
-      "    disabled: true",
-      "    env:",
-      "      TOKEN: keep-trae-yaml-secret",
+    await writeFile(join(traeDir, "traecli.toml"), [
+      'model = "fast"',
+      "",
+      "[mcp_servers.docs]",
+      'command = "docs"',
+      "enabled = false",
+      "",
+      "[mcp_servers.docs.env]",
+      'TOKEN = "keep-trae-toml-secret"',
+      "",
+      "[mcp_servers.browser]",
+      'url = "https://example.test/browser"',
+      "enabled = true",
+      "",
+      "[mcp_servers.browser.headers]",
+      'Authorization = "keep-trae-header-secret"',
       ""
     ].join("\n"), "utf8");
-    await writeFile(join(traeDir, "mcp.json"), `{
-  "telemetry": false,
-  "mcpServers": {
-    "browser": {
-      "url": "https://example.test/browser",
-      "headers": { "Authorization": "keep-trae-json-secret" },
-      "disabled": false
-    }
-  }
-}\n`, "utf8");
   }
   const librarySkill = await writeLibrarySkill(appDataRoot);
   if (options.openCodeAlphaLibrarySkillCount) {
@@ -6085,16 +6084,19 @@ describe("Electron UI profile switching e2e", () => {
 
     await previewAndApply(page, "Trae CLI");
 
-    await expect(readFile(join(traeDir, "AGENTS.md"), "utf8"))
+    await expect(readFile(join(traeDir, "rules", "agentenv-manager.md"), "utf8"))
       .resolves.toContain("Use the managed Trae CLI environment");
+    await expect(readFile(join(traeDir, "AGENTS.md"), "utf8"))
+      .resolves.toBe("# Existing UI Trae\n");
     await expect(readFile(join(traeDir, "skills", "ui-alpha-skill", "SKILL.md"), "utf8"))
       .resolves.toContain("UI alpha Profile Skill");
-    const yaml = await readFile(join(traeDir, "trae_cli.yaml"), "utf8");
-    expect(yaml).toContain("disabled: false");
-    expect(yaml).toContain("TOKEN: keep-trae-yaml-secret");
-    const json = await readFile(join(traeDir, "mcp.json"), "utf8");
-    expect(json).toContain('"disabled": true');
-    expect(json).toContain('"Authorization": "keep-trae-json-secret"');
+    const toml = await readFile(join(traeDir, "traecli.toml"), "utf8");
+    expect(toml).toContain("[mcp_servers.docs]\ncommand = \"docs\"\nenabled = true");
+    expect(toml).toContain('TOKEN = "keep-trae-toml-secret"');
+    expect(toml).toContain(
+      "[mcp_servers.browser]\nurl = \"https://example.test/browser\"\nenabled = false"
+    );
+    expect(toml).toContain('Authorization = "keep-trae-header-secret"');
   }, 30_000);
 
   it("installs a shared library skill into an OpenCode profile from the rendered app", async () => {

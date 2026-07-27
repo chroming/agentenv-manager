@@ -93,6 +93,9 @@ const checkPath = async (
 const createChecks = async (paths: TargetPaths): Promise<TargetPathCheck[]> => {
   const checks = await Promise.all([
     checkPath("configDir", "Config directory", paths.configDir, true),
+    paths.runtimeDir
+      ? checkPath("runtimeDir", "Runtime directory", paths.runtimeDir, false)
+      : undefined,
     checkPath("instructions", "Instructions", paths.instructionsPath, true),
     checkPath("config", "Config", paths.configPath, true),
     paths.mcpConfigPath

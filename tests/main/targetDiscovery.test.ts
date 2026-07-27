@@ -11,6 +11,7 @@ import { createOpenCodeTargetAdapter } from "../../src/main/targets/opencodeTarg
 import { createTargetRegistry } from "../../src/main/targets/registry";
 import { createTargetScope } from "../../src/main/targets/targetScope";
 import { createAntigravityTargetAdapter } from "../../src/main/targets/integrations/antigravity";
+import { createTraeCliTargetAdapter } from "../../src/main/targets/integrations/trae-cli";
 
 let root = "";
 
@@ -26,7 +27,8 @@ const makeService = async (options: { platform?: NodeJS.Platform } = {}) => {
   const targetRegistry = createTargetRegistry([
     createOpenCodeTargetAdapter(),
     createClaudeCodeTargetAdapter(),
-    createCodexTargetAdapter()
+    createCodexTargetAdapter(),
+    createTraeCliTargetAdapter()
   ]);
   const settingsStore = createSettingsStore(paths, {
     supportedTargetIds: targetRegistry.list().map((target) => target.id)
@@ -133,6 +135,38 @@ describe("target discovery", () => {
 
     expect(opencode?.health.status).toBe("ready");
     expect(opencode?.health.canWrite).toBe(true);
+  });
+
+  it("reports the resolved Trae V2 runtime separately from its resource root", async () => {
+    const { binDir, service } = await makeService();
+    const executable = join(binDir, "traecli");
+    const runtimeDir = join(root, ".trae", "cli");
+    await writeFile(executable, "#!/bin/sh\n");
+    await chmod(executable, 0o755);
+    await mkdir(join(runtimeDir, "sessions"), { recursive: true });
+
+    const targets = await service.listTargets({ forceRefresh: true });
+    const trae = targets.find((target) => target.id === "trae-cli");
+
+    expect(trae).toMatchObject({
+      paths: {
+        configDir: join(root, ".trae"),
+        runtimeDir,
+        configPath: join(root, ".trae", "traecli.toml")
+      },
+      conversationCapabilities: {
+        history: { state: "available" },
+        openOriginal: { state: "available" },
+        continue: { state: "degraded" }
+      }
+    });
+    expect(trae?.health.checks).toContainEqual(expect.objectContaining({
+      id: "runtimeDir",
+      label: "Runtime directory",
+      path: runtimeDir,
+      exists: true,
+      required: false
+    }));
   });
 
   it("caches missing executable checks until an explicit refresh", async () => {

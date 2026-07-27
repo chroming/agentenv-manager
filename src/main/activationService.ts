@@ -150,6 +150,7 @@ class InvalidTargetStateError extends Error {
 
 interface InternalActivationPreview extends ActivationPreview {
   targetStateFingerprint: string;
+  targetPathFingerprint: string;
   assetBackupPaths: string[];
   resourceManagement: {
     instructions: boolean;
@@ -170,6 +171,7 @@ interface InternalActivationPreview extends ActivationPreview {
 const publicPreview = (preview: InternalActivationPreview): ActivationPreview => {
   const {
     targetStateFingerprint: _targetStateFingerprint,
+    targetPathFingerprint: _targetPathFingerprint,
     assetBackupPaths: _assetBackupPaths,
     resourceManagement: _resourceManagement,
     skillDeployment: _skillDeployment,
@@ -197,6 +199,26 @@ const publicPreview = (preview: InternalActivationPreview): ActivationPreview =>
 
 const hashText = (content: string): string =>
   createHash("sha256").update(content).digest("hex");
+
+const targetPathFingerprint = (targetPaths: TargetPaths) =>
+  hashText(JSON.stringify({
+    targetId: targetPaths.targetId,
+    configDir: resolve(targetPaths.configDir),
+    runtimeDir: targetPaths.runtimeDir ? resolve(targetPaths.runtimeDir) : undefined,
+    instructionsPath: resolve(targetPaths.instructionsPath),
+    instructionsOverridePath: targetPaths.instructionsOverridePath
+      ? resolve(targetPaths.instructionsOverridePath)
+      : undefined,
+    configPath: resolve(targetPaths.configPath),
+    mcpConfigPath: targetPaths.mcpConfigPath
+      ? resolve(targetPaths.mcpConfigPath)
+      : undefined,
+    agentsDir: targetPaths.agentsDir ? resolve(targetPaths.agentsDir) : undefined,
+    skillsDir: targetPaths.skillsDir ? resolve(targetPaths.skillsDir) : undefined,
+    skillLocations: (targetPaths.skillLocations ?? [])
+      .map((location) => resolve(location.path))
+      .sort()
+  }));
 
 const normalizeSharedSkillPreparations = (
   preparations: readonly SharedSkillPreparation[] = []
@@ -1181,6 +1203,7 @@ export const createActivationService = ({
     const preview: InternalActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
+      targetPathFingerprint: targetPathFingerprint(targetPaths),
       profileContentHash,
       libraryVersions: collectLibraryResourceVersions(
         materializedProfile,
@@ -1360,6 +1383,13 @@ export const createActivationService = ({
         };
       }
       const targetPaths = await targetPathsFor(preview.targetId);
+      if (targetPathFingerprint(targetPaths) !== preview.targetPathFingerprint) {
+        return {
+          ok: false,
+          kind: "stale",
+          errors: ["Agent paths changed after preview; review the latest version"]
+        };
+      }
       const currentStateFile = await readTargetStateFile(preview.targetId);
       if (fingerprintTargetState(currentStateFile.state) !== preview.targetStateFingerprint) {
         return {

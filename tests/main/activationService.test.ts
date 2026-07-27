@@ -274,8 +274,10 @@ describe("activation service v2", () => {
     await expect(service.applyProfile("trae-captured", preview.id)).resolves.toEqual(
       expect.objectContaining({ ok: true })
     );
-    await expect(readFile(join(traeDir, "AGENTS.md"), "utf8"))
+    await expect(readFile(join(traeDir, "rules", "agentenv-manager.md"), "utf8"))
       .resolves.toBe("# Managed Trae guidance\n");
+    await expect(readFile(join(traeDir, "AGENTS.md"), "utf8"))
+      .resolves.toBe("# Existing Trae guidance\n");
     await expect(readFile(join(externalPaths[0], "SKILL.md"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });
     for (const observedPath of externalPaths.slice(1)) {
@@ -952,6 +954,44 @@ describe("activation service v2", () => {
     });
     await expect(readFile(paths.globalAgentsPath, "utf8"))
       .resolves.toBe("# Old guidance\n");
+  });
+
+  it("rejects a Trae Preview when V2 layout evidence appears before Apply", async () => {
+    const { paths, profileStore, service } = await makeEnv();
+    const traeRoot = join(paths.homeDir, ".trae");
+    const legacyConfigPath = join(traeRoot, "traecli.yaml");
+    const managedInstructionsPath = join(traeRoot, "rules", "agentenv-manager.md");
+    await mkdir(traeRoot, { recursive: true });
+    await writeFile(legacyConfigPath, "model: legacy\n");
+    await profileStore.saveProfile({
+      manifest: {
+        id: "trae-layout-transition",
+        name: "Trae layout transition",
+        description: "",
+        preferredTargetId: "trae-cli",
+        version: 2
+      },
+      instructions: "# Managed Trae guidance\n",
+      resources: {
+        skills: [],
+        mcpByTarget: {
+          "trae-cli": { mode: "ignore", selections: [] }
+        }
+      }
+    });
+
+    const preview = await service.previewProfile("trae-layout-transition", "trae-cli");
+    await mkdir(join(traeRoot, "cli", "sessions"), { recursive: true });
+
+    await expect(
+      service.applyProfile("trae-layout-transition", preview.id)
+    ).resolves.toEqual({
+      ok: false,
+      kind: "stale",
+      errors: ["Agent paths changed after preview; review the latest version"]
+    });
+    await expect(readFile(legacyConfigPath, "utf8")).resolves.toBe("model: legacy\n");
+    await expect(readFile(managedInstructionsPath, "utf8")).rejects.toThrow();
   });
 
   it("restores the pre-Apply environment from its backup", async () => {

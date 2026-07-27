@@ -60,30 +60,29 @@ describe("Trae CLI Profile v2 switching e2e", () => {
     }
 
     const traeDir = join(paths.homeDir, ".trae");
-    const yamlConfig = [
-      "model: fast",
-      "mcp_servers:",
-      "  - name: docs",
-      "    command: docs",
-      "    disabled: true",
-      "    env:",
-      "      TOKEN: keep-yaml-secret",
+    const tomlConfig = [
+      'model = "fast"',
+      "",
+      "[mcp_servers.docs]",
+      'command = "docs"',
+      "enabled = false",
+      "",
+      "[mcp_servers.docs.env]",
+      'TOKEN = "keep-toml-secret"',
+      "",
+      "[mcp_servers.browser]",
+      'url = "https://example.test/mcp"',
+      "enabled = false",
+      "",
+      "[mcp_servers.browser.headers]",
+      'Authorization = "keep-header-secret"',
       ""
     ].join("\n");
-    const jsonConfig = `{
-  "telemetry": false,
-  "mcpServers": {
-    "browser": {
-      "url": "https://example.test/mcp",
-      "headers": { "Authorization": "keep-json-secret" },
-      "disabled": true
-    }
-  }
-}\n`;
-    await mkdir(traeDir, { recursive: true });
+    await mkdir(join(traeDir, "rules"), { recursive: true });
+    await mkdir(join(traeDir, "cli"), { recursive: true });
     await writeFile(join(traeDir, "AGENTS.md"), "# Before\n");
-    await writeFile(join(traeDir, "trae_cli.yaml"), yamlConfig);
-    await writeFile(join(traeDir, "mcp.json"), jsonConfig);
+    await writeFile(join(traeDir, "traecli.toml"), tomlConfig);
+    await writeFile(join(traeDir, "cli", "auth.json"), '{"token":"runtime-owned"}\n');
     const service = createActivationService({
       paths,
       profileStore,
@@ -101,15 +100,17 @@ describe("Trae CLI Profile v2 switching e2e", () => {
       if (id === "beta" && applied.ok) betaBackupId = applied.backupId;
     }
 
-    expect(await readFile(join(traeDir, "AGENTS.md"), "utf8")).toBe("# BETA\n");
-    const finalYaml = await readFile(join(traeDir, "trae_cli.yaml"), "utf8");
-    expect(finalYaml).toContain("model: fast");
-    expect(finalYaml).toContain("TOKEN: keep-yaml-secret");
-    expect(finalYaml).toContain("disabled: true");
-    const finalJson = await readFile(join(traeDir, "mcp.json"), "utf8");
-    expect(finalJson).toContain('"telemetry": false');
-    expect(finalJson).toContain('"Authorization": "keep-json-secret"');
-    expect(finalJson).toContain('"disabled": false');
+    expect(await readFile(join(traeDir, "rules", "agentenv-manager.md"), "utf8"))
+      .toBe("# BETA\n");
+    expect(await readFile(join(traeDir, "AGENTS.md"), "utf8")).toBe("# Before\n");
+    const finalToml = await readFile(join(traeDir, "traecli.toml"), "utf8");
+    expect(finalToml).toContain('model = "fast"');
+    expect(finalToml).toContain('TOKEN = "keep-toml-secret"');
+    expect(finalToml).toContain('Authorization = "keep-header-secret"');
+    expect(finalToml).toContain("[mcp_servers.docs]\ncommand = \"docs\"\nenabled = false");
+    expect(finalToml).toContain("[mcp_servers.browser]\nurl = \"https://example.test/mcp\"\nenabled = true");
+    await expect(readFile(join(traeDir, "cli", "auth.json"), "utf8"))
+      .resolves.toBe('{"token":"runtime-owned"}\n');
     await expect(readFile(join(traeDir, "skills", "alpha", "SKILL.md"), "utf8"))
       .rejects.toThrow();
     await expect(readFile(join(traeDir, "skills", "beta", "SKILL.md"), "utf8"))
@@ -122,15 +123,20 @@ describe("Trae CLI Profile v2 switching e2e", () => {
     const rollbackPreview = await service.previewRollback(betaBackupId);
     expect(rollbackPreview.errors).toEqual([]);
     expect((await service.rollback(betaBackupId)).ok).toBe(true);
-    await expect(readFile(join(traeDir, "AGENTS.md"), "utf8"))
+    await expect(readFile(join(traeDir, "rules", "agentenv-manager.md"), "utf8"))
       .resolves.toBe("# ALPHA\n");
     await expect(readFile(join(traeDir, "skills", "alpha", "SKILL.md"), "utf8"))
       .resolves.toContain("# alpha");
     await expect(readFile(join(traeDir, "skills", "beta", "SKILL.md"), "utf8"))
       .rejects.toThrow();
-    await expect(readFile(join(traeDir, "trae_cli.yaml"), "utf8"))
-      .resolves.toContain("disabled: false");
-    await expect(readFile(join(traeDir, "mcp.json"), "utf8"))
-      .resolves.toContain('"disabled": true');
+    const rolledBackToml = await readFile(join(traeDir, "traecli.toml"), "utf8");
+    expect(rolledBackToml).toContain(
+      "[mcp_servers.docs]\ncommand = \"docs\"\nenabled = true"
+    );
+    expect(rolledBackToml).toContain(
+      "[mcp_servers.browser]\nurl = \"https://example.test/mcp\"\nenabled = false"
+    );
+    await expect(readFile(join(traeDir, "cli", "auth.json"), "utf8"))
+      .resolves.toBe('{"token":"runtime-owned"}\n');
   });
 });

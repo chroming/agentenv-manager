@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTargetRegistry } from "../../../src/main/targets/registry";
 import { blockingMessages } from "../../helpers/applyIssues";
@@ -19,7 +19,7 @@ describe("Target resource management contract", () => {
       root = await mkdtemp(join(tmpdir(), `agentenv-${targetId}-resource-policy-`));
       const adapter = createTargetRegistry().get(targetId);
       const targetPaths = adapter.createTargetPaths({ homeDir: root });
-      await mkdir(targetPaths.configDir, { recursive: true });
+      await mkdir(dirname(targetPaths.instructionsPath), { recursive: true });
       await writeFile(targetPaths.instructionsPath, "# Live instructions\n", "utf8");
       const profile = adapter.createDefaultProfile("daily");
       profile.instructions = "# Profile instructions\n";
