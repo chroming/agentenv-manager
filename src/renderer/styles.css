@@ -4626,10 +4626,6 @@ button svg,
   color: var(--accent);
 }
 
-.app-feedback--loading svg {
-  animation: spin 0.9s linear infinite;
-}
-
 .app-feedback--success {
   background: var(--success-bg);
   border-color: #bfe8d2;
@@ -4685,24 +4681,12 @@ button svg,
 }
 
 .inline-state--loading .inline-state__icon::after {
-  animation: spin 0.9s linear infinite;
   border: 2px solid rgba(49, 95, 220, 0.22);
   border-top-color: var(--accent);
   border-radius: var(--radius-pill);
   content: "";
   height: 12px;
   width: 12px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* Async controls use this shared state across every page and dialog. */
-.is-spinning {
-  animation: spin 0.9s linear infinite;
 }
 
 .row-action-popover {
@@ -4803,25 +4787,7 @@ button svg,
   transition:
     background-color var(--motion-standard),
     border-color var(--motion-standard),
-    box-shadow var(--motion-standard),
-    transform var(--motion-standard);
-}
-
-.workspace-button:hover:not(:disabled),
-.profile-row:hover:not(:disabled),
-.resource-picker-option:hover,
-.resource-row:hover,
-.target-card:hover,
-.resource-overview-card:hover,
-.compatibility-item:hover,
-.metric-tile--button:hover {
-  transform: translateY(-1px);
-}
-
-.profile-row:active:not(:disabled),
-.workspace-button:active:not(:disabled),
-.metric-tile--button:active {
-  transform: translateY(0) scale(0.995);
+    box-shadow var(--motion-standard);
 }
 
 .metric-tile strong,

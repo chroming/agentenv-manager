@@ -39,8 +39,20 @@ const primitiveRootSelectors = new Set([
   ".ui-switch"
 ]);
 const runtimeCustomProperties = new Set([
-  "--hover-detail-arrow-left"
+  "--hover-detail-arrow-left",
+  "--hover-detail-origin-x"
 ]);
+const animationOwnerFiles = new Set([
+  "src/renderer/ui/accessibility.css",
+  "src/renderer/ui/primitives.css"
+]);
+const highFrequencySpatialSelectors = [
+  ".workspace-button",
+  ".profile-row",
+  ".library-table-row",
+  ".resource-row",
+  ".resource-picker-option"
+];
 
 const selectorCounts = (content) => {
   const counts = new Map();
@@ -74,6 +86,16 @@ for (const file of files) {
   const hardcodedRadii = [...content.matchAll(/border-radius:\s*([^;]+);/g)]
     .map((match) => match[1].trim())
     .filter((value) => /\d+(?:px|rem|em|%)/.test(value) && value !== "50%");
+  const highFrequencySpatialMotion = [
+    ...content.matchAll(/([^{}]+)\{([^{}]*\btransform\s*:\s*([^;]+);[^{}]*)\}/g)
+  ]
+    .map((match) => ({
+      selector: match[1].replace(/\s+/g, " ").trim(),
+      value: match[3].trim()
+    }))
+    .filter(({ selector }) =>
+      highFrequencySpatialSelectors.some((candidate) => selector.includes(candidate))
+    );
   reports.push({
     file,
     lines: content.split("\n").length,
@@ -88,6 +110,10 @@ for (const file of files) {
     heavyNumericFontWeights: [...content.matchAll(/font-weight:\s*([0-9]+)/g)]
       .map((match) => Number(match[1]))
       .filter((value) => value > 650),
+    animationDeclarations: (content.match(/\banimation\s*:/g) ?? []).length,
+    keyframes: [...content.matchAll(/@keyframes\s+([a-zA-Z0-9_-]+)/g)]
+      .map((match) => match[1]),
+    highFrequencySpatialMotion,
     selectors
   });
 }
@@ -125,6 +151,20 @@ const undefinedCustomProperties = [...usedCustomProperties.entries()]
     files: [...locations].sort()
   }))
   .sort((left, right) => left.property.localeCompare(right.property));
+const animationOwnerViolations = reports
+  .filter(
+    ({ file, animationDeclarations, keyframes }) =>
+      !animationOwnerFiles.has(file) &&
+      (animationDeclarations > 0 || keyframes.length > 0)
+  )
+  .map(({ file, animationDeclarations, keyframes }) => ({
+    file,
+    animationDeclarations,
+    keyframes
+  }));
+const highFrequencySpatialMotion = reports.flatMap(({ file, highFrequencySpatialMotion }) =>
+  highFrequencySpatialMotion.map((motion) => ({ file, ...motion }))
+);
 
 const result = {
   files: reports.map(({ selectors: _selectors, ...report }) => report),
@@ -150,6 +190,8 @@ const result = {
     )
   },
   architecture: {
+    animationOwnerViolations,
+    highFrequencySpatialMotion,
     pagePrimitiveRedefinitions,
     undefinedCustomProperties,
     usesLateSystemLayer: /(?:\bsystem\b|system\.css)/.test(rendererIndex)
@@ -182,6 +224,16 @@ if (shouldCheck) {
       ? `Page styles must not redefine primitive roots: ${result.architecture.pagePrimitiveRedefinitions
           .map(({ file, selector }) => `${file} (${selector})`)
           .join(", ")}`
+      : undefined,
+    result.architecture.animationOwnerViolations.length > 0
+      ? `Animation declarations belong to shared primitives or accessibility: ${result.architecture.animationOwnerViolations
+          .map(({ file }) => file)
+          .join(", ")}`
+      : undefined,
+    result.architecture.highFrequencySpatialMotion.length > 0
+      ? `High-frequency rows and navigation must not move: ${result.architecture.highFrequencySpatialMotion
+          .map(({ file, selector, value }) => `${file} (${selector}: ${value})`)
+          .join("; ")}`
       : undefined,
     result.architecture.undefinedCustomProperties.length > 0
       ? `CSS custom properties must be declared in the renderer token system: ${result.architecture.undefinedCustomProperties

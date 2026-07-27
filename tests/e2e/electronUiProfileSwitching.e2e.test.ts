@@ -2706,14 +2706,19 @@ describe("Electron UI profile switching e2e", () => {
       return {
         fontWeight: style.fontWeight,
         borderTopWidth: style.borderTopWidth,
-        userSelect: style.userSelect
+        userSelect: style.userSelect,
+        transitionProperty: style.transitionProperty,
+        transformOrigin: style.transformOrigin
       };
     });
-    expect(detailStyle).toEqual({
+    expect(detailStyle).toMatchObject({
       fontWeight: "400",
       borderTopWidth: "1px",
       userSelect: "text"
     });
+    expect(detailStyle.transitionProperty).toContain("opacity");
+    expect(detailStyle.transitionProperty).toContain("transform");
+    expect(detailStyle.transformOrigin).not.toBe("50% 50%");
     await page.mouse.move(10, 10);
     await descriptionTip.waitFor({ state: "hidden" });
 
@@ -3788,6 +3793,35 @@ describe("Electron UI profile switching e2e", () => {
 
     const profilePositions = await Promise.all([skillsButton.boundingBox(), profilesButton.boundingBox()]);
     expect(profilePositions[0]!.y).toBeLessThan(profilePositions[1]!.y);
+    const navigationBeforeHover = await skillsButton.boundingBox();
+    await skillsButton.hover();
+    await page.waitForTimeout(220);
+    expect(await skillsButton.boundingBox()).toEqual(navigationBeforeHover);
+
+    await profilesButton.click();
+    const profileRow = page.locator(".profile-row").first();
+    await profileRow.waitFor({ state: "visible" });
+    const profileBeforeHover = await profileRow.boundingBox();
+    await profileRow.hover();
+    await page.waitForTimeout(220);
+    expect(await profileRow.boundingBox()).toEqual(profileBeforeHover);
+
+    await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.className = "is-spinning";
+      probe.dataset.motionProbe = "spinner";
+      document.body.append(probe);
+    });
+    const motionProbe = page.locator('[data-motion-probe="spinner"]');
+    expect(await motionProbe.evaluate((element) => getComputedStyle(element).animationName))
+      .toBe("spin");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(await motionProbe.evaluate((element) => getComputedStyle(element).animationName))
+      .toBe("reduced-motion-pulse");
+    expect(await motionProbe.evaluate((element) => getComputedStyle(element).transform))
+      .toBe("none");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await motionProbe.evaluate((element) => element.remove());
 
     await navigation.getByRole("button", { name: "Agents", exact: true }).click();
     expect(await page.getByRole("complementary", { name: "Workspace summary" }).count()).toBe(0);

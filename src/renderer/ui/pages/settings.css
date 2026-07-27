@@ -732,7 +732,7 @@
   grid-template-columns: 36px minmax(0, 1fr);
   min-height: 76px;
   padding: 12px 14px;
-  transition: box-shadow var(--motion-standard), transform var(--motion-standard);
+  transition: box-shadow var(--motion-standard);
 }
 
 .metric-strip--compact .metric-icon {
@@ -898,10 +898,6 @@
 .github-device-status svg {
   color: var(--accent);
   flex: 0 0 auto;
-}
-
-.github-device-status .is-spinning {
-  animation: spin 0.9s linear infinite;
 }
 
 .github-device-actions {
@@ -1184,14 +1180,6 @@
 .workspace-sync-review-actions {
   border-top: 1px solid var(--border);
   padding: 12px 18px;
-}
-
-.spin {
-  animation: agentenv-spin 0.8s linear infinite;
-}
-
-@keyframes agentenv-spin {
-  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 1040px) {

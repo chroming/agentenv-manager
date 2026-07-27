@@ -1,6 +1,28 @@
 .ui-button,
 .ui-icon-button {
   flex: 0 0 auto;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-fast);
+}
+
+.ui-button:active:not(:disabled),
+.ui-icon-button:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.is-spinning,
+.inline-state--loading .inline-state__icon::after {
+  animation: spin var(--motion-spinner) linear infinite;
 }
 
 .ui-button {

@@ -278,7 +278,6 @@ html[data-platform="darwin"] .page-header.ui-page-header [role="button"] {
 
 .workspace-button:hover:not(:disabled) {
   background: rgba(60, 60, 67, 0.065);
-  transform: none;
 }
 
 .workspace-button.is-active .workspace-button__icon {

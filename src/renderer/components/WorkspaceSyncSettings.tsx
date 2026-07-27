@@ -147,7 +147,7 @@ export const WorkspaceSyncSettings = () => {
     return labels[status.kind];
   }, [status.kind, status.working, t]);
   const statusIcon = status.working === "checking"
-    ? <LoaderCircle className="spin" size={15} />
+    ? <LoaderCircle className="is-spinning" size={15} />
     : status.kind === "up-to-date"
       ? <CheckCircle2 size={15} />
       : status.kind === "local-changes"

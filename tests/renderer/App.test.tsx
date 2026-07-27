@@ -874,6 +874,20 @@ describe("App", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it("animates only the status icon for global loading feedback", () => {
+    const { container } = render(
+      <AppFeedback
+        feedback={{ kind: "loading", title: "Checking for updates" }}
+        onDismiss={vi.fn()}
+      />
+    );
+
+    expect(container.querySelectorAll(".is-spinning")).toHaveLength(1);
+    expect(
+      screen.getByRole("button", { name: "Copy message" }).querySelector(".is-spinning")
+    ).toBeNull();
+  });
+
   const openProfiles = async () => {
     fireEvent.click(await screen.findByRole("button", { name: "Profiles" }));
   };

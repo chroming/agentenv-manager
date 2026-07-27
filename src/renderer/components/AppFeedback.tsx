@@ -65,7 +65,12 @@ export const AppFeedback = ({
       }`}
       role={feedback.kind === "error" ? "alert" : "status"}
     >
-      <Icon size={15} strokeWidth={2.2} aria-hidden="true" />
+      <Icon
+        className={feedback.kind === "loading" ? "is-spinning" : undefined}
+        size={15}
+        strokeWidth={2.2}
+        aria-hidden="true"
+      />
       <div>
         <strong>{t(feedback.title)}</strong>
         {feedback.message ? <span>{t(feedback.message)}</span> : null}

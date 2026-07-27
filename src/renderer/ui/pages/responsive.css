@@ -40,16 +40,3 @@
     min-height: var(--control-height-compact);
   }
 }
-
-@media (hover: none), (pointer: coarse) {
-  .workspace-button:hover:not(:disabled),
-  .profile-row:hover:not(:disabled),
-  .resource-picker-option:hover,
-  .resource-row:hover,
-  .target-card:hover,
-  .resource-overview-card:hover,
-  .compatibility-item:hover,
-  .metric-tile--button:hover {
-    transform: none;
-  }
-}

@@ -55,10 +55,31 @@
   position: fixed;
   text-align: left;
   text-transform: none;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity var(--motion-fast),
+    transform var(--motion-fast);
   user-select: text;
   white-space: pre-wrap;
   width: max-content;
   z-index: var(--z-tooltip);
+}
+
+.ui-hover-detail--top {
+  --hover-detail-enter-y: 2px;
+  transform-origin: var(--hover-detail-origin-x, 24px) calc(100% + 4px);
+}
+
+.ui-hover-detail--bottom {
+  --hover-detail-enter-y: -2px;
+  transform-origin: var(--hover-detail-origin-x, 24px) -4px;
+}
+
+@starting-style {
+  .ui-hover-detail {
+    opacity: 0;
+    transform: translateY(var(--hover-detail-enter-y, 0)) scale(0.985);
+  }
 }
 
 .ui-hover-detail--arrow::after {

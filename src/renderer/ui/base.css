@@ -144,8 +144,7 @@ button {
     background-color var(--motion-fast),
     border-color var(--motion-fast),
     box-shadow var(--motion-fast),
-    color var(--motion-fast),
-    transform var(--motion-fast);
+    color var(--motion-fast);
   white-space: nowrap;
 }
 

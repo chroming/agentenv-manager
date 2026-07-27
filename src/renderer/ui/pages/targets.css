@@ -80,16 +80,11 @@
   gap: 0;
   min-height: 0;
   padding: 0 12px;
-  transform: none;
   width: 100%;
 }
 
 .target-card--workflow + .target-card--workflow {
   border-top: 1px solid var(--border);
-}
-
-.target-card--workflow:hover {
-  transform: none;
 }
 
 .target-workflow-header {
@@ -448,9 +443,6 @@
   opacity: 1;
 }
 
-.capture-dialog__submit.is-working svg {
-  animation: spin 0.8s linear infinite;
-}
 .target-native-mcps {
   border-top: 1px solid var(--border);
   display: grid;

@@ -733,11 +733,6 @@
   color: var(--muted);
 }
 
-.github-import-state .is-spinning,
-.import-dialog-actions .is-spinning {
-  animation: spin 0.8s linear infinite;
-}
-
 .import-inline-error {
   align-items: flex-start;
   margin: 10px 18px 0;

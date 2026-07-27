@@ -144,6 +144,44 @@ describe("renderer UI primitives", () => {
     vi.useRealTimers();
   });
 
+  it("opens an adjacent hover detail immediately after the first delayed detail", () => {
+    vi.useFakeTimers();
+    render(
+      <>
+        <OverflowTooltip
+          className="description"
+          displayText="First truncated value"
+          text="First complete value"
+        />
+        <OverflowTooltip
+          className="description"
+          displayText="Second truncated value"
+          text="Second complete value"
+        />
+      </>
+    );
+    const first = screen.getByText("First truncated value");
+    const second = screen.getByText("Second truncated value");
+    for (const trigger of [first, second]) {
+      Object.defineProperties(trigger, {
+        clientWidth: { configurable: true, value: 80 },
+        scrollWidth: { configurable: true, value: 220 }
+      });
+    }
+
+    fireEvent.mouseEnter(first);
+    act(() => vi.advanceTimersByTime(179));
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("First complete value");
+
+    fireEvent.mouseLeave(first);
+    fireEvent.mouseEnter(second);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Second complete value");
+    expect(screen.queryByText("First complete value")).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
   it("does not open an overflow detail for text that already fits", () => {
     render(<OverflowTooltip className="description" focusable text="Short value" />);
     const trigger = screen.getByText("Short value");

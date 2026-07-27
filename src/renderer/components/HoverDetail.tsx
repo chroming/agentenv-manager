@@ -39,6 +39,7 @@ interface HoverDetailProps {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
 const hoverDetailOpenEvent = "agentenv:hover-detail-open";
+let activeHoverDetailId: string | undefined;
 
 export const HoverDetail = ({
   align = "start",
@@ -81,8 +82,11 @@ export const HoverDetail = ({
   const close = useCallback(() => {
     cancelOpen();
     cancelClose();
+    if (activeHoverDetailId === popoverId) {
+      activeHoverDetailId = undefined;
+    }
     setIsOpen(false);
-  }, []);
+  }, [popoverId]);
 
   const open = () => {
     const trigger = triggerRef.current;
@@ -97,17 +101,22 @@ export const HoverDetail = ({
     cancelOpen();
     cancelClose();
     document.dispatchEvent(new CustomEvent(hoverDetailOpenEvent, { detail: popoverId }));
+    activeHoverDetailId = popoverId;
     setIsOpen(true);
   };
 
   const scheduleOpen = () => {
     cancelOpen();
+    if (activeHoverDetailId && activeHoverDetailId !== popoverId) {
+      open();
+      return;
+    }
     openTimerRef.current = window.setTimeout(open, hoverDelay);
   };
 
   const scheduleClose = () => {
     cancelClose();
-    closeTimerRef.current = window.setTimeout(() => setIsOpen(false), 160);
+    closeTimerRef.current = window.setTimeout(close, 160);
   };
 
   const updatePosition = useCallback(() => {
@@ -181,7 +190,10 @@ export const HoverDetail = ({
   useEffect(() => () => {
     cancelOpen();
     cancelClose();
-  }, []);
+    if (activeHoverDetailId === popoverId) {
+      activeHoverDetailId = undefined;
+    }
+  }, [popoverId]);
 
   useEffect(() => {
     const closeForAnotherDetail = (event: Event) => {
@@ -193,6 +205,7 @@ export const HoverDetail = ({
 
   const popoverStyle = {
     "--hover-detail-arrow-left": `${position?.arrowLeft ?? 24}px`,
+    "--hover-detail-origin-x": `${position?.arrowLeft ?? 24}px`,
     left: position?.left ?? -9999,
     maxWidth: position?.maxWidth ?? maxWidth,
     top: position?.top ?? -9999

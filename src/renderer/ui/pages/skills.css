@@ -183,7 +183,6 @@
   grid-template-areas: none;
   min-height: var(--resource-row-comfortable);
   padding: 6px 14px;
-  transform: none;
   z-index: auto;
 }
 
@@ -453,7 +452,6 @@
 
 .skill-library-panel .library-table-row:hover {
   background: rgba(0, 122, 255, 0.035);
-  transform: none;
 }
 
 .skill-library-panel .library-resource-cell .resource-avatar {

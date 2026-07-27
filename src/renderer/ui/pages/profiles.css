@@ -295,13 +295,7 @@
 }
 
 .profile-commit-actions .save-button .is-spinning {
-  animation: spin 0.8s linear infinite;
   flex: 0 0 auto;
-}
-
-.profile-apply-button .is-spinning,
-.preview-actions .is-spinning {
-  animation: spin 0.8s linear infinite;
 }
 
 .preview-actions .primary-action {
@@ -411,12 +405,6 @@
   min-height: 68px;
   padding: 7px 9px;
   position: relative;
-  transform: none;
-}
-
-.profile-row:hover:not(:disabled),
-.profile-row:active:not(:disabled) {
-  transform: none;
 }
 
 .profile-row.is-active {
@@ -1437,10 +1425,6 @@
   display: flex;
   flex: 0 0 auto;
   gap: 8px;
-}
-
-.profile-skill-check .is-spinning {
-  animation: spin 0.9s linear infinite;
 }
 
 .profile-skill-list {

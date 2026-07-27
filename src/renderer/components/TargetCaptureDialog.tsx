@@ -302,7 +302,7 @@ export const TargetCaptureDialog = ({
               onClick={isReview ? onCreate : onReview}
             >
               <span className="capture-dialog__submit-icon" aria-hidden="true">
-                {isBusy ? <LoaderCircle size={15} /> : null}
+                {isBusy ? <LoaderCircle className="is-spinning" size={15} /> : null}
               </span>
               <span aria-live="polite">
                 {t(
