@@ -616,7 +616,7 @@ export const SkillSourceView = ({
       aria-hidden={!active}
     >
       <div className={`skill-source-toolbar${mergeSelectionMode ? " is-merge-selection" : ""}`}>
-        <label className="library-search">
+        <label className="library-search ui-composite-field">
           <span>{t("Search")}</span>
           <Search size={16} strokeWidth={2.1} aria-hidden="true" />
           <input

@@ -1369,12 +1369,7 @@
 
 .skill-import-alternate-id input {
   min-width: 0;
-  height: 32px;
-  padding: 0 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--text);
+  height: var(--control-height-default);
 }
 
 .skill-import-alternate-id input[aria-invalid="true"] {

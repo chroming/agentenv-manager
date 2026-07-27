@@ -8342,6 +8342,23 @@ describe("Electron UI profile switching e2e", () => {
     const { page } = await launchApp();
     await resizeAppWindow(page, 920, 620);
     const sidebar = page.locator(".global-sidebar");
+    const sharedSearchContracts: Array<{
+      borderWidth: string;
+      height: number;
+      inputBorderWidth: string;
+      radius: string;
+    }> = [];
+    const readCompositeFieldContract = (selector: string) =>
+      page.locator(selector).first().evaluate((field) => {
+        const input = field.querySelector<HTMLInputElement>("input")!;
+        const fieldStyle = getComputedStyle(field);
+        return {
+          borderWidth: fieldStyle.borderTopWidth,
+          height: Math.round(field.getBoundingClientRect().height),
+          inputBorderWidth: getComputedStyle(input).borderTopWidth,
+          radius: fieldStyle.borderRadius
+        };
+      });
 
     const headerMetrics: Array<{ fontSize: string; left: number; top: number }> = [];
     const workspaceSurfaceSelectors: Record<string, string> = {
@@ -8488,6 +8505,29 @@ describe("Electron UI profile switching e2e", () => {
       source: getComputedStyle(row.querySelector<HTMLElement>(".library-source-primary")!).fontWeight
     }));
     expect(skillTypography).toEqual({ description: "400", name: "500", source: "400" });
+    sharedSearchContracts.push(await readCompositeFieldContract(".library-toolbar .library-search"));
+
+    await page.getByRole("button", { name: "Import skills", exact: true }).click();
+    const readonlySourceField = page.getByRole("textbox", { name: "Local Skill source path" });
+    const readonlySourceContract = await readonlySourceField.evaluate((input) => {
+      const style = getComputedStyle(input);
+      return {
+        backgroundColor: style.backgroundColor,
+        height: Math.round(input.getBoundingClientRect().height),
+        readOnly: (input as HTMLInputElement).readOnly,
+        radius: style.borderRadius
+      };
+    });
+    expect(readonlySourceContract).toEqual({
+      backgroundColor: "rgb(245, 245, 247)",
+      height: 34,
+      readOnly: true,
+      radius: "6px"
+    });
+    await page
+      .getByRole("dialog", { name: "Import skills" })
+      .getByRole("button", { name: "Close", exact: true })
+      .click();
 
     await sidebar.getByRole("button", { name: "Profiles", exact: true }).click();
     await page.locator(".profile-hero").waitFor({ state: "visible" });
@@ -8523,6 +8563,79 @@ describe("Electron UI profile switching e2e", () => {
     expect(profileSearchGeometry.leftInset).toBeGreaterThanOrEqual(30);
     expect(profileSearchGeometry.rightInset).toBeGreaterThanOrEqual(1);
     expect(profileSearchGeometry.topInset).toBeGreaterThanOrEqual(1);
+    sharedSearchContracts.push(await readCompositeFieldContract(".profile-search"));
+
+    await page.getByRole("button", { name: "New Profile", exact: true }).click();
+    const profileDialog = page.getByRole("dialog", { name: "New profile" });
+    const profileNameField = profileDialog.getByRole("textbox", { name: "Profile name" });
+    const profileDescriptionField = profileDialog.getByRole("textbox", { name: "Description" });
+    const profileFieldContract = await profileDialog.evaluate((dialog) => {
+      const input = dialog.querySelector<HTMLInputElement>('input[aria-label="Profile name"]')!;
+      const textarea = dialog.querySelector<HTMLTextAreaElement>('textarea[aria-label="Description"]')!;
+      const cancel = dialog.querySelector<HTMLButtonElement>(".secondary-action")!;
+      const create = dialog.querySelector<HTMLButtonElement>(".primary-action")!;
+      const inputStyle = getComputedStyle(input);
+      const textareaStyle = getComputedStyle(textarea);
+      const cancelStyle = getComputedStyle(cancel);
+      const createStyle = getComputedStyle(create);
+      return {
+        cancel: {
+          backgroundColor: cancelStyle.backgroundColor,
+          fontWeight: cancelStyle.fontWeight,
+          height: Math.round(cancel.getBoundingClientRect().height),
+          radius: cancelStyle.borderRadius
+        },
+        create: {
+          backgroundColor: createStyle.backgroundColor,
+          disabled: create.disabled,
+          fontWeight: createStyle.fontWeight,
+          height: Math.round(create.getBoundingClientRect().height),
+          radius: createStyle.borderRadius
+        },
+        input: {
+          backgroundColor: inputStyle.backgroundColor,
+          borderWidth: inputStyle.borderTopWidth,
+          height: Math.round(input.getBoundingClientRect().height),
+          radius: inputStyle.borderRadius
+        },
+        textarea: {
+          backgroundColor: textareaStyle.backgroundColor,
+          borderWidth: textareaStyle.borderTopWidth,
+          height: Math.round(textarea.getBoundingClientRect().height),
+          radius: textareaStyle.borderRadius
+        }
+      };
+    });
+    expect(profileFieldContract).toEqual({
+      cancel: {
+        backgroundColor: "rgb(245, 245, 247)",
+        fontWeight: "400",
+        height: 40,
+        radius: "6px"
+      },
+      create: {
+        backgroundColor: "rgb(245, 245, 247)",
+        disabled: true,
+        fontWeight: "400",
+        height: 40,
+        radius: "6px"
+      },
+      input: {
+        backgroundColor: "rgb(255, 255, 255)",
+        borderWidth: "1px",
+        height: 34,
+        radius: "6px"
+      },
+      textarea: {
+        backgroundColor: "rgb(255, 255, 255)",
+        borderWidth: "1px",
+        height: 88,
+        radius: "8px"
+      }
+    });
+    expect(await profileNameField.isVisible()).toBe(true);
+    expect(await profileDescriptionField.isVisible()).toBe(true);
+    await profileDialog.getByRole("button", { name: "Cancel" }).click();
     const profileActionGeometry = await page.locator(".profile-action-stack").evaluate((stack) => {
       const status = stack.querySelector<HTMLElement>(".profile-action-status")!;
       const actions = stack.querySelector<HTMLElement>(".profile-commit-actions")!;
@@ -8571,6 +8684,19 @@ describe("Electron UI profile switching e2e", () => {
       state: getComputedStyle(row.querySelector<HTMLElement>(".profile-skill-state strong")!).fontWeight
     }));
     expect(profileSkillTypography).toEqual({ detail: "400", name: "500", state: "400" });
+
+    await page.locator(".profile-skill-manager").getByRole("button", { name: "Add", exact: true }).click();
+    sharedSearchContracts.push(await readCompositeFieldContract(".resource-picker-search"));
+    await page.getByRole("dialog", { name: "Add library skills" }).getByRole("button", { name: "Cancel" }).click();
+
+    await sidebar.getByRole("button", { name: "Conversations", exact: true }).click();
+    sharedSearchContracts.push(await readCompositeFieldContract(".conversation-search"));
+    expect(sharedSearchContracts).toEqual([
+      { borderWidth: "1px", height: 34, inputBorderWidth: "0px", radius: "6px" },
+      { borderWidth: "1px", height: 34, inputBorderWidth: "0px", radius: "6px" },
+      { borderWidth: "1px", height: 34, inputBorderWidth: "0px", radius: "6px" },
+      { borderWidth: "1px", height: 34, inputBorderWidth: "0px", radius: "6px" }
+    ]);
 
     await sidebar.getByRole("button", { name: "Agents", exact: true }).click();
     const targetListGeometry = await page.locator(".target-list").evaluate((list) => {

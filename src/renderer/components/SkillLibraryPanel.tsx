@@ -1794,7 +1794,7 @@ export const SkillLibraryPanel = ({
           </div>
         </div>
         <div className="library-toolbar" hidden={libraryMode !== "skills"}>
-          <label className="library-search">
+          <label className="library-search ui-composite-field">
             <span>{t("Search")}</span>
             <Search size={16} strokeWidth={2.1} aria-hidden="true" />
             <input

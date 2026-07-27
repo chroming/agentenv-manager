@@ -126,7 +126,7 @@ textarea {
 button {
   align-items: center;
   appearance: none;
-  background: #f3f3f5;
+  background: var(--surface-muted);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-control);
   color: var(--text);

@@ -309,7 +309,7 @@ export const SkillsEditor = ({
               </div>
             </header>
             <div className="resource-picker-dialog__body ui-dialog-body">
-              <label className="resource-picker-search">
+              <label className="resource-picker-search ui-composite-field">
                 <Search size={15} strokeWidth={2.2} aria-hidden="true" />
                 <input
                   aria-label={t("Search library skills")}
