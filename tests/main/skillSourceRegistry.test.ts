@@ -69,4 +69,23 @@ describe("Skill source registry", () => {
     expect((await registry.list()).find((record) => record.id === local!.id)?.automaticChecks)
       .toBe(true);
   });
+
+  it("stores ignored candidates by source-relative path", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-source-registry-"));
+    const registry = createSkillSourceRegistry(join(root, "skill-sources.json"));
+    const [created] = await registry.ensure([scope("skills")]);
+
+    await registry.setIgnoredSubpath(created!.id, "wip/experimental", true);
+    await registry.setIgnoredSubpath(created!.id, "wip/experimental", true);
+
+    expect((await registry.list())[0]?.ignoredSubpaths).toEqual([
+      "wip/experimental"
+    ]);
+
+    await registry.setIgnoredSubpath(created!.id, "wip/experimental", false);
+    expect((await registry.list())[0]?.ignoredSubpaths).toBeUndefined();
+    await expect(
+      registry.setIgnoredSubpath(created!.id, "../outside", true)
+    ).rejects.toThrow("Skill source path is invalid");
+  });
 });

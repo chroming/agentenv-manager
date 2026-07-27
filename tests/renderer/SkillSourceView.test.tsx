@@ -451,6 +451,81 @@ describe("SkillSourceView", () => {
     await waitFor(() => expect(checkMonitored).toHaveAttribute("aria-busy", "false"));
   });
 
+  it("ignores a new Skill only for its source and can add it later", async () => {
+    const onAdd = vi.fn().mockResolvedValue(true);
+    const onSetCandidateIgnored = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(
+      <SkillSourceView
+        active
+        groups={[group]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onSetCandidateIgnored={onSetCandidateIgnored}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={onAdd}
+        onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand source" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Ignore testing for this source"
+    }));
+    await waitFor(() => expect(onSetCandidateIgnored).toHaveBeenCalledWith({
+      sourceId: group.sourceId,
+      sourceSubpath: "testing",
+      ignored: true
+    }));
+
+    const ignoredGroup: SkillSourceGroupView = {
+      ...group,
+      counts: { ...group.counts, new: 0 },
+      candidates: group.candidates.map((candidate) =>
+        candidate.sourceSubpath === "testing"
+          ? { ...candidate, state: "ignored" as const }
+          : candidate
+      )
+    };
+    rerender(
+      <SkillSourceView
+        active
+        groups={[ignoredGroup]}
+        loading={false}
+        onCheckGroup={vi.fn().mockResolvedValue(undefined)}
+        onCheckMonitored={vi.fn().mockResolvedValue(undefined)}
+        onRename={vi.fn().mockResolvedValue(undefined)}
+        onSetCandidateIgnored={onSetCandidateIgnored}
+        onPreviewMerge={vi.fn()}
+        onMerge={vi.fn()}
+        onAdd={onAdd}
+        onUpdate={vi.fn()}
+        onReviewUpdates={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenSource={vi.fn()}
+        onCopySource={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Ignored")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(onAdd).toHaveBeenCalledWith(
+      ignoredGroup,
+      ignoredGroup.candidates[0]
+    ));
+    expect(onSetCandidateIgnored).toHaveBeenLastCalledWith({
+      sourceId: group.sourceId,
+      sourceSubpath: "testing",
+      ignored: false
+    });
+  });
+
   it("animates the action that is waiting for an update preview", async () => {
     let finishUpdate!: () => void;
     const onUpdate = vi.fn(() => new Promise<void>((resolve) => {

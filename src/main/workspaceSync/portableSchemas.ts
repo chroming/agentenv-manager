@@ -41,7 +41,15 @@ export const PortableSkillSourceSchema = z.object({
   repository: z.string(),
   ref: z.string(),
   directory: z.string(),
-  displayName: z.string().max(80).optional()
+  displayName: z.string().max(80).optional(),
+  ignoredSubpaths: z.array(
+    z.string().refine((value) =>
+      !value.startsWith("/") &&
+      !value.includes("\\") &&
+      !value.split("/").includes("..") &&
+      !/[\u0000-\u001f\u007f]/.test(value)
+    )
+  ).optional()
 });
 
 export const PortableSkillSourcesSchema = z.object({

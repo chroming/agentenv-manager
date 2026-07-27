@@ -184,6 +184,29 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
       `skill-source-merge-${stamp}-${previewId.slice(0, 8)}`
     );
     const snapshots = new Map<string, string>();
+    const mergedIgnoredSubpaths = new Set<string>();
+    for (const record of pending.sourceRegistrySnapshot.filter((source) =>
+      pending.affectedSourceIds.includes(source.id)
+    )) {
+      for (const ignoredSubpath of record.ignoredSubpaths ?? []) {
+        const candidateDirectory = pending.preview.mergedSource.kind === "local"
+          ? resolve(record.repository, ignoredSubpath)
+          : [record.directory, ignoredSubpath].filter(Boolean).join("/");
+        const mergedSubpath = pending.preview.mergedSource.kind === "local"
+          ? relative(
+              pending.preview.mergedSource.repository,
+              candidateDirectory
+            ).split("\\").join("/")
+          : sourceSubpathFor(
+              pending.preview.mergedSource.directory,
+              candidateDirectory
+            );
+        if (mergedSubpath === ".." || mergedSubpath.startsWith("../")) {
+          throw new Error(`Ignored Skill path is outside the merged source: ${candidateDirectory}`);
+        }
+        mergedIgnoredSubpaths.add(mergedSubpath);
+      }
+    }
     await mkdir(backupPath, { recursive: true });
     for (const skill of affectedSkills) {
       const metadataPath = join(skill.path, ".agentenv-skill.json");
@@ -205,6 +228,13 @@ export const createSkillSourceMergeService = (options: SkillSourceMergeServiceOp
         mergedRecord!.id,
         pending.preview.automaticChecks
       );
+      for (const ignoredSubpath of mergedIgnoredSubpaths) {
+        await options.sourceRegistry.setIgnoredSubpath(
+          mergedRecord!.id,
+          ignoredSubpath,
+          true
+        );
+      }
       for (const skill of affectedSkills) {
         const collection = skill.sourceCollection!;
         const localSource = pending.preview.mergedSource.kind === "local";

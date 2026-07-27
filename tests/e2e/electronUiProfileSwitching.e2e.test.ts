@@ -1633,7 +1633,14 @@ describe("Electron UI profile switching e2e", () => {
       await expectTextFits(changingRow.locator(".library-status-cell .library-primary-status"));
       const beforeUpdateHeight = (await changingRow.boundingBox())?.height;
       await changingRow.getByRole("button", { name: "Update layout-skill-1" }).click();
+      const updateDialog = page.getByRole("dialog", {
+        name: "Update preview for layout-skill-1"
+      });
       await page.getByRole("button", { name: "Apply update layout-skill-1" }).click();
+      await updateDialog
+        .getByRole("status", { name: /Done$/ })
+        .waitFor({ state: "visible" });
+      await updateDialog.getByRole("button", { name: "Close" }).click();
       await changingRow.getByText("Up to date").waitFor({ state: "visible" });
       await expect
         .poll(() => changingRow.getByRole("button", { name: "Check update layout-skill-1" }).count())
@@ -6130,7 +6137,13 @@ describe("Electron UI profile switching e2e", () => {
       .getByText(/Used by 1 Profiles.*1 copied Agent installs update with this Library change/)
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
-    await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated shared-reviewer");
+    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
+      "Updated shared-reviewer"
+    );
+    await updateDialog
+      .getByRole("status", { name: "Shared Reviewer: Done" })
+      .waitFor({ state: "visible" });
+    await updateDialog.getByRole("button", { name: "Close" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByText("Installed update guidance.")
@@ -6392,6 +6405,13 @@ describe("Electron UI profile switching e2e", () => {
     const bulkUpdateDialog = page.getByRole("dialog", { name: "Update all skills" });
     await bulkUpdateDialog.waitFor({ state: "visible" });
     await bulkUpdateDialog.getByRole("button", { name: "Update 2 skills" }).click();
+    await bulkUpdateDialog
+      .getByRole("status", { name: "Shared Reviewer: Done" })
+      .waitFor({ state: "visible" });
+    await bulkUpdateDialog
+      .getByRole("status", { name: "batch-helper: Done" })
+      .waitFor({ state: "visible" });
+    await bulkUpdateDialog.getByRole("button", { name: "Close" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByText("Batch shared v2.")
@@ -6436,9 +6456,16 @@ describe("Electron UI profile switching e2e", () => {
     await rm(missingSourceSkill.sourceDir, { recursive: true, force: true });
     await bulkUpdateDialog.getByRole("button", { name: "Update 2 skills" }).click();
 
-    await expect.poll(() => page.getByRole("status").textContent()).toContain(
+    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
       "Updated 2 skills"
     );
+    await bulkUpdateDialog
+      .getByRole("status", { name: "Shared Reviewer: Done" })
+      .waitFor({ state: "visible" });
+    await bulkUpdateDialog
+      .getByRole("status", { name: "missing-source-helper: Done" })
+      .waitFor({ state: "visible" });
+    await bulkUpdateDialog.getByRole("button", { name: "Close" }).click();
     await expect(readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8")).resolves.toContain(
       "Successful partial update."
     );
@@ -7751,11 +7778,18 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "Update github-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Update github-reviewer" }).click();
-    await page
-      .getByRole("dialog", { name: "Update preview for github-reviewer" })
-      .waitFor({ state: "visible" });
+    const updateDialog = page.getByRole("dialog", {
+      name: "Update preview for github-reviewer"
+    });
+    await updateDialog.waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update github-reviewer" }).click();
-    await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated github-reviewer");
+    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
+      "Updated github-reviewer"
+    );
+    await updateDialog
+      .getByRole("status", { name: /Done$/ })
+      .waitFor({ state: "visible" });
+    await updateDialog.getByRole("button", { name: "Close" }).click();
     await page
       .getByRole("group", { name: "Library item github-reviewer" })
       .getByText("GitHub skill v2.")
@@ -8054,6 +8088,13 @@ describe("Electron UI profile switching e2e", () => {
       "utf8"
     );
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
+    const updateDialog = page.getByRole("dialog", {
+      name: "Update preview for shared-reviewer"
+    });
+    await updateDialog
+      .getByRole("status", { name: "Shared Reviewer: Done" })
+      .waitFor({ state: "visible" });
+    await updateDialog.getByRole("button", { name: "Close" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByText("Updated shared review guidance.")
@@ -8101,7 +8142,16 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("dialog", { name: "Update preview for shared-reviewer" })
       .waitFor({ state: "visible" });
     await page.getByRole("button", { name: "Apply update shared-reviewer" }).click();
-    await expect.poll(() => page.getByRole("status").textContent()).toContain("Updated shared-reviewer");
+    await expect.poll(() => page.locator(".app-feedback").textContent()).toContain(
+      "Updated shared-reviewer"
+    );
+    const updateDialog = page.getByRole("dialog", {
+      name: "Update preview for shared-reviewer"
+    });
+    await updateDialog
+      .getByRole("status", { name: "Shared Reviewer: Done" })
+      .waitFor({ state: "visible" });
+    await updateDialog.getByRole("button", { name: "Close" }).click();
     await page
       .getByRole("group", { name: "Library item shared-reviewer" })
       .getByText("Alternate source guidance.")

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillUpdateDialog } from "../../src/renderer/components/SkillUpdateDialog";
 import type { SkillUpdatePlan } from "../../src/shared/types";
@@ -62,5 +62,52 @@ describe("SkillUpdateDialog", () => {
     details[49]!.open = true;
     fireEvent(details[49]!, new Event("toggle"));
     expect(document.querySelectorAll(".skill-update-dialog .diff-viewer")).toHaveLength(2);
+  });
+
+  it("keeps the dialog open and replaces Update with completion or retry state", () => {
+    const onClose = vi.fn();
+    const onConfirm = vi.fn();
+    const plan = planWithChanges(1);
+    const { rerender } = render(
+      <SkillUpdateDialog
+        plan={plan}
+        progress={{ status: "updating" }}
+        onClose={onClose}
+        onConfirm={onConfirm}
+      />
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Update preview for claude-api" });
+    expect(within(dialog).getByRole("status", { name: "claude-api: Updating..." }))
+      .toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Updating claude-api" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toBeDisabled();
+
+    rerender(
+      <SkillUpdateDialog
+        plan={plan}
+        progress={{ status: "updated" }}
+        onClose={onClose}
+        onConfirm={onConfirm}
+      />
+    );
+    expect(screen.getByRole("dialog", { name: "Update preview for claude-api" }))
+      .toBeInTheDocument();
+    expect(within(dialog).getByRole("status", { name: "claude-api: Done" }))
+      .toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
+    expect(within(dialog).queryByRole("button", { name: "Update skill" })).toBeNull();
+
+    rerender(
+      <SkillUpdateDialog
+        plan={plan}
+        progress={{ status: "failed", error: "Source changed" }}
+        onClose={onClose}
+        onConfirm={onConfirm}
+      />
+    );
+    expect(within(dialog).getByText("Source changed")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Retry update claude-api" }));
+    expect(onConfirm).toHaveBeenCalledWith(plan);
   });
 });

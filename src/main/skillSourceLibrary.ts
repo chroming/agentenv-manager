@@ -161,7 +161,24 @@ export const createSkillSourceGroupStore = (
         ...group,
         sourceKind: record?.kind ?? group.sourceKind,
         automaticChecks: record?.automaticChecks ?? group.sourceKind !== "local",
-        displayName: record?.displayName
+        displayName: record?.displayName,
+        candidates: group.candidates.map((candidate) =>
+          candidate.state === "new" &&
+          record?.ignoredSubpaths?.includes(candidate.sourceSubpath)
+            ? {
+                ...candidate,
+                state: "ignored" as const,
+                detail: "Ignored for this source"
+              }
+            : candidate
+        ),
+        counts: {
+          ...group.counts,
+          new: group.candidates.filter((candidate) =>
+            candidate.state === "new" &&
+            !record?.ignoredSubpaths?.includes(candidate.sourceSubpath)
+          ).length
+        }
       };
     });
   };
@@ -215,6 +232,37 @@ export const createSkillSourceGroupStore = (
       }
       await registry.setAutomaticChecks(input.sourceId, input.enabled);
       const group = (await listSourceGroups()).find((candidate) => candidate.sourceId === input.sourceId);
+      if (!group) throw new Error("Skill source no longer exists");
+      return group;
+    },
+    setSourceCandidateIgnored: async (
+      input: import("../shared/types").SkillSourceCandidateIgnoreInput
+    ) => {
+      if (!input ||
+        typeof input.sourceId !== "string" ||
+        typeof input.sourceSubpath !== "string" ||
+        typeof input.ignored !== "boolean") {
+        throw new Error("Skill source ignore setting is invalid");
+      }
+      const current = (await listSourceGroups()).find(
+        (candidate) => candidate.sourceId === input.sourceId
+      );
+      if (!current) throw new Error("Skill source no longer exists");
+      const candidate = current.candidates.find(
+        (item) => item.sourceSubpath === input.sourceSubpath
+      );
+      if (!candidate) throw new Error("Skill source item no longer exists");
+      if (input.ignored && candidate.state !== "new" && candidate.state !== "ignored") {
+        throw new Error("Only a new source Skill can be ignored");
+      }
+      await registry.setIgnoredSubpath(
+        input.sourceId,
+        input.sourceSubpath,
+        input.ignored
+      );
+      const group = (await listSourceGroups()).find(
+        (item) => item.sourceId === input.sourceId
+      );
       if (!group) throw new Error("Skill source no longer exists");
       return group;
     }

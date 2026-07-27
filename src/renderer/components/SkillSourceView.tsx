@@ -13,6 +13,7 @@ import {
   ChevronRight,
   CircleAlert,
   Copy,
+  EyeOff,
   ExternalLink,
   GitMerge,
   ListFilter,
@@ -28,6 +29,7 @@ import {
 import type {
   SkillSourceGroupCandidate,
   SkillSourceGroupView,
+  SkillSourceCandidateIgnoreInput,
   SkillSourceNameInput,
   SkillSourceMergePreview,
   SkillSourceMergePreviewInput,
@@ -59,6 +61,7 @@ interface SkillSourceViewProps {
   onCheckMonitored(): Promise<void>;
   onRename(input: SkillSourceNameInput): Promise<void>;
   onSetMonitored?(sourceId: string, enabled: boolean): Promise<void>;
+  onSetCandidateIgnored?(input: SkillSourceCandidateIgnoreInput): Promise<void>;
   onPreviewMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   onMerge(previewId: string): Promise<SkillSourceMergeResult>;
   onAdd(group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate): Promise<boolean>;
@@ -73,6 +76,7 @@ const stateLabel = (state: SkillSourceGroupCandidate["state"]) => {
   if (state === "current") return "Current";
   if (state === "update") return "Update available";
   if (state === "new") return "New";
+  if (state === "ignored") return "Ignored";
   if (state === "removed") return "Removed upstream";
   if (state === "invalid") return "Invalid upstream";
   if (state === "conflict") return "Relationship conflict";
@@ -125,6 +129,7 @@ export const SkillSourceView = ({
   onCheckMonitored,
   onRename,
   onSetMonitored,
+  onSetCandidateIgnored,
   onPreviewMerge,
   onMerge,
   onAdd,
@@ -550,7 +555,32 @@ export const SkillSourceView = ({
     const key = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
     setOperation(key);
     try {
-      await onAdd(group, candidate);
+      const added = await onAdd(group, candidate);
+      if (added && candidate.state === "ignored" && onSetCandidateIgnored) {
+        await onSetCandidateIgnored({
+          sourceId: group.sourceId,
+          sourceSubpath: candidate.sourceSubpath,
+          ignored: false
+        });
+      }
+    } finally {
+      setOperation(undefined);
+    }
+  };
+
+  const runIgnore = async (
+    group: SkillSourceGroupView,
+    candidate: SkillSourceGroupCandidate
+  ) => {
+    if (!onSetCandidateIgnored) return;
+    const key = `ignore\0${group.sourceId}\0${candidate.sourceSubpath}`;
+    setOperation(key);
+    try {
+      await onSetCandidateIgnored({
+        sourceId: group.sourceId,
+        sourceSubpath: candidate.sourceSubpath,
+        ignored: true
+      });
     } finally {
       setOperation(undefined);
     }
@@ -1011,8 +1041,11 @@ export const SkillSourceView = ({
                   </div>
                   {group.candidates.map((candidate) => {
                     const addKey = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
+                    const ignoreKey =
+                      `ignore\0${group.sourceId}\0${candidate.sourceSubpath}`;
                     const updateKey = candidate.libraryId ? `update\0${candidate.libraryId}` : "";
                     const isAdding = operation === addKey;
+                    const isIgnoring = operation === ignoreKey;
                     const isUpdating =
                       operation === updateKey ||
                       (updateActivity?.kind === "preview-skill" &&
@@ -1059,6 +1092,38 @@ export const SkillSourceView = ({
                         </div>
                         <div className="skill-source-candidate-action">
                           {candidate.state === "new" ? (
+                            <>
+                              <button
+                                aria-busy={isAdding}
+                                className="text-action"
+                                type="button"
+                                disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
+                                onClick={() => void runAdd(group, candidate)}
+                              >
+                                {isAdding ? <LoaderCircle className="is-spinning" size={13} /> : null}
+                                <span>{t("Add")}</span>
+                              </button>
+                              {onSetCandidateIgnored ? (
+                                <IconButton
+                                  className="skill-source-ignore-action"
+                                  label={t("Ignore {{name}} for this source", {
+                                    name: candidate.name
+                                  })}
+                                  size="compact"
+                                  variant="ghost"
+                                  aria-busy={isIgnoring}
+                                  disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
+                                  onClick={() => void runIgnore(group, candidate)}
+                                >
+                                  {isIgnoring ? (
+                                    <LoaderCircle className="is-spinning" />
+                                  ) : (
+                                    <EyeOff />
+                                  )}
+                                </IconButton>
+                              ) : null}
+                            </>
+                          ) : candidate.state === "ignored" ? (
                             <button
                               aria-busy={isAdding}
                               className="text-action"

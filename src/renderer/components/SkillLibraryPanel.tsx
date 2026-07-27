@@ -60,6 +60,7 @@ import type {
   SkillIconInput,
   SkillLibraryEntry,
   SkillSourceGroupCandidate,
+  SkillSourceCandidateIgnoreInput,
   SkillSourceGroupView,
   SkillSourceCollectionRef,
   SkillSourceNameInput,
@@ -103,11 +104,13 @@ import { sourceSubpathFor } from "../../shared/skillSourceGrouping";
 import { SkillSourceView } from "./SkillSourceView";
 import { ProjectSkillDiscoveryPanel } from "./ProjectSkillDiscoveryPanel";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
+import type { SkillUpdateRun } from "../skillUpdateQueue";
 import { SkillFileBrowserDialog } from "./SkillFileBrowserDialog";
 import {
   SkillUpdateSettingsDialog
 } from "./SkillUpdateSettingsDialog";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
+import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
 
 export type SkillUpdateCheckStatus = {
   state: "checking" | "success" | "error" | "info";
@@ -160,6 +163,7 @@ interface SkillLibraryPanelProps {
   selectedUpdatePlan?: SkillUpdatePlan;
   bulkUpdatePlans?: SkillUpdatePlan[];
   bulkUpdateFailures?: SkillUpdatePreviewBatchResult["failed"];
+  updateRun?: SkillUpdateRun;
   skillUsage: Record<string, string[]>;
   installedTargetIds?: string[];
   targetNames?: TargetNameIndex;
@@ -195,6 +199,9 @@ interface SkillLibraryPanelProps {
   onCheckMonitoredSourceGroups(): Promise<void>;
   onSetSourceName(input: SkillSourceNameInput): Promise<void>;
   onSetSourceMonitored?(sourceId: string, enabled: boolean): Promise<void>;
+  onSetSourceCandidateIgnored?(
+    input: SkillSourceCandidateIgnoreInput
+  ): Promise<void>;
   onPreviewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   onMergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   onCancelRepositoryOperations(): Promise<void>;
@@ -414,6 +421,7 @@ export const SkillLibraryPanel = ({
   selectedUpdatePlan,
   bulkUpdatePlans,
   bulkUpdateFailures = [],
+  updateRun = {},
   skillUsage,
   installedTargetIds = [],
   targetNames = {},
@@ -439,6 +447,7 @@ export const SkillLibraryPanel = ({
   onCheckMonitoredSourceGroups,
   onSetSourceName,
   onSetSourceMonitored,
+  onSetSourceCandidateIgnored,
   onPreviewSourceMerge,
   onMergeSources,
   onCancelRepositoryOperations,
@@ -634,8 +643,6 @@ export const SkillLibraryPanel = ({
       setSharedRetireKey(undefined);
     } else if (autoCleanupReviewOpen) {
       setAutoCleanupReviewOpen(false);
-    } else if (bulkUpdatePlans) {
-      onCloseBulkUpdatePreview();
     } else if (externalImport) {
       setExternalImport(undefined);
     } else {
@@ -649,7 +656,6 @@ export const SkillLibraryPanel = ({
       sourceCandidate ||
       mergePreview ||
       browsingSkill ||
-      bulkUpdatePlans ||
       externalImport ||
       cleanupDetailsKey ||
       sharedTargetReviewKey ||
@@ -773,8 +779,7 @@ export const SkillLibraryPanel = ({
       availabilityOperation ||
       sharedOperation ||
       cleanupOperationKey ||
-      mergeOperation ||
-      (bulkUpdatePlans && (isBusy || previewingAllUpdates))
+      mergeOperation
     ),
     onDismiss: dismissModal
   });
@@ -1695,7 +1700,6 @@ export const SkillLibraryPanel = ({
     }]);
     return result.imported.length > 0;
   };
-  const applicableBulkUpdateCount = bulkUpdatePlans?.filter((plan) => plan.changes.length > 0 && plan.errors.length === 0).length ?? 0;
   return (
     <section className="skill-library-panel ui-surface-frame" aria-label={t("Skill library")}>
       <div className="library-control-deck">
@@ -2330,6 +2334,7 @@ export const SkillLibraryPanel = ({
         onCheckMonitored={onCheckMonitoredSourceGroups}
         onRename={onSetSourceName}
         onSetMonitored={onSetSourceMonitored}
+        onSetCandidateIgnored={onSetSourceCandidateIgnored}
         onPreviewMerge={onPreviewSourceMerge}
         onMerge={onMergeSources}
         onAdd={addSourceCandidate}
@@ -2346,6 +2351,7 @@ export const SkillLibraryPanel = ({
       <SkillUpdateDialog
         plan={selectedUpdatePlan}
         busy={isBusy}
+        progress={selectedUpdatePlan ? updateRun[selectedUpdatePlan.id] : undefined}
         onClose={onCloseUpdatePreview}
         onConfirm={onUpdateLibrarySkill}
       />
@@ -2902,101 +2908,18 @@ export const SkillLibraryPanel = ({
         document.body
       ) : null}
 
-      {bulkUpdatePlans ? createPortal(
-        <div
-          className="preview-modal-backdrop"
-          onClick={isBusy || previewingAllUpdates ? undefined : onCloseBulkUpdatePreview}
-        >
-          <section
-            ref={modalDialogRef}
-            className="profile-form-dialog bulk-update-dialog ui-dialog-shell"
-            role="dialog"
-            aria-label={t("Update all skills")}
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="profile-dialog-header ui-dialog-header">
-              <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Update all skills")}</div>
-                <p className="muted ui-dialog-description">{t("Review every tracked change before updating the shared library.")}</p>
-              </div>
-            </header>
-            <div className="bulk-update-list ui-dialog-body">
-              {bulkUpdateFailures.length > 0 ? (
-                <section className="bulk-update-failures" aria-label={t("Preview failures")}>
-                  <div className="bulk-update-failures__heading">
-                    <TriangleAlert size={15} aria-hidden="true" />
-                    <strong>
-                      {t("{{count}} update previews could not be prepared", {
-                        count: bulkUpdateFailures.length
-                      })}
-                    </strong>
-                  </div>
-                  {bulkUpdateFailures.map((failure) => (
-                    <div className="bulk-update-failure" key={failure.id}>
-                      <strong>{failure.id}</strong>
-                      <PreviewText
-                        className="bulk-update-failure__error"
-                        text={failure.error}
-                      />
-                    </div>
-                  ))}
-                </section>
-              ) : null}
-              {bulkUpdatePlans.map((plan) => (
-                <details key={plan.id} open={plan.errors.length > 0}>
-                  <summary>
-                    <span className="bulk-update-summary-identity">
-                      <ChevronDown className="bulk-update-disclosure" size={15} strokeWidth={2.2} />
-                      <strong>{plan.name}</strong>
-                    </span>
-                    <span>{plan.errors.length > 0 ? t("Blocked") : t("{{count}} file changes", { count: plan.changes.length })}</span>
-                  </summary>
-                  {plan.impact ? (
-                    <p className="skill-update-impact">
-                      {t("{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs update in this transaction", {
-                        profiles: plan.impact.profileNames.length,
-                        linked: plan.impact.linkedInstallCount,
-                        copied: plan.impact.copiedInstallCount
-                      })}
-                    </p>
-                  ) : null}
-                  {plan.errors.map((error) => <p className="error" key={error}>{error}</p>)}
-                  {plan.changes.map((change) => <code key={change.path}>{change.path}</code>)}
-                </details>
-              ))}
-            </div>
-            <footer className="preview-actions ui-dialog-footer">
-              <button ref={modalInitialFocusRef} className="secondary-action" type="button" disabled={isBusy} onClick={onCloseBulkUpdatePreview}>{t("Cancel")}</button>
-              {bulkUpdateFailures.length > 0 ? (
-                <button
-                  className="secondary-action"
-                  type="button"
-                  disabled={isBusy || previewingAllUpdates}
-                  onClick={() => void onPreviewAllLibrarySkillUpdates([
-                    ...bulkUpdatePlans.map((plan) => plan.id),
-                    ...bulkUpdateFailures.map((failure) => failure.id)
-                  ])}
-                >
-                  {previewingAllUpdates ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" /> : null}
-                  {t(isBusy ? "Preparing..." : "Retry failed previews")}
-                </button>
-              ) : null}
-              <button className="primary-action" type="button"
-                disabled={isBusy || updateActivityBusy || applicableBulkUpdateCount === 0}
-                onClick={() => onUpdateAllLibrarySkills(bulkUpdatePlans.filter((plan) =>
-                  plan.changes.length > 0 && plan.errors.length === 0))}>
-                {t(
-                  applicableBulkUpdateCount === 1
-                    ? "Update {{count}} skill"
-                    : "Update {{count}} skills",
-                  { count: applicableBulkUpdateCount }
-                )}
-              </button>
-            </footer>
-          </section>
-        </div>,
-        document.body
+      {bulkUpdatePlans ? (
+        <BulkSkillUpdateDialog
+          plans={bulkUpdatePlans}
+          failures={bulkUpdateFailures}
+          updateRun={updateRun}
+          isBusy={isBusy}
+          previewingAllUpdates={previewingAllUpdates}
+          updateActivityBusy={updateActivityBusy}
+          onClose={onCloseBulkUpdatePreview}
+          onPreview={(ids) => void onPreviewAllLibrarySkillUpdates(ids)}
+          onUpdate={onUpdateAllLibrarySkills}
+        />
       ) : null}
 
       {externalImport && externalImportGroup ? createPortal(

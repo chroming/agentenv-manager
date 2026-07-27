@@ -489,6 +489,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       counts: { total: 0, updates: 0, new: 0, removed: 0 },
       candidates: []
     })),
+    setSkillSourceCandidateIgnored: vi.fn(),
     previewSkillSourceMerge: vi.fn(),
     mergeSkillSources: vi.fn(),
     cancelRepositoryOperations: vi.fn().mockResolvedValue(undefined),

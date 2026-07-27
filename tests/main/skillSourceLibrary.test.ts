@@ -102,4 +102,61 @@ describe("skill source library", () => {
       "ready"
     ]);
   });
+
+  it("keeps ignored source candidates visible while excluding them from changes", async () => {
+    const sourceId = "source-engineering";
+    const candidate = {
+      sourceSubpath: "wip",
+      directory: "skills/wip",
+      name: "WIP",
+      description: "Experimental Skill",
+      contentRevision: "wip-1",
+      state: "new" as const
+    };
+    const service = {
+      listGroups: vi.fn().mockResolvedValue([{
+        formatVersion: 1,
+        sourceId,
+        sourceKind: "repository",
+        automaticChecks: true,
+        canonicalLink: "https://example.com/skills",
+        repository: "https://example.com/skills.git",
+        ref: "main",
+        directory: "skills",
+        observationState: "ready",
+        counts: { total: 1, updates: 0, new: 1, removed: 0 },
+        candidates: [candidate]
+      }])
+    };
+    const registry = {
+      list: vi.fn().mockResolvedValue([{
+        formatVersion: 1,
+        id: sourceId,
+        canonicalLink: "https://example.com/skills",
+        repository: "https://example.com/skills.git",
+        ref: "main",
+        directory: "skills",
+        ignoredSubpaths: ["wip"],
+        createdAt: "2026-07-22T00:00:00.000Z",
+        updatedAt: "2026-07-22T00:00:00.000Z"
+      }]),
+      setIgnoredSubpath: vi.fn()
+    };
+    const store = createSkillSourceGroupStore(
+      service as never,
+      async () => [],
+      registry as never
+    );
+
+    const [group] = await store.listSourceGroups();
+
+    expect(group?.counts).toMatchObject({ total: 1, new: 0 });
+    expect(group?.candidates).toEqual([
+      expect.objectContaining({
+        sourceSubpath: "wip",
+        state: "ignored",
+        detail: "Ignored for this source"
+      })
+    ]);
+  });
 });

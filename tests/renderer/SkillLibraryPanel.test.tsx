@@ -6,6 +6,7 @@ import {
   type SkillImportQueueOptions
 } from "../../src/renderer/components/SkillLibraryPanel";
 import { defaultSkillLibraryViewState } from "../../src/renderer/libraryViewState";
+import type { SkillUpdateRun } from "../../src/renderer/skillUpdateQueue";
 import type {
   GitHubSkillImportInput,
   RepositorySkillImportInput
@@ -170,7 +171,8 @@ describe("SkillLibraryPanel", () => {
         };
       }>,
       showSelectedUpdatePlan = false,
-      bulkUpdateFailures: Array<{ id: string; error: string }> = []
+      bulkUpdateFailures: Array<{ id: string; error: string }> = [],
+      updateRun: SkillUpdateRun = {}
     ) => (
       <SkillLibraryPanel
         sourceGroups={[]}
@@ -515,6 +517,7 @@ describe("SkillLibraryPanel", () => {
         } : undefined}
         bulkUpdatePlans={bulkUpdatePlans}
         bulkUpdateFailures={bulkUpdateFailures}
+        updateRun={updateRun}
         skillUsage={{ "shared-reviewer": ["Daily Coding"] }}
         installedTargetIds={["opencode", "codex"]}
         preparedTargetsBySkill={{
@@ -1342,6 +1345,39 @@ describe("SkillLibraryPanel", () => {
     expect(onUpdateAllLibrarySkills).toHaveBeenCalledWith([
       expect.objectContaining({ id: "shared-reviewer", previewId: "preview-shared-reviewer" })
     ]);
+
+    rerender(
+      renderPanel(
+        undefined,
+        [
+          {
+            id: "shared-reviewer",
+            previewId: "preview-shared-reviewer",
+            name: "Shared Reviewer",
+            sourceType: "local",
+            updateAvailable: true,
+            changes: [{ path: "SKILL.md", before: "old", after: "new", diff: "diff" }],
+            errors: [],
+            impact: {
+              profileNames: ["Daily Coding"],
+              linkedInstallCount: 1,
+              linkedTargetIds: ["opencode"],
+              copiedInstallCount: 0,
+              copiedTargetIds: []
+            }
+          }
+        ],
+        false,
+        [],
+        { "shared-reviewer": { status: "updated" } }
+      )
+    );
+    const completedDialog = screen.getByRole("dialog", { name: "Update all skills" });
+    expect(
+      within(completedDialog).getByRole("status", { name: "Shared Reviewer: Done" })
+    ).toBeInTheDocument();
+    expect(within(completedDialog).getByRole("button", { name: "Close" })).toBeEnabled();
+    expect(within(completedDialog).queryByRole("button", { name: "Update 1 skill" })).toBeNull();
   }, 15_000);
 
   it("falls back from a private GitHub URL to SSH-backed System Git and preserves its directory scope", async () => {

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { CheckCircle2, CircleAlert, Clock3, LoaderCircle } from "lucide-react";
 import type { PlannedFileChange, SkillUpdatePlan } from "../../shared/types";
+import type { SkillUpdateRunItem } from "../skillUpdateQueue";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffViewer } from "./DiffViewer";
 import { Button, ModalFrame } from "./ui";
@@ -10,6 +11,7 @@ interface SkillUpdateDialogProps {
   plan?: SkillUpdatePlan;
   impact?: string;
   busy?: boolean;
+  progress?: SkillUpdateRunItem;
   onClose(): void;
   onConfirm(plan: SkillUpdatePlan): void;
 }
@@ -38,6 +40,7 @@ export const SkillUpdateDialog = ({
   plan,
   impact,
   busy = false,
+  progress,
   onClose,
   onConfirm
 }: SkillUpdateDialogProps) => {
@@ -84,6 +87,17 @@ export const SkillUpdateDialog = ({
       ? parts.join(" · ")
       : t("No Profiles or managed Agent installs currently use this Skill");
   })();
+  const progressLabel = progress?.status === "queued"
+    ? t("Waiting")
+    : progress?.status === "updating"
+      ? t("Updating...")
+      : progress?.status === "updated"
+        ? t("Done")
+        : progress?.status === "failed"
+          ? t("Failed")
+          : undefined;
+  const running = progress?.status === "queued" || progress?.status === "updating";
+  const finished = progress?.status === "updated" || progress?.status === "failed";
 
   return (
     <ModalFrame
@@ -103,6 +117,30 @@ export const SkillUpdateDialog = ({
                 : ""}
             </p>
             <p className="skill-update-impact">{impactSummary}</p>
+            {progressLabel ? (
+              <div
+                className={`skill-update-progress skill-update-progress--${progress!.status}`}
+                role="status"
+                aria-label={t("{{name}}: {{status}}", {
+                  name: plan.name,
+                  status: progressLabel
+                })}
+              >
+                {progress!.status === "queued" ? (
+                  <Clock3 size={15} aria-hidden="true" />
+                ) : progress!.status === "updating" ? (
+                  <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+                ) : progress!.status === "updated" ? (
+                  <CheckCircle2 size={15} aria-hidden="true" />
+                ) : (
+                  <CircleAlert size={15} aria-hidden="true" />
+                )}
+                <span>
+                  <strong>{progressLabel}</strong>
+                  {progress?.error ? <small>{progress.error}</small> : null}
+                </span>
+              </div>
+            ) : null}
           </div>
         </header>
         <div className="update-change-list ui-dialog-body">
@@ -117,23 +155,40 @@ export const SkillUpdateDialog = ({
         <footer className="preview-actions ui-dialog-footer">
           <Button
             ref={initialFocusRef}
-            disabled={busy}
+            disabled={running || (busy && !finished)}
             size="prominent"
             onClick={onClose}
           >
-            {t("Cancel")}
+            {t(finished ? "Close" : "Cancel")}
           </Button>
-          <Button
-            aria-label={t("Apply update {{id}}", { id: plan.id })}
-            aria-busy={busy}
-            disabled={busy}
-            icon={busy ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" /> : undefined}
-            size="prominent"
-            variant="primary"
-            onClick={() => onConfirm(plan)}
-          >
-            {t(busy ? "Updating..." : "Update skill")}
-          </Button>
+          {progress?.status !== "updated" ? (
+            <Button
+              aria-label={t(
+                running
+                  ? "Updating {{id}}"
+                  : progress?.status === "failed"
+                    ? "Retry update {{id}}"
+                    : "Apply update {{id}}",
+                { id: plan.id }
+              )}
+              aria-busy={running}
+              disabled={running || (busy && progress?.status !== "failed")}
+              icon={running
+                ? <LoaderCircle className="is-spinning" size={15} aria-hidden="true" />
+                : undefined}
+              size="prominent"
+              variant="primary"
+              onClick={() => onConfirm(plan)}
+            >
+              {t(
+                running
+                  ? "Updating..."
+                  : progress?.status === "failed"
+                    ? "Retry"
+                    : "Update skill"
+              )}
+            </Button>
+          ) : null}
         </footer>
     </ModalFrame>
   );

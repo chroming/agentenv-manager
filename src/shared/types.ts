@@ -107,6 +107,9 @@ export interface AgentEnvApi {
   checkMonitoredSkillSourceGroups(): Promise<SkillSourceCheckAllResult>;
   setSkillSourceName(input: SkillSourceNameInput): Promise<SkillSourceGroupView>;
   setSkillSourceMonitored(input: SkillSourceMonitoringInput): Promise<SkillSourceGroupView>;
+  setSkillSourceCandidateIgnored(
+    input: SkillSourceCandidateIgnoreInput
+  ): Promise<SkillSourceGroupView>;
   previewSkillSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   mergeSkillSources(previewId: string): Promise<SkillSourceMergeResult>;
   cancelRepositoryOperations(): Promise<void>;
@@ -603,6 +606,7 @@ export interface SkillSourceRecord extends SkillSourceScope {
   id: string;
   displayName?: string;
   automaticChecks?: boolean;
+  ignoredSubpaths?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -617,10 +621,17 @@ export interface SkillSourceMonitoringInput {
   enabled: boolean;
 }
 
+export interface SkillSourceCandidateIgnoreInput {
+  sourceId: string;
+  sourceSubpath: string;
+  ignored: boolean;
+}
+
 export type SkillSourceCandidateState =
   | "current"
   | "update"
   | "new"
+  | "ignored"
   | "removed"
   | "invalid"
   | "conflict"

@@ -14,6 +14,12 @@ const sourceKey = (source: Pick<SkillSourceScope, "repository" | "ref" | "direct
 const sourceIdFor = (scope: SkillSourceScope) =>
   `source-${createHash("sha256").update(sourceKey(scope)).digest("hex").slice(0, 20)}`;
 
+const isValidSourceSubpath = (value: string) =>
+  !value.startsWith("/") &&
+  !value.includes("\\") &&
+  !value.split("/").includes("..") &&
+  !/[\u0000-\u001f\u007f]/.test(value);
+
 const isSourceRecord = (value: unknown): value is SkillSourceRecord => {
   if (!value || typeof value !== "object") return false;
   const source = value as Record<string, unknown>;
@@ -26,6 +32,11 @@ const isSourceRecord = (value: unknown): value is SkillSourceRecord => {
     (source.kind === undefined || source.kind === "repository" || source.kind === "local") &&
     (source.displayName === undefined || typeof source.displayName === "string") &&
     (source.automaticChecks === undefined || typeof source.automaticChecks === "boolean") &&
+    (source.ignoredSubpaths === undefined ||
+      (Array.isArray(source.ignoredSubpaths) &&
+        source.ignoredSubpaths.every((item) =>
+          typeof item === "string" && isValidSourceSubpath(item)
+        ))) &&
     typeof source.createdAt === "string" &&
     typeof source.updatedAt === "string";
 };
@@ -36,6 +47,11 @@ export interface SkillSourceRegistry {
   replace(records: SkillSourceRecord[]): Promise<void>;
   setDisplayName(sourceId: string, displayName?: string): Promise<SkillSourceRecord>;
   setAutomaticChecks(sourceId: string, enabled: boolean): Promise<SkillSourceRecord>;
+  setIgnoredSubpath(
+    sourceId: string,
+    sourceSubpath: string,
+    ignored: boolean
+  ): Promise<SkillSourceRecord>;
 }
 
 export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => {
@@ -56,7 +72,10 @@ export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => 
       return parsed.sources.map((source) => ({
         ...source,
         kind: source.kind ?? "repository",
-        automaticChecks: source.automaticChecks ?? (source.kind !== "local")
+        automaticChecks: source.automaticChecks ?? (source.kind !== "local"),
+        ignoredSubpaths: source.ignoredSubpaths?.length
+          ? [...new Set(source.ignoredSubpaths)].sort()
+          : undefined
       }));
     } catch (error) {
       if (isMissingFileError(error)) return [];
@@ -100,6 +119,30 @@ export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => 
     return record;
   });
 
+  const setIgnoredSubpath = (
+    sourceId: string,
+    sourceSubpath: string,
+    ignored: boolean
+  ) => serialize(async () => {
+    if (!isValidSourceSubpath(sourceSubpath)) {
+      throw new Error("Skill source path is invalid");
+    }
+    const records = await list();
+    const record = records.find((candidate) => candidate.id === sourceId);
+    if (!record) throw new Error("Skill source no longer exists");
+    const next = new Set(record.ignoredSubpaths ?? []);
+    if (ignored) next.add(sourceSubpath);
+    else next.delete(sourceSubpath);
+    const ignoredSubpaths = [...next].sort();
+    if (JSON.stringify(record.ignoredSubpaths ?? []) === JSON.stringify(ignoredSubpaths)) {
+      return record;
+    }
+    record.ignoredSubpaths = ignoredSubpaths.length > 0 ? ignoredSubpaths : undefined;
+    record.updatedAt = new Date().toISOString();
+    await writeRecords(records);
+    return record;
+  });
+
   const ensure = (scopes: SkillSourceScope[]) => serialize(async () => {
     const records = await list();
     const byKey = new Map(records.map((record) => [sourceKey(record), record]));
@@ -133,7 +176,14 @@ export const createSkillSourceRegistry = (path: string): SkillSourceRegistry => 
     return resolved;
   });
 
-  return { list, ensure, replace, setDisplayName, setAutomaticChecks };
+  return {
+    list,
+    ensure,
+    replace,
+    setDisplayName,
+    setAutomaticChecks,
+    setIgnoredSubpath
+  };
 };
 
 export const bindSkillSourceCollection = async (

@@ -78,6 +78,7 @@ import type {
   SkillCleanupBackupSummary,
   SkillCleanupResult,
   SkillLibraryEntry,
+  SkillSourceCandidateIgnoreInput,
   SkillSourceGroupView,
   SkillSourceNameInput,
   SkillSourceMergePreview,
@@ -156,6 +157,11 @@ import {
 } from "./libraryUpdateState";
 import { runSkillImportQueue } from "./skillImportQueue";
 import { useScheduledSkillUpdateChecks, useSkillUpdateActivity, type SkillUpdateActivity } from "./skillUpdateActivity";
+import {
+  runSkillUpdateQueue,
+  type SkillUpdateRun,
+  type SkillUpdateRunItem
+} from "./skillUpdateQueue";
 import {
   ActionMenu,
   Button,
@@ -326,6 +332,7 @@ const AppContent = ({
   const [bulkSkillUpdateFailures, setBulkSkillUpdateFailures] = useState<
     SkillUpdatePreviewBatchResult["failed"]
   >([]);
+  const [skillUpdateRun, setSkillUpdateRun] = useState<SkillUpdateRun>({});
   const [profileResourceCounts, setProfileResourceCounts] = useState<
     Record<string, ProfileResourceSummary>
   >({});
@@ -2470,6 +2477,29 @@ const AppContent = ({
     }
   };
 
+  const executeSkillUpdatePlans = (
+    plans: SkillUpdatePlan[],
+    preserveExistingProgress: boolean
+  ) => {
+    setSkillUpdateRun((current) => {
+      const next = preserveExistingProgress ? { ...current } : {};
+      for (const plan of plans) next[plan.id] = { status: "queued" };
+      return next;
+    });
+    const updateProgress = (id: string, item: SkillUpdateRunItem) => {
+      setSkillUpdateRun((current) => ({ ...current, [id]: item }));
+    };
+    return runSkillUpdateQueue(
+      plans,
+      (plan) =>
+        window.agentEnv.updateLibrarySkill({
+          id: plan.id,
+          previewId: plan.previewId!
+        }),
+      updateProgress
+    );
+  };
+
   const updateLibrarySkill = async (plan: SkillUpdatePlan) => {
     if (!plan.previewId) {
       setError("Skill update preview is unavailable; review the update again");
@@ -2478,22 +2508,22 @@ const AppContent = ({
     setBusy(true);
     setError(undefined);
     try {
-      const updated = await window.agentEnv.updateLibrarySkill({
-        id: plan.id,
-        previewId: plan.previewId
-      });
-      setSelectedSkillUpdatePlan(undefined);
-      applyLibraryContentUpdatesLocally([updated]);
+      const result = await executeSkillUpdatePlans([plan], false);
+      applyLibraryContentUpdatesLocally(result.updated);
       await refreshSkillSourceGroups();
-      setSkillUpdateCheckStatus(
-        summarizeSkillUpdateResult(
-          plan.id,
-          skillUpdates.filter((item) => item.id !== plan.id),
-          t
-        )
-      );
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      if (result.updated.length > 0) {
+        setSkillUpdateCheckStatus(
+          summarizeSkillUpdateResult(
+            plan.id,
+            skillUpdates.filter((item) => item.id !== plan.id),
+            t
+          )
+        );
+      }
+      if (result.failed.length > 0) {
+        setSkillUpdateCheckStatus({ state: "error", message: `Update ${plan.id} failed` });
+        setError(result.failed[0]!.error);
+      }
     } finally {
       setBusy(false);
     }
@@ -2578,30 +2608,9 @@ const AppContent = ({
 
     setBusy(true);
     setError(undefined);
-    setBulkSkillUpdatePlans(undefined);
-    setBulkSkillUpdateFailures([]);
     try {
-      const results: PromiseSettledResult<SkillLibraryEntry>[] = [];
-      for (const plan of applicablePlans) {
-        try {
-          results.push({
-            status: "fulfilled",
-            value: await window.agentEnv.updateLibrarySkill({
-              id: plan.id,
-              previewId: plan.previewId!
-            })
-          });
-        } catch (reason) {
-          results.push({ status: "rejected", reason });
-        }
-      }
-      const failures = results.filter((result): result is PromiseRejectedResult =>
-        result.status === "rejected"
-      );
-      const updatedSkills = results.flatMap((result) =>
-        result.status === "fulfilled" ? [result.value] : []
-      );
-      setSelectedSkillUpdatePlan(undefined);
+      const result = await executeSkillUpdatePlans(applicablePlans, true);
+      const updatedSkills = result.updated;
       applyLibraryContentUpdatesLocally(updatedSkills);
       await refreshSkillSourceGroups();
       const updatedIds = new Set(updatedSkills.map((skill) => skill.id));
@@ -2609,27 +2618,21 @@ const AppContent = ({
         (update) =>
           !updatedIds.has(update.id) && update.updateAvailable && !update.error
       ).length;
-      if (failures.length === 0) {
+      if (result.failed.length === 0) {
         setSkillUpdateCheckStatus({
           state: "success",
           message:
             remainingUpdates > 0
-              ? `Updated ${plural(applicablePlans.length, "skill")} · More updates remain`
-              : `Updated ${plural(applicablePlans.length, "skill")} · All tracked skills are up to date`
+              ? `Updated ${plural(updatedSkills.length, "skill")} · More updates remain`
+              : `Updated ${plural(updatedSkills.length, "skill")} · All tracked skills are up to date`
         });
       }
-      if (failures.length > 0) {
+      if (result.failed.length > 0) {
         setSkillUpdateCheckStatus({
           state: "error",
-          message: `${plural(failures.length, "update")} failed`
+          message: `${plural(result.failed.length, "update")} failed`
         });
-        setError(
-          failures
-            .map((failure) =>
-              failure.reason instanceof Error ? failure.reason.message : String(failure.reason)
-            )
-            .join("\n")
-        );
+        setError(result.failed.map((failure) => failure.error).join("\n"));
       }
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
@@ -2645,6 +2648,7 @@ const AppContent = ({
     const activity: SkillUpdateActivity = { kind: "preview-skills", skillIds: ids };
     if (!beginSkillUpdateActivity(activity)) return;
     setError(undefined);
+    setSkillUpdateRun({});
     setSkillUpdateCheckStatus({ state: "checking", message: "Preparing updates..." });
     try {
       const result = await window.agentEnv.previewLibrarySkillUpdates(ids);
@@ -3017,6 +3021,29 @@ const AppContent = ({
     }
   };
 
+  const setSkillSourceCandidateIgnored = async (
+    input: SkillSourceCandidateIgnoreInput
+  ) => {
+    setError(undefined);
+    try {
+      const group = await window.agentEnv.setSkillSourceCandidateIgnored(input);
+      setSkillSourceGroups((current) => current.map((candidate) =>
+        candidate.sourceId === group.sourceId ? group : candidate
+      ));
+      setSkillUpdateFeedbackWorkspace("library");
+      setSkillUpdateCheckStatus({
+        state: "success",
+        message: t(input.ignored
+          ? "Skill ignored for this source"
+          : "Skill included for this source")
+      });
+    } catch (unknownError) {
+      const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+      setError(message);
+      throw unknownError;
+    }
+  };
+
   const previewSkillSourceMerge = async (
     input: SkillSourceMergePreviewInput
   ): Promise<SkillSourceMergePreview> => {
@@ -3349,6 +3376,7 @@ const AppContent = ({
     setError(undefined);
     setProfileSaveStatus("");
     setSelectedSkillUpdatePlan(undefined);
+    setSkillUpdateRun({});
     setSkillUpdateFeedbackWorkspace("library");
     setSkillUpdateCheckStatus({ state: "checking", message: `Checking ${id}...` });
     try {
@@ -4110,6 +4138,7 @@ const AppContent = ({
                 selectedUpdatePlan={selectedSkillUpdatePlan}
                 bulkUpdatePlans={bulkSkillUpdatePlans}
                 bulkUpdateFailures={bulkSkillUpdateFailures}
+                updateRun={skillUpdateRun}
                 skillUsage={skillUsage}
                 installedTargetIds={targets
                   .filter((target) => isTargetInstalled(target.health))
@@ -4138,6 +4167,7 @@ const AppContent = ({
                 onCheckMonitoredSourceGroups={checkMonitoredSkillSourceGroups}
                 onSetSourceName={setSkillSourceName}
                 onSetSourceMonitored={setSkillSourceMonitored}
+                onSetSourceCandidateIgnored={setSkillSourceCandidateIgnored}
                 onPreviewSourceMerge={previewSkillSourceMerge}
                 onMergeSources={mergeSkillSources}
                 onCancelRepositoryOperations={() => window.agentEnv.cancelRepositoryOperations()}
@@ -4148,13 +4178,17 @@ const AppContent = ({
                 onSetAvailability={setSkillAvailability}
                 onSetIcon={(input) => void setSkillIcon(input)}
                 onPreviewLibrarySkillUpdate={previewLibrarySkillUpdate}
-                onCloseUpdatePreview={() => setSelectedSkillUpdatePlan(undefined)}
+                onCloseUpdatePreview={() => {
+                  setSelectedSkillUpdatePlan(undefined);
+                  setSkillUpdateRun({});
+                }}
                 onUpdateLibrarySkill={updateLibrarySkill}
                 onUpdateAllLibrarySkills={updateAllLibrarySkills}
                 onPreviewAllLibrarySkillUpdates={previewAllLibrarySkillUpdates}
                 onCloseBulkUpdatePreview={() => {
                   setBulkSkillUpdatePlans(undefined);
                   setBulkSkillUpdateFailures([]);
+                  setSkillUpdateRun({});
                 }}
                 onSyncSkillInstalls={(id) => void syncSkillInstalls(id)}
                 onRemoveLibrarySkill={removeLibrarySkill}
@@ -4610,7 +4644,13 @@ const AppContent = ({
                       <SkillUpdateDialog
                         plan={selectedSkillUpdatePlan}
                         busy={busy}
-                        onClose={() => setSelectedSkillUpdatePlan(undefined)}
+                        progress={selectedSkillUpdatePlan
+                          ? skillUpdateRun[selectedSkillUpdatePlan.id]
+                          : undefined}
+                        onClose={() => {
+                          setSelectedSkillUpdatePlan(undefined);
+                          setSkillUpdateRun({});
+                        }}
                         onConfirm={(plan) => void updateLibrarySkill(plan)}
                       />
                   </>
@@ -4733,6 +4773,9 @@ const AppContent = ({
               skillUpdates={skillUpdates}
               checkingSkillUpdates={checkingProfileSkillUpdates}
               selectedSkillUpdatePlan={selectedSkillUpdatePlan}
+              updateProgress={selectedSkillUpdatePlan
+                ? skillUpdateRun[selectedSkillUpdatePlan.id]
+                : undefined}
               updateBusy={busy}
               onBeginSetup={(scope) =>
                 openCreateFromTargetDialog(
@@ -4749,7 +4792,10 @@ const AppContent = ({
               }}
               onCheckSkillUpdates={(ids) => void checkProfileSkillUpdates(ids)}
               onPreviewSkillUpdate={(id) => void previewLibrarySkillUpdate(id)}
-              onCloseSkillUpdate={() => setSelectedSkillUpdatePlan(undefined)}
+              onCloseSkillUpdate={() => {
+                setSelectedSkillUpdatePlan(undefined);
+                setSkillUpdateRun({});
+              }}
               onConfirmSkillUpdate={(plan) => void updateLibrarySkill(plan)}
               onKeepSkillOutside={(issue) =>
                 keepPreviewSkillOutside(

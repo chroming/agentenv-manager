@@ -528,6 +528,26 @@ export const registerIpcHandlers = ({
       enabled: candidate.enabled
     });
   });
+  handleMutation("skills:set-source-candidate-ignored", (_event, input: unknown) => {
+    if (!input || typeof input !== "object") {
+      throw new Error("Skill source ignore setting is invalid");
+    }
+    const candidate = input as {
+      sourceId?: unknown;
+      sourceSubpath?: unknown;
+      ignored?: unknown;
+    };
+    if (typeof candidate.sourceId !== "string" ||
+      typeof candidate.sourceSubpath !== "string" ||
+      typeof candidate.ignored !== "boolean") {
+      throw new Error("Skill source ignore setting is invalid");
+    }
+    return skillLibraryStore.setSourceCandidateIgnored({
+      sourceId: candidate.sourceId,
+      sourceSubpath: candidate.sourceSubpath,
+      ignored: candidate.ignored
+    });
+  });
   handleMutation("skills:preview-source-merge", (_event, input: SkillSourceMergePreviewInput) => {
     if (!input || !Array.isArray(input.sourceIds)) {
       throw new Error("Skill source merge requires a source selection");

@@ -7,6 +7,7 @@ import type {
   SkillUpdatePlan
 } from "../../shared/types";
 import type { AgentSkillWorkspaceController } from "../hooks/useAgentSkillWorkspace";
+import type { SkillUpdateRunItem } from "../skillUpdateQueue";
 import { AgentSkillWorkspace } from "./AgentSkillWorkspace";
 import { SkillUpdateDialog } from "./SkillUpdateDialog";
 
@@ -16,6 +17,7 @@ interface AgentSkillWorkspaceRouteProps {
   skillUpdates: SkillUpdateInfo[];
   checkingSkillUpdates: boolean;
   selectedSkillUpdatePlan?: SkillUpdatePlan;
+  updateProgress?: SkillUpdateRunItem;
   updateBusy: boolean;
   onBeginSetup(scope: "all" | "skills"): void;
   onOpenProfile(profileId: string, targetId: string): void;
@@ -33,6 +35,7 @@ export const AgentSkillWorkspaceRoute = ({
   skillUpdates,
   checkingSkillUpdates,
   selectedSkillUpdatePlan,
+  updateProgress,
   updateBusy,
   onBeginSetup,
   onOpenProfile,
@@ -89,6 +92,7 @@ export const AgentSkillWorkspaceRoute = ({
       <SkillUpdateDialog
         plan={selectedSkillUpdatePlan}
         busy={updateBusy}
+        progress={updateProgress}
         onClose={onCloseSkillUpdate}
         onConfirm={onConfirmSkillUpdate}
       />

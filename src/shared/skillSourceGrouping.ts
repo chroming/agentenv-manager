@@ -50,7 +50,8 @@ const candidatePriority: Record<SkillSourceGroupCandidate["state"], number> = {
   new: 4,
   removed: 5,
   unchecked: 6,
-  current: 7
+  current: 7,
+  ignored: 8
 };
 
 const localCandidate = (

@@ -673,6 +673,11 @@ Object.assign(zhCN, {
   "Checking...": "正在检查...",
   "Update all skills": "更新全部技能",
   "Update all": "全部更新",
+  "Waiting": "等待中",
+  "Updating {{completed}} of {{total}}": "正在更新 {{completed}} / {{total}}",
+  "Updating {{id}}": "正在更新 {{id}}",
+  "Retry update {{id}}": "重试更新 {{id}}",
+  "Retry failed updates": "重试失败的更新",
   "Update {{count}} skill": "更新 {{count}} 个技能",
   "Update {{count}} skills": "更新 {{count}} 个技能",
   "Review all updates": "查看全部更新",
@@ -1849,7 +1854,10 @@ Object.assign(zhCN, {
   "Include in routine checks": "加入常规检查",
   "Exclude from routine checks": "从常规检查中排除",
   "Source name": "来源名称",
-  "Source name updated": "来源名称已更新"
+  "Source name updated": "来源名称已更新",
+  "Ignore {{name}} for this source": "在此来源中忽略 {{name}}",
+  "Skill ignored for this source": "已在此来源中忽略技能",
+  "Skill included for this source": "已重新包含此来源中的技能"
 });
 
 Object.assign(zhCN, {
@@ -1877,6 +1885,12 @@ Object.assign(zhCN, {
 
 const zhTW: Record<string, string> = {
   "Preparing updates...": "正在準備更新...",
+  "Waiting": "等待中",
+  "{{name}}: {{status}}": "{{name}}：{{status}}",
+  "Updating {{completed}} of {{total}}": "正在更新 {{completed}} / {{total}}",
+  "Updating {{id}}": "正在更新 {{id}}",
+  "Retry update {{id}}": "重試更新 {{id}}",
+  "Retry failed updates": "重試失敗的更新",
   "Update {{count}} skill": "更新 {{count}} 個技能",
   "Update {{count}} skills": "更新 {{count}} 個技能",
   "Apply {{count}} update": "套用 {{count}} 個更新",
@@ -2064,6 +2078,10 @@ const zhTW: Record<string, string> = {
   "Rename source {{name}}": "重新命名來源 {{name}}",
   "Source name": "來源名稱",
   "Source name updated": "來源名稱已更新",
+  "Ignored": "已忽略",
+  "Ignore {{name}} for this source": "在此來源中忽略 {{name}}",
+  "Skill ignored for this source": "已在此來源中忽略技能",
+  "Skill included for this source": "已重新包含此來源中的技能",
   "Merge": "合併",
   "Merge sources": "合併來源",
   "Merge selected": "合併選取項目",

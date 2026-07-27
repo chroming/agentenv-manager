@@ -244,6 +244,9 @@ export interface SkillLibraryStore {
   checkMonitoredSourceGroups(): Promise<SkillSourceCheckAllResult>;
   setSourceName(input: import("../shared/types").SkillSourceNameInput): Promise<SkillSourceGroupView>;
   setSourceMonitored(input: import("../shared/types").SkillSourceMonitoringInput): Promise<SkillSourceGroupView>;
+  setSourceCandidateIgnored(
+    input: import("../shared/types").SkillSourceCandidateIgnoreInput
+  ): Promise<SkillSourceGroupView>;
   previewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   mergeSources(previewId: string): Promise<SkillSourceMergeResult>;
   removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
@@ -1854,7 +1857,8 @@ export const createSkillLibraryStore = (
     checkSourceGroup,
     checkMonitoredSourceGroups,
     setSourceName,
-    setSourceMonitored
+    setSourceMonitored,
+    setSourceCandidateIgnored
   } =
     createSkillSourceGroupStore(skillSourceService, listSkills, skillSourceRegistry);
   const { preview: previewSourceMerge, merge: mergeSources } = createSkillSourceMergeService({
@@ -3213,6 +3217,7 @@ export const createSkillLibraryStore = (
     checkMonitoredSourceGroups,
     setSourceName,
     setSourceMonitored,
+    setSourceCandidateIgnored,
     previewSourceMerge,
     mergeSources,
     removeSkill,

@@ -511,6 +511,10 @@
   color: var(--accent);
 }
 
+.skill-source-state.is-ignored {
+  color: var(--muted);
+}
+
 .skill-source-state.is-removed,
 .skill-source-state.is-invalid,
 .skill-source-state.is-conflict,
@@ -526,9 +530,15 @@
 }
 
 .skill-source-candidate-action {
+  align-items: center;
   display: flex;
+  gap: 2px;
   justify-content: flex-start;
   min-width: 0;
+}
+
+.skill-source-ignore-action {
+  color: var(--muted);
 }
 
 .skill-source-view .text-action {

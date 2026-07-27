@@ -173,10 +173,27 @@ describe("Repository Skill source", () => {
       .toEqual(["Upstream", "Library"]);
     expect(await firstCandidate.getByText("Upstream", { exact: true }).isVisible()).toBe(true);
     expect(await firstCandidate.getByText("Library", { exact: true }).isVisible()).toBe(true);
+    await sourceGroup.getByRole("button", {
+      name: "Ignore Release Check Internal for this source"
+    }).click();
+    await sourceGroup.getByText("Ignored", { exact: true }).waitFor({ state: "visible" });
+    await expect.poll(() => sourceGroup.getByLabel("Source summary").textContent())
+      .toContain("Changes 0");
+    const ignoredRegistry = JSON.parse(
+      await readFile(join(appDataRoot, "skill-sources.json"), "utf8")
+    ) as { sources: Array<{ ignoredSubpaths?: string[] }> };
+    expect(ignoredRegistry.sources[0]?.ignoredSubpaths).toEqual(["release-check"]);
+
     await sourceGroup.getByRole("button", { name: "Add", exact: true }).click();
     const releaseLibrarySkill = join(appDataRoot, "skills-library", "release-check-internal");
     await expect.poll(() => exists(join(releaseLibrarySkill, "SKILL.md"))).toBe(true);
     await expect.poll(() => sourceGroup.getByText("New", { exact: true }).count()).toBe(0);
+    await expect.poll(async () => {
+      const restoredRegistry = JSON.parse(
+        await readFile(join(appDataRoot, "skill-sources.json"), "utf8")
+      ) as { sources: Array<{ ignoredSubpaths?: string[] }> };
+      return restoredRegistry.sources[0]?.ignoredSubpaths;
+    }).toBeUndefined();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
     ).toBe(true);
@@ -235,7 +252,10 @@ describe("Repository Skill source", () => {
     await expect.poll(() => readFile(join(librarySkill, "SKILL.md"), "utf8"))
       .not.toContain("Review compatibility");
     await preview.getByRole("button", { name: "Update 1 skill" }).click();
-    await preview.waitFor({ state: "hidden" });
+    await preview
+      .getByRole("status", { name: "API Design Internal: Done" })
+      .waitFor({ state: "visible" });
+    await preview.getByRole("button", { name: "Close" }).click();
     await page.getByText(
       "Updated 1 skill · All tracked skills are up to date",
       { exact: true }
