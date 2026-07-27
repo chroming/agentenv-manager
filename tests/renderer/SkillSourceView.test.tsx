@@ -451,7 +451,7 @@ describe("SkillSourceView", () => {
     await waitFor(() => expect(checkMonitored).toHaveAttribute("aria-busy", "false"));
   });
 
-  it("ignores a new Skill only for its source and can add it later", async () => {
+  it("unignores a source candidate without importing it", async () => {
     const onAdd = vi.fn().mockResolvedValue(true);
     const onSetCandidateIgnored = vi.fn().mockResolvedValue(undefined);
     const { rerender } = render(
@@ -514,16 +514,14 @@ describe("SkillSourceView", () => {
     );
 
     expect(screen.getByText("Ignored")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    await waitFor(() => expect(onAdd).toHaveBeenCalledWith(
-      ignoredGroup,
-      ignoredGroup.candidates[0]
-    ));
-    expect(onSetCandidateIgnored).toHaveBeenLastCalledWith({
+    expect(screen.queryByRole("button", { name: "Add" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Unignore" }));
+    await waitFor(() => expect(onSetCandidateIgnored).toHaveBeenLastCalledWith({
       sourceId: group.sourceId,
       sourceSubpath: "testing",
       ignored: false
-    });
+    }));
+    expect(onAdd).not.toHaveBeenCalled();
   });
 
   it("animates the action that is waiting for an update preview", async () => {

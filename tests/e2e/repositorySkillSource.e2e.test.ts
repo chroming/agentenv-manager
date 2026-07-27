@@ -184,16 +184,21 @@ describe("Repository Skill source", () => {
     ) as { sources: Array<{ ignoredSubpaths?: string[] }> };
     expect(ignoredRegistry.sources[0]?.ignoredSubpaths).toEqual(["release-check"]);
 
-    await sourceGroup.getByRole("button", { name: "Add", exact: true }).click();
-    const releaseLibrarySkill = join(appDataRoot, "skills-library", "release-check-internal");
-    await expect.poll(() => exists(join(releaseLibrarySkill, "SKILL.md"))).toBe(true);
-    await expect.poll(() => sourceGroup.getByText("New", { exact: true }).count()).toBe(0);
+    await sourceGroup.getByRole("button", { name: "Unignore", exact: true }).click();
+    await sourceGroup.getByText("New", { exact: true }).waitFor({ state: "visible" });
+    await expect.poll(() => sourceGroup.getByLabel("Source summary").textContent())
+      .toContain("Changes 1");
     await expect.poll(async () => {
       const restoredRegistry = JSON.parse(
         await readFile(join(appDataRoot, "skill-sources.json"), "utf8")
       ) as { sources: Array<{ ignoredSubpaths?: string[] }> };
       return restoredRegistry.sources[0]?.ignoredSubpaths;
     }).toBeUndefined();
+
+    await sourceGroup.getByRole("button", { name: "Add", exact: true }).click();
+    const releaseLibrarySkill = join(appDataRoot, "skills-library", "release-check-internal");
+    await expect.poll(() => exists(join(releaseLibrarySkill, "SKILL.md"))).toBe(true);
+    await expect.poll(() => sourceGroup.getByText("New", { exact: true }).count()).toBe(0);
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
     ).toBe(true);

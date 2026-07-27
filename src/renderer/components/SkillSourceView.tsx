@@ -555,31 +555,25 @@ export const SkillSourceView = ({
     const key = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
     setOperation(key);
     try {
-      const added = await onAdd(group, candidate);
-      if (added && candidate.state === "ignored" && onSetCandidateIgnored) {
-        await onSetCandidateIgnored({
-          sourceId: group.sourceId,
-          sourceSubpath: candidate.sourceSubpath,
-          ignored: false
-        });
-      }
+      await onAdd(group, candidate);
     } finally {
       setOperation(undefined);
     }
   };
 
-  const runIgnore = async (
+  const setCandidateIgnored = async (
     group: SkillSourceGroupView,
-    candidate: SkillSourceGroupCandidate
+    candidate: SkillSourceGroupCandidate,
+    ignored: boolean
   ) => {
     if (!onSetCandidateIgnored) return;
-    const key = `ignore\0${group.sourceId}\0${candidate.sourceSubpath}`;
+    const key = `${ignored ? "ignore" : "unignore"}\0${group.sourceId}\0${candidate.sourceSubpath}`;
     setOperation(key);
     try {
       await onSetCandidateIgnored({
         sourceId: group.sourceId,
         sourceSubpath: candidate.sourceSubpath,
-        ignored: true
+        ignored
       });
     } finally {
       setOperation(undefined);
@@ -1043,9 +1037,12 @@ export const SkillSourceView = ({
                     const addKey = `add\0${group.canonicalLink}\0${candidate.sourceSubpath}`;
                     const ignoreKey =
                       `ignore\0${group.sourceId}\0${candidate.sourceSubpath}`;
+                    const unignoreKey =
+                      `unignore\0${group.sourceId}\0${candidate.sourceSubpath}`;
                     const updateKey = candidate.libraryId ? `update\0${candidate.libraryId}` : "";
                     const isAdding = operation === addKey;
                     const isIgnoring = operation === ignoreKey;
+                    const isUnignoring = operation === unignoreKey;
                     const isUpdating =
                       operation === updateKey ||
                       (updateActivity?.kind === "preview-skill" &&
@@ -1113,7 +1110,7 @@ export const SkillSourceView = ({
                                   variant="ghost"
                                   aria-busy={isIgnoring}
                                   disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
-                                  onClick={() => void runIgnore(group, candidate)}
+                                  onClick={() => void setCandidateIgnored(group, candidate, true)}
                                 >
                                   {isIgnoring ? (
                                     <LoaderCircle className="is-spinning" />
@@ -1125,14 +1122,14 @@ export const SkillSourceView = ({
                             </>
                           ) : candidate.state === "ignored" ? (
                             <button
-                              aria-busy={isAdding}
+                              aria-busy={isUnignoring}
                               className="text-action"
                               type="button"
                               disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
-                              onClick={() => void runAdd(group, candidate)}
+                              onClick={() => void setCandidateIgnored(group, candidate, false)}
                             >
-                              {isAdding ? <LoaderCircle className="is-spinning" size={13} /> : null}
-                              <span>{t("Add")}</span>
+                              {isUnignoring ? <LoaderCircle className="is-spinning" size={13} /> : null}
+                              <span>{t("Unignore")}</span>
                             </button>
                           ) : candidate.state === "update" &&
                             candidate.libraryId &&

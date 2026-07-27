@@ -1856,6 +1856,7 @@ Object.assign(zhCN, {
   "Source name": "来源名称",
   "Source name updated": "来源名称已更新",
   "Ignore {{name}} for this source": "在此来源中忽略 {{name}}",
+  "Unignore": "取消忽略",
   "Skill ignored for this source": "已在此来源中忽略技能",
   "Skill included for this source": "已重新包含此来源中的技能"
 });
@@ -2080,6 +2081,7 @@ const zhTW: Record<string, string> = {
   "Source name updated": "來源名稱已更新",
   "Ignored": "已忽略",
   "Ignore {{name}} for this source": "在此來源中忽略 {{name}}",
+  "Unignore": "取消忽略",
   "Skill ignored for this source": "已在此來源中忽略技能",
   "Skill included for this source": "已重新包含此來源中的技能",
   "Merge": "合併",
