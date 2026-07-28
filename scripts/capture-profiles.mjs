@@ -834,16 +834,15 @@ try {
   await capturePage(page, join(outputDir, "skills-cleanup-1180x728.png"));
   await setWindowSize(page, windowHandle, 920, 620);
   await capturePage(page, join(outputDir, "skills-cleanup-920x620.png"));
-  await page.getByRole("button", { name: "Expand Managed" }).click();
   const sharedCleanupGroup = page.getByRole("group", {
     name: "Cleanup group shared-compatibility-reviewer"
   });
+  await sharedCleanupGroup.waitFor({ state: "visible", timeout: 5_000 });
   await sharedCleanupGroup.getByRole("button", {
-    name: "More cleanup actions for shared-compatibility-reviewer"
+    name: "Review Agents shared-compatibility-reviewer"
   }).click();
-  await page.getByRole("menuitem", { name: "Details" }).click();
   const sharedTargetReview = page.getByRole("dialog", {
-    name: "Skill details shared-compatibility-reviewer"
+    name: "Prepare shared Skill migration"
   });
   await sharedTargetReview.waitFor({ state: "visible", timeout: 5_000 });
   await capturePage(page, join(outputDir, "skills-cleanup-shared-review-920x620.png"));

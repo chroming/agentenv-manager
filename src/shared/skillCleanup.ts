@@ -30,8 +30,8 @@ export type SkillCleanupDisplayState =
   | "local-changes-found"
   | "managed-copy-changed"
   | "outside-agentenv"
-  | "shared-copy-in-use"
-  | "shared-copy-replaceable"
+  | "shared-copy-needs-decisions"
+  | "shared-copy-ready-to-move"
   | "kept-shared"
   | "unavailable"
   | "managed"
@@ -43,8 +43,8 @@ export type SkillCleanupRecommendedAction =
   | "review-differences"
   | "review-drift"
   | "review-paths"
-  | "open-profiles"
-  | "review-replacement"
+  | "review-agents"
+  | "move-from-shared"
   | "review-details"
   | "none";
 
@@ -261,20 +261,20 @@ export const buildSkillCleanupGroups = (
       const sharedCopyWaiting = sharedMigration?.state === "waiting";
       const sharedCopyReplaceable = sharedMigration?.state === "ready";
       const resolution: SkillCleanupResolution =
-        state === "kept-outside" || state === "managed"
-          ? "resolved"
-          : sharedCopyWaiting
+        sharedCopyWaiting
+          ? "manual"
+          : state === "kept-outside" || state === "managed"
             ? "resolved"
             : canRemoveBrokenLinks ||
                 canImportSharedCopies ||
                 canNormalizeToLibrary ||
                 canImportStandalone
-              ? "automatic"
-              : sharedMigration
-                ? "manual"
-                : state === "outside" || state === "conflict" || state === "broken" || missingTarget
+                ? "automatic"
+                : sharedMigration
                   ? "manual"
-                  : "automatic";
+                  : state === "outside" || state === "conflict" || state === "broken" || missingTarget
+                    ? "manual"
+                    : "automatic";
       const automaticEffect: SkillCleanupAutomaticEffect | undefined =
         resolution !== "automatic"
           ? undefined
@@ -293,7 +293,7 @@ export const buildSkillCleanupGroups = (
         sharedCopyReplaceable
           ? "ready"
           : sharedCopyWaiting
-            ? "managed"
+            ? "decision"
             : resolution === "automatic"
               ? "ready"
               : resolution === "manual"
@@ -302,33 +302,33 @@ export const buildSkillCleanupGroups = (
                   ? "managed"
                   : "kept";
       const resolutionReason =
-        resolution === "resolved"
-          ? sharedCopyWaiting
-            ? "The Library version is ready, and the shared copy remains active for consumer Agents that have not recorded a Profile decision."
-            : state === "kept-outside"
+        sharedCopyWaiting
+          ? "Consumer Agents need an applied Skill decision before AgentEnv can move this Skill out of the shared folder."
+          : resolution === "resolved"
+            ? state === "kept-outside"
               ? "Intentionally excluded from management."
               : state === "outside"
                 ? "Every copy outside AgentEnv matches the Library."
                 : "Every detected copy is managed and current."
-          : resolution === "automatic"
-            ? automaticEffect === "remove-broken-link"
-              ? "The unavailable symbolic link can be removed without touching its missing target."
-              : automaticEffect === "archive-and-link"
-                ? "Library is canonical. Local differences will be backed up before the copies are linked to it."
-                : state === "stale"
-              ? "Managed copies can be refreshed from Library without choosing content."
-              : state === "duplicate"
-                ? "All detected copies have identical content."
-                : state === "library"
-                  ? "The local copy already matches the Library version."
-                  : "A single local copy can become the Library version."
-            : state === "broken"
-              ? "The Skill path is unavailable and must be reviewed before any cleanup action."
-              : state === "outside"
-                ? "At least one copy is outside AgentEnv and needs a path decision."
-                : missingTarget
-                  ? "A destination Agent could not be identified."
-                  : "Detected copies differ and require a version choice.";
+            : resolution === "automatic"
+              ? automaticEffect === "remove-broken-link"
+                ? "The unavailable symbolic link can be removed without touching its missing target."
+                : automaticEffect === "archive-and-link"
+                  ? "Library is canonical. Local differences will be backed up before the copies are linked to it."
+                  : state === "stale"
+                    ? "Managed copies can be refreshed from Library without choosing content."
+                    : state === "duplicate"
+                      ? "All detected copies have identical content."
+                      : state === "library"
+                        ? "The local copy already matches the Library version."
+                        : "A single local copy can become the Library version."
+              : state === "broken"
+                ? "The Skill path is unavailable and must be reviewed before any cleanup action."
+                : state === "outside"
+                  ? "At least one copy is outside AgentEnv and needs a path decision."
+                  : missingTarget
+                    ? "A destination Agent could not be identified."
+                    : "Detected copies differ and require a version choice.";
 
       const presentation: SkillCleanupPresentation = allKeptOutside
         ? sharedKept
@@ -342,9 +342,9 @@ export const buildSkillCleanupGroups = (
                 action: "review-paths"
               }
             : sharedMigration?.state === "ready"
-              ? { state: "shared-copy-replaceable", action: "review-replacement" }
+              ? { state: "shared-copy-ready-to-move", action: "move-from-shared" }
               : sharedMigration?.state === "waiting"
-                ? { state: "shared-copy-in-use", action: "open-profiles" }
+                ? { state: "shared-copy-needs-decisions", action: "review-agents" }
                 : sharedMigration?.state === "kept"
                   ? { state: "kept-shared", action: "none" }
                   : sharedMigration?.state === "outside"

@@ -371,10 +371,10 @@ describe("skill cleanup groups", () => {
       libraryId: "reviewer"
     });
     expect(waiting.presentation).toEqual({
-      state: "shared-copy-in-use",
-      action: "open-profiles"
+      state: "shared-copy-needs-decisions",
+      action: "review-agents"
     });
-    expect(waiting).toMatchObject({ resolution: "resolved", bucket: "managed" });
+    expect(waiting).toMatchObject({ resolution: "manual", bucket: "decision" });
     expect(automaticSkillCleanupRequest(waiting)).toBeUndefined();
 
     const [ready] = buildSkillCleanupGroups([sharedCopy, openCodeCopy, codexCopy], {
@@ -389,8 +389,8 @@ describe("skill cleanup groups", () => {
     });
     expect(ready.sharedMigration).toMatchObject({ state: "ready", pendingConsumers: [] });
     expect(ready.presentation).toEqual({
-      state: "shared-copy-replaceable",
-      action: "review-replacement"
+      state: "shared-copy-ready-to-move",
+      action: "move-from-shared"
     });
     expect(ready).toMatchObject({ resolution: "manual", bucket: "ready" });
 
@@ -409,8 +409,8 @@ describe("skill cleanup groups", () => {
       pendingConsumers: ["codex", "opencode"]
     });
     expect(stale.presentation).toEqual({
-      state: "shared-copy-in-use",
-      action: "open-profiles"
+      state: "shared-copy-needs-decisions",
+      action: "review-agents"
     });
   });
 

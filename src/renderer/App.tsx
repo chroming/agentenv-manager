@@ -3818,7 +3818,7 @@ const AppContent = ({
               : skillCleanupResult.operation === "merge"
                 ? t("Merged duplicates into {{id}}", { id: skillCleanupResult.libraryId })
               : skillCleanupResult.operation === "retire"
-                ? t("Replaced shared copy for {{id}}", { id: skillCleanupResult.libraryId })
+                ? t("Moved {{id}} out of the shared folder", { id: skillCleanupResult.libraryId })
                 : skillCleanupResult.libraryCreated
                   ? t("Added {{id}} to Library", { id: skillCleanupResult.libraryId })
                   : t("Managed copies for {{id}}", { id: skillCleanupResult.libraryId }),

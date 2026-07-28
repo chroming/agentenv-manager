@@ -334,8 +334,8 @@ const cleanupPresentationLabel = (state: SkillCleanupDisplayState) => {
   if (state === "local-changes-found") return "Local changes found";
   if (state === "managed-copy-changed") return "Managed copy changed";
   if (state === "outside-agentenv") return "Outside AgentEnv";
-  if (state === "shared-copy-in-use") return "Shared copy still active";
-  if (state === "shared-copy-replaceable") return "Shared copy can be replaced";
+  if (state === "shared-copy-needs-decisions") return "Needs Agent choices";
+  if (state === "shared-copy-ready-to-move") return "Ready to move out of shared folder";
   if (state === "kept-shared") return "Kept shared";
   if (state === "kept-outside") return "Kept outside";
   if (state === "unavailable") return "Unavailable";
@@ -348,8 +348,8 @@ const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState) => {
   if (state === "multiple-versions") return "Multiple versions";
   if (state === "local-changes-found" || state === "managed-copy-changed") return "Changed";
   if (state === "outside-agentenv") return "Outside";
-  if (state === "shared-copy-in-use") return "Shared";
-  if (state === "shared-copy-replaceable") return "Ready";
+  if (state === "shared-copy-needs-decisions") return "Needs choice";
+  if (state === "shared-copy-ready-to-move") return "Ready";
   if (state === "kept-shared") return "Kept";
   if (state === "kept-outside") return "Kept";
   if (state === "managed") return "Managed";
@@ -357,12 +357,12 @@ const cleanupPresentationCompactLabel = (state: SkillCleanupDisplayState) => {
 };
 
 const cleanupPresentationChipClass = (state: SkillCleanupDisplayState) => {
-  if (state === "managed" || state === "shared-copy-replaceable") return "managed";
+  if (state === "managed" || state === "shared-copy-ready-to-move") return "managed";
   if (state === "kept-outside" || state === "kept-shared") return "kept-outside";
   if (state === "outside-agentenv") return "outside";
   if (state === "multiple-versions" || state === "local-changes-found") return "conflict";
   if (state === "managed-copy-changed") return "stale";
-  if (state === "shared-copy-in-use") return "pending";
+  if (state === "shared-copy-needs-decisions") return "pending";
   if (state === "duplicate-copies") return "library";
   if (state === "unavailable") return "stale";
   return "outside";
@@ -374,18 +374,18 @@ const cleanupActionLabel = (action: SkillCleanupRecommendedAction) => {
   if (action === "review-differences") return "Review differences";
   if (action === "review-drift") return "Review drift";
   if (action === "review-paths") return "Review paths";
-  if (action === "open-profiles") return "Review shared copy";
-  if (action === "review-replacement") return "Review replacement";
+  if (action === "review-agents") return "Review Agents";
+  if (action === "move-from-shared") return "Move out of shared folder";
   if (action === "review-details") return "Review details";
   return "";
 };
 
 const cleanupActionDisplayLabel = (action: SkillCleanupRecommendedAction) => {
-  if (action === "open-profiles") {
-    return "Review copy";
+  if (action === "review-agents") {
+    return "Review Agents";
   }
-  if (action === "review-replacement") {
-    return "Replace shared";
+  if (action === "move-from-shared") {
+    return "Move";
   }
   if (
     action === "review-differences" ||
@@ -2665,7 +2665,7 @@ export const SkillLibraryPanel = ({
               {sharedReplacementCandidates.length > 0 ? (
                 <section className="cleanup-bulk-effect">
                   <div>
-                    <strong>{t("Replace shared copies")}</strong>
+                    <strong>{t("Move Skills out of shared folder")}</strong>
                     <span>{sharedReplacementCandidates.length}</span>
                   </div>
                   <p>
@@ -2713,12 +2713,12 @@ export const SkillLibraryPanel = ({
             className="profile-form-dialog profile-form-dialog--compact shared-target-review-dialog ui-dialog-shell"
             role="dialog"
             aria-modal="true"
-            aria-label={t("Choose shared Skill handling")}
+            aria-label={t("Prepare shared Skill migration")}
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header ui-dialog-header">
               <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Choose how Agents use this Skill")}</div>
+                <div className="section-title ui-dialog-title">{t("Prepare affected Agents")}</div>
                 <p className="muted ui-dialog-description">
                   {t("{{name}} is still loaded by {{count}} Agents from one shared folder.", {
                     name: sharedTargetReview.primary?.name ?? sharedTargetReview.skillKey,
@@ -2732,9 +2732,9 @@ export const SkillLibraryPanel = ({
                 <span key={targetId}>{t(targetNameFor(targetId, targetNames, targetId))}</span>
               ))}
               <p className="shared-target-review-guidance">
-                {t("Apply the intended Profile to each Agent, then return here to replace the shared copy.")}
+                {t("Apply the intended Profile to each Agent, then return here to move this Skill out of the shared folder.")}
               </p>
-              <small>{t("Profiles without this Skill will remove it from that Agent when the shared copy is replaced.")}</small>
+              <small>{t("Profiles without this Skill will keep it absent from that Agent after the shared copy is removed.")}</small>
             </div>
             <footer className="preview-actions ui-dialog-footer">
               <button
@@ -2780,13 +2780,13 @@ export const SkillLibraryPanel = ({
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact shared-retire-dialog ui-dialog-shell"
             role="dialog"
-            aria-label={t("Replace shared Skill copy")}
+            aria-label={t("Move Skill out of shared folder")}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header ui-dialog-header">
               <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Replace shared copy")}</div>
+                <div className="section-title ui-dialog-title">{t("Move out of shared folder")}</div>
                 <p className="muted ui-dialog-description">
                   {t("Each Agent will use its saved Profile instead of the shared {{name}} copy.", {
                     name: sharedRetireCandidate.primary?.name ?? sharedRetireCandidate.skillKey
@@ -2796,7 +2796,7 @@ export const SkillLibraryPanel = ({
             </header>
             <div className="cleanup-retire-summary ui-dialog-body">
               <div>
-                <strong>{t("After replacement")}</strong>
+                <strong>{t("After moving")}</strong>
                 {sharedRetireTargets.length > 0 ? (
                   <div className="cleanup-migration-decisions">
                     {sharedRetireTargets.map((target) => (
@@ -2846,7 +2846,7 @@ export const SkillLibraryPanel = ({
                   {sharedOperation?.action === "retire" ? (
                     <LoaderCircle className="is-spinning" size={15} strokeWidth={2.2} />
                   ) : null}
-                  {t(sharedOperation?.action === "retire" ? "Replacing..." : "Replace shared copy")}
+                  {t(sharedOperation?.action === "retire" ? "Moving..." : "Move out of shared folder")}
               </button>
             </footer>
           </section>
@@ -3593,11 +3593,11 @@ export const SkillLibraryPanel = ({
                     }
                     return;
                   }
-                  if (group.presentation.action === "open-profiles") {
+                  if (group.presentation.action === "review-agents") {
                     setSharedTargetReviewKey(group.skillKey);
                     return;
                   }
-                  if (group.presentation.action === "review-replacement") {
+                  if (group.presentation.action === "move-from-shared") {
                     setSharedRetireKey(group.skillKey);
                   }
                 };
@@ -3810,8 +3810,8 @@ export const SkillLibraryPanel = ({
                         <PreviewText
                           ariaLabel={t("Full cleanup history details {{id}}", { id: backup.libraryId })}
                           className="cleanup-history-details"
-                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared copy replacement" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
-                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared copy replacement" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          displayText={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared folder migration" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
+                          text={`${t(backup.operation === "remove" ? "Removal" : backup.operation === "retire" ? "Shared folder migration" : backup.operation === "update" ? "Update" : backup.operation === "merge" ? "Merge" : "Cleanup")} · ${t("{{count}} locations", { count: backup.locationCount })} · ${formatDate(backup.createdAt)}`}
                         />
                       </div>
                       <div className="cleanup-group-actions">

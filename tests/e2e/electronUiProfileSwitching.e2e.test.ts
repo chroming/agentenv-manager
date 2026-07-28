@@ -5117,6 +5117,47 @@ describe("Electron UI profile switching e2e", () => {
     ).toBe(1);
   }, 30_000);
 
+  it("surfaces legacy AgentEnv-owned shared links as an unfinished location migration", async () => {
+    const { homeDir, librarySkill, page } = await launchApp();
+    const skillId = "shared-reviewer";
+    const sharedSkillDir = join(homeDir, ".agents", "skills", skillId);
+    const libraryNotesPath = join(librarySkill.libraryDir, "notes.md");
+    await writeFile(libraryNotesPath, "# Shared notes\n", "utf8");
+    await mkdir(sharedSkillDir, { recursive: true });
+    await writeJson(join(sharedSkillDir, ".agentenv-owner.json"), {
+      owner: "agentenv-manager",
+      profileId: "library-cleanup",
+      targetId: "codex",
+      kind: "skill",
+      source: `skills-library/${skillId}`
+    });
+    await symlink(
+      join(librarySkill.libraryDir, "SKILL.md"),
+      join(sharedSkillDir, "SKILL.md")
+    );
+    await symlink(libraryNotesPath, join(sharedSkillDir, "notes.md"));
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const cleanupGroup = page.getByRole("group", {
+      name: `Cleanup group ${skillId}`
+    });
+
+    await cleanupGroup.waitFor({ state: "visible" });
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Needs choice");
+    await expect.poll(() => cleanupGroup.textContent()).toContain(
+      "Agents still load this shared copy"
+    );
+    await expect(
+      cleanupGroup.getByRole("button", { name: `Review Agents ${skillId}` }).count()
+    ).resolves.toBe(1);
+    await expect(fileExists(sharedSkillDir)).resolves.toBe(true);
+    await expect(lstat(join(sharedSkillDir, "SKILL.md")).then((value) => value.isSymbolicLink()))
+      .resolves.toBe(true);
+    await expect(lstat(join(sharedSkillDir, "notes.md")).then((value) => value.isSymbolicLink()))
+      .resolves.toBe(true);
+  }, 30_000);
+
   it("imports a shared compatibility Skill without taking ownership and blocks early removal", async () => {
     const { appDataRoot, homeDir, page } = await launchApp();
     const sharedSkillDir = join(homeDir, ".agents", "skills", "shared-migration-reviewer");
@@ -5175,9 +5216,8 @@ describe("Electron UI profile switching e2e", () => {
     await expect(readFile(join(sharedSkillDir, "SKILL.md"), "utf8")).resolves.toBe(sharedContent);
     expect((await stat(join(sharedSkillDir, "SKILL.md"))).ino).toBe(sharedSkillStatsBefore.ino);
     await expect(fileExists(join(sharedSkillDir, ".agentenv-owner.json"))).resolves.toBe(false);
-    await page.getByRole("button", { name: "Expand Managed" }).click();
     await cleanupGroup.waitFor({ state: "visible" });
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Needs choice");
     await expect.poll(() => cleanupGroup.textContent()).toContain("2 Agents still load this shared copy");
     await resizeAppWindow(page, 920, 620);
     const sharedStateGeometry = await cleanupGroup.evaluate((row) => {
@@ -5201,7 +5241,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(sharedStateGeometry).toEqual({ contained: true, overlaps: false, stateFits: true });
     await cleanupGroup.locator(".cleanup-group-state").hover();
     const sharedStateTooltip = page.getByRole("tooltip").filter({
-      hasText: "Shared copy still active"
+      hasText: "Needs Agent choices"
     });
     await sharedStateTooltip.waitFor({ state: "visible" });
     await expectInViewport(page, sharedStateTooltip);
@@ -5209,7 +5249,7 @@ describe("Electron UI profile switching e2e", () => {
       await Promise.all([
         sharedStateTooltip.boundingBox(),
         cleanupGroup
-          .getByRole("button", { name: "Review shared copy shared-migration-reviewer" })
+          .getByRole("button", { name: "Review Agents shared-migration-reviewer" })
           .boundingBox()
       ]).then(([tooltip, action]) =>
         Boolean(
@@ -5223,9 +5263,9 @@ describe("Electron UI profile switching e2e", () => {
       )
     ).toBe(false);
     await cleanupGroup
-      .getByRole("button", { name: "Review shared copy shared-migration-reviewer" })
+      .getByRole("button", { name: "Review Agents shared-migration-reviewer" })
       .click();
-    const sharedTargetReview = page.getByRole("dialog", { name: "Choose shared Skill handling" });
+    const sharedTargetReview = page.getByRole("dialog", { name: "Prepare shared Skill migration" });
     await sharedTargetReview.waitFor({ state: "visible" });
     await expect.poll(() => sharedTargetReview.textContent()).toContain(
       "still loaded by 2 Agents from one shared folder"
@@ -5233,14 +5273,13 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => sharedTargetReview.textContent()).toContain("OpenCode");
     await expect.poll(() => sharedTargetReview.textContent()).toContain("Codex");
     await expect.poll(() => sharedTargetReview.textContent()).toContain(
-      "return here to replace the shared copy"
+      "return here to move this Skill out of the shared folder"
     );
     await expect(sharedTargetReview.getByRole("button", { name: "Keep shared copy" }).count()).resolves.toBe(1);
     await sharedTargetReview.getByRole("button", { name: "Open Profiles" }).click();
     await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({ state: "visible" });
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local" }).click();
-    await page.getByRole("button", { name: "Expand Managed" }).click();
     await cleanupGroup.waitFor({ state: "visible" });
 
     const retirementError = await page.evaluate(async ({ skillKey, libraryId, path }) => {
@@ -5274,7 +5313,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "More cleanup actions for shared-migration-reviewer" })
       .click();
     await page.getByRole("menuitem", { name: "Review again" }).click();
-    await expect.poll(() => cleanupGroup.textContent()).toContain("Shared");
+    await expect.poll(() => cleanupGroup.textContent()).toContain("Needs choice");
   }, 30_000);
 
   it("atomically migrates and restores a shared Skill after every consumer is prepared", async () => {
@@ -5373,12 +5412,14 @@ describe("Electron UI profile switching e2e", () => {
       ).toEqual([]);
     }
     await cleanupGroup
-      .getByRole("button", { name: `Review replacement ${skillId}` })
+      .getByRole("button", { name: `Move out of shared folder ${skillId}` })
       .click();
-    const retirementDialog = page.getByRole("dialog", { name: "Replace shared Skill copy" });
+    const retirementDialog = page.getByRole("dialog", { name: "Move Skill out of shared folder" });
     await expect.poll(() => retirementDialog.textContent()).toContain(`Install as ${skillId}`);
     await expectInViewport(page, retirementDialog);
-    await retirementDialog.getByRole("button", { name: "Replace shared copy" }).click();
+    await retirementDialog
+      .getByRole("button", { name: "Move out of shared folder" })
+      .click();
     await retirementDialog.waitFor({ state: "hidden" });
     await expect(fileExists(sharedSkillDir)).resolves.toBe(false);
     await expect(fileExists(join(appDataRoot, "skills-library", skillId, "SKILL.md"))).resolves.toBe(true);
@@ -5386,11 +5427,11 @@ describe("Electron UI profile switching e2e", () => {
     await expect(fileExists(`${join(codexDir, "skills", skillId)}.agentenv-owner.json`)).resolves.toBe(true);
 
     const history = page.getByRole("region", { name: "Cleanup history" });
-    await expect.poll(() => history.textContent()).toContain("Shared copy replacement");
+    await expect.poll(() => history.textContent()).toContain("Shared folder migration");
     const migrationHistoryRow = history
       .locator(".cleanup-history-row")
       .filter({ hasText: skillId })
-      .filter({ hasText: "Shared copy replacement" });
+      .filter({ hasText: "Shared folder migration" });
     await migrationHistoryRow
       .getByRole("button", { name: `Restore cleanup ${skillId}` })
       .click();

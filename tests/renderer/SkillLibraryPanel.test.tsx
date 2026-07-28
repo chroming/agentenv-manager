@@ -1051,16 +1051,18 @@ describe("SkillLibraryPanel", () => {
       retained: true
     });
     const removeSharedButton = within(sharedMigrationGroup).getByRole("button", {
-      name: "Review replacement compat-reviewer"
+      name: "Move out of shared folder compat-reviewer"
     });
     await waitFor(() => expect(removeSharedButton).toBeEnabled());
     fireEvent.click(removeSharedButton);
-    const retireDialog = screen.getByRole("dialog", { name: "Replace shared Skill copy" });
+    const retireDialog = screen.getByRole("dialog", { name: "Move Skill out of shared folder" });
     expect(retireDialog).toHaveTextContent("The Library copy is kept");
     expect(retireDialog).toHaveTextContent("OpenCodeInstall as compat-reviewer");
     expect(retireDialog).toHaveTextContent("CodexDo not install");
     expect(retireDialog).toHaveTextContent("/tmp/home/.agents/skills/compat-reviewer");
-    fireEvent.click(within(retireDialog).getByRole("button", { name: "Replace shared copy" }));
+    fireEvent.click(
+      within(retireDialog).getByRole("button", { name: "Move out of shared folder" })
+    );
     await waitFor(() => expect(onRetireSharedSkill).toHaveBeenCalledWith({
       skillKey: "compat-reviewer",
       libraryId: "compat-reviewer",
@@ -1098,7 +1100,7 @@ describe("SkillLibraryPanel", () => {
     expect(bulkCleanupDialog).toHaveTextContent("Add to Library and link copies");
     expect(bulkCleanupDialog).toHaveTextContent("Copied Local");
     expect(bulkCleanupDialog).toHaveTextContent("Legacy Reviewer");
-    expect(bulkCleanupDialog).toHaveTextContent("Replace shared copies");
+    expect(bulkCleanupDialog).toHaveTextContent("Move Skills out of shared folder");
     expect(bulkCleanupDialog).toHaveTextContent("compat-reviewer");
     fireEvent.click(
       within(bulkCleanupDialog).getByRole("button", { name: "Clean up 5 skills" })
