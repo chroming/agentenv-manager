@@ -164,10 +164,11 @@
   overflow: visible;
   column-gap: 10px;
   grid-template-columns:
-    minmax(220px, 1.5fr)
-    minmax(160px, 0.95fr)
-    minmax(104px, 0.64fr)
-    minmax(150px, 0.9fr)
+    minmax(210px, 1.5fr)
+    minmax(150px, 0.95fr)
+    minmax(92px, 0.6fr)
+    minmax(118px, 0.78fr)
+    104px
     34px;
 }
 
@@ -249,6 +250,7 @@
 .skill-library-panel .library-source-cell,
 .skill-library-panel .library-usage-cell,
 .skill-library-panel .library-status-cell,
+.skill-library-panel .library-current-action-cell,
 .skill-library-panel .library-actions-cell {
   align-content: center;
   grid-area: auto;
@@ -410,33 +412,53 @@
   white-space: nowrap;
 }
 
-.skill-library-panel button.library-primary-status.is-actionable {
+.skill-library-panel .library-actions-cell {
+  gap: 0;
+  overflow: visible;
+}
+
+.skill-library-panel .library-current-action-cell {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+}
+
+.skill-library-panel .library-row-action {
+  align-items: center;
   background: transparent;
   border: 0;
   border-radius: var(--radius-tight);
+  color: var(--accent);
   cursor: pointer;
-  padding: 0;
-  width: fit-content;
+  display: inline-flex;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  gap: 5px;
+  height: 28px;
+  justify-content: flex-start;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0 4px;
+  white-space: nowrap;
 }
 
-.skill-library-panel button.library-primary-status.is-actionable:hover:not(:disabled) > span {
+.skill-library-panel .library-row-action > svg {
+  flex: 0 0 auto;
+}
+
+.skill-library-panel .library-row-action > span {
+  min-width: 0;
+}
+
+.skill-library-panel .library-row-action:hover:not(:disabled) {
+  color: var(--accent-strong);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.skill-library-panel button.library-primary-status.is-actionable:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.skill-library-panel button.library-primary-status.is-actionable:disabled {
+.skill-library-panel .library-row-action:disabled {
+  color: var(--muted);
   cursor: wait;
-  opacity: 0.72;
-}
-
-.skill-library-panel .library-actions-cell {
-  gap: 0;
-  overflow: visible;
 }
 
 .skill-library-panel .library-actions-cell .icon-action {
@@ -486,10 +508,11 @@
   .skill-library-panel .library-table-row {
     column-gap: 10px;
     grid-template-columns:
-      minmax(164px, 1.25fr)
-      minmax(110px, 0.8fr)
-      82px
-      minmax(134px, 0.85fr)
+      minmax(136px, 1.25fr)
+      minmax(92px, 0.8fr)
+      68px
+      120px
+      96px
       32px;
   }
 

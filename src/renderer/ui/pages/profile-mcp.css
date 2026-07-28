@@ -7,9 +7,16 @@
   align-items: center;
   border-bottom: 1px solid var(--border);
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   min-height: 38px;
   padding: 3px 8px 3px 12px;
+}
+
+.profile-mcp-toolbar > strong {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
 }
 
 .profile-mcp-toolbar__actions {
@@ -22,6 +29,10 @@
 .profile-mcp-toolbar__actions .secondary-action {
   min-height: 30px;
   padding-inline: 9px;
+}
+
+.profile-mcp-toolbar .ui-icon-button {
+  color: var(--muted);
 }
 
 .profile-mcp-empty {

@@ -1073,7 +1073,7 @@ describe("App", () => {
     expect(
       within(screen.getByRole("group", { name: "Library item github-reviewer" }))
         .getByRole("button", { name: "Update github-reviewer" })
-    ).toHaveTextContent("Update available");
+    ).toHaveTextContent("Update");
     expect(screen.queryByRole("complementary", { name: "Library summary" })).not.toBeInTheDocument();
     expect(screen.queryByRole("complementary", { name: "Activation" })).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist", { name: "Profile sections" })).not.toBeInTheDocument();
@@ -2183,6 +2183,7 @@ describe("App", () => {
       target: { value: "# Updated Agent\n" }
     });
     expect(row).toHaveTextContent("Unsaved");
+    expect(row.querySelector(".profile-row__dirty")).toHaveTextContent("Unsaved");
     expect(document.querySelector(".app-feedback")).toBeNull();
   });
 

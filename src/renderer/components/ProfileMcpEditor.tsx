@@ -1,4 +1,5 @@
-import { AlertTriangle, Network, RefreshCw } from "lucide-react";
+import { AlertTriangle, LoaderCircle, Network, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import type {
   NativeMcpConnection,
   NativeMcpInspectionIssue,
@@ -7,6 +8,7 @@ import type {
 } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { OverflowTooltip } from "./OverflowTooltip";
+import { Button, IconButton } from "./ui";
 
 type McpSelectionMode = "agent" | "on" | "off";
 
@@ -28,6 +30,18 @@ export const ProfileMcpEditor = ({
   onRefresh
 }: ProfileMcpEditorProps) => {
   const { t } = useI18n();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (!target) {
     return <div className="profile-mcp-empty">{t("Select an Agent to inspect MCP connections.")}</div>;
   }
@@ -82,6 +96,7 @@ export const ProfileMcpEditor = ({
   return (
     <div className="profile-mcp-editor">
       <div className="profile-mcp-toolbar">
+        <strong>{t("MCP connections")}</strong>
         <span className="profile-mcp-toolbar__actions">
           {!canManage && policy.mode !== "ignore" ? (
             <button
@@ -92,15 +107,20 @@ export const ProfileMcpEditor = ({
               {t("Remove override")}
             </button>
           ) : null}
-          <button
-            className="icon-action"
-            type="button"
-            aria-label={t("Refresh MCP connections")}
-            title={t("Refresh MCP connections")}
-            onClick={() => void onRefresh()}
+          <IconButton
+            label={t("Refresh MCP connections")}
+            size="compact"
+            variant="ghost"
+            aria-busy={refreshing}
+            disabled={refreshing}
+            onClick={() => void refresh()}
           >
-            <RefreshCw size={15} strokeWidth={2.2} aria-hidden="true" />
-          </button>
+            {refreshing ? (
+              <LoaderCircle className="is-spinning" aria-hidden="true" />
+            ) : (
+              <RefreshCw aria-hidden="true" />
+            )}
+          </IconButton>
         </span>
       </div>
 
@@ -113,9 +133,14 @@ export const ProfileMcpEditor = ({
             <strong>{t("Could not inspect MCP connections")}</strong>
             <small>{targetIssues.map((issue) => issue.message).join(" · ")}</small>
           </span>
-          <button className="secondary-action" type="button" onClick={() => void onRefresh()}>
+          <Button
+            busy={refreshing}
+            size="compact"
+            variant="secondary"
+            onClick={() => void refresh()}
+          >
             {t("Retry")}
-          </button>
+          </Button>
         </div>
       ) : rows.length === 0 ? (
         <div className="profile-mcp-empty">

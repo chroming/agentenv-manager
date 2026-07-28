@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   ChevronDown,
   Circle,
+  CircleAlert,
+  CircleArrowUp,
   CircleSlash2,
   Combine,
   Copy,
@@ -1935,6 +1937,7 @@ export const SkillLibraryPanel = ({
             {t("Status")}
             <InfoTip label={t("Shows the current maintenance state for this skill.")} />
           </span>
+          <span>{t("Action")}</span>
           <span aria-label={t("More")} />
         </div>
         <div className="library-table__body" ref={scrollOwnerRef}>
@@ -2145,58 +2148,20 @@ export const SkillLibraryPanel = ({
                       <span>{t("Disabled")}</span>
                     </strong>
                   ) : hasUpdate ? (
-                    <button
-                      aria-label={t("Update {{name}}", { name: skill.id })}
-                      aria-busy={previewingSkillId === skill.id}
-                      className="library-primary-status is-actionable is-update"
-                      type="button"
-                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
-                      onClick={(event) => {
-                        modalFallbackFocusRef.current = event.currentTarget;
-                        void runSkillUpdatePreview(skill.id);
-                      }}
-                    >
-                      {previewingSkillId === skill.id ? (
-                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
-                      ) : (
-                        <RefreshCw size={13} strokeWidth={2.2} />
-                      )}
+                    <strong className="library-primary-status is-update">
+                      <CircleArrowUp size={13} strokeWidth={2.2} />
                       <span>{t("Update available")}</span>
-                    </button>
+                    </strong>
                   ) : hasError ? (
-                    <button
-                      aria-label={t("Retry update check {{id}}", { id: skill.id })}
-                      aria-busy={previewingSkillId === skill.id}
-                      className="library-primary-status is-actionable is-error"
-                      type="button"
-                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
-                      onClick={(event) => {
-                        modalFallbackFocusRef.current = event.currentTarget;
-                        void runSkillUpdatePreview(skill.id);
-                      }}
-                    >
-                      {previewingSkillId === skill.id ? (
-                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
-                      ) : (
-                        <TriangleAlert size={13} strokeWidth={2.2} />
-                      )}
+                    <strong className="library-primary-status is-error">
+                      <TriangleAlert size={13} strokeWidth={2.2} />
                       <span>{t("Check failed")}</span>
-                    </button>
+                    </strong>
                   ) : staleCopies.length > 0 ? (
-                    <button
-                      aria-label={t(
-                        staleCopies.length === 1
-                          ? "Sync install of {{id}}"
-                          : "Sync {{count}} installs of {{id}}",
-                        { count: staleCopies.length, id: skill.id }
-                      )}
-                      className="library-primary-status is-actionable is-warning"
-                      type="button"
-                      onClick={() => onSyncSkillInstalls(skill.id)}
-                    >
-                      <RefreshCw size={13} strokeWidth={2.2} />
+                    <strong className="library-primary-status is-warning">
+                      <CircleAlert size={13} strokeWidth={2.2} />
                       <span>{t("Needs sync")}</span>
-                    </button>
+                    </strong>
                   ) : (
                     <strong className="library-primary-status">
                       {isTracked && updateInfo ? (
@@ -2225,6 +2190,62 @@ export const SkillLibraryPanel = ({
                       className="library-status-detail"
                       text={statusDetail}
                     />
+                  ) : null}
+                </div>
+                <div className="library-current-action-cell">
+                  {hasUpdate ? (
+                    <button
+                      aria-label={t("Update {{name}}", { name: skill.id })}
+                      aria-busy={previewingSkillId === skill.id}
+                      className="library-row-action"
+                      type="button"
+                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
+                      onClick={(event) => {
+                        modalFallbackFocusRef.current = event.currentTarget;
+                        void runSkillUpdatePreview(skill.id);
+                      }}
+                    >
+                      {previewingSkillId === skill.id ? (
+                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
+                      ) : (
+                        <RefreshCw size={13} strokeWidth={2.2} />
+                      )}
+                      <span>{t("Update")}</span>
+                    </button>
+                  ) : hasError ? (
+                    <button
+                      aria-label={t("Retry update check {{id}}", { id: skill.id })}
+                      aria-busy={previewingSkillId === skill.id}
+                      className="library-row-action"
+                      type="button"
+                      disabled={updateActivityBusy || Boolean(previewingSkillId)}
+                      onClick={(event) => {
+                        modalFallbackFocusRef.current = event.currentTarget;
+                        void runSkillUpdatePreview(skill.id);
+                      }}
+                    >
+                      {previewingSkillId === skill.id ? (
+                        <LoaderCircle className="is-spinning" size={13} strokeWidth={2.2} />
+                      ) : (
+                        <RefreshCw size={13} strokeWidth={2.2} />
+                      )}
+                      <span>{t("Retry check")}</span>
+                    </button>
+                  ) : staleCopies.length > 0 ? (
+                    <button
+                      aria-label={t(
+                        staleCopies.length === 1
+                          ? "Sync install of {{id}}"
+                          : "Sync {{count}} installs of {{id}}",
+                        { count: staleCopies.length, id: skill.id }
+                      )}
+                      className="library-row-action"
+                      type="button"
+                      onClick={() => onSyncSkillInstalls(skill.id)}
+                    >
+                      <RefreshCw size={13} strokeWidth={2.2} />
+                      <span>{t("Sync installs")}</span>
+                    </button>
                   ) : null}
                 </div>
                 <div className="library-actions-cell">

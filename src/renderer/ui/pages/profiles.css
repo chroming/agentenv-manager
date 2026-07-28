@@ -467,6 +467,11 @@
   padding: 0 5px;
 }
 
+.profile-row__title .profile-row__dirty {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 .profile-row__description {
   color: var(--muted);
   display: block;
@@ -1327,7 +1332,39 @@
   .profile-composer:not(:has(.profile-composer-section.is-expanded))
     .profile-composer-section.has-scope-summary
     .profile-composer-section__trigger {
-    grid-template-columns: 32px minmax(0, 1fr) minmax(118px, auto);
+    align-content: center;
+    column-gap: 10px;
+    grid-template-columns: 30px minmax(0, 1fr);
+    grid-template-rows: 18px 16px;
+    row-gap: 0;
+  }
+
+  .profile-composer-section.has-scope-summary
+    .profile-composer-section__icon {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+
+  .profile-composer-section.has-scope-summary
+    .profile-composer-section__heading {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .profile-composer-section.has-scope-summary
+    .profile-composer-section__description {
+    display: none;
+  }
+
+  .profile-composer-section.has-scope-summary
+    .profile-composer-section__count {
+    grid-column: 2;
+    grid-row: 2;
+    justify-content: flex-start;
+    line-height: 16px;
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
   }
 
   .profile-composer-section__icon {

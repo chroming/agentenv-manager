@@ -276,7 +276,9 @@ export const ProfileList = ({
               >
                 <span className="profile-row__title">
                   <span className="profile-row__name">{profile.name}</span>
-                  {isSelected && isProfileDirty ? <strong>{t("Unsaved")}</strong> : null}
+                  {isSelected && isProfileDirty ? (
+                    <strong className="profile-row__dirty">{t("Unsaved")}</strong>
+                  ) : null}
                 </span>
                 {isBroken ? (
                   <span className="profile-row__description profile-row__description--invalid">

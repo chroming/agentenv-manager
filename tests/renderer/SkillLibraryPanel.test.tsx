@@ -668,13 +668,13 @@ describe("SkillLibraryPanel", () => {
     const githubRow = screen.getByRole("group", { name: "Library item github-reviewer" });
     expect(
       within(githubRow).getByRole("button", { name: "Update github-reviewer" })
-    ).toHaveTextContent("Update available");
+    ).toHaveTextContent("Update");
     expect(
       within(githubRow).queryByRole("button", { name: /^Review$/ })
     ).not.toBeInTheDocument();
     expect(githubRow).toHaveTextContent("Update available");
-    expect(within(screen.getByRole("region", { name: "Library skills" })).queryByText("Action"))
-      .not.toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Library skills" })).getByText("Action"))
+      .toBeInTheDocument();
     const githubSource = within(githubRow).getByLabelText("Full source for github-reviewer");
     expect(githubSource).not.toHaveAttribute("title");
     fireEvent.mouseEnter(githubSource);
