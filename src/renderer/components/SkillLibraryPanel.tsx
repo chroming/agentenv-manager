@@ -1009,6 +1009,16 @@ export const SkillLibraryPanel = ({
   const cleanupDetails = cleanupDetailsKey
     ? cleanupGroups.find((group) => group.skillKey === cleanupDetailsKey)
     : undefined;
+  const cleanupDetailsStatusClass = cleanupDetails?.automaticEffect === "remove-broken-link"
+    ? "managed"
+    : cleanupDetails
+      ? cleanupPresentationChipClass(cleanupDetails.presentation.state)
+      : "outside";
+  const cleanupDetailsStatusLabel = cleanupDetails?.automaticEffect === "remove-broken-link"
+    ? "Ready to remove"
+    : cleanupDetails
+      ? cleanupPresentationLabel(cleanupDetails.presentation.state)
+      : "";
   const cleanupDetailVersions = cleanupDetails
     ? [...cleanupDetails.items.reduce((groups, item) => {
         const unavailable = !item.contentHash || item.runtimeIssues?.some(
@@ -3035,17 +3045,15 @@ export const SkillLibraryPanel = ({
                   {cleanupDetails.primary?.description || t("Local Skill details and detected locations.")}
                 </p>
               </div>
-              <span className={`resource-chip resource-chip--${
-                cleanupPresentationChipClass(cleanupDetails.presentation.state)
-              }`}>
-                {t(cleanupPresentationLabel(cleanupDetails.presentation.state))}
+              <span className={`resource-chip resource-chip--${cleanupDetailsStatusClass}`}>
+                {t(cleanupDetailsStatusLabel)}
               </span>
             </header>
             <div className="cleanup-details-list ui-dialog-body">
               {cleanupDetailVersions.map((version) => (
                 <section
                   aria-label={t(
-                    version.key === "unavailable" ? "Unavailable links" : "Version {{hash}}",
+                    version.key === "unavailable" ? "Broken links" : "Version {{hash}}",
                     { hash: version.key.slice(0, 7) }
                   )}
                   className="cleanup-details-version"
@@ -3054,7 +3062,7 @@ export const SkillLibraryPanel = ({
                   <header>
                     <strong>
                       {t(
-                        version.key === "unavailable" ? "Unavailable links" : "Version {{hash}}",
+                        version.key === "unavailable" ? "Broken links" : "Version {{hash}}",
                         { hash: version.key.slice(0, 7) }
                       )}
                     </strong>

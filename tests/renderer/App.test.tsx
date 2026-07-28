@@ -307,13 +307,18 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
-    runtimeVersion: 5,
+    runtimeVersion: 6,
     platform: "darwin",
     readStartupStatus: vi.fn().mockResolvedValue({ state: "ready" }),
     onStartupStatusChanged: vi.fn().mockReturnValue(() => undefined),
     retryStartup: vi.fn().mockResolvedValue(undefined),
     openStartupDataFolder: vi.fn().mockResolvedValue(undefined),
     exportStartupDiagnostics: vi.fn().mockResolvedValue(undefined),
+    readDiagnosticIssue: vi.fn().mockResolvedValue(undefined),
+    readLatestDiagnosticIssue: vi.fn().mockResolvedValue(undefined),
+    exportDiagnostics: vi.fn().mockResolvedValue(undefined),
+    openDiagnosticsFolder: vi.fn().mockResolvedValue(undefined),
+    reportRendererError: vi.fn(),
     quitApp: vi.fn(),
     onOpenSettingsRequested: vi.fn().mockReturnValue(() => undefined),
     onWindowCloseRequested: vi.fn().mockReturnValue(() => undefined),
@@ -919,6 +924,47 @@ describe("App", () => {
     ).toBeNull();
   });
 
+  it("copies structured diagnostic details and exposes the issue reference", async () => {
+    const issue = {
+      reference: "AEM-20260728-ABC123",
+      action: "activation:apply",
+      category: "activation",
+      occurredAt: "2026-07-28T12:00:00.000Z",
+      durationMs: 42,
+      error: {
+        name: "Error",
+        message: "Apply failed",
+        stack: "Error: Apply failed\n at apply",
+        causes: []
+      },
+      events: []
+    };
+    const api = installApi({
+      readDiagnosticIssue: vi.fn().mockResolvedValue(issue)
+    });
+    const onViewDiagnostic = vi.fn();
+    render(
+      <AppFeedback
+        feedback={{
+          kind: "error",
+          title: "Action failed",
+          message: "Apply failed",
+          diagnosticReference: issue.reference
+        }}
+        onDismiss={vi.fn()}
+        onViewDiagnostic={onViewDiagnostic}
+      />
+    );
+
+    expect(screen.getByText(/AEM-20260728-ABC123/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy message" }));
+    await waitFor(() =>
+      expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining("Stack:"))
+    );
+    fireEvent.click(screen.getByRole("button", { name: "View details" }));
+    expect(onViewDiagnostic).toHaveBeenCalledWith(issue.reference);
+  });
+
   const openProfiles = async () => {
     fireEvent.click(await screen.findByRole("button", { name: "Profiles" }));
   };
@@ -1044,6 +1090,9 @@ describe("App", () => {
 
     expect(
       await screen.findByRole("group", { name: "Library item startup-reviewer" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Manage reusable Skills, their sources, updates, and local copies.")
     ).toBeInTheDocument();
     expect(screen.queryByText("Loading skills")).not.toBeInTheDocument();
     expect(api.scanSkillInventory).not.toHaveBeenCalled();
@@ -1674,6 +1723,36 @@ describe("App", () => {
     expect(screen.getByTestId("locale-select")).toBeInTheDocument();
   });
 
+  it("offers copy, export, and log-folder diagnostics from Data settings", async () => {
+    const api = installApi({
+      readLatestDiagnosticIssue: vi.fn().mockResolvedValue({
+        reference: "AEM-20260728-ABC123",
+        action: "skills:scan-inventory",
+        category: "skills",
+        occurredAt: "2026-07-28T12:00:00.000Z",
+        error: {
+          name: "Error",
+          message: "Inventory failed",
+          causes: []
+        },
+        events: []
+      }),
+      exportDiagnostics: vi.fn().mockResolvedValue("/tmp/diagnostics.json")
+    });
+    render(<App />);
+
+    await openSettingsCategory("Data");
+    expect(await screen.findByText("Diagnostics")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy latest issue" }));
+    await waitFor(() =>
+      expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining("Inventory failed"))
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Export report" }));
+    await waitFor(() => expect(api.exportDiagnostics).toHaveBeenCalledWith());
+    fireEvent.click(screen.getByRole("button", { name: "Open logs" }));
+    expect(api.openDiagnosticsFolder).toHaveBeenCalledTimes(1);
+  });
+
   it("persists the terminal used to open conversations", async () => {
     const api = installApi();
     render(<App />);
@@ -2104,6 +2183,11 @@ describe("App", () => {
 
     await openProfiles();
     const composer = await screen.findByRole("region", { name: "Profile composer" });
+    expect(
+      screen.getByLabelText(
+        "Compose reusable resources, then preview and apply them to an Agent."
+      )
+    ).toBeInTheDocument();
     const instructions = within(composer).getByRole("button", { name: "Instructions" });
     const skills = within(composer).getByRole("button", { name: "Skills" });
     const mcp = within(composer).getByRole("button", { name: "MCPs" });

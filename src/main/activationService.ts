@@ -454,6 +454,53 @@ const applyLibrarySkillAvailability = (
   };
 };
 
+const effectiveAppliedLibraryVersions = async ({
+  profile,
+  targetPaths,
+  skillLibrary,
+  state
+}: {
+  profile: ProfileDetail;
+  targetPaths: TargetPaths;
+  skillLibrary: readonly SkillLibraryEntry[];
+  state: TargetState;
+}) => {
+  const skills = { ...(state.appliedLibraryVersions?.skills ?? {}) };
+  if (
+    !targetPaths.skillsDir ||
+    !profileUsesResource(profile.resources, targetPaths.targetId, "skills")
+  ) {
+    return { skills };
+  }
+
+  const activeManagedPaths = new Set(
+    (state.managedResources ?? [])
+      .filter((resource) => resource.kind === "skill" && !resource.paused)
+      .map((resource) => resolve(resource.path))
+  );
+  const libraryById = new Map(skillLibrary.map((skill) => [skill.id, skill]));
+  for (const reference of profile.resources.skills) {
+    const librarySkill = libraryById.get(reference.libraryId);
+    if (
+      !reference.enabled ||
+      !librarySkill ||
+      librarySkill.globallyEnabled === false
+    ) {
+      continue;
+    }
+    const targetPath = resolve(join(targetPaths.skillsDir, reference.targetName));
+    if (!activeManagedPaths.has(targetPath)) continue;
+    const stats = await lstat(targetPath).catch(() => undefined);
+    if (!stats?.isSymbolicLink()) continue;
+    if (
+      await hashManagedResourcePath(targetPath, "skill") === librarySkill.contentHash
+    ) {
+      skills[reference.libraryId] = librarySkill.contentHash;
+    }
+  }
+  return { skills };
+};
+
 const effectivePayloadFor = (
   profile: Awaited<ReturnType<ProfileStore["readProfile"]>>,
   targetId: string,
@@ -630,6 +677,7 @@ export const createActivationService = ({
             let lifecycleStatus: TargetManagementState["lifecycleStatus"] = "unmanaged";
             let lifecycleReason: string | undefined;
             let activeProfileName: string | undefined;
+            let appliedLibraryVersions = state.appliedLibraryVersions;
             if (state.recoveryRequired) {
               lifecycleStatus = "recovery-required";
               lifecycleReason = state.recoveryRequired.error;
@@ -639,22 +687,31 @@ export const createActivationService = ({
             } else if (state.activeProfileId) {
               if (activeProfile) {
                 activeProfileName = activeProfile.manifest.name;
+                const deploymentProfile = profileWithoutLocalSkillExceptions(
+                  activeProfile,
+                  state.keptOutsideSkills,
+                  state.sharedSkillPreparations
+                );
                 const expectedHash =
                   activeProfile.targetContentHashes?.[targetId] ??
                   createProfileContentHash(activeProfile, targetId);
                 const currentVersions = collectLibraryResourceVersions(
-                  profileWithoutLocalSkillExceptions(
-                    activeProfile,
-                    state.keptOutsideSkills,
-                    state.sharedSkillPreparations
-                  ),
+                  deploymentProfile,
                   skillLibrary,
                   targetId
                 );
+                appliedLibraryVersions = activeTargetPaths
+                  ? await effectiveAppliedLibraryVersions({
+                      profile: deploymentProfile,
+                      targetPaths: activeTargetPaths,
+                      skillLibrary,
+                      state
+                    })
+                  : state.appliedLibraryVersions;
                 const isCurrent =
                   Boolean(expectedHash) &&
                   expectedHash === state.appliedProfileHash &&
-                  libraryResourceVersionsEqual(currentVersions, state.appliedLibraryVersions);
+                  libraryResourceVersionsEqual(currentVersions, appliedLibraryVersions);
                 lifecycleStatus = isCurrent
                   ? (state.keptOutsideSkills?.length ?? 0) > 0
                     ? "applied-with-outside"
@@ -677,7 +734,7 @@ export const createActivationService = ({
               activeProfileId: state.activeProfileId,
               activeProfileName,
               appliedProfileHash: state.appliedProfileHash,
-              appliedLibraryVersions: state.appliedLibraryVersions,
+              appliedLibraryVersions,
               status: state.activeProfileId ? "managed" : "unmanaged",
               lifecycleStatus,
               lifecycleReason,
@@ -1211,6 +1268,12 @@ export const createActivationService = ({
       skillLibrary,
       targetId
     );
+    const appliedLibraryVersions = await effectiveAppliedLibraryVersions({
+      profile: materializedProfile,
+      targetPaths,
+      skillLibrary,
+      state: stateFile.state
+    });
     const preview: InternalActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
@@ -1261,7 +1324,7 @@ export const createActivationService = ({
         stateFile.state.appliedProfileHash !== profileContentHash ||
         !libraryResourceVersionsEqual(
           libraryVersions,
-          stateFile.state.appliedLibraryVersions
+          appliedLibraryVersions
         ) ||
         JSON.stringify([...new Set(stateFile.state.managedMcpNames)].sort()) !==
           JSON.stringify([...new Set(targetPreview.targetState.managedMcpNames)].sort()),

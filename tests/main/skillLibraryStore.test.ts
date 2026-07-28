@@ -2424,23 +2424,29 @@ description: >
       profileId: profile.id
     });
     const initialLibrary = (await store.listSkills()).find((skill) => skill.id === "reviewer")!;
+    const openCodeInstallPath = join(openCodePaths.skillsDir!, "reviewer");
     const claudeInstallPath = join(claudePaths.skillsDir!, "reviewer");
     await mkdir(paths.targetStatesDir, { recursive: true });
-    await writeFile(join(paths.targetStatesDir, "claude-code.json"), JSON.stringify({
-      formatVersion: 2,
-      managedMcpNames: [],
-      activeProfileId: profile.id,
-      appliedProfileHash: "profile-hash",
-      appliedLibraryVersions: { skills: { reviewer: initialLibrary.contentHash } },
-      managedResources: [{
-        kind: "skill",
-        id: "reviewer",
-        path: claudeInstallPath,
-        contentHash: initialLibrary.contentHash
-      }],
-      keptOutsideSkills: [],
-      sharedSkillPreparations: []
-    }));
+    for (const [targetId, installPath] of [
+      ["opencode", openCodeInstallPath],
+      ["claude-code", claudeInstallPath]
+    ] as const) {
+      await writeFile(join(paths.targetStatesDir, `${targetId}.json`), JSON.stringify({
+        formatVersion: 2,
+        managedMcpNames: [],
+        activeProfileId: profile.id,
+        appliedProfileHash: "profile-hash",
+        appliedLibraryVersions: { skills: { reviewer: initialLibrary.contentHash } },
+        managedResources: [{
+          kind: "skill",
+          id: "reviewer",
+          path: installPath,
+          contentHash: initialLibrary.contentHash
+        }],
+        keptOutsideSkills: [],
+        sharedSkillPreparations: []
+      }));
+    }
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v2\n", "utf8");
 
     const plan = await store.previewUpdate("reviewer");
@@ -2468,6 +2474,18 @@ description: >
         kind: "skill",
         id: "reviewer",
         path: claudeInstallPath,
+        contentHash: updated.contentHash
+      }]
+    });
+    await expect(
+      readFile(join(paths.targetStatesDir, "opencode.json"), "utf8")
+        .then((content) => JSON.parse(content))
+    ).resolves.toMatchObject({
+      appliedLibraryVersions: { skills: { reviewer: updated.contentHash } },
+      managedResources: [{
+        kind: "skill",
+        id: "reviewer",
+        path: openCodeInstallPath,
         contentHash: updated.contentHash
       }]
     });

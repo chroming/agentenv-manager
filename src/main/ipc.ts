@@ -64,6 +64,7 @@ import {
   materializeSharedSkillLocations,
   resolveSharedSkillLocation
 } from "./targets/sharedSkillLocations";
+import type { RuntimeDiagnostics } from "./runtimeDiagnostics";
 
 export interface IpcServices {
   profileStore: ProfileStore;
@@ -80,6 +81,7 @@ export interface IpcServices {
   mutationCoordinator: MutationCoordinator;
   paths: AgentEnvPaths;
   workspaceSyncService: WorkspaceSyncService;
+  diagnostics: RuntimeDiagnostics;
   cancelRepositoryOperations(): void;
 }
 
@@ -115,15 +117,24 @@ export const registerIpcHandlers = ({
   mutationCoordinator,
   paths,
   workspaceSyncService,
+  diagnostics,
   cancelRepositoryOperations
 }: IpcServices) => {
   const skillArchiveService = createSkillArchiveService();
   const skillFileBrowser = createSkillFileBrowser(paths, settingsStore);
+  const diagnosticHandle = (
+    channel: string,
+    handler: (event: Electron.IpcMainInvokeEvent, ...args: any[]) => any
+  ) => {
+    ipcMain.handle(channel, (event, ...args) =>
+      diagnostics.runIpcOperation(channel, args, () => handler(event, ...args))
+    );
+  };
   const handleMutation = (
     channel: string,
     handler: (event: any, ...args: any[]) => any
   ) => {
-    ipcMain.handle(channel, (event, ...args) =>
+    diagnosticHandle(channel, (event, ...args) =>
       mutationCoordinator.runExclusive(channel, async () => {
         const changesWorkspace = /^(skills|profiles|activation|targets|data|settings|workspace-sync):/.test(channel);
         if (
@@ -141,7 +152,7 @@ export const registerIpcHandlers = ({
     channel: string,
     handler: (event: any, ...args: any[]) => any
   ) => {
-    ipcMain.handle(channel, (event, ...args) => {
+    diagnosticHandle(channel, (event, ...args) => {
       workspaceSyncService.cancel();
       return mutationCoordinator.runExclusive(channel, async () => {
         if (
@@ -224,23 +235,23 @@ export const registerIpcHandlers = ({
     });
   };
 
-  ipcMain.handle("clipboard:write-text", (_event, text: unknown) => {
+  diagnosticHandle("clipboard:write-text", (_event, text: unknown) => {
     clipboard.writeText(String(text));
   });
-  ipcMain.handle("conversations:list", (_event, input: unknown) =>
+  diagnosticHandle("conversations:list", (_event, input: unknown) =>
     conversationService.list(input && typeof input === "object" ? input : undefined)
   );
-  ipcMain.handle("conversations:read", (_event, id: unknown, input: unknown) =>
+  diagnosticHandle("conversations:read", (_event, id: unknown, input: unknown) =>
     conversationService.read(
       String(id ?? ""),
       input && typeof input === "object" ? input : undefined
     )
   );
-  ipcMain.handle("conversations:refresh", () => conversationService.refresh());
-  ipcMain.handle("conversations:open-original", (_event, id: unknown) =>
+  diagnosticHandle("conversations:refresh", () => conversationService.refresh());
+  diagnosticHandle("conversations:open-original", (_event, id: unknown) =>
     conversationService.openOriginal(String(id ?? ""))
   );
-  ipcMain.handle("conversations:preview-continue", (_event, input: unknown) => {
+  diagnosticHandle("conversations:preview-continue", (_event, input: unknown) => {
     if (!input || typeof input !== "object") {
       throw new Error("Conversation continuation requires a source and target");
     }
@@ -250,10 +261,10 @@ export const registerIpcHandlers = ({
       targetId: parseId(value.targetId, "target id")
     });
   });
-  ipcMain.handle("conversations:continue", (_event, previewId: unknown) =>
+  diagnosticHandle("conversations:continue", (_event, previewId: unknown) =>
     conversationService.continue(String(previewId ?? ""))
   );
-  ipcMain.handle("menu:open-context", (event, value: unknown) => {
+  diagnosticHandle("menu:open-context", (event, value: unknown) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window || window.isDestroyed()) return undefined;
     const items = parseDesktopContextMenuItems(value);
@@ -280,7 +291,7 @@ export const registerIpcHandlers = ({
       });
     });
   });
-  ipcMain.handle("dialog:select-skill-folder", async (event) => {
+  diagnosticHandle("dialog:select-skill-folder", async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     const options = {
       title: "Select skill folder",
@@ -292,7 +303,7 @@ export const registerIpcHandlers = ({
 
     return result.canceled ? undefined : result.filePaths[0];
   });
-  ipcMain.handle("dialog:select-local-skill-source", async (event) => {
+  diagnosticHandle("dialog:select-local-skill-source", async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     const options = {
       title: "Select Skill folder or ZIP",
@@ -311,10 +322,10 @@ export const registerIpcHandlers = ({
     }
     return skillArchiveService.prepare(selectedPath);
   });
-  ipcMain.handle("skills:release-archive", (_event, token: unknown) =>
+  diagnosticHandle("skills:release-archive", (_event, token: unknown) =>
     skillArchiveService.release(String(token))
   );
-  ipcMain.handle("dialog:select-target-config-root", async (event, targetId: unknown) => {
+  diagnosticHandle("dialog:select-target-config-root", async (event, targetId: unknown) => {
     const id = parseId(targetId, "target id");
     const target = targetRegistry.get(id).descriptor;
     const window = BrowserWindow.fromWebContents(event.sender);
@@ -327,14 +338,14 @@ export const registerIpcHandlers = ({
       : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
-  ipcMain.handle("targets:list", (_event, forceRefresh: unknown) =>
+  diagnosticHandle("targets:list", (_event, forceRefresh: unknown) =>
     targetDiscoveryService.listTargets({ forceRefresh: forceRefresh === true })
   );
-  ipcMain.handle("targets:list-supported", () => targetRegistry.list());
-  ipcMain.handle("targets:list-states", () =>
+  diagnosticHandle("targets:list-supported", () => targetRegistry.list());
+  diagnosticHandle("targets:list-states", () =>
     activationService.listTargetStates()
   );
-  ipcMain.handle("targets:list-native-mcps", async () => {
+  diagnosticHandle("targets:list-native-mcps", async () => {
     const targets = await targetDiscoveryService.listTargets();
     const inspections = await Promise.all(
       targets
@@ -369,22 +380,22 @@ export const registerIpcHandlers = ({
       issues: inspections.flatMap((inspection) => inspection.issues)
     };
   });
-  ipcMain.handle("skills:list-library", () => skillLibraryStore.listSkills());
-  ipcMain.handle("skills:list-files", (_event, id: unknown) =>
+  diagnosticHandle("skills:list-library", () => skillLibraryStore.listSkills());
+  diagnosticHandle("skills:list-files", (_event, id: unknown) =>
     skillFileBrowser.list(parseId(id, "skill id"))
   );
-  ipcMain.handle("skills:read-file", (_event, input: unknown) => {
+  diagnosticHandle("skills:read-file", (_event, input: unknown) => {
     if (!input || typeof input !== "object") throw new Error("Invalid Skill file selection");
     const candidate = input as { id?: unknown; path?: unknown };
     if (typeof candidate.path !== "string") throw new Error("Invalid Skill file path");
     return skillFileBrowser.read(parseId(candidate.id, "skill id"), candidate.path);
   });
-  ipcMain.handle("skills:scan-inventory", async () => {
+  diagnosticHandle("skills:scan-inventory", async () => {
     await waitForAutomationBackgroundDelay();
     const targets = await targetDiscoveryService.listTargets();
     return skillLibraryStore.scanInventory(inventoryPathsFor(targets));
   });
-  ipcMain.handle("skills:list-cleanup-backups", async () =>
+  diagnosticHandle("skills:list-cleanup-backups", async () =>
     (await Promise.all([
       activationService.listSharedSkillMigrationBackups(),
       skillLibraryStore.listCleanupBackups()
@@ -401,12 +412,12 @@ export const registerIpcHandlers = ({
     }
     return skillLibraryStore.setSkillPathPolicies(input);
   });
-  ipcMain.handle("skills:scan-unmanaged", () =>
+  diagnosticHandle("skills:scan-unmanaged", () =>
     targetDiscoveryService
       .listTargets()
       .then((targets) => skillLibraryStore.scanUnmanaged(inventoryPathsFor(targets)))
   );
-  ipcMain.handle("skills:preview-import", (_event, input: SkillImportPreviewInput) => {
+  diagnosticHandle("skills:preview-import", (_event, input: SkillImportPreviewInput) => {
     if (
       !input ||
       (input.kind !== "local" && input.kind !== "github" && input.kind !== "repository")
@@ -415,7 +426,7 @@ export const registerIpcHandlers = ({
     }
     return skillLibraryStore.previewImport(input);
   });
-  ipcMain.handle("skills:preview-merge", async (_event, id: unknown) => {
+  diagnosticHandle("skills:preview-merge", async (_event, id: unknown) => {
     const skillId = parseId(id, "skill id");
     const targets = await targetDiscoveryService.listTargets();
     return skillLibraryStore.previewMerge(
@@ -469,19 +480,19 @@ export const registerIpcHandlers = ({
   handleMutation("skills:import-github", (_event, input: GitHubSkillImportInput) =>
     skillLibraryStore.importGitHubSkill(input)
   );
-  ipcMain.handle("skills:scan-github", (_event, url: unknown) =>
+  diagnosticHandle("skills:scan-github", (_event, url: unknown) =>
     skillLibraryStore.scanGitHubSkills(String(url))
   );
   handleMutation("skills:import-github-batch", (_event, inputs: GitHubSkillImportInput[]) =>
     skillLibraryStore.importGitHubSkills(Array.isArray(inputs) ? inputs : [])
   );
-  ipcMain.handle("skills:scan-repository", (_event, input: RepositorySkillSourceInput) => {
+  diagnosticHandle("skills:scan-repository", (_event, input: RepositorySkillSourceInput) => {
     if (!input || typeof input !== "object" || typeof input.repository !== "string") {
       throw new Error("Repository scan requires a repository address");
     }
     return skillLibraryStore.scanRepositorySkills(input);
   });
-  ipcMain.handle("skills:scan-local-source", (_event, rootPath: unknown) => {
+  diagnosticHandle("skills:scan-local-source", (_event, rootPath: unknown) => {
     if (typeof rootPath !== "string" || !rootPath.trim()) {
       throw new Error("Local Skill source requires a folder");
     }
@@ -498,11 +509,11 @@ export const registerIpcHandlers = ({
     (_event, inputs: RepositorySkillImportInput[]) =>
       skillLibraryStore.importRepositorySkills(Array.isArray(inputs) ? inputs : [])
   );
-  ipcMain.handle("skills:list-source-groups", () => skillLibraryStore.listSourceGroups());
-  ipcMain.handle("skills:check-source-group", (_event, sourceId: unknown) =>
+  diagnosticHandle("skills:list-source-groups", () => skillLibraryStore.listSourceGroups());
+  diagnosticHandle("skills:check-source-group", (_event, sourceId: unknown) =>
     skillLibraryStore.checkSourceGroup(String(sourceId))
   );
-  ipcMain.handle("skills:check-monitored-source-groups", () =>
+  diagnosticHandle("skills:check-monitored-source-groups", () =>
     skillLibraryStore.checkMonitoredSourceGroups()
   );
   handleMutation("skills:set-source-name", (_event, input: unknown) => {
@@ -565,7 +576,7 @@ export const registerIpcHandlers = ({
   handleMutation("skills:merge-sources", (_event, previewId: unknown) =>
     skillLibraryStore.mergeSources(String(previewId))
   );
-  ipcMain.handle("skills:cancel-repository", () => {
+  diagnosticHandle("skills:cancel-repository", () => {
     cancelRepositoryOperations();
   });
   handleMutation("skills:remove-library", async (_event, id: unknown) => {
@@ -790,7 +801,7 @@ export const registerIpcHandlers = ({
     }
     await skillLibraryStore.rollbackSkillCleanup(id);
   });
-  ipcMain.handle("skills:check-updates", async (_event, ids: unknown) => {
+  diagnosticHandle("skills:check-updates", async (_event, ids: unknown) => {
     await waitForAutomationBackgroundDelay();
     return skillLibraryStore.checkUpdates(
       Array.isArray(ids) ? ids.map((id) => parseId(id, "skill id")) : undefined
@@ -839,11 +850,11 @@ export const registerIpcHandlers = ({
           : ResourceIconKeySchema.parse(input.iconKey)
     })
   );
-  ipcMain.handle("skills:preview-update", async (_event, id: unknown) => {
+  diagnosticHandle("skills:preview-update", async (_event, id: unknown) => {
     await waitForAutomationBackgroundDelay();
     return skillLibraryStore.previewUpdate(parseId(id, "skill id"));
   });
-  ipcMain.handle("skills:preview-updates", async (_event, ids: unknown) => {
+  diagnosticHandle("skills:preview-updates", async (_event, ids: unknown) => {
     if (!Array.isArray(ids)) throw new Error("Skill update preview requires a list of Skill ids");
     await waitForAutomationBackgroundDelay();
     return skillLibraryStore.previewUpdates(ids.map((id) => parseId(id, "skill id")));
@@ -883,12 +894,12 @@ export const registerIpcHandlers = ({
     }
     return settingsStore.updateSettings(nextInput);
   });
-  ipcMain.handle("workspace-sync:status", () => workspaceSyncService.readStatus());
+  diagnosticHandle("workspace-sync:status", () => workspaceSyncService.readStatus());
   handleWorkspaceSyncMutation("workspace-sync:connect", (_event, input: unknown) =>
     workspaceSyncService.connect(input as import("../shared/workspaceSync").WorkspaceSyncConnectInput)
   );
-  ipcMain.handle("workspace-sync:check", () => workspaceSyncService.check());
-  ipcMain.handle("workspace-sync:review", () => workspaceSyncService.review());
+  diagnosticHandle("workspace-sync:check", () => workspaceSyncService.check());
+  diagnosticHandle("workspace-sync:review", () => workspaceSyncService.review());
   handleWorkspaceSyncMutation("workspace-sync:update", (_event, input: unknown) =>
     workspaceSyncService.update(input as import("../shared/workspaceSync").WorkspaceSyncUpdateInput)
   );
@@ -896,19 +907,19 @@ export const registerIpcHandlers = ({
   handleWorkspaceSyncMutation("workspace-sync:recover", () => workspaceSyncService.recover());
   handleWorkspaceSyncMutation("workspace-sync:disconnect", () => workspaceSyncService.disconnect());
   handleMutation("github:status", () => githubAuthService.readStatus());
-  ipcMain.handle("github:start-device-login", () => githubAuthService.startDeviceLogin());
+  diagnosticHandle("github:start-device-login", () => githubAuthService.startDeviceLogin());
   handleMutation("github:poll-device-login", (_event, id: unknown) =>
     githubAuthService.pollDeviceLogin(String(id))
   );
   handleMutation("github:sign-out", () => githubAuthService.signOut());
-  ipcMain.handle("github:open-device-page", (_event, url: unknown) =>
+  diagnosticHandle("github:open-device-page", (_event, url: unknown) =>
     shell.openExternal(parseExternalUrl(url))
   );
-  ipcMain.handle("external:open-url", (_event, url: unknown) =>
+  diagnosticHandle("external:open-url", (_event, url: unknown) =>
     shell.openExternal(parseExternalUrl(url))
   );
-  ipcMain.handle("profiles:list", () => profileStore.listProfiles());
-  ipcMain.handle("profiles:read", async (_event, id: unknown) => {
+  diagnosticHandle("profiles:list", () => profileStore.listProfiles());
+  diagnosticHandle("profiles:read", async (_event, id: unknown) => {
     const profileId = parseId(id, "profile id");
     const testDelayMs = Number(process.env.AGENTENV_TEST_PROFILE_READ_DELAY_MS ?? 0);
     if (
@@ -939,7 +950,7 @@ export const registerIpcHandlers = ({
       typeof input === "string" ? { preferredTargetId: parseId(input, "target id") } : input
     )
   );
-  ipcMain.handle(
+  diagnosticHandle(
     "profiles:preview-create-from-target",
     (_event, targetId: unknown, scope: TargetCaptureScope | undefined) => {
       if (scope !== undefined && scope !== "all" && scope !== "skills") {
@@ -967,7 +978,7 @@ export const registerIpcHandlers = ({
     }
     await profileStore.deleteProfile(profileId);
   });
-  ipcMain.handle("activation:preview", (_event, profileId: unknown, targetId?: unknown) =>
+  diagnosticHandle("activation:preview", (_event, profileId: unknown, targetId?: unknown) =>
     activationService.previewProfile(
       parseId(profileId, "profile id"),
       targetId === undefined ? undefined : parseId(targetId, "target id")
@@ -981,22 +992,22 @@ export const registerIpcHandlers = ({
         String(previewId)
       )
   );
-  ipcMain.handle("backups:list", () => backupStore.listBackups());
-  ipcMain.handle("backups:list-managed", () => backupMaintenanceService.listInventory());
-  ipcMain.handle("backups:preview-managed", (_event, input: unknown) =>
+  diagnosticHandle("backups:list", () => backupStore.listBackups());
+  diagnosticHandle("backups:list-managed", () => backupMaintenanceService.listInventory());
+  diagnosticHandle("backups:preview-managed", (_event, input: unknown) =>
     backupMaintenanceService.previewBackup(parseManagedBackupInput(input))
   );
   handleMutation("backups:delete-managed", (_event, input: unknown) =>
     backupMaintenanceService.deleteBackup(parseManagedBackupInput(input))
   );
   handleMutation("backups:cleanup-managed", () => backupMaintenanceService.cleanup());
-  ipcMain.handle("rollback:preview", (_event, backupId: unknown) =>
+  diagnosticHandle("rollback:preview", (_event, backupId: unknown) =>
     activationService.previewRollback(String(backupId))
   );
   handleMutation("rollback:apply", (_event, backupId: unknown) =>
     activationService.rollback(String(backupId))
   );
-  ipcMain.handle("targets:preview-stop-managing", (_event, targetId: unknown, mode: unknown) =>
+  diagnosticHandle("targets:preview-stop-managing", (_event, targetId: unknown, mode: unknown) =>
     activationService.previewStopManaging(
       parseId(targetId, "target id"),
       mode === "restore-pre-takeover" ? "restore-pre-takeover" : "keep-current"
@@ -1005,7 +1016,7 @@ export const registerIpcHandlers = ({
   handleMutation("targets:stop-managing", (_event, previewId: unknown) =>
     activationService.stopManaging(String(previewId))
   );
-  ipcMain.handle("data:create-backup", async () => {
+  diagnosticHandle("data:create-backup", async () => {
     const owner = BrowserWindow.getFocusedWindow();
     const options = {
       title: "Choose AgentEnv backup location",
@@ -1022,9 +1033,9 @@ export const registerIpcHandlers = ({
           createDataBackup(paths, destination)
         );
   });
-  ipcMain.handle("data:root", () => paths.appDataRoot);
-  ipcMain.handle("data:open-folder", () => shell.openPath(paths.appDataRoot));
-  ipcMain.handle("data:select-restore", async () => {
+  diagnosticHandle("data:root", () => paths.appDataRoot);
+  diagnosticHandle("data:open-folder", () => shell.openPath(paths.appDataRoot));
+  diagnosticHandle("data:select-restore", async () => {
     const owner = BrowserWindow.getFocusedWindow();
     const options = {
       title: "Select AgentEnv backup",

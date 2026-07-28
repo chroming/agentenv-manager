@@ -61,6 +61,11 @@ export interface AgentEnvApi {
   retryStartup(): Promise<void>;
   openStartupDataFolder(): Promise<void>;
   exportStartupDiagnostics(): Promise<string | undefined>;
+  readDiagnosticIssue(reference: string): Promise<DiagnosticIssueDetail | undefined>;
+  readLatestDiagnosticIssue(): Promise<DiagnosticIssueDetail | undefined>;
+  exportDiagnostics(reference?: string): Promise<string | undefined>;
+  openDiagnosticsFolder(): Promise<void>;
+  reportRendererError(input: RendererDiagnosticError): void;
   quitApp(): void;
   onOpenSettingsRequested(callback: () => void): () => void;
   onWindowCloseRequested(callback: () => void): () => void;
@@ -232,6 +237,54 @@ export type StartupStatus =
       dataRoot?: string;
       canRetry: boolean;
     };
+
+export type DiagnosticOutcome = "completed" | "no-op" | "cancelled" | "failed";
+
+export interface DiagnosticErrorDetail {
+  name: string;
+  message: string;
+  code?: string;
+  errno?: string | number;
+  stack?: string;
+  causes: Array<{
+    name: string;
+    message: string;
+    code?: string;
+    errno?: string | number;
+    stack?: string;
+  }>;
+}
+
+export interface DiagnosticEvent {
+  schemaVersion: 1;
+  at: string;
+  reference: string;
+  action: string;
+  category: string;
+  phase: string;
+  outcome?: DiagnosticOutcome;
+  durationMs?: number;
+  context?: Record<string, unknown>;
+  error?: DiagnosticErrorDetail;
+}
+
+export interface DiagnosticIssueDetail {
+  reference: string;
+  action: string;
+  category: string;
+  occurredAt: string;
+  durationMs?: number;
+  context?: Record<string, unknown>;
+  error: DiagnosticErrorDetail;
+  events: DiagnosticEvent[];
+}
+
+export interface RendererDiagnosticError {
+  kind: "error" | "unhandled-rejection";
+  message: string;
+  name?: string;
+  stack?: string;
+}
 
 export type ConversationRole = "user" | "assistant";
 export type ConversationDetailState = "full" | "summary-only";

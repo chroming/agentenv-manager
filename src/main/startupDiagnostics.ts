@@ -2,6 +2,7 @@ import { appendFile, copyFile, mkdir, rename, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { StartupFailureKind, StartupStatus } from "../shared/types";
 import { AppDataFormatError } from "./appDataFormat";
+import { redactDiagnosticText } from "./diagnosticRedaction";
 import { isMissingFileError } from "./fileUtils";
 
 const MAX_LOG_BYTES = 512 * 1024;
@@ -42,12 +43,6 @@ export const classifyStartupFailure = (
   };
 };
 
-const redact = (value: string, homeDir: string) => value
-  .replaceAll(homeDir, "~")
-  .replace(/(token|authorization|password|secret|api[_-]?key)([\s"':=]+)[^\s,"'}]+/gi, "$1$2[redacted]")
-  .replace(/(gh[pousr]_[A-Za-z0-9_]{20,})/g, "[redacted-github-token]")
-  .replace(/(Bearer\s+)[A-Za-z0-9._~+\/-]+/gi, "$1[redacted]");
-
 export const createStartupDiagnostics = (options: {
   directory: string;
   homeDir: string;
@@ -76,7 +71,7 @@ export const createStartupDiagnostics = (options: {
     const rawDetail = detail instanceof Error
       ? { name: detail.name, message: detail.message, stack: detail.stack }
       : detail;
-    const line = redact(JSON.stringify({
+    const line = redactDiagnosticText(JSON.stringify({
       at: (options.now?.() ?? new Date()).toISOString(),
       event,
       detail: rawDetail

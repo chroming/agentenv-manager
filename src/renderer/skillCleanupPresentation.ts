@@ -25,7 +25,7 @@ const inventoryStatusLabel = (status: SkillInventoryEntry["status"]) => {
 
 export const cleanupInventoryStatusLabel = (item: SkillInventoryEntry) =>
   item.externalEvidence?.state === "broken-link"
-    ? "Unavailable"
+    ? "Broken link"
     : inventoryStatusLabel(item.status);
 
 export const cleanupInventoryStatusClass = (item: SkillInventoryEntry) =>

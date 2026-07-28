@@ -550,6 +550,14 @@
   min-height: 32px;
 }
 
+.profile-hero__title > .icon-action {
+  flex: 0 0 30px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0;
+  width: 30px;
+}
+
 .profile-hero__title h2 {
   flex: 0 1 auto;
   font-size: 17px;
@@ -1698,13 +1706,6 @@
 
 .profile-commit-actions {
   flex: 0 0 auto;
-}
-
-.profile-commit-actions .save-button,
-.profile-commit-actions .profile-apply-button {
-  flex-basis: 104px;
-  min-width: 104px;
-  width: 104px;
 }
 
 .profile-action-status {

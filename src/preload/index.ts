@@ -14,6 +14,16 @@ const api: AgentEnvApi = {
   retryStartup: () => ipcRenderer.invoke("startup:retry"),
   openStartupDataFolder: () => ipcRenderer.invoke("startup:open-data-folder"),
   exportStartupDiagnostics: () => ipcRenderer.invoke("startup:export-diagnostics"),
+  readDiagnosticIssue: (reference) =>
+    ipcRenderer.invoke("diagnostics:read-issue", reference),
+  readLatestDiagnosticIssue: () =>
+    ipcRenderer.invoke("diagnostics:read-latest-issue"),
+  exportDiagnostics: (reference) =>
+    ipcRenderer.invoke("diagnostics:export", reference),
+  openDiagnosticsFolder: () =>
+    ipcRenderer.invoke("diagnostics:open-folder"),
+  reportRendererError: (input) =>
+    ipcRenderer.send("diagnostics:renderer-error", input),
   quitApp: () => ipcRenderer.send("startup:quit"),
   onOpenSettingsRequested: (callback) => {
     const listener = () => callback();

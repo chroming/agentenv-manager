@@ -406,7 +406,7 @@ html[data-platform="darwin"] .window-drag-strip {
 .editor-panel > .app-feedback--dismissible {
   bottom: 18px;
   left: 222px;
-  max-height: 76px;
+  max-height: 104px;
   max-width: none;
   right: 18px;
   width: auto;
@@ -447,6 +447,19 @@ html[data-platform="darwin"] .window-drag-strip {
   min-height: 24px;
   padding: 0;
   pointer-events: auto;
+}
+
+.app-feedback__action + .app-feedback__action {
+  margin-left: 12px;
+}
+
+.editor-panel > .app-feedback .app-feedback__reference {
+  color: currentColor;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  line-height: 15px;
+  opacity: 0.78;
+  user-select: text;
 }
 
 .app-feedback__action:hover:not(:disabled) {

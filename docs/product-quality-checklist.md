@@ -388,6 +388,14 @@ Rules:
   inspection or deletion of another object.
 - [ ] Credentials never enter Profile data, Library metadata, backups, logs,
   renderer payloads, or diagnostics.
+- [ ] Every runtime IPC failure has a copyable diagnostic reference linked to
+  the redacted original stack, cause chain, action, safe object identifiers,
+  and elapsed time.
+- [ ] Runtime logs are size-bounded, rotated, tolerant of malformed neighboring
+  entries, and never contain clipboard, Instruction, Skill, Conversation, MCP,
+  environment, credential, or arbitrary IPC content.
+- [ ] Diagnostics can be copied or exported from both the error surface and
+  Settings; packaged macOS also exposes export from the Help menu.
 - [ ] Rollback restores all successfully changed owned resources after a later
   failure.
 

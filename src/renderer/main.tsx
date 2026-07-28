@@ -8,6 +8,24 @@ import "./ui/index.css";
 const runtimeApi = window.agentEnv as Partial<typeof window.agentEnv> | undefined;
 document.documentElement.dataset.platform = runtimeApi?.platform ?? "unknown";
 
+window.addEventListener("error", (event) => {
+  runtimeApi?.reportRendererError?.({
+    kind: "error",
+    name: event.error instanceof Error ? event.error.name : "Error",
+    message: event.error instanceof Error ? event.error.message : event.message,
+    stack: event.error instanceof Error ? event.error.stack : undefined
+  });
+});
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason;
+  runtimeApi?.reportRendererError?.({
+    kind: "unhandled-rejection",
+    name: reason instanceof Error ? reason.name : "Error",
+    message: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined
+  });
+});
+
 const root = document.getElementById("root");
 
 if (!root) {

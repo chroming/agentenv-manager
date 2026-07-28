@@ -498,7 +498,14 @@ describe("activation service v2", () => {
     const [targetState] = await service.listTargetStates();
 
     expect(updated.issues.filter((issue) => issue.code === "managed-resource-drift")).toEqual([]);
-    expect(targetState).toMatchObject({ lifecycleStatus: "pending", errorCount: 0 });
+    expect(updated.targetStateChanged).toBe(false);
+    expect(targetState).toMatchObject({
+      lifecycleStatus: "applied",
+      errorCount: 0,
+      appliedLibraryVersions: {
+        skills: { review: importPreview.incoming.contentHash }
+      }
+    });
     expect(await readFile(join(paths.codexHome, "skills", "review", "SKILL.md"), "utf8"))
       .toContain("# Updated review");
   });

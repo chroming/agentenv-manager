@@ -58,6 +58,11 @@ import { createGitSyncTransport, type GitSyncTransport } from "./workspaceSync/g
 import { createWorkspaceSyncService } from "./workspaceSync/workspaceSyncService";
 import type { StartupStatus } from "../shared/types";
 import { classifyStartupFailure, createStartupDiagnostics } from "./startupDiagnostics";
+import {
+  createRuntimeDiagnostics,
+  type RuntimeDiagnosticReportContext,
+  type RuntimeDiagnostics
+} from "./runtimeDiagnostics";
 import { targetPathInputFor } from "./targets/pathInput";
 import {
   createApplicationMenuTemplate,
@@ -230,8 +235,25 @@ let startupStatus: StartupStatus = { state: "initializing" };
 let startupAttempt: Promise<void> | undefined;
 let startupDataRoot: string | undefined;
 let startupDiagnostics: ReturnType<typeof createStartupDiagnostics> | undefined;
+let runtimeDiagnostics: RuntimeDiagnostics | undefined;
+let runtimeDiagnosticContextProvider:
+  | (() => Promise<RuntimeDiagnosticReportContext>)
+  | undefined;
 let lastWindowState: PersistedWindowState | undefined;
 let windowStateSaveTimer: ReturnType<typeof setTimeout> | undefined;
+
+process.on("uncaughtExceptionMonitor", (error) => {
+  void runtimeDiagnostics?.record("main:uncaught-exception", "failed", {
+    outcome: "failed",
+    error
+  });
+});
+process.on("unhandledRejection", (reason) => {
+  void runtimeDiagnostics?.record("main:unhandled-rejection", "failed", {
+    outcome: "failed",
+    error: reason
+  });
+});
 
 const broadcastStartupStatus = () => {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -241,6 +263,49 @@ const broadcastStartupStatus = () => {
   }
 };
 
+async function collectDiagnosticReportContext(): Promise<RuntimeDiagnosticReportContext> {
+  const context = runtimeDiagnosticContextProvider
+    ? await runtimeDiagnosticContextProvider().catch((error) => ({
+        workspace: {
+          diagnosticContextError: error instanceof Error ? error.message : String(error)
+        }
+      }))
+    : {};
+  let startupLog: string | undefined;
+  if (startupDiagnostics) {
+    try {
+      startupLog = await readFile(startupDiagnostics.logPath, "utf8");
+    } catch {
+      startupLog = undefined;
+    }
+  }
+  return {
+    ...context,
+    startup: startupLog
+      ? { recentLog: startupLog.split("\n").filter(Boolean).slice(-100) }
+      : undefined
+  };
+}
+
+async function exportRuntimeDiagnostics(reference?: string) {
+  if (!runtimeDiagnostics) return undefined;
+  const result = await dialog.showSaveDialog({
+    title: "Export AgentEnv diagnostics",
+    defaultPath: `AgentEnv-Diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
+    filters: [{ name: "JSON", extensions: ["json"] }]
+  });
+  if (result.canceled || !result.filePath) return undefined;
+  await runtimeDiagnostics.exportReport(result.filePath, {
+    reference,
+    context: await collectDiagnosticReportContext()
+  });
+  await runtimeDiagnostics.record("diagnostics:export", "completed", {
+    outcome: "completed",
+    context: { selectedIssue: reference ?? "latest" }
+  });
+  return result.filePath;
+}
+
 ipcMain.handle("startup:status", () => startupStatus);
 ipcMain.handle("startup:open-data-folder", async () => {
   if (!startupDataRoot) return;
@@ -248,16 +313,39 @@ ipcMain.handle("startup:open-data-folder", async () => {
   if (error) throw new Error(error);
 });
 ipcMain.handle("startup:export-diagnostics", async () => {
-  if (!startupDiagnostics) return undefined;
-  await startupDiagnostics.record("diagnostics-exported");
-  const result = await dialog.showSaveDialog({
-    title: "Export AgentEnv diagnostics",
-    defaultPath: `agentenv-diagnostics-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
-    filters: [{ name: "Log", extensions: ["log"] }]
+  await startupDiagnostics?.record("diagnostics-exported");
+  return exportRuntimeDiagnostics();
+});
+ipcMain.handle("diagnostics:read-issue", (_event, reference: unknown) =>
+  typeof reference === "string"
+    ? runtimeDiagnostics?.readIssue(reference)
+    : undefined
+);
+ipcMain.handle("diagnostics:read-latest-issue", () =>
+  runtimeDiagnostics?.readLatestIssue()
+);
+ipcMain.handle("diagnostics:export", (_event, reference: unknown) =>
+  exportRuntimeDiagnostics(typeof reference === "string" ? reference : undefined)
+);
+ipcMain.handle("diagnostics:open-folder", async () => {
+  if (!runtimeDiagnostics) return;
+  const error = await shell.openPath(runtimeDiagnostics.directory);
+  if (error) throw new Error(error);
+});
+ipcMain.on("diagnostics:renderer-error", (_event, input: unknown) => {
+  if (!input || typeof input !== "object") return;
+  const value = input as Record<string, unknown>;
+  void runtimeDiagnostics?.record("renderer:unhandled", "failed", {
+    outcome: "failed",
+    context: {
+      kind: value.kind === "unhandled-rejection" ? value.kind : "error"
+    },
+    error: {
+      name: typeof value.name === "string" ? value.name : "Error",
+      message: typeof value.message === "string" ? value.message : "Unknown renderer error",
+      stack: typeof value.stack === "string" ? value.stack : undefined
+    }
   });
-  if (result.canceled || !result.filePath) return undefined;
-  await startupDiagnostics.exportTo(result.filePath);
-  return result.filePath;
 });
 ipcMain.on("startup:quit", () => app.quit());
 
@@ -685,7 +773,60 @@ const initializeServices = () => {
         broadcastStartupStatus();
       });
       let removeWorkspaceSyncFocusListener: () => void = () => undefined;
-      registerIpcHandlers(services);
+      runtimeDiagnosticContextProvider = async () => {
+        const [settingsResult, targetsResult, workspaceResult] = await Promise.allSettled([
+          services.settingsStore.readSettings(),
+          services.targetDiscoveryService.listTargets(),
+          services.workspaceSyncService.readStatus()
+        ]);
+        const settings = settingsResult.status === "fulfilled"
+          ? settingsResult.value
+          : undefined;
+        return {
+          settings: settings
+            ? {
+                locale: settings.locale,
+                conversationTerminal: settings.conversationTerminal,
+                skillSyncMethod: settings.skillSyncMethod,
+                skillStorageLocation: settings.skillStorageLocation,
+                skillAutoCheckEnabled: settings.skillAutoCheckEnabled,
+                skillAutoCheckIntervalMinutes: settings.skillAutoCheckIntervalMinutes,
+                backupRetentionDays: settings.backupRetentionDays,
+                enabledTargetIds: settings.enabledTargetIds,
+                targetConfigRoots: settings.targetConfigRoots
+              }
+            : {
+                error: settingsResult.status === "rejected"
+                  ? String(settingsResult.reason)
+                  : "unavailable"
+              },
+          targets: targetsResult.status === "fulfilled"
+            ? targetsResult.value.map((target) => ({
+                id: target.id,
+                name: target.name,
+                health: {
+                  status: target.health.status,
+                  installationFound: target.health.installationFound,
+                  executablePath: target.health.executablePath,
+                  executableFound: target.health.executableFound,
+                  canWrite: target.health.canWrite,
+                  checks: target.health.checks
+                },
+                paths: {
+                  configDir: target.paths.configDir,
+                  configPath: target.paths.configPath,
+                  instructionsPath: target.paths.instructionsPath,
+                  skillsDir: target.paths.skillsDir,
+                  skillLocations: target.paths.skillLocations
+                }
+              }))
+            : [{ error: String(targetsResult.reason) }],
+          workspace: workspaceResult.status === "fulfilled"
+            ? workspaceResult.value as unknown as Record<string, unknown>
+            : { error: String(workspaceResult.reason) }
+        };
+      };
+      registerIpcHandlers({ ...services, diagnostics: runtimeDiagnostics! });
       if (process.env.AGENTENV_AUTOMATION !== "1") {
         let lastWorkspaceCheckAt = 0;
         const runWorkspaceCheck = () => {
@@ -716,6 +857,7 @@ const initializeServices = () => {
       disposeServices = () => {
         removeWorkspaceSyncFocusListener();
         services.dispose();
+        runtimeDiagnosticContextProvider = undefined;
       };
       servicesInitialized = true;
       startupStatus = { state: "ready" };
@@ -758,16 +900,38 @@ if (ownsSingleInstance) void app.whenReady().then(() => {
       screen.getDisplayMatching(savedWindowState).workArea
     );
   }
-  Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
-    isDevelopment: Boolean(process.env.ELECTRON_RENDERER_URL),
-    openSettings: () => requestSettingsForWindow(
-      BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
-    )
-  })));
   startupDiagnostics = createStartupDiagnostics({
     directory: join(app.getPath("logs"), "diagnostics"),
     homeDir: app.getPath("home")
   });
+  runtimeDiagnostics = createRuntimeDiagnostics({
+    directory: join(app.getPath("logs"), "diagnostics"),
+    homeDir: app.getPath("home"),
+    appVersion: app.getVersion(),
+    buildCommit:
+      process.env.AGENTENV_BUILD_COMMIT ??
+      process.env.GITHUB_SHA ??
+      process.env.CI_COMMIT_SHA,
+    packaged: app.isPackaged,
+    platform: process.platform,
+    arch: process.arch,
+    osVersion: process.getSystemVersion(),
+    locale: app.getLocale()
+  });
+  Menu.setApplicationMenu(Menu.buildFromTemplate(createApplicationMenuTemplate({
+    isDevelopment: Boolean(process.env.ELECTRON_RENDERER_URL),
+    openSettings: () => requestSettingsForWindow(
+      BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+    ),
+    exportDiagnostics: () => {
+      void exportRuntimeDiagnostics().catch((error) =>
+        runtimeDiagnostics?.record("diagnostics:export", "failed", {
+          outcome: "failed",
+          error
+        })
+      );
+    }
+  })));
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
   void initializeServices();
 });

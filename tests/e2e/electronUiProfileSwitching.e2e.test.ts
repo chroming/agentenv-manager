@@ -3415,25 +3415,43 @@ describe("Electron UI profile switching e2e", () => {
 
     const profileTitle = page.locator(".profile-hero__title");
     const commitActions = page.getByRole("group", { name: "Selected profile actions" });
+    const editProfileButton = page.getByRole("button", { name: "Edit profile" });
     const saveButton = commitActions.getByRole("button", { name: "Save" });
     const moreButton = commitActions.getByRole("button", { name: "More profile actions" });
     const applyControl = page.locator(".profile-apply-control");
     const actionStatus = page.getByRole("status", { name: "Profile readiness" });
     const expectCommitActionsToFit = async () => {
-      for (const locator of [profileTitle, commitActions, saveButton, applyControl, moreButton, actionStatus]) {
+      for (const locator of [
+        profileTitle,
+        editProfileButton,
+        commitActions,
+        saveButton,
+        applyControl,
+        moreButton,
+        actionStatus
+      ]) {
         await expectInViewport(page, locator);
       }
       expect(await page.locator(".profile-readiness-strip").count()).toBe(0);
 
       const targetSelector = commitActions.locator(".profile-target-workspace-control");
-      const [titleBox, applyBox, saveBox, targetSelectorBox, applyButtonBox] = await Promise.all([
+      const [
+        titleBox,
+        editProfileBox,
+        applyBox,
+        saveBox,
+        targetSelectorBox,
+        applyButtonBox
+      ] = await Promise.all([
         profileTitle.boundingBox(),
+        editProfileButton.boundingBox(),
         applyControl.boundingBox(),
         saveButton.boundingBox(),
         targetSelector.boundingBox(),
         commitActions.locator(".profile-apply-button").boundingBox()
       ]);
       expect(titleBox).not.toBeNull();
+      expect(editProfileBox).not.toBeNull();
       expect(applyBox).not.toBeNull();
       expect(saveBox).not.toBeNull();
       expect(targetSelectorBox).not.toBeNull();
@@ -3445,6 +3463,13 @@ describe("Electron UI profile switching e2e", () => {
         applyBox!.y + applyBox!.height <= titleBox!.y
       );
       expect(titleOverlapsApply).toBe(false);
+      const editOverlapsSave = !(
+        editProfileBox!.x + editProfileBox!.width <= saveBox!.x ||
+        saveBox!.x + saveBox!.width <= editProfileBox!.x ||
+        editProfileBox!.y + editProfileBox!.height <= saveBox!.y ||
+        saveBox!.y + saveBox!.height <= editProfileBox!.y
+      );
+      expect(editOverlapsSave).toBe(false);
       expect(targetSelectorBox!.x).toBeGreaterThanOrEqual(saveBox!.x + saveBox!.width);
       expect(targetSelectorBox!.x - (saveBox!.x + saveBox!.width)).toBeLessThanOrEqual(10);
       expect(applyButtonBox!.x).toBeGreaterThanOrEqual(
@@ -3457,7 +3482,9 @@ describe("Electron UI profile switching e2e", () => {
       expect(Math.abs(saveBox!.height - applyButtonBox!.height)).toBeLessThanOrEqual(1);
       expect(Math.abs(saveBox!.width - applyButtonBox!.width)).toBeLessThanOrEqual(1);
       expect(Math.round(saveBox!.height)).toBe(34);
-      expect(Math.round(saveBox!.width)).toBe(104);
+      expect(Math.round(saveBox!.width)).toBe(
+        page.viewportSize()?.width === 920 ? 92 : 104
+      );
 
       const controlsFitText = await commitActions.locator("button").evaluateAll((buttons) =>
         buttons.every((button) => {
@@ -5767,7 +5794,8 @@ describe("Electron UI profile switching e2e", () => {
     const brokenDetails = page.getByRole("dialog", {
       name: "Skill details cleanup-broken-link"
     });
-    await expect.poll(() => brokenDetails.textContent()).toContain("Unavailable");
+    await expect.poll(() => brokenDetails.textContent()).toContain("Ready to remove");
+    await expect.poll(() => brokenDetails.textContent()).toContain("Broken link");
     await expect.poll(() => brokenDetails.textContent()).not.toContain("External");
     await brokenDetails.getByRole("button", { name: "Close" }).click();
 
@@ -7030,7 +7058,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect.poll(() => capturedSkillRow.textContent()).not.toContain("Not tracked");
   }, 30_000);
 
-  it("captures Trae CLI while warning about and skipping a broken Skill link", async () => {
+  it("captures Trae CLI while warning about a broken Skill link, then cleans it up safely", async () => {
     const { appDataRoot, page, traeDir } = await launchApp({ includeTraeTarget: true });
     const brokenSkill = join(traeDir, "skills", "api-mock");
     await mkdir(join(traeDir, "skills"), { recursive: true });
@@ -7058,6 +7086,27 @@ describe("Electron UI profile switching e2e", () => {
     );
     expect(manifests.some((manifest) => manifest.name === "Trae CLI")).toBe(true);
     expect((await lstat(brokenSkill)).isSymbolicLink()).toBe(true);
+
+    await openSkillLibrary(page);
+    await page.getByRole("button", { name: "Scan local" }).click();
+    const brokenGroup = page.getByRole("group", { name: "Cleanup group api-mock" });
+    await brokenGroup.waitFor({ state: "visible" });
+    await expect.poll(() => brokenGroup.textContent()).toContain("Ready");
+    await brokenGroup
+      .getByRole("button", { name: "More cleanup actions for api-mock" })
+      .click();
+    await page.getByRole("menuitem", { name: "Details" }).click();
+    const details = page.getByRole("dialog", { name: "Skill details api-mock" });
+    await expect.poll(() => details.textContent()).toContain("Ready to remove");
+    await expect.poll(() => details.textContent()).toContain("Broken link");
+    await expect.poll(() => details.textContent()).toContain(brokenSkill);
+    await details.getByRole("button", { name: "Close" }).click();
+
+    await page.getByRole("button", { name: /Clean up \d+ ready Skills/ }).click();
+    const cleanupDialog = page.getByRole("dialog", { name: "Clean up local Skills" });
+    await expect.poll(() => cleanupDialog.textContent()).toContain("Remove unavailable links");
+    await cleanupDialog.getByRole("button", { name: /Clean up \d+ skills/ }).click();
+    await expect.poll(() => fileExists(brokenSkill)).toBe(false);
   }, 30_000);
 
   it("keeps capture actions visible with long, high-density review content", async () => {
@@ -9060,12 +9109,12 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("tab", { name: "Data", exact: true }).click();
     const settingsActionHeights = await page
       .locator(
-        ".settings-data-actions button, .backup-settings-row > button, .backup-settings-row > select"
+        ".settings-data-actions button, .backup-settings-row > button, .backup-settings-row > select, .diagnostics-settings-actions button"
       )
       .evaluateAll((controls) =>
         controls.map((control) => (control as HTMLElement).getBoundingClientRect().height)
       );
-    expect(settingsActionHeights.length).toBeGreaterThanOrEqual(4);
+    expect(settingsActionHeights.length).toBeGreaterThanOrEqual(7);
     expect(settingsActionHeights.every((height) => Math.abs(height - 34) <= 1)).toBe(true);
 
     await sidebar.getByRole("button", { name: "Skills", exact: true }).click();
@@ -9127,5 +9176,41 @@ describe("Electron UI profile switching e2e", () => {
       separated: true,
       stateFits: true
     });
+  }, 60_000);
+
+  it("records failed IPC operations with a diagnostic reference", async () => {
+    const { page } = await launchApp();
+
+    const failureMessage = await page.evaluate(async () => {
+      try {
+        await window.agentEnv.readProfile("../outside");
+        return "";
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    });
+    const reference = failureMessage.match(/AEM-\d{8}-[A-Z0-9]{6}/)?.[0];
+
+    expect(failureMessage).toContain("Invalid profile id");
+    expect(reference).toBeTruthy();
+
+    const issue = await page.evaluate(
+      (diagnosticReference) => window.agentEnv.readDiagnosticIssue(diagnosticReference),
+      reference!
+    );
+    expect(issue).toMatchObject({
+      action: "profiles:read",
+      error: {
+        message: "Invalid profile id",
+        name: "Error"
+      },
+      reference
+    });
+    expect(issue?.events.at(-1)).toMatchObject({
+      outcome: "failed",
+      phase: "failed"
+    });
+    expect(issue?.error.stack).toContain("parseId");
+    expect(issue?.error.stack).toContain("file://~/Github/agentenv-manager");
   }, 60_000);
 });

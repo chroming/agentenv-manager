@@ -100,6 +100,13 @@ Pi 使用 `~/.pi/agent`，并兼容 `PI_CODING_AGENT_DIR`、`PI_CODING_AGENT_SES
 - 首次运行默认跟随 macOS 系统语言；不支持的系统语言回退为 English。
 - 可在 Settings > Appearance > Language 中即时切换，选择会持久化，无需重启应用。
 
+### 故障排查
+
+- 运行时操作失败会显示一个形如 `AEM-20260728-ABC123` 的诊断编号。错误消息上的复制和详情入口会提供可选择的脱敏错误、动作、耗时与调用栈。
+- 在 `Settings > Data > Diagnostics` 可以复制最近一次问题、导出 JSON 报告或打开本机日志目录；macOS 的 `Help > Export Diagnostics…` 也可以直接导出。
+- 诊断日志保存在本机并自动轮转。报告不会包含指令、Skill 文件、对话、MCP 定义、环境变量、凭据或剪贴板内容，Workspace Sync 也不会同步它。
+- 反馈另一台设备的问题时，请同时提供诊断编号和导出的 JSON 报告；不需要手工寻找或修改 Agent 配置文件。
+
 ## 技术栈
 
 - Electron

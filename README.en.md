@@ -111,6 +111,22 @@ application-operated cloud service.
 Read [PRIVACY.md](PRIVACY.md) for local data, network, and removal behavior.
 Report vulnerabilities according to [SECURITY.md](SECURITY.md).
 
+## Troubleshooting
+
+- Failed runtime operations show a diagnostic reference such as
+  `AEM-20260728-ABC123`. The error surface can copy or display selectable,
+  redacted error details, the action, duration, and stack trace.
+- Use `Settings > Data > Diagnostics` to copy the latest issue, export a JSON
+  report, or open the local log folder. On macOS,
+  `Help > Export Diagnostics…` provides the same export.
+- Diagnostic logs stay on the device and rotate automatically. Reports exclude
+  Instructions, Skill files, Conversations, MCP definitions, environment
+  values, credentials, and clipboard content, and are never included in
+  Workspace Sync.
+- When reporting an issue from another device, provide both the diagnostic
+  reference and exported JSON report. There is no need to locate or edit Agent
+  configuration files manually.
+
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Product

@@ -23,6 +23,13 @@ contains Profiles, the Skill Library, backups, recovery state, settings, and
 rebuildable caches. Target files are changed only by confirmed operations
 described in the Preview.
 
+Bounded, rotating runtime diagnostics are stored in the application's macOS log
+directory. They contain operation names, allowlisted identifiers, timings, and
+redacted error chains. They do not contain instruction text, Skill contents,
+Conversation text, MCP definitions, environment values, credentials, or
+clipboard contents. Diagnostic reports are written only to a location selected
+by the user and are not included in Workspace Sync.
+
 GitHub OAuth tokens are encrypted with macOS secure storage before being written
 to the application data directory. Repository passwords, personal access
 tokens, SSH private keys, and credential-helper secrets are not copied into the
@@ -43,7 +50,10 @@ Apply Profiles, pull Workspace changes, or push local changes.
 
 Sign out of GitHub in Settings to remove the saved OAuth token. Disconnect
 Workspace Sync to remove its connection metadata. To remove all AgentEnv data,
-quit the application and delete `~/.config/agentenv-manager`.
+quit the application, delete `~/.config/agentenv-manager`, and remove the
+diagnostic directory opened by `Settings > Data > Diagnostics > Open logs`.
+Exported diagnostic reports remain at the user-selected destination until
+deleted there.
 
 Deleting AgentEnv data does not remove files owned by external Agents. Use
 Preview, recovery, or the relevant Agent's own tools before deleting data when

@@ -35,16 +35,17 @@ export const prepareLibraryUpdatePropagation = async ({
   nextContentHash: string;
   targetStatesDir: string;
 }): Promise<LibraryUpdatePropagation> => {
-  const copiedInstalls = inventory.filter(
+  const managedInstalls = inventory.filter(
     (entry) =>
       entry.status === "managed" &&
       entry.libraryId === libraryId &&
-      entry.installMethod === "copied"
+      (entry.installMethod === "copied" || entry.installMethod === "linked")
   );
-  const driftedCopy = copiedInstalls.find((entry) => entry.contentMatchesLibrary !== true);
-  if (driftedCopy) {
+  const copiedInstalls = managedInstalls.filter((entry) => entry.installMethod === "copied");
+  const driftedInstall = managedInstalls.find((entry) => entry.contentMatchesLibrary !== true);
+  if (driftedInstall) {
     throw new Error(
-      `${driftedCopy.name} changed in ${driftedCopy.path}; review that Agent copy before updating the Library`
+      `${driftedInstall.name} changed in ${driftedInstall.path}; review that Agent copy before updating the Library`
     );
   }
 
@@ -75,7 +76,7 @@ export const prepareLibraryUpdatePropagation = async ({
   }
 
   const targetIds = [...new Set(
-    copiedInstalls
+    managedInstalls
       .map((entry) => entry.foundIn[0])
       .filter((targetId): targetId is string => Boolean(targetId))
   )];
@@ -85,7 +86,7 @@ export const prepareLibraryUpdatePropagation = async ({
       if (!(await pathExists(path))) return undefined;
       const state = parseTargetState(JSON.parse(await readFile(path, "utf8")));
       const installPaths = new Set(
-        copiedInstalls
+        managedInstalls
           .filter((entry) => entry.foundIn[0] === targetId)
           .map((entry) => resolve(entry.path))
       );

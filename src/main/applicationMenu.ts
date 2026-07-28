@@ -3,11 +3,13 @@ import type { BrowserWindow, MenuItemConstructorOptions } from "electron";
 export interface ApplicationMenuDependencies {
   isDevelopment: boolean;
   openSettings(): void;
+  exportDiagnostics(): void;
 }
 
 export const createApplicationMenuTemplate = ({
   isDevelopment,
-  openSettings
+  openSettings,
+  exportDiagnostics
 }: ApplicationMenuDependencies): MenuItemConstructorOptions[] => {
   const viewSubmenu: MenuItemConstructorOptions[] = [];
   if (isDevelopment) {
@@ -68,6 +70,15 @@ export const createApplicationMenuTemplate = ({
         { role: "zoom" },
         { type: "separator" },
         { role: "front" }
+      ]
+    },
+    {
+      role: "help",
+      submenu: [
+        {
+          label: "Export Diagnostics…",
+          click: exportDiagnostics
+        }
       ]
     }
   ];
