@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   BookOpen,
   Boxes,
+  LoaderCircle,
   MessageSquareText,
   Monitor,
   Network,
@@ -297,15 +298,15 @@ export const ProfileSidebar = ({
     .sort((left, right) => targetDisplayRank(left) - targetDisplayRank(right));
   const statusTargets = orderedTargets.slice(0, 3);
   const hiddenTargets = orderedTargets.slice(statusTargets.length);
-  const statusSummary = t("{{ready}}/{{total}} Agents · {{profiles}}", {
-    ready: readyTargets,
-    total: targets.length,
-    profiles: isLoading
-      ? t("Loading")
-      : t(profiles.length === 1 ? "{{count}} profile" : "{{count}} profiles", {
+  const statusSummary = isLoading
+    ? t("Detecting Agents")
+    : t("{{ready}}/{{total}} Agents · {{profiles}}", {
+        ready: readyTargets,
+        total: targets.length,
+        profiles: t(profiles.length === 1 ? "{{count}} profile" : "{{count}} profiles", {
           count: profiles.length
         })
-  });
+      });
 
   const workspaceItems: Array<{
     id: AppWorkspace;
@@ -320,9 +321,7 @@ export const ProfileSidebar = ({
       detail: t("Continue across Agents"),
       icon: MessageSquareText
     },
-    ...(targets.length > 0
-      ? [{ id: "targets" as const, label: t("Agents"), detail: t("Configure and inspect"), icon: Monitor }]
-      : [])
+    { id: "targets", label: t("Agents"), detail: t("Configure and inspect"), icon: Monitor }
   ];
 
   return (
@@ -396,13 +395,18 @@ export const ProfileSidebar = ({
           <small>{t("Storage and safety")}</small>
         </button>
       </nav>
-      {targets.length > 0 ? <section className="system-status-card" aria-label={t("System status")}>
+      <section className="system-status-card" aria-label={t("System status")}>
         <div>
-          <span className="status-dot is-ready" />
+          <span className={`status-dot${isLoading ? " is-loading" : " is-ready"}`} />
           <strong>{t("Local Agents")}</strong>
         </div>
         <OverflowTooltip className="system-status-summary" text={statusSummary} />
         <div className="agent-chip-row" aria-label={t("Enabled Agents")}>
+          {isLoading ? (
+            <span className="agent-chip-row__loading" aria-hidden="true">
+              <LoaderCircle className="is-spinning" size={16} />
+            </span>
+          ) : null}
           {statusTargets.map((target) => {
             const targetIcon = targetIconFor(target);
 
@@ -430,7 +434,7 @@ export const ProfileSidebar = ({
             />
           ) : null}
         </div>
-      </section> : null}
+      </section>
     </aside>
   );
 };

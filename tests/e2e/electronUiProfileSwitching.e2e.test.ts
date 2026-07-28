@@ -3472,10 +3472,14 @@ describe("Electron UI profile switching e2e", () => {
         description: getComputedStyle(
           hero.querySelector<HTMLElement>(".profile-description")!
         ).display,
-        meta: getComputedStyle(hero.querySelector<HTMLElement>(".profile-hero__meta")!).display
+        readiness: getComputedStyle(
+          hero.querySelector<HTMLElement>(".profile-action-status")!
+        ).display,
+        duplicateAgentMeta: hero.querySelectorAll(".profile-hero__meta").length
       }));
       expect(heroContent.description).not.toBe("none");
-      expect(heroContent.meta).not.toBe("none");
+      expect(heroContent.readiness).not.toBe("none");
+      expect(heroContent.duplicateAgentMeta).toBe(0);
 
       const composerCountGeometry = await page
         .locator(".profile-composer-section__count")
@@ -3490,6 +3494,9 @@ describe("Electron UI profile switching e2e", () => {
               left: box.left,
               right: box.right,
               width: box.width,
+              compact:
+                getComputedStyle(count.closest(".profile-composer-section__trigger")!)
+                  .gridTemplateRows.split(" ").length > 1,
               scoped: count.querySelector(".profile-composer-section__count-scope") !== null,
               visualFits:
                 Boolean(visualBox) &&
@@ -3502,7 +3509,10 @@ describe("Electron UI profile switching e2e", () => {
       const rightEdge = composerCountGeometry[0]!.right;
       for (const count of composerCountGeometry) {
         expect(Math.abs(count.right - rightEdge)).toBeLessThanOrEqual(4);
-        if (count.scoped) {
+        if (count.compact) {
+          expect(count.width).toBeGreaterThanOrEqual(80);
+          expect(count.width).toBeLessThanOrEqual(160);
+        } else if (count.scoped) {
           expect(count.width).toBeGreaterThanOrEqual(118);
           expect(count.width).toBeLessThanOrEqual(160);
         } else {
@@ -4619,6 +4629,32 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByLabel("shared-docs Profile behavior").count()).toBe(0);
   }, 45_000);
 
+  it("clears Profile pending state after applying a saved Instructions policy", async () => {
+    const { page } = await launchApp();
+    await selectProfile(page, "UI OpenCode alpha");
+    await previewAndApply(page, "OpenCode");
+
+    const profileRow = page.getByRole("group", { name: "Profile UI OpenCode alpha" });
+    await expect.poll(() => profileRow.textContent()).toContain("Active");
+
+    await setComposerResourcePolicy(page, "Instructions", "OpenCode", "Keep current");
+    await saveProfile(page);
+    await expect.poll(() => profileRow.textContent()).toContain("Pending");
+
+    await previewAndApply(page, "OpenCode");
+    await expect.poll(() => profileRow.textContent()).toContain("Active");
+    await expect
+      .poll(() => page.getByRole("status", { name: "Profile readiness" }).textContent())
+      .toContain("Up to date on OpenCode");
+
+    await page.reload();
+    await page.getByRole("region", { name: "Profiles", exact: true }).waitFor({
+      state: "visible"
+    });
+    await selectProfile(page, "UI OpenCode alpha");
+    await expect.poll(() => profileRow.textContent()).toContain("Active");
+  }, 45_000);
+
   it("edits and persists Instructions from the default-collapsed Composer", async () => {
     const { app: electronApp, appDataRoot, page } = await launchApp();
     await page.setViewportSize({ width: 1180, height: 728 });
@@ -5297,6 +5333,11 @@ describe("Electron UI profile switching e2e", () => {
     await saveProfile(page);
     await previewAndApply(page, "Codex");
     await expect(fileExists(join(codexDir, "skills", skillId))).resolves.toBe(false);
+    await writeFile(
+      join(appDataRoot, "profiles", "ui-codex-alpha", "INSTRUCTIONS.md"),
+      "# Saved after shared Skill preparation\n",
+      "utf8"
+    );
 
     await openSkillLibrary(page);
     await page.getByRole("button", { name: "Scan local" }).click();
@@ -7271,13 +7312,18 @@ describe("Electron UI profile switching e2e", () => {
         return settings.enabledTargetIds ?? [];
       })
       .toEqual([]);
-    expect(await page.getByRole("button", { name: "Agents", exact: true }).count()).toBe(0);
+    const agentsNavigation = page.getByRole("button", { name: "Agents", exact: true });
+    await agentsNavigation.waitFor({ state: "visible" });
+    await agentsNavigation.click();
+    await page.getByText("No enabled Agents").waitFor({ state: "visible" });
     const inventory = await page.evaluate(() => window.agentEnv.scanSkillInventory());
     expect(inventory.some((item) => item.id === "shared-scope-skill")).toBe(true);
     expect(inventory.some((item) => item.id === "target-only-reviewer")).toBe(false);
 
     await page.reload();
-    await page.getByRole("heading", { name: "Settings", exact: true }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Settings", exact: true }).waitFor({
+      state: "visible"
+    });
     await openSettingsCategory(page, "Agents");
     await page.getByRole("switch", { name: "Turn on OpenCode" }).click();
     await page.getByRole("switch", { name: "Turn off OpenCode" }).waitFor({ state: "visible" });
@@ -7285,7 +7331,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(async () => (await page.evaluate(() => window.agentEnv.listTargets(true))).map((item) => item.id))
       .toContain("opencode");
-  }, 30_000);
+  }, 45_000);
 
   it("switches, persists, and contains all supported interface languages", async () => {
     const { app: electronApp, appDataRoot, page } = await launchApp();
@@ -7321,7 +7367,7 @@ describe("Electron UI profile switching e2e", () => {
     );
     await expect
       .poll(async () => (await localizedMcpScope.textContent())?.trim())
-      .toMatch(/^配置方案 \d+ · Agent \d+$/);
+      .toMatch(/^方案 \d+ · Agent \d+$/);
     await expectTextFits(localizedMcpScope);
     const localizedPolicyBoxes = await Promise.all(
       localizedPolicies.map((policy) => policy.boundingBox())
@@ -8743,11 +8789,12 @@ describe("Electron UI profile switching e2e", () => {
     expect(await profileNameField.isVisible()).toBe(true);
     expect(await profileDescriptionField.isVisible()).toBe(true);
     await profileDialog.getByRole("button", { name: "Cancel" }).click();
-    const profileActionGeometry = await page.locator(".profile-action-stack").evaluate((stack) => {
-      const status = stack.querySelector<HTMLElement>(".profile-action-status")!;
-      const actions = stack.querySelector<HTMLElement>(".profile-commit-actions")!;
+    const profileActionGeometry = await page.locator(".profile-hero").evaluate((hero) => {
+      const status = hero.querySelector<HTMLElement>(".profile-action-status")!;
+      const actions = hero.querySelector<HTMLElement>(".profile-commit-actions")!;
       const statusBox = status.getBoundingClientRect();
       const actionsBox = actions.getBoundingClientRect();
+      const heroBox = hero.getBoundingClientRect();
       const overlaps = !(
         statusBox.right <= actionsBox.left ||
         actionsBox.right <= statusBox.left ||
@@ -8755,16 +8802,16 @@ describe("Electron UI profile switching e2e", () => {
         actionsBox.bottom <= statusBox.top
       );
       return {
-        actionsContained: actionsBox.right <= stack.getBoundingClientRect().right + 1,
+        actionsContained: actionsBox.right <= heroBox.right + 1,
         overlaps,
-        statusBeforeActions: statusBox.top <= actionsBox.top,
+        statusInProfileBody: status.closest(".profile-hero__body") !== null,
         statusFits: status.scrollWidth <= status.clientWidth + 1
       };
     });
     expect(profileActionGeometry).toEqual({
       actionsContained: true,
       overlaps: false,
-      statusBeforeActions: true,
+      statusInProfileBody: true,
       statusFits: true
     });
     await expandComposerSection(page, "Skills");

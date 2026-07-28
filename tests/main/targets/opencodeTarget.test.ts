@@ -86,6 +86,48 @@ describe("OpenCode Profile v2 adapter", () => {
     expect(preview.targetState.managedMcpNames).toEqual(["docs"]);
   });
 
+  it("patches only selected OpenCode v2 MCP disabled fields", async () => {
+    const { adapter, paths, profile } = await setup();
+    const live = `{
+  "theme": "dark",
+  "mcp": {
+    "servers": {
+      "docs": { "type": "local", "command": ["docs"], "disabled": true },
+      "other": { "type": "remote", "url": "https://example.test" }
+    }
+  }
+}\n`;
+    await writeFile(paths.configPath, live);
+
+    const managedProfile = {
+      ...profile,
+      resources: {
+        skills: [],
+        mcpByTarget: {
+          opencode: {
+            mode: "manage" as const,
+            selections: [{ name: "docs", enabled: true }]
+          }
+        }
+      }
+    };
+    const preview = await adapter.createPreview({
+      profile: managedProfile,
+      targetPaths: paths,
+      state: { managedMcpNames: [] }
+    });
+
+    expect(blockingMessages(preview.issues)).toEqual([]);
+    const configChange = preview.changes.find(({ path }) => path === paths.configPath);
+    expect(configChange?.after).toContain('"theme": "dark"');
+    expect(configChange?.after).toContain('"disabled": false');
+    expect(configChange?.after).toContain('"other": {');
+    expect((await adapter.captureProfile(paths)).mcpConnections).toEqual([
+      expect.objectContaining({ name: "docs", enabled: false }),
+      expect.objectContaining({ name: "other", enabled: true })
+    ]);
+  });
+
   it("blocks an enabled missing MCP but treats a disabled missing MCP as no-op", async () => {
     const { adapter, paths, profile } = await setup();
     await writeFile(paths.configPath, "{}\n");

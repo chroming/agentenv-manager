@@ -1200,16 +1200,17 @@ export const createActivationService = ({
           targetName: decision.targetName
         }))
     );
+    const libraryVersions = collectLibraryResourceVersions(
+      materializedProfile,
+      skillLibrary,
+      targetId
+    );
     const preview: InternalActivationPreview = {
       id: randomUUID(),
       profileId: profile.id,
       targetPathFingerprint: targetPathFingerprint(targetPaths),
       profileContentHash,
-      libraryVersions: collectLibraryResourceVersions(
-        materializedProfile,
-        skillLibrary,
-        targetId
-      ),
+      libraryVersions,
       targetId: adapter.descriptor.id,
       createdAt: new Date().toISOString(),
       issues,
@@ -1250,6 +1251,12 @@ export const createActivationService = ({
         skillDeploymentPlan.sharedPreparations
       ),
       targetStateChanged:
+        stateFile.state.activeProfileId !== profile.id ||
+        stateFile.state.appliedProfileHash !== profileContentHash ||
+        !libraryResourceVersionsEqual(
+          libraryVersions,
+          stateFile.state.appliedLibraryVersions
+        ) ||
         JSON.stringify([...new Set(stateFile.state.managedMcpNames)].sort()) !==
           JSON.stringify([...new Set(targetPreview.targetState.managedMcpNames)].sort()),
       targetState: targetPreview.targetState,
@@ -1743,35 +1750,25 @@ export const createActivationService = ({
         }
 
         const sourceProfile = await profileStore.readProfile(stateFile.state.activeProfileId);
-        const effectiveProfile = applyLibrarySkillAvailability(sourceProfile, skillLibrary);
+        if (profileResourceMode(sourceProfile.resources, targetId, "skills") === "ignore") {
+          throw new Error(
+            `${adapter.descriptor.name} leaves Skills unchanged. Choose Use Profile or Turn off for Skills, save, then retry cleanup.`
+          );
+        }
+        const effectiveProfile = materializeTargetResourcePolicy(
+          applyLibrarySkillAvailability(sourceProfile, skillLibrary),
+          targetId
+        );
         const expectedReference = effectiveProfile.resources.skills.find(
           (reference) => reference.libraryId === libraryId && reference.enabled
         );
-        const currentProfileHash =
-          sourceProfile.targetContentHashes?.[targetId] ??
-          createProfileContentHash(sourceProfile, targetId);
-        const currentLibraryVersions = collectLibraryResourceVersions(
-          profileWithoutLocalSkillExceptions(
-            effectiveProfile,
-            stateFile.state.keptOutsideSkills,
-            stateFile.state.sharedSkillPreparations
-          ),
-          skillLibrary,
-          targetId
-        );
         if (
           preparation.profileId !== sourceProfile.id ||
-          preparation.profileHash !== currentProfileHash ||
           preparation.disposition !== (expectedReference ? "install" : "omit") ||
-          preparation.targetName !== (expectedReference?.targetName ?? libraryId) ||
-          stateFile.state.appliedProfileHash !== currentProfileHash ||
-          !libraryResourceVersionsEqual(
-            currentLibraryVersions,
-            stateFile.state.appliedLibraryVersions
-          )
+          preparation.targetName !== (expectedReference?.targetName ?? libraryId)
         ) {
           throw new Error(
-            `${adapter.descriptor.name} preparation is stale. Preview and Apply the saved Profile again.`
+            `${adapter.descriptor.name} Skill intent changed after preparation. Apply the saved Profile, then retry cleanup.`
           );
         }
 

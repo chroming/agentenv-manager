@@ -952,7 +952,8 @@ describe("App", () => {
     );
     expect(api.readProfile).toHaveBeenCalledWith("daily-coding");
     expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
-    expect(screen.getByText("Preview Agent: OpenCode")).toBeInTheDocument();
+    expect(screen.queryByText("Preview Agent: OpenCode")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Current Agent OpenCode")).toBeInTheDocument();
     expect(within(composer).getByRole("button", { name: "Instructions" })).toBeInTheDocument();
     const emptyMcpRow = within(composer).getByRole("button", { name: "MCPs" });
     expect(emptyMcpRow).toBeInTheDocument();
@@ -974,6 +975,42 @@ describe("App", () => {
       ).getByRole("radio", { name: "Keep current" })
     ).toHaveAttribute("aria-checked", "true");
     expect(screen.getByTitle("Profile 0 · Agent 0")).toBeInTheDocument();
+  });
+
+  it("keeps Agents navigation available while startup discovery is pending", async () => {
+    const targetRequest = deferred<TargetInfo[]>();
+    installApi({
+      listTargets: vi.fn().mockReturnValue(targetRequest.promise)
+    });
+    render(<App />);
+
+    const navigation = screen.getByRole("complementary", { name: "Global navigation" });
+    expect(
+      within(navigation).getByRole("button", { name: "Agents" })
+    ).toBeInTheDocument();
+    expect(
+      within(navigation).getByRole("region", { name: "System status" })
+    ).toHaveTextContent("Detecting Agents");
+
+    fireEvent.click(within(navigation).getByRole("button", { name: /^Quick open/ }));
+    const quickOpen = screen.getByRole("dialog", { name: "Quick open" });
+    fireEvent.click(within(quickOpen).getByRole("option", { name: /^Agents/ }));
+
+    const agentsWorkspace = screen.getByRole("region", { name: "Agents" });
+    expect(within(agentsWorkspace).getByRole("status")).toHaveTextContent(
+      "Detecting Agents"
+    );
+    expect(within(agentsWorkspace).queryByText("No enabled Agents")).not.toBeInTheDocument();
+
+    await act(async () => {
+      targetRequest.resolve([target]);
+      await Promise.resolve();
+    });
+
+    expect(
+      await within(agentsWorkspace).findByRole("article", { name: "Agent OpenCode" })
+    ).toBeInTheDocument();
+    expect(within(agentsWorkspace).queryByText("Detecting Agents")).not.toBeInTheDocument();
   });
 
   it("renders Library Skills before startup discovery and update checks finish", async () => {
@@ -1701,7 +1738,12 @@ describe("App", () => {
     await waitFor(() =>
       expect(updateSettings).toHaveBeenLastCalledWith({ enabledTargetIds: [] })
     );
-    expect(screen.queryByRole("button", { name: "Agents" })).not.toBeInTheDocument();
+    const agentsNavigation = screen.getByRole("button", { name: "Agents" });
+    expect(agentsNavigation).toBeInTheDocument();
+    fireEvent.click(agentsNavigation);
+    expect(
+      await screen.findByRole("region", { name: "Agents" })
+    ).toHaveTextContent("No enabled Agents");
 
     fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
     await screen.findByRole("region", { name: "Profiles" });

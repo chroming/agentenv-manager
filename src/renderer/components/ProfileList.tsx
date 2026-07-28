@@ -2,13 +2,11 @@ import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "re
 import { createPortal } from "react-dom";
 import { Search, TriangleAlert } from "lucide-react";
 import type {
-  LibraryResourceVersions,
   ProfileDetail,
   ProfileSummary,
   TargetInfo,
   TargetManagementState
 } from "../../shared/types";
-import { libraryResourceVersionsEqual } from "../../shared/libraryVersions";
 import { useI18n } from "../i18n";
 import {
   compareProfilesByCreationTime,
@@ -32,7 +30,6 @@ interface ProfileListProps {
   selectedProfileId?: string;
   draftProfile?: ProfileDetail;
   isProfileDirty: boolean;
-  profileLibraryVersions: Record<string, LibraryResourceVersions>;
   targets: TargetInfo[];
   targetStates: TargetManagementState[];
   actionsDisabled?: boolean;
@@ -50,7 +47,6 @@ export const ProfileList = ({
   selectedProfileId,
   draftProfile,
   isProfileDirty,
-  profileLibraryVersions,
   targets,
   targetStates,
   actionsDisabled = false,
@@ -174,17 +170,6 @@ export const ProfileList = ({
               (
                 application.state.lifecycleStatus === "applied" ||
                 application.state.lifecycleStatus === "applied-with-outside"
-              ) &&
-              Boolean(application.state.appliedProfileHash) &&
-              application.state.appliedProfileHash ===
-                (profile.targetContentHashes?.[application.state.targetId] ??
-                  profile.contentHash) &&
-              (
-                application.state.lifecycleStatus === "applied-with-outside" ||
-                libraryResourceVersionsEqual(
-                  application.state.appliedLibraryVersions,
-                  profileLibraryVersions[profile.id]
-                )
               );
             return {
               name: application.target?.name ?? application.state.targetId,

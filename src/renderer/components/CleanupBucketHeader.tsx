@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronRight, ListChecks } from "lucide-react";
 import type { SkillCleanupBucket } from "../../shared/skillCleanup";
 import { useI18n } from "../i18n";
 import { Button, IconButton } from "./ui";
@@ -48,17 +48,12 @@ export const CleanupBucketHeader = ({
           {showCleanup ? (
             <Button
               aria-label={t("Clean up {{count}} ready Skills", { count: readyCleanupCount })}
+              busy={actionWorking}
               className="cleanup-auto-action"
               disabled={actionDisabled}
-              icon={(
-                <Sparkles
-                  className={actionWorking ? "is-spinning" : undefined}
-                  size={15}
-                  strokeWidth={2.2}
-                />
-              )}
+              icon={<ListChecks size={15} strokeWidth={2.2} />}
               size="compact"
-              variant="primary"
+              variant="secondary"
               onClick={onReviewCleanup}
             >
               {t(actionWorking ? "Cleaning up..." : "Clean up {{count}}", {

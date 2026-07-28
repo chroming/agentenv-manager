@@ -34,6 +34,7 @@ interface TargetWorkspaceProps {
   rollbackPreview?: RollbackPreview;
   rollbackError?: string;
   stopManagingPreview?: StopManagingPreview;
+  isLoading: boolean;
   busy: boolean;
   onRefresh(): Promise<void>;
   onConfigure(targetId: string): void;
@@ -87,6 +88,7 @@ export const TargetWorkspace = ({
   rollbackPreview,
   rollbackError,
   stopManagingPreview,
+  isLoading,
   busy,
   onRefresh,
   onConfigure,
@@ -142,7 +144,7 @@ export const TargetWorkspace = ({
               className="secondary-action target-recovery-trigger"
               size="prominent"
               aria-haspopup="dialog"
-              disabled={busy}
+              disabled={busy || isLoading}
               icon={<ArchiveRestore size={15} strokeWidth={2.2} />}
               onClick={() => setIsRecoveryOpen(true)}
             >
@@ -153,7 +155,7 @@ export const TargetWorkspace = ({
               className="secondary-action"
               size="prominent"
               busy={busy}
-              disabled={busy}
+              disabled={busy || isLoading}
               icon={<RefreshCw size={15} strokeWidth={2.2} />}
               onClick={() => { void onRefresh(); }}
             >
@@ -164,7 +166,7 @@ export const TargetWorkspace = ({
       />
 
       <div className="target-list">
-        {targets.length > 0 ? (
+        {!isLoading && targets.length > 0 ? (
           <div className="target-list__header" aria-hidden="true">
             <span />
             <span>{t("Agent")}</span>
@@ -175,13 +177,18 @@ export const TargetWorkspace = ({
             <span>{t("Actions")}</span>
           </div>
         ) : null}
-        {targets.length === 0 ? (
+        {isLoading ? (
+          <div className="inline-state inline-state--panel inline-state--loading" role="status">
+            <span className="inline-state__icon" aria-hidden="true" />
+            <span>{t("Detecting Agents")}</span>
+          </div>
+        ) : targets.length === 0 ? (
           <div className="inline-state inline-state--panel">
             <span className="inline-state__icon" aria-hidden="true"><Monitor size={15} /></span>
             <span>{t("No enabled Agents")}</span>
           </div>
         ) : null}
-        {targets.map((target) => {
+        {!isLoading ? targets.map((target) => {
           const state = statesByTarget.get(target.id);
           const isManaged = state?.status === "managed";
           const isExpanded = expandedTargetId === target.id;
@@ -328,7 +335,7 @@ export const TargetWorkspace = ({
               ) : null}
             </article>
           );
-        })}
+        }) : null}
       </div>
 
       {isRecoveryOpen ? (

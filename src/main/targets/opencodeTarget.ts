@@ -72,6 +72,22 @@ const setJsoncProperty = (content: string, path: string[], value: unknown) => {
   );
 };
 
+const openCodeMcpLayout = (value: Record<string, unknown>) => {
+  const mcp = isRecord(value.mcp) ? value.mcp : {};
+  if (isRecord(mcp.servers)) {
+    return {
+      servers: mcp.servers,
+      propertyPathFor: (name: string) => ["mcp", "servers", name, "disabled"],
+      propertyValueFor: (enabled: boolean) => !enabled
+    };
+  }
+  return {
+    servers: mcp,
+    propertyPathFor: (name: string) => ["mcp", name, "enabled"],
+    propertyValueFor: (enabled: boolean) => enabled
+  };
+};
+
 const addChange = (
   changes: PlannedFileChange[],
   path: string,
@@ -197,11 +213,14 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
     ]);
     const parsed = parseJsoncObject(configText, "Invalid live opencode.jsonc");
     if (!parsed.ok) throw new Error(parsed.message);
-    const mcpConnections = captureNativeJsonMcpConnections(parsed.value.mcp, {
+    const mcpConnections = captureNativeJsonMcpConnections(
+      openCodeMcpLayout(parsed.value).servers,
+      {
       targetId: "opencode",
       sourcePath: targetPaths.configPath,
       controllable: true
-    });
+      }
+    );
     const excluded = Object.keys(parsed.value)
       .filter((key) => key !== "mcp")
       .map((key) => `opencode.jsonc.${key}`);
@@ -257,11 +276,11 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
           message: liveConfig.message
         }));
       } else {
-        const liveMcp = isRecord(liveConfig.value.mcp) ? liveConfig.value.mcp : {};
+        const liveMcp = openCodeMcpLayout(liveConfig.value);
         let nextContent = liveConfigText;
         const controlled = new Set<string>();
         for (const selection of policy.selections) {
-          const server = liveMcp[selection.name];
+          const server = liveMcp.servers[selection.name];
           if (!isRecord(server)) {
             if (selection.enabled) {
               issues.push(createApplyIssue({
@@ -276,8 +295,8 @@ export const createOpenCodeTargetAdapter = (): AgentTargetAdapter => ({
           }
           nextContent = setJsoncProperty(
             nextContent,
-            ["mcp", selection.name, "enabled"],
-            selection.enabled
+            liveMcp.propertyPathFor(selection.name),
+            liveMcp.propertyValueFor(selection.enabled)
           );
           controlled.add(selection.name);
         }

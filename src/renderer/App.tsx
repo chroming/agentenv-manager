@@ -4230,7 +4230,6 @@ const AppContent = ({
                 selectedProfileId={profileLoadingId ?? selectedProfileId}
                 draftProfile={draftProfile}
                 isProfileDirty={isProfileDirty}
-                profileLibraryVersions={profileLibraryVersions}
                 targets={targets}
                 targetStates={targetStates}
                 actionsDisabled={busy}
@@ -4294,7 +4293,12 @@ const AppContent = ({
                       />
                       <div className="profile-hero__body">
                         <div className="profile-hero__title">
-                          <h2 title={draftProfile.manifest.name}>{draftProfile.manifest.name}</h2>
+                          <h2
+                            data-ui-overflow-detail="true"
+                            title={draftProfile.manifest.name}
+                          >
+                            {draftProfile.manifest.name}
+                          </h2>
                           <button
                             className="icon-action"
                             type="button"
@@ -4308,15 +4312,30 @@ const AppContent = ({
                         <p className="profile-description">
                           {draftProfile.manifest.description || t("No description")}
                         </p>
-                        <div className="profile-hero__meta">
-                          {draftProfile.manifest.preferredTargetId ? (
-                            <span className="native-target-pill">
-                              {t("Preview Agent: {{name}}", {
-                                name: targets.find(
-                                  (target) => target.id === draftProfile.manifest.preferredTargetId
-                                )?.name ?? draftProfile.manifest.preferredTargetId
-                              })}
-                            </span>
+                        <div
+                          className={`profile-action-status profile-action-status--${readiness.status}`}
+                        >
+                          <span
+                            className="profile-action-status__copy"
+                            role="status"
+                            aria-label={t("Profile readiness")}
+                            title={t(readiness.message)}
+                          >
+                            <ReadinessIcon size={13} strokeWidth={2.3} aria-hidden="true" />
+                            <span>{t(readinessActionText)}</span>
+                          </span>
+                          {readiness.remediationLabel && readiness.remediationLabel !== "Save now" ? (
+                            <button
+                              className="profile-action-status__action"
+                              type="button"
+                              aria-label={t(readiness.remediationLabel)}
+                              title={t(readiness.remediationLabel)}
+                              disabled={busy}
+                              onClick={runReadinessRemediation}
+                            >
+                              <span>{t(readiness.remediationLabel)}</span>
+                              <ArrowRight size={12} strokeWidth={2.3} aria-hidden="true" />
+                            </button>
                           ) : null}
                         </div>
                       </div>
@@ -4380,32 +4399,6 @@ const AppContent = ({
                                 openDeleteProfileDialog();
                               }}
                             />
-                          ) : null}
-                        </div>
-                        <div
-                          className={`profile-action-status profile-action-status--${readiness.status}`}
-                        >
-                          <span
-                            className="profile-action-status__copy"
-                            role="status"
-                            aria-label={t("Profile readiness")}
-                            title={t(readiness.message)}
-                          >
-                            <ReadinessIcon size={13} strokeWidth={2.3} aria-hidden="true" />
-                            <span>{t(readinessActionText)}</span>
-                          </span>
-                          {readiness.remediationLabel && readiness.remediationLabel !== "Save now" ? (
-                            <button
-                              className="profile-action-status__action"
-                              type="button"
-                              aria-label={t(readiness.remediationLabel)}
-                              title={t(readiness.remediationLabel)}
-                              disabled={busy}
-                              onClick={runReadinessRemediation}
-                            >
-                              <span>{t(readiness.remediationLabel)}</span>
-                              <ArrowRight size={12} strokeWidth={2.3} aria-hidden="true" />
-                            </button>
                           ) : null}
                         </div>
                       </div>
@@ -4751,6 +4744,7 @@ const AppContent = ({
               rollbackPreview={rollbackPreview}
               rollbackError={rollbackError}
               stopManagingPreview={stopManagingPreview}
+              isLoading={isLoading}
               busy={busy}
               onRefresh={refreshTargets}
               onConfigure={openAgentConfiguration}

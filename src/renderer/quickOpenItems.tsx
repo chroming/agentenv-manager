@@ -60,14 +60,14 @@ export const buildQuickOpenItems = ({
     icon: <MessageSquareText size={16} strokeWidth={2.2} />,
     onSelect: () => onOpenWorkspace("conversations")
   },
-  ...(targets.length > 0 ? [{
+  {
     id: "workspace:targets",
     group: t("Pages"),
     label: t("Agents"),
     description: t("Local agent tools"),
     icon: <Monitor size={16} strokeWidth={2.2} />,
     onSelect: () => onOpenWorkspace("targets")
-  }] : []),
+  },
   {
     id: "workspace:settings",
     group: t("Pages"),

@@ -1089,7 +1089,7 @@ describe("SkillLibraryPanel", () => {
     expect(takeOverAllButton).toHaveClass(
       "ui-button",
       "ui-button--compact",
-      "ui-button--primary"
+      "ui-button--secondary"
     );
     expect(takeOverAllButton).toHaveTextContent("Clean up 5");
     fireEvent.click(takeOverAllButton);
